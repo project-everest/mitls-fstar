@@ -940,6 +940,132 @@ let lemma_paired_supported_profile_all_derived_key_material_agrees
   lemma_paired_x25519_key_shares_derived_key_agrees
     (FinishedKey ServerTraffic) client server
 
+let lemma_key_schedule_traffic_record_material_agrees_from_expected
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        peer_derived_key_material_agrees (TrafficKey traffic_id) client server /\
+        peer_derived_key_material_agrees (TrafficIV traffic_id) client server /\
+        traffic_material_matches_expected_derived_material traffic_id client /\
+        traffic_material_matches_expected_derived_material traffic_id server)
+      (ensures
+        key_schedule_traffic_record_material_agrees traffic_id client server)
+=
+  match
+    traffic_material_for_label
+      client.cs_model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label,
+    expected_derived_key_material (TrafficKey traffic_id) client,
+    expected_derived_key_material (TrafficIV traffic_id) client,
+    traffic_material_for_label
+      server.cs_model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label,
+    expected_derived_key_material (TrafficKey traffic_id) server,
+    expected_derived_key_material (TrafficIV traffic_id) server
+  with
+  | Some client_material, Some client_key, Some client_iv,
+    Some server_material, Some server_key, Some server_iv ->
+    assert (Seq.equal client_material.traffic_key client_key);
+    assert (Seq.equal client_material.traffic_iv client_iv);
+    assert (Seq.equal server_material.traffic_key server_key);
+    assert (Seq.equal server_material.traffic_iv server_iv);
+    assert (Seq.equal client_key server_key);
+    assert (Seq.equal client_iv server_iv);
+    Seq.lemma_eq_elim client_material.traffic_key client_key;
+    Seq.lemma_eq_elim server_material.traffic_key server_key;
+    Seq.lemma_eq_elim client_key server_key;
+    Seq.lemma_eq_elim client_material.traffic_iv client_iv;
+    Seq.lemma_eq_elim server_material.traffic_iv server_iv;
+    Seq.lemma_eq_elim client_iv server_iv;
+    assert (Seq.equal client_material.traffic_key server_material.traffic_key);
+    assert (Seq.equal client_material.traffic_iv server_material.traffic_iv)
+  | _, _, _, _, _, _ ->
+    assert False
+
+let lemma_application_record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : Lemma
+      (requires
+        application_record_keys_installed_for_role role model /\
+        application_record_epochs_installed_for_role role model)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          role
+          dir
+          (traffic_id
+            TrafficApplication
+            (traffic_label_for_endpoint_direction role dir))
+          model)
+=
+  let keys = model.model_handshake.hs_keys in
+  match role, dir with
+  | ClientEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+    assert (model.model_record.record_read.R.epoch == R.Application);
+    (match
+      traffic_material_for_label keys TrafficApplication ServerTraffic,
+      record_direction_material model.model_record.record_read
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_read);
+       assert (model.model_record.record_read.R.key == Some material.traffic_key);
+       assert (model.model_record.record_read.R.static_iv == Some material.traffic_iv);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ClientEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+    assert (model.model_record.record_write.R.epoch == R.Application);
+    (match
+      traffic_material_for_label keys TrafficApplication ClientTraffic,
+      record_direction_material model.model_record.record_write
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_write);
+       assert (model.model_record.record_write.R.key == Some material.traffic_key);
+       assert (model.model_record.record_write.R.static_iv == Some material.traffic_iv);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ServerEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+    assert (model.model_record.record_read.R.epoch == R.Application);
+    (match
+      traffic_material_for_label keys TrafficApplication ClientTraffic,
+      record_direction_material model.model_record.record_read
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_read);
+       assert (model.model_record.record_read.R.key == Some material.traffic_key);
+       assert (model.model_record.record_read.R.static_iv == Some material.traffic_iv);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ServerEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+    assert (model.model_record.record_write.R.epoch == R.Application);
+    (match
+      traffic_material_for_label keys TrafficApplication ServerTraffic,
+      record_direction_material model.model_record.record_write
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_write);
+       assert (model.model_record.record_write.R.key == Some material.traffic_key);
+       assert (model.model_record.record_write.R.static_iv == Some material.traffic_iv);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+
 let lemma_peer_record_material_agrees
   (traffic_id:labeled_traffic_epoch)
   (client:connection_state)
@@ -1065,6 +1191,66 @@ let lemma_paired_supported_profile_application_record_material_agrees
     (traffic_id TrafficApplication ClientTraffic) client server;
   lemma_peer_record_material_agrees
     (traffic_id TrafficApplication ServerTraffic) client server
+
+let lemma_supported_profile_application_record_material_inputs_agree_from_expected
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        supported_profile_all_derived_key_material_agrees client server /\
+        supported_profile_application_traffic_material_matches_expected client /\
+        supported_profile_application_traffic_material_matches_expected server /\
+        application_record_keys_installed_for_role
+          ClientEndpoint
+          client.cs_model /\
+        application_record_epochs_installed_for_role
+          ClientEndpoint
+          client.cs_model /\
+        application_record_keys_installed_for_role
+          ServerEndpoint
+          server.cs_model /\
+        application_record_epochs_installed_for_role
+          ServerEndpoint
+          server.cs_model)
+      (ensures
+        supported_profile_application_record_material_inputs_agree client server)
+=
+  let client_app = traffic_id TrafficApplication ClientTraffic in
+  let server_app = traffic_id TrafficApplication ServerTraffic in
+  assert (peer_derived_key_material_agrees (TrafficKey client_app) client server);
+  assert (peer_derived_key_material_agrees (TrafficIV client_app) client server);
+  assert (peer_derived_key_material_agrees (TrafficKey server_app) client server);
+  assert (peer_derived_key_material_agrees (TrafficIV server_app) client server);
+  assert (traffic_material_matches_expected_derived_material client_app client);
+  assert (traffic_material_matches_expected_derived_material client_app server);
+  assert (traffic_material_matches_expected_derived_material server_app client);
+  assert (traffic_material_matches_expected_derived_material server_app server);
+  lemma_key_schedule_traffic_record_material_agrees_from_expected
+    client_app
+    client
+    server;
+  lemma_key_schedule_traffic_record_material_agrees_from_expected
+    server_app
+    client
+    server;
+  lemma_application_record_direction_material_matches_key_schedule_for_role
+    ClientEndpoint
+    TrafficWrite
+    client.cs_model;
+  lemma_application_record_direction_material_matches_key_schedule_for_role
+    ServerEndpoint
+    TrafficRead
+    server.cs_model;
+  lemma_application_record_direction_material_matches_key_schedule_for_role
+    ServerEndpoint
+    TrafficWrite
+    server.cs_model;
+  lemma_application_record_direction_material_matches_key_schedule_for_role
+    ClientEndpoint
+    TrafficRead
+    client.cs_model;
+  assert (peer_record_material_inputs_agree client_app client server);
+  assert (peer_record_material_inputs_agree server_app client server)
 
 let lemma_supported_profile_client_server_key_material_agrees
   (client:connection_state)

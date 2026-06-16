@@ -252,20 +252,25 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      `CS.supported_profile_client_server_key_material_agrees`.
    - `client_server_driver_supported_profile_state_inputs` now names only the
      remaining paired semantic state-machine obligations: paired X25519 key
-     shares, paired transcript checkpoints, and current application
-     record-material input agreement. Handshake traffic-key agreement remains
-     part of the historical derived-key theorem, while the current record-state
-     component is application-only so the application-ready theorem surface does
-     not require one endpoint record state to be simultaneously at handshake and
-     application epochs. Key-schedule lineage is no longer caller-supplied at this bridge:
+     shares, paired transcript checkpoints, and precise current application
+     record-state facts: each endpoint's installed application traffic slots
+     match the expected derived key/IV material, and each current read/write
+     record direction is at the application epoch. Handshake traffic-key
+     agreement remains part of the historical derived-key theorem, while the
+     current record-state component is application-only so the application-ready
+     theorem surface does not require one endpoint record state to be
+     simultaneously at handshake and application epochs. Key-schedule lineage is
+     no longer caller-supplied at this bridge:
      `lemma_client_server_driver_supported_profile_derived_key_material_agrees`
      now proves the full historical derived-key agreement theorem from public
      application-ready success plus only paired X25519 shares and transcript
      checkpoints, deriving client/server lineage from endpoint reachability and
      role-correct installed application record keys. The aggregate bridge
      `lemma_client_server_driver_supported_profile_key_material_inputs_agree`
-     reuses that derived-key theorem and adds the application record-material
-     input component. The component theorem
+     reuses that derived-key theorem and calls the pure
+     `lemma_supported_profile_application_record_material_inputs_agree_from_expected`
+     bridge to turn those precise current application record-state facts into
+     `supported_profile_application_record_material_inputs_agree`. The component theorem
      `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
      proves the aggregate spec input predicate plus the same wire-log and
      key-material conclusions from those explicit components.
@@ -279,8 +284,9 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      now discharged by a pure reachability-shape invariant plus installed
      application keys, and the driver-level derived-key theorem is independent
      of record-material agreement; paired X25519 shares, transcript checkpoints,
-     and application record-material input agreement still need dedicated
-     paired-state projection lemmas.
+     installed application traffic slots matching expected derived material, and
+     current application record epochs still need dedicated paired-state
+     projection lemmas.
 
 3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.
@@ -292,8 +298,9 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
 
 1. Prove each remaining component of
    `client_server_driver_supported_profile_state_inputs` from successful paired
-   driver resources: X25519 shares, transcript checkpoints, and application
-   record-material inputs.
+   driver resources: X25519 shares, transcript checkpoints, installed
+   application traffic slots matching expected derived material, and current
+   application record epochs.
 2. Package those component proofs into a concrete driver-pair theorem that
    instantiates
    `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`.

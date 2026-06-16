@@ -193,6 +193,29 @@ val lemma_paired_supported_profile_application_record_material_agrees
       (ensures
         supported_profile_application_record_material_agrees client server)
 
+val lemma_supported_profile_application_record_material_inputs_agree_from_expected
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        supported_profile_all_derived_key_material_agrees client server /\
+        supported_profile_application_traffic_material_matches_expected client /\
+        supported_profile_application_traffic_material_matches_expected server /\
+        application_record_keys_installed_for_role
+          ClientEndpoint
+          client.cs_model /\
+        application_record_epochs_installed_for_role
+          ClientEndpoint
+          client.cs_model /\
+        application_record_keys_installed_for_role
+          ServerEndpoint
+          server.cs_model /\
+        application_record_epochs_installed_for_role
+          ServerEndpoint
+          server.cs_model)
+      (ensures
+        supported_profile_application_record_material_inputs_agree client server)
+
 val lemma_supported_profile_client_server_key_material_agrees
   (client:connection_state)
   (server:connection_state)

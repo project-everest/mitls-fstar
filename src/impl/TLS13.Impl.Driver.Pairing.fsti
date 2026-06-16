@@ -269,12 +269,28 @@ val lemma_client_server_driver_supported_profile_derived_key_material_agrees
         CS.supported_profile_all_derived_key_material_agrees client server)
 
 noextract
+let client_server_driver_supported_profile_application_record_state_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  CS.supported_profile_application_traffic_material_matches_expected client /\
+  CS.supported_profile_application_traffic_material_matches_expected server /\
+  CS.application_record_epochs_installed_for_role
+    CS.ClientEndpoint
+    client.CS.cs_model /\
+  CS.application_record_epochs_installed_for_role
+    CS.ServerEndpoint
+    server.CS.cs_model
+
+noextract
 let client_server_driver_supported_profile_state_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
   client_server_driver_supported_profile_derived_state_inputs client server /\
-  CS.supported_profile_application_record_material_inputs_agree client server
+  client_server_driver_supported_profile_application_record_state_inputs
+    client
+    server
 
 val lemma_client_server_driver_supported_profile_key_material_inputs_agree
   (client:CS.connection_state)

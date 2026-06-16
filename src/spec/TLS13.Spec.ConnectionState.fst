@@ -915,6 +915,13 @@ let application_record_keys_installed_for_role
   | _, _ ->
     False
 
+let application_record_epochs_installed_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  : prop =
+  model.model_record.record_read.R.epoch == R.Application /\
+  model.model_record.record_write.R.epoch == R.Application
+
 let record_epoch_for_traffic_epoch
   (epoch:traffic_epoch)
   : R.epoch =
@@ -1838,6 +1845,32 @@ let expected_derived_key_material
   | ExporterMasterSecret
   | ResumptionMasterSecret ->
     None
+
+let traffic_material_matches_expected_derived_material
+  (traffic_id:labeled_traffic_epoch)
+  (st:connection_state)
+  : prop =
+  match
+    traffic_material_for_label
+      st.cs_model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label,
+    expected_derived_key_material (TrafficKey traffic_id) st,
+    expected_derived_key_material (TrafficIV traffic_id) st
+  with
+  | Some material, Some key, Some iv ->
+    Seq.equal material.traffic_key key /\
+    Seq.equal material.traffic_iv iv
+  | _, _, _ ->
+    False
+
+let supported_profile_application_traffic_material_matches_expected
+  (st:connection_state)
+  : prop =
+  traffic_material_matches_expected_derived_material
+    (traffic_id TrafficApplication ClientTraffic) st /\
+  traffic_material_matches_expected_derived_material
+    (traffic_id TrafficApplication ServerTraffic) st
 
 let base_secret_inputs_agree
   (base_id:base_secret_id)

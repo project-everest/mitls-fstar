@@ -251,6 +251,19 @@ let lemma_client_server_driver_supported_profile_key_material_inputs_agree
     server;
   assert (CS.connection_supported_profile_key_schedule_lineage client);
   assert (CS.connection_supported_profile_key_schedule_lineage server);
+  assert (CS.supported_profile_all_derived_key_material_agrees client server);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ClientEndpoint
+    client.CS.cs_model);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    server.CS.cs_model);
+  CSL.lemma_supported_profile_application_record_material_inputs_agree_from_expected
+    client
+    server;
+  assert (CS.supported_profile_application_record_material_inputs_agree
+    client
+    server);
   assert (CS.supported_profile_client_server_key_material_inputs_agree
     client
     server)

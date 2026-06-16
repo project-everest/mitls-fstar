@@ -1140,18 +1140,24 @@ driver facts plus the existing supported-profile state-machine input predicate,
 without requiring full TCP-history equality. The remaining paired semantic
 obligations are now named by
 `client_server_driver_supported_profile_state_inputs`: paired X25519 key shares,
-paired transcript checkpoints, and current application record-material input
-agreement. Handshake traffic-key agreement is still covered by the historical
-derived-key theorem; the live record-state component is application-only so the
-application-ready theorem does not require current read/write record states to
-simultaneously match both handshake and application epochs.
+paired transcript checkpoints, and precise current application record-state
+facts: each endpoint's installed application traffic slots match the expected
+derived key/IV material, and each current read/write record direction is at the
+application epoch. Handshake traffic-key agreement is still covered by the
+historical derived-key theorem; the live record-state component is
+application-only so the application-ready theorem does not require current
+read/write record states to simultaneously match both handshake and application
+epochs.
 Key-schedule lineage is derived by
 `lemma_client_server_driver_supported_profile_derived_key_material_agrees`, which
 proves full historical derived-key agreement from public client/server
 application-ready success plus only paired X25519 shares and transcript
 checkpoints. The aggregate bridge
 `lemma_client_server_driver_supported_profile_key_material_inputs_agree` reuses
-that theorem and adds the current application record-material input component. The checked
+that theorem and calls
+`lemma_supported_profile_application_record_material_inputs_agree_from_expected`
+to turn those precise current application record-state facts into the application
+record-material input component. The checked
 `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
 turns those explicit components plus public no-read-ahead success facts into the
 aggregate supported-profile input predicate, full paired wire logs, and the main
