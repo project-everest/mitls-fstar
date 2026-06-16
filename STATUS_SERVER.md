@@ -1,6 +1,6 @@
 # TLS server verification status
 
-Status date: 2026-06-15.
+Status date: 2026-06-16.
 
 ## Goal
 
@@ -35,11 +35,11 @@ older server/transcript planning documents.
 
 ## Committed verified status
 
-The latest committed verified server-driver baseline before the current client
-facade hardening slice is:
+The latest committed verified server-driver, client-driver, and pairing-theorem
+baseline is:
 
 ```text
-e0df22b Record server interop validation
+85c7e47 Clarify public-success pairing theorem name
 ```
 
 At that point the full gate had passed:
@@ -48,6 +48,10 @@ At that point the full gate had passed:
 git --no-pager diff --check
 make check-admits
 make verify
+make test-extracted-client-driver-slice
+make test-extracted-server-driver-slice
+make test-openssl-echo
+make test-openssl-sclient
 ```
 
 That committed state includes:
@@ -114,31 +118,43 @@ We do **not** yet have the final verified interoperable server.
 The main spec-level key-material agreement theorem is now packaged as an
 aggregate supported-profile theorem, and `TLS13.Impl.Driver.Pairing` now provides
 the audit-facing driver-pair bridge theorem:
-`lemma_client_server_driver_key_material_agrees`. It also now provides the
-explicit no-read-ahead bridge
+`lemma_client_server_driver_key_material_agrees`. It also provides the explicit
+no-read-ahead bridge
 `lemma_paired_wire_logs_from_exact_prefix_no_read_ahead`, which upgrades the
 public ordered received-prefix facts to full `CS.paired_wire_logs` when each
 transport receive history has no retained suffix beyond the protocol
 `raw_received` log. Successful public client `connect` and server `accept` now
-also expose that no-read-ahead fact. What is still missing is the concrete
-paired-resource theorem that packages successful client/server resources and
-establishes the remaining
-`supported_profile_client_server_key_material_inputs_agree` premise for live
-runs.
+also expose that no-read-ahead fact. The clearer wrapper
+`lemma_client_server_driver_key_material_agrees_from_public_success_components`
+takes those public success facts plus the remaining semantic state inputs and
+returns historical derived-key agreement, the aggregate key-material input
+predicate, exact paired transport/protocol wire logs, and final
+`CS.supported_profile_client_server_key_material_agrees`.
+
+What is still missing is the concrete paired-resource theorem that establishes
+the remaining semantic state inputs for live runs: paired X25519 shares, paired
+transcript checkpoints, and precise current application record-state facts. The
+last category is intentionally still explicit: successful application readiness
+proves role-correct application record keys are installed, but it does not yet
+prove the record epoch/current application traffic material facts needed by the
+aggregate record-material theorem, especially in the presence of post-handshake
+KeyUpdate behavior.
 
 On the Pulse implementation side, public server `accept` and client `connect`
-now both expose application-data readiness on success, public client/server
-`send` operations expose exact local-write sent-log append facts, public
-client/server `receive` operations expose exact successful app-output copyout
-facts, public connected send/receive/accept success results expose exact
-transport sent-history/protocol sent-log equality plus received-log accounting
-facts, and public client/server `close` operations expose verified
+now both expose application-data readiness on success, exact sent-log equality,
+ordered received-prefix facts, and no-read-ahead success facts. Public
+client/server `send` operations expose exact local-write sent-log append facts;
+public client/server `receive` operations expose exact successful app-output
+copyout facts; and public client/server `send`/`receive`/`close` operations
+expose the pre-call wire-log projections hidden inside the connected driver
+resource. Public client/server `close` operations expose verified
 `close_notify` local-write facts before transport shutdown. The remaining
 implementation-side gaps are:
 
-- prove the exact transport/protocol log obligations named by
-  `TLS13.Impl.Driver.Pairing.paired_driver_transport_logs_exact` from complete
-  client/server driver resources and raw IO logs;
+- package a concrete paired-run theorem over successful client/server resources
+  and raw IO logs that supplies the paired transport histories and semantic
+  state inputs required by
+  `lemma_client_server_driver_key_material_agrees_from_public_success_components`;
 - continue splitting the remaining public driver orchestration into smaller
   `Driver.Handshake`/`Driver.App` modules with narrow `.fsti` boundaries;
 - strengthen the private client receive workflow with a factored network-loop
@@ -175,22 +191,23 @@ exposes `client_driver_close_correct`, tying the returned status to a verified
 TCP channel is closed.
 
 The latest theorem-bridge slices add `TLS13.Impl.Driver.Pairing`, which packages
-the public client/server application-readiness facts, exact paired transport log
-obligations, and existing
-`supported_profile_client_server_key_material_inputs_agree` predicate into a
-single checked theorem that yields both `CS.paired_wire_logs` and
-`CS.supported_profile_client_server_key_material_agrees`. The same module now
-also exposes `lemma_paired_protocol_received_logs_accounted`, a checked
-intermediate bridge from public sent-exact/received-accounted facade facts plus
-paired transport histories to cross-endpoint protocol received-log accounting.
+the public client/server application-readiness facts, exact/no-read-ahead
+transport log facts, paired transport histories, and explicit semantic
+state-machine components into checked bridge theorems. The most audit-facing
+entry point is
+`lemma_client_server_driver_key_material_agrees_from_public_success_components`;
+it proves historical derived-key agreement, the aggregate key-material input
+predicate, exact paired wire logs, and
+`CS.supported_profile_client_server_key_material_agrees`.
 
-The latest facade-accounting slice exposes public
+The latest facade-accounting slices expose public
 `client_driver_received_log_accounted` and
-`server_driver_received_log_accounted` predicates on successful connected
-client/server paths. These prove the protocol `raw_received` bytes are
-accounted for within the concrete transport receive history. This is deliberately
-weaker than ordered exact equality: retained read-ahead and rejected consumed
-bytes still prevent deriving `CS.paired_wire_logs` directly.
+`server_driver_received_log_accounted` predicates on connected public operations,
+and public `send`/`receive`/`close` postconditions expose the pre-call sent-exact
+and received-accounted projections hidden inside the connected driver resource.
+Successful `connect`/`accept` additionally expose ordered exact-prefix and
+no-read-ahead facts, so the pairing bridge can upgrade those success states to
+full protocol/transport receive equality.
 
 ## Remaining proof gaps
 
@@ -273,7 +290,10 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      `supported_profile_application_record_material_inputs_agree`. The component theorem
      `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
      proves the aggregate spec input predicate plus the same wire-log and
-     key-material conclusions from those explicit components.
+     key-material conclusions from those explicit components, and
+     `lemma_client_server_driver_key_material_agrees_from_public_success_components`
+     exposes the same result under an audit-facing public-success name while
+     also returning the historical derived-key agreement fact explicitly.
    - `client_driver_application_ready` is now symmetric with
      `server_driver_application_ready` at the invariant layer: it includes the
      client end-to-end invariant, threaded through the Pulse handshake and
