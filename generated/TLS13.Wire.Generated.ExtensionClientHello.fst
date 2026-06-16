@@ -335,7 +335,7 @@ let copyful_extensionClientHello_cases (k: LP.dsum_key extensionClientHello_sum)
 let read_extensionClientHello_sum
   : PPB.copyful_parse (PPS.vmatch_dsum extensionClientHello_sum extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch) extensionClientHello_parser (PPS.dsum_conv extensionClientHello_sum extensionClientHello_mid_of_tag extensionClientHello_conv_of_tag) =
   PPS.copyful_parse_dsum extensionClientHello_sum read_maybe_extensionType_key extensionType_repr_jumper parse_extensionClientHello_cases
-    extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch extensionClientHello_conv_of_tag copyful_extensionClientHello_cases (_ by (LP.dep_maybe_enum_destr_t_tac ())) ()
+    extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch extensionClientHello_conv_of_tag copyful_extensionClientHello_cases (_ by (LP.dep_maybe_enum_destr_t_tac ())) (_ by (LP.enum_repr_of_key_tac extensionType_enum)) ()
 
 let extensionClientHello_coerce_vmatch_eq (xl: extensionClientHello_low) (m1: PPS.dsum_mid extensionClientHello_sum extensionClientHello_mid_of_tag)
   : Lemma (PPS.vmatch_dsum extensionClientHello_sum extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch xl m1 == extensionClientHello_vmatch xl (extensionClientHello_fg m1))
@@ -460,7 +460,7 @@ let free_extensionClientHello_cases (k: LP.dsum_key extensionClientHello_sum)
       free_extensionClientHello_extension_data_default (fun xl -> match xl with | Extension_data_Unknown_extensionType_low _ v -> Some v | _ -> None) ()
 
 let free_extensionClientHello_sum : PPB.free_t (PPS.vmatch_dsum extensionClientHello_sum extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch) =
-  PPS.free_dsum extensionClientHello_sum extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch free_extensionClientHello_cases (_ by (LP.dep_maybe_enum_destr_t_tac ()))
+  PPS.free_dsum extensionClientHello_sum extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch free_extensionClientHello_cases (_ by (LP.dep_maybe_enum_destr_t_tac ())) (_ by (LP.enum_repr_of_key_tac extensionType_enum))
 
 let extensionClientHello_free_vmatch_eq (xl: extensionClientHello_low) (m: extensionClientHello_mid)
   : Lemma (extensionClientHello_vmatch xl m == PPS.vmatch_dsum extensionClientHello_sum extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch xl (extensionClientHello_gf m))
@@ -556,7 +556,7 @@ let write_extensionClientHello_cases (k: LP.dsum_key extensionClientHello_sum)
 let write_extensionClientHello_sum
   : PPB.l2r_safe_writer (PPS.vmatch_dsum extensionClientHello_sum extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch) (LP.serialize_dsum extensionClientHello_sum extensionType_repr_serializer parse_extensionClientHello_cases serialize_extensionClientHello_cases extensionClientHello_extension_data_default_parser extensionClientHello_extension_data_default_serializer) (PPS.dsum_conv extensionClientHello_sum extensionClientHello_mid_of_tag extensionClientHello_conv_of_tag) =
   PPS.l2r_safe_writer_dsum extensionClientHello_sum extensionType_repr_serializer write_maybe_extensionType_key 2sz parse_extensionClientHello_cases serialize_extensionClientHello_cases extensionClientHello_extension_data_default_parser extensionClientHello_extension_data_default_serializer
-    extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch extensionClientHello_conv_of_tag write_extensionClientHello_cases (_ by (LP.dep_maybe_enum_destr_t_tac ())) ()
+    extensionClientHello_low extensionClientHello_tag_of_low extensionClientHello_mid_of_tag extensionClientHello_casevmatch extensionClientHello_conv_of_tag write_extensionClientHello_cases (_ by (LP.dep_maybe_enum_destr_t_tac ())) (_ by (LP.enum_repr_of_key_tac extensionType_enum)) ()
 
 let extensionClientHello_write_conv_eq (m: extensionClientHello_mid)
   : Lemma (extensionClientHello_conv m == PPS.dsum_conv extensionClientHello_sum extensionClientHello_mid_of_tag extensionClientHello_conv_of_tag (extensionClientHello_gf m))
