@@ -2373,11 +2373,13 @@ fn accept_transport_start_and_read_client_hello
                  'credential_identity
                  received
                  sent **
-               pure (wait.server_driver_client_hello_wait_ready == true ==>
+               pure (st1.CS.cs_model.CS.model_config ==
+                   (CM.started_server_state 'st0).CS.cs_model.CS.model_config /\
+                 (wait.server_driver_client_hello_wait_ready == true ==>
                    st1.CS.cs_model.CS.model_control ==
                      CS.ControlHandshaking CS.HsClientHelloReceived /\
                    st1.CS.cs_model.CS.model_config ==
-                     (CM.started_server_state 'st0).CS.cs_model.CS.model_config)
+                     (CM.started_server_state 'st0).CS.cs_model.CS.model_config))
            | _ ->
              server_driver_live d 'st0 'certificate_chain 'credential_identity)
 {
@@ -2401,11 +2403,13 @@ fn accept_transport_start_and_read_client_hello
           'credential_identity
           received
           sent **
-        pure (wait.server_driver_client_hello_wait_ready == true ==>
-          st1.CS.cs_model.CS.model_control ==
-             CS.ControlHandshaking CS.HsClientHelloReceived /\
-           st1.CS.cs_model.CS.model_config ==
-             (CM.started_server_state 'st0).CS.cs_model.CS.model_config));
+        pure (st1.CS.cs_model.CS.model_config ==
+            (CM.started_server_state 'st0).CS.cs_model.CS.model_config /\
+          (wait.server_driver_client_hello_wait_ready == true ==>
+            st1.CS.cs_model.CS.model_control ==
+               CS.ControlHandshaking CS.HsClientHelloReceived /\
+             st1.CS.cs_model.CS.model_config ==
+               (CM.started_server_state 'st0).CS.cs_model.CS.model_config)));
       ServerDriverAcceptClientHelloTransportOk wait
     }
     ServerDriverListenFailed -> {
@@ -2457,7 +2461,9 @@ fn accept_start_read_client_hello_select_derive_once
                  'credential_identity
                  received
                  sent **
-               pure (wait.server_driver_client_hello_wait_ready == false)
+               pure (wait.server_driver_client_hello_wait_ready == false /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptSelectDeriveMaterialFailed ->
              exists* st1 received sent.
                server_driver_connected
@@ -2468,7 +2474,9 @@ fn accept_start_read_client_hello_select_derive_once
                  received
                  sent **
                pure (st1.CS.cs_model.CS.model_control ==
-                 CS.ControlHandshaking CS.HsClientHelloReceived)
+                 CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptSelectDeriveSelectionNotReady ->
              exists* st1 received sent.
                server_driver_connected
@@ -2479,7 +2487,9 @@ fn accept_start_read_client_hello_select_derive_once
                  received
                  sent **
                pure (st1.CS.cs_model.CS.model_control ==
-                 CS.ControlHandshaking CS.HsClientHelloReceived)
+                 CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptSelectDeriveInternalUnsupported ->
              pure False
            | ServerDriverAcceptSelectDeriveOk ->
@@ -2517,11 +2527,18 @@ fn accept_start_read_client_hello_select_derive_once
           'credential_identity
           received
           sent **
-        pure (wait.server_driver_client_hello_wait_ready == true ==>
+        pure (st_ch.CS.cs_model.CS.model_config ==
+            (CM.started_server_state 'st0).CS.cs_model.CS.model_config /\
+          (wait.server_driver_client_hello_wait_ready == true ==>
           st_ch.CS.cs_model.CS.model_control ==
             CS.ControlHandshaking CS.HsClientHelloReceived /\
           st_ch.CS.cs_model.CS.model_config ==
-            (CM.started_server_state 'st0).CS.cs_model.CS.model_config));
+            (CM.started_server_state 'st0).CS.cs_model.CS.model_config)));
+      assert (pure (
+        (CM.started_server_state 'st0).CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
+      assert (pure (st_ch.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       if wait.server_driver_client_hello_wait_ready {
         assert (pure (wait.server_driver_client_hello_wait_ready == true));
         assert (pure (st_ch.CS.cs_model.CS.model_control ==
@@ -2603,6 +2620,8 @@ fn accept_start_read_client_hello_select_derive_once
                 sent);
               assert (pure (st_ch.CS.cs_model.CS.model_control ==
                 CS.ControlHandshaking CS.HsClientHelloReceived));
+              assert (pure (st_ch.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config));
               ServerDriverAcceptSelectDeriveSelectionNotReady
             }
             ServerDriverLocalExternalOrUnsupported -> {
@@ -2617,10 +2636,14 @@ fn accept_start_read_client_hello_select_derive_once
         } else {
           assert (pure (st_ch.CS.cs_model.CS.model_control ==
             CS.ControlHandshaking CS.HsClientHelloReceived));
+          assert (pure (st_ch.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
           ServerDriverAcceptSelectDeriveMaterialFailed
         }
       } else {
         assert (pure (wait.server_driver_client_hello_wait_ready == false));
+        assert (pure (st_ch.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
         ServerDriverAcceptSelectDeriveClientHelloWait wait
       }
     }
@@ -2667,7 +2690,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                            'credential_identity
                            received
                            sent **
-                         pure (wait.server_driver_client_hello_wait_ready == false)
+                         pure (wait.server_driver_client_hello_wait_ready == false /\
+                           st1.CS.cs_model.CS.model_config ==
+                             'st0.CS.cs_model.CS.model_config)
                      | ServerDriverAcceptServerHelloMaterialFailed
                      | ServerDriverAcceptServerHelloSelectionNotReady ->
                        exists* st1 received sent.
@@ -2679,7 +2704,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                            received
                            sent **
                          pure (st1.CS.cs_model.CS.model_control ==
-                           CS.ControlHandshaking CS.HsClientHelloReceived)
+                           CS.ControlHandshaking CS.HsClientHelloReceived /\
+                           st1.CS.cs_model.CS.model_config ==
+                             'st0.CS.cs_model.CS.model_config)
                      | ServerDriverAcceptServerHelloDeriveFailed
                      | ServerDriverAcceptServerHelloSendNotReady
                      | ServerDriverAcceptServerHelloOk ->
@@ -2718,11 +2745,18 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                     'credential_identity
                     received
                     sent **
-                  pure (wait.server_driver_client_hello_wait_ready == true ==>
+                  pure (st_ch.CS.cs_model.CS.model_config ==
+                      (CM.started_server_state 'st0).CS.cs_model.CS.model_config /\
+                    (wait.server_driver_client_hello_wait_ready == true ==>
                     st_ch.CS.cs_model.CS.model_control ==
                       CS.ControlHandshaking CS.HsClientHelloReceived /\
                     st_ch.CS.cs_model.CS.model_config ==
-                      (CM.started_server_state 'st0).CS.cs_model.CS.model_config));
+                      (CM.started_server_state 'st0).CS.cs_model.CS.model_config)));
+                 assert (pure (
+                  (CM.started_server_state 'st0).CS.cs_model.CS.model_config ==
+                    'st0.CS.cs_model.CS.model_config));
+                 assert (pure (st_ch.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config));
                 if wait.server_driver_client_hello_wait_ready {
                   assert (pure (wait.server_driver_client_hello_wait_ready == true));
                   assert (pure (st_ch.CS.cs_model.CS.model_control ==
@@ -2882,6 +2916,8 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         sent);
                       assert (pure (st_ch.CS.cs_model.CS.model_control ==
                         CS.ControlHandshaking CS.HsClientHelloReceived));
+                      assert (pure (st_ch.CS.cs_model.CS.model_config ==
+                        'st0.CS.cs_model.CS.model_config));
                       ServerDriverAcceptServerHelloSelectionNotReady
                     }
                   } else {
@@ -2894,10 +2930,14 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                       sent);
                     assert (pure (st_ch.CS.cs_model.CS.model_control ==
                       CS.ControlHandshaking CS.HsClientHelloReceived));
+                    assert (pure (st_ch.CS.cs_model.CS.model_config ==
+                      'st0.CS.cs_model.CS.model_config));
                     ServerDriverAcceptServerHelloMaterialFailed
                   }
                 } else {
                   assert (pure (wait.server_driver_client_hello_wait_ready == false));
+                  assert (pure (st_ch.CS.cs_model.CS.model_config ==
+                    'st0.CS.cs_model.CS.model_config));
                   ServerDriverAcceptServerHelloClientHelloWait wait
                 }
               }
@@ -2947,7 +2987,11 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                  sent **
                 pure (st1.CS.cs_model.CS.model_config ==
                  'st0.CS.cs_model.CS.model_config)
-            | _ ->
+            | ServerDriverAcceptServerHelloDrainClientHelloWait _
+            | ServerDriverAcceptServerHelloDrainMaterialFailed
+            | ServerDriverAcceptServerHelloDrainSelectionNotReady
+            | ServerDriverAcceptServerHelloDrainDeriveFailed
+            | ServerDriverAcceptServerHelloDrainSendNotReady ->
               exists* st1 received sent.
                 server_driver_connected
                  d
@@ -2955,7 +2999,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                  'certificate_chain
                  'credential_identity
                  received
-                 sent)
+                 sent **
+                pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config))
 {
   let accepted =
     accept_start_read_client_hello_select_derive_send_server_hello_once
@@ -2972,18 +3018,73 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
       ServerDriverAcceptServerHelloDrainAcceptFailed
     }
     ServerDriverAcceptServerHelloClientHelloWait wait -> {
+      with st_wait received_wait sent_wait.
+        assert (
+          server_driver_connected
+            d
+            st_wait
+            'certificate_chain
+            'credential_identity
+            received_wait
+            sent_wait **
+          pure (st_wait.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
       ServerDriverAcceptServerHelloDrainClientHelloWait wait
     }
     ServerDriverAcceptServerHelloMaterialFailed -> {
+      with st_material received_material sent_material.
+        assert (
+          server_driver_connected
+            d
+            st_material
+            'certificate_chain
+            'credential_identity
+            received_material
+            sent_material **
+          pure (st_material.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
       ServerDriverAcceptServerHelloDrainMaterialFailed
     }
     ServerDriverAcceptServerHelloSelectionNotReady -> {
+      with st_selection received_selection sent_selection.
+        assert (
+          server_driver_connected
+            d
+            st_selection
+            'certificate_chain
+            'credential_identity
+            received_selection
+            sent_selection **
+          pure (st_selection.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
       ServerDriverAcceptServerHelloDrainSelectionNotReady
     }
     ServerDriverAcceptServerHelloDeriveFailed -> {
+      with st_derive received_derive sent_derive.
+        assert (
+          server_driver_connected
+            d
+            st_derive
+            'certificate_chain
+            'credential_identity
+            received_derive
+            sent_derive **
+          pure (st_derive.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
       ServerDriverAcceptServerHelloDrainDeriveFailed
     }
     ServerDriverAcceptServerHelloSendNotReady -> {
+      with st_send received_send sent_send.
+        assert (
+          server_driver_connected
+            d
+            st_send
+            'certificate_chain
+            'credential_identity
+            received_send
+            sent_send **
+          pure (st_send.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
       ServerDriverAcceptServerHelloDrainSendNotReady
     }
     ServerDriverAcceptServerHelloOk -> {

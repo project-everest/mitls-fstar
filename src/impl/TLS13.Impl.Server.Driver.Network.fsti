@@ -261,11 +261,13 @@ fn read_until_client_hello_received
             'credential_identity
             received'
             sent' **
-          pure (result.server_driver_client_hello_wait_ready == true ==>
+          pure (st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config /\
+           (result.server_driver_client_hello_wait_ready == true ==>
             st1.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloReceived /\
             st1.CS.cs_model.CS.model_config ==
-              'st0.CS.cs_model.CS.model_config)
+              'st0.CS.cs_model.CS.model_config))
 
 val lemma_server_driver_network_process_correct_intro
   (st0:CS.connection_state)

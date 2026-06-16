@@ -371,7 +371,9 @@ fn accept
                  'certificate_chain
                  'credential_identity
                  received
-                 sent)
+                 sent **
+               pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config))
 {
   let result =
     accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
@@ -398,7 +400,9 @@ fn accept
           'certificate_chain
           'credential_identity
           received
-          sent);
+          sent **
+        pure (st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
       if (wait.server_driver_client_hello_wait_exhausted) {
         ServerWorkflowExhausted
       } else {
@@ -417,7 +421,9 @@ fn accept
           'certificate_chain
           'credential_identity
           received
-          sent);
+          sent **
+        pure (st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainSelectionNotReady -> {
@@ -428,7 +434,9 @@ fn accept
           'certificate_chain
           'credential_identity
           received
-          sent);
+          sent **
+        pure (st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainDeriveFailed -> {
@@ -439,7 +447,9 @@ fn accept
           'certificate_chain
           'credential_identity
           received
-          sent);
+          sent **
+        pure (st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainSendNotReady -> {
@@ -450,7 +460,9 @@ fn accept
           'certificate_chain
           'credential_identity
           received
-          sent);
+          sent **
+        pure (st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainOk drain -> {

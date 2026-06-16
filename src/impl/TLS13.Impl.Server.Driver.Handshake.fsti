@@ -619,7 +619,9 @@ fn accept_start_read_client_hello_select_derive_once
                  'credential_identity
                  received
                  sent **
-               pure (wait.DN.server_driver_client_hello_wait_ready == false)
+               pure (wait.DN.server_driver_client_hello_wait_ready == false /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptSelectDeriveMaterialFailed ->
              exists* st1 received sent.
                DS.server_driver_connected
@@ -630,7 +632,9 @@ fn accept_start_read_client_hello_select_derive_once
                  received
                  sent **
                pure (st1.CS.cs_model.CS.model_control ==
-                 CS.ControlHandshaking CS.HsClientHelloReceived)
+                 CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptSelectDeriveSelectionNotReady ->
              exists* st1 received sent.
                DS.server_driver_connected
@@ -641,7 +645,9 @@ fn accept_start_read_client_hello_select_derive_once
                  received
                  sent **
                pure (st1.CS.cs_model.CS.model_control ==
-                 CS.ControlHandshaking CS.HsClientHelloReceived)
+                 CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptSelectDeriveInternalUnsupported ->
              pure False
            | ServerDriverAcceptSelectDeriveOk ->
@@ -696,7 +702,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                    'credential_identity
                    received
                    sent **
-                 pure (wait.DN.server_driver_client_hello_wait_ready == false)
+                 pure (wait.DN.server_driver_client_hello_wait_ready == false /\
+                   st1.CS.cs_model.CS.model_config ==
+                     'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptServerHelloMaterialFailed
            | ServerDriverAcceptServerHelloSelectionNotReady ->
                exists* st1 received sent.
@@ -708,7 +716,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                    received
                    sent **
                  pure (st1.CS.cs_model.CS.model_control ==
-                   CS.ControlHandshaking CS.HsClientHelloReceived)
+                   CS.ControlHandshaking CS.HsClientHelloReceived /\
+                   st1.CS.cs_model.CS.model_config ==
+                     'st0.CS.cs_model.CS.model_config)
            | ServerDriverAcceptServerHelloDeriveFailed
            | ServerDriverAcceptServerHelloSendNotReady
            | ServerDriverAcceptServerHelloOk ->
@@ -766,7 +776,11 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                    sent **
                   pure (st1.CS.cs_model.CS.model_config ==
                    'st0.CS.cs_model.CS.model_config)
-            | _ ->
+            | ServerDriverAcceptServerHelloDrainClientHelloWait _
+            | ServerDriverAcceptServerHelloDrainMaterialFailed
+            | ServerDriverAcceptServerHelloDrainSelectionNotReady
+            | ServerDriverAcceptServerHelloDrainDeriveFailed
+            | ServerDriverAcceptServerHelloDrainSendNotReady ->
               exists* st1 received sent.
                   DS.server_driver_connected
                    d
@@ -774,7 +788,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                    'certificate_chain
                    'credential_identity
                    received
-                   sent)
+                   sent **
+                  pure (st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config))
 
 fn accept_transport_and_start_once
   (d:DS.server_driver)
@@ -821,10 +837,12 @@ fn accept_transport_start_and_read_client_hello
                  'credential_identity
                  received
                  sent **
-               pure (wait.DN.server_driver_client_hello_wait_ready == true ==>
+               pure (st1.CS.cs_model.CS.model_config ==
+                   (CM.started_server_state 'st0).CS.cs_model.CS.model_config /\
+                 (wait.DN.server_driver_client_hello_wait_ready == true ==>
                    st1.CS.cs_model.CS.model_control ==
                      CS.ControlHandshaking CS.HsClientHelloReceived /\
                    st1.CS.cs_model.CS.model_config ==
-                     (CM.started_server_state 'st0).CS.cs_model.CS.model_config)
+                     (CM.started_server_state 'st0).CS.cs_model.CS.model_config))
            | _ ->
              DS.server_driver_live d 'st0 'certificate_chain 'credential_identity)

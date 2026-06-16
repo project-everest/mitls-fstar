@@ -367,7 +367,9 @@ fn accept
                  'certificate_chain
                  'credential_identity
                  received
-                 sent)
+                 sent **
+               pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config))
 
 fn send
   (d:server_driver)

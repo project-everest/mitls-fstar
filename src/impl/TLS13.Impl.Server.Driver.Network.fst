@@ -2468,11 +2468,13 @@ fn rec read_until_client_hello_received
             'credential_identity
             received'
             sent' **
-          pure (result.server_driver_client_hello_wait_ready == true ==>
+          pure (st1.CS.cs_model.CS.model_config ==
+             'st0.CS.cs_model.CS.model_config /\
+           (result.server_driver_client_hello_wait_ready == true ==>
             st1.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloReceived /\
             st1.CS.cs_model.CS.model_config ==
-              'st0.CS.cs_model.CS.model_config)
+              'st0.CS.cs_model.CS.model_config))
   decreases (SZ.v fuel)
 {
   let no_op_resp = {
@@ -2506,6 +2508,9 @@ fn rec read_until_client_hello_received
       server_driver_client_hello_wait_exhausted = false;
     }
   } else if (fuel = 0sz) {
+    assert (pure (
+      'st0.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
     {
       server_driver_client_hello_wait_last = no_op_buffer_resp;
       server_driver_client_hello_wait_ready = false;
@@ -2529,6 +2534,12 @@ fn rec read_until_client_hello_received
         step
         (Ghost.reveal 'sent)
         sent'));
+    lemma_server_driver_network_process_correct_preserves_config
+      'st0
+      st1
+      step
+      (Ghost.reveal 'sent)
+      sent';
     forget_server_driver_connected_app_out d;
     let snapshot_after = server_driver_control_snapshot d;
     assert (pure (CR.control_snapshot_matches snapshot_after st1));
@@ -2543,12 +2554,6 @@ fn rec read_until_client_hello_received
       assert (pure (
         st1.CS.cs_model.CS.model_control ==
           CS.ControlHandshaking CS.HsClientHelloReceived));
-      lemma_server_driver_network_process_correct_preserves_config
-        'st0
-        st1
-        step
-        (Ghost.reveal 'sent)
-        sent';
       assert (pure (
         st1.CS.cs_model.CS.model_config ==
           'st0.CS.cs_model.CS.model_config));
@@ -2560,12 +2565,6 @@ fn rec read_until_client_hello_received
     } else {
       let need_more = step.ST.response.ST.status = ST.NeedMoreInput;
       if need_more {
-        lemma_server_driver_network_process_correct_preserves_config
-          'st0
-          st1
-          step
-          (Ghost.reveal 'sent)
-          sent';
         let next_fuel = SZ.sub fuel 1sz;
         assert (pure (SZ.v next_fuel < SZ.v fuel));
         let result = read_until_client_hello_received d next_fuel;
@@ -2577,16 +2576,23 @@ fn rec read_until_client_hello_received
             'credential_identity
             received2
             sent2 **
-          pure (result.server_driver_client_hello_wait_ready == true ==>
+          pure (st2.CS.cs_model.CS.model_config ==
+            st1.CS.cs_model.CS.model_config /\
+          (result.server_driver_client_hello_wait_ready == true ==>
             st2.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloReceived /\
             st2.CS.cs_model.CS.model_config ==
-              st1.CS.cs_model.CS.model_config));
+              st1.CS.cs_model.CS.model_config)));
+        assert (pure (st2.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
         assert (pure (result.server_driver_client_hello_wait_ready == true ==>
           st2.CS.cs_model.CS.model_config ==
             'st0.CS.cs_model.CS.model_config));
         result
       } else {
+        assert (pure (
+          st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
         {
           server_driver_client_hello_wait_last = step;
           server_driver_client_hello_wait_ready = false;
