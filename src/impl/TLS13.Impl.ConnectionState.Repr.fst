@@ -117,7 +117,7 @@ fn alloc_empty_sized_bytes (#cap:nat)
   assert (pure (B.length (Seq.create cap 0uy) == cap));
   Seq.lemma_len_slice (Seq.create cap 0uy) 0 0;
   Seq.lemma_eq_intro B.empty (Seq.slice (Seq.create cap 0uy) 0 0);
-  assert (pure (byte_prefix_matches (Seq.create cap 0uy) (SZ.uint_to_t 0) B.empty));
+  assert (pure (byte_prefix_matches (Seq.create cap 0uy) 0sz B.empty));
   fold (sized_bytes_exactly slot cap B.empty);
   slot
 }
@@ -312,7 +312,7 @@ fn alloc_default_cipher_suites ()
             max_cipher_suites
             default_connection_config.CS.config_cipher_suites
 {
-  let items = V.alloc 0x1303us (SZ.uint_to_t max_cipher_suites);
+  let items = V.alloc 0x1303us (max_cipher_suites_sz);
   let len = Box.alloc 1sz;
   let slot = { items; len };
   rewrite (V.pts_to items (Seq.create max_cipher_suites 0x1303us)) as
@@ -343,7 +343,7 @@ fn alloc_default_signature_schemes ()
             max_signature_schemes
             default_connection_config.CS.config_signature_schemes
 {
-  let items = V.alloc 0x0804us (SZ.uint_to_t max_signature_schemes);
+  let items = V.alloc 0x0804us (max_signature_schemes_sz);
   let len = Box.alloc 1sz;
   let slot = { items; len };
   rewrite (V.pts_to items (Seq.create max_signature_schemes 0x0804us)) as
@@ -632,10 +632,10 @@ fn alloc_handshake_start_empty ()
   let client_random = V.alloc 0uy 32sz;
   let client_key_share_private = alloc_empty_optional_fixed32 ();
   let client_key_share_public = V.alloc 0uy 32sz;
-  let cipher_suites_items = V.alloc 0us (SZ.uint_to_t max_cipher_suites);
+  let cipher_suites_items = V.alloc 0us (max_cipher_suites_sz);
   let cipher_suites_len = Box.alloc 0sz;
   let cipher_suites = { items = cipher_suites_items; len = cipher_suites_len };
-  let signature_schemes_items = V.alloc 0us (SZ.uint_to_t max_signature_schemes);
+  let signature_schemes_items = V.alloc 0us (max_signature_schemes_sz);
   let signature_schemes_len = Box.alloc 0sz;
   let signature_schemes = { items = signature_schemes_items; len = signature_schemes_len };
   let start = {
@@ -689,10 +689,10 @@ fn alloc_client_hello_slot_empty ()
 {
   let present_box = Box.alloc false;
   let client_hello_random = V.alloc 0uy 32sz;
-  let client_hello_server_name = V.alloc 0uy (SZ.uint_to_t max_hostname_len);
+  let client_hello_server_name = V.alloc 0uy (max_hostname_len_sz);
   let client_hello_key_share = V.alloc 0uy 32sz;
-  let client_hello_cipher_suites = V.alloc 0us (SZ.uint_to_t max_cipher_suites);
-  let client_hello_signature_schemes = V.alloc 0us (SZ.uint_to_t max_signature_schemes);
+  let client_hello_cipher_suites = V.alloc 0us (max_cipher_suites_sz);
+  let client_hello_signature_schemes = V.alloc 0us (max_signature_schemes_sz);
   let l = {
     IM.client_hello_random;
     IM.client_hello_server_name;
@@ -802,7 +802,7 @@ fn alloc_peer_empty ()
   let present = Box.alloc false;
   let validated_hostname = alloc_empty_sized_bytes #max_hostname_len;
   let leaf_public_key = alloc_empty_sized_bytes #max_public_key_len;
-  let permitted_items = V.alloc 0us (SZ.uint_to_t max_signature_schemes);
+  let permitted_items = V.alloc 0us (max_signature_schemes_sz);
   let permitted_len = Box.alloc 0sz;
   let permitted_signature_schemes = { items = permitted_items; len = permitted_len };
   let peer = {
@@ -1171,8 +1171,8 @@ fn copy_server_hello_prefix_to_transcript
 
   assert (pure (SZ.fits max_server_hello_len));
   assert (pure (SZ.fits max_transcript_len));
-  let src_cap = SZ.uint_to_t max_server_hello_len;
-  let dst_cap = SZ.uint_to_t max_transcript_len;
+  let src_cap = max_server_hello_len_sz;
+  let dst_cap = max_transcript_len_sz;
   let src_slice = Slice.from_array (V.vec_to_array src) src_cap;
   let dst_slice = Slice.from_array (V.vec_to_array dst) dst_cap;
 
@@ -1231,8 +1231,8 @@ fn copy_client_hello_prefix_to_transcript
 
   assert (pure (SZ.fits max_client_hello_len));
   assert (pure (SZ.fits max_transcript_len));
-  let src_cap = SZ.uint_to_t max_client_hello_len;
-  let dst_cap = SZ.uint_to_t max_transcript_len;
+  let src_cap = max_client_hello_len_sz;
+  let dst_cap = max_transcript_len_sz;
   let src_slice = Slice.from_array (V.vec_to_array src) src_cap;
   let dst_slice = Slice.from_array (V.vec_to_array dst) dst_cap;
 
@@ -1286,7 +1286,7 @@ fn copy_array_to_transcript
   V.to_array_pts_to dst;
 
   assert (pure (SZ.fits max_transcript_len));
-  let dst_cap = SZ.uint_to_t max_transcript_len;
+  let dst_cap = max_transcript_len_sz;
   let src_slice = Slice.from_array src src_len;
   let dst_slice = Slice.from_array (V.vec_to_array dst) dst_cap;
 
@@ -1429,7 +1429,7 @@ fn copy_hostname_sized_bytes
   V.to_array_pts_to dst.bytes;
 
   assert (pure (SZ.fits max_hostname_len));
-  let cap = SZ.uint_to_t max_hostname_len;
+  let cap = max_hostname_len_sz;
   let src_slice = Slice.from_array (V.vec_to_array src.bytes) cap;
   let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) cap;
 
@@ -1479,7 +1479,7 @@ fn copy_array_to_public_key_sized_bytes
   V.to_array_pts_to dst.bytes;
 
   assert (pure (SZ.fits max_public_key_len));
-  let dst_cap = SZ.uint_to_t max_public_key_len;
+  let dst_cap = max_public_key_len_sz;
   let src_slice = Slice.from_array src src_len;
   let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) dst_cap;
 
@@ -1526,7 +1526,7 @@ fn copy_array_to_certificate_verify_input_sized_bytes
   V.to_array_pts_to dst.bytes;
 
   assert (pure (SZ.fits max_certificate_verify_input_len));
-  let dst_cap = SZ.uint_to_t max_certificate_verify_input_len;
+  let dst_cap = max_certificate_verify_input_len_sz;
   let src_slice = Slice.from_array src src_len;
   let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) dst_cap;
 
@@ -1617,8 +1617,8 @@ fn copy_certificate_chain_range_to_sized_bytes
 
   assert (pure (SZ.fits IM.max_certificate_chain_bytes));
   assert (pure (SZ.fits max_handshake_flight_len));
-  let src_cap = SZ.uint_to_t IM.max_certificate_chain_bytes;
-  let dst_cap = SZ.uint_to_t max_handshake_flight_len;
+  let src_cap = IM.max_certificate_chain_bytes_sz;
+  let dst_cap = max_handshake_flight_len_sz;
   let src_slice = Slice.from_array (V.vec_to_array src) src_cap;
   let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) dst_cap;
 

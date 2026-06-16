@@ -1281,7 +1281,7 @@ fn can_receive_encrypted_extensions
   let seq_ok = Rec.can_advance_seq c.records.read;
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let fragment_fits = SZ.lte fragment_len max_len;
   if fragment_fits {
     let max_start = SZ.sub max_len fragment_len;
@@ -1455,7 +1455,7 @@ fn can_receive_certificate
   let has_certificate = SZ.gt cert_count 0sz;
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let fragment_fits = SZ.lte fragment_len max_len;
   if fragment_fits {
     let max_start = SZ.sub max_len fragment_len;
@@ -1645,7 +1645,7 @@ fn can_validate_certificate
   };
 
   assert (pure (SZ.fits max_public_key_len));
-  let max_pk_len = SZ.uint_to_t max_public_key_len;
+  let max_pk_len = max_public_key_len_sz;
   let payload_fits = SZ.lte payload_len max_pk_len;
   let ok =
     tag_ok &&
@@ -1777,7 +1777,7 @@ fn can_receive_certificate_verify
   let seq_ok = Rec.can_advance_seq c.records.read;
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let fragment_fits = SZ.lte fragment_len max_len;
   if fragment_fits {
     let max_start = SZ.sub max_len fragment_len;
@@ -2169,7 +2169,7 @@ fn can_verify_server_finished
     st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false));
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let payload_fits = SZ.lte payload_len max_len;
   if payload_fits {
     let max_start = SZ.sub max_len payload_len;
@@ -2522,7 +2522,7 @@ fn can_send_client_finished_runtime
   fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let finished_len = 36sz;
   let transcript_room = (
     if SZ.lte finished_len max_len then

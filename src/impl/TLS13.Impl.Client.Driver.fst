@@ -27,13 +27,13 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
-let driver_network_out_capacity : SZ.t = SZ.uint_to_t 20000
-let driver_app_out_capacity : SZ.t = SZ.uint_to_t 16640
-let driver_rx_capacity : SZ.t = SZ.uint_to_t 65535
-let driver_public_key_payload_capacity : SZ.t = SZ.uint_to_t 4096
-let driver_auth_leaf_der_capacity : SZ.t = SZ.uint_to_t 32768
-let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
-let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
+let driver_network_out_capacity : SZ.t = 20000sz
+let driver_app_out_capacity : SZ.t = 16640sz
+let driver_rx_capacity : SZ.t = 65535sz
+let driver_public_key_payload_capacity : SZ.t = 4096sz
+let driver_auth_leaf_der_capacity : SZ.t = 32768sz
+let driver_certificate_verify_input_capacity : SZ.t = 256sz
+let driver_signature_capacity : SZ.t = 4096sz
 let driver_server_finished_payload_len : SZ.t = 36sz
 
 let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
