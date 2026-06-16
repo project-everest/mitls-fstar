@@ -517,7 +517,8 @@ test/test_extracted_server_openssl_client: \
 	  $(HACL_WRAPPER_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
-test-openssl-sclient: test/test_extracted_server_openssl_client
+test-openssl-sclient: test/test_extracted_server_openssl_client \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
 	./test/test_extracted_server_openssl_client
 
 test/test_extracted_client_openssl_echo: \
