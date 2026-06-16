@@ -280,6 +280,22 @@ let lemma_paired_handshake_message_states_application_derivation_projection_inpu
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
 
+let lemma_paired_handshake_events_application_derivation_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_events client server)
+      (ensures
+        client_server_driver_application_derivation_projection_inputs
+          client
+          server)
+=
+  assert (CS.paired_handshake_events client server);
+  CSL.lemma_paired_handshake_events_same_key_derivation_checkpoint
+    CS.DeriveApplicationTraffic
+    client
+    server
+
 let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -432,6 +448,50 @@ let lemma_client_server_driver_application_record_epochs_installed
     server.CS.cs_model);
   CSL.lemma_connection_application_ready_record_epochs_installed
     CS.ServerEndpoint
+    server
+
+let lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_application_checkpoint
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        paired_cleartext_hello_messages client server /\
+        client_server_driver_application_derivation_projection_inputs
+          client
+          server /\
+        client_server_driver_supported_profile_application_record_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server)
+=
+  assert (client_server_driver_x25519_projection_inputs client server);
+  assert (client_server_driver_supported_profile_derived_projection_inputs
+    client
+    server)
+
+let lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        paired_cleartext_hello_messages client server /\
+        paired_handshake_events client server /\
+        client_server_driver_supported_profile_application_record_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server)
+=
+  lemma_paired_handshake_events_application_derivation_projection_inputs
+    client
+    server;
+  lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_application_checkpoint
+    client
     server
 
 let lemma_client_server_driver_remaining_semantic_projection_inputs_from_paired_handshake_message_states
@@ -730,6 +790,119 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_transport
     server_received
     server_sent);
   lemma_client_server_driver_key_material_agrees_from_public_success_projections
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent
+
+let lemma_client_server_driver_key_material_agrees_from_public_success_minimal_projections
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_minimal_projection_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_application_checkpoint
+    client
+    server;
+  assert (client_server_driver_key_material_no_read_ahead_projection_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent);
+  lemma_client_server_driver_key_material_agrees_from_public_success_transport_and_semantics
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent
+
+let lemma_client_server_driver_key_material_agrees_from_public_success_cleartext_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_handshake_event_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_handshake_events
+    client
+    server;
+  assert (client_server_driver_key_material_no_read_ahead_minimal_projection_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent);
+  assert (client_server_driver_key_material_no_read_ahead_projection_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent);
+  lemma_client_server_driver_key_material_agrees_from_public_success_minimal_projections
     client
     server
     client_received
