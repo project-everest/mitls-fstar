@@ -36,7 +36,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 inline_for_extraction noextract let min_len = 1
 inline_for_extraction noextract let max_len = 65535
-type keyShareEntry_key_exchange = LP.parse_bounded_seq_vlbytes_t 1 65535
+noextract type keyShareEntry_key_exchange = LP.parse_bounded_seq_vlbytes_t 1 65535
 
 inline_for_extraction noextract let keyShareEntry_key_exchange_parser_kind = LP.strong_parser_kind 3 65537 None
 

@@ -34,7 +34,7 @@ module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
 
-type finished = Seq.lseq FStar.UInt8.t 32
+noextract type finished = Seq.lseq FStar.UInt8.t 32
 
 inline_for_extraction noextract let finished_parser_kind = LP.strong_parser_kind 32 32 (Some LP.ParserKindMetadataTotal)
 

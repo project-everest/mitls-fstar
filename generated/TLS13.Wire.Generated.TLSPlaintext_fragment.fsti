@@ -36,7 +36,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 inline_for_extraction noextract let min_len = 0
 inline_for_extraction noextract let max_len = 16640
-type tLSPlaintext_fragment = LP.parse_bounded_seq_vlbytes_t 0 16640
+noextract type tLSPlaintext_fragment = LP.parse_bounded_seq_vlbytes_t 0 16640
 
 inline_for_extraction noextract let tLSPlaintext_fragment_parser_kind = LP.strong_parser_kind 2 16642 None
 

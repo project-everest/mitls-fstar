@@ -36,7 +36,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 inline_for_extraction noextract let min_len = 0
 inline_for_extraction noextract let max_len = 32
-type clientHello_legacy_session_id = LP.parse_bounded_seq_vlbytes_t 0 32
+noextract type clientHello_legacy_session_id = LP.parse_bounded_seq_vlbytes_t 0 32
 
 inline_for_extraction noextract let clientHello_legacy_session_id_parser_kind = LP.strong_parser_kind 1 33 None
 

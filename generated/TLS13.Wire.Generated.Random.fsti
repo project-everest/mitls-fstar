@@ -34,7 +34,7 @@ module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
 
-type random = Seq.lseq FStar.UInt8.t 32
+noextract type random = Seq.lseq FStar.UInt8.t 32
 
 inline_for_extraction noextract let random_parser_kind = LP.strong_parser_kind 32 32 (Some LP.ParserKindMetadataTotal)
 

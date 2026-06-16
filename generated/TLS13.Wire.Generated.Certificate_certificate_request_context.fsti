@@ -36,7 +36,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 inline_for_extraction noextract let min_len = 0
 inline_for_extraction noextract let max_len = 255
-type certificate_certificate_request_context = LP.parse_bounded_seq_vlbytes_t 0 255
+noextract type certificate_certificate_request_context = LP.parse_bounded_seq_vlbytes_t 0 255
 
 inline_for_extraction noextract let certificate_certificate_request_context_parser_kind = LP.strong_parser_kind 1 256 None
 

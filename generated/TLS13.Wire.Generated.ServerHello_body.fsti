@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.ServerHelloBody
 
-type serverHello_body_random = Seq.lseq FStar.UInt8.t 32
+noextract type serverHello_body_random = Seq.lseq FStar.UInt8.t 32
 
 inline_for_extraction noextract let serverHello_body_random_parser_kind = LP.strong_parser_kind 32 32 (Some LP.ParserKindMetadataTotal)
 
@@ -73,12 +73,12 @@ noextract let serverHello_body_cst : serverHello_body_random =
   assert_norm (L.length [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] == 32);
   Seq.seq_of_list [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy]
 
-type serverHello_body_false = {
+noextract type serverHello_body_false = {
   tag: t:serverHello_body_random{t <> serverHello_body_cst};
   value: serverHelloBody
 }
 
-type serverHello_body =
+noextract type serverHello_body =
   | HelloRetryRequest of serverHelloBody
   | ServerHello_body_false of serverHello_body_false
 
