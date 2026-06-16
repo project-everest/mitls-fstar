@@ -463,6 +463,8 @@ fn close
   ensures exists* st1.
             server_driver_closed d st1 'certificate_chain 'credential_identity **
             pure (status == ServerWorkflowClosed /\
+                 server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                  server_driver_close_correct
                    'st0
                    st1

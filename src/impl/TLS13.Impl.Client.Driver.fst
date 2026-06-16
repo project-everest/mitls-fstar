@@ -6124,12 +6124,14 @@ fn close
   returns status:driver_workflow_status
   ensures exists* st1.
           client_driver_closed d st1 **
-          pure (exists st_close_notify.
+          pure (client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+                (exists st_close_notify.
             client_driver_close_correct
               'st0
               st_close_notify
               status
-              wait_for_peer)
+              wait_for_peer))
 {
   unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
   with ch buffered buffered_len.
@@ -6144,6 +6146,14 @@ fn close
                     (Ghost.reveal 'sent0)
                     buffered
                     buffered_len));
+  assert (pure (client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0)));
+  lemma_client_driver_wire_logs_match_received_accounted
+    'st0
+    (Ghost.reveal 'received0)
+    (Ghost.reveal 'sent0)
+    buffered
+    buffered_len;
+  assert (pure (client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0)));
   let current_channel = Box.(!d.client_driver_channel);
   assert (pure (current_channel == Some ch));
   assert (pure (Some? current_channel));
@@ -6225,6 +6235,8 @@ fn close
   fold (client_driver_buffers d (Ghost.reveal close_buffered) workflow.driver_workflow_rx_len);
   free_client_driver_buffers d workflow.driver_workflow_rx_len;
   fold (client_driver_closed d st1);
+  assert (pure (client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0)));
+  assert (pure (client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0)));
   assert (pure (exists st_close_notify.
     client_driver_close_correct
       'st0

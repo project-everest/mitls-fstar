@@ -675,37 +675,37 @@ fn send
             server_driver_received_log_accounted st1 (Ghost.reveal 'received))
 {
   unfold (server_driver_connected
-    d
-    'st0
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal 'received)
-    (Ghost.reveal 'sent));
+     d
+     'st0
+     (Ghost.reveal 'certificate_chain)
+     (Ghost.reveal 'credential_identity)
+     (Ghost.reveal 'received)
+     (Ghost.reveal 'sent));
   with ch0 buffered0 buffered_len0.
-    assert (Box.pts_to d.server_driver_channel (Some ch0) **
-            IO.is_channel ch0 (Ghost.reveal 'received) (Ghost.reveal 'sent) **
-            server_driver_buffers d buffered0 buffered_len0 **
-            pure (server_driver_wire_logs_match
-              'st0
-              (Ghost.reveal 'received)
-              (Ghost.reveal 'sent)
-              buffered0
-              buffered_len0));
+     assert (Box.pts_to d.server_driver_channel (Some ch0) **
+             IO.is_channel ch0 (Ghost.reveal 'received) (Ghost.reveal 'sent) **
+             server_driver_buffers d buffered0 buffered_len0 **
+             pure (server_driver_wire_logs_match
+               'st0
+               (Ghost.reveal 'received)
+               (Ghost.reveal 'sent)
+               buffered0
+               buffered_len0));
   assert (pure (server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
   lemma_server_driver_wire_logs_match_received_accounted
-    'st0
-    (Ghost.reveal 'received)
-    (Ghost.reveal 'sent)
-    buffered0
-    buffered_len0;
+     'st0
+     (Ghost.reveal 'received)
+     (Ghost.reveal 'sent)
+     buffered0
+     buffered_len0;
   assert (pure (server_driver_received_log_accounted 'st0 (Ghost.reveal 'received)));
   fold (server_driver_connected
-    d
-    'st0
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal 'received)
-    (Ghost.reveal 'sent));
+     d
+     'st0
+     (Ghost.reveal 'certificate_chain)
+     (Ghost.reveal 'credential_identity)
+     (Ghost.reveal 'received)
+     (Ghost.reveal 'sent));
   let resp = send_application_data_once d payload payload_len;
   with st1 sent'.
     assert (server_driver_connected
@@ -1151,11 +1151,45 @@ fn close
   ensures exists* st1.
           server_driver_closed d st1 'certificate_chain 'credential_identity **
           pure (status == ServerWorkflowClosed /\
+                server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+                server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_close_correct
                   'st0
                   st1
                   (Ghost.reveal 'sent))
 {
+  unfold (server_driver_connected
+   d
+   'st0
+   (Ghost.reveal 'certificate_chain)
+   (Ghost.reveal 'credential_identity)
+   (Ghost.reveal 'received)
+   (Ghost.reveal 'sent));
+  with ch0 buffered0 buffered_len0.
+   assert (Box.pts_to d.server_driver_channel (Some ch0) **
+           IO.is_channel ch0 (Ghost.reveal 'received) (Ghost.reveal 'sent) **
+           server_driver_buffers d buffered0 buffered_len0 **
+           pure (server_driver_wire_logs_match
+             'st0
+             (Ghost.reveal 'received)
+             (Ghost.reveal 'sent)
+             buffered0
+             buffered_len0));
+  assert (pure (server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+  lemma_server_driver_wire_logs_match_received_accounted
+   'st0
+   (Ghost.reveal 'received)
+   (Ghost.reveal 'sent)
+   buffered0
+   buffered_len0;
+  assert (pure (server_driver_received_log_accounted 'st0 (Ghost.reveal 'received)));
+  fold (server_driver_connected
+   d
+   'st0
+   (Ghost.reveal 'certificate_chain)
+   (Ghost.reveal 'credential_identity)
+   (Ghost.reveal 'received)
+   (Ghost.reveal 'sent));
   lemma_application_ready_close_notify_ready 'st0;
   let resp = DL.send_close_notify_once d;
   with st1 sent'.
@@ -1173,6 +1207,8 @@ fn close
   close_transport_once d;
   assert (server_driver_closed d st1 'certificate_chain 'credential_identity);
   assert (pure (ServerWorkflowClosed == ServerWorkflowClosed /\
+    server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+    server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
     server_driver_close_correct
       'st0
       st1
@@ -1180,6 +1216,8 @@ fn close
   assert (exists* st_after.
     server_driver_closed d st_after 'certificate_chain 'credential_identity **
     pure (ServerWorkflowClosed == ServerWorkflowClosed /\
+          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+          server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
           server_driver_close_correct
             'st0
             st_after

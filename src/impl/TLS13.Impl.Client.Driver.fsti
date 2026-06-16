@@ -431,9 +431,11 @@ fn close
   returns status:driver_workflow_status
   ensures exists* st1.
           client_driver_closed d st1 **
-          pure (exists st_close_notify.
+          pure (client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+                (exists st_close_notify.
             client_driver_close_correct
               'st0
               st_close_notify
               status
-              wait_for_peer)
+              wait_for_peer))
