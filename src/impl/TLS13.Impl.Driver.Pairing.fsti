@@ -248,12 +248,32 @@ let client_server_driver_key_material_no_read_ahead_inputs
   CS.supported_profile_client_server_key_material_inputs_agree client server
 
 noextract
-let client_server_driver_supported_profile_state_inputs
+let client_server_driver_supported_profile_derived_state_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
   CS.paired_x25519_key_shares client server /\
-  CS.paired_handshake_events client server /\
+  CS.paired_handshake_events client server
+
+val lemma_client_server_driver_supported_profile_derived_key_material_agrees
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        client_server_driver_supported_profile_derived_state_inputs client server)
+      (ensures
+        CS.connection_supported_profile_key_schedule_lineage client /\
+        CS.connection_supported_profile_key_schedule_lineage server /\
+        CS.supported_profile_all_derived_key_material_agrees client server)
+
+noextract
+let client_server_driver_supported_profile_state_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  client_server_driver_supported_profile_derived_state_inputs client server /\
   CS.supported_profile_application_record_material_inputs_agree client server
 
 val lemma_client_server_driver_supported_profile_key_material_inputs_agree

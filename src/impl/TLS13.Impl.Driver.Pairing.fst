@@ -200,18 +200,18 @@ let lemma_client_server_driver_key_material_agrees_from_prefixes
     server_sent;
   CSL.lemma_supported_profile_client_server_key_material_agrees client server
 
-let lemma_client_server_driver_supported_profile_key_material_inputs_agree
+let lemma_client_server_driver_supported_profile_derived_key_material_agrees
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
       (requires
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
-        client_server_driver_supported_profile_state_inputs client server)
+        client_server_driver_supported_profile_derived_state_inputs client server)
       (ensures
-        CS.supported_profile_client_server_key_material_inputs_agree
-          client
-          server)
+        CS.connection_supported_profile_key_schedule_lineage client /\
+        CS.connection_supported_profile_key_schedule_lineage server /\
+        CS.supported_profile_all_derived_key_material_agrees client server)
 =
   assert (CS.connection_state_consistent client);
   assert (CS.application_record_keys_installed_for_role
@@ -226,6 +226,28 @@ let lemma_client_server_driver_supported_profile_key_material_inputs_agree
     server.CS.cs_model);
   CSL.lemma_connection_application_keys_supported_profile_key_schedule_lineage
     CS.ServerEndpoint
+    server;
+  assert (CS.connection_supported_profile_key_schedule_lineage client);
+  assert (CS.connection_supported_profile_key_schedule_lineage server);
+  CSL.lemma_paired_supported_profile_all_derived_key_material_agrees
+    client
+    server
+
+let lemma_client_server_driver_supported_profile_key_material_inputs_agree
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        client_server_driver_supported_profile_state_inputs client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server)
+=
+  lemma_client_server_driver_supported_profile_derived_key_material_agrees
+    client
     server;
   assert (CS.connection_supported_profile_key_schedule_lineage client);
   assert (CS.connection_supported_profile_key_schedule_lineage server);

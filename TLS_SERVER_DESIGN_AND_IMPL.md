@@ -1145,10 +1145,13 @@ agreement. Handshake traffic-key agreement is still covered by the historical
 derived-key theorem; the live record-state component is application-only so the
 application-ready theorem does not require current read/write record states to
 simultaneously match both handshake and application epochs.
-Key-schedule lineage is derived at this bridge by
-`lemma_client_server_driver_supported_profile_key_material_inputs_agree`, using
-public client/server application-ready success, endpoint reachability, and
-role-correct installed application record keys. The checked
+Key-schedule lineage is derived by
+`lemma_client_server_driver_supported_profile_derived_key_material_agrees`, which
+proves full historical derived-key agreement from public client/server
+application-ready success plus only paired X25519 shares and transcript
+checkpoints. The aggregate bridge
+`lemma_client_server_driver_supported_profile_key_material_inputs_agree` reuses
+that theorem and adds the current application record-material input component. The checked
 `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
 turns those explicit components plus public no-read-ahead success facts into the
 aggregate supported-profile input predicate, full paired wire logs, and the main

@@ -258,10 +258,14 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      component is application-only so the application-ready theorem surface does
      not require one endpoint record state to be simultaneously at handshake and
      application epochs. Key-schedule lineage is no longer caller-supplied at this bridge:
+     `lemma_client_server_driver_supported_profile_derived_key_material_agrees`
+     now proves the full historical derived-key agreement theorem from public
+     application-ready success plus only paired X25519 shares and transcript
+     checkpoints, deriving client/server lineage from endpoint reachability and
+     role-correct installed application record keys. The aggregate bridge
      `lemma_client_server_driver_supported_profile_key_material_inputs_agree`
-     derives the client and server lineage facts from public application-ready
-     success, endpoint reachability, and role-correct installed application
-     record keys. The component theorem
+     reuses that derived-key theorem and adds the application record-material
+     input component. The component theorem
      `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
      proves the aggregate spec input predicate plus the same wire-log and
      key-material conclusions from those explicit components.
@@ -273,8 +277,9 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      state-machine components from two live successful driver resources, rather
      than requiring them as external theorem premises. Key-schedule lineage is
      now discharged by a pure reachability-shape invariant plus installed
-     application keys; paired X25519 shares, transcript checkpoints, and
-     application record-material input agreement still need dedicated
+     application keys, and the driver-level derived-key theorem is independent
+     of record-material agreement; paired X25519 shares, transcript checkpoints,
+     and application record-material input agreement still need dedicated
      paired-state projection lemmas.
 
 3. **Extraction and interoperability**
