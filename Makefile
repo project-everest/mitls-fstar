@@ -35,7 +35,6 @@ GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
 FSTAR_PREFIX    = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
 FSTAR_ULIB      = $(FSTAR_PREFIX)/lib/fstar/ulib
-FSTAR_ULIB_CHECKED = $(FSTAR_PREFIX)/lib/fstar/ulib.checked
 FSTAR_PULSE_COMMON = $(FSTAR_PREFIX)/lib/fstar/pulse/common
 FSTAR_PULSE_LIB = $(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib
 
@@ -407,49 +406,17 @@ $(KRML_STUB_DIR)/TLS13.Impl.Messages.fst: src/impl/TLS13.Impl.Messages.fst | $(K
 	  { print } \
 	  END { if (pending) print "noextract" }' $< > $@
 
-$(KRML_STUB_DIR)/FStar.SizeT.fsti: $(FSTAR_ULIB)/FStar.SizeT.fsti | $(KRML_STUB_DIR)
-	@awk '/noextract_to "krml"/ { next } { print }' $< > $@
-
-$(KRML_STUB_DIR)/FStar.SizeT.fst: $(FSTAR_ULIB)/FStar.SizeT.fst | $(KRML_STUB_DIR)
-	@cp $< $@
-
-$(OUTPUT_DIR)/FStar_SizeT.krml: \
-  $(KRML_STUB_DIR)/FStar.SizeT.fsti $(KRML_STUB_DIR)/FStar.SizeT.fst | $(OUTPUT_DIR) $(KRML_STUB_CACHE)
-	@# The stub FStar.SizeT (with `noextract_to "krml"` stripped) shares the module
-	@# name FStar.SizeT with the standard library, so despite --cache_dir, F*
-	@# rewrites the *install's* ulib.checked/FStar.SizeT.*.checked with a leaner,
-	@# digest-incompatible variant.  Modules already verified by `make verify`
-	@# recorded the original install hash, so that clobber makes downstream
-	@# per-module (Pulse) extraction see a stale FStar.SizeT (Error 317).  Back up
-	@# the install checked, do the stub work, then restore the originals.
-	@for f in FStar.SizeT.fsti.checked FStar.SizeT.fst.checked; do \
-	  if [ -f "$(FSTAR_ULIB_CHECKED)/$$f" ]; then \
-	    cp -p "$(FSTAR_ULIB_CHECKED)/$$f" "$(FSTAR_ULIB_CHECKED)/$$f.agentic-bak"; \
-	  fi; \
-	done
-	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
-	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
-	  $(KRML_STUB_DIR)/FStar.SizeT.fsti
-	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
-	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
-	  $(KRML_STUB_DIR)/FStar.SizeT.fst
-	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
-	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
+$(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
+	@# Extract the *stock* standard-library FStar.SizeT to .krml, reusing the F*
+	@# install's already-cached FStar.SizeT.checked (--already_cached 'Prims,FStar'
+	@# keeps FStar.SizeT cached, so F* loads it rather than re-checking and never
+	@# rewrites the install's ulib.checked/FStar.SizeT.*.checked).  No stub, no
+	@# clobber/restore: the extracted client code calls no FStar.SizeT function
+	@# (v/uint_to_t stay noextract_to "krml"; all SizeT arithmetic/casts are KaRaMeL
+	@# builtins), so the stock module — where v/uint_to_t emit no C — works as-is.
+	$(FSTAR_EXE) --odir $(OUTPUT_DIR) --already_cached 'Prims,FStar' \
 	  --codegen krml --extract_module FStar.SizeT \
-	  $(KRML_STUB_DIR)/FStar.SizeT.fst --krmloutput $@
-	@# Restore the pristine install FStar.SizeT checked clobbered above.
-	@for f in FStar.SizeT.fsti.checked FStar.SizeT.fst.checked; do \
-	  if [ -f "$(FSTAR_ULIB_CHECKED)/$$f.agentic-bak" ]; then \
-	    mv -f "$(FSTAR_ULIB_CHECKED)/$$f.agentic-bak" "$(FSTAR_ULIB_CHECKED)/$$f"; \
-	  fi; \
-	done
-	@# NOTE: do NOT verify the original FStar.SizeT into $(CACHE_DIR): that writes
-	@# a _cache/FStar.SizeT.*.checked whose dependence hash differs from the F*
-	@# install's already-cached FStar.SizeT.  Modules verified in `make verify`
-	@# record the install hash, so a conflicting _cache copy makes them stale
-	@# (dependence hash mismatch) and breaks per-module extraction of
-	@# interface-only modules (Error 317).  FStar.SizeT is already-cached from the
-	@# install for every other extraction, so no _cache copy is needed.
+	  $(FSTAR_ULIB)/FStar.SizeT.fst --krmloutput $@
 
 $(OUTPUT_DIR)/TLS13_Impl_Messages.krml: \
   $(KRML_STUB_DIR)/TLS13.Impl.Messages.fst | $(OUTPUT_DIR) $(KRML_STUB_CACHE)
@@ -506,70 +473,14 @@ for path in list(root.glob("*.c")) + list((root / "internal").glob("*.h")):
 
         text = fp_re.sub(lambda m: m.group(1) + resolve(m.group(3)) + m.group(4), text)
 
-    if path.name == "FStar_Pulse_PulseCore_Prims.c" and "krml_checked_int_t FStar_UInt8_v(uint8_t x)" not in text:
-        text += "\nkrml_checked_int_t FStar_UInt8_v(uint8_t x)\n{\n  return (krml_checked_int_t)x;\n}\n"
+    # The [krml_checked_int_t] (F* [nat]) runtime primitives
+    # (Prims.op_*, FStar.UInt8.v/uint_to_t) are provided by the hand-written
+    # c_stubs/tls13_prims_runtime.c, which is always compiled and linked.  They
+    # used to be injected here into the KaRaMeL-generated
+    # FStar_Pulse_PulseCore_Prims.c, but that file is no longer emitted now that
+    # the client uses the stock FStar.SizeT (it calls no FStar.SizeT function),
+    # so a generated host file can no longer be relied upon.
 
-    if path.name == "FStar_Pulse_PulseCore_Prims.c":
-        runtime_helpers = """
-krml_checked_int_t Prims_op_Division(krml_checked_int_t x, krml_checked_int_t y)
-{
-  return x / y;
-}
-
-krml_checked_int_t Prims_op_Subtraction(krml_checked_int_t x, krml_checked_int_t y)
-{
-  return x - y;
-}
-
-krml_checked_int_t Prims_op_Addition(krml_checked_int_t x, krml_checked_int_t y)
-{
-  return x + y;
-}
-
-krml_checked_int_t Prims_op_Modulus(krml_checked_int_t x, krml_checked_int_t y)
-{
-  return x % y;
-}
-
-bool Prims_op_LessThanOrEqual(krml_checked_int_t x, krml_checked_int_t y)
-{
-  return x <= y;
-}
-
-bool Prims_op_GreaterThan(krml_checked_int_t x, krml_checked_int_t y)
-{
-  return x > y;
-}
-
-bool Prims_op_LessThan(krml_checked_int_t x, krml_checked_int_t y)
-{
-  return x < y;
-}
-
-uint8_t FStar_UInt8_uint_to_t(krml_checked_int_t x)
-{
-  return (uint8_t)x;
-}
-
-size_t FStar_SizeT_uint_to_t(krml_checked_int_t x)
-{
-  return (size_t)x;
-}
-"""
-        if "krml_checked_int_t Prims_op_Division(" not in text:
-            text += "\n" + runtime_helpers
-
-    if path.name == "FStar_Pulse_PulseCore_Prims.h":
-        if "FStar_SizeT_uint_to_t" not in text:
-            text = text.replace(
-                "krml_checked_int_t FStar_SizeT_v(size_t x);\n",
-                "krml_checked_int_t FStar_SizeT_v(size_t x);\n\nsize_t FStar_SizeT_uint_to_t(krml_checked_int_t x);\n",
-            )
-
-    if path.suffix == ".c" and "FStar_SizeT_uint_to_t" in text and "internal/FStar_Pulse_PulseCore_Prims.h" not in text:
-        first_include = re.search(r'#include "[^"]+"\n', text)
-        if first_include:
-            text = text[:first_include.end()] + '#include "internal/FStar_Pulse_PulseCore_Prims.h"\n' + text[first_include.end():]
 
     if path.name == "TLS13_Transcript.c":
         text = text.replace(
@@ -654,8 +565,6 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -warn-error '+9' \
 	  -no-prefix TLS13.Impl.Client \
 	  $(DRIVER_KRML_FILES)
-	perl -0pi -e 's/krml_checked_int_t FStar_SizeT_v\(size_t x\)\n\{\n  return FStar_UInt64_v\(FStar_SizeT___proj__Sz__item__x\(x\)\);\n\}\n/krml_checked_int_t FStar_SizeT_v(size_t x)\n{\n  return (krml_checked_int_t)x;\n}\n/s' \
-	  $(DRIVER_BUNDLE_DIR)/FStar_Pulse_PulseCore_Prims.c
 	DRIVER_BUNDLE_DIR="$(DRIVER_BUNDLE_DIR)" python3 -c "$$POSTPROCESS_DRIVER_BUNDLE_PY"
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
@@ -692,6 +601,7 @@ HACL_WRAPPER_SOURCES = \
 ECHO_STUB_SOURCES = \
   c_stubs/tls13_crypto_external.c \
   c_stubs/tls13_pulse_shims.c \
+  c_stubs/tls13_prims_runtime.c \
   c_stubs/tls13_io_karamel.c \
   c_stubs/tls13_io_stubs.c \
   c_stubs/tls13_openssl_karamel.c \
@@ -750,6 +660,7 @@ test/test_extracted_client_openssl_echo: \
 	  _extract/driver_bundle/*.c \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \
+	  c_stubs/tls13_prims_runtime.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/tls13_io_karamel.c \
 	  c_stubs/tls13_io_stubs.c \
