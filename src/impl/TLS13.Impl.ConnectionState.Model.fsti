@@ -44,6 +44,7 @@ val lemma_seal_some_of_keys
                  | _, _ -> False))
       (ensures Some? (R.seal s aad pt))
 
+noextract
 let bounded_u16_sizet (n:nat) : SZ.t =
   if n < 65536 then SZ.uint_to_t n else 0sz
 
@@ -70,14 +71,17 @@ val lemma_signature_schemes_match_length
       (requires IM.signature_schemes_match wire len schemes)
       (ensures len == length schemes)
 
+noextract
 let client_hello_server_name_len_for (m:M.client_hello) : SZ.t =
   match m.M.server_name with
   | Some sn -> bounded_u16_sizet (B.length sn)
   | None -> 0sz
 
+noextract
 let client_hello_cipher_suites_len_for (m:M.client_hello) : SZ.t =
   bounded_u16_sizet (length m.M.cipher_suites)
 
+noextract
 let client_hello_signature_schemes_len_for (m:M.client_hello) : SZ.t =
   bounded_u16_sizet (length m.M.signature_schemes)
 
