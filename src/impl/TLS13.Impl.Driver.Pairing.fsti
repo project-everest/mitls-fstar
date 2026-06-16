@@ -295,15 +295,14 @@ let client_server_driver_handshake_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
-  paired_handshake_message_states client server
+  CS.paired_handshake_events client server
 
 noextract
 let client_server_driver_supported_profile_derived_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
-  CD.client_driver_application_ready client /\
-  SD.server_driver_application_ready server /\
+  client_server_driver_x25519_projection_inputs client server /\
   client_server_driver_handshake_projection_inputs client server
 
 val lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs

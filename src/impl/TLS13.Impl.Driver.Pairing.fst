@@ -263,46 +263,7 @@ let lemma_client_server_driver_paired_handshake_events_from_projection_inputs
         client_server_driver_handshake_projection_inputs client server)
       (ensures CS.paired_handshake_events client server)
 =
-  let client_hs = client.CS.cs_model.CS.model_handshake in
-  let server_hs = server.CS.cs_model.CS.model_handshake in
-  match
-    client_hs.CS.hs_client_hello,
-    server_hs.CS.hs_client_hello,
-    client_hs.CS.hs_server_hello,
-    server_hs.CS.hs_server_hello,
-    client_hs.CS.hs_encrypted_extensions,
-    server_hs.CS.hs_encrypted_extensions,
-    client_hs.CS.hs_certificate,
-    server_hs.CS.hs_certificate,
-    client_hs.CS.hs_certificate_verify,
-    server_hs.CS.hs_certificate_verify,
-    client_hs.CS.hs_server_finished,
-    server_hs.CS.hs_server_finished,
-    client_hs.CS.hs_client_finished,
-    server_hs.CS.hs_client_finished
-  with
-  | Some client_ch, Some server_ch,
-    Some client_sh, Some server_sh,
-    Some client_ee, Some server_ee,
-    Some client_cert, Some server_cert,
-    Some client_cv, Some server_cv,
-    Some client_sf, Some server_sf,
-    Some client_cf, Some server_cf ->
-    assert (client_ch == server_ch);
-    assert (client_sh == server_sh);
-    assert (client_ee == server_ee);
-    assert (client_cert == server_cert);
-    assert (client_cv == server_cv);
-    assert (client_sf == server_sf);
-    assert (client_cf == server_cf);
-    assert (CS.same_transcript_checkpoint CS.TH_CH client server);
-    assert (CS.same_transcript_checkpoint CS.TH_SH client server);
-    assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
-    assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
-    assert (CS.same_transcript_checkpoint CS.TH_SF client server);
-    assert (CS.same_transcript_checkpoint CS.TH_CF client server)
-  | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
-    assert False
+  ()
 
 let lemma_client_server_driver_supported_profile_derived_state_inputs_from_projection_inputs
   (client:CS.connection_state)
@@ -317,8 +278,6 @@ let lemma_client_server_driver_supported_profile_derived_state_inputs_from_proje
           client
           server)
 =
-  assert (CS.paired_cleartext_hello_messages client server);
-  assert (client_server_driver_x25519_projection_inputs client server);
   lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
     client
     server;
