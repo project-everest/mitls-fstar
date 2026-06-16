@@ -260,10 +260,13 @@ let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection
   (server:CS.connection_state)
   : Lemma
       (requires
-        client_server_driver_handshake_projection_inputs client server)
+        client_server_driver_supported_profile_derived_projection_inputs
+          client
+          server)
       (ensures CS.paired_key_derivation_checkpoints client server)
 =
-  ()
+  assert (CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server);
+  assert (CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server)
 
 let lemma_client_server_driver_supported_profile_derived_state_inputs_from_projection_inputs
   (client:CS.connection_state)

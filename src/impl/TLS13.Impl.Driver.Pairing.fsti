@@ -291,11 +291,11 @@ let client_server_driver_x25519_projection_inputs
   paired_cleartext_hello_messages client server
 
 noextract
-let client_server_driver_handshake_projection_inputs
+let client_server_driver_application_derivation_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
-  CS.paired_key_derivation_checkpoints client server
+  CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server
 
 noextract
 let client_server_driver_supported_profile_derived_projection_inputs
@@ -303,7 +303,7 @@ let client_server_driver_supported_profile_derived_projection_inputs
   (server:CS.connection_state)
   : prop =
   client_server_driver_x25519_projection_inputs client server /\
-  client_server_driver_handshake_projection_inputs client server
+  client_server_driver_application_derivation_projection_inputs client server
 
 val lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
   (client:CS.connection_state)
@@ -318,7 +318,9 @@ val lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection
   (server:CS.connection_state)
   : Lemma
       (requires
-        client_server_driver_handshake_projection_inputs client server)
+        client_server_driver_supported_profile_derived_projection_inputs
+          client
+          server)
       (ensures CS.paired_key_derivation_checkpoints client server)
 
 val lemma_client_server_driver_supported_profile_derived_state_inputs_from_projection_inputs
