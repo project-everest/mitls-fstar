@@ -121,6 +121,483 @@ let lemma_update_key_schedule_with_install_client_projection
 =
   ()
 
+let supported_profile_base_lineage_or_empty
+  (keys:key_schedule_state)
+  : prop =
+  match
+    keys.ks_shared_secret,
+    keys.ks_early_secret,
+    keys.ks_handshake_secret,
+    keys.ks_master_secret
+  with
+  | None, None, None, None ->
+    True
+  | Some shared, Some early, Some handshake, Some master ->
+    Seq.equal early (K.early_secret B.empty) /\
+    Seq.equal handshake (K.handshake_secret early shared) /\
+    Seq.equal master (K.master_secret handshake)
+  | _, _, _, _ ->
+    False
+
+let traffic_material_slots_have_base_secret
+  (keys:key_schedule_state)
+  : prop =
+  (Some? keys.ks_client_handshake_traffic ==> Some? keys.ks_handshake_secret) /\
+  (Some? keys.ks_server_handshake_traffic ==> Some? keys.ks_handshake_secret) /\
+  (Some? keys.ks_client_application_traffic ==> Some? keys.ks_master_secret) /\
+  (Some? keys.ks_server_application_traffic ==> Some? keys.ks_master_secret)
+
+let model_supported_profile_key_schedule_reachable_shape
+  (model:connection_model)
+  : prop =
+  let keys = model.model_handshake.hs_keys in
+  supported_profile_base_lineage_or_empty keys /\
+  traffic_material_slots_have_base_secret keys
+
+let connection_supported_profile_key_schedule_reachable_shape
+  (st:connection_state)
+  : prop =
+  model_supported_profile_key_schedule_reachable_shape st.cs_model
+
+let lemma_same_key_schedule_reachable_shape
+  (model:connection_model)
+  (model':connection_model)
+  : Lemma
+      (requires
+        model_supported_profile_key_schedule_reachable_shape model /\
+        model'.model_handshake.hs_keys == model.model_handshake.hs_keys)
+      (ensures model_supported_profile_key_schedule_reachable_shape model')
+=
+  ()
+
+let lemma_supported_profile_base_lineage_or_empty_to_lineage
+  (keys:key_schedule_state)
+  : Lemma
+      (requires
+        supported_profile_base_lineage_or_empty keys /\
+        Some? keys.ks_master_secret)
+      (ensures supported_profile_key_schedule_lineage keys)
+=
+  match
+    keys.ks_shared_secret,
+    keys.ks_early_secret,
+    keys.ks_handshake_secret,
+    keys.ks_master_secret
+  with
+  | Some shared, Some early, Some handshake, Some master ->
+    ()
+  | _, _, _, _ ->
+    assert False
+
+let lemma_application_keys_reachable_shape_supported_profile_key_schedule_lineage
+  (role:endpoint_role)
+  (model:connection_model)
+  : Lemma
+      (requires
+        model_supported_profile_key_schedule_reachable_shape model /\
+        application_record_keys_installed_for_role role model)
+      (ensures supported_profile_key_schedule_lineage model.model_handshake.hs_keys)
+=
+  let keys = model.model_handshake.hs_keys in
+  match role with
+  | ClientEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+    assert (Some? keys.ks_server_application_traffic);
+    assert (Some? keys.ks_master_secret)
+  | ServerEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+    assert (Some? keys.ks_client_application_traffic);
+    assert (Some? keys.ks_master_secret);
+  lemma_supported_profile_base_lineage_or_empty_to_lineage keys
+
+let lemma_traffic_install_matches_key_schedule_base_present_for_role
+  (role:endpoint_role)
+  (hs:handshake_state)
+  (install:traffic_key_install)
+  : Lemma
+      (requires traffic_install_matches_key_schedule_for_role role hs install)
+      (ensures Some? (traffic_secret_base_for_epoch install.install_epoch hs.hs_keys))
+=
+  match role, install.install_epoch, install.install_direction with
+  | ClientEndpoint, TrafficHandshake, TrafficRead
+  | ClientEndpoint, TrafficHandshake, TrafficWrite
+  | ServerEndpoint, TrafficHandshake, TrafficRead
+  | ServerEndpoint, TrafficHandshake, TrafficWrite ->
+    (match hs.hs_keys.ks_handshake_secret with
+    | Some _ -> ()
+    | None -> assert False)
+  | ClientEndpoint, TrafficApplication, TrafficRead
+  | ClientEndpoint, TrafficApplication, TrafficWrite
+  | ServerEndpoint, TrafficApplication, TrafficRead
+  | ServerEndpoint, TrafficApplication, TrafficWrite ->
+    (match hs.hs_keys.ks_master_secret with
+    | Some _ -> ()
+    | None -> assert False)
+
+let lemma_traffic_install_matches_key_schedule_base_present
+  (hs:handshake_state)
+  (install:traffic_key_install)
+  : Lemma
+      (requires traffic_install_matches_key_schedule hs install)
+      (ensures Some? (traffic_secret_base_for_epoch install.install_epoch hs.hs_keys))
+=
+  lemma_expected_traffic_secret_client_projection
+    hs
+    install.install_epoch
+    install.install_direction;
+  lemma_traffic_install_matches_key_schedule_base_present_for_role
+    ClientEndpoint
+    hs
+    install
+
+let lemma_update_key_schedule_with_label_reachable_shape
+  (keys:key_schedule_state)
+  (epoch:traffic_epoch)
+  (label:traffic_label)
+  (material:traffic_key_material)
+  : Lemma
+      (requires
+        supported_profile_base_lineage_or_empty keys /\
+        traffic_material_slots_have_base_secret keys /\
+        Some? (traffic_secret_base_for_epoch epoch keys))
+      (ensures
+        supported_profile_base_lineage_or_empty
+          (update_key_schedule_with_label keys epoch label material) /\
+        traffic_material_slots_have_base_secret
+          (update_key_schedule_with_label keys epoch label material))
+=
+  match epoch, label with
+  | TrafficHandshake, ClientTraffic
+  | TrafficHandshake, ServerTraffic ->
+    assert (Some? keys.ks_handshake_secret)
+  | TrafficApplication, ClientTraffic
+  | TrafficApplication, ServerTraffic ->
+    assert (Some? keys.ks_master_secret)
+
+let lemma_update_application_traffic_material_reachable_shape
+  (keys:key_schedule_state)
+  (label:traffic_label)
+  (material:traffic_key_material)
+  : Lemma
+      (requires
+        supported_profile_base_lineage_or_empty keys /\
+        traffic_material_slots_have_base_secret keys /\
+        Some? (traffic_material_for_label keys TrafficApplication label))
+      (ensures
+        supported_profile_base_lineage_or_empty
+          (update_key_schedule_with_label keys TrafficApplication label material) /\
+        traffic_material_slots_have_base_secret
+          (update_key_schedule_with_label keys TrafficApplication label material))
+=
+  match label with
+  | ClientTraffic ->
+    assert (Some? keys.ks_client_application_traffic);
+    assert (Some? keys.ks_master_secret)
+  | ServerTraffic ->
+    assert (Some? keys.ks_server_application_traffic);
+    assert (Some? keys.ks_master_secret);
+  lemma_update_key_schedule_with_label_reachable_shape
+    keys
+    TrafficApplication
+    label
+    material
+
+let lemma_update_key_schedule_with_install_for_role_reachable_shape
+  (role:endpoint_role)
+  (keys:key_schedule_state)
+  (install:traffic_key_install)
+  : Lemma
+      (requires
+        supported_profile_base_lineage_or_empty keys /\
+        traffic_material_slots_have_base_secret keys /\
+        Some? (traffic_secret_base_for_epoch install.install_epoch keys))
+      (ensures
+        supported_profile_base_lineage_or_empty
+          (update_key_schedule_with_install_for_role role keys install) /\
+        traffic_material_slots_have_base_secret
+          (update_key_schedule_with_install_for_role role keys install))
+=
+  lemma_update_key_schedule_with_label_reachable_shape
+    keys
+    install.install_epoch
+    (traffic_label_for_endpoint_direction role install.install_direction)
+    install.install_material
+
+let lemma_update_key_schedule_with_install_reachable_shape
+  (keys:key_schedule_state)
+  (install:traffic_key_install)
+  : Lemma
+      (requires
+        supported_profile_base_lineage_or_empty keys /\
+        traffic_material_slots_have_base_secret keys /\
+        Some? (traffic_secret_base_for_epoch install.install_epoch keys))
+      (ensures
+        supported_profile_base_lineage_or_empty
+          (update_key_schedule_with_install keys install) /\
+        traffic_material_slots_have_base_secret
+          (update_key_schedule_with_install keys install))
+=
+  lemma_update_key_schedule_with_install_client_projection keys install;
+  lemma_update_key_schedule_with_install_for_role_reachable_shape
+    ClientEndpoint
+    keys
+    install
+
+let lemma_derive_shared_secret_model_reachable_shape
+  (model:connection_model)
+  (hs:handshake_state)
+  (shared:C.x25519_shared_secret)
+  : Lemma
+      (requires traffic_material_slots_have_base_secret hs.hs_keys)
+      (ensures
+        model_supported_profile_key_schedule_reachable_shape
+          (derive_shared_secret_model model hs shared))
+=
+  let early = K.early_secret B.empty in
+  let handshake = K.handshake_secret early shared in
+  let master = K.master_secret handshake in
+  ()
+
+let lemma_step_handshake_message_supported_profile_key_schedule_reachable_shape
+  (model:connection_model)
+  (dir:direction)
+  (msg:M.handshake_msg)
+  (model':connection_model)
+  : Lemma
+      (requires
+        model_supported_profile_key_schedule_reachable_shape model /\
+        step_handshake_message model dir msg == Some model')
+      (ensures model_supported_profile_key_schedule_reachable_shape model')
+=
+  match dir, msg, model.model_control with
+  | CL.Sent, M.ClientHello _, ControlHandshaking HsStarted
+  | CL.Received, M.ClientHello _, ControlHandshaking HsAwaitingClientHello
+  | CL.Received, M.ServerHello _, ControlHandshaking HsClientHelloSent
+  | CL.Sent, M.ServerHello _, ControlHandshaking HsClientHelloReceived
+  | CL.Sent, M.EncryptedExtensions _, ControlHandshaking HsServerHelloSent
+  | CL.Sent, M.Certificate _, ControlHandshaking HsServerEncryptedFlightSent
+  | CL.Sent, M.CertificateVerify _, ControlHandshaking HsServerEncryptedFlightSent
+  | CL.Sent, M.Finished _, ControlHandshaking HsServerEncryptedFlightSent
+  | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
+  | CL.Received, M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
+  | CL.Received, M.CertificateVerify _, ControlHandshaking HsCertificateValidated
+  | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified
+  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent
+  | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified
+  | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
+    assert (model'.model_handshake.hs_keys == model.model_handshake.hs_keys);
+    lemma_same_key_schedule_reachable_shape model model'
+  | _, _, _ ->
+    assert False
+
+let lemma_step_tls_message_supported_profile_key_schedule_reachable_shape
+  (model:connection_model)
+  (dir:direction)
+  (msg:M.tls_message)
+  (model':connection_model)
+  : Lemma
+      (requires
+        model_supported_profile_key_schedule_reachable_shape model /\
+        legal_tls_message model dir msg /\
+        step_tls_message model dir msg == Some model')
+      (ensures model_supported_profile_key_schedule_reachable_shape model')
+=
+  let hs = model.model_handshake in
+  let keys = hs.hs_keys in
+  match msg, model.model_control with
+  | M.TlsHandshake handshake_msg, _ ->
+    lemma_step_handshake_message_supported_profile_key_schedule_reachable_shape
+      model
+      dir
+      handshake_msg
+      model'
+  | M.TlsKeyUpdate req, ControlApplicationData ->
+    (match dir, req with
+     | CL.Received, _ ->
+       (match keys.ks_server_application_traffic with
+        | Some old_server_app ->
+          let new_server_app = updated_traffic_key_material old_server_app in
+          lemma_update_application_traffic_material_reachable_shape
+            keys
+            ServerTraffic
+            new_server_app;
+          assert (model'.model_handshake.hs_keys ==
+                  update_key_schedule_with_label
+                    keys
+                    TrafficApplication
+                    ServerTraffic
+                    new_server_app);
+          assert (model_supported_profile_key_schedule_reachable_shape model')
+        | None ->
+          assert False)
+     | CL.Sent, M.UpdateNotRequested ->
+       (match keys.ks_client_application_traffic with
+        | Some old_client_app ->
+          if model.model_application.app_key_update_response_pending then
+            let new_client_app = updated_traffic_key_material old_client_app in
+            lemma_update_application_traffic_material_reachable_shape
+              keys
+              ClientTraffic
+              new_client_app;
+            assert (model'.model_handshake.hs_keys ==
+                    update_key_schedule_with_label
+                      keys
+                      TrafficApplication
+                      ClientTraffic
+                      new_client_app);
+            assert (model_supported_profile_key_schedule_reachable_shape model')
+          else
+            assert False
+        | None ->
+          assert False)
+     | CL.Sent, M.UpdateRequested ->
+       assert False)
+  | M.TlsApplicationData _, ControlApplicationData
+  | M.TlsAlert _, _
+  | M.TlsChangeCipherSpec, ControlHandshaking _ ->
+    assert (model'.model_handshake.hs_keys == keys);
+    lemma_same_key_schedule_reachable_shape model model'
+  | M.TlsIgnoredPostHandshake _, ControlApplicationData ->
+    (match dir with
+     | CL.Received ->
+       assert (model'.model_handshake.hs_keys == keys);
+       lemma_same_key_schedule_reachable_shape model model'
+     | CL.Sent ->
+       assert False)
+  | _, _ ->
+    assert False
+
+let lemma_step_model_supported_profile_key_schedule_reachable_shape
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires
+        model_supported_profile_key_schedule_reachable_shape model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures model_supported_profile_key_schedule_reachable_shape model')
+=
+  let hs = model.model_handshake in
+  let keys = hs.hs_keys in
+  match ev with
+  | ConnLocalEvent local ->
+    (match local, model.model_control with
+     | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived
+     | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
+       lemma_derive_shared_secret_model_reachable_shape model hs shared
+     | LocalInstallTrafficKeys install, ControlHandshaking _ ->
+       lemma_traffic_install_matches_key_schedule_base_present hs install;
+       lemma_update_key_schedule_with_install_reachable_shape keys install
+     | LocalInstallTrafficKeysForRole role_install, ControlHandshaking _ ->
+       lemma_traffic_install_matches_key_schedule_base_present_for_role
+         role_install.install_role
+         hs
+         role_install.install_payload;
+       lemma_update_key_schedule_with_install_for_role_reachable_shape
+         role_install.install_role
+         keys
+         role_install.install_payload
+     | _, _ ->
+       ())
+  | ConnNetworkEvent msg ->
+    lemma_step_tls_message_supported_profile_key_schedule_reachable_shape
+      model
+      msg.CL.message_direction
+      msg.CL.message_value
+      model'
+
+let lemma_connection_delta_supported_profile_key_schedule_reachable_shape
+  (st0:connection_state)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        connection_supported_profile_key_schedule_reachable_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures connection_supported_profile_key_schedule_reachable_shape st1)
+=
+  match st1 with
+  | _ ->
+    assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    assert (legal_event st0.cs_model delta.delta_event);
+    assert (step_model st0.cs_model delta.delta_event == Some st1.cs_model);
+    lemma_step_model_supported_profile_key_schedule_reachable_shape
+      st0.cs_model
+      delta.delta_event
+      st1.cs_model
+
+let lemma_initial_supported_profile_key_schedule_reachable_shape
+  (cfg:connection_config)
+  : Lemma
+      (ensures
+        connection_supported_profile_key_schedule_reachable_shape (initial cfg))
+=
+  ()
+
+let lemma_connection_state_single_step_supported_profile_key_schedule_reachable_shape
+  (u:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern
+            (connection_supported_profile_key_schedule_reachable_shape y);
+            (connection_state_single_step x y)}
+          connection_supported_profile_key_schedule_reachable_shape x /\
+          connection_state_single_step x y ==>
+          connection_supported_profile_key_schedule_reachable_shape y)
+=
+  introduce forall x y.
+    connection_supported_profile_key_schedule_reachable_shape x /\
+    connection_state_single_step x y ==>
+    connection_supported_profile_key_schedule_reachable_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_connection_delta_supported_profile_key_schedule_reachable_shape x y
+
+let lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures connection_supported_profile_key_schedule_reachable_shape st)
+=
+  let p = connection_supported_profile_key_schedule_reachable_shape in
+  lemma_initial_supported_profile_key_schedule_reachable_shape st.cs_model.model_config;
+  lemma_connection_state_single_step_supported_profile_key_schedule_reachable_shape ();
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+
+let lemma_connection_application_keys_supported_profile_key_schedule_lineage
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        application_record_keys_installed_for_role role st.cs_model)
+      (ensures connection_supported_profile_key_schedule_lineage st)
+=
+  lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape st;
+  lemma_application_keys_reachable_shape_supported_profile_key_schedule_lineage
+    role
+    st.cs_model
+
 let lemma_record_read_key_schedule_projection_client_projection
   (model:connection_model)
   : Lemma

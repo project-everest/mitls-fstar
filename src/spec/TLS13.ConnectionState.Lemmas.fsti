@@ -72,6 +72,15 @@ val lemma_update_key_schedule_with_install_client_projection
         update_key_schedule_with_install keys install ==
         update_key_schedule_with_install_for_role ClientEndpoint keys install)
 
+val lemma_connection_application_keys_supported_profile_key_schedule_lineage
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        application_record_keys_installed_for_role role st.cs_model)
+      (ensures connection_supported_profile_key_schedule_lineage st)
+
 val lemma_record_read_key_schedule_projection_client_projection
   (model:connection_model)
   : Lemma

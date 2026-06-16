@@ -1137,11 +1137,14 @@ predicate to prove both full `CS.paired_wire_logs` and
 `lemma_client_server_driver_key_material_agrees_from_prefixes`, which proves the
 main supported-profile key-material agreement from the ordered-prefix public
 driver facts plus the existing supported-profile state-machine input predicate,
-without requiring full TCP-history equality. The remaining semantic obligations
-are now named by
+without requiring full TCP-history equality. The remaining paired semantic
+obligations are now named by
 `client_server_driver_supported_profile_state_inputs`: paired X25519 key shares,
-client/server key-schedule lineage, paired transcript checkpoints, and all
-record-material input agreement. The checked
+paired transcript checkpoints, and all record-material input agreement.
+Key-schedule lineage is derived at this bridge by
+`lemma_client_server_driver_supported_profile_key_material_inputs_agree`, using
+public client/server application-ready success, endpoint reachability, and
+role-correct installed application record keys. The checked
 `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
 turns those explicit components plus public no-read-ahead success facts into the
 aggregate supported-profile input predicate, full paired wire logs, and the main

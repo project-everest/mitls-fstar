@@ -250,10 +250,14 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      no-read-ahead facts plus paired transport histories to prove both full
      `CS.paired_wire_logs` and
      `CS.supported_profile_client_server_key_material_agrees`.
-   - `client_server_driver_supported_profile_state_inputs` now names the
-     remaining semantic state-machine obligations explicitly: paired X25519
-     key shares, client/server key-schedule lineage, paired transcript
-     checkpoints, and all record-material input agreement. The component theorem
+   - `client_server_driver_supported_profile_state_inputs` now names only the
+     remaining paired semantic state-machine obligations: paired X25519 key
+     shares, paired transcript checkpoints, and all record-material input
+     agreement. Key-schedule lineage is no longer caller-supplied at this bridge:
+     `lemma_client_server_driver_supported_profile_key_material_inputs_agree`
+     derives the client and server lineage facts from public application-ready
+     success, endpoint reachability, and role-correct installed application
+     record keys. The component theorem
      `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
      proves the aggregate spec input predicate plus the same wire-log and
      key-material conclusions from those explicit components.
@@ -261,12 +265,13 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      `server_driver_application_ready` at the invariant layer: it includes the
      client end-to-end invariant, threaded through the Pulse handshake and
      receive helper postconditions.
-   - The remaining proof work is to prove the supported-profile state-machine
-     input predicate from two live successful driver resources, rather than
-     requiring it as an external theorem premise. In particular, key-schedule
-     lineage and transcript/record-material pairing need dedicated pure-state
-     projection lemmas from reachable successful endpoint states; they are not
-     inferred from installed application record keys alone.
+   - The remaining proof work is to prove the paired supported-profile
+     state-machine components from two live successful driver resources, rather
+     than requiring them as external theorem premises. Key-schedule lineage is
+     now discharged by a pure reachability-shape invariant plus installed
+     application keys; paired X25519 shares, transcript checkpoints, and
+     record-material input agreement still need dedicated paired-state projection
+     lemmas.
 
 3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.
@@ -276,10 +281,10 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
 
 ## Recommended next steps
 
-1. Prove each component of
+1. Prove each remaining component of
    `client_server_driver_supported_profile_state_inputs` from successful paired
-   driver resources: X25519 shares, key-schedule lineage, transcript
-   checkpoints, and record-material inputs.
+   driver resources: X25519 shares, transcript checkpoints, and record-material
+   inputs.
 2. Package those component proofs into a concrete driver-pair theorem that
    instantiates
    `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`.
