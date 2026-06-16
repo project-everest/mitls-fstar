@@ -1137,6 +1137,61 @@ val lemma_client_server_driver_paired_cleartext_hello_key_shares_from_public_suc
         WFL.paired_cleartext_hello_key_shares client server)
 
 noextract
+let client_server_driver_key_material_no_read_ahead_supported_wire_hello_derivation_checkpoint_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  client_server_driver_public_success_supported_wire_hello_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  CS.paired_key_derivation_checkpoints client server /\
+  client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server
+
+val lemma_client_server_driver_key_material_agrees_from_public_success_supported_wire_hello_and_derivation_checkpoints
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_supported_wire_hello_derivation_checkpoint_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
+noextract
 let client_server_driver_key_material_no_read_ahead_supported_wire_hello_handshake_event_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -1200,7 +1255,7 @@ let client_server_driver_end_to_end_agreement_inputs
   (server_received:B.bytes)
   (server_sent:B.bytes)
   : prop =
-  client_server_driver_key_material_no_read_ahead_supported_wire_hello_handshake_event_inputs
+  client_server_driver_key_material_no_read_ahead_supported_wire_hello_derivation_checkpoint_inputs
     client
     server
     client_received
