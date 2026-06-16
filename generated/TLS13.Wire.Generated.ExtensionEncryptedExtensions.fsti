@@ -37,7 +37,7 @@ open TLS13.Wire.Generated.ExtensionType
 include TLS13.Wire.Generated.ExtensionEncryptedExtensions_extension_data_default
 include TLS13.Wire.Generated.ExtensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation
 
-type extensionEncryptedExtensions =
+noextract type extensionEncryptedExtensions =
   | Extension_data_application_layer_protocol_negotiation of extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation
   | Extension_data_key_share of extensionEncryptedExtensions_extension_data_default
   | Extension_data_supported_versions of extensionEncryptedExtensions_extension_data_default
@@ -46,7 +46,7 @@ type extensionEncryptedExtensions =
   | Extension_data_server_name of extensionEncryptedExtensions_extension_data_default
   | Extension_data_Unknown_extensionType: v:extensionType_repr{not (known_extensionType_repr v)} -> x:extensionEncryptedExtensions_extension_data_default -> extensionEncryptedExtensions
 
-inline_for_extraction let tag_of_extensionEncryptedExtensions (x:extensionEncryptedExtensions) : extensionType = match x with
+inline_for_extraction noextract let tag_of_extensionEncryptedExtensions (x:extensionEncryptedExtensions) : extensionType = match x with
   | Extension_data_application_layer_protocol_negotiation _ -> Application_layer_protocol_negotiation
   | Extension_data_key_share _ -> Key_share
   | Extension_data_supported_versions _ -> Supported_versions

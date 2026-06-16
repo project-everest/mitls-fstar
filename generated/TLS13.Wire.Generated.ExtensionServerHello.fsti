@@ -38,7 +38,7 @@ include TLS13.Wire.Generated.ExtensionServerHello_extension_data_default
 include TLS13.Wire.Generated.ExtensionServerHello_extension_data_key_share
 include TLS13.Wire.Generated.ExtensionServerHello_extension_data_supported_versions
 
-type extensionServerHello =
+noextract type extensionServerHello =
   | Extension_data_key_share of extensionServerHello_extension_data_key_share
   | Extension_data_supported_versions of extensionServerHello_extension_data_supported_versions
   | Extension_data_application_layer_protocol_negotiation of extensionServerHello_extension_data_default
@@ -47,7 +47,7 @@ type extensionServerHello =
   | Extension_data_server_name of extensionServerHello_extension_data_default
   | Extension_data_Unknown_extensionType: v:extensionType_repr{not (known_extensionType_repr v)} -> x:extensionServerHello_extension_data_default -> extensionServerHello
 
-inline_for_extraction let tag_of_extensionServerHello (x:extensionServerHello) : extensionType = match x with
+inline_for_extraction noextract let tag_of_extensionServerHello (x:extensionServerHello) : extensionType = match x with
   | Extension_data_key_share _ -> Key_share
   | Extension_data_supported_versions _ -> Supported_versions
   | Extension_data_application_layer_protocol_negotiation _ -> Application_layer_protocol_negotiation

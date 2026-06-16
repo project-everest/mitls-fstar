@@ -42,16 +42,16 @@ include TLS13.Wire.Generated.ServerHelloBody_legacy_session_id_echo
 (* Type of field extensions*)
 include TLS13.Wire.Generated.ServerHelloBody_extensions
 
-type serverHelloBody = {
+noextract type serverHelloBody = {
   legacy_session_id_echo : serverHelloBody_legacy_session_id_echo;
   cipher_suite : cipherSuite;
   legacy_compression_method : U8.t;
   extensions : serverHelloBody_extensions;
 }
 
-type serverHelloBody' = ((serverHelloBody_legacy_session_id_echo & cipherSuite) & (U8.t & serverHelloBody_extensions))
+noextract type serverHelloBody' = ((serverHelloBody_legacy_session_id_echo & cipherSuite) & (U8.t & serverHelloBody_extensions))
 
-inline_for_extraction let synth_serverHelloBody (x: serverHelloBody') : serverHelloBody =
+inline_for_extraction noextract let synth_serverHelloBody (x: serverHelloBody') : serverHelloBody =
   match x with ((legacy_session_id_echo,cipher_suite),(legacy_compression_method,extensions)) -> {
     legacy_session_id_echo = legacy_session_id_echo;
     cipher_suite = cipher_suite;
@@ -59,7 +59,7 @@ inline_for_extraction let synth_serverHelloBody (x: serverHelloBody') : serverHe
     extensions = extensions;
   }
 
-inline_for_extraction let synth_serverHelloBody_recip (x: serverHelloBody) : serverHelloBody' = ((x.legacy_session_id_echo,x.cipher_suite),(x.legacy_compression_method,x.extensions))
+inline_for_extraction noextract let synth_serverHelloBody_recip (x: serverHelloBody) : serverHelloBody' = ((x.legacy_session_id_echo,x.cipher_suite),(x.legacy_compression_method,x.extensions))
 
 inline_for_extraction noextract let serverHelloBody_parser_kind = LP.strong_parser_kind 12 65573 None
 

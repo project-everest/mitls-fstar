@@ -36,7 +36,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 open TLS13.Wire.Generated.ExtensionType
 include TLS13.Wire.Generated.ExtensionCertificate_extension_data_default
 
-type extensionCertificate =
+noextract type extensionCertificate =
   | Extension_data_key_share of extensionCertificate_extension_data_default
   | Extension_data_supported_versions of extensionCertificate_extension_data_default
   | Extension_data_application_layer_protocol_negotiation of extensionCertificate_extension_data_default
@@ -45,7 +45,7 @@ type extensionCertificate =
   | Extension_data_server_name of extensionCertificate_extension_data_default
   | Extension_data_Unknown_extensionType: v:extensionType_repr{not (known_extensionType_repr v)} -> x:extensionCertificate_extension_data_default -> extensionCertificate
 
-inline_for_extraction let tag_of_extensionCertificate (x:extensionCertificate) : extensionType = match x with
+inline_for_extraction noextract let tag_of_extensionCertificate (x:extensionCertificate) : extensionType = match x with
   | Extension_data_key_share _ -> Key_share
   | Extension_data_supported_versions _ -> Supported_versions
   | Extension_data_application_layer_protocol_negotiation _ -> Application_layer_protocol_negotiation

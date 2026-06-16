@@ -38,20 +38,20 @@ open TLS13.Wire.Generated.ServerHelloBody
 
 include TLS13.Wire.Generated.ServerHello_body
 
-type serverHello = {
+noextract type serverHello = {
   legacy_version : protocolVersion;
   body : serverHello_body;
 }
 
-type serverHello' = (protocolVersion & serverHello_body)
+noextract type serverHello' = (protocolVersion & serverHello_body)
 
-inline_for_extraction let synth_serverHello (x: serverHello') : serverHello =
+inline_for_extraction noextract let synth_serverHello (x: serverHello') : serverHello =
   match x with (legacy_version,body) -> {
     legacy_version = legacy_version;
     body = body;
   }
 
-inline_for_extraction let synth_serverHello_recip (x: serverHello) : serverHello' = (x.legacy_version,x.body)
+inline_for_extraction noextract let synth_serverHello_recip (x: serverHello) : serverHello' = (x.legacy_version,x.body)
 
 inline_for_extraction noextract let serverHello_parser_kind = LP.strong_parser_kind 46 65607 None
 

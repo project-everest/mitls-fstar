@@ -42,7 +42,7 @@ include TLS13.Wire.Generated.Handshake_body_certificate_verify
 include TLS13.Wire.Generated.Handshake_body_finished
 include TLS13.Wire.Generated.Handshake_body_key_update
 
-type handshake =
+noextract type handshake =
   | Body_client_hello of handshake_body_client_hello
   | Body_server_hello of handshake_body_server_hello
   | Body_encrypted_extensions of handshake_body_encrypted_extensions
@@ -52,7 +52,7 @@ type handshake =
   | Body_key_update of handshake_body_key_update
   | Body_new_session_ticket of (squash False)
 
-inline_for_extraction let tag_of_handshake (x:handshake) : handshakeType = match x with
+inline_for_extraction noextract let tag_of_handshake (x:handshake) : handshakeType = match x with
   | Body_client_hello _ -> Client_hello
   | Body_server_hello _ -> Server_hello
   | Body_encrypted_extensions _ -> Encrypted_extensions

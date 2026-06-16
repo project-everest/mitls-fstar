@@ -41,20 +41,20 @@ include TLS13.Wire.Generated.CertificateEntry_cert_data
 (* Type of field extensions*)
 include TLS13.Wire.Generated.CertificateEntry_extensions
 
-type certificateEntry = {
+noextract type certificateEntry = {
   cert_data : certificateEntry_cert_data;
   extensions : certificateEntry_extensions;
 }
 
-type certificateEntry' = (certificateEntry_cert_data & certificateEntry_extensions)
+noextract type certificateEntry' = (certificateEntry_cert_data & certificateEntry_extensions)
 
-inline_for_extraction let synth_certificateEntry (x: certificateEntry') : certificateEntry =
+inline_for_extraction noextract let synth_certificateEntry (x: certificateEntry') : certificateEntry =
   match x with (cert_data,extensions) -> {
     cert_data = cert_data;
     extensions = extensions;
   }
 
-inline_for_extraction let synth_certificateEntry_recip (x: certificateEntry) : certificateEntry' = (x.cert_data,x.extensions)
+inline_for_extraction noextract let synth_certificateEntry_recip (x: certificateEntry) : certificateEntry' = (x.cert_data,x.extensions)
 
 inline_for_extraction noextract let certificateEntry_parser_kind = LP.strong_parser_kind 6 16842755 None
 

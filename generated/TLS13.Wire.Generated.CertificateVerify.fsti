@@ -38,20 +38,20 @@ open TLS13.Wire.Generated.SignatureScheme
 (* Type of field signature*)
 include TLS13.Wire.Generated.CertificateVerify_signature
 
-type certificateVerify = {
+noextract type certificateVerify = {
   algorithm : signatureScheme;
   signature : certificateVerify_signature;
 }
 
-type certificateVerify' = (signatureScheme & certificateVerify_signature)
+noextract type certificateVerify' = (signatureScheme & certificateVerify_signature)
 
-inline_for_extraction let synth_certificateVerify (x: certificateVerify') : certificateVerify =
+inline_for_extraction noextract let synth_certificateVerify (x: certificateVerify') : certificateVerify =
   match x with (algorithm,signature) -> {
     algorithm = algorithm;
     signature = signature;
   }
 
-inline_for_extraction let synth_certificateVerify_recip (x: certificateVerify) : certificateVerify' = (x.algorithm,x.signature)
+inline_for_extraction noextract let synth_certificateVerify_recip (x: certificateVerify) : certificateVerify' = (x.algorithm,x.signature)
 
 inline_for_extraction noextract let certificateVerify_parser_kind = LP.strong_parser_kind 4 65539 None
 

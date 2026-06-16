@@ -36,20 +36,20 @@ module LPITE = LowParse.PulseParse.IfThenElse
 open TLS13.Wire.Generated.AlertLevel
 open TLS13.Wire.Generated.AlertDescription
 
-type alert = {
+noextract type alert = {
   level : alertLevel;
   description : alertDescription;
 }
 
-type alert' = (alertLevel & alertDescription)
+noextract type alert' = (alertLevel & alertDescription)
 
-inline_for_extraction let synth_alert (x: alert') : alert =
+inline_for_extraction noextract let synth_alert (x: alert') : alert =
   match x with (level,description) -> {
     level = level;
     description = description;
   }
 
-inline_for_extraction let synth_alert_recip (x: alert) : alert' = (x.level,x.description)
+inline_for_extraction noextract let synth_alert_recip (x: alert) : alert' = (x.level,x.description)
 
 inline_for_extraction noextract let alert_parser_kind = LP.strong_parser_kind 2 2 None
 

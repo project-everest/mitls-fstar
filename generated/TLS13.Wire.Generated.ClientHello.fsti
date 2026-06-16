@@ -50,7 +50,7 @@ include TLS13.Wire.Generated.ClientHello_legacy_compression_methods
 (* Type of field extensions*)
 include TLS13.Wire.Generated.ClientHello_extensions
 
-type clientHello = {
+noextract type clientHello = {
   legacy_version : protocolVersion;
   random : random;
   legacy_session_id : clientHello_legacy_session_id;
@@ -59,9 +59,9 @@ type clientHello = {
   extensions : clientHello_extensions;
 }
 
-type clientHello' = (((protocolVersion & random) & (clientHello_legacy_session_id & clientHello_cipher_suites)) & (clientHello_legacy_compression_methods & clientHello_extensions))
+noextract type clientHello' = (((protocolVersion & random) & (clientHello_legacy_session_id & clientHello_cipher_suites)) & (clientHello_legacy_compression_methods & clientHello_extensions))
 
-inline_for_extraction let synth_clientHello (x: clientHello') : clientHello =
+inline_for_extraction noextract let synth_clientHello (x: clientHello') : clientHello =
   match x with (((legacy_version,random),(legacy_session_id,cipher_suites)),(legacy_compression_methods,extensions)) -> {
     legacy_version = legacy_version;
     random = random;
@@ -71,7 +71,7 @@ inline_for_extraction let synth_clientHello (x: clientHello') : clientHello =
     extensions = extensions;
   }
 
-inline_for_extraction let synth_clientHello_recip (x: clientHello) : clientHello' = (((x.legacy_version,x.random),(x.legacy_session_id,x.cipher_suites)),(x.legacy_compression_methods,x.extensions))
+inline_for_extraction noextract let synth_clientHello_recip (x: clientHello) : clientHello' = (((x.legacy_version,x.random),(x.legacy_session_id,x.cipher_suites)),(x.legacy_compression_methods,x.extensions))
 
 inline_for_extraction noextract let clientHello_parser_kind = LP.strong_parser_kind 51 131396 None
 

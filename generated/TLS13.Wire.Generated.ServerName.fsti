@@ -37,10 +37,10 @@ open TLS13.Wire.Generated.NameType
 open TLS13.Wire.Generated.UnknownName
 open TLS13.Wire.Generated.HostName
 
-type serverName =
+noextract type serverName =
   | Name_host_name of hostName
 
-inline_for_extraction let tag_of_serverName (x:serverName) : nameType = match x with
+inline_for_extraction noextract let tag_of_serverName (x:serverName) : nameType = match x with
   | Name_host_name _ -> Host_name
 
 inline_for_extraction unfold let nameType_as_enum_key (x:nameType) : Pure (LP.enum_key nameType_enum)

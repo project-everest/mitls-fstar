@@ -39,22 +39,22 @@ open TLS13.Wire.Generated.ProtocolVersion
 (* Type of field encrypted_record*)
 include TLS13.Wire.Generated.TLSCiphertext_encrypted_record
 
-type tLSCiphertext = {
+noextract type tLSCiphertext = {
   opaque_type : contentType;
   legacy_record_version : protocolVersion;
   encrypted_record : tLSCiphertext_encrypted_record;
 }
 
-type tLSCiphertext' = ((contentType & protocolVersion) & tLSCiphertext_encrypted_record)
+noextract type tLSCiphertext' = ((contentType & protocolVersion) & tLSCiphertext_encrypted_record)
 
-inline_for_extraction let synth_tLSCiphertext (x: tLSCiphertext') : tLSCiphertext =
+inline_for_extraction noextract let synth_tLSCiphertext (x: tLSCiphertext') : tLSCiphertext =
   match x with ((opaque_type,legacy_record_version),encrypted_record) -> {
     opaque_type = opaque_type;
     legacy_record_version = legacy_record_version;
     encrypted_record = encrypted_record;
   }
 
-inline_for_extraction let synth_tLSCiphertext_recip (x: tLSCiphertext) : tLSCiphertext' = ((x.opaque_type,x.legacy_record_version),x.encrypted_record)
+inline_for_extraction noextract let synth_tLSCiphertext_recip (x: tLSCiphertext) : tLSCiphertext' = ((x.opaque_type,x.legacy_record_version),x.encrypted_record)
 
 inline_for_extraction noextract let tLSCiphertext_parser_kind = LP.strong_parser_kind 5 16645 None
 

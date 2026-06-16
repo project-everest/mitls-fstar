@@ -39,22 +39,22 @@ open TLS13.Wire.Generated.ProtocolVersion
 (* Type of field fragment*)
 include TLS13.Wire.Generated.TLSPlaintext_fragment
 
-type tLSPlaintext = {
+noextract type tLSPlaintext = {
   content_type : contentType;
   legacy_record_version : protocolVersion;
   fragment : tLSPlaintext_fragment;
 }
 
-type tLSPlaintext' = ((contentType & protocolVersion) & tLSPlaintext_fragment)
+noextract type tLSPlaintext' = ((contentType & protocolVersion) & tLSPlaintext_fragment)
 
-inline_for_extraction let synth_tLSPlaintext (x: tLSPlaintext') : tLSPlaintext =
+inline_for_extraction noextract let synth_tLSPlaintext (x: tLSPlaintext') : tLSPlaintext =
   match x with ((content_type,legacy_record_version),fragment) -> {
     content_type = content_type;
     legacy_record_version = legacy_record_version;
     fragment = fragment;
   }
 
-inline_for_extraction let synth_tLSPlaintext_recip (x: tLSPlaintext) : tLSPlaintext' = ((x.content_type,x.legacy_record_version),x.fragment)
+inline_for_extraction noextract let synth_tLSPlaintext_recip (x: tLSPlaintext) : tLSPlaintext' = ((x.content_type,x.legacy_record_version),x.fragment)
 
 inline_for_extraction noextract let tLSPlaintext_parser_kind = LP.strong_parser_kind 5 16645 None
 

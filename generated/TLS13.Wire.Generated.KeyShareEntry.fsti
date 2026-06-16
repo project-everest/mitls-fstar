@@ -38,20 +38,20 @@ open TLS13.Wire.Generated.NamedGroup
 (* Type of field key_exchange*)
 include TLS13.Wire.Generated.KeyShareEntry_key_exchange
 
-type keyShareEntry = {
+noextract type keyShareEntry = {
   group : namedGroup;
   key_exchange : keyShareEntry_key_exchange;
 }
 
-type keyShareEntry' = (namedGroup & keyShareEntry_key_exchange)
+noextract type keyShareEntry' = (namedGroup & keyShareEntry_key_exchange)
 
-inline_for_extraction let synth_keyShareEntry (x: keyShareEntry') : keyShareEntry =
+inline_for_extraction noextract let synth_keyShareEntry (x: keyShareEntry') : keyShareEntry =
   match x with (group,key_exchange) -> {
     group = group;
     key_exchange = key_exchange;
   }
 
-inline_for_extraction let synth_keyShareEntry_recip (x: keyShareEntry) : keyShareEntry' = (x.group,x.key_exchange)
+inline_for_extraction noextract let synth_keyShareEntry_recip (x: keyShareEntry) : keyShareEntry' = (x.group,x.key_exchange)
 
 inline_for_extraction noextract let keyShareEntry_parser_kind = LP.strong_parser_kind 5 65539 None
 

@@ -41,7 +41,7 @@ include TLS13.Wire.Generated.ExtensionClientHello_extension_data_signature_algor
 include TLS13.Wire.Generated.ExtensionClientHello_extension_data_key_share
 include TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_versions
 
-type extensionClientHello =
+noextract type extensionClientHello =
   | Extension_data_server_name of extensionClientHello_extension_data_server_name
   | Extension_data_supported_groups of extensionClientHello_extension_data_supported_groups
   | Extension_data_signature_algorithms of extensionClientHello_extension_data_signature_algorithms
@@ -50,7 +50,7 @@ type extensionClientHello =
   | Extension_data_application_layer_protocol_negotiation of extensionClientHello_extension_data_default
   | Extension_data_Unknown_extensionType: v:extensionType_repr{not (known_extensionType_repr v)} -> x:extensionClientHello_extension_data_default -> extensionClientHello
 
-inline_for_extraction let tag_of_extensionClientHello (x:extensionClientHello) : extensionType = match x with
+inline_for_extraction noextract let tag_of_extensionClientHello (x:extensionClientHello) : extensionType = match x with
   | Extension_data_server_name _ -> Server_name
   | Extension_data_supported_groups _ -> Supported_groups
   | Extension_data_signature_algorithms _ -> Signature_algorithms

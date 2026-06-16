@@ -41,20 +41,20 @@ include TLS13.Wire.Generated.Certificate_certificate_request_context
 (* Type of field certificate_list*)
 include TLS13.Wire.Generated.Certificate_certificate_list
 
-type certificate = {
+noextract type certificate = {
   certificate_request_context : certificate_certificate_request_context;
   certificate_list : certificate_certificate_list;
 }
 
-type certificate' = (certificate_certificate_request_context & certificate_certificate_list)
+noextract type certificate' = (certificate_certificate_request_context & certificate_certificate_list)
 
-inline_for_extraction let synth_certificate (x: certificate') : certificate =
+inline_for_extraction noextract let synth_certificate (x: certificate') : certificate =
   match x with (certificate_request_context,certificate_list) -> {
     certificate_request_context = certificate_request_context;
     certificate_list = certificate_list;
   }
 
-inline_for_extraction let synth_certificate_recip (x: certificate) : certificate' = (x.certificate_request_context,x.certificate_list)
+inline_for_extraction noextract let synth_certificate_recip (x: certificate) : certificate' = (x.certificate_request_context,x.certificate_list)
 
 inline_for_extraction noextract let certificate_parser_kind = LP.strong_parser_kind 4 16777474 None
 
