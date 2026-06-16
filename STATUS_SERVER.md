@@ -252,8 +252,12 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      `CS.supported_profile_client_server_key_material_agrees`.
    - `client_server_driver_supported_profile_state_inputs` now names only the
      remaining paired semantic state-machine obligations: paired X25519 key
-     shares, paired transcript checkpoints, and all record-material input
-     agreement. Key-schedule lineage is no longer caller-supplied at this bridge:
+     shares, paired transcript checkpoints, and current application
+     record-material input agreement. Handshake traffic-key agreement remains
+     part of the historical derived-key theorem, while the current record-state
+     component is application-only so the application-ready theorem surface does
+     not require one endpoint record state to be simultaneously at handshake and
+     application epochs. Key-schedule lineage is no longer caller-supplied at this bridge:
      `lemma_client_server_driver_supported_profile_key_material_inputs_agree`
      derives the client and server lineage facts from public application-ready
      success, endpoint reachability, and role-correct installed application
@@ -270,8 +274,8 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      than requiring them as external theorem premises. Key-schedule lineage is
      now discharged by a pure reachability-shape invariant plus installed
      application keys; paired X25519 shares, transcript checkpoints, and
-     record-material input agreement still need dedicated paired-state projection
-     lemmas.
+     application record-material input agreement still need dedicated
+     paired-state projection lemmas.
 
 3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.
@@ -283,8 +287,8 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
 
 1. Prove each remaining component of
    `client_server_driver_supported_profile_state_inputs` from successful paired
-   driver resources: X25519 shares, transcript checkpoints, and record-material
-   inputs.
+   driver resources: X25519 shares, transcript checkpoints, and application
+   record-material inputs.
 2. Package those component proofs into a concrete driver-pair theorem that
    instantiates
    `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`.

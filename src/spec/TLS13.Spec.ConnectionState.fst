@@ -1949,6 +1949,15 @@ let supported_profile_all_record_material_inputs_agree
   peer_record_material_inputs_agree
     (traffic_id TrafficApplication ServerTraffic) client server
 
+let supported_profile_application_record_material_inputs_agree
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  peer_record_material_inputs_agree
+    (traffic_id TrafficApplication ClientTraffic) client server /\
+  peer_record_material_inputs_agree
+    (traffic_id TrafficApplication ServerTraffic) client server
+
 let supported_profile_all_record_material_agrees
   (client:connection_state)
   (server:connection_state)
@@ -1962,6 +1971,15 @@ let supported_profile_all_record_material_agrees
   peer_record_material_agrees
     (traffic_id TrafficApplication ServerTraffic) client server
 
+let supported_profile_application_record_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  peer_record_material_agrees
+    (traffic_id TrafficApplication ClientTraffic) client server /\
+  peer_record_material_agrees
+    (traffic_id TrafficApplication ServerTraffic) client server
+
 let supported_profile_client_server_key_material_inputs_agree
   (client:connection_state)
   (server:connection_state)
@@ -1970,14 +1988,14 @@ let supported_profile_client_server_key_material_inputs_agree
   connection_supported_profile_key_schedule_lineage client /\
   connection_supported_profile_key_schedule_lineage server /\
   paired_handshake_events client server /\
-  supported_profile_all_record_material_inputs_agree client server
+  supported_profile_application_record_material_inputs_agree client server
 
 let supported_profile_client_server_key_material_agrees
   (client:connection_state)
   (server:connection_state)
   : prop =
   supported_profile_all_derived_key_material_agrees client server /\
-  supported_profile_all_record_material_agrees client server
+  supported_profile_application_record_material_agrees client server
 
 let traffic_install_allowed_at_stage
   (stage:handshake_stage)

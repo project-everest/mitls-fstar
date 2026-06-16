@@ -1052,6 +1052,20 @@ let lemma_paired_supported_profile_all_record_material_agrees
   lemma_peer_record_material_agrees
     (traffic_id TrafficApplication ServerTraffic) client server
 
+let lemma_paired_supported_profile_application_record_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+     (requires
+       supported_profile_application_record_material_inputs_agree client server)
+     (ensures
+       supported_profile_application_record_material_agrees client server)
+=
+  lemma_peer_record_material_agrees
+    (traffic_id TrafficApplication ClientTraffic) client server;
+  lemma_peer_record_material_agrees
+    (traffic_id TrafficApplication ServerTraffic) client server
+
 let lemma_supported_profile_client_server_key_material_agrees
   (client:connection_state)
   (server:connection_state)
@@ -1062,7 +1076,7 @@ let lemma_supported_profile_client_server_key_material_agrees
        supported_profile_client_server_key_material_agrees client server)
 =
   lemma_paired_supported_profile_all_derived_key_material_agrees client server;
-  lemma_paired_supported_profile_all_record_material_agrees client server
+  lemma_paired_supported_profile_application_record_material_agrees client server
 
 let lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)

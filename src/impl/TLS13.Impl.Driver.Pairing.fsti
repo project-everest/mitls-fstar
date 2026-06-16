@@ -254,7 +254,7 @@ let client_server_driver_supported_profile_state_inputs
   : prop =
   CS.paired_x25519_key_shares client server /\
   CS.paired_handshake_events client server /\
-  CS.supported_profile_all_record_material_inputs_agree client server
+  CS.supported_profile_application_record_material_inputs_agree client server
 
 val lemma_client_server_driver_supported_profile_key_material_inputs_agree
   (client:CS.connection_state)

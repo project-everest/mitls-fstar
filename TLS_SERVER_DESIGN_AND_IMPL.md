@@ -1140,7 +1140,11 @@ driver facts plus the existing supported-profile state-machine input predicate,
 without requiring full TCP-history equality. The remaining paired semantic
 obligations are now named by
 `client_server_driver_supported_profile_state_inputs`: paired X25519 key shares,
-paired transcript checkpoints, and all record-material input agreement.
+paired transcript checkpoints, and current application record-material input
+agreement. Handshake traffic-key agreement is still covered by the historical
+derived-key theorem; the live record-state component is application-only so the
+application-ready theorem does not require current read/write record states to
+simultaneously match both handshake and application epochs.
 Key-schedule lineage is derived at this bridge by
 `lemma_client_server_driver_supported_profile_key_material_inputs_agree`, using
 public client/server application-ready success, endpoint reachability, and

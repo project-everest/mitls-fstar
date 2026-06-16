@@ -184,6 +184,15 @@ val lemma_paired_supported_profile_all_record_material_agrees
       (ensures
         supported_profile_all_record_material_agrees client server)
 
+val lemma_paired_supported_profile_application_record_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        supported_profile_application_record_material_inputs_agree client server)
+      (ensures
+        supported_profile_application_record_material_agrees client server)
+
 val lemma_supported_profile_client_server_key_material_agrees
   (client:connection_state)
   (server:connection_state)
