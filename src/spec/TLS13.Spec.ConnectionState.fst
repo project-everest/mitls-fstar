@@ -485,6 +485,13 @@ let paired_handshake_events
   same_transcript_checkpoint TH_SF client server /\
   same_transcript_checkpoint TH_CF client server
 
+let paired_key_derivation_checkpoints
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+  same_key_derivation_checkpoint DeriveApplicationTraffic client server
+
 let shared_secret_material_agrees
   (client:connection_state)
   (server:connection_state)
@@ -2210,7 +2217,7 @@ let supported_profile_client_server_key_material_inputs_agree
   paired_x25519_key_shares client server /\
   connection_supported_profile_key_schedule_lineage client /\
   connection_supported_profile_key_schedule_lineage server /\
-  paired_handshake_events client server /\
+  paired_key_derivation_checkpoints client server /\
   supported_profile_application_record_material_inputs_agree client server
 
 let supported_profile_client_server_key_material_agrees

@@ -2187,14 +2187,12 @@ let lemma_paired_supported_profile_all_derived_key_material_agrees
         paired_x25519_key_shares client server /\
         connection_supported_profile_key_schedule_lineage client /\
         connection_supported_profile_key_schedule_lineage server /\
-        paired_handshake_events client server)
+        paired_key_derivation_checkpoints client server)
       (ensures
         supported_profile_all_derived_key_material_agrees client server)
 =
-  lemma_paired_handshake_events_same_key_derivation_checkpoint
-    DeriveHandshakeTraffic client server;
-  lemma_paired_handshake_events_same_key_derivation_checkpoint
-    DeriveApplicationTraffic client server;
+  assert (same_key_derivation_checkpoint DeriveHandshakeTraffic client server);
+  assert (same_key_derivation_checkpoint DeriveApplicationTraffic client server);
   lemma_paired_x25519_key_shares_derived_key_agrees
     (BaseSecret EarlySecret) client server;
   lemma_paired_x25519_key_shares_derived_key_agrees

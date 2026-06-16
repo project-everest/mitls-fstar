@@ -4758,6 +4758,7 @@ fn rec driver_await_peer_close_notify
             result.driver_workflow_rx_len);
         result
       } else {
+        assert (pure (0 < SZ.v fuel));
         let next_fuel = SZ.sub fuel 1sz;
         assert (pure (SZ.v next_fuel < SZ.v fuel));
         let next_buffered_len =
