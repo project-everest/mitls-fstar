@@ -258,7 +258,9 @@ fn select_default_server_parameters_from_payload_once
           pure (server_driver_selection_from_payload_correct
               'st0
               st1
-              (Ghost.reveal 'payload_bytes))
+              (Ghost.reveal 'payload_bytes) /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config)
 
 fn derive_shared_secret_from_payload_once
   (d:DS.server_driver)
@@ -300,7 +302,9 @@ fn derive_shared_secret_from_payload_once
               'st0
               st1
               resp
-              (Ghost.reveal 'payload_bytes))
+              (Ghost.reveal 'payload_bytes) /\
+           st1.CS.cs_model.CS.model_config ==
+             'st0.CS.cs_model.CS.model_config)
 
 fn select_supported_server_parameters_from_payload_if_ready_once
   (d:DS.server_driver)
@@ -346,7 +350,9 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                  pure (server_driver_selection_from_payload_correct
                    'st0
                    st1
-                   (Ghost.reveal 'payload_bytes))
+                   (Ghost.reveal 'payload_bytes) /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
            | DL.ServerDriverLocalNotReady ->
                  DS.server_driver_connected
                    d
@@ -393,7 +399,9 @@ fn select_and_derive_shared_secret_from_payload_once
             'st0
             st2
             resp
-            (Ghost.reveal 'payload_bytes))
+            (Ghost.reveal 'payload_bytes) /\
+          st2.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 
 fn send_server_hello_from_payload_once
   (d:DS.server_driver)
@@ -435,7 +443,9 @@ fn send_server_hello_from_payload_once
             'st0
             st1
             resp
-            (Ghost.reveal 'payload_bytes))
+            (Ghost.reveal 'payload_bytes) /\
+          st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 
 fn select_derive_send_server_hello_from_payload_once
  (d:DS.server_driver)
@@ -466,7 +476,9 @@ fn select_derive_send_server_hello_from_payload_once
                 'credential_identity
                 'received
                 sent_after_send **
-              pts_to payload 'payload_bytes
+              pts_to payload 'payload_bytes **
+              pure (st3.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config)
           | ServerDriverSelectDeriveServerHelloDeriveFailed ->
             exists* st2 sent_after_derive.
               DS.server_driver_connected
@@ -476,7 +488,9 @@ fn select_derive_send_server_hello_from_payload_once
                 'credential_identity
                 'received
                 sent_after_derive **
-              pts_to payload 'payload_bytes
+              pts_to payload 'payload_bytes **
+              pure (st2.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config)
           | ServerDriverSelectDeriveServerHelloSendNotReady ->
             exists* st2 sent_after_derive.
               DS.server_driver_connected
@@ -486,7 +500,9 @@ fn select_derive_send_server_hello_from_payload_once
                 'credential_identity
                 'received
                 sent_after_derive **
-              pts_to payload 'payload_bytes)
+              pts_to payload 'payload_bytes **
+              pure (st2.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config))
 
 fn select_and_derive_shared_secret_once
  (d:DS.server_driver)
@@ -509,7 +525,9 @@ fn select_and_derive_shared_secret_once
             'certificate_chain
             'credential_identity
             'received
-            sent'
+            sent' **
+           pure (st2.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 
 fn select_and_derive_shared_secret_if_ready_once
   (d:DS.server_driver)
@@ -545,7 +563,9 @@ fn select_and_derive_shared_secret_if_ready_once
                  'certificate_chain
                  'credential_identity
                  'received
-                 sent'
+                 sent' **
+                pure (st2.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config)
            | DL.ServerDriverLocalNotReady ->
              DS.server_driver_connected
                d
@@ -632,7 +652,9 @@ fn accept_start_read_client_hello_select_derive_once
                  'certificate_chain
                  'credential_identity
                  received
-                 sent)
+                 sent **
+                pure (st2.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config))
 
 fn accept_start_read_client_hello_select_derive_send_server_hello_once
   (d:DS.server_driver)
@@ -697,7 +719,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                    'certificate_chain
                    'credential_identity
                    received
-                   sent)
+                   sent **
+                  pure (st2.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config))
 
 fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
   (d:DS.server_driver)
@@ -731,9 +755,20 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
              DS.server_driver_live d 'st0 'certificate_chain 'credential_identity
            | ServerDriverAcceptServerHelloDrainAcceptFailed ->
              DS.server_driver_live d 'st0 'certificate_chain 'credential_identity
-           | _ ->
+           | ServerDriverAcceptServerHelloDrainOk _ ->
              exists* st1 received sent.
                  DS.server_driver_connected
+                   d
+                   st1
+                   'certificate_chain
+                   'credential_identity
+                   received
+                   sent **
+                  pure (st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
+            | _ ->
+              exists* st1 received sent.
+                  DS.server_driver_connected
                    d
                    st1
                    'certificate_chain

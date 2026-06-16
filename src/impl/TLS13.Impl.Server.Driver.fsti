@@ -353,6 +353,8 @@ fn accept
                  received
                  sent **
                pure (server_driver_application_ready st1 /\
+                     st1.CS.cs_model.CS.model_config ==
+                       'st0.CS.cs_model.CS.model_config /\
                      server_driver_sent_log_exact st1 sent /\
                      server_driver_received_log_accounted st1 received /\
                      server_driver_received_log_exact_prefix st1 received /\

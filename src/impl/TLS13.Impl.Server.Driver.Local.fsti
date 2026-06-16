@@ -43,7 +43,9 @@ fn start_server_once
             'certificate_chain
             'credential_identity
             'received
-            'sent
+            'sent **
+           pure ((CM.started_server_state 'st0).CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 
 noextract
 let server_driver_local_write_correct
@@ -172,7 +174,9 @@ fn process_local_event_and_write_once
             kind
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
-            sent')
+            sent' /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config)
 
 fn process_empty_local_event_and_write_once
   (d:DS.server_driver)
@@ -209,7 +213,9 @@ fn process_empty_local_event_and_write_once
             kind
             B.empty
             (Ghost.reveal 'sent)
-            sent')
+            sent' /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config)
 
 fn process_ready_empty_local_action_once
   (d:DS.server_driver)
@@ -231,7 +237,9 @@ fn process_ready_empty_local_action_once
                  'certificate_chain
                  'credential_identity
                  'received
-                 sent'
+                 sent' **
+               pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config)
            | _ ->
              DS.server_driver_connected
                d
@@ -259,7 +267,9 @@ fn drain_ready_empty_local_actions
             'certificate_chain
             'credential_identity
             'received
-            sent'
+            sent' **
+          pure (st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 
 fn send_application_data_once
   (d:DS.server_driver)

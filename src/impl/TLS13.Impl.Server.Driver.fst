@@ -357,6 +357,8 @@ fn accept
                  received
                  sent **
                pure (server_driver_application_ready st1 /\
+                    st1.CS.cs_model.CS.model_config ==
+                      'st0.CS.cs_model.CS.model_config /\
                     server_driver_sent_log_exact st1 sent /\
                     server_driver_received_log_accounted st1 received /\
                     server_driver_received_log_exact_prefix st1 received /\
@@ -453,13 +455,16 @@ fn accept
     }
     ServerDriverAcceptServerHelloDrainOk drain -> {
       with st1 received sent.
-        assert (server_driver_connected
-          d
-          st1
-          'certificate_chain
-          'credential_identity
-          received
-          sent);
+        assert (
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received
+            sent **
+          pure (st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
       if (drain.server_driver_local_drain_exhausted) {
         ServerWorkflowExhausted
       } else {
@@ -473,14 +478,19 @@ fn accept
           ServerDriverLocalNotReady -> {
             let net = DN.read_process_network_until_ready d network_fuel;
             with st_net received_net sent_net net_app_out.
-              assert (server_driver_connected_with_app_out
-                d
-                st_net
-                'certificate_chain
-                'credential_identity
-                received_net
-                sent_net
-                net_app_out);
+              assert (
+                server_driver_connected_with_app_out
+                  d
+                  st_net
+                  'certificate_chain
+                  'credential_identity
+                  received_net
+                  sent_net
+                  net_app_out **
+                pure (st_net.CS.cs_model.CS.model_config ==
+                  st1.CS.cs_model.CS.model_config));
+            assert (pure (st_net.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config));
             forget_server_driver_connected_app_out d;
             if (net.DN.server_driver_network_loop_exhausted) {
               ServerWorkflowExhausted
@@ -489,13 +499,18 @@ fn accept
                 let drain_after_client_finished =
                   DL.drain_ready_empty_local_actions d local_fuel;
                 with st2 received2 sent2.
-                  assert (server_driver_connected
-                    d
-                    st2
-                    'certificate_chain
-                    'credential_identity
-                    received2
-                    sent2);
+                  assert (
+                    server_driver_connected
+                      d
+                      st2
+                      'certificate_chain
+                      'credential_identity
+                      received2
+                      sent2 **
+                    pure (st2.CS.cs_model.CS.model_config ==
+                      st_net.CS.cs_model.CS.model_config));
+                assert (pure (st2.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config));
                 if (drain_after_client_finished.DL.server_driver_local_drain_exhausted) {
                   ServerWorkflowExhausted
                 } else {
@@ -516,6 +531,10 @@ fn accept
                           'credential_identity
                           received3
                           sent3);
+                      assert (pure (st3.CS.cs_model.CS.model_config ==
+                        st2.CS.cs_model.CS.model_config));
+                      assert (pure (st3.CS.cs_model.CS.model_config ==
+                        'st0.CS.cs_model.CS.model_config));
                       assert (pure (CR.control_snapshot_matches snapshot st3));
                       let app_ready = snapshot.CR.snapshot_control_tag = 2uy;
                       if app_ready {

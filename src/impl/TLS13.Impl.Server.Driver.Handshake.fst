@@ -542,7 +542,9 @@ fn select_default_server_parameters_from_payload_once
           pure (server_driver_selection_from_payload_correct
             'st0
             st1
-            (Ghost.reveal 'payload_bytes))
+            (Ghost.reveal 'payload_bytes) /\
+            st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -679,6 +681,8 @@ fn select_default_server_parameters_from_payload_once
     'st0
     st1
     (Ghost.reveal 'payload_bytes)));
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
 
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_sent;
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_received;
@@ -742,7 +746,9 @@ fn derive_shared_secret_from_payload_once
             'st0
             st1
             resp
-            (Ghost.reveal 'payload_bytes))
+            (Ghost.reveal 'payload_bytes) /\
+           st1.CS.cs_model.CS.model_config ==
+             'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -1083,7 +1089,9 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                pure (server_driver_selection_from_payload_correct
                  'st0
                  st1
-                 (Ghost.reveal 'payload_bytes))
+                 (Ghost.reveal 'payload_bytes) /\
+               st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config)
            | ServerDriverLocalNotReady ->
                server_driver_connected
                  d
@@ -1208,6 +1216,8 @@ fn select_supported_server_parameters_from_payload_if_ready_once
       'st0
       st1
       (Ghost.reveal 'payload_bytes)));
+    assert (pure (st1.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
     ServerDriverLocalProcessed
   } else {
     fold (server_driver_connected
@@ -1253,7 +1263,9 @@ fn select_and_derive_shared_secret_from_payload_once
             'st0
             st2
             resp
-            (Ghost.reveal 'payload_bytes))
+            (Ghost.reveal 'payload_bytes) /\
+          st2.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 {
   let _ =
     select_default_server_parameters_from_payload_once
@@ -1322,7 +1334,13 @@ fn select_and_derive_shared_secret_from_payload_once
         st1
         st2
         resp
-        server_private_key_bytes));
+        server_private_key_bytes /\
+      st2.CS.cs_model.CS.model_config ==
+        st1.CS.cs_model.CS.model_config));
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure (st2.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   assert (pure (Seq.equal
     server_private_key_bytes
     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)));
@@ -1377,7 +1395,9 @@ fn send_server_hello_from_payload_once
            'st0
            st1
            resp
-           (Ghost.reveal 'payload_bytes))
+           (Ghost.reveal 'payload_bytes) /\
+         st1.CS.cs_model.CS.model_config ==
+           'st0.CS.cs_model.CS.model_config)
 {
  unfold (server_driver_connected
    d
@@ -1655,6 +1675,18 @@ fn send_server_hello_from_payload_once
      (if SZ.v written <= B.length network_out_bytes
       then Seq.slice network_out_bytes 0 (SZ.v written)
       else B.empty))));
+ lemma_server_driver_local_write_correct_preserves_config
+   'st0
+   st1
+   resp
+   ST.LocalSendServerHello
+   (Ghost.reveal 'payload_bytes)
+   (Ghost.reveal 'sent)
+   (B.append
+     (Ghost.reveal 'sent)
+     (if SZ.v written <= B.length network_out_bytes
+      then Seq.slice network_out_bytes 0 (SZ.v written)
+      else B.empty));
  assert (pure (server_driver_send_server_hello_from_payload_success_correct
    'st0
    st1
@@ -1692,7 +1724,9 @@ fn select_derive_send_server_hello_from_payload_once
                 'credential_identity
                 'received
                 sent_after_send **
-              pts_to payload 'payload_bytes
+              pts_to payload 'payload_bytes **
+              pure (st3.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config)
           | ServerDriverSelectDeriveServerHelloDeriveFailed ->
             exists* st2 sent_after_derive.
               server_driver_connected
@@ -1702,7 +1736,9 @@ fn select_derive_send_server_hello_from_payload_once
                 'credential_identity
                 'received
                 sent_after_derive **
-              pts_to payload 'payload_bytes
+              pts_to payload 'payload_bytes **
+              pure (st2.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config)
           | ServerDriverSelectDeriveServerHelloSendNotReady ->
             exists* st2 sent_after_derive.
               server_driver_connected
@@ -1712,7 +1748,9 @@ fn select_derive_send_server_hello_from_payload_once
                 'credential_identity
                 'received
                 sent_after_derive **
-              pts_to payload 'payload_bytes)
+              pts_to payload 'payload_bytes **
+              pure (st2.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config))
 {
  let derive_resp =
    select_and_derive_shared_secret_from_payload_once
@@ -1733,7 +1771,9 @@ fn select_derive_send_server_hello_from_payload_once
        'st0
        st2
        derive_resp
-       (Ghost.reveal 'payload_bytes)));
+       (Ghost.reveal 'payload_bytes) /\
+     st2.CS.cs_model.CS.model_config ==
+       'st0.CS.cs_model.CS.model_config));
 
  if (derive_resp.ST.status = ST.StepOk) {
    assert (pure (derive_resp.ST.status == ST.StepOk));
@@ -1814,7 +1854,13 @@ fn select_derive_send_server_hello_from_payload_once
            st2
            st3
            send_resp
-           (Ghost.reveal 'payload_bytes)));
+           (Ghost.reveal 'payload_bytes) /\
+         st3.CS.cs_model.CS.model_config ==
+           st2.CS.cs_model.CS.model_config));
+      assert (pure (st2.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
+      assert (pure (st3.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
      assert (pure (derive_resp.ST.status == ST.StepOk));
      assert (pure (server_driver_select_derive_from_payload_success_correct
        'st0
@@ -1876,7 +1922,9 @@ fn select_and_derive_shared_secret_once
             'certificate_chain
             'credential_identity
             'received
-            sent'
+            sent' **
+           pure (st2.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -1985,6 +2033,8 @@ fn select_and_derive_shared_secret_once
       pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   assert (pure (st1.CS.cs_model.CS.model_control ==
     CS.ControlHandshaking CS.HsClientHelloReceived));
   assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
@@ -2056,6 +2106,20 @@ fn select_and_derive_shared_secret_once
       d
       server_private_key
       32sz;
+  with st2 sent'.
+    assert (
+      server_driver_connected
+        d
+        st2
+        'certificate_chain
+        'credential_identity
+        'received
+        sent' **
+      pts_to server_private_key server_private_key_bytes **
+      pure (st2.CS.cs_model.CS.model_config ==
+        st1.CS.cs_model.CS.model_config));
+  assert (pure (st2.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   resp
 }
 
@@ -2093,7 +2157,9 @@ fn select_and_derive_shared_secret_if_ready_once
                  'certificate_chain
                  'credential_identity
                  'received
-                 sent'
+                 sent' **
+                pure (st2.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config)
            | ServerDriverLocalNotReady ->
              server_driver_connected
                d
@@ -2223,13 +2289,16 @@ fn select_and_derive_shared_secret_if_ready_once
       'sent);
     let resp = select_and_derive_shared_secret_once d;
     with st2 sent'.
-      assert (server_driver_connected
-        d
-        st2
-        'certificate_chain
-        'credential_identity
-        'received
-        sent');
+      assert (
+        server_driver_connected
+          d
+          st2
+          'certificate_chain
+          'credential_identity
+          'received
+          sent' **
+        pure (st2.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
     ServerDriverLocalProcessed
   } else {
     fold (server_driver_buffers d buffered buffered_len);
@@ -2421,7 +2490,9 @@ fn accept_start_read_client_hello_select_derive_once
                  'certificate_chain
                  'credential_identity
                  received
-                 sent)
+                 sent **
+                pure (st2.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config))
 {
   let accepted =
     accept_transport_start_and_read_client_hello
@@ -2619,7 +2690,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                            'certificate_chain
                            'credential_identity
                            received
-                           sent)
+                           sent **
+                          pure (st2.CS.cs_model.CS.model_config ==
+                           'st0.CS.cs_model.CS.model_config))
           {
             let accepted =
               accept_transport_start_and_read_client_hello
@@ -2863,9 +2936,20 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
              server_driver_live d 'st0 'certificate_chain 'credential_identity
            | ServerDriverAcceptServerHelloDrainAcceptFailed ->
              server_driver_live d 'st0 'certificate_chain 'credential_identity
-           | _ ->
+           | ServerDriverAcceptServerHelloDrainOk _ ->
              exists* st1 received sent.
                server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent **
+                pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config)
+            | _ ->
+              exists* st1 received sent.
+                server_driver_connected
                  d
                  st1
                  'certificate_chain
@@ -2903,7 +2987,31 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
       ServerDriverAcceptServerHelloDrainSendNotReady
     }
     ServerDriverAcceptServerHelloOk -> {
+      with st_sh received_sh sent_sh.
+        assert (
+          server_driver_connected
+            d
+            st_sh
+            'certificate_chain
+            'credential_identity
+            received_sh
+            sent_sh **
+          pure (st_sh.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
       let drain = drain_ready_empty_local_actions d local_fuel;
+      with st_drain received_drain sent_drain.
+        assert (
+          server_driver_connected
+            d
+            st_drain
+            'certificate_chain
+            'credential_identity
+            received_drain
+            sent_drain **
+          pure (st_drain.CS.cs_model.CS.model_config ==
+            st_sh.CS.cs_model.CS.model_config));
+      assert (pure (st_drain.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       ServerDriverAcceptServerHelloDrainOk drain
     }
   }

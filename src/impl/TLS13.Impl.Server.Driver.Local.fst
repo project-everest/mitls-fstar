@@ -51,7 +51,9 @@ fn start_server_once
             'certificate_chain
             'credential_identity
             'received
-            'sent
+            'sent **
+           pure ((CM.started_server_state 'st0).CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -145,6 +147,8 @@ fn start_server_once
     'credential_identity
     'received
     'sent);
+  assert (pure ((CM.started_server_state 'st0).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   resp
 }
 
@@ -646,7 +650,9 @@ fn process_local_event_and_write_once
             kind
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
-            sent')
+            sent' /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -952,7 +958,9 @@ fn process_local_event_and_write_once
       (Ghost.reveal 'sent)
       (if SZ.v written <= B.length network_out_bytes
        then Seq.slice network_out_bytes 0 (SZ.v written)
-       else B.empty))));
+       else B.empty)) /\
+     st1.CS.cs_model.CS.model_config ==
+       'st0.CS.cs_model.CS.model_config));
   resp
 }
 
@@ -991,7 +999,9 @@ fn process_empty_local_event_and_write_once
              kind
              B.empty
              (Ghost.reveal 'sent)
-             sent')
+             sent' /\
+             st1.CS.cs_model.CS.model_config ==
+               'st0.CS.cs_model.CS.model_config)
 {
   let mut empty_payload = [| 0uy; 0sz |];
   with empty_payload_bytes.
@@ -1042,6 +1052,14 @@ fn process_empty_local_event_and_write_once
     B.empty
     (Ghost.reveal 'sent)
     sent'));
+  lemma_server_driver_local_write_correct_preserves_config
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    (Ghost.reveal 'sent)
+    sent';
   resp
 }
 
@@ -1082,7 +1100,9 @@ fn process_empty_local_event_exact_network_len_and_write_once
             kind
             B.empty
             (Ghost.reveal 'sent)
-            sent')
+            sent' /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -1444,6 +1464,8 @@ fn process_empty_local_event_exact_network_len_and_write_once
        else B.empty))
     network_out_bytes
     app_out_bytes;
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   resp
 }
 
@@ -1472,7 +1494,9 @@ fn process_send_certificate_exact_and_write_once
             'certificate_chain
             'credential_identity
             'received
-            sent'
+            sent' **
+           pure (st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -1570,7 +1594,9 @@ fn process_send_certificate_verify_exact_and_write_once
             'certificate_chain
             'credential_identity
             'received
-            sent'
+            sent' **
+           pure (st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config)
 {
   unfold (server_driver_connected
     d
@@ -1651,7 +1677,9 @@ fn process_ready_empty_local_action_once
                   'certificate_chain
                   'credential_identity
                   'received
-                  sent'
+                  sent' **
+                pure (st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config)
             | _ ->
               server_driver_connected
                 d
@@ -1997,10 +2025,14 @@ fn rec drain_ready_empty_local_actions
              'certificate_chain
              'credential_identity
              'received
-             sent'
+             sent' **
+           pure (st1.CS.cs_model.CS.model_config ==
+             'st0.CS.cs_model.CS.model_config)
   decreases (SZ.v fuel)
 {
   if (fuel = 0sz) {
+    assert (pure ('st0.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
     let result:server_driver_local_drain_result = {
        server_driver_local_drain_last = ServerDriverLocalNotReady;
        server_driver_local_drain_exhausted = true;
@@ -2019,11 +2051,36 @@ fn rec drain_ready_empty_local_actions
              'credential_identity
              'received
              sent');
+         assert (pure (st1.CS.cs_model.CS.model_config ==
+           'st0.CS.cs_model.CS.model_config));
          let next_fuel = SZ.sub fuel 1sz;
          assert (pure (SZ.v next_fuel < SZ.v fuel));
-         drain_ready_empty_local_actions d next_fuel
+         let result = drain_ready_empty_local_actions d next_fuel;
+         with st2 sent2.
+           assert (server_driver_connected
+             d
+             st2
+             'certificate_chain
+             'credential_identity
+             'received
+             sent2 **
+           pure (st2.CS.cs_model.CS.model_config ==
+             st1.CS.cs_model.CS.model_config));
+         assert (pure (st2.CS.cs_model.CS.model_config ==
+           'st0.CS.cs_model.CS.model_config));
+         result
        }
        ServerDriverLocalStepFailed -> {
+         with st1 sent'.
+           assert (server_driver_connected
+             d
+             st1
+             'certificate_chain
+             'credential_identity
+             'received
+             sent' **
+           pure (st1.CS.cs_model.CS.model_config ==
+             'st0.CS.cs_model.CS.model_config));
          let result:server_driver_local_drain_result = {
           server_driver_local_drain_last = ServerDriverLocalStepFailed;
           server_driver_local_drain_exhausted = false;
@@ -2031,6 +2088,8 @@ fn rec drain_ready_empty_local_actions
          result
        }
        ServerDriverLocalNotReady -> {
+         assert (pure ('st0.CS.cs_model.CS.model_config ==
+           'st0.CS.cs_model.CS.model_config));
          let result:server_driver_local_drain_result = {
            server_driver_local_drain_last = ServerDriverLocalNotReady;
            server_driver_local_drain_exhausted = false;
@@ -2038,6 +2097,8 @@ fn rec drain_ready_empty_local_actions
          result
        }
        ServerDriverLocalExternalOrUnsupported -> {
+         assert (pure ('st0.CS.cs_model.CS.model_config ==
+           'st0.CS.cs_model.CS.model_config));
          let result:server_driver_local_drain_result = {
            server_driver_local_drain_last = ServerDriverLocalExternalOrUnsupported;
            server_driver_local_drain_exhausted = false;
