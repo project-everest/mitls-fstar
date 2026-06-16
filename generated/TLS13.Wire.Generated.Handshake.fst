@@ -294,7 +294,7 @@ let copyful_handshake_cases (k: LP.sum_key handshake_sum)
 let read_handshake_sum
   : PPB.copyful_parse (PPS.vmatch_sum handshake_sum handshake_low handshake_tag_of_low handshake_mid_of_tag handshake_casevmatch) handshake_parser (PPS.sum_conv handshake_sum handshake_mid_of_tag handshake_conv_of_tag) =
   PPS.copyful_parse_sum handshake_sum handshakeType_repr_reader handshakeType_repr_jumper parse_handshake_cases
-    handshake_low handshake_tag_of_low handshake_mid_of_tag handshake_casevmatch handshake_conv_of_tag copyful_handshake_cases (_ by (LP.dep_enum_destr_tac ())) ()
+    handshake_low handshake_tag_of_low handshake_mid_of_tag handshake_casevmatch handshake_conv_of_tag copyful_handshake_cases (_ by (LP.dep_enum_destr_tac ())) (_ by (LP.dep_maybe_enum_destr_t_tac ())) () ()
 
 let handshake_coerce_vmatch_eq (xl: handshake_low) (m1: PPS.sum_mid handshake_sum handshake_mid_of_tag)
   : Lemma (PPS.vmatch_sum handshake_sum handshake_low handshake_tag_of_low handshake_mid_of_tag handshake_casevmatch xl m1 == handshake_vmatch xl (handshake_fg m1))

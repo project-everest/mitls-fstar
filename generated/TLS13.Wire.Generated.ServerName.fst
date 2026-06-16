@@ -168,7 +168,7 @@ let copyful_serverName_cases (k: LP.sum_key serverName_sum)
 let read_serverName_sum
   : PPB.copyful_parse (PPS.vmatch_sum serverName_sum serverName_low serverName_tag_of_low serverName_mid_of_tag serverName_casevmatch) serverName_parser (PPS.sum_conv serverName_sum serverName_mid_of_tag serverName_conv_of_tag) =
   PPS.copyful_parse_sum serverName_sum nameType_repr_reader nameType_repr_jumper parse_serverName_cases
-    serverName_low serverName_tag_of_low serverName_mid_of_tag serverName_casevmatch serverName_conv_of_tag copyful_serverName_cases (_ by (LP.dep_enum_destr_tac ())) ()
+    serverName_low serverName_tag_of_low serverName_mid_of_tag serverName_casevmatch serverName_conv_of_tag copyful_serverName_cases (_ by (LP.dep_enum_destr_tac ())) (_ by (LP.dep_maybe_enum_destr_t_tac ())) () ()
 
 let serverName_coerce_vmatch_eq (xl: serverName_low) (m1: PPS.sum_mid serverName_sum serverName_mid_of_tag)
   : Lemma (PPS.vmatch_sum serverName_sum serverName_low serverName_tag_of_low serverName_mid_of_tag serverName_casevmatch xl m1 == serverName_vmatch xl (serverName_fg m1))
