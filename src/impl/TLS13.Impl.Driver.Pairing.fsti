@@ -281,6 +281,13 @@ let paired_handshake_message_states
   : prop =
   CS.paired_handshake_message_states client server
 
+val lemma_paired_handshake_message_states_paired_cleartext_hello_messages
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_message_states client server)
+      (ensures paired_cleartext_hello_messages client server)
+
 noextract
 let client_server_driver_x25519_projection_inputs
   (client:CS.connection_state)
@@ -296,6 +303,16 @@ let client_server_driver_application_derivation_projection_inputs
   (server:CS.connection_state)
   : prop =
   CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server
+
+val lemma_paired_handshake_message_states_application_derivation_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_message_states client server)
+      (ensures
+        client_server_driver_application_derivation_projection_inputs
+          client
+          server)
 
 noextract
 let client_server_driver_supported_profile_derived_projection_inputs
@@ -398,6 +415,20 @@ let client_server_driver_supported_profile_state_inputs
   client_server_driver_supported_profile_application_record_state_inputs
     client
     server
+
+val lemma_client_server_driver_remaining_semantic_projection_inputs_from_paired_handshake_message_states
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        paired_handshake_message_states client server /\
+        client_server_driver_supported_profile_application_record_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server)
 
 val lemma_client_server_driver_supported_profile_state_inputs_from_projection_inputs
   (client:CS.connection_state)
