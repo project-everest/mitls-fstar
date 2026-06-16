@@ -345,7 +345,7 @@ let lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components
     server_received
     server_sent
 
-let lemma_client_server_driver_key_material_agrees_from_public_success
+let lemma_client_server_driver_key_material_agrees_from_public_success_components
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

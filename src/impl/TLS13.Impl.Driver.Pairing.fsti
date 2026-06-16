@@ -386,7 +386,7 @@ val lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components
         CS.paired_wire_logs client server /\
         CS.supported_profile_client_server_key_material_agrees client server)
 
-val lemma_client_server_driver_key_material_agrees_from_public_success
+val lemma_client_server_driver_key_material_agrees_from_public_success_components
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
