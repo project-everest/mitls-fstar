@@ -114,10 +114,17 @@ regen-generated: | check-toolchain
 # producing their (gitignored) .checked files.  Driven through a stamp so the
 # main build's `.depend` can depend on it (order-only) without re-running it on
 # every invocation; the stamp rebuilds when a generated source changes.
+#
+# The verification artifacts under $(GENERATED_DIR)/cache (and the harness
+# .depend) are deliberately left in place: extract-generated reuses them so the
+# generated Wire modules are verified exactly once per `parsers` run instead of
+# being re-verified during extraction.  The main build never reads
+# $(GENERATED_DIR)/cache (its cache_dir is $(CACHE_DIR), and the Wire modules are
+# consumed as already-cached from the $(GENERATED_DIR)/*.checked copies below), so
+# these leftovers are inert for the rest of the build.
 $(GENERATED_STAMP): $(GENERATED_SRCS) | check-toolchain
 	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify $(GENERATED_MAKE_VARS)
 	-cp $(GENERATED_DIR)/cache/TLS13.Wire.Generated.*.checked $(GENERATED_DIR)/ 2>/dev/null || true
-	-$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile clean-local 2>/dev/null || true
 	touch $@
 
 # Force a re-verification of the generated modules (e.g. after regen-generated).
@@ -131,20 +138,24 @@ verify-generated: | check-toolchain
 # krmlinit_globals() at startup to initialise the enum lookup tables (the
 # parsers/serializers library is what the verified client links against; the
 # client driver wires krmlinit_globals — see extract-driver-bundle).
+#
+# Depends on $(GENERATED_STAMP): verification happens there (once).  The `verify`
+# goal below is then satisfied by the preserved $(GENERATED_DIR)/cache, so this
+# stage only runs KaRaMeL extraction rather than re-verifying.
 .PHONY: extract-generated
-extract-generated: | check-toolchain
+extract-generated: $(GENERATED_STAMP) | check-toolchain
 	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify extract $(GENERATED_MAKE_VARS)
 	@echo "Extracted TLS wire parsers/serializers to $(GENERATED_DIR)/out/"
 
 # Full parsers/serializers pipeline from $(QD_RFC): generate, verify, extract.
-# These three stages share the generated/ directory (.depend, cache/, the .fst
-# sources) and are inherently ordered, so they MUST run sequentially even under
-# a parallel `make -jN`; run them via recursive $(MAKE) rather than as parallel
-# prerequisites.
+# These stages share the generated/ directory (.depend, cache/, the .fst sources)
+# and are inherently ordered, so they MUST run sequentially even under a parallel
+# `make -jN`; run them via recursive $(MAKE) rather than as parallel prerequisites.
+# extract-generated pulls in $(GENERATED_STAMP) (the single verification step), so
+# verify-generated is not invoked separately here.
 .PHONY: parsers
 parsers:
 	$(MAKE) regen-generated
-	$(MAKE) verify-generated
 	$(MAKE) extract-generated
 
 # ── Dependency Analysis ────────────────────────────────────────────
@@ -155,7 +166,19 @@ parsers:
 .depend: $(ALL_FILES) Makefile | check-toolchain $(GENERATED_STAMP)
 	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ALL_FILES) --output_deps_to $@
 
+# Do NOT pull in .depend (and, through it, the order-only $(GENERATED_STAMP)
+# prerequisite) for the generated-pipeline phony goals or clean.  `parsers` runs
+# regen/verify/extract-generated as recursive $(MAKE) sub-builds; each such
+# sub-invocation re-reads this Makefile and would re-evaluate $(GENERATED_STAMP),
+# which is perpetually out of date during `parsers` (regen-generated rewrites the
+# generated sources), so the generated Wire modules would be re-verified once per
+# sub-make — racing under -jN.  These goals manage the generated .checked files
+# explicitly via the stamp and never need the spec/impl dependency graph.
+DEPEND_EXCLUDED_GOALS := clean regen-generated verify-generated extract-generated \
+  parsers generated-checked $(GENERATED_STAMP)
+ifeq (,$(filter $(DEPEND_EXCLUDED_GOALS),$(MAKECMDGOALS)))
 include .depend
+endif
 
 # ── Generic Verification Rules ────────────────────────────────────
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
