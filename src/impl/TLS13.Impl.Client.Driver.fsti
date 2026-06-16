@@ -390,8 +390,10 @@ fn send
                   (Ghost.reveal 'payload_bytes)
                   (Ghost.reveal 'sent0)
                   sent1 /\
-          client_driver_sent_log_exact st1 sent1 /\
-          client_driver_received_log_accounted st1 received1)
+                 client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                 client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+                 client_driver_sent_log_exact st1 sent1 /\
+                 client_driver_received_log_accounted st1 received1)
 
 fn receive
   (d:client_driver)
@@ -408,9 +410,11 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len /\
+                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                 client_driver_sent_log_exact st1 sent1 /\
-          client_driver_received_log_accounted st1 received1 /\
-          (exists obs app_out.
+                client_driver_received_log_accounted st1 received1 /\
+                (exists obs app_out.
                   client_driver_receive_correct
                    'st0
                    st1

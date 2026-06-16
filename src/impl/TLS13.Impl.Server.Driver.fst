@@ -669,9 +669,43 @@ fn send
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
             sent' /\
+            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+            server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
             server_driver_sent_log_exact st1 sent' /\
             server_driver_received_log_accounted st1 (Ghost.reveal 'received))
 {
+  unfold (server_driver_connected
+    d
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent));
+  with ch0 buffered0 buffered_len0.
+    assert (Box.pts_to d.server_driver_channel (Some ch0) **
+            IO.is_channel ch0 (Ghost.reveal 'received) (Ghost.reveal 'sent) **
+            server_driver_buffers d buffered0 buffered_len0 **
+            pure (server_driver_wire_logs_match
+              'st0
+              (Ghost.reveal 'received)
+              (Ghost.reveal 'sent)
+              buffered0
+              buffered_len0));
+  assert (pure (server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+  lemma_server_driver_wire_logs_match_received_accounted
+    'st0
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    buffered0
+    buffered_len0;
+  assert (pure (server_driver_received_log_accounted 'st0 (Ghost.reveal 'received)));
+  fold (server_driver_connected
+    d
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent));
   let resp = send_application_data_once d payload payload_len;
   with st1 sent'.
     assert (server_driver_connected
@@ -742,6 +776,8 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
+                server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+                server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_sent_log_exact st1 sent' /\
                 server_driver_received_log_accounted st1 received' /\
                 (exists loop app_out.
@@ -755,6 +791,38 @@ fn receive
                     app_out
                     out_bytes))
 {
+  unfold (server_driver_connected
+    d
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent));
+  with ch0 buffered0 buffered_len0.
+    assert (Box.pts_to d.server_driver_channel (Some ch0) **
+            IO.is_channel ch0 (Ghost.reveal 'received) (Ghost.reveal 'sent) **
+            server_driver_buffers d buffered0 buffered_len0 **
+            pure (server_driver_wire_logs_match
+              'st0
+              (Ghost.reveal 'received)
+              (Ghost.reveal 'sent)
+              buffered0
+              buffered_len0));
+  assert (pure (server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+  lemma_server_driver_wire_logs_match_received_accounted
+    'st0
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    buffered0
+    buffered_len0;
+  assert (pure (server_driver_received_log_accounted 'st0 (Ghost.reveal 'received)));
+  fold (server_driver_connected
+    d
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent));
   let loop = read_process_network_until_ready d network_fuel;
   with st1 received' sent' loop_app_out.
     assert (server_driver_connected_with_app_out

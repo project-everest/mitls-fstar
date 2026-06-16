@@ -400,6 +400,8 @@ fn send
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
             sent' /\
+            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+            server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
             server_driver_sent_log_exact st1 sent' /\
             server_driver_received_log_accounted st1 (Ghost.reveal 'received))
 
@@ -430,6 +432,8 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
+                server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+                server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_sent_log_exact st1 sent' /\
                 server_driver_received_log_accounted st1 received' /\
                 (exists loop app_out.
