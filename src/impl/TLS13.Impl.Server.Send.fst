@@ -697,7 +697,7 @@ fn process_send_encrypted_extensions_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                (let ee = { M.negotiated_alpn = None } in
+                (let ee = { M.negotiated_alpn = None; M.body = B.empty } in
                  st1 ==
                    CM.sent_encrypted_extensions_state
                      'st0
@@ -713,7 +713,7 @@ fn process_send_encrypted_extensions_serialized
                   app_out_bytes)
 {
   let ee : erased M.encrypted_extensions =
-    Ghost.hide { M.negotiated_alpn = None };
+    Ghost.hide { M.negotiated_alpn = None; M.body = B.empty };
   assert (pure ((Ghost.reveal ee).M.negotiated_alpn == None));
 
   let alpn = V.alloc 0uy 255sz;
@@ -747,7 +747,7 @@ fn process_send_encrypted_extensions_serialized
     M.key_share = Seq.create 32 0uy;
     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
   };
-  let dummy_cert : erased M.certificate_msg = Ghost.hide { M.chain = [] };
+  let dummy_cert : erased M.certificate_msg = Ghost.hide { M.chain = []; M.body = B.empty };
   let dummy_cv : erased M.certificate_verify = Ghost.hide {
     M.scheme = T.RsaPssRsaeSha256;
     M.signature = B.empty;
@@ -965,7 +965,7 @@ fn build_certificate_from_credentials
            | Some lcert ->
              IM.is_valid_certificate_msg
                lcert
-               { M.chain = [Ghost.reveal 'certificate_chain] } **
+               { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty } **
              pure (
                SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
                  B.length (Ghost.reveal 'certificate_chain) /\
@@ -1057,7 +1057,7 @@ fn build_certificate_from_credentials
         [Ghost.reveal 'certificate_chain]));
       fold (IM.is_valid_certificate_msg
         lcert
-        { M.chain = [Ghost.reveal 'certificate_chain] });
+        { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
       assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
         B.length (Ghost.reveal 'certificate_chain)));
       assert (pure (lcert.IM.certificate_msg_cert_count == 1sz));
@@ -1415,7 +1415,7 @@ fn process_send_certificate_from_credentials
                 st1 ==
                   CM.sent_certificate_state
                     'st0
-                    { M.chain = [Ghost.reveal 'certificate_chain] }
+                    { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty }
                     network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
@@ -1444,7 +1444,7 @@ fn process_send_certificate_from_credentials
     }
     Some lcert -> {
       let cert:erased M.certificate_msg =
-        Ghost.hide { M.chain = [Ghost.reveal 'certificate_chain] };
+        Ghost.hide { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty };
       assert (pure ((Ghost.reveal cert).M.chain <> []));
       assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
         B.length (Ghost.reveal 'certificate_chain)));
@@ -1571,7 +1571,7 @@ fn process_send_certificate_verify_serialized
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     }
-    { M.chain = [] }
+    { M.chain = []; M.body = B.empty }
     (Ghost.reveal cv)
     { M.verify_data = Seq.create 32 0uy };
   assert (pure (Seq.equal
@@ -1866,7 +1866,7 @@ fn process_send_stored_certificate_verify_serialized
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     }
-    { M.chain = [] }
+    { M.chain = []; M.body = B.empty }
     (Ghost.reveal cv)
     { M.verify_data = Seq.create 32 0uy };
   assert (pure (Seq.equal
@@ -2240,7 +2240,7 @@ fn process_send_server_finished_serialized
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     }
-    { M.chain = [] }
+    { M.chain = []; M.body = B.empty }
     { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty }
     (Ghost.reveal fin);
   assert (pure (Seq.equal
