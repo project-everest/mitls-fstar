@@ -1279,8 +1279,6 @@ let lemma_server_initial_consistent
 =
   ()
 
-fn alloc_empty_sized_bytes (#cap:nat)
-  requires pure (SZ.fits cap)
 fn alloc_empty_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
   requires pure (SZ.v cap == reveal cap_spec)
   returns slot:sized_bytes

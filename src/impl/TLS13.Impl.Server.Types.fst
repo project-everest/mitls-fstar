@@ -163,7 +163,7 @@ let next_local_action_sound
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
           CL.message_value =
-            M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+            M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
         })
     | LocalSendCertificate ->
       action.next_local_payload == LocalPayloadNone /\
@@ -184,7 +184,7 @@ let next_local_action_sound
          B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
            B.length
              (WS.serialize_certificate_from_credential
-               { M.chain = [cfg.CS.server_certificate_chain] }) <=
+               { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty }) <=
              Bounds.max_transcript_len /\
          CS.legal_event
            st.CS.cs_model
@@ -192,7 +192,7 @@ let next_local_action_sound
              CL.message_direction = CL.Sent;
              CL.message_value =
                M.TlsHandshake
-                 (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+                 (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
            })
        | None -> False)
     | LocalSignCertificateVerify ->
@@ -335,6 +335,7 @@ let server_local_event_input_ready
        M.key_share =
          CryptoSpec.x25519_public_from_private server_private_key;
        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+       M.body = B.empty;
      } in
      (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
       | Some selection ->
@@ -366,7 +367,7 @@ let server_local_event_input_ready
       (CS.ConnNetworkEvent {
         CL.message_direction = CL.Sent;
         CL.message_value =
-          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
       })
   | LocalSendServerFinished ->
     Seq.equal payload B.empty /\
@@ -464,7 +465,7 @@ let server_local_event_input_ready_with_credentials
       (CS.ConnNetworkEvent {
         CL.message_direction = CL.Sent;
         CL.message_value =
-          M.TlsHandshake (M.Certificate { M.chain = [certificate_chain] });
+          M.TlsHandshake (M.Certificate { M.chain = [certificate_chain]; M.body = B.empty });
       })
   | LocalSignCertificateVerify ->
     Seq.equal payload B.empty /\
