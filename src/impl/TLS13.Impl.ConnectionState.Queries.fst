@@ -2413,7 +2413,7 @@ fn can_send_encrypted_extensions_runtime
       (CS.ConnNetworkEvent {
         CL.message_direction = CL.Sent;
         CL.message_value =
-          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
       })));
 
     fold (traffic_key_material_exactly
