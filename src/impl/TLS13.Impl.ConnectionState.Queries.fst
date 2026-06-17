@@ -2353,7 +2353,7 @@ fn can_send_encrypted_extensions_runtime
               (CS.ConnNetworkEvent {
                 CL.message_direction = CL.Sent;
                 CL.message_value =
-                  M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+                  M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
               }))
 {
   unfold (connection_exactly c st0);
