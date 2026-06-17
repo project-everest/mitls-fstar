@@ -163,13 +163,13 @@ val lemma_serialize_certificate_from_single_chain_len:
   certificate:B.bytes ->
   Lemma
     (B.length
-      (serialize_certificate_msg { M.chain = [certificate] }) ==
+      (serialize_certificate_msg { M.chain = [certificate]; M.body = B.empty }) ==
         9 + B.length certificate /\
      B.length
-      (serialize_handshake (M.Certificate { M.chain = [certificate] })) ==
+      (serialize_handshake (M.Certificate { M.chain = [certificate]; M.body = B.empty })) ==
         13 + B.length certificate /\
      B.length
-      (serialize_certificate_from_credential { M.chain = [certificate] }) ==
+      (serialize_certificate_from_credential { M.chain = [certificate]; M.body = B.empty }) ==
         13 + B.length certificate)
 
 val serialize_certificate_verify_from_signature:

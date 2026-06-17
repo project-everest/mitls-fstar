@@ -1,0 +1,348 @@
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Bytes.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Bounds.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.MachineTypes.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Extract.Smoke.fst
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.Bounds
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Bounds.fst
+Verified module: TLS13.Extract.Smoke
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.MachineTypes
+All verification conditions discharged successfully
+Verified module: TLS13.Bytes
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.ServerHello.Checks.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Types.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.IO.fsti
+Verified module: TLS13.Impl.ConnectionState.Bounds
+All verification conditions discharged successfully
+Verified module: TLS13.Types
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Crypto.Spec.fsti
+Verified i'face (or impl+i'face): TLS13.Crypto.Spec
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.X509.Spec.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Keys.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Transcript.fst
+Verified i'face (or impl+i'face): TLS13.IO
+All verification conditions discharged successfully
+Verified module: TLS13.ServerHello.Checks
+All verification conditions discharged successfully
+Verified module: TLS13.Transcript
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.X509.Spec
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.X509.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Messages.fst
+Verified module: TLS13.Keys
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.KeySchedule.fsti
+Verified module: TLS13.Messages
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Messages.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Handshake.Spec.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Record.Spec.fst
+Verified i'face (or impl+i'face): TLS13.X509
+All verification conditions discharged successfully
+Verified module: TLS13.Handshake.Spec
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Wire.Spec.fsti
+Verified module: TLS13.Record.Spec
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.StateMachine.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Record.fsti
+Verified i'face (or impl+i'face): TLS13.Wire.Spec
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Wire.Spec.fst
+Verified i'face (or impl+i'face): TLS13.KeySchedule
+All verification conditions discharged successfully
+Verified module: TLS13.StateMachine
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.ConnectionLog.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.StateMachine.Lemmas.fst
+Verified i'face (or impl+i'face): TLS13.Record
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.Messages
+All verification conditions discharged successfully
+* Warning 331 at src/spec/TLS13.ConnectionLog.fst(420,15-420,26):
+  - This name is being ignored
+
+* Warning 331 at src/spec/TLS13.ConnectionLog.fst(421,29-421,38):
+  - This name is being ignored
+
+* Warning 331 at src/spec/TLS13.ConnectionLog.fst(422,29-422,36):
+  - This name is being ignored
+
+* Warning 331 at src/spec/TLS13.ConnectionLog.fst(436,14-436,19):
+  - This name is being ignored
+
+Verified module: TLS13.StateMachine.Lemmas
+All verification conditions discharged successfully
+Verified module: TLS13.Wire.Spec
+All verification conditions discharged successfully
+Verified module: TLS13.ConnectionLog
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/spec/TLS13.Spec.ConnectionState.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Crypto.fsti
+Verified i'face (or impl+i'face): TLS13.Crypto
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Record.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.KeySchedule.fst
+Verified module: TLS13.KeySchedule
+All verification conditions discharged successfully
+Verified module: TLS13.Record
+All verification conditions discharged successfully
+* Warning 349 at src/spec/TLS13.Spec.ConnectionState.fst(1877,2-2034,85):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+* Warning 349 at src/spec/TLS13.Spec.ConnectionState.fst(3923,2-4037,16):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+* Warning 349 at src/spec/TLS13.Spec.ConnectionState.fst(4284,2-4358,92):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+* Warning 349 at src/spec/TLS13.Spec.ConnectionState.fst(4425,2-4545,16):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+* Warning 349 at src/spec/TLS13.Spec.ConnectionState.fst(5064,2-5138,98):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+* Warning 349 at src/spec/TLS13.Spec.ConnectionState.fst(5205,2-5325,16):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+Verified module: TLS13.Spec.ConnectionState
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Client.Types.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Tags.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Model.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Serializer.fsti
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.Tags
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Tags.fst
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.Model
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Repr.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Model.fst
+Verified module: TLS13.Impl.ConnectionState.Tags
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.Serializer
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.Repr
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Queries.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Repr.fst
+Verified module: TLS13.Impl.ConnectionState.Model
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.Queries
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Network.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Fail.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalApp.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Queries.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalSend.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalHandshake.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalAuth.fsti
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.LocalApp
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.Fail
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalApp.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Fail.fst
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.LocalAuth
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalAuth.fst
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.LocalHandshake
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalHandshake.fst
+* Warning 349 at src/impl/TLS13.Impl.Client.Types.fst(3371,2-3489,3):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.Network
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.Network.fst
+Verified i'face (or impl+i'face): TLS13.Impl.ConnectionState.LocalSend
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.ConnectionState.LocalSend.fst
+Verified module: TLS13.Impl.ConnectionState.LocalApp
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.ConnectionState.Fail
+All verification conditions discharged successfully
+* Warning 349 at src/impl/TLS13.Impl.Client.Types.fst(3507,2-3636,3):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+Verified module: TLS13.Impl.ConnectionState.LocalAuth
+All verification conditions discharged successfully
+* Warning 349 at src/impl/TLS13.Impl.Client.Types.fst(4488,2-4594,3):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+Verified module: TLS13.Impl.ConnectionState.Repr
+All verification conditions discharged successfully
+* Warning 349 at src/impl/TLS13.Impl.Client.Types.fst(4688,2-4744,3):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+* Warning 349 at src/impl/TLS13.Impl.Client.Types.fst(5188,2-5216,3):
+  - The verification condition succeeded after splitting it to localize
+    potential errors, although the original non-split verification condition
+    failed. If you want to rely on splitting queries for verifying your program
+    please use the '--split_queries always' option rather than relying on it
+    implicitly.
+
+Verified module: TLS13.Impl.Client.Types
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.ChangeCipherSpec.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.OpenSSL.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Alert.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Client.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Local.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Handshake.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.ApplicationData.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Parser.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Dispatch.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.DecodeError.fsti
+Verified i'face (or impl+i'face): TLS13.Impl.Handle.Local
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.Handle.DecodeError
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.Handle.ChangeCipherSpec
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.OpenSSL
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.Handle.Alert
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Local.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.DecodeError.fst
+Verified i'face (or impl+i'face): TLS13.Impl.Handle.ApplicationData
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.ChangeCipherSpec.fst
+Verified i'face (or impl+i'face): TLS13.Impl.Handle.Handshake
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Alert.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.ApplicationData.fst
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Handshake.fst
+Verified i'face (or impl+i'face): TLS13.Impl.Handle.Dispatch
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Handle.Dispatch.fst
+Verified i'face (or impl+i'face): TLS13.Impl.Parser
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.Client
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Client.Driver.fsti
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Client.fst
+Verified module: TLS13.Impl.Handle.DecodeError
+All verification conditions discharged successfully
+Verified i'face (or impl+i'face): TLS13.Impl.Client.Driver
+All verification conditions discharged successfully
+/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe --cache_checked_modules --cache_dir _cache --odir _output --warn_error -321 --report_assumes warn --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' --ext optimize_let_vc --ext fly_deps --include src/spec --include src/impl src/impl/TLS13.Impl.Client.Driver.fst
+Verified module: TLS13.Impl.Handle.ChangeCipherSpec
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.Handle.ApplicationData
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.Handle.Alert
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.Handle.Dispatch
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.ConnectionState.Network
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.Client
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.ConnectionState.LocalSend
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.Handle.Handshake
+All verification conditions discharged successfully
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+Verified module: TLS13.Impl.ConnectionState.LocalHandshake
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.Handle.Local
+All verification conditions discharged successfully
+Verified module: TLS13.Impl.ConnectionState.Queries
+All verification conditions discharged successfully
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+* Warning 335 at /home/nswamy/workspace/agentic-tls/tools/FStar/lib/fstar/ulib/Prims.fst(607,0-607,36):
+  - Every use of Prims.magic triggers a warning
+  - Uses an axiom
+
+Verified module: TLS13.Impl.Client.Driver
+All verification conditions discharged successfully
+All F* modules verified

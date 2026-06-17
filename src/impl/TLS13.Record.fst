@@ -183,7 +183,9 @@ fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
   assert (pure (ok ==> 's.R.static_iv == Some (Ghost.reveal 'iv_bytes)));
   fold (is_record_state st 's);
   ok
-fn has_seal_keys (st: record_state)
+}
+
+fn has_seal_keys (st: record_state) (#'s: erased R.record_state)
   requires is_record_state st 's
   returns ok: bool
   ensures is_record_state st 's **
