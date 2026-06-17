@@ -606,6 +606,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                      CryptoSpec.x25519_public_from_private
                        (Ghost.reveal 'server_private_key_bytes);
                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                   M.body = B.empty;
                  } in
                  CM.can_send_server_hello
                    'st0
@@ -629,6 +630,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                       CryptoSpec.x25519_public_from_private
                         (Ghost.reveal 'server_private_key_bytes);
                     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                    M.body = B.empty;
                   } in
                   Seq.equal
                     network_out_bytes
@@ -677,7 +679,7 @@ fn process_send_encrypted_extensions_serialized
                      CL.message_direction = CL.Sent;
                      CL.message_value =
                        M.TlsHandshake
-                         (M.EncryptedExtensions { M.negotiated_alpn = None });
+                         (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
                    }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -686,7 +688,7 @@ fn process_send_encrypted_extensions_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                (let ee = { M.negotiated_alpn = None } in
+                (let ee = { M.negotiated_alpn = None; M.body = B.empty } in
                  st1 ==
                    CM.sent_encrypted_extensions_state
                      'st0
@@ -808,7 +810,7 @@ fn process_send_certificate_from_credentials
                     CL.message_direction = CL.Sent;
                     CL.message_value =
                       M.TlsHandshake
-                        (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain] });
+                        (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
                   }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -821,7 +823,7 @@ fn process_send_certificate_from_credentials
                 st1 ==
                   CM.sent_certificate_state
                     'st0
-                    { M.chain = [Ghost.reveal 'certificate_chain] }
+                    { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty }
                     network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
