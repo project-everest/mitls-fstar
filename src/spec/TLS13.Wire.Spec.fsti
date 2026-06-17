@@ -200,7 +200,7 @@ val lemma_fixed_server_handshake_serializers:
        (serialize_handshake (M.ServerHello sh)) /\
      Seq.equal
        (serialize_empty_encrypted_extensions ())
-       (serialize_handshake (M.EncryptedExtensions { M.negotiated_alpn = None })) /\
+       (serialize_handshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty })) /\
      Seq.equal
        (serialize_certificate_from_credential cert)
        (serialize_handshake (M.Certificate cert)) /\
