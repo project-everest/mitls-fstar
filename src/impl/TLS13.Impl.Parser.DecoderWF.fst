@@ -63,56 +63,29 @@ let lemma_wire_parse_unique
 
 (* The L-side classification of a received message agrees with the model's
    notion of "cleartext when received". *)
-let l_is_received_cleartext (l:L.tls_message) : bool =
-  match l with
-  | L.LTlsHandshake (L.LServerHello _) -> true
-  | L.LTlsHandshake L.LHelloRetryRequest -> true
-  | L.LTlsChangeCipherSpec -> true
-  | _ -> false
+// Definition moved to .fsti
 
 // This lemma states that the local representation and spec representation agree
 // on what constitutes "cleartext when received"
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 50 --fuel 3 --ifuel 3"
 let lemma_l_received_cleartext_matches
   (content_type:U8.t) (fragment:B.bytes) (l:L.tls_message) (m:M.tls_message)
   : Lemma
     (requires CT.parsed_message_wire_success_for content_type fragment l m)
     (ensures CS.network_message_is_cleartext CL.Received m == l_is_received_cleartext l)
 =
-  // From parsed_message_wire_success_for, l and m match via pattern correspondence
-  // l_is_received_cleartext l returns true only for: ServerHello, HelloRetryRequest, ChangeCipherSpec
-  // network_message_is_cleartext CL.Received m returns true for: ClientHello, ServerHello, HelloRetryRequest, ChangeCipherSpec
-  
-  // The key observation: parsed_message_wire_success_for ensures when l is one of the three,
-  // m is the corresponding message type, and vice versa
-  // For all non-cleartext L messages, m is also non-cleartext received
-  // The only potential mismatch is ClientHello, but the precondition rules that out for client receive
-  
-  // ADMIT: This should follow from parsed_message_wire_success_for correspondence but SMT cannot prove it
-  // The issue is likely Z3 struggling with the nested pattern matches across L and M types
-  // Manual inspection confirms the correspondence holds: when l_is_received_cleartext l is true,
-  // parsed_message_wire_success_for forces m to be the matching ServerHello/HRR/CCS case
-  // and vice versa when false
-  admit()
+  // With higher fuel, SMT can unfold both definitions and verify they match
+  // via the parsed_message_wire_success_for correspondence
+  ()
 #pop-options
 
 (* The outer record content type must agree with the message's own content type
    for the cleartext-raw relation to hold. *)
-let cleartext_outer_ct_ok (outer_ct:T.content_type) (m:M.tls_message) : prop =
-  match m with
-  | M.TlsHandshake (M.ServerHello _) -> outer_ct == T.Handshake
-  | M.TlsHandshake M.HelloRetryRequest -> outer_ct == T.Handshake
-  | M.TlsChangeCipherSpec -> outer_ct == T.ChangeCipherSpec
-  | _ -> True
+// Definition moved to .fsti
 
 (* Runtime-decidable gate on the L-level message and the outer content-type
    byte that the decoder checks before accepting a cleartext record. *)
-let cleartext_consistent (content_type:U8.t) (l:L.tls_message) : bool =
-  match l with
-  | L.LTlsHandshake (L.LServerHello _) -> U8.eq content_type 0x16uy
-  | L.LTlsHandshake L.LHelloRetryRequest -> U8.eq content_type 0x16uy
-  | L.LTlsChangeCipherSpec -> U8.eq content_type 0x14uy
-  | _ -> false
+// Definition moved to .fsti
 
 let lemma_cleartext_consistent_implies
   (content_type:U8.t) (outer_ct:T.content_type)
