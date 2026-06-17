@@ -185,7 +185,7 @@ fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
   ok
 }
 
-fn has_seal_keys (st: record_state) (#'s: erased R.record_state)
+fn has_seal_keys (st: record_state) (#'s: erased R.direction_state)
   requires is_record_state st 's
   returns ok: bool
   ensures is_record_state st 's **
