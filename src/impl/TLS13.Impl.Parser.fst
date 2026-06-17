@@ -3425,7 +3425,7 @@ fn decode_network_record
                      WS.parse_tls_message ct fragment_bytes == Some msg) **
                  pure (CT.parsed_message_wire_success
                    decoded.L.decoded_record_content_type
-                   (Ghost.reveal fragment_bytes)
+                   fragment_bytes
                    l)
                | None ->
                  pure (forall (ct:T.content_type).
@@ -3440,13 +3440,13 @@ fn decode_network_record
                 B.length fragment_bytes ==
                   SZ.v decoded.L.decoded_record_fragment_len /\
                 (exists outer_ct outer_fragment.
-                   WS.parse_record (Ghost.reveal 'raw_bytes) ==
-                     Some (outer_ct, outer_fragment, B.length (Ghost.reveal 'raw_bytes))) /\
+                   WS.parse_record 'raw_bytes ==
+                     Some (outer_ct, outer_fragment, B.length 'raw_bytes)) /\
                 CT.network_input_wf
                   'st0
                   decoded.L.decoded_record_content_type
                   fragment_bytes
-                  (Ghost.reveal 'raw_bytes)))
+                  'raw_bytes)))
 {
   Arr.pts_to_len raw;
   if (SZ.lt raw_len 5sz) {

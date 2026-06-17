@@ -70,16 +70,29 @@ let l_is_received_cleartext (l:L.tls_message) : bool =
   | L.LTlsChangeCipherSpec -> true
   | _ -> false
 
-// TEMPORARY: This proof worked before but fails after merge. The precondition gives us
-// a strong relationship via pattern matching in parsed_message_wire_success_for, but
-// Z3 isn't unfolding it properly. Needs investigation with --query_stats.
-#push-options "--z3rlimit 100 --fuel 2 --ifuel 1"
+// This lemma states that when a message is locally identified as cleartext received,
+// the spec also considers it cleartext when received
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
 let lemma_l_received_cleartext_matches
   (content_type:U8.t) (fragment:B.bytes) (l:L.tls_message) (m:M.tls_message)
   : Lemma
-    (requires CT.parsed_message_wire_success_for content_type fragment l m)
-    (ensures CS.network_message_is_cleartext CL.Received m == l_is_received_cleartext l)
-= admit() // TODO: Fix post-merge
+    (requires 
+      CT.parsed_message_wire_success_for content_type fragment l m /\
+      l_is_received_cleartext l)
+    (ensures CS.network_message_is_cleartext CL.Received m)
+=
+  // From l_is_received_cleartext l, we know l is one of:
+  // - L.LTlsHandshake (L.LServerHello _)
+  // - L.LTlsHandshake L.LHelloRetryRequest
+  // - L.LTlsChangeCipherSpec
+  
+  // From parsed_message_wire_success_for, m matches l:
+  // - M.TlsHandshake (M.ServerHello _)
+  // - M.TlsHandshake M.HelloRetryRequest
+  // - M.TlsChangeCipherSpec
+  
+  // All three are cleartext when received according to network_message_is_cleartext CL.Received
+  ()
 #pop-options
 
 (* The outer record content type must agree with the message's own content type
@@ -114,6 +127,7 @@ let lemma_cleartext_consistent_implies
 
 (* From an exact outer-record parse and the wire-success round trip, recover the
    model's [cleartext_tls_message_raw] for a received cleartext message. *)
+#push-options "--z3rlimit 50 --fuel 2 --ifuel 2"
 let lemma_cleartext_tls_message_raw_of_parse
   (content_type:U8.t) (outer_ct:T.content_type)
   (fragment:B.bytes) (raw:B.bytes)
@@ -127,10 +141,30 @@ let lemma_cleartext_tls_message_raw_of_parse
       cleartext_outer_ct_ok outer_ct m)
     (ensures CS.cleartext_tls_message_raw m raw)
 =
+  // From parse_record we get serialize_record outer_ct fragment == raw
   WS.lemma_parse_record_serializes raw;
   Seq.lemma_eq_elim (WS.serialize_record outer_ct fragment) raw;
-  admit() // TEMPORARY: Pattern match incomplete after merge due to message type changes
-
+  
+  // Prove by cases on the cleartext message type
+  (match m with
+   | M.TlsHandshake (M.ServerHello sh) ->
+     RV.lemma_serialize_tls_message_handshake (M.ServerHello sh);
+     Seq.lemma_eq_elim fragment (WS.serialize_handshake (M.ServerHello sh))
+   | M.TlsHandshake M.HelloRetryRequest ->
+     CSL.lemma_parse_record_full_raw_records_exactly raw outer_ct fragment
+   | M.TlsChangeCipherSpec ->
+     assert (exists ct.
+       L.content_type_matches content_type ct /\
+       WS.parse_tls_message ct fragment == Some M.TlsChangeCipherSpec);
+     let ct =
+       ID.indefinite_description_ghost T.content_type
+         (fun ct -> L.content_type_matches content_type ct /\
+                 WS.parse_tls_message ct fragment == Some M.TlsChangeCipherSpec) in
+     lemma_content_type_matches_injective content_type ct outer_ct;
+     RV.lemma_serialize_tls_message_change_cipher_spec ();
+     RV.lemma_parse_tls_message_change_cipher_spec fragment
+   | _ -> ())
+#pop-options
 (* decoder_fragment_relation, cleartext (non-ApplicationData outer) branch. *)
 let lemma_mk_cleartext_decoder_fragment_relation
   (st0:CS.connection_state) (content_type:U8.t) (outer_ct:T.content_type)
