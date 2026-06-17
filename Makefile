@@ -598,7 +598,7 @@ check-deps:
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
-	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend
+	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
 	  test/openssl_echo_server test/openssl_echo_server.port \
 	  test/openssl_echo_server.log
 	find src test -name '*.checked' -delete
