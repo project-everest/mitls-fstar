@@ -539,6 +539,7 @@ fn process_send_server_hello_from_arrays
                    M.random = Ghost.reveal 'server_random_bytes;
                    M.key_share = Ghost.reveal 'server_key_share_bytes;
                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                   M.body = B.empty;
                  } in
                  CM.can_send_server_hello
                    'st0
@@ -560,6 +561,7 @@ fn process_send_server_hello_from_arrays
                     M.random = Ghost.reveal 'server_random_bytes;
                     M.key_share = Ghost.reveal 'server_key_share_bytes;
                     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                    M.body = B.empty;
                   } in
                   Seq.equal
                     network_out_bytes
