@@ -63,7 +63,9 @@ Added `body = B.empty` to **11 locations** across 5 files:
 
 ## Verification Status
 
-**Result:** All modules verify successfully except 2 documented temporary admits.
+**Result:** 99% complete - All modules verify except:
+- 2 documented temporary admits in TLS13.Impl.Parser.DecoderWF (lines 75-80, 127-130)
+- 1 proof adjustment needed in TLS13.Impl.Client.FragmentBound (line 100)
 
 **Admits:**
 1. `TLS13.Impl.Parser.DecoderWF.lemma_mk_cleartext_decoder_fragment_relation` (line 75-80)

@@ -43,7 +43,7 @@ let lemma_network_input_wf_fragment_bound
       (ensures B.length fragment <= L.max_record_fragment_len)
 =
   assert (CT.decoder_fragment_relation st0 content_type fragment raw_received);
-  WS.lemma_parse_record_fragment_bound raw_received;
+  WS.lemma_parse_record_wire_fragment_bound raw_received;
   // decoder_fragment_relation now uses parse_record_wire instead of parse_record after merge
   let outer_ct =
     ID.indefinite_description_ghost T.content_type

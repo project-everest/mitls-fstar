@@ -340,6 +340,14 @@ val lemma_parse_record_fragment_bound:
       | Some (_, fragment, _) -> B.length fragment <= 16640
       | None -> True))
 
+val lemma_parse_record_wire_fragment_bound:
+  input:B.bytes ->
+  Lemma
+    (ensures (
+      match parse_record_wire input with
+      | Some (_, fragment, _) -> B.length fragment <= 16640
+      | None -> True))
+
 val lemma_parse_tls_message_round_trip:
   content_type:T.content_type ->
   fragment:B.bytes ->

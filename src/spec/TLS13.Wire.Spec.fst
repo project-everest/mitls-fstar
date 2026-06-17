@@ -1200,6 +1200,29 @@ let lemma_parse_record_fragment_bound (input:B.bytes)
             assert (B.length fragment <= 16640)
           | None -> ()
 
+let lemma_parse_record_wire_fragment_bound (input:B.bytes)
+  : Lemma
+      (ensures (
+        match parse_record_wire input with
+        | Some (_, fragment, _) -> B.length fragment <= 16640
+        | None -> True))
+=
+  if B.length input < 5 then ()
+  else
+    match content_type_of_byte (Seq.index input 0) with
+    | None -> ()
+    | Some _ ->
+      if read_u16 input 1 <> 0x0303 then ()
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
+        else
+          match take_range input 5 fragment_len with
+          | Some fragment ->
+            assert (B.length fragment == fragment_len);
+            assert (B.length fragment <= 16640)
+          | None -> ()
+
 // Round-trip: a handshake message accepted by parse_tls_message re-serializes to
 // exactly the input fragment, for the messages whose M-value carries the verbatim
 // wire body (ServerHello, EncryptedExtensions, Certificate, CertificateVerify).
