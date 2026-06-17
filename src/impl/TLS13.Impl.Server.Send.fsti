@@ -290,7 +290,7 @@ fn process_send_encrypted_extensions_serialized
                      CL.message_direction = CL.Sent;
                      CL.message_value =
                        M.TlsHandshake
-                         (M.EncryptedExtensions { M.negotiated_alpn = None });
+                         (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
                    }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -440,7 +440,7 @@ fn process_send_certificate_from_credentials
                     CL.message_direction = CL.Sent;
                     CL.message_value =
                       M.TlsHandshake
-                        (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain] });
+                        (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
                   }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.

@@ -1863,7 +1863,7 @@ fn process_ready_empty_local_action_once
                  CL.message_direction = CL.Sent;
                  CL.message_value =
                    M.TlsHandshake
-                     (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+                     (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
                })
            | None -> False));
          assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
@@ -1888,7 +1888,7 @@ fn process_ready_empty_local_action_once
              CL.message_direction = CL.Sent;
              CL.message_value =
                M.TlsHandshake
-                 (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain] });
+                 (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
            })));
          assert (pure (ST.server_local_event_input_ready_with_credentials
            'st0

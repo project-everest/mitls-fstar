@@ -2492,7 +2492,7 @@ fn can_send_certificate_runtime
                    CL.message_direction = CL.Sent;
                    CL.message_value =
                      M.TlsHandshake
-                       (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+                       (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
                  })
              | None -> False))
 {
@@ -2650,7 +2650,7 @@ fn can_send_certificate_runtime
       CL.message_direction = CL.Sent;
       CL.message_value =
         M.TlsHandshake
-          (M.Certificate { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] });
+          (M.Certificate { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty });
     })));
 
   fold (traffic_key_material_exactly

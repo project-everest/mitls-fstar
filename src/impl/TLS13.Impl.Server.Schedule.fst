@@ -136,7 +136,7 @@ fn next_local_action
       (CS.ConnNetworkEvent {
         CL.message_direction = CL.Sent;
         CL.message_value =
-          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
       })));
     {
       ST.next_local_ready = true;
@@ -175,7 +175,7 @@ fn next_local_action
         CL.message_direction = CL.Sent;
         CL.message_value =
           M.TlsHandshake
-            (M.Certificate { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] });
+            (M.Certificate { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty });
       })));
     {
       ST.next_local_ready = true;
