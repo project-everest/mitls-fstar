@@ -299,7 +299,7 @@ fn process_send_encrypted_extensions_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                (let ee = { M.negotiated_alpn = None } in
+                (let ee = { M.negotiated_alpn = None; M.body = B.empty } in
                  st1 ==
                    CM.sent_encrypted_extensions_state
                      'st0
@@ -323,7 +323,7 @@ fn build_certificate_from_credentials
            | Some lcert ->
              IM.is_valid_certificate_msg
                lcert
-               { M.chain = [Ghost.reveal 'certificate_chain] } **
+               { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty } **
              pure (
                SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
                  B.length (Ghost.reveal 'certificate_chain) /\
@@ -453,7 +453,7 @@ fn process_send_certificate_from_credentials
                 st1 ==
                   CM.sent_certificate_state
                     'st0
-                    { M.chain = [Ghost.reveal 'certificate_chain] }
+                    { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty }
                     network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0

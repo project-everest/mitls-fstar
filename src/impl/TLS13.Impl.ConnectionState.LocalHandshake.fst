@@ -1991,7 +1991,7 @@ fn serialize_stored_certificate_verify_fragment
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     }
-    { M.chain = [] }
+    { M.chain = []; M.body = B.empty }
     (Ghost.reveal cv)
     { M.verify_data = Seq.create 32 0uy };
   assert (pure (Seq.equal
