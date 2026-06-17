@@ -70,14 +70,17 @@ let l_is_received_cleartext (l:L.tls_message) : bool =
   | L.LTlsChangeCipherSpec -> true
   | _ -> false
 
+// TEMPORARY: This proof worked before but fails after merge. The precondition gives us
+// a strong relationship via pattern matching in parsed_message_wire_success_for, but
+// Z3 isn't unfolding it properly. Needs investigation with --query_stats.
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 1"
 let lemma_l_received_cleartext_matches
   (content_type:U8.t) (fragment:B.bytes) (l:L.tls_message) (m:M.tls_message)
   : Lemma
     (requires CT.parsed_message_wire_success_for content_type fragment l m)
     (ensures CS.network_message_is_cleartext CL.Received m == l_is_received_cleartext l)
-= admit() // TODO: This used to work automatically before the merge. The addition of `body` fields
-          // to message types changed the pattern matching compilation, and Z3 now fails to prove
-          // the relation. Need to revisit with explicit case analysis or helper lemmas.
+= admit() // TODO: Fix post-merge
+#pop-options
 
 (* The outer record content type must agree with the message's own content type
    for the cleartext-raw relation to hold. *)
@@ -126,7 +129,7 @@ let lemma_cleartext_tls_message_raw_of_parse
 =
   WS.lemma_parse_record_serializes raw;
   Seq.lemma_eq_elim (WS.serialize_record outer_ct fragment) raw;
-  admit() // TODO: After merge, pattern match needs to be updated for `body` fields in message types
+  admit() // TEMPORARY: Pattern match incomplete after merge due to message type changes
 
 (* decoder_fragment_relation, cleartext (non-ApplicationData outer) branch. *)
 let lemma_mk_cleartext_decoder_fragment_relation
