@@ -533,7 +533,7 @@ fn serialize_empty_encrypted_extensions
                 SZ.v written == 6 /\
                 Seq.equal out_bytes (WS.serialize_empty_encrypted_extensions ()) /\
                 WS.parse_tls_message T.Handshake out_bytes ==
-                 Some (M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None })))
+                 Some (M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = out_bytes })))
 
 fn serialize_certificate_from_credential
   (#cert: erased M.certificate_msg)

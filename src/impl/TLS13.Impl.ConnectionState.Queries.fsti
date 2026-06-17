@@ -467,7 +467,7 @@ fn can_send_encrypted_extensions_runtime
               (CS.ConnNetworkEvent {
                 CL.message_direction = CL.Sent;
                 CL.message_value =
-                  M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+                  M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
               }))
 
 fn can_send_certificate_runtime
@@ -496,7 +496,7 @@ fn can_send_certificate_runtime
               B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                 B.length
                   (W.serialize_certificate_from_credential
-                    { M.chain = [cfg.CS.server_certificate_chain] }) <=
+                    { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty }) <=
                   max_transcript_len /\
               CS.legal_event
                 st0.CS.cs_model
@@ -504,7 +504,7 @@ fn can_send_certificate_runtime
                   CL.message_direction = CL.Sent;
                   CL.message_value =
                     M.TlsHandshake
-                      (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+                      (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
                 })
              | None -> False))
 
