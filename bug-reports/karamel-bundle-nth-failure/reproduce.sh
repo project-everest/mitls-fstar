@@ -9,9 +9,9 @@ echo ""
 if [ -n "$FSTAR_HOME" ]; then
     FSTAR="$FSTAR_HOME/bin/fstar.exe"
     KRML="$FSTAR_HOME/bin/krml"
-elif [ -f "/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe" ]; then
-    FSTAR="/home/nswamy/workspace/agentic-tls/tools/FStar/bin/fstar.exe"
-    KRML="/home/nswamy/workspace/agentic-tls/tools/FStar/bin/krml"
+elif [ -f "/home/nswamy/workspace/agentic-tls/tools/everparse/opt/FStar/out/bin/fstar.exe" ]; then
+    FSTAR="/home/nswamy/workspace/agentic-tls/tools/everparse/opt/FStar/out/bin/fstar.exe"
+    KRML="/home/nswamy/workspace/agentic-tls/tools/everparse/opt/FStar/out/bin/krml"
 elif command -v fstar.exe >/dev/null 2>&1; then
     FSTAR="fstar.exe"
     KRML="krml"

@@ -50,6 +50,15 @@ fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
             's.R.key == Some (Ghost.reveal 'key_bytes) /\
             's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
 
+fn has_seal_keys (st: record_state)
+  requires is_record_state st 's
+  returns ok: bool
+  ensures is_record_state st 's **
+          pure (ok ==> (match 's.R.key, 's.R.static_iv with
+                        | Some _, Some _ -> True
+                        | _, _ -> False))
+>>>>>>> origin/main
+
 fn advance_seq (st: record_state)
   requires is_record_state st 's **
            pure (U64.fits ('s.R.seq + 1))
@@ -126,6 +135,40 @@ fn seal_application
                               (Ghost.reveal 'aad_bytes)
                               { R.content_type = T.ApplicationData;
                                 R.fragment = Ghost.reveal 'plain_bytes } == None))
+
+fn seal_application_no_update
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (plain: array U8.t)
+  (plain_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to plain 'plain_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'plain_bytes == SZ.v plain_len /\
+                 B.length 'old == SZ.v plain_len + 16)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_record_state st 's **
+          pts_to aad 'aad_bytes **
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure ((ok ==> R.seal
+                           's
+                           (Ghost.reveal 'aad_bytes)
+                           { R.content_type = T.ApplicationData;
+                            R.fragment = Ghost.reveal 'plain_bytes } ==
+                           Some (out_bytes, R.next_seq 's) /\
+                         B.length out_bytes == B.length 'old) /\
+                (not ok ==> out_bytes == 'old /\
+                            R.seal
+                             's
+                             (Ghost.reveal 'aad_bytes)
+                             { R.content_type = T.ApplicationData;
+                               R.fragment = Ghost.reveal 'plain_bytes } == None))
 
 fn seal_application_runtime
   (st: record_state)

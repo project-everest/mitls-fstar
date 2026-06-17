@@ -56,6 +56,8 @@ digraph TLS13Architecture {
     Model [label="TLS13.Impl.ConnectionState.Model/Bounds/Tags\npure model helpers + proof predicates", fillcolor="#e8f7e8", color="#2e8b57"];
     Handlers [label="TLS13.Impl.Handle.*\nhandshake/local/alert/app dispatch", fillcolor="#e8f7e8", color="#2e8b57"];
     ImplMessages [label="TLS13.Impl.Messages\nextractable L messages + validity predicates", fillcolor="#e8f7e8", color="#2e8b57"];
+    Parser [label="TLS13.Impl.Parser\nverified parser facade", fillcolor="#e8f7e8", color="#2e8b57"];
+    Serializer [label="TLS13.Impl.Serializer\nverified serializer facade", fillcolor="#e8f7e8", color="#2e8b57"];
     KeySchedule [label="TLS13.KeySchedule\nTLS 1.3 secret derivation", fillcolor="#e8f7e8", color="#2e8b57"];
     Record [label="TLS13.Record\nrecord-state and AEAD wrapper", fillcolor="#e8f7e8", color="#2e8b57"];
   }
@@ -66,9 +68,6 @@ digraph TLS13Architecture {
     fillcolor="#fff7f7";
     style="rounded,filled";
 
-    Parser [label="TLS13.Impl.Parser.fsti\nparser TCB interface", fillcolor="#ffe8e8", color="#c9342c"];
-    Serializer [label="TLS13.Impl.Serializer.fsti\nserializer TCB interface", fillcolor="#ffe8e8", color="#c9342c"];
-    BackendH [label="tls13_connection_backend.h\nC parser/serializer helpers", fillcolor="#ffe8e8", color="#c9342c"];
     CryptoABI [label="TLS13.Crypto.fsti\ncrypto ABI", fillcolor="#ffe8e8", color="#c9342c"];
     X509ABI [label="TLS13.X509.fsti\ncertificate/signature ABI", fillcolor="#ffe8e8", color="#c9342c"];
     MachineTypes [label="TLS13.MachineTypes.fsti\nmachine/runtime types", fillcolor="#ffe8e8", color="#c9342c"];
@@ -127,8 +126,6 @@ digraph TLS13Architecture {
   Mutations -> StateSpec [style=dashed, label="legal deltas", color="#777777"];
   ClientTypes -> StateSpec [style=dashed, label="legal responses", color="#777777"];
 
-  Parser -> BackendH;
-  Serializer -> BackendH;
   Record -> CryptoABI;
   KeySchedule -> CryptoABI;
   Mutations -> X509ABI;
@@ -138,7 +135,6 @@ digraph TLS13Architecture {
   CryptoC -> HACL;
   X509C -> OpenSSL;
   CryptoC -> PulseShims;
-  BackendH -> Runtime;
   PulseShims -> Runtime;
 
   ImplMessages -> Messages [style=dashed, label="L/M validity", color="#777777"];

@@ -28,7 +28,7 @@ module WS = TLS13.Wire.Spec
   The first group is a buffer-oriented streaming facade used by the active
   implementation, including a few message-builder helpers that assemble fixed
   protocol inputs.  These signatures preserve the existing driver shape while
-  routing the serializer TCB through this module.
+  giving the extracted client a verified serializer implementation.
 
   Unused generic L serializers are deliberately not exposed here: the active
   extracted client path only relies on the fixed buffer-oriented helpers below.
@@ -407,7 +407,16 @@ fn serialize_client_finished_outputs
   (network_out: array U8.t)
   (network_out_len: SZ.t)
   requires Rec.is_record_state write_state 'record_write **
-           (exists* fin. L.is_valid_finished lfin fin) **
+           (exists* fin. L.is_valid_finished lfin fin **
+             pure (Some? (R.seal
+               'record_write
+               (CS.application_data_record_header 53)
+               {
+                 R.content_type = T.ApplicationData;
+                 R.fragment =
+                   CS.sent_tls_inner_plaintext_fragment
+                     (M.TlsHandshake (M.Finished fin));
+               }))) **
            pts_to handshake_out 'old_handshake **
            pts_to network_out 'old_network **
            pure (B.length 'old_handshake == 36 /\

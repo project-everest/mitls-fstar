@@ -382,8 +382,8 @@ fn mark_received_server_hello
     (Ghost.reveal 'raw_bytes)));
 
   W.lemma_serialize_server_hello_len sh;
-  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
-  assert (pure (SZ.v fragment_len == 90));
+  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) <= max_server_hello_len));
+  assert (pure (SZ.v fragment_len <= max_server_hello_len));
 
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);

@@ -1,0 +1,310 @@
+/*
+ * tls.rfc
+ *
+ * The subset of the TLS 1.3 (RFC 8446) message formats that the agentic-tls
+ * parser (src/impl/TLS13.Impl.Parser.fsti) and serializer
+ * (src/impl/TLS13.Impl.Serializer.fsti) currently cover, expressed in the
+ * RFC 8446 presentation language (RFC 8446 Section 3).
+ *
+ * Notation note: this file uses the RFC presentation language. Where the
+ * implementation only accepts/produces a fixed value or a single-element
+ * subset of an enum, that is shown with a `[covered: ...]` comment and the
+ * unsupported alternatives are omitted. Ground truth for every value below
+ * is src/spec/TLS13.Wire.Spec.fst, src/spec/TLS13.Messages.fst and
+ * src/spec/TLS13.Types.fst.
+ *
+ * Scope (per README): TLS 1.3 client profile only. X25519,
+ * TLS_CHACHA20_POLY1305_SHA256, 1-RTT handshake, application data.
+ * PSK / 0-RTT / resumption / client auth / key update emission are out of
+ * scope; KeyUpdate and NewSessionTicket are recognized on receipt only.
+ */
+
+/* ===================================================================== */
+/* Common enums (only the covered members)                               */
+/* ===================================================================== */
+
+enum {
+    invalid(0),                 /* not produced; rejected on parse */
+    change_cipher_spec(20),
+    alert(21),
+    handshake(22),
+    application_data(23),
+    (255)
+} ContentType;
+
+enum {
+    /* legacy_record_version / legacy_version are always 0x0303 ("TLS 1.2")
+       on the wire in TLS 1.3; the real version travels in extensions. */
+    TLS_v1_2(0x0303),
+    TLS_v1_3(0x0304)
+} ProtocolVersion;
+
+enum {
+    /* the only cipher suite implemented */
+    TLS_CHACHA20_POLY1305_SHA256(0x1303)   /* [covered: this value only] */
+} CipherSuite;
+
+enum {
+    x25519(0x001D)              /* [covered: this NamedGroup only] */
+} NamedGroup;
+
+enum {
+    /* SignatureScheme values the codec understands. Only these are mapped;
+       any other 16-bit value round-trips as "unsupported". */
+    rsa_pss_rsae_sha256(0x0804),
+    ecdsa_secp256r1_sha256(0x0403),
+    ed25519(0x0807)
+} SignatureScheme;
+
+enum {
+    /* ExtensionType values that are emitted and/or interpreted. */
+    server_name(0),
+    supported_groups(10),
+    signature_algorithms(13),
+    application_layer_protocol_negotiation(16),
+    supported_versions(43),
+    key_share(51)
+} ExtensionType;
+
+enum {
+    /* AlertDescription values the codec maps; level is always fatal(2)
+       on emission. */
+    close_notify(0),
+    unexpected_message(10),
+    bad_record_mac(20),
+    handshake_failure(40),
+    certificate_unknown(46),
+    illegal_parameter(47),
+    decode_error(50),
+    decrypt_error(51),
+    protocol_version(70),
+    unsupported_extension(110),
+    (255)
+} AlertDescription;
+
+enum {
+    /* level is fixed to fatal(2) when this implementation emits an Alert. */
+    warning(1),
+    fatal(2)
+} AlertLevel;
+
+struct {
+    AlertLevel   level;         /* [covered: serialized as fatal(2)] */
+    AlertDescription description;
+} Alert;                        /* exactly 2 bytes */
+
+
+/* ===================================================================== */
+/* Record layer (TLS13.Wire.Spec: parse_record / serialize_record,       */
+/*               serialize_plaintext, ChangeCipherSpec handling)         */
+/* ===================================================================== */
+
+struct {
+    ContentType     type;
+    ProtocolVersion legacy_record_version;   /* must be 0x0303 */
+    uint16          length;                  /* [covered: length <= 16640] */
+    opaque          fragment[TLSPlaintext.length];
+} TLSPlaintext;
+
+struct {
+    opaque      content[TLSPlaintext.length];
+    ContentType type;
+    uint8       zeros[length_of_padding];    /* [covered: padding length 0 */
+                                             /*  -- encode_inner_plaintext_  */
+                                             /*  no_padding] */
+} TLSInnerPlaintext;
+
+struct {
+    ContentType     opaque_type = application_data(23); /* outer type */
+    ProtocolVersion legacy_record_version = 0x0303;
+    uint16          length;
+    opaque          encrypted_record[TLSCiphertext.length];
+} TLSCiphertext;
+
+/* ChangeCipherSpec record payload: a single byte 0x01, accepted and
+   ignored (parse_tls_message, ContentType change_cipher_spec). */
+struct {
+    uint8 value = 1;            /* [covered: exactly the one-byte 0x01] */
+} ChangeCipherSpec;
+
+
+/* ===================================================================== */
+/* Handshake envelope (TLS13.Wire.Spec: parse_handshake /                */
+/*                     serialize_handshake)                              */
+/* ===================================================================== */
+
+enum {
+    /* HandshakeType values handled. Emitted: client_hello, finished.     */
+    /* Parsed: server_hello, encrypted_extensions, certificate,           */
+    /* certificate_verify, finished, key_update, new_session_ticket.      */
+    client_hello(1),            /* emit + parse */
+    new_session_ticket(4),      /* parse only, body ignored */
+    server_hello(2),            /* parse */
+    encrypted_extensions(8),    /* parse */
+    certificate(11),            /* parse */
+    certificate_verify(15),     /* parse */
+    finished(20),               /* emit + parse */
+    key_update(24)              /* parse only */
+} HandshakeType;
+
+struct {
+    HandshakeType   msg_type;
+    uint24          length;
+    select (Handshake.msg_type) {
+        case client_hello:          ClientHello;
+        case server_hello:          ServerHello;
+        case encrypted_extensions:  EncryptedExtensions;
+        case certificate:           Certificate;
+        case certificate_verify:    CertificateVerify;
+        case finished:              Finished;
+        case key_update:            KeyUpdate;
+        case new_session_ticket:    opaque body[Handshake.length]; /* ignored */
+    };
+} Handshake;
+
+
+/* ===================================================================== */
+/* ClientHello  (emitted: serialize_client_hello)                        */
+/* ===================================================================== */
+
+struct {
+    ProtocolVersion legacy_version = 0x0303;
+    Random          random;                       /* 32 bytes */
+    opaque          legacy_session_id<0..0>;      /* [covered: always empty] */
+    CipherSuite     cipher_suites<2..2>;          /* [covered: exactly       */
+                                                  /*  { 0x1303 } ] */
+    opaque          legacy_compression_methods<1..1> = { 0x00 }; /* null only */
+    Extension       extensions<...>;              /* see below, fixed order */
+} ClientHello;
+
+/* ClientHello extensions are emitted in exactly this order
+   (client_hello_extensions). server_name is present only when a non-empty
+   hostname is configured. */
+
+struct {
+    opaque host_name<1..2^16-1>;
+} HostName;                                       /* name_type = host_name(0) */
+
+struct {
+    /* extension_type = server_name(0)  -- omitted when hostname is empty */
+    NameType server_name_type = host_name(0);
+    HostName name;
+} ServerNameList;                                 /* one entry */
+
+struct {
+    NamedGroup named_group_list<2..2> = { x25519 }; /* supported_groups(10) */
+} NamedGroupList;
+
+struct {
+    SignatureScheme supported_signature_algorithms<2..2>
+        = { rsa_pss_rsae_sha256 };                /* signature_algorithms(13) */
+} SignatureSchemeList;
+
+struct {
+    NamedGroup group = x25519;
+    opaque     key_exchange<32..32>;              /* 32-byte X25519 public */
+} KeyShareEntry;
+
+struct {
+    KeyShareEntry client_shares<36..36> = { x25519, key[32] }; /* key_share(51) */
+} KeyShareClientHello;
+
+struct {
+    ProtocolVersion versions<2..2> = { 0x0304 };  /* supported_versions(43) */
+} SupportedVersions;                              /* ClientHello form */
+
+
+/* ===================================================================== */
+/* ServerHello  (parsed: parse_server_hello / parse_supported_server_hello)*/
+/* ===================================================================== */
+
+struct {
+    ProtocolVersion legacy_version = 0x0303;
+    Random          random;                       /* 32 bytes              */
+                                                  /* (HelloRetryRequest    */
+                                                  /*  special random is     */
+                                                  /*  recognized as HRR)    */
+    opaque          legacy_session_id_echo<0..0>; /* [covered: empty]       */
+    CipherSuite     cipher_suite = 0x1303;
+    uint8           legacy_compression_method = 0;
+    Extension       extensions<...>;              /* see below */
+} ServerHello;
+
+/* ServerHello extensions accepted: supported_versions (must carry 0x0304)
+   and key_share (must carry x25519 + 32-byte key). Both are required. */
+struct {
+    ProtocolVersion selected_version = 0x0304;    /* supported_versions(43) */
+} ServerSupportedVersion;
+
+struct {
+    KeyShareEntry server_share = { x25519, key[32] }; /* key_share(51) */
+} KeyShareServerHello;
+
+
+/* ===================================================================== */
+/* EncryptedExtensions  (parse/serialize_encrypted_extensions)           */
+/* ===================================================================== */
+
+struct {
+    Extension extensions<0..2^16-1>;   /* [covered: only ALPN(16) understood, */
+                                       /*  optional; all others tolerated]    */
+} EncryptedExtensions;
+
+struct {
+    /* application_layer_protocol_negotiation(16); single protocol name. */
+    opaque ProtocolName<1..255>;
+    ProtocolName protocol_name_list<...>;   /* [covered: one name] */
+} ProtocolNameList;
+
+
+/* ===================================================================== */
+/* Certificate  (parse/serialize_certificate_msg)                        */
+/* ===================================================================== */
+
+struct {
+    opaque cert_data<1..2^24-1>;       /* X.509 DER (CertificateType X509) */
+    Extension extensions<0..2^16-1>;   /* [covered: emitted/expected empty] */
+} CertificateEntry;
+
+struct {
+    opaque certificate_request_context<0..0>; /* [covered: always empty] */
+    CertificateEntry certificate_list<...>;
+} Certificate;
+
+
+/* ===================================================================== */
+/* CertificateVerify  (parse/serialize_certificate_verify)               */
+/* ===================================================================== */
+
+struct {
+    SignatureScheme algorithm;
+    opaque          signature<0..2^16-1>;
+} CertificateVerify;
+
+/* Signed content for server CertificateVerify
+   (serialize_server_certificate_verify_input): 64 spaces (0x20),
+   the context string "TLS 1.3, server CertificateVerify", a single 0x00
+   separator, then the transcript hash. */
+
+
+/* ===================================================================== */
+/* Finished  (parse/serialize_finished)                                  */
+/* ===================================================================== */
+
+struct {
+    opaque verify_data[32];   /* [covered: HMAC length fixed to 32 (SHA-256)] */
+} Finished;
+
+
+/* ===================================================================== */
+/* KeyUpdate  (parse_key_update; serialized only via tls_message)        */
+/* ===================================================================== */
+
+enum {
+    update_not_requested(0),
+    update_requested(1)
+} KeyUpdateRequest;
+
+struct {
+    KeyUpdateRequest request_update;
+} KeyUpdate;                  /* recognized on receipt; not driven by client */

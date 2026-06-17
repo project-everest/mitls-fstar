@@ -194,17 +194,17 @@ fn try_start_handshake
       c.handshake.start.client_key_share_public
       32
       public_key_bytes);
-    assert (pure (SZ.fits max_cipher_suites));
     copy_cipher_suite_list_storage
       c.config.cipher_suites
       c.handshake.start.cipher_suites
-      max_cipher_suites
+      max_cipher_suites_sz
+      #max_cipher_suites
       #(st0.CS.cs_model.CS.model_config.CS.config_cipher_suites);
-    assert (pure (SZ.fits max_signature_schemes));
     copy_signature_scheme_list_storage
       c.config.signature_schemes
       c.handshake.start.signature_schemes
-      max_signature_schemes
+      max_signature_schemes_sz
+      #max_signature_schemes
       #(st0.CS.cs_model.CS.model_config.CS.config_signature_schemes);
 
     assert (pure (CS.start_matches_config

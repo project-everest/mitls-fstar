@@ -1,0 +1,10 @@
+{
+  "fstar_exe": "../tools/everparse/opt/FStar/out/bin/fstar.exe",
+  "options": [
+  ],
+  "include_dirs": [
+    "./spec",
+    "./impl",
+    "../_cache"
+  ]
+}

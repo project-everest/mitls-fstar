@@ -397,6 +397,11 @@ fn try_send_client_finished
     assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic));
     assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
     assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+    assert (pure (
+      match st0.CS.cs_model.CS.model_record.CS.record_write.R.key,
+            st0.CS.cs_model.CS.model_record.CS.record_write.R.static_iv with
+      | Some _, Some _ -> True
+      | _, _ -> False));
     assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
     assert (pure (B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <= max_transcript_len));
     assert (pure (58 <= SZ.v network_out_len));
@@ -492,6 +497,24 @@ fn try_send_client_finished
     assert (pure (B.length verify_data_bytes == 32));
     assert (pure (Seq.equal fin_vec_bytes (Ghost.reveal fin).M.verify_data));
     fold (IM.is_valid_finished lfin (Ghost.reveal fin));
+    lemma_seal_some_of_keys
+      st0.CS.cs_model.CS.model_record.CS.record_write
+      (CS.application_data_record_header 53)
+      {
+        R.content_type = T.ApplicationData;
+        R.fragment =
+          CS.sent_tls_inner_plaintext_fragment
+            (M.TlsHandshake (M.Finished (Ghost.reveal fin)));
+      };
+    assert (pure (Some? (R.seal
+      st0.CS.cs_model.CS.model_record.CS.record_write
+      (CS.application_data_record_header 53)
+      {
+        R.content_type = T.ApplicationData;
+        R.fragment =
+          CS.sent_tls_inner_plaintext_fragment
+            (M.TlsHandshake (M.Finished (Ghost.reveal fin)));
+      })));
 
     let mut serialized_finished = [| 0uy; 36sz |];
     unfold connection_exactly c st0;
