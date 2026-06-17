@@ -2,87 +2,54 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")" && pwd)"
-fstar_dir="$repo_root/tools/FStar"
-source_flag="--nightly"
-version="2026-06-09"
 
 usage() {
-  cat <<'EOF'
+  cat <<'USAGE'
 Usage:
-  ./setup.sh [--nightly] [--version VERSION]
+  ./setup.sh [--everparse-home DIR] [--jobs N]
 
-Installs a repository-local F* binary toolchain into tools/FStar using the
-official installer with --no-link. The Makefile uses only this local toolchain
-unless FSTAR_EXE/KRML_EXE are explicitly overridden.
-EOF
+Builds the EverParse toolchain (QuackyDucky + LowParse + the F*/KaRaMeL binaries
+it vendors) from the fork/branch used by this project, then fetches the HACL*
+snapshot and RFC caches.  The Makefile consumes this toolchain via EVERPARSE_HOME;
+no separate F* installation is required.
+
+Environment overrides:
+  EVERPARSE_HOME    where to clone/build EverParse (default: tools/everparse)
+  EVERPARSE_REPO    git URL     (default: https://github.com/tahina-pro/quackyducky)
+  EVERPARSE_BRANCH  git branch  (default: _taramana_fstar2_qd_copyful)
+  EVERPARSE_COMMIT  pinned commit to build (default: recorded in scripts/build-everparse.sh)
+  JOBS              parallelism for the EverParse build (default: nproc)
+USAGE
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --nightly)
-      source_flag="--nightly"
-      version=""
-      shift
-      ;;
-    --version)
-      if [ "$#" -lt 2 ]; then
-        echo "--version requires an argument" >&2
-        exit 1
-      fi
-      source_flag=""
-      version="$2"
-      shift 2
-      ;;
+    --everparse-home)
+      [ "$#" -ge 2 ] || { echo "--everparse-home requires an argument" >&2; exit 1; }
+      export EVERPARSE_HOME="$2"; shift 2 ;;
+    --jobs)
+      [ "$#" -ge 2 ] || { echo "--jobs requires an argument" >&2; exit 1; }
+      export JOBS="$2"; shift 2 ;;
     -h|--help)
-      usage
-      exit 0
-      ;;
+      usage; exit 0 ;;
     *)
-      echo "unknown argument: $1" >&2
-      usage >&2
-      exit 1
-      ;;
+      echo "unknown argument: $1" >&2; usage >&2; exit 1 ;;
   esac
 done
 
-for cmd in bash curl; do
+for cmd in bash curl git make opam; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "missing prerequisite: $cmd" >&2
     exit 1
   fi
 done
 
-if [ ! -x "$fstar_dir/bin/fstar.exe" ]; then
-  args=(--dest "$fstar_dir" --no-link)
-  if [ -n "$source_flag" ]; then
-    args=("$source_flag" "${args[@]}")
-  fi
-  if [ -n "$version" ]; then
-    args=(--version "$version" "${args[@]}")
-  fi
+# 1. Build EverParse (F*, KaRaMeL, QuackyDucky, LowParse) from the fork.
+"$repo_root/scripts/build-everparse.sh"
 
-  curl --fail --location --show-error --silent https://aka.ms/install-fstar \
-    | bash -s -- "${args[@]}"
-fi
-
-if [ ! -x "$fstar_dir/bin/fstar.exe" ]; then
-  echo "F* installation failed: $fstar_dir/bin/fstar.exe not found" >&2
-  exit 1
-fi
-
-compat="$fstar_dir/karamel"
-if [ ! -x "$compat/krml" ]; then
-  rm -rf "$compat"
-  mkdir -p "$compat"
-  ln -s ../bin/krml "$compat/krml"
-  ln -s ../include/krml "$compat/include"
-  ln -s ../lib/krml "$compat/krmllib"
-fi
-
+# 2. Project dependencies.
 "$repo_root/scripts/fetch-hacl-star.sh"
 "$repo_root/scripts/fetch-rfcs.sh"
 "$repo_root/scripts/check-openssl.sh"
 
-"$fstar_dir/bin/fstar.exe" --version
-echo "Local F* toolchain is ready in tools/FStar"
-
+echo "Setup complete.  Run 'make verify' to check the F* development."

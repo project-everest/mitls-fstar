@@ -673,8 +673,9 @@ fn can_send_client_hello_runtime
   assert (pure (has_client_hello == ch_present));
   assert (pure (B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript == SZ.v transcript_len));
 
-  assert (pure (SZ.fits (max_transcript_len - max_client_hello_len)));
-  let transcript_bound = SZ.uint_to_t (max_transcript_len - max_client_hello_len);
+  assert (pure (SZ.v max_transcript_len_sz == max_transcript_len /\
+                SZ.v max_client_hello_len_sz == max_client_hello_len));
+  let transcript_bound = SZ.sub max_transcript_len_sz max_client_hello_len_sz;
   let transcript_room = sizet_lte_plain transcript_len transcript_bound;
   lemma_sizet_lte_plain transcript_len transcript_bound;
   let out_room = sizet_lte_plain 517sz network_out_len;
@@ -827,9 +828,10 @@ fn can_receive_server_hello
   assert (pure (current_transcript_len == transcript_len));
 
   W.lemma_serialize_server_hello_len sh;
-  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
-  assert (pure (SZ.fits (max_transcript_len - 90)));
-  let max_start = SZ.uint_to_t (max_transcript_len - 90);
+  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) <= max_server_hello_len));
+  assert (pure (SZ.v max_transcript_len_sz == max_transcript_len /\
+                SZ.v max_server_hello_len_sz == max_server_hello_len));
+  let max_start = SZ.sub max_transcript_len_sz max_server_hello_len_sz;
   let transcript_room = SZ.lte current_transcript_len max_start;
 
   if has_start {
@@ -867,7 +869,7 @@ fn can_receive_server_hello
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloSent));
           assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
-          assert (pure (ok ==> SZ.v current_transcript_len <= max_transcript_len - 90));
+          assert (pure (ok ==> SZ.v current_transcript_len <= max_transcript_len - max_server_hello_len));
           assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
             SZ.v current_transcript_len));
           assert (pure (ok ==>
@@ -1281,7 +1283,7 @@ fn can_receive_encrypted_extensions
   let seq_ok = Rec.can_advance_seq c.records.read;
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let fragment_fits = SZ.lte fragment_len max_len;
   if fragment_fits {
     let max_start = SZ.sub max_len fragment_len;
@@ -1450,12 +1452,10 @@ fn can_receive_certificate
 
   with chain_bytes offsets lens. assert (pure True);
   let cert_count = lcert.IM.certificate_msg_cert_count;
-  let cert_count_nat = SZ.v cert_count;
-  let chain_bytes_len_nat = SZ.v lcert.IM.certificate_msg_chain_bytes_len;
   let has_certificate = SZ.gt cert_count 0sz;
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let fragment_fits = SZ.lte fragment_len max_len;
   if fragment_fits {
     let max_start = SZ.sub max_len fragment_len;
@@ -1464,7 +1464,7 @@ fn can_receive_certificate
 
     if has_certificate {
       assert (pure has_certificate);
-      assert (pure (cert_count_nat > 0));
+      assert (pure (SZ.v cert_count > 0));
       assert (pure ((Ghost.reveal cert).M.chain <> []));
       let control_ok = tag_ok && stage_ok;
       let ok =
@@ -1645,7 +1645,7 @@ fn can_validate_certificate
   };
 
   assert (pure (SZ.fits max_public_key_len));
-  let max_pk_len = SZ.uint_to_t max_public_key_len;
+  let max_pk_len = max_public_key_len_sz;
   let payload_fits = SZ.lte payload_len max_pk_len;
   let ok =
     tag_ok &&
@@ -1777,7 +1777,7 @@ fn can_receive_certificate_verify
   let seq_ok = Rec.can_advance_seq c.records.read;
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let fragment_fits = SZ.lte fragment_len max_len;
   if fragment_fits {
     let max_start = SZ.sub max_len fragment_len;
@@ -2169,7 +2169,7 @@ fn can_verify_server_finished
     st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false));
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let payload_fits = SZ.lte payload_len max_len;
   if payload_fits {
     let max_start = SZ.sub max_len payload_len;
@@ -2427,6 +2427,10 @@ fn can_send_client_finished_runtime
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+            (match st0.CS.cs_model.CS.model_record.CS.record_write.R.key,
+                   st0.CS.cs_model.CS.model_record.CS.record_write.R.static_iv with
+             | Some _, Some _ -> True
+             | _, _ -> False) /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <= max_transcript_len /\
             58 <= SZ.v network_out_len)
@@ -2514,10 +2518,11 @@ fn can_send_client_finished_runtime
     st0.CS.cs_model.CS.model_failure);
 
   let seq_ok = Rec.can_advance_seq c.records.write;
+  let seal_key_ok = Rec.has_seal_keys c.records.write;
   fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let finished_len = 36sz;
   let transcript_room = (
     if SZ.lte finished_len max_len then
@@ -2535,6 +2540,7 @@ fn can_send_client_finished_runtime
     client_app_present &&
     server_app_present &&
     seq_ok &&
+    seal_key_ok &&
     transcript_room &&
     out_room;
 
@@ -2546,6 +2552,11 @@ fn can_send_client_finished_runtime
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic));
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+  assert (pure (ok ==>
+    (match st0.CS.cs_model.CS.model_record.CS.record_write.R.key,
+           st0.CS.cs_model.CS.model_record.CS.record_write.R.static_iv with
+     | Some _, Some _ -> True
+     | _, _ -> False)));
   assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
   lemma_sizet_lte_plain 58sz network_out_len;
   assert (pure (ok ==> 58 <= SZ.v network_out_len));

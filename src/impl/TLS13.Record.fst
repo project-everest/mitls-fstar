@@ -121,6 +121,30 @@ fn can_advance_seq (st: record_state)
   }
 }
 
+fn has_seal_keys (st: record_state)
+  requires is_record_state st 's
+  returns ok: bool
+  ensures is_record_state st 's **
+          pure (ok ==> (match 's.R.key, 's.R.static_iv with
+                        | Some _, Some _ -> True
+                        | _, _ -> False))
+{
+  unfold (is_record_state st 's);
+  let installed = !st.installed;
+  with key_s. assert (V.pts_to st.key key_s);
+  with iv_s. assert (V.pts_to st.iv iv_s);
+  with seq_s. assert (Box.pts_to st.seq seq_s);
+  assert (pure (state_matches installed seq_s key_s iv_s 's));
+  if installed {
+    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s));
+    fold (is_record_state st 's);
+    true
+  } else {
+    fold (is_record_state st 's);
+    false
+  }
+}
+
 fn advance_seq (st: record_state)
   requires is_record_state st 's **
            pure (U64.fits ('s.R.seq + 1))
@@ -312,6 +336,103 @@ fn seal_application
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     assert (pure (R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } == None));
+    fold (is_record_state st 's);
+    false
+  }
+}
+
+fn seal_application_no_update
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (plain: array U8.t)
+  (plain_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to plain 'plain_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'plain_bytes == SZ.v plain_len /\
+                 B.length 'old == SZ.v plain_len + 16)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_record_state st 's **
+          pts_to aad 'aad_bytes **
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure ((ok ==> R.seal
+                           's
+                           (Ghost.reveal 'aad_bytes)
+                           { R.content_type = T.ApplicationData;
+                             R.fragment = Ghost.reveal 'plain_bytes } ==
+                           Some (out_bytes, R.next_seq 's) /\
+                         B.length out_bytes == B.length 'old) /\
+                (not ok ==> out_bytes == 'old /\
+                            R.seal
+                              's
+                              (Ghost.reveal 'aad_bytes)
+                              { R.content_type = T.ApplicationData;
+                                R.fragment = Ghost.reveal 'plain_bytes } == None))
+{
+  unfold (is_record_state st 's);
+  let installed = !st.installed;
+  if installed {
+    let seq = !st.seq;
+    let mut nonce = [| 0uy; 12sz |];
+    V.to_array_pts_to st.key;
+    V.to_array_pts_to st.iv;
+    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    assert (pure nonce_ok);
+    Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
+    V.to_vec_pts_to st.key;
+    V.to_vec_pts_to st.iv;
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (state_matches true seq key_s iv_s 's));
+    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
+                  's.R.seq == U64.v seq));
+    assert (pure (B.length
+      (C.chacha20_poly1305_seal
+        key_s
+        (C.tls13_record_nonce iv_s (U64.v seq))
+        (Ghost.reveal 'aad_bytes)
+        (Ghost.reveal 'plain_bytes)) == B.length 'old));
+    assert (pure (R.seal
+      's
+      (Ghost.reveal 'aad_bytes)
+      { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } ==
+      Some ((C.chacha20_poly1305_seal
+               key_s
+               (C.tls13_record_nonce iv_s (U64.v seq))
+               (Ghost.reveal 'aad_bytes)
+               (Ghost.reveal 'plain_bytes) <: B.bytes),
+            R.next_seq 's)));
+    assert (pure (out_s ==
+      C.chacha20_poly1305_seal
+        key_s
+        (C.tls13_record_nonce iv_s (U64.v seq))
+        (Ghost.reveal 'aad_bytes)
+        (Ghost.reveal 'plain_bytes)));
+    assert (pure (R.seal
+      's
+      (Ghost.reveal 'aad_bytes)
+      { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } ==
+      Some ((out_s <: B.bytes), R.next_seq 's)));
+    fold (is_record_state st 's);
+    true
+  } else {
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with seq_s. assert (Box.pts_to st.seq seq_s);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (out_s == 'old));
+    assert (pure (state_matches false seq_s key_s iv_s 's));
+    assert (pure (R.seal
+      's
+      (Ghost.reveal 'aad_bytes)
+      { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } == None));
     fold (is_record_state st 's);
     false
   }

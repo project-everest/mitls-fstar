@@ -191,7 +191,6 @@ The active TCB surface is intentionally explicit.
 
 | TCB component | Files | Role |
 | --- | --- | --- |
-| Parser/serializer C backend | `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`, `c_stubs/tls13_connection_backend.h` | Interface-only parser/serializer contracts implemented by C macros/static helpers. Live hooks expose `TLS13.Wire.Spec` parse/serialize facts, but the C implementation is trusted. |
 | Crypto primitives and entropy | `src/impl/TLS13.Crypto.fsti`, `c_stubs/tls13_crypto_external.c`, `c_stubs/tls13_hacl_stubs.c`, HACL* sources | Trusted to match `TLS13.Crypto.Spec`, including AEAD, hashes, HKDF/HMAC, random bytes, and X25519. |
 | X509/signature validation | `src/impl/TLS13.OpenSSL.fsti`, `c_stubs/tls13_openssl_karamel.*`, `c_stubs/tls13_openssl_stubs.c` | Typed OpenSSL auth TCB. The Pulse workflow calls this interface directly; successful returns are trusted to establish `CT.local_input_wf` for certificate validation over the exact returned peer-identity prefix and for CertificateVerify. |
 | TCP bridge | `src/impl/TLS13.IO.fsti`, `c_stubs/tls13_io_stubs.c`, `c_stubs/tls13_io_karamel.*` | Trusted connect/read/write/close bridge with ghost-indexed received/sent byte histories. The verified driver exposes those histories in `client_driver_connected` and relates their contents to `st.cs_wire_log`: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. `TLS13_IO.krml` is included in the driver bundle so KaRaMeL typechecks the exact IO ABI; the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
@@ -205,14 +204,14 @@ The C code is kept to glue and TCB responsibilities:
 - POSIX socket connect/read/write/close in `tls13_io_stubs.c`;
 - the tiny extracted-IO ABI shim in `tls13_io_karamel.c`;
 - the typed OpenSSL ABI shim in `tls13_openssl_karamel.c`;
-- parser/serializer backend shims in `tls13_connection_backend.h`;
 - crypto/X509 bridge code;
 - the small `tls13_client_driver.h` ABI wrapper.
 
 Protocol state transitions, key-schedule logic, record-layer logic, client step
-theorems, local-action drain, auth copyout/completion boundaries, response
-writes, top-level connect/send/receive/close workflows, OpenSSL auth
-orchestration, caller receive copyout, and the driver
+theorems, parser/serializer facades, local-action drain,
+auth copyout/completion boundaries, response writes, top-level
+connect/send/receive/close workflows, OpenSSL auth orchestration, caller receive
+copyout, and the driver
 receive-prefix/buffered-prefix/read-append/compaction paths are in F*/Pulse and
 extracted.
 
@@ -222,7 +221,6 @@ The current theorem does not yet claim:
 
 - cumulative logging of rejected consumed bytes inside `connection_state`;
 - full TLS 1.3 feature coverage beyond the supported profile;
-- verified parser/serializer C implementations;
 - verified crypto/X509 implementations;
 - liveness: the top-level Pulse workflows are fuel-bounded and may return
   exhaustion rather than proving global protocol progress;
@@ -253,8 +251,9 @@ Start with these files:
    typed OpenSSL TCB boundary called by the Pulse workflow.
 7. `runtime/tls13_client_driver.c` for the small C ABI wrapper around the
    extracted workflow.
-8. `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`,
-   and `c_stubs/tls13_connection_backend.h` for the parser/serializer TCB.
+8. `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*` for
+   the verified parser/serializer facades and their `TLS13.Wire.Spec`
+   postconditions.
 9. `c_stubs/tls13_io_karamel.*`, `c_stubs/tls13_io_stubs.*`,
    `c_stubs/tls13_crypto_external.*`, and `c_stubs/tls13_openssl_stubs.*` for
    the remaining C boundary.

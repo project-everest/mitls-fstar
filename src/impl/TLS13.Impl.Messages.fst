@@ -39,6 +39,10 @@ let max_signature_schemes : nat = 16
 noextract
 let max_certificate_chain_bytes : nat = 32768
 
+(* [SZ.t] companion (sz literal) so executable [SZ.uint_to_t max_certificate_chain_bytes]
+   positions extract to a plain C [size_t] constant instead of [FStar_SizeT_uint_to_t]. *)
+inline_for_extraction let max_certificate_chain_bytes_sz : SZ.t = 32768sz
+
 noextract
 let max_certificate_chain_entries : nat = 8
 

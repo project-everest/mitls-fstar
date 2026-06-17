@@ -422,6 +422,10 @@ fn can_send_client_finished_runtime
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+            (match st0.CS.cs_model.CS.model_record.CS.record_write.R.key,
+                   st0.CS.cs_model.CS.model_record.CS.record_write.R.static_iv with
+             | Some _, Some _ -> True
+             | _, _ -> False) /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <= max_transcript_len /\
             58 <= SZ.v network_out_len)

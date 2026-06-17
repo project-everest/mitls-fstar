@@ -27,13 +27,13 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
-let driver_network_out_capacity : SZ.t = SZ.uint_to_t 20000
-let driver_app_out_capacity : SZ.t = SZ.uint_to_t 16640
-let driver_rx_capacity : SZ.t = SZ.uint_to_t 65535
-let driver_public_key_payload_capacity : SZ.t = SZ.uint_to_t 4096
-let driver_auth_leaf_der_capacity : SZ.t = SZ.uint_to_t 32768
-let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
-let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
+let driver_network_out_capacity : SZ.t = 20000sz
+let driver_app_out_capacity : SZ.t = 16640sz
+let driver_rx_capacity : SZ.t = 65535sz
+let driver_public_key_payload_capacity : SZ.t = 4096sz
+let driver_auth_leaf_der_capacity : SZ.t = 32768sz
+let driver_certificate_verify_input_capacity : SZ.t = 256sz
+let driver_signature_capacity : SZ.t = 4096sz
 let driver_server_finished_payload_len : SZ.t = 36sz
 
 let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
@@ -679,85 +679,76 @@ fn new_client
                    TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
                  SZ.v trust_anchors_len <=
                    TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
-  returns result: option client_driver
+  returns result: client_driver
   ensures pts_to server_name 'server_name_bytes **
           pts_to trust_anchors 'trust_anchors_bytes **
-          (match result with
-           | Some d ->
-             client_driver_live
-               d
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) **
-             pure (CT.client_state_correct
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) /\
-                   CT.client_end_to_end_invariant
-                     (CR.configured_initial_state
-                       (Ghost.reveal 'server_name_bytes)
-                       (Ghost.reveal 'trust_anchors_bytes)
-                       validation_time_seconds))
-           | None ->
-             emp)
+          client_driver_live
+            result
+            (CR.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds) **
+          pure (CT.client_state_correct
+            (CR.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds) /\
+                CT.client_end_to_end_invariant
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds))
 {
-  let auth_opt =
+  let auth =
     O.auth_context_new
       server_name
       server_name_len
       trust_anchors
       trust_anchors_len
       validation_time_seconds;
-  match auth_opt {
-    None -> {
-      None
-    }
-    Some auth -> {
-      let c =
-        C.new_client
-          server_name
-          server_name_len
-          trust_anchors
-          trust_anchors_len
-          validation_time_seconds;
-      rewrite
-        (CR.connection_exactly
-          c
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds))
-        as
-        (C.connection_exactly
-          c
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds));
-      let channel = Box.alloc no_channel;
-      let buffered_len = Box.alloc 0sz;
-      let empty_payload = V.alloc 0uy 0sz;
-      let raw = V.alloc 0uy driver_rx_capacity;
-      let network_out = V.alloc 0uy driver_network_out_capacity;
-      let auth_leaf_der = V.alloc 0uy driver_auth_leaf_der_capacity;
-      let auth_payload = V.alloc 0uy driver_public_key_payload_capacity;
-      let auth_cv_input = V.alloc 0uy driver_certificate_verify_input_capacity;
-      let auth_signature = V.alloc 0uy driver_signature_capacity;
-      let app_out = V.alloc 0uy driver_app_out_capacity;
-      assert (pure (Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity));
-      assert (pure (SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len));
-      assert (pure (Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity));
-      assert (pure (L.max_signature_len <= SZ.v driver_signature_capacity));
-      assert (pure (L.max_record_fragment_len <= SZ.v driver_app_out_capacity));
-      let d = {
-        client_driver_client = c;
-        client_driver_auth = auth;
-        client_driver_channel = channel;
-        client_driver_buffered_len = buffered_len;
-        client_driver_empty_payload = empty_payload;
-        client_driver_raw = raw;
+  let c =
+    C.new_client
+      server_name
+      server_name_len
+      trust_anchors
+      trust_anchors_len
+      validation_time_seconds;
+  rewrite
+    (CR.connection_exactly
+      c
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds))
+    as
+    (C.connection_exactly
+      c
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds));
+  let channel = Box.alloc no_channel;
+  let buffered_len = Box.alloc 0sz;
+  let empty_payload = V.alloc 0uy 0sz;
+  let raw = V.alloc 0uy driver_rx_capacity;
+  let network_out = V.alloc 0uy driver_network_out_capacity;
+  let auth_leaf_der = V.alloc 0uy driver_auth_leaf_der_capacity;
+  let auth_payload = V.alloc 0uy driver_public_key_payload_capacity;
+  let auth_cv_input = V.alloc 0uy driver_certificate_verify_input_capacity;
+  let auth_signature = V.alloc 0uy driver_signature_capacity;
+  let app_out = V.alloc 0uy driver_app_out_capacity;
+  assert (pure (Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity));
+  assert (pure (SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len));
+  assert (pure (Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity));
+  assert (pure (L.max_signature_len <= SZ.v driver_signature_capacity));
+  assert (pure (L.max_record_fragment_len <= SZ.v driver_app_out_capacity));
+  let d = {
+    client_driver_client = c;
+    client_driver_auth = auth;
+    client_driver_channel = channel;
+    client_driver_buffered_len = buffered_len;
+    client_driver_empty_payload = empty_payload;
+    client_driver_raw = raw;
         client_driver_network_out = network_out;
         client_driver_auth_leaf_der = auth_leaf_der;
         client_driver_auth_payload = auth_payload;
@@ -831,9 +822,7 @@ fn new_client
             (Ghost.reveal 'server_name_bytes)
             (Ghost.reveal 'trust_anchors_bytes)
             validation_time_seconds));
-      Some d
-    }
-  }
+      d
 }
 
 fn driver_connect
@@ -991,51 +980,44 @@ fn driver_open
            | None ->
              emp)
 {
-  let auth_opt =
+  let auth =
     O.auth_context_new
       server_name
       server_name_len
       trust_anchors
       trust_anchors_len
       validation_time_seconds;
-  match auth_opt {
+  let connected =
+    driver_connect
+      connect_host
+      connect_host_len
+      port
+      server_name
+      server_name_len
+      trust_anchors
+      trust_anchors_len
+      validation_time_seconds;
+  match connected {
     None -> {
+      O.auth_context_free auth;
       None
     }
-    Some auth -> {
-      let connected =
-        driver_connect
-          connect_host
-          connect_host_len
-          port
-          server_name
-          server_name_len
-          trust_anchors
-          trust_anchors_len
-          validation_time_seconds;
-      match connected {
-        None -> {
-          O.auth_context_free auth;
-          None
-        }
-        Some d -> {
-          fold
-            (top_driver_exactly
-              {
-                top_driver_core = d;
-                top_driver_auth = auth;
-              }
-              (CR.configured_initial_state
-                (Ghost.reveal 'server_name_bytes)
-                (Ghost.reveal 'trust_anchors_bytes)
-                validation_time_seconds)
-              B.empty
-              0sz);
-          Some {
+    Some d -> {
+      fold
+        (top_driver_exactly
+          {
             top_driver_core = d;
             top_driver_auth = auth;
           }
-        }
+          (CR.configured_initial_state
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds)
+          B.empty
+          0sz);
+      Some {
+        top_driver_core = d;
+        top_driver_auth = auth;
       }
     }
   }

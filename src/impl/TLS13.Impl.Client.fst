@@ -13,6 +13,7 @@ module CQ = TLS13.Impl.ConnectionState.Queries
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CM = TLS13.Impl.ConnectionState.Model
 module CT = TLS13.Impl.Client.Types
+module FB = TLS13.Impl.Client.FragmentBound
 module HDispatch = TLS13.Impl.Handle.Dispatch
 module HDecodeError = TLS13.Impl.Handle.DecodeError
 module HLocal = TLS13.Impl.Handle.Local
@@ -429,6 +430,11 @@ fn process_network_event
                   network_out_bytes
                   app_out_bytes)
 {
+  FB.lemma_network_input_wf_fragment_bound
+    'st0
+    content_type
+    (Ghost.reveal 'fragment_bytes)
+    (Ghost.reveal 'raw_bytes);
   let parsed = P.parse_tls_message content_type fragment fragment_len;
   HDispatch.dispatch_network_event
     c

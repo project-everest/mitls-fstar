@@ -2,6 +2,26 @@ module TLS13.Wire.Spec
 
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
+module LP = LowParse.Spec
+module GFinished = TLS13.Wire.Generated.Finished
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GSS = TLS13.Wire.Generated.SignatureScheme
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GSH = TLS13.Wire.Generated.ServerHello
+module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GSHB = TLS13.Wire.Generated.ServerHello_body
+module GSHBody = TLS13.Wire.Generated.ServerHelloBody
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GCert = TLS13.Wire.Generated.Certificate
+module GCE = TLS13.Wire.Generated.CertificateEntry
+module GCH = TLS13.Wire.Generated.ClientHello
+module GHS = TLS13.Wire.Generated.Handshake
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
+module GKSE = TLS13.Wire.Generated.KeyShareEntry
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GSN = TLS13.Wire.Generated.ServerName
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -9,6 +29,7 @@ module SHC = TLS13.ServerHello.Checks
 module SP = FStar.Seq.Properties
 module T = TLS13.Types
 module U8 = FStar.UInt8
+module U16 = FStar.UInt16
 
 let byte (n:nat) : B.byte = U8.uint_to_t (n % 256)
 
@@ -273,80 +294,161 @@ let rec parse_client_hello_extensions
       else parse_client_hello_extensions body next extensions_end server_name key_share saw_supported_versions signature_schemes
   else None
 
-let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
-  if B.length input < 35 then None
-  else if read_u16 input 0 <> 0x0303 then None
+let synth_cipher_suite (c:GCS.cipherSuite) : T.cipher_suite =
+  match c with
+  | GCS.TLS_CHACHA20_POLY1305_SHA256 -> T.TLS_CHACHA20_POLY1305_SHA256
+
+let rec synth_cipher_suites (l:list GCS.cipherSuite)
+  : GTot (list T.cipher_suite)
+       (decreases l)
+  =
+  match l with
+  | [] -> []
+  | c :: tl -> synth_cipher_suite c :: synth_cipher_suites tl
+
+let key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange) : GTot (option (B.bytes_of_len 32)) =
+  let b : B.bytes = (ke <: B.bytes) in
+  if B.length b = 32 then Some (b <: B.bytes_of_len 32) else None
+
+// Find an x25519 entry carrying a 32-byte key in a ClientHello key_share list.
+let rec ch_find_key_share (l:list GKSE.keyShareEntry)
+  : GTot (option (B.bytes_of_len 32)) (decreases l) =
+  match l with
+  | [] -> None
+  | e :: tl ->
+    if GNG.X25519? e.GKSE.group
+    then (match key_exchange_to_key32 e.GKSE.key_exchange with
+          | Some k -> Some k
+          | None -> ch_find_key_share tl)
+    else ch_find_key_share tl
+
+let synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme =
+  match s with
+  | GSS.Ecdsa_secp256r1_sha256 -> T.EcdsaSecp256r1Sha256
+  | GSS.Rsa_pss_rsae_sha256 -> T.RsaPssRsaeSha256
+  | GSS.Ed25519 -> T.Ed25519
+  | GSS.Unknown_signatureScheme v -> T.UnsupportedSignatureScheme (U16.v v)
+
+let rec synth_sig_schemes (l:list GSS.signatureScheme) : GTot (list T.signature_scheme) (decreases l) =
+  match l with
+  | [] -> []
+  | s :: tl -> synth_signature_scheme s :: synth_sig_schemes tl
+
+// Hostname from the first host_name entry of a ClientHello server_name list.
+let ch_server_name (snl:list GSN.serverName) : GTot (option T.hostname) =
+  match snl with
+  | (GSN.Name_host_name h) :: _ -> Some ((h <: B.bytes) <: T.hostname)
+  | _ -> None
+
+let rec ch_extensions
+  (l:list GECH.extensionClientHello)
+  (server_name:option T.hostname)
+  (key_share:option (B.bytes_of_len 32))
+  (saw_supported_versions:bool)
+  (signature_schemes:list T.signature_scheme)
+  : GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme))
+       (decreases l)
+  =
+  match l with
+  | [] ->
+    if saw_supported_versions
+    then Some (server_name, key_share, saw_supported_versions, signature_schemes)
+    else None
+  | e :: tl ->
+    (match e with
+     | GECH.Extension_data_server_name snl ->
+       (match ch_server_name snl with
+        | Some name -> ch_extensions tl (Some name) key_share saw_supported_versions signature_schemes
+        | None -> None)
+     | GECH.Extension_data_supported_groups _ ->
+       ch_extensions tl server_name key_share saw_supported_versions signature_schemes
+     | GECH.Extension_data_signature_algorithms ssl ->
+       ch_extensions tl server_name key_share saw_supported_versions (synth_sig_schemes ssl)
+     | GECH.Extension_data_key_share kscl ->
+       (match ch_find_key_share kscl with
+        | Some ks -> ch_extensions tl server_name (Some ks) saw_supported_versions signature_schemes
+        | None -> None)
+     | GECH.Extension_data_supported_versions svl ->
+       if List.Tot.mem GPV.TLS_1p3 svl
+       then ch_extensions tl server_name key_share true signature_schemes
+       else None
+     | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
+
+let synth_client_hello (c:GCH.clientHello) : GTot (option M.client_hello) =
+  // RFC 8446 4.1.2: ClientHello.legacy_version MUST be 0x0303 (TLS_1p2). The high
+  // M.client_hello has no version field, so requiring the canonical value here both
+  // matches the original parser and keeps the wire<->M map injective on this field.
+  if not (GPV.TLS_1p2? c.GCH.legacy_version) then None
   else
-    match take_range input 2 32 with
-    | None -> None
-    | Some random ->
-      let session_id_len = nat_of_byte (Seq.index input 34) in
-      let cipher_suites_len_pos = 35 + session_id_len in
-      if cipher_suites_len_pos + 2 > B.length input then None
-      else
-        let cipher_suites_len = read_u16 input cipher_suites_len_pos in
-        let cipher_suites_pos = cipher_suites_len_pos + 2 in
-        let compression_len_pos = cipher_suites_pos + cipher_suites_len in
-        if cipher_suites_len <> 2 || compression_len_pos + 1 > B.length input then None
-        else
-          match cipher_suite_of_u16 (read_u16 input cipher_suites_pos) with
-          | None -> None
-          | Some suite ->
-            let compression_methods_len = nat_of_byte (Seq.index input compression_len_pos) in
-            let compression_methods_pos = compression_len_pos + 1 in
-            if compression_methods_len <> 1 ||
-               compression_methods_pos + 1 > B.length input ||
-               nat_of_byte (Seq.index input compression_methods_pos) <> 0
-            then None
-            else
-              let extensions_len_pos = compression_methods_pos + compression_methods_len in
-              if extensions_len_pos + 2 > B.length input then None
-              else
-                let extensions_len = read_u16 input extensions_len_pos in
-                let extensions_pos = extensions_len_pos + 2 in
-                let extensions_end = extensions_pos + extensions_len in
-                if extensions_end <> B.length input then None
-                else
-                  match parse_client_hello_extensions input extensions_pos extensions_end None None false [] with
-                  | Some (server_name, Some key_share, _, signature_schemes) ->
-                    Some {
-                      M.random = random;
-                      M.server_name = server_name;
-                      M.key_share = key_share;
-                      M.cipher_suites = [suite];
-                      M.signature_schemes = signature_schemes
-                    }
-                  | _ -> None
+  match ch_extensions c.GCH.extensions None None false [] with
+  | Some (server_name, Some key_share, _, signature_schemes) ->
+    Some ({ M.random = (c.GCH.random <: B.bytes_of_len 32);
+            M.server_name = server_name;
+            M.key_share = key_share;
+            M.cipher_suites = synth_cipher_suites c.GCH.cipher_suites;
+            M.signature_schemes = signature_schemes })
+  | _ -> None
+
+let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
+  match LP.parse GCH.clientHello_parser input with
+  | Some (ch, consumed) ->
+    if consumed = B.length input then synth_client_hello ch else None
+  | None -> None
+
+let rec sh_key_share
+  (l:list GESH.extensionServerHello)
+  (saw_supported_versions:bool)
+  (key_share:option (B.bytes_of_len 32))
+  : GTot (option (B.bytes_of_len 32))
+       (decreases l)
+  =
+  match l with
+  | [] -> if saw_supported_versions then key_share else None
+  | e :: tl ->
+    (match e with
+     | GESH.Extension_data_supported_versions sv ->
+       // sv : protocolVersion (closed enum); RFC requires the selected version 0x0304.
+       if GPV.TLS_1p3? sv then sh_key_share tl true key_share else None
+     | GESH.Extension_data_key_share ks ->
+       // ks : keyShareEntry; require x25519 + 32-byte key.
+       if GNG.X25519? ks.GKSE.group
+       then (match key_exchange_to_key32 ks.GKSE.key_exchange with
+             | Some k -> sh_key_share tl saw_supported_versions (Some k)
+             | None -> None)
+       else None
+     | _ -> sh_key_share tl saw_supported_versions key_share)
+
+let synth_server_hello (sh:GSH.serverHello) : GTot (option M.server_hello) =
+  // A magic-random HelloRetryRequest is NOT a normal ServerHello: reject it here
+  // (consistent with parse_supported_server_hello, which rejects HRR via
+  // SHC.server_hello_ok).  parse_handshake maps the HRR arm to M.HelloRetryRequest
+  // separately, so the modeled HelloRetryRequestRejected path is reachable.
+  // RFC 8446 4.1.3: ServerHello.legacy_version MUST be 0x0303 (TLS_1p2); the high
+  // M.server_hello has no version field, so requiring the canonical value here both
+  // matches the original parser and keeps the wire<->M map injective on this field.
+  if not (GPV.TLS_1p2? sh.GSH.legacy_version) then None
+  else
+  match sh.GSH.body with
+  | GSHB.HelloRetryRequest _ -> None
+  | GSHB.ServerHello_body_false sf ->
+    let body = sf.GSHB.value in
+    if U8.v body.GSHBody.legacy_compression_method <> 0 then None
+    else
+      match sh_key_share body.GSHBody.extensions false None with
+      | Some ks ->
+        Some ({ M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
+                M.key_share = ks;
+                M.cipher_suite = synth_cipher_suite body.GSHBody.cipher_suite;
+                // Overridden with the verbatim wire bytes in synth_handshake_msg_of;
+                // this standalone entry point is unused by the round-trip path.
+                M.body = B.empty })
+      | None -> None
 
 let parse_server_hello (input:B.bytes) : GTot (option M.server_hello) =
-  if B.length input < 35 then None
-  else if read_u16 input 0 <> 0x0303 then None
-  else
-    match take_range input 2 32 with
-    | None -> None
-    | Some random ->
-      let session_id_len = nat_of_byte (Seq.index input 34) in
-      let cipher_suite_pos = 35 + session_id_len in
-      if cipher_suite_pos + 5 > B.length input then None
-      else
-        match cipher_suite_of_u16 (read_u16 input cipher_suite_pos) with
-        | None -> None
-        | Some suite ->
-          if nat_of_byte (Seq.index input (cipher_suite_pos + 2)) <> 0 then None
-          else
-            let extensions_len = read_u16 input (cipher_suite_pos + 3) in
-            let extensions_pos = cipher_suite_pos + 5 in
-            let extensions_end = extensions_pos + extensions_len in
-            if extensions_end <> B.length input then None
-            else
-              match parse_server_hello_extensions input extensions_pos extensions_end false None with
-              | Some key_share ->
-                Some {
-                  M.random = random;
-                  M.key_share = key_share;
-                  M.cipher_suite = suite
-                }
-              | None -> None
+  match LP.parse GSH.serverHello_parser input with
+  | Some (sh, consumed) ->
+    if consumed = B.length input then synth_server_hello sh else None
+  | None -> None
 
 let parse_supported_server_hello_impl (input:B.bytes) : GTot (option M.server_hello) =
   if SHC.server_hello_ok_52 input then
@@ -355,7 +457,8 @@ let parse_supported_server_hello_impl (input:B.bytes) : GTot (option M.server_he
       Some {
         M.random = random;
         M.key_share = key_share;
-        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256
+        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        M.body = B.empty
       }
     | _, _ -> None
   else if SHC.server_hello_ok_58 input then
@@ -364,7 +467,8 @@ let parse_supported_server_hello_impl (input:B.bytes) : GTot (option M.server_he
       Some {
         M.random = random;
         M.key_share = key_share;
-        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256
+        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        M.body = B.empty
       }
     | _, _ -> None
   else None
@@ -416,21 +520,35 @@ let rec parse_certificate_entries
         | _, _ -> None
   else None
 
+let rec synth_cert_chain (l:list GCE.certificateEntry)
+  : GTot (list B.bytes)
+       (decreases l)
+  =
+  match l with
+  | [] -> []
+  | e :: tl -> (e.GCE.cert_data <: B.bytes) :: synth_cert_chain tl
+
+// Total number of bytes of certificate data in a chain (concatenated cert_data,
+// the layout the low-level certificate_msg representation stores).
+let rec cert_chain_total_bytes (chain:list B.bytes) : GTot nat =
+  match chain with
+  | [] -> 0
+  | c :: tl -> B.length c + cert_chain_total_bytes tl
+
+// A chain fits the fixed-size low-level representation iff it has at most
+// certificate_chain_max_entries certificates and their data fits in
+// certificate_chain_max_bytes.
+let cert_chain_fits (chain:list B.bytes) : GTot bool =
+  FStar.List.Tot.length chain <= M.certificate_chain_max_entries &&
+  cert_chain_total_bytes chain <= M.certificate_chain_max_bytes
+
 let parse_certificate_msg (input:B.bytes) : GTot (option M.certificate_msg) =
-  if B.length input < 4 then None
-  else
-    let request_context_len = nat_of_byte (Seq.index input 0) in
-    let list_len_pos = 1 + request_context_len in
-    if list_len_pos + 3 > B.length input then None
-    else
-      let cert_list_len = read_u24 input list_len_pos in
-      let entries_pos = list_len_pos + 3 in
-      let entries_end = entries_pos + cert_list_len in
-      if entries_end <> B.length input then None
-      else
-        match parse_certificate_entries input entries_pos entries_end with
-        | Some chain -> Some { M.chain = chain }
-        | None -> None
+  match LP.parse GCert.certificate_parser input with
+  | Some (c, consumed) ->
+    if consumed = B.length input
+    then Some ({ M.chain = synth_cert_chain c.GCert.certificate_list; M.body = B.empty })
+    else None
+  | None -> None
 
 let parse_certificate_verify_impl (input:B.bytes) : GTot (option M.certificate_verify) =
   if B.length input < 4 then None
@@ -443,7 +561,8 @@ let parse_certificate_verify_impl (input:B.bytes) : GTot (option M.certificate_v
       | Some signature ->
         Some {
           M.scheme = signature_scheme_of_u16 scheme;
-          M.signature = signature
+          M.signature = signature;
+          M.body = B.empty
         }
       | None -> None
 
@@ -455,7 +574,7 @@ let rec parse_encrypted_extensions_entries
   : GTot (option M.encrypted_extensions)
        (decreases (entries_end - pos))
   =
-  if pos == entries_end then Some { M.negotiated_alpn = alpn }
+  if pos == entries_end then Some { M.negotiated_alpn = alpn; M.body = B.empty }
   else if pos < entries_end && pos + 4 <= entries_end && entries_end <= B.length input then
     let ext_type = read_u16 input pos in
     let ext_len = read_u16 input (pos + 2) in
@@ -476,22 +595,52 @@ let rec parse_encrypted_extensions_entries
       else parse_encrypted_extensions_entries input next entries_end alpn
   else None
 
+// First ALPN protocol name (as raw bytes) from a parsed protocol_name_list.
+let alpn_first_name (pnl:GEEE.extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation)
+  : GTot (option B.bytes) =
+  match (pnl <: list TLS13.Wire.Generated.ProtocolName.protocolName) with
+  | pn :: _ -> Some ((pn <: B.bytes))
+  | [] -> None
+
+let rec synth_encrypted_extensions (l:list GEEE.extensionEncryptedExtensions)
+  : GTot (option M.encrypted_extensions)
+       (decreases l)
+  =
+  match l with
+  | [] -> Some ({ M.negotiated_alpn = None; M.body = B.empty })
+  | e :: tl ->
+    (match e with
+     | GEEE.Extension_data_application_layer_protocol_negotiation pnl ->
+       (match alpn_first_name pnl with
+        | Some name -> Some ({ M.negotiated_alpn = Some name; M.body = B.empty })
+        | None -> None)
+     | _ -> synth_encrypted_extensions tl)
+
 let parse_encrypted_extensions (input:B.bytes) : GTot (option M.encrypted_extensions) =
-  if B.length input < 2 then None
-  else
-    let extensions_len = read_u16 input 0 in
-    let extensions_pos = 2 in
-    let extensions_end = extensions_pos + extensions_len in
-    if extensions_end <> B.length input then None
-    else parse_encrypted_extensions_entries input extensions_pos extensions_end None
+  match LP.parse GEE.encryptedExtensions_parser input with
+  | Some (exts, consumed) ->
+    if consumed = B.length input
+    then synth_encrypted_extensions exts
+    else None
+  | None -> None
 
 let parse_certificate_verify (input:B.bytes) : GTot (option M.certificate_verify) =
-  parse_certificate_verify_impl input
+  match LP.parse GCV.certificateVerify_parser input with
+  | Some (cv, consumed) ->
+    if consumed = B.length input
+    then Some ({ M.scheme = synth_signature_scheme cv.GCV.algorithm;
+                 M.signature = (cv.GCV.signature <: B.bytes);
+                 M.body = B.empty })
+    else None
+  | None -> None
 
 let parse_finished (input:B.bytes) : GTot (option M.finished) =
-  if B.length input == 32
-  then Some { M.verify_data = input }
-  else None
+  match LP.parse GFinished.finished_parser input with
+  | Some (vd, consumed) ->
+    if consumed = B.length input
+    then Some ({ M.verify_data = vd })
+    else None
+  | None -> None
 
 let parse_ignored_post_handshake (input:B.bytes) : GTot (option B.bytes) =
   if B.length input < 4 then None
@@ -513,41 +662,65 @@ let parse_key_update (input:B.bytes) : GTot (option M.key_update_request) =
     else None
   else None
 
-let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
-  if B.length input < 4 then None
-  else
-    let msg_type = nat_of_byte (Seq.index input 0) in
-    let body_len = read_u24 input 1 in
-    if body_len + 4 > B.length input then None
+let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
+  // The verbatim wire bytes of this handshake message: the QuackyDucky
+  // serializer applied to the parsed value.  By LowParse's parse/serialize
+  // round-trip this equals the input fragment, so a parser can discharge
+  // `fragment == serialize_handshake msg` (see lemma_synth_handshake_round_trip).
+  let full = LP.serialize GHS.handshake_serializer h in
+  match h with
+  | GHS.Body_client_hello b ->
+    // A TLS client never legitimately receives a ClientHello; the dispatcher
+    // would reject it as an unexpected handshake message anyway.  Modelling it
+    // as a parse failure (rather than Some (M.ClientHello _)) keeps the received
+    // message space to what a client can actually accept, and lets the verified
+    // parser reject it without the (never-exercised) ClientHello field copy.
+    None
+  | GHS.Body_server_hello b ->
+    // legacy_version MUST be 0x0303 (matches synth_server_hello and the original
+    // parser, which rejected non-0x0303 before inspecting random/body).
+    if not (GPV.TLS_1p2? b.GSH.legacy_version) then None
     else
-      let consumed = body_len + 4 in
-      let body = Seq.slice input 4 consumed in
-      match msg_type with
-      | 1 ->
-        (match parse_client_hello body with
-         | Some ch -> Some (M.ClientHello ch, consumed)
-         | None -> None)
-      | 2 ->
-        (match parse_server_hello body with
-         | Some sh -> Some (M.ServerHello sh, consumed)
-         | None -> None)
-      | 8 ->
-        (match parse_encrypted_extensions body with
-         | Some ee -> Some (M.EncryptedExtensions ee, consumed)
-         | None -> None)
-      | 11 ->
-        (match parse_certificate_msg body with
-         | Some cert -> Some (M.Certificate cert, consumed)
-         | None -> None)
-      | 15 ->
-        (match parse_certificate_verify body with
-         | Some cv -> Some (M.CertificateVerify cv, consumed)
-         | None -> None)
-      | 20 ->
-        (match parse_finished body with
-         | Some fin -> Some (M.Finished fin, consumed)
-         | None -> None)
-      | _ -> None
+    (match b.GSH.body with
+     | GSHB.HelloRetryRequest _ -> Some M.HelloRetryRequest
+     | GSHB.ServerHello_body_false _ ->
+       (match synth_server_hello b with
+        | Some x ->
+          // Bound the carried ServerHello to server_hello_max_len; oversized
+          // ServerHellos are rejected (they cannot fit the fixed receive buffer).
+          if B.length full <= M.server_hello_max_len
+          then Some (M.ServerHello ({ x with M.body = full }))
+          else None
+        | None -> None))
+  | GHS.Body_encrypted_extensions b ->
+    (match synth_encrypted_extensions b with
+     | Some x -> Some (M.EncryptedExtensions ({ x with M.body = full }))
+     | None -> None)
+  | GHS.Body_certificate b ->
+    // Reject chains too large for the fixed-size low-level representation.
+    let chain = synth_cert_chain b.GCert.certificate_list in
+    if cert_chain_fits chain
+    then Some (M.Certificate ({ M.chain = chain; M.body = full }))
+    else None
+  | GHS.Body_certificate_verify b ->
+    // Reject signatures too large for the fixed-size low-level representation.
+    if B.length b.GCV.signature <= M.signature_max_len
+    then Some (M.CertificateVerify ({ M.scheme = synth_signature_scheme b.GCV.algorithm;
+                                      M.signature = (b.GCV.signature <: B.bytes);
+                                      M.body = full }))
+    else None
+  | GHS.Body_finished b ->
+    Some (M.Finished ({ M.verify_data = (b <: B.bytes_of_len 32) }))
+  | GHS.Body_key_update _ -> None
+  | GHS.Body_new_session_ticket _ -> None
+
+let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
+  match LP.parse GHS.handshake_parser input with
+  | Some (h, consumed) ->
+    (match synth_handshake_msg_of h with
+     | Some m -> Some (m, consumed)
+     | None -> None)
+  | None -> None
 
 let parse_handshake_msg (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
   parse_handshake input
@@ -714,10 +887,24 @@ let serialize_handshake_body (msg:M.handshake_msg) : GTot (option (nat & B.bytes
   | M.Finished fin -> Some (20, serialize_finished fin)
   | M.HelloRetryRequest -> None
 
+// For received messages that must round-trip exactly (ServerHello, Encrypted-
+// Extensions, Certificate, CertificateVerify) we return the verbatim wire bytes
+// carried in the message (m.body == the full handshake message produced by the
+// QuackyDucky serializer at parse time).  This lets a verified parser discharge
+// `fragment == serialize_handshake msg` via LowParse's parse/serialize round-trip
+// even for non-canonical encodings (extra/reordered extensions, echoed
+// session_id, per-cert extensions).  ClientHello / Finished / key-update keep the
+// canonical hand-written encoding.
 let serialize_handshake (msg:M.handshake_msg) : GTot B.bytes =
-  match serialize_handshake_body msg with
-  | Some (msg_type, body) -> append3 (u8 msg_type) (u24 (B.length body)) body
-  | None -> B.empty
+  match msg with
+  | M.ServerHello sh -> sh.M.body
+  | M.EncryptedExtensions ee -> ee.M.body
+  | M.Certificate cert -> cert.M.body
+  | M.CertificateVerify cv -> cv.M.body
+  | _ ->
+    (match serialize_handshake_body msg with
+     | Some (msg_type, body) -> append3 (u8 msg_type) (u24 (B.length body)) body
+     | None -> B.empty)
 
 let serialize_handshake_msg (msg:M.handshake_msg) : GTot B.bytes =
   serialize_handshake msg
@@ -730,8 +917,8 @@ let lemma_serialize_finished_len (fin:M.finished)
   ()
 
 let lemma_serialize_server_hello_len (sh:M.server_hello)
-  : Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
-           B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
+  : Lemma (B.length (serialize_handshake (M.ServerHello sh)) <= M.server_hello_max_len /\
+           B.length (serialize_handshake_msg (M.ServerHello sh)) <= M.server_hello_max_len)
 =
   ()
 
@@ -1012,3 +1199,44 @@ let lemma_parse_record_fragment_bound (input:B.bytes)
             assert (B.length fragment == fragment_len);
             assert (B.length fragment <= 16640)
           | None -> ()
+
+// Round-trip: a handshake message accepted by parse_tls_message re-serializes to
+// exactly the input fragment, for the messages whose M-value carries the verbatim
+// wire body (ServerHello, EncryptedExtensions, Certificate, CertificateVerify).
+// This is the spec obligation a verified parser discharges for
+// CT.parsed_message_wire_success_for.  Proof: synth sets m.body to the QuackyDucky
+// serialization of the parsed handshake value h, and LowParse's parsed_data_is_serialize
+// gives `serialize handshake_serializer h == fragment` (exact consumption).
+let lemma_parse_tls_message_round_trip
+  (content_type:T.content_type)
+  (fragment:B.bytes)
+  : Lemma
+    (ensures (
+      match parse_tls_message content_type fragment with
+      | Some (M.TlsHandshake (M.ServerHello sh)) ->
+        Seq.equal fragment (serialize_handshake (M.ServerHello sh))
+      | Some (M.TlsHandshake (M.EncryptedExtensions ee)) ->
+        Seq.equal fragment (serialize_handshake (M.EncryptedExtensions ee))
+      | Some (M.TlsHandshake (M.Certificate c)) ->
+        Seq.equal fragment (serialize_handshake (M.Certificate c))
+      | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
+        Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | _ -> True))
+=
+  match content_type with
+  | T.Handshake ->
+    (match LP.parse GHS.handshake_parser fragment with
+     | Some (h, consumed) ->
+       if consumed = B.length fragment then begin
+         LP.parsed_data_is_serialize GHS.handshake_serializer fragment;
+         Seq.lemma_eq_intro
+           (Seq.slice fragment consumed (B.length fragment))
+           B.empty;
+         Seq.lemma_eq_intro
+           (Seq.append (LP.serialize GHS.handshake_serializer h)
+                       (Seq.slice fragment consumed (B.length fragment)))
+           (LP.serialize GHS.handshake_serializer h)
+       end
+       else ()
+     | None -> ())
+  | _ -> ()

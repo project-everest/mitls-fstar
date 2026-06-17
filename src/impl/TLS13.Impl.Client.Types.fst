@@ -147,6 +147,7 @@ type next_local_action = {
   next_local_payload: local_payload_kind;
 }
 
+noextract
 let local_validation_peer
   (st:CS.connection_state)
   (payload:B.bytes)
@@ -4536,12 +4537,15 @@ let lemma_network_bytes_step_correct_end_to_end
   if CS.connection_state_sent_seal_replay_consistent st0 then (
     if response_stuttered st0 st1 buffer_resp.response old_network_out network_out old_app_out app_out
     then assert (st1 == st0)
-    else lemma_some_legal_response_sent_seal_replay_consistent
-      st0
-      st1
-      buffer_resp.response
-      network_out
-      app_out
+    else (
+      assert (some_legal_response st0 st1 buffer_resp.response network_out app_out);
+      assert (response_network_out_seal_projection st0 st1 buffer_resp.response network_out app_out);
+      lemma_some_legal_response_sent_seal_replay_consistent
+        st0
+        st1
+        buffer_resp.response
+        network_out
+        app_out)
   );
   if CS.connection_state_received_decode_replay_consistent st0 then (
     lemma_network_bytes_step_correct_received_decode_replay_consistent

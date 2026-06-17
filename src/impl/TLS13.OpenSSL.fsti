@@ -26,12 +26,10 @@ fn auth_context_new
            pts_to trust_anchors 'trust_anchors_bytes **
            pure (B.length 'server_name_bytes == SZ.v server_name_len /\
                  B.length 'trust_anchors_bytes == SZ.v trust_anchors_len)
-  returns result: option auth_context
+  returns ctx: auth_context
   ensures pts_to server_name 'server_name_bytes **
           pts_to trust_anchors 'trust_anchors_bytes **
-          (match result with
-           | Some ctx -> is_auth_context ctx
-           | None -> emp)
+          is_auth_context ctx
 
 fn validate_certificate_for_local_event
   (ctx:auth_context)

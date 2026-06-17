@@ -144,8 +144,8 @@ val lemma_serialize_finished_len:
 
 val lemma_serialize_server_hello_len:
   sh:M.server_hello ->
-  Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
-         B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
+  Lemma (B.length (serialize_handshake (M.ServerHello sh)) <= M.server_hello_max_len /\
+         B.length (serialize_handshake_msg (M.ServerHello sh)) <= M.server_hello_max_len)
 
 val serialize_server_certificate_verify_input:
   transcript_hash:B.bytes ->
@@ -256,3 +256,19 @@ val lemma_parse_record_fragment_bound:
       match parse_record input with
       | Some (_, fragment, _) -> B.length fragment <= 16640
       | None -> True))
+
+val lemma_parse_tls_message_round_trip:
+  content_type:T.content_type ->
+  fragment:B.bytes ->
+  Lemma
+    (ensures (
+      match parse_tls_message content_type fragment with
+      | Some (M.TlsHandshake (M.ServerHello sh)) ->
+        Seq.equal fragment (serialize_handshake (M.ServerHello sh))
+      | Some (M.TlsHandshake (M.EncryptedExtensions ee)) ->
+        Seq.equal fragment (serialize_handshake (M.EncryptedExtensions ee))
+      | Some (M.TlsHandshake (M.Certificate c)) ->
+        Seq.equal fragment (serialize_handshake (M.Certificate c))
+      | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
+        Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | _ -> True))
