@@ -1855,7 +1855,7 @@ fn process_ready_empty_local_action_once
              B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                B.length
                  (W.serialize_certificate_from_credential
-                   { M.chain = [cfg.CS.server_certificate_chain] }) <=
+                   { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty }) <=
                  Bounds.max_transcript_len /\
              CS.legal_event
                'st0.CS.cs_model

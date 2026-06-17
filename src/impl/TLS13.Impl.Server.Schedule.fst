@@ -167,7 +167,7 @@ fn next_local_action
       B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
         B.length
           (W.serialize_certificate_from_credential
-            { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) <=
+            { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty }) <=
           Bounds.max_transcript_len));
     assert (pure (CS.legal_event
       'st0.CS.cs_model

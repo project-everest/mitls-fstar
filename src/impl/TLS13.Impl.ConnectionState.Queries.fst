@@ -2605,7 +2605,7 @@ fn can_send_certificate_runtime
   assert (pure (
     B.length
       (W.serialize_certificate_from_credential
-        { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) ==
+        { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty }) ==
       13 + B.length (Ghost.reveal server_cfg).CS.server_certificate_chain));
 
   assert (pure (ok ==> U8.v tag == 1));
@@ -2633,17 +2633,17 @@ fn can_send_certificate_runtime
     SZ.v current_transcript_len +
       B.length
         (W.serialize_certificate_from_credential
-          { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) <=
+          { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty }) <=
       max_transcript_len));
   assert (pure (ok ==>
     B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
       B.length
         (W.serialize_certificate_from_credential
-          { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) <=
+          { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty }) <=
         max_transcript_len));
   assert (pure (CS.certificate_msg_matches_server_config
     (Ghost.reveal server_cfg)
-    { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }));
+    { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty }));
   assert (pure (ok ==> CS.legal_event
     st0.CS.cs_model
     (CS.ConnNetworkEvent {
