@@ -2484,7 +2484,7 @@ fn can_send_certificate_runtime
                B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                  B.length
                    (W.serialize_certificate_from_credential
-                     { M.chain = [cfg.CS.server_certificate_chain] }) <=
+                     { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty }) <=
                    max_transcript_len /\
                CS.legal_event
                  st0.CS.cs_model
