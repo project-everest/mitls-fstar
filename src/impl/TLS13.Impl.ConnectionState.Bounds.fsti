@@ -18,8 +18,10 @@ noextract
 let max_handshake_flight_len : nat = 32768
 noextract
 let max_transcript_len : nat = 65535
-let max_server_certificate_chain_len : nat = 16610
 noextract
+let max_certificate_verify_input_len : nat = 256
+noextract
+let max_server_certificate_chain_len : nat = 16610
 noextract
 let max_pending_plaintext_len : nat = 32768
 noextract

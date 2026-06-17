@@ -57,7 +57,6 @@ fn has_seal_keys (st: record_state)
           pure (ok ==> (match 's.R.key, 's.R.static_iv with
                         | Some _, Some _ -> True
                         | _, _ -> False))
->>>>>>> origin/main
 
 fn advance_seq (st: record_state)
   requires is_record_state st 's **

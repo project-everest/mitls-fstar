@@ -142,15 +142,7 @@ let lemma_mk_cleartext_decoder_fragment_relation
       L.content_type_matches content_type outer_ct)
     (ensures CT.decoder_fragment_relation st0 content_type fragment raw)
 =
-  introduce exists outer_ct' outer_fragment'.
-    WS.parse_record raw == Some (outer_ct', outer_fragment', B.length raw) /\
-    (if outer_ct' == T.ApplicationData
-     then CT.protected_decoder_fragment_relation st0 content_type fragment raw
-     else
-       L.content_type_matches content_type outer_ct' /\
-       Seq.equal fragment outer_fragment')
-  with outer_ct fragment
-  and ()
+  WS.lemma_parse_record_implies_parse_record_wire raw
 
 (* network_input_wf for a successfully-parsed received cleartext message. *)
 let lemma_mk_cleartext_network_input_wf
@@ -242,31 +234,7 @@ let lemma_mk_protected_decoder_fragment_relation
       Seq.equal fragment plaintext.M.fragment)
     (ensures CT.protected_decoder_fragment_relation st0 content_type fragment raw)
 =
-  assert (CT.protected_record_opened st0 raw outer_fragment opened);
-  assert (CT.decoder_fragment_matches_plaintext content_type fragment plaintext);
-  introduce exists outer_fragment'.
-    WS.parse_record raw == Some (T.ApplicationData, outer_fragment', B.length raw) /\
-    (exists opened'.
-      CT.protected_record_opened st0 raw outer_fragment' opened' /\
-      (exists plaintext'.
-        WS.parse_plaintext opened' == Some plaintext' /\
-        CT.decoder_fragment_matches_plaintext content_type fragment plaintext'))
-  with outer_fragment
-  and (
-    introduce exists opened'.
-      CT.protected_record_opened st0 raw outer_fragment opened' /\
-      (exists plaintext'.
-        WS.parse_plaintext opened' == Some plaintext' /\
-        CT.decoder_fragment_matches_plaintext content_type fragment plaintext')
-    with opened
-    and (
-      introduce exists plaintext'.
-        WS.parse_plaintext opened == Some plaintext' /\
-        CT.decoder_fragment_matches_plaintext content_type fragment plaintext'
-      with plaintext
-      and ()
-    )
-  )
+  WS.lemma_parse_record_implies_parse_record_wire raw
 
 (* network_input_wf for a successfully-parsed received protected message. *)
 let lemma_mk_protected_network_input_wf
