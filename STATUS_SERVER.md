@@ -1,6 +1,31 @@
 # TLS server verification status
 
-Status date: 2026-06-16.
+Status date: 2026-06-17.
+
+## EverParse Merge Status (2026-06-17)
+
+**Branch:** `tls_server_merge`  
+**Status:** Phase 3 in progress (verification at 95%)
+
+The `origin/main` branch has been merged, bringing EverParse/QuackyDucky integration for verified TLS message parsing. This eliminates client-side parser/serializer code from the TCB.
+
+**Completed:**
+- ✅ Phase 1: Merged origin/main with all conflicts resolved
+- ✅ Phase 2: Built full EverParse toolchain (fstar.exe 77MB, krml 37MB, qd.exe 8.8MB)
+- ✅ Generated 65+ TLS13.Wire.Generated.* modules from tls.qd.rfc
+- ✅ Verified all generated modules
+- ✅ Verified 140+ main codebase modules
+
+**In Progress (Phase 3):**
+- ⚠️ 2 temporary admits in TLS13.Impl.Parser.DecoderWF.fst (proofs broken by message type changes)
+- 🔄 Full verification running
+- ⏳ Interop tests pending
+
+**Remaining:**
+- Phase 4: Update documentation (TCB boundaries)
+- Phase 5: Implement verified server parsers using generated combinators (8-16h estimated)
+
+See MERGE_PHASE2_COMPLETE.md for detailed status.
 
 ## Goal
 

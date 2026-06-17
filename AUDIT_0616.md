@@ -330,12 +330,18 @@ Sign-off questions:
 
 Audit file: `src/impl/TLS13.Impl.Parser.fsti`.
 
-This module is trusted to connect concrete parser code to pure
-`TLS13.Wire.Spec` facts.
+**STATUS (2026-06-17):** CLIENT PARSERS NOW VERIFIED via EverParse integration.
+
+After merging `origin/main`, client-side parsers use auto-generated, verified code from
+`TLS13.Wire.Generated.*` modules (65+ modules generated from `tls.qd.rfc`). The parser TCB
+for **client** messages is eliminated. Server-side parsers still use `c_stubs` temporarily
+and are planned for Phase 5 (see MERGE_PHASE2_COMPLETE.md).
+
+This module connects concrete parser code to pure `TLS13.Wire.Spec` facts.
 
 Key functions:
 
-- `parse_tls_message`
+- `parse_tls_message` - now uses generated parsers for client messages
 - `decode_network_record`
 - `decode_network_buffer`
 
