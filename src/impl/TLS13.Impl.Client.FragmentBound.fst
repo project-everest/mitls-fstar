@@ -44,17 +44,18 @@ let lemma_network_input_wf_fragment_bound
 =
   assert (CT.decoder_fragment_relation st0 content_type fragment raw_received);
   WS.lemma_parse_record_fragment_bound raw_received;
+  // decoder_fragment_relation now uses parse_record_wire instead of parse_record after merge
   let outer_ct =
     ID.indefinite_description_ghost T.content_type
       (fun outer_ct -> exists outer_fragment.
-        WS.parse_record raw_received == Some (outer_ct, outer_fragment, B.length raw_received) /\
+        WS.parse_record_wire raw_received == Some (outer_ct, outer_fragment, B.length raw_received) /\
         (if outer_ct == T.ApplicationData
          then CT.protected_decoder_fragment_relation st0 content_type fragment raw_received
          else L.content_type_matches content_type outer_ct /\ Seq.equal fragment outer_fragment)) in
   let outer_fragment =
     ID.indefinite_description_ghost M.sealed_record
       (fun outer_fragment ->
-        WS.parse_record raw_received == Some (outer_ct, outer_fragment, B.length raw_received) /\
+        WS.parse_record_wire raw_received == Some (outer_ct, outer_fragment, B.length raw_received) /\
         (if outer_ct == T.ApplicationData
          then CT.protected_decoder_fragment_relation st0 content_type fragment raw_received
          else L.content_type_matches content_type outer_ct /\ Seq.equal fragment outer_fragment)) in
@@ -64,7 +65,7 @@ let lemma_network_input_wf_fragment_bound
     let pof =
       ID.indefinite_description_ghost B.bytes
         (fun pof ->
-          WS.parse_record raw_received == Some (T.ApplicationData, pof, B.length raw_received) /\
+          WS.parse_record_wire raw_received == Some (T.ApplicationData, pof, B.length raw_received) /\
           (exists opened. CT.protected_record_opened st0 raw_received pof opened /\
             (exists plaintext. WS.parse_plaintext opened == Some plaintext /\
               CT.decoder_fragment_matches_plaintext content_type fragment plaintext))) in

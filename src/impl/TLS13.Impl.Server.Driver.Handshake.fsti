@@ -152,6 +152,7 @@ let server_driver_send_server_hello_from_payload_success_correct
       M.key_share =
         CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      M.body = B.empty;
      } in
      st1 ==
       CM.sent_server_hello_state
