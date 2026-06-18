@@ -542,7 +542,7 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
   return total_len;
 }
 
-#ifdef TLS13_USE_EXTRACTED_RECORD
+#ifdef TLS13_SERVER_EXTRACTION_SHAPE
 #define TLS13_Impl_Serializer_serialize_server_hello_from_selection(sh_erased, lsh, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_server_hello_fixed( \
       (lsh).server_hello_random, (lsh).server_hello_key_share, \
@@ -567,7 +567,7 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
 #define TLS13_Impl_Serializer_serialize_empty_encrypted_extensions(out, out_len, ...) \
   TLS13_Connection_Backend_serialize_empty_encrypted_extensions_fixed((out), (out_len))
 
-#ifdef TLS13_USE_EXTRACTED_RECORD
+#ifdef TLS13_SERVER_EXTRACTION_SHAPE
 #define TLS13_Impl_Serializer_serialize_certificate_from_credential(cert_erased, lcert, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_certificate_msg_fixed( \
       (lcert).certificate_msg_chain_bytes, (lcert).certificate_msg_chain_bytes_len, \
@@ -662,7 +662,7 @@ static inline size_t TLS13_Connection_Backend_serialize_protected_handshake_reco
   return written;
 }
 
-#ifdef TLS13_USE_EXTRACTED_RECORD
+#ifdef TLS13_SERVER_EXTRACTION_SHAPE
 #define TLS13_Impl_Serializer_serialize_protected_handshake_record(msg_erased, write_state, handshake, handshake_len, network_out, network_out_len, ...) \
   ({ \
     __auto_type _tls13_write_state = (write_state); \
@@ -762,7 +762,7 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
   return 36u;
 }
 
-#ifdef TLS13_USE_EXTRACTED_RECORD
+#ifdef TLS13_SERVER_EXTRACTION_SHAPE
 #define TLS13_Impl_Serializer_serialize_finished_handshake(fin_erased, lfin, handshake_out, handshake_out_len, ...) \
   TLS13_Connection_Backend_serialize_finished_handshake((lfin), (handshake_out), (handshake_out_len))
 #else
@@ -1423,7 +1423,7 @@ static inline size_t TLS13_Connection_Backend_serialize_client_hello_from_start_
   return record_len;
 }
 
-#ifdef TLS13_USE_EXTRACTED_RECORD
+#ifdef TLS13_SERVER_EXTRACTION_SHAPE
 #define TLS13_Impl_Serializer_serialize_client_hello_from_start( \
     start_erased, ch_erased, start_random, start_server_name, start_server_name_len, \
     start_key_share, start_cipher_suites, start_cipher_suites_len, \

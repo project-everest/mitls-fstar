@@ -408,7 +408,7 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
 	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.IO \
 	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.\*' \
@@ -417,7 +417,6 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -warn-error '+9' \
 	  -no-prefix TLS13.Impl.Client \
 	  $(DRIVER_KRML_FILES)
-	DRIVER_BUNDLE_DIR="$(DRIVER_BUNDLE_DIR)" python3 -c "$$POSTPROCESS_DRIVER_BUNDLE_PY"
 
 extract-server-driver-krml: $(SERVER_DRIVER_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
@@ -428,11 +427,14 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -tmpdir $(SERVER_DRIVER_BUNDLE_DIR) \
 	  -skip-compilation \
 	  -warn-error -2-9-17-6 \
-	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
+	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
+	  -bundle 'TLS13.Wire.Generated.*' \
+	  -bundle 'LowParse.\*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Impl.Server \
 	  $(SERVER_DRIVER_KRML_FILES) \

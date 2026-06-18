@@ -340,6 +340,7 @@ DRIVER_IMPL_MODULES = \
   TLS13.Impl.Handle.Local \
   TLS13.Impl.Messages \
   TLS13.KeySchedule \
+  TLS13.Record \
   TLS13.Impl.Client
 DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(DRIVER_IMPL_MODULES))) \
@@ -348,173 +349,6 @@ DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
   -TLS13.Impl.Driver.Pairing,-TLS13.X509,-TLS13.MachineTypes
-
-define POSTPROCESS_DRIVER_BUNDLE_PY
-import os
-from pathlib import Path
-
-bundle_dir = Path(os.environ["DRIVER_BUNDLE_DIR"])
-repr_h = bundle_dir / "TLS13_Impl_ConnectionState_Repr.h"
-if repr_h.exists():
-    contents = repr_h.read_text()
-    contents = contents.replace('#include "TLS13_Impl_ConnectionState_Queries.h"\n', "")
-    repr_h.write_text(contents)
-
-bound_aliases = (
-    "max_hostname_len",
-    "max_public_key_len",
-    "max_cipher_suites",
-    "max_signature_schemes",
-    "max_client_hello_len",
-    "max_server_hello_len",
-    "max_handshake_flight_len",
-    "max_transcript_len",
-    "max_certificate_verify_input_len",
-    "max_trust_anchors_len",
-    "max_pending_plaintext_len",
-    "max_pending_raw_len",
-)
-bounds_h = bundle_dir / "TLS13_Impl_ConnectionState_Bounds.h"
-if bounds_h.exists():
-    contents = bounds_h.read_text()
-    alias_block = "".join(
-        f"#define TLS13_Impl_ConnectionState_Bounds_{name} "
-        f"TLS13_Impl_ConnectionState_Bounds_{name}_sz\n"
-        for name in bound_aliases
-    )
-    if "TLS13_Impl_ConnectionState_Bounds_max_hostname_len " not in contents:
-        contents = contents.replace(
-            "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
-            "\n" + alias_block + "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
-        )
-    bounds_h.write_text(contents)
-
-backend_include = '#include "../../c_stubs/tls13_connection_backend.h"\n'
-bounds_include = '#include "TLS13_Impl_ConnectionState_Bounds.h"\n'
-backend_triggers = (
-    "TLS13_Impl_Parser_",
-    "TLS13_Impl_Serializer_",
-    "TLS13_Connection_Backend_",
-    "TLS13_Impl_ConnectionState_Repr_copy_",
-    "TLS13_Crypto_",
-    "TLS13_Crypto_sha256_prefix",
-)
-
-def insert_after_include_block(contents, include_line):
-    if include_line in contents:
-        return contents
-    lines = contents.splitlines(keepends=True)
-    last_include = -1
-    seen_include = False
-    for i, line in enumerate(lines):
-        if line.startswith("#include "):
-            seen_include = True
-            last_include = i
-            continue
-        if seen_include and line.strip() != "":
-            break
-    if last_include >= 0:
-        lines.insert(last_include + 1, include_line)
-    else:
-        lines.insert(0, include_line)
-    return "".join(lines)
-
-for c_path in bundle_dir.glob("*.c"):
-    contents = c_path.read_text()
-    if any(trigger in contents for trigger in backend_triggers):
-        contents = insert_after_include_block(contents, backend_include)
-    if "TLS13_Impl_ConnectionState_Bounds_" in contents:
-        contents = insert_after_include_block(contents, bounds_include)
-    c_path.write_text(contents)
-endef
-export POSTPROCESS_DRIVER_BUNDLE_PY
-
-define POSTPROCESS_SERVER_DRIVER_BUNDLE_PY
-import os
-from pathlib import Path
-
-bundle_dir = Path(os.environ["SERVER_DRIVER_BUNDLE_DIR"])
-
-def insert_after_include_block(contents, include_line):
-    if include_line in contents:
-        return contents
-    lines = contents.splitlines(keepends=True)
-    last_include = -1
-    seen_include = False
-    for i, line in enumerate(lines):
-        if line.startswith("#include "):
-            seen_include = True
-            last_include = i
-            continue
-        if seen_include and line.strip() != "":
-            break
-    if last_include >= 0:
-        lines.insert(last_include + 1, include_line)
-    else:
-        lines.insert(0, include_line)
-    return "".join(lines)
-
-bound_aliases = (
-    "max_hostname_len",
-    "max_public_key_len",
-    "max_cipher_suites",
-    "max_signature_schemes",
-    "max_client_hello_len",
-    "max_server_hello_len",
-    "max_handshake_flight_len",
-    "max_transcript_len",
-    "max_certificate_verify_input_len",
-    "max_trust_anchors_len",
-    "max_pending_plaintext_len",
-    "max_pending_raw_len",
-)
-bounds_h = bundle_dir / "TLS13_Impl_ConnectionState_Bounds.h"
-if bounds_h.exists():
-    contents = bounds_h.read_text()
-    alias_block = "".join(
-        f"#define TLS13_Impl_ConnectionState_Bounds_{name} "
-        f"TLS13_Impl_ConnectionState_Bounds_{name}_sz\n"
-        for name in bound_aliases
-    )
-    if "TLS13_Impl_ConnectionState_Bounds_max_hostname_len " not in contents:
-        contents = contents.replace(
-            "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
-            "\n" + alias_block + "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
-        )
-    bounds_h.write_text(contents)
-
-repr_h = bundle_dir / "TLS13_Impl_ConnectionState_Repr.h"
-if repr_h.exists():
-    contents = repr_h.read_text()
-    contents = contents.replace('#include "TLS13_Impl_ConnectionState_Queries.h"\n', "")
-    repr_h.write_text(contents)
-
-backend_include = '#include "../../c_stubs/tls13_connection_backend.h"\n'
-server_shims_include = '#include "../../c_stubs/tls13_server_extraction_shims.h"\n'
-bounds_include = '#include "TLS13_Impl_ConnectionState_Bounds.h"\n'
-backend_triggers = (
-    "TLS13_Impl_Parser_",
-    "TLS13_Impl_Serializer_",
-    "TLS13_Connection_Backend_",
-    "TLS13_Impl_ConnectionState_Repr_copy_",
-    "TLS13_Crypto_",
-    "TLS13_Crypto_sha256_prefix",
-)
-server_shims_triggers = (
-    "TLS13_Impl_Server_Material_copy_server_random_and_private_from_payload",
-)
-
-for c_path in bundle_dir.glob("*.c"):
-    contents = c_path.read_text()
-    if any(trigger in contents for trigger in server_shims_triggers):
-        contents = insert_after_include_block(contents, server_shims_include)
-    if any(trigger in contents for trigger in backend_triggers):
-        contents = insert_after_include_block(contents, backend_include)
-    if "TLS13_Impl_ConnectionState_Bounds_" in contents:
-        contents = insert_after_include_block(contents, bounds_include)
-    c_path.write_text(contents)
-endef
-export POSTPROCESS_SERVER_DRIVER_BUNDLE_PY
 
 SERVER_DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/server_driver_bundle
 SERVER_DRIVER_MODULES = \
@@ -636,7 +470,7 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
 	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.IO \
 	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.\*' \
@@ -646,7 +480,6 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -warn-error '+9' \
 	  -no-prefix TLS13.Impl.Client \
 	  $(DRIVER_KRML_FILES)
-	DRIVER_BUNDLE_DIR="$(DRIVER_BUNDLE_DIR)" python3 -c "$$POSTPROCESS_DRIVER_BUNDLE_PY"
 
 extract-server-driver-krml: $(SERVER_DRIVER_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
@@ -661,11 +494,14 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
+	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
+	  -bundle 'TLS13.Wire.Generated.*' \
+	  -bundle 'LowParse.\*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Impl.Server \
 	  $(SERVER_DRIVER_KRML_FILES) \
 	  _output/FStar_Pervasives_Native.krml
-	SERVER_DRIVER_BUNDLE_DIR="$(SERVER_DRIVER_BUNDLE_DIR)" python3 -c "$$POSTPROCESS_SERVER_DRIVER_BUNDLE_PY"
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
 
@@ -709,7 +545,9 @@ ECHO_STUB_SOURCES = \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
+  c_stubs/tls13_connection_backend.h \
   c_stubs/tls13_crypto_external.h \
+  c_stubs/tls13_generated_shims.h \
   c_stubs/tls13_hacl_stubs.h \
   c_stubs/tls13_io_karamel.h \
   c_stubs/tls13_io_stubs.h \
@@ -756,9 +594,18 @@ test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c extract-driver-bundle \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+	@rm -rf $(DRIVER_BUNDLE_DIR)/obj
+	@mkdir -p $(DRIVER_BUNDLE_DIR)/obj
+	@set -e; for src in $(DRIVER_BUNDLE_DIR)/*.c; do \
+	  obj="$(DRIVER_BUNDLE_DIR)/obj/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) \
+	    -I_extract/driver_bundle -I_extract/driver_bundle/internal \
+	    -include c_stubs/tls13_generated_shims.h \
+	    -c "$$src" -o "$$obj"; \
+	done
 	$(CC) $(CFLAGS_COMMON) \
 	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
-	  _extract/driver_bundle/*.c \
+	  _extract/driver_bundle/obj/*.o \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \
 	  c_stubs/tls13_prims_runtime.c \
@@ -807,9 +654,18 @@ test/test_extracted_server_openssl_client: \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
   c_stubs/tls13_server_extraction_shims.c c_stubs/tls13_server_extraction_shims.h \
   $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
-	$(CC) $(CFLAGS_COMMON) -DTLS13_USE_EXTRACTED_RECORD \
+	@rm -rf $(SERVER_DRIVER_BUNDLE_DIR)/obj
+	@mkdir -p $(SERVER_DRIVER_BUNDLE_DIR)/obj
+	@set -e; for src in $(SERVER_DRIVER_BUNDLE_DIR)/*.c; do \
+	  obj="$(SERVER_DRIVER_BUNDLE_DIR)/obj/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) -DTLS13_SERVER_EXTRACTION_SHAPE \
+	    -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
+	    -include c_stubs/tls13_generated_shims.h \
+	    -c "$$src" -o "$$obj"; \
+	done
+	$(CC) $(CFLAGS_COMMON) \
 	  -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
-	  _extract/server_driver_bundle/*.c \
+	  _extract/server_driver_bundle/obj/*.o \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \
 	  c_stubs/tls13_prims_runtime.c \
