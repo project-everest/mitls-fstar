@@ -349,6 +349,10 @@ DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
   -TLS13.Impl.Driver.Pairing,-TLS13.X509,-TLS13.MachineTypes
+SERVER_DRIVER_EXTRACT_SELECTOR = \
+  *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
+  +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -TLS13.X509,-TLS13.MachineTypes
 
 SERVER_DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/server_driver_bundle
 SERVER_DRIVER_MODULES = \
@@ -386,7 +390,8 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver
 SERVER_DRIVER_KRML_FILES = \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERVER_DRIVER_MODULES)))
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERVER_DRIVER_MODULES))) \
+  $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
@@ -412,6 +417,10 @@ $(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
 $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Client.Driver.fst | $(OUTPUT_DIR)
 	$(FSTAR_EXTRACT) --codegen krml --extract '$(DRIVER_EXTRACT_SELECTOR)' \
 	  src/impl/TLS13.Impl.Client.Driver.fst --krmloutput $@
+
+$(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Server.Driver.fst | $(OUTPUT_DIR)
+	$(FSTAR_EXTRACT) --codegen krml --extract '$(SERVER_DRIVER_EXTRACT_SELECTOR)' \
+	  src/impl/TLS13.Impl.Server.Driver.fst --krmloutput $@
 
 $(OUTPUT_DIR)/%.krml: | $(OUTPUT_DIR)
 	@target_base=$$(basename "$@" .krml); \
@@ -658,7 +667,7 @@ test/test_extracted_server_openssl_client: \
 	@mkdir -p $(SERVER_DRIVER_BUNDLE_DIR)/obj
 	@set -e; for src in $(SERVER_DRIVER_BUNDLE_DIR)/*.c; do \
 	  obj="$(SERVER_DRIVER_BUNDLE_DIR)/obj/$$(basename "$$src" .c).o"; \
-	  $(CC) $(CFLAGS_COMMON) -DTLS13_SERVER_EXTRACTION_SHAPE \
+	  $(CC) $(CFLAGS_COMMON) \
 	    -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
 	    -include c_stubs/tls13_generated_shims.h \
 	    -c "$$src" -o "$$obj"; \
