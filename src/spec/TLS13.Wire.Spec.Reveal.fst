@@ -383,8 +383,160 @@ let lemma_serialize_server_certificate_verify_input_bytes transcript_hash =
 let lemma_serialize_client_hello_reveal hello = ()
 #pop-options
 
+let client_hello_byte (n:nat) : GTot B.byte =
+  U8.uint_to_t (n % 256)
+
+let client_hello_common_extensions_bytes (key_share:B.bytes) : GTot B.bytes =
+  B.append
+    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])
+    (B.append
+      (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
+      (B.append
+        (B.append
+          (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+          key_share)
+        (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy])))
+
+let client_hello_server_name_extension_bytes (hostname:B.bytes) : GTot B.bytes =
+  if B.length hostname = 0 then B.empty
+  else
+    B.append
+      (B.of_list [
+        0uy; 0uy;
+        client_hello_byte ((5 + B.length hostname) / 256);
+        client_hello_byte (5 + B.length hostname);
+        client_hello_byte ((3 + B.length hostname) / 256);
+        client_hello_byte (3 + B.length hostname);
+        0uy;
+        client_hello_byte (B.length hostname / 256);
+        client_hello_byte (B.length hostname)])
+      hostname
+
+let client_hello_extensions_bytes (hostname:B.bytes) (key_share:B.bytes) : GTot B.bytes =
+  B.append
+    (client_hello_server_name_extension_bytes hostname)
+    (client_hello_common_extensions_bytes key_share)
+
+let client_hello_prefix_bytes (body_len:nat) (extensions_len:nat) (random:B.bytes) : GTot B.bytes =
+  B.append
+    (B.of_list [
+      1uy;
+      client_hello_byte (body_len / 65536);
+      client_hello_byte (body_len / 256);
+      client_hello_byte body_len;
+      0x03uy; 0x03uy])
+    (B.append
+      random
+      (B.of_list [
+        0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
+        client_hello_byte (extensions_len / 256);
+        client_hello_byte extensions_len]))
+
+let client_hello_body_bytes
+  (random:B.bytes)
+  (hostname:B.bytes)
+  (key_share:B.bytes)
+  : GTot B.bytes =
+  let extensions = client_hello_extensions_bytes hostname key_share in
+  B.append
+    (B.of_list [0x03uy; 0x03uy])
+    (B.append
+      random
+      (B.append
+        (B.of_list [0uy])
+        (B.append
+          (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+          (B.append
+            (B.of_list [0uy])
+            (B.append
+              (B.of_list [
+                client_hello_byte (B.length extensions / 256);
+                client_hello_byte (B.length extensions)])
+              extensions)))))
+
+let client_hello_handshake_bytes
+  (random:B.bytes)
+  (hostname:B.bytes)
+  (key_share:B.bytes)
+  : GTot B.bytes =
+  let body = client_hello_body_bytes random hostname key_share in
+  B.append
+    (B.of_list [
+      1uy;
+      client_hello_byte (B.length body / 65536);
+      client_hello_byte (B.length body / 256);
+      client_hello_byte (B.length body)])
+    body
+
+let lemma_client_hello_common_extensions_bytes_reveal
+  (key_share:B.bytes{B.length key_share == 32})
+=
+  assert_norm (client_hello_common_extensions_bytes key_share ==
+    B.append
+      (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])
+      (B.append
+        (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
+        (B.append
+          (B.append
+            (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+            key_share)
+          (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]))))
+
+let lemma_client_hello_extensions_bytes_shape
+  (hostname:B.bytes{B.length hostname <= 255})
+  (key_share:B.bytes{B.length key_share == 32})
+=
+  assert_norm (client_hello_extensions_bytes hostname key_share ==
+    B.append
+      (client_hello_server_name_extension_bytes hostname)
+      (client_hello_common_extensions_bytes key_share))
+
+let lemma_client_hello_server_name_extension_bytes_reveal
+  (hostname:B.bytes{0 < B.length hostname /\ B.length hostname <= 255})
+=
+  assert (not (B.length hostname = 0));
+  assert_norm (client_hello_server_name_extension_bytes hostname ==
+    B.append
+      (B.of_list [
+        0uy; 0uy;
+        U8.uint_to_t (((5 + B.length hostname) / 256) % 256);
+        U8.uint_to_t ((5 + B.length hostname) % 256);
+        U8.uint_to_t (((3 + B.length hostname) / 256) % 256);
+        U8.uint_to_t ((3 + B.length hostname) % 256);
+        0uy;
+        U8.uint_to_t ((B.length hostname / 256) % 256);
+        U8.uint_to_t (B.length hostname % 256)])
+      hostname)
+
+let lemma_client_hello_server_name_extension_bytes_empty
+  (hostname:B.bytes{B.length hostname == 0})
+=
+  assert_norm (client_hello_server_name_extension_bytes hostname == B.empty)
+
+let lemma_client_hello_prefix_bytes_reveal
+  (body_len:nat)
+  (extensions_len:nat)
+  (random:B.bytes{B.length random == 32})
+=
+  assert_norm (client_hello_prefix_bytes body_len extensions_len random ==
+    B.append
+      (B.of_list [
+        1uy;
+        U8.uint_to_t ((body_len / 65536) % 256);
+        U8.uint_to_t ((body_len / 256) % 256);
+        U8.uint_to_t (body_len % 256);
+        0x03uy; 0x03uy])
+      (B.append
+        random
+        (B.of_list [
+          0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
+          U8.uint_to_t ((extensions_len / 256) % 256);
+          U8.uint_to_t (extensions_len % 256)])))
+
 #push-options "--initial_fuel 50 --max_fuel 50 --z3rlimit 20"
-let lemma_client_hello_common_extensions_len key_share =
+let lemma_client_hello_common_extensions_len
+  (key_share:B.bytes{B.length key_share == 32})
+=
   let supported_l : l:list B.byte{FStar.List.Tot.length l == 8} =
     [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy] in
   let supported = SeqP.createL supported_l in
@@ -422,7 +574,9 @@ let lemma_client_hello_common_extensions_len key_share =
         (B.append (B.of_list key_header_l) key_share)
         (B.of_list common_suffix_l)))
 
-let lemma_client_hello_server_name_extension_len hostname =
+let lemma_client_hello_server_name_extension_len
+  (hostname:B.bytes{B.length hostname <= 255})
+=
   if B.length hostname = 0 then
     assert_norm (B.length B.empty == 0)
   else
@@ -442,18 +596,35 @@ let lemma_client_hello_server_name_extension_len hostname =
       (B.of_list sni_prefix_l)
       hostname
 
-let lemma_client_hello_extensions_len hostname key_share =
+let lemma_client_hello_extensions_len
+  (hostname:B.bytes{B.length hostname <= 255})
+  (key_share:B.bytes{B.length key_share == 32})
+=
   lemma_client_hello_common_extensions_len key_share;
   lemma_client_hello_server_name_extension_len hostname;
+  assert_norm (client_hello_extensions_bytes hostname key_share ==
+    B.append
+      (client_hello_server_name_extension_bytes hostname)
+      (client_hello_common_extensions_bytes key_share));
   Seq.lemma_len_append
     (client_hello_server_name_extension_bytes hostname)
-    (client_hello_common_extensions_bytes key_share)
+    (client_hello_common_extensions_bytes key_share);
+  assert (B.length (client_hello_common_extensions_bytes key_share) == 65);
+  assert (B.length (client_hello_server_name_extension_bytes hostname) ==
+    (if B.length hostname == 0 then 0 else 9 + B.length hostname));
+  assert (B.length (client_hello_extensions_bytes hostname key_share) ==
+    B.length (client_hello_server_name_extension_bytes hostname) +
+    B.length (client_hello_common_extensions_bytes key_share));
+  assert (B.length (client_hello_extensions_bytes hostname key_share) ==
+    (if B.length hostname == 0 then 0 else 9 + B.length hostname) + 65);
+  assert (B.length (client_hello_extensions_bytes hostname key_share) ==
+    65 + (if B.length hostname == 0 then 0 else 9 + B.length hostname))
 #pop-options
 
 private let client_hello_body_bytes_with_extensions
   (random:B.bytes)
   (extensions:B.bytes)
-  : B.bytes =
+  : GTot B.bytes =
   B.append
     (B.of_list [0x03uy; 0x03uy])
     (B.append
@@ -470,12 +641,12 @@ private let client_hello_body_bytes_with_extensions
                 client_hello_byte (B.length extensions)])
               extensions)))))
 
-private let client_hello_hostname (hello:M.client_hello) : B.bytes =
+private let client_hello_hostname (hello:M.client_hello) : GTot B.bytes =
   match hello.M.server_name with
   | Some h -> h
   | None -> B.empty
 
-private let client_hello_expected_extensions (hello:M.client_hello) : B.bytes =
+private let client_hello_expected_extensions (hello:M.client_hello) : GTot B.bytes =
   client_hello_extensions_bytes (client_hello_hostname hello) hello.M.key_share
 
 private let client_hello_ws_body_bytes (hello:M.client_hello) : GTot B.bytes =
@@ -488,12 +659,12 @@ private let client_hello_ws_body_bytes (hello:M.client_hello) : GTot B.bytes =
     (WS.u8 0)
     (B.append (WS.u16 (B.length extensions)) extensions)
 
-private let client_hello_impl_body_bytes (hello:M.client_hello) : B.bytes =
+private let client_hello_impl_body_bytes (hello:M.client_hello) : GTot B.bytes =
   client_hello_body_bytes_with_extensions
     hello.M.random
     (client_hello_expected_extensions hello)
 
-private let client_hello_public_body_bytes (hello:M.client_hello) : B.bytes =
+private let client_hello_public_body_bytes (hello:M.client_hello) : GTot B.bytes =
   client_hello_body_bytes
     hello.M.random
     (client_hello_hostname hello)
@@ -753,26 +924,137 @@ private let lemma_client_hello_body_bytes_reveal
 #pop-options
 
 #push-options "--initial_fuel 50 --max_fuel 50 --z3rlimit 50"
-let lemma_client_hello_handshake_bytes_reveal hello =
-  lemma_client_hello_common_extensions_len hello.M.key_share;
-  (match hello.M.server_name with
-   | Some h ->
-     assert (B.length h <= 255);
-     assert (B.length hello.M.key_share == 32);
-     lemma_client_hello_server_name_extension_len h;
-     lemma_client_hello_extensions_len h hello.M.key_share
-   | None ->
-     assert (B.length B.empty <= 255);
-     assert (B.length hello.M.key_share == 32);
-     lemma_client_hello_server_name_extension_len B.empty;
-     lemma_client_hello_extensions_len B.empty hello.M.key_share);
-  lemma_client_hello_body_bytes_reveal hello;
-  lemma_serialize_client_hello_reveal hello
+let lemma_client_hello_handshake_bytes_prefix
+  (random:B.bytes{B.length random == 32})
+  (hostname:B.bytes{B.length hostname <= 255})
+  (key_share:B.bytes{B.length key_share == 32})
+=
+  let extensions = client_hello_extensions_bytes hostname key_share in
+  let body = client_hello_body_bytes random hostname key_share in
+  lemma_client_hello_extensions_len hostname key_share;
+  assert (body ==
+    B.append
+      (B.of_list [0x03uy; 0x03uy])
+      (B.append
+        random
+        (B.append
+          (B.of_list [0uy])
+          (B.append
+            (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+            (B.append
+              (B.of_list [0uy])
+              (B.append
+                (B.of_list [
+                  client_hello_byte (B.length extensions / 256);
+                  client_hello_byte (B.length extensions)])
+                extensions))))));
+  assert (B.length body == 43 + B.length extensions);
+  assert (client_hello_byte (B.length body / 65536) ==
+    client_hello_byte ((43 + B.length extensions) / 65536));
+  assert (client_hello_byte (B.length body / 256) ==
+    client_hello_byte ((43 + B.length extensions) / 256));
+  assert (client_hello_byte (B.length body) ==
+    client_hello_byte (43 + B.length extensions));
+  assert_norm (client_hello_handshake_bytes random hostname key_share ==
+    B.append
+      (B.of_list [
+        1uy;
+        client_hello_byte (B.length body / 65536);
+        client_hello_byte (B.length body / 256);
+        client_hello_byte (B.length body)])
+      body);
+  assert (B.of_list [
+        1uy;
+        client_hello_byte (B.length body / 65536);
+        client_hello_byte (B.length body / 256);
+        client_hello_byte (B.length body)] ==
+      B.of_list [
+        1uy;
+        client_hello_byte ((43 + B.length extensions) / 65536);
+        client_hello_byte ((43 + B.length extensions) / 256);
+        client_hello_byte (43 + B.length extensions)]);
+  assert (client_hello_handshake_bytes random hostname key_share ==
+    B.append
+      (B.of_list [
+        1uy;
+        client_hello_byte ((43 + B.length extensions) / 65536);
+        client_hello_byte ((43 + B.length extensions) / 256);
+        client_hello_byte (43 + B.length extensions)])
+      body);
+  assert (client_hello_prefix_bytes (43 + B.length extensions) (B.length extensions) random ==
+    B.append
+      (B.of_list [
+        1uy;
+        client_hello_byte ((43 + B.length extensions) / 65536);
+        client_hello_byte ((43 + B.length extensions) / 256);
+        client_hello_byte (43 + B.length extensions);
+        0x03uy; 0x03uy])
+      (B.append
+        random
+        (B.of_list [
+          0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
+          client_hello_byte (B.length extensions / 256);
+          client_hello_byte (B.length extensions)])));
+  Seq.append_assoc
+    (B.of_list [
+      1uy;
+      client_hello_byte ((43 + B.length extensions) / 65536);
+      client_hello_byte ((43 + B.length extensions) / 256);
+      client_hello_byte (43 + B.length extensions)])
+    (B.of_list [0x03uy; 0x03uy])
+    (B.append
+      random
+      (B.append
+        (B.of_list [0uy])
+        (B.append
+          (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+          (B.append
+            (B.of_list [0uy])
+            (B.append
+              (B.of_list [
+                client_hello_byte (B.length extensions / 256);
+                client_hello_byte (B.length extensions)])
+              extensions)))));
+  Seq.append_assoc
+    (B.of_list [
+      1uy;
+      client_hello_byte ((43 + B.length extensions) / 65536);
+      client_hello_byte ((43 + B.length extensions) / 256);
+      client_hello_byte (43 + B.length extensions);
+      0x03uy; 0x03uy])
+    random
+    (B.append
+      (B.of_list [
+        0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
+        client_hello_byte (B.length extensions / 256);
+        client_hello_byte (B.length extensions)])
+      extensions);
+  assert (Seq.equal
+    (client_hello_handshake_bytes random hostname key_share)
+    (B.append
+      (client_hello_prefix_bytes
+        (43 + B.length extensions)
+        (B.length extensions)
+        random)
+      extensions))
 #pop-options
 
 #push-options "--initial_fuel 50 --max_fuel 50 --z3rlimit 50"
-let lemma_client_hello_handshake_bytes_prefix random hostname key_share =
-  lemma_client_hello_extensions_len hostname key_share
+let lemma_client_hello_handshake_bytes_reveal
+  (hello:M.client_hello{B.length hello.M.random == 32 /\
+                       B.length hello.M.key_share == 32 /\
+                       (match hello.M.server_name with
+                        | Some h -> B.length h <= 255
+                        | None -> True)})
+=
+  let key_share : (b:B.bytes{B.length b == 32}) = hello.M.key_share in
+  let hostname : (b:B.bytes{B.length b <= 255}) =
+    match hello.M.server_name with
+    | Some h -> h
+    | None -> B.empty in
+  lemma_client_hello_body_bytes_reveal hello;
+  lemma_serialize_client_hello_reveal hello;
+  lemma_client_hello_handshake_bytes_prefix hello.M.random hostname key_share
 #pop-options
 
 let lemma_ptm_alert fragment =

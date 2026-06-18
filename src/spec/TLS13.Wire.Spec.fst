@@ -877,6 +877,27 @@ let serialize_supported_client_hello (hello:M.client_hello) : GTot B.bytes =
   let body = serialize_client_hello hello in
   append3 (u8 1) (u24 (B.length body)) body
 
+let serialize_server_hello_from_selection_canonical (sh:M.server_hello) : GTot B.bytes =
+  let body = serialize_server_hello sh in
+  append3 (u8 2) (u24 (B.length body)) body
+
+let serialize_empty_encrypted_extensions_canonical (_:unit) : GTot B.bytes =
+  let body =
+    serialize_encrypted_extensions
+      { M.negotiated_alpn = None; M.body = B.empty } in
+  append3 (u8 8) (u24 (B.length body)) body
+
+let serialize_certificate_from_credential_canonical (cert:M.certificate_msg) : GTot B.bytes =
+  let body = serialize_certificate_msg cert in
+  append3 (u8 11) (u24 (B.length body)) body
+
+let serialize_certificate_verify_from_signature_canonical (cv:M.certificate_verify) : GTot B.bytes =
+  let body = serialize_certificate_verify cv in
+  append3 (u8 15) (u24 (B.length body)) body
+
+let serialize_server_finished_canonical (fin:M.finished) : GTot B.bytes =
+  append3 (u8 20) (u24 (B.length fin.M.verify_data)) fin.M.verify_data
+
 let serialize_handshake_body (msg:M.handshake_msg) : GTot (option (nat & B.bytes)) =
   match msg with
   | M.ClientHello hello -> Some (1, serialize_client_hello hello)
@@ -887,20 +908,20 @@ let serialize_handshake_body (msg:M.handshake_msg) : GTot (option (nat & B.bytes
   | M.Finished fin -> Some (20, serialize_finished fin)
   | M.HelloRetryRequest -> None
 
-// For received messages that must round-trip exactly (ServerHello, Encrypted-
-// Extensions, Certificate, CertificateVerify) we return the verbatim wire bytes
-// carried in the message (m.body == the full handshake message produced by the
-// QuackyDucky serializer at parse time).  This lets a verified parser discharge
-// `fragment == serialize_handshake msg` via LowParse's parse/serialize round-trip
-// even for non-canonical encodings (extra/reordered extensions, echoed
-// session_id, per-cert extensions).  ClientHello / Finished / key-update keep the
-// canonical hand-written encoding.
+// Received messages that must round-trip exactly (ServerHello, Encrypted-
+// Extensions, Certificate, CertificateVerify) carry the verbatim wire bytes in
+// [body].  Server-generated messages use [body = B.empty] and fall back to the
+// canonical server-side serializers backed by the C stubs.
 let serialize_handshake (msg:M.handshake_msg) : GTot B.bytes =
   match msg with
-  | M.ServerHello sh -> sh.M.body
-  | M.EncryptedExtensions ee -> ee.M.body
-  | M.Certificate cert -> cert.M.body
-  | M.CertificateVerify cv -> cv.M.body
+  | M.ServerHello sh ->
+    if B.length sh.M.body == 0 then serialize_server_hello_from_selection_canonical sh else sh.M.body
+  | M.EncryptedExtensions ee ->
+    if B.length ee.M.body == 0 then serialize_empty_encrypted_extensions_canonical () else ee.M.body
+  | M.Certificate cert ->
+    if B.length cert.M.body == 0 then serialize_certificate_from_credential_canonical cert else cert.M.body
+  | M.CertificateVerify cv ->
+    if B.length cv.M.body == 0 then serialize_certificate_verify_from_signature_canonical cv else cv.M.body
   | _ ->
     (match serialize_handshake_body msg with
      | Some (msg_type, body) -> append3 (u8 msg_type) (u24 (B.length body)) body
@@ -919,6 +940,83 @@ let lemma_serialize_finished_len (fin:M.finished)
 let lemma_serialize_server_hello_len (sh:M.server_hello)
   : Lemma (B.length (serialize_handshake (M.ServerHello sh)) <= M.server_hello_max_len /\
            B.length (serialize_handshake_msg (M.ServerHello sh)) <= M.server_hello_max_len)
+=
+  ()
+
+let serialize_server_hello_from_selection (sh:M.server_hello) : GTot B.bytes =
+  serialize_server_hello_from_selection_canonical sh
+
+let lemma_serialize_server_hello_from_selection_len (sh:M.server_hello)
+  : Lemma
+    (requires B.length sh.M.random == 32 /\
+              B.length sh.M.key_share == 32)
+    (ensures B.length (serialize_server_hello_from_selection sh) == 90)
+=
+  ()
+
+let serialize_empty_encrypted_extensions (_:unit) : GTot B.bytes =
+  serialize_empty_encrypted_extensions_canonical ()
+
+let serialize_certificate_from_credential (cert:M.certificate_msg) : GTot B.bytes =
+  serialize_certificate_from_credential_canonical cert
+
+let lemma_serialize_certificate_from_single_chain_len
+  (certificate:B.bytes)
+  : Lemma
+    (B.length
+      (serialize_certificate_msg { M.chain = [certificate]; M.body = B.empty }) ==
+        9 + B.length certificate /\
+     B.length
+      (serialize_handshake (M.Certificate { M.chain = [certificate]; M.body = B.empty })) ==
+        13 + B.length certificate /\
+     B.length
+      (serialize_certificate_from_credential { M.chain = [certificate]; M.body = B.empty }) ==
+        13 + B.length certificate)
+=
+  ()
+
+let serialize_certificate_verify_from_signature (cv:M.certificate_verify) : GTot B.bytes =
+  serialize_certificate_verify_from_signature_canonical cv
+
+let lemma_serialize_certificate_verify_from_signature_len
+  (cv:M.certificate_verify)
+  : Lemma
+    (B.length (serialize_certificate_verify cv) == 4 + B.length cv.M.signature /\
+     (B.length cv.M.body == 0 ==>
+      B.length (serialize_handshake (M.CertificateVerify cv)) ==
+        8 + B.length cv.M.signature) /\
+     B.length (serialize_certificate_verify_from_signature cv) ==
+       8 + B.length cv.M.signature)
+=
+  ()
+
+let serialize_server_finished (fin:M.finished) : GTot B.bytes =
+  serialize_server_finished_canonical fin
+
+let lemma_fixed_server_handshake_serializers
+  (sh:M.server_hello)
+  (cert:M.certificate_msg)
+  (cv:M.certificate_verify)
+  (fin:M.finished)
+  : Lemma
+    (requires B.length sh.M.body == 0 /\
+              B.length cert.M.body == 0 /\
+              B.length cv.M.body == 0)
+    (ensures Seq.equal
+       (serialize_server_hello_from_selection sh)
+       (serialize_handshake (M.ServerHello sh)) /\
+     Seq.equal
+       (serialize_empty_encrypted_extensions ())
+       (serialize_handshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty })) /\
+     Seq.equal
+       (serialize_certificate_from_credential cert)
+       (serialize_handshake (M.Certificate cert)) /\
+     Seq.equal
+       (serialize_certificate_verify_from_signature cv)
+       (serialize_handshake (M.CertificateVerify cv)) /\
+     Seq.equal
+       (serialize_server_finished fin)
+       (serialize_handshake (M.Finished fin)))
 =
   ()
 
@@ -949,6 +1047,41 @@ let parse_record (input:B.bytes) : GTot (option (T.content_type & M.sealed_recor
           match take_range input 5 fragment_len with
           | Some fragment -> Some (content_type, fragment, 5 + fragment_len)
           | None -> None
+
+let parse_record_wire (input:B.bytes) : GTot (option (T.content_type & M.sealed_record & nat)) =
+  parse_record input
+
+let lemma_parse_record_implies_parse_record_wire (input:B.bytes)
+  : Lemma
+    (ensures parse_record_wire input == parse_record input)
+=
+  ()
+
+let lemma_parse_record_wire_some_consumed_positive
+  (input:B.bytes)
+  (content_type:T.content_type)
+  (fragment:M.sealed_record)
+  (consumed:nat)
+  : Lemma
+    (requires parse_record_wire input == Some (content_type, fragment, consumed))
+    (ensures consumed > 0 /\ consumed <= B.length input)
+=
+  if B.length input < 5 then ()
+  else
+    match content_type_of_byte (Seq.index input 0) with
+    | None -> ()
+    | Some _ ->
+      if read_u16 input 1 <> 0x0303 then ()
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
+        else
+          match take_range input 5 fragment_len with
+          | Some _ ->
+            assert (consumed == 5 + fragment_len);
+            assert (consumed > 0);
+            assert (consumed <= B.length input)
+          | None -> ()
 
 // Parse just the 5-byte record header (without requiring the fragment data)
 let parse_record_header (input:B.bytes) : GTot (option (T.content_type & nat)) =

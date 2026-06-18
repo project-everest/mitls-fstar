@@ -495,6 +495,7 @@ fn process_application_data
   Arr.memcpy_l data_len (V.vec_to_array lapp.IM.application_data_bytes) app_out;
   V.to_vec_pts_to lapp.IM.application_data_bytes;
   with app_out_bytes. assert (pts_to app_out app_out_bytes);
+  pts_to_len app_out;
   assert (pure (B.length app_out_bytes == SZ.v app_out_len));
   assert (pure (Seq.equal
     (Ghost.reveal app_payload)

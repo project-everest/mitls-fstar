@@ -807,8 +807,11 @@ fn mark_sent_server_hello
     B.empty));
 
   W.lemma_serialize_server_hello_len sh;
-  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
-  assert (pure (SZ.v fragment_len == 90));
+  assert (pure (B.length (Ghost.reveal 'fragment_bytes) == SZ.v fragment_len));
+  assert (pure (Seq.equal
+    (Ghost.reveal 'fragment_bytes)
+    (W.serialize_handshake (M.ServerHello sh))));
+  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == SZ.v fragment_len));
 
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
@@ -1934,6 +1937,7 @@ fn serialize_stored_certificate_verify_fragment
            pure (B.length 'old_fragment_bytes == SZ.v fragment_len /\
                  st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                    Some (Ghost.reveal cv) /\
+                 B.length (Ghost.reveal cv).M.body == 0 /\
                  SZ.v fragment_len ==
                    B.length (W.serialize_certificate_verify_from_signature
                      (Ghost.reveal cv)))
@@ -1990,6 +1994,7 @@ fn serialize_stored_certificate_verify_fragment
       M.random = Seq.create 32 0uy;
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      M.body = B.empty;
     }
     { M.chain = []; M.body = B.empty }
     (Ghost.reveal cv)

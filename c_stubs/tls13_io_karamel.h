@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 typedef struct TLS13_IO_channel_s *TLS13_IO_channel;
+typedef struct TLS13_IO_listener_s *TLS13_IO_listener;
 
 TLS13_IO_channel tls13_io_channel_from_fd(int fd);
 

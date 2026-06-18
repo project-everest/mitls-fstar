@@ -79,3 +79,13 @@ val lemma_parse_tls_message_change_cipher_spec (fragment:B.bytes)
   : Lemma
     (requires WS.parse_tls_message T.ChangeCipherSpec fragment == Some M.TlsChangeCipherSpec)
     (ensures Seq.equal fragment (snd (WS.serialize_tls_message M.TlsChangeCipherSpec)))
+
+(* The received-message handshake synthesizer rejects ClientHello; the server
+   side has a separate parser path for incoming ClientHello records. *)
+val lemma_parse_tls_message_no_client_hello
+  (ct:T.content_type)
+  (fragment:B.bytes)
+  (ch:M.client_hello)
+  : Lemma
+    (requires WS.parse_tls_message ct fragment == Some (M.TlsHandshake (M.ClientHello ch)))
+    (ensures False)

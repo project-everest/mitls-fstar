@@ -145,6 +145,7 @@ let lemma_select_derive_success_server_hello_ready
     M.random = server_random;
     M.key_share = CryptoSpec.x25519_public_from_private server_private_key;
     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    M.body = B.empty;
   } in
   assert (exists st1 shared.
     server_driver_selection_from_payload_correct st0 st1 payload /\
@@ -222,6 +223,12 @@ let lemma_select_derive_success_server_hello_ready
   assert (Seq.equal (Some?.v selection.CS.server_key_share_private) server_private_key);
   assert (CS.server_selection_key_share_consistent selection);
   assert (CS.server_hello_matches_selection selection sh);
+  W.lemma_serialize_server_hello_from_selection_len sh;
+  W.lemma_fixed_server_handshake_serializers
+    sh
+    { M.chain = []; M.body = B.empty }
+    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
+    { M.verify_data = Seq.create 32 0uy };
   W.lemma_serialize_server_hello_len sh;
   assert (B.length (W.serialize_handshake (M.ServerHello sh)) == 90);
   assert (
@@ -1464,6 +1471,7 @@ fn send_server_hello_from_payload_once
      M.key_share =
        CryptoSpec.x25519_public_from_private server_private_key_bytes;
      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+     M.body = B.empty;
    } in
    CM.can_send_server_hello
      'st0

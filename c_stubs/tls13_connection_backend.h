@@ -19,7 +19,10 @@ typedef struct TLS13_Connection_Backend_config_s {
 } *TLS13_Connection_Backend_config;
 
 typedef struct TLS13_Connection_Backend_connection_s *TLS13_Connection_Backend_connection;
+#ifndef TLS13_X509_SPEC_TRUST_STORE_DEFINED
+#define TLS13_X509_SPEC_TRUST_STORE_DEFINED
 typedef TLS13_Connection_Backend_config TLS13_X509_Spec_trust_store;
+#endif
 typedef TLS13_Connection_Backend_connection TLS13_Connection_External_connection;
 
 TLS13_Connection_Backend_connection TLS13_Connection_Backend_client_new(
@@ -279,14 +282,19 @@ static inline uint8_t *TLS13_Connection_Backend_dup_bytes(const uint8_t *src, si
   return dst;
 }
 
+#ifndef FStar_SizeT_uint_to_t
 #define FStar_SizeT_uint_to_t(n) ((size_t)(n))
+#endif
+#ifndef FStar_SizeT_v
 #define FStar_SizeT_v(n) ((size_t)(n))
+#endif
 
 #define TLS13_Impl_ConnectionState_Repr_copy_hostname_sized_bytes(src, dst, ...) \
   ((*((dst).len) = *((src).len)), memcpy((dst).bytes, (src).bytes, *((src).len)))
 
-#define TLS13_Impl_ConnectionState_Repr_copy_array_to_sized_bytes(cap, src, dst, nbytes, ...) \
+#define TLS13_Impl_ConnectionState_Repr_copy_array_to_sized_bytes(src, dst, cap, nbytes, ...) \
   do { \
+    (void)(cap); \
     size_t tls13_copy_nbytes = (size_t)(nbytes); \
     *((dst).len) = tls13_copy_nbytes; \
     if (tls13_copy_nbytes != 0u) { \
@@ -296,6 +304,9 @@ static inline uint8_t *TLS13_Connection_Backend_dup_bytes(const uint8_t *src, si
 
 #define TLS13_Impl_ConnectionState_Repr_copy_array_to_transcript(src, dst, nbytes, off, ...) \
   (memcpy((dst) + (off), (src), (nbytes)))
+
+#define TLS13_Impl_ConnectionState_Repr_copy_array_prefix_to_transcript(src, dst, nbytes, off, ...) \
+  TLS13_Impl_ConnectionState_Repr_copy_array_to_transcript((src), (dst), (nbytes), (off))
 
 #define TLS13_Impl_ConnectionState_Repr_copy_client_hello_prefix_to_transcript(src, dst, nbytes, off, ...) \
   TLS13_Impl_ConnectionState_Repr_copy_array_to_transcript((src), (dst), (nbytes), (off))
@@ -313,7 +324,7 @@ static inline uint8_t *TLS13_Connection_Backend_dup_bytes(const uint8_t *src, si
   ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src), (nbytes)))
 
 #define TLS13_Crypto_sha256_prefix(input, input_len, out, ...) \
-  TLS13_Crypto_sha256((input), (input_len), (out), NULL, NULL)
+  TLS13_Crypto_sha256((input), (input_len), (out))
 
 static inline void TLS13_Connection_Backend_build_server_certificate_verify_input(
     uint8_t *transcript_hash,
@@ -489,12 +500,12 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
   return total_len;
 }
 
-#define TLS13_Impl_Serializer_serialize_server_hello_from_selection(sh_erased, lsh, out, out_len, ...) \
+#define TLS13_Impl_Serializer_serialize_server_hello_from_selection(lsh, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_server_hello_fixed( \
       (lsh).server_hello_random, (lsh).server_hello_key_share, \
       (lsh).server_hello_cipher_suite, (out), (out_len))
 
-#define TLS13_Impl_Serializer_serialize_server_hello_record_from_selection(sh_erased, lsh, out, out_len, ...) \
+#define TLS13_Impl_Serializer_serialize_server_hello_record_from_selection(lsh, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_server_hello_record_fixed( \
       (lsh).server_hello_random, (lsh).server_hello_key_share, \
       (lsh).server_hello_cipher_suite, (out), (out_len))
@@ -502,19 +513,19 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
 #define TLS13_Impl_Serializer_serialize_empty_encrypted_extensions(out, out_len, ...) \
   TLS13_Connection_Backend_serialize_empty_encrypted_extensions_fixed((out), (out_len))
 
-#define TLS13_Impl_Serializer_serialize_certificate_from_credential(cert_erased, lcert, out, out_len, ...) \
+#define TLS13_Impl_Serializer_serialize_certificate_from_credential(lcert, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_certificate_msg_fixed( \
       (lcert).certificate_msg_chain_bytes, (lcert).certificate_msg_chain_bytes_len, \
       (lcert).certificate_msg_cert_offsets, (lcert).certificate_msg_cert_lens, \
       (lcert).certificate_msg_cert_count, (out), (out_len))
 
-#define TLS13_Impl_Serializer_serialize_certificate_verify_from_signature(cv_erased, lcv, out, out_len, ...) \
+#define TLS13_Impl_Serializer_serialize_certificate_verify_from_signature(lcv, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_certificate_verify_fixed( \
       (lcv).certificate_verify_scheme, (lcv).certificate_verify_signature, \
       (lcv).certificate_verify_signature_len, (out), (out_len))
 
-#define TLS13_Impl_Serializer_serialize_server_finished(fin_erased, lfin, out, out_len, ...) \
-  TLS13_Impl_Serializer_serialize_finished_handshake((fin_erased), (lfin), (out), (out_len), NULL)
+#define TLS13_Impl_Serializer_serialize_server_finished(lfin, out, out_len, ...) \
+  TLS13_Impl_Serializer_serialize_finished_handshake((lfin), (out), (out_len))
 
 static inline size_t TLS13_Connection_Backend_serialize_raw_application_data_record(
     uint8_t *fragment,
@@ -581,7 +592,7 @@ static inline size_t TLS13_Connection_Backend_serialize_protected_handshake_reco
   return written;
 }
 
-#define TLS13_Impl_Serializer_serialize_protected_handshake_record(msg_erased, write_state, handshake, handshake_len, network_out, network_out_len, ...) \
+#define TLS13_Impl_Serializer_serialize_protected_handshake_record(write_state, handshake, handshake_len, network_out, network_out_len, ...) \
   ({ \
     __auto_type _tls13_write_state = (write_state); \
     TLS13_Connection_Backend_serialize_protected_handshake_record( \
@@ -665,7 +676,7 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
   return 36u;
 }
 
-#define TLS13_Impl_Serializer_serialize_finished_handshake(fin_erased, lfin, handshake_out, handshake_out_len, ...) \
+#define TLS13_Impl_Serializer_serialize_finished_handshake(lfin, handshake_out, handshake_out_len, ...) \
   TLS13_Connection_Backend_serialize_finished_handshake((lfin), (handshake_out), (handshake_out_len))
 
 #define TLS13_Impl_Parser_parse_tls_message(content_type, input, input_len, ...) \
@@ -1322,7 +1333,7 @@ static inline size_t TLS13_Connection_Backend_serialize_client_hello_from_start_
 }
 
 #define TLS13_Impl_Serializer_serialize_client_hello_from_start( \
-    start_erased, ch_erased, start_random, start_server_name, start_server_name_len, \
+    start_random, start_server_name, start_server_name_len, \
     start_key_share, start_cipher_suites, start_cipher_suites_len, \
     start_signature_schemes, start_signature_schemes_len, client_hello_present, l, \
     client_hello_bytes, client_hello_bytes_len, network_out, network_out_len, ...) \

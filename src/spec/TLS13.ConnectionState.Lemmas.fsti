@@ -341,6 +341,17 @@ val lemma_step_model_preserves_config
       (requires step_model model ev == Some model')
       (ensures model'.model_config == model.model_config)
 
+val lemma_connection_state_consistent_server_certificate_verify_body_empty
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st)
+      (ensures
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_certificate_verify ==>
+        B.length
+          (Some?.v st.cs_model.model_handshake.hs_certificate_verify).M.body == 0)
+
 val lemma_step_model_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)

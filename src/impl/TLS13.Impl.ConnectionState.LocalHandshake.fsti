@@ -275,6 +275,7 @@ fn serialize_stored_certificate_verify_fragment
           pure (B.length 'old_fragment_bytes == SZ.v fragment_len /\
                 st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                   Some (Ghost.reveal cv) /\
+                B.length (Ghost.reveal cv).M.body == 0 /\
                 SZ.v fragment_len ==
                   B.length (W.serialize_certificate_verify_from_signature
                     (Ghost.reveal cv)))

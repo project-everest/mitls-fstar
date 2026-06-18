@@ -732,6 +732,7 @@ fn process_send_certificate_serialized
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+                 B.length (Ghost.reveal cert).M.body == 0 /\
                  (Ghost.reveal cert).M.chain <> [] /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -862,6 +863,7 @@ fn process_send_certificate_verify_serialized
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+                 B.length (Ghost.reveal cv).M.body == 0 /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
@@ -931,6 +933,7 @@ fn process_send_stored_certificate_verify_serialized
                     ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
                   'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                     Some (Ghost.reveal cv) /\
+                  B.length (Ghost.reveal cv).M.body == 0 /\
                   B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                     SZ.v fragment_len <= Bounds.max_transcript_len /\
                   CS.legal_event

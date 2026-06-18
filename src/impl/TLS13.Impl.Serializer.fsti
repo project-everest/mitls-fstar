@@ -363,20 +363,23 @@ fn serialize_protected_handshake_record
   (handshake_len: SZ.t)
   (network_out: array U8.t)
   (network_out_len: SZ.t)
-  requires Rec.is_record_state write_state 'record_write **
-           pts_to handshake 'handshake_bytes **
-           pts_to network_out 'old_network **
-           pure (B.length 'handshake_bytes == SZ.v handshake_len /\
+  (#record_write: erased R.direction_state)
+  (#handshake_bytes: erased B.bytes)
+  (#old_network: erased B.bytes)
+  requires Rec.is_record_state write_state (Ghost.reveal record_write) **
+           pts_to handshake (Ghost.reveal handshake_bytes) **
+           pts_to network_out (Ghost.reveal old_network) **
+           pure (B.length (Ghost.reveal handshake_bytes) == SZ.v handshake_len /\
                 Seq.equal
-                  (Ghost.reveal 'handshake_bytes)
+                  (Ghost.reveal handshake_bytes)
                   (WS.serialize_handshake (Ghost.reveal msg)) /\
-                B.length 'old_network == SZ.v network_out_len /\
+                B.length (Ghost.reveal old_network) == SZ.v network_out_len /\
                 SZ.v handshake_len + 17 <= 16640 /\
                 SZ.v handshake_len + 22 <= SZ.v network_out_len)
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* network_bytes.
-          Rec.is_record_state write_state 'record_write **
-          pts_to handshake 'handshake_bytes **
+          Rec.is_record_state write_state (Ghost.reveal record_write) **
+          pts_to handshake (Ghost.reveal handshake_bytes) **
           pts_to network_out network_bytes **
           pure (B.length network_bytes == SZ.v network_out_len /\
                 SZ.v written == SZ.v handshake_len + 22 /\
@@ -390,7 +393,7 @@ fn serialize_protected_handshake_record
                      (CS.record_header_aad raw_prefix)
                      (CS.application_data_record_header (SZ.v handshake_len + 17)) /\
                    R.seal
-                     'record_write
+                     (Ghost.reveal record_write)
                      (CS.record_header_aad raw_prefix)
                      {
                        R.content_type = T.ApplicationData;
@@ -398,7 +401,7 @@ fn serialize_protected_handshake_record
                          CS.sent_tls_inner_plaintext_fragment
                            (M.TlsHandshake (Ghost.reveal msg));
                      } ==
-                     Some (outer_fragment, R.next_seq 'record_write))))
+                     Some (outer_fragment, R.next_seq (Ghost.reveal record_write)))))
 
 fn serialize_client_finished_outputs
   (write_state: Rec.record_state)
@@ -478,9 +481,10 @@ fn serialize_server_hello_from_selection
   (lsh: L.server_hello)
   (out: array U8.t)
   (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
-           pts_to out 'old_bytes **
-           pure (B.length 'old_bytes == SZ.v out_len /\
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                 SZ.v out_len == 90)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -500,9 +504,10 @@ fn serialize_server_hello_record_from_selection
   (lsh: L.server_hello)
   (out: array U8.t)
   (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
-           pts_to out 'old_bytes **
-           pure (B.length 'old_bytes == SZ.v out_len /\
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                 SZ.v out_len == 95)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -523,8 +528,9 @@ fn serialize_server_hello_record_from_selection
 fn serialize_empty_encrypted_extensions
   (out: array U8.t)
   (out_len: SZ.t)
-  requires pts_to out 'old_bytes **
-           pure (B.length 'old_bytes == SZ.v out_len /\
+  (#old_bytes: erased B.bytes)
+  requires pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                 SZ.v out_len == 6)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -540,9 +546,10 @@ fn serialize_certificate_from_credential
   (lcert: L.certificate_msg)
   (out: array U8.t)
   (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
   requires L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
-           pts_to out 'old_bytes **
-           pure (B.length 'old_bytes == SZ.v out_len /\
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                 SZ.v out_len == B.length (WS.serialize_certificate_from_credential (Ghost.reveal cert)))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -560,9 +567,10 @@ fn serialize_certificate_verify_from_signature
   (lcv: L.certificate_verify)
   (out: array U8.t)
   (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
   requires L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
-           pts_to out 'old_bytes **
-           pure (B.length 'old_bytes == SZ.v out_len /\
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                 SZ.v out_len == B.length (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -580,9 +588,10 @@ fn serialize_server_finished
   (lfin: L.finished)
   (out: array U8.t)
   (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
   requires L.is_valid_finished lfin (Ghost.reveal fin) **
-           pts_to out 'old_bytes **
-           pure (B.length 'old_bytes == SZ.v out_len /\
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                 SZ.v out_len == 36)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.

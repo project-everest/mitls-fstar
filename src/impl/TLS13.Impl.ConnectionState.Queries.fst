@@ -9,6 +9,7 @@ open FStar.List.Tot
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
+module CSL = TLS13.ConnectionState.Lemmas
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
@@ -2985,6 +2986,8 @@ fn can_send_certificate_verify_runtime
       B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
         B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv)) <=
           max_transcript_len));
+    CSL.lemma_connection_state_consistent_server_certificate_verify_body_empty st0;
+    assert (pure (ok ==> B.length (Ghost.reveal cv).M.body == 0));
     assert (pure (ok ==> CS.legal_event
       st0.CS.cs_model
       (CS.ConnNetworkEvent {

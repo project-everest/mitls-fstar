@@ -437,8 +437,8 @@ fn alloc_server_config_storage
   assert (pure (SZ.fits max_hostname_len));
   assert (pure (SZ.fits max_trust_anchors_len));
   let role_tag = Box.alloc 1uy;
-  let server_name = alloc_empty_sized_bytes #max_hostname_len;
-  let trust_anchors = alloc_empty_sized_bytes #max_trust_anchors_len;
+  let server_name = alloc_empty_sized_bytes max_hostname_len_sz #max_hostname_len;
+  let trust_anchors = alloc_empty_sized_bytes max_trust_anchors_len_sz #max_trust_anchors_len;
   let validation_time_seconds = Box.alloc 0sz;
   let cipher_suites = alloc_default_cipher_suites ();
   let signature_schemes = alloc_default_signature_schemes ();
@@ -523,8 +523,8 @@ fn alloc_server_config_storage_erased_credential_identity
   assert (pure (SZ.fits max_hostname_len));
   assert (pure (SZ.fits max_trust_anchors_len));
   let role_tag = Box.alloc 1uy;
-  let server_name = alloc_empty_sized_bytes #max_hostname_len;
-  let trust_anchors = alloc_empty_sized_bytes #max_trust_anchors_len;
+  let server_name = alloc_empty_sized_bytes max_hostname_len_sz #max_hostname_len;
+  let trust_anchors = alloc_empty_sized_bytes max_trust_anchors_len_sz #max_trust_anchors_len;
   let validation_time_seconds = Box.alloc 0sz;
   let cipher_suites = alloc_default_cipher_suites ();
   let signature_schemes = alloc_default_signature_schemes ();

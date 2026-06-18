@@ -217,6 +217,7 @@ let next_local_action_sound
         (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
       (let cv = Some?.v
          st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+       B.length cv.M.body == 0 /\
        B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
          B.length (WS.serialize_certificate_verify_from_signature cv) <=
            Bounds.max_transcript_len /\
@@ -395,6 +396,7 @@ let server_local_event_input_ready
       (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
     (let cv = Some?.v
        st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+     B.length cv.M.body == 0 /\
      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
        B.length (WS.serialize_certificate_verify_from_signature cv) <=
          Bounds.max_transcript_len /\

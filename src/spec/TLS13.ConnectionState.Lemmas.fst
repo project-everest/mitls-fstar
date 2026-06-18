@@ -3144,6 +3144,130 @@ let lemma_step_model_preserves_config
 =
   ()
 
+let server_certificate_verify_body_empty_reachable_shape
+  (st:connection_state)
+  : prop =
+  st.cs_model.model_config.config_role == ServerEndpoint ==>
+  (match st.cs_model.model_handshake.hs_certificate_verify with
+   | Some cv -> B.length cv.M.body == 0
+   | None -> True)
+
+let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires
+        server_certificate_verify_body_empty_reachable_shape
+          { cs_model = model; cs_wire_log = CL.empty_raw_io_log; cs_event_log = [] } /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures
+        server_certificate_verify_body_empty_reachable_shape
+          { cs_model = model'; cs_wire_log = CL.empty_raw_io_log; cs_event_log = [] })
+=
+  lemma_step_model_preserves_config model ev model';
+  match ev with
+  | ConnLocalEvent local ->
+    (match local with
+     | LocalSignCertificateVerify cv ->
+       assert (B.length cv.M.body == 0)
+     | LocalVerifyCertificateSignature _ ->
+       assert (model.model_config.config_role == ClientEndpoint)
+     | _ ->
+       assert (model'.model_handshake.hs_certificate_verify ==
+               model.model_handshake.hs_certificate_verify))
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Sent, M.TlsHandshake (M.CertificateVerify cv) ->
+       assert (B.length cv.M.body == 0)
+     | CL.Received, M.TlsHandshake (M.CertificateVerify _) ->
+       assert (model.model_config.config_role == ClientEndpoint)
+     | _, _ ->
+       assert (model'.model_handshake.hs_certificate_verify ==
+               model.model_handshake.hs_certificate_verify))
+
+let lemma_connection_delta_server_certificate_verify_body_empty_reachable_shape
+  (st0:connection_state)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        server_certificate_verify_body_empty_reachable_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures server_certificate_verify_body_empty_reachable_shape st1)
+=
+  match st1 with
+  | _ ->
+    assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    assert (legal_event st0.cs_model delta.delta_event);
+    assert (step_model st0.cs_model delta.delta_event == Some st1.cs_model);
+    lemma_step_model_server_certificate_verify_body_empty_reachable_shape
+      st0.cs_model
+      delta.delta_event
+      st1.cs_model
+
+let lemma_initial_server_certificate_verify_body_empty_reachable_shape
+  (cfg:connection_config)
+  : Lemma
+      (ensures
+        server_certificate_verify_body_empty_reachable_shape (initial cfg))
+=
+  ()
+
+let lemma_connection_state_single_step_server_certificate_verify_body_empty_reachable_shape
+  (u:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern
+            (server_certificate_verify_body_empty_reachable_shape y);
+            (connection_state_single_step x y)}
+          server_certificate_verify_body_empty_reachable_shape x /\
+          connection_state_single_step x y ==>
+          server_certificate_verify_body_empty_reachable_shape y)
+=
+  introduce forall x y.
+    server_certificate_verify_body_empty_reachable_shape x /\
+    connection_state_single_step x y ==>
+    server_certificate_verify_body_empty_reachable_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_connection_delta_server_certificate_verify_body_empty_reachable_shape x y
+
+let lemma_connection_state_consistent_server_certificate_verify_body_empty
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st)
+      (ensures
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_certificate_verify ==>
+        B.length
+          (Some?.v st.cs_model.model_handshake.hs_certificate_verify).M.body == 0)
+=
+  let p = server_certificate_verify_body_empty_reachable_shape in
+  lemma_initial_server_certificate_verify_body_empty_reachable_shape
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_server_certificate_verify_body_empty_reachable_shape ();
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+
 let lemma_step_model_key_update_pending_delta
   (model0:connection_model)
   (ev:conn_event)

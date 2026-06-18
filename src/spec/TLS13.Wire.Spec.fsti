@@ -151,6 +151,13 @@ val serialize_server_hello_from_selection:
   sh:M.server_hello ->
   GTot B.bytes
 
+val lemma_serialize_server_hello_from_selection_len:
+  sh:M.server_hello ->
+  Lemma
+    (requires B.length sh.M.random == 32 /\
+              B.length sh.M.key_share == 32)
+    (ensures B.length (serialize_server_hello_from_selection sh) == 90)
+
 val serialize_empty_encrypted_extensions:
   unit ->
   GTot B.bytes
@@ -180,8 +187,9 @@ val lemma_serialize_certificate_verify_from_signature_len:
   cv:M.certificate_verify ->
   Lemma
     (B.length (serialize_certificate_verify cv) == 4 + B.length cv.M.signature /\
-     B.length (serialize_handshake (M.CertificateVerify cv)) ==
-       8 + B.length cv.M.signature /\
+     (B.length cv.M.body == 0 ==>
+      B.length (serialize_handshake (M.CertificateVerify cv)) ==
+        8 + B.length cv.M.signature) /\
      B.length (serialize_certificate_verify_from_signature cv) ==
        8 + B.length cv.M.signature)
 
@@ -195,7 +203,10 @@ val lemma_fixed_server_handshake_serializers:
   cv:M.certificate_verify ->
   fin:M.finished ->
   Lemma
-    (Seq.equal
+    (requires B.length sh.M.body == 0 /\
+              B.length cert.M.body == 0 /\
+              B.length cv.M.body == 0)
+    (ensures Seq.equal
        (serialize_server_hello_from_selection sh)
        (serialize_handshake (M.ServerHello sh)) /\
      Seq.equal
@@ -232,7 +243,6 @@ val parse_record_wire:
 val lemma_parse_record_implies_parse_record_wire:
   input:B.bytes ->
   Lemma
-    (requires Some? (parse_record input))
     (ensures parse_record_wire input == parse_record input)
 
 val lemma_parse_record_wire_some_consumed_positive:

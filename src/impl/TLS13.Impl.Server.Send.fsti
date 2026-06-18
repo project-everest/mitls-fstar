@@ -154,6 +154,7 @@ fn process_send_server_hello_from_arrays
                    M.random = Ghost.reveal 'server_random_bytes;
                    M.key_share = Ghost.reveal 'server_key_share_bytes;
                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                   M.body = B.empty;
                  } in
                  CM.can_send_server_hello
                    'st0
@@ -175,6 +176,7 @@ fn process_send_server_hello_from_arrays
                     M.random = Ghost.reveal 'server_random_bytes;
                     M.key_share = Ghost.reveal 'server_key_share_bytes;
                     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                    M.body = B.empty;
                   } in
                   Seq.equal
                     network_out_bytes
@@ -219,6 +221,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                      CryptoSpec.x25519_public_from_private
                        (Ghost.reveal 'server_private_key_bytes);
                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                   M.body = B.empty;
                  } in
                  CM.can_send_server_hello
                    'st0
@@ -242,6 +245,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                       CryptoSpec.x25519_public_from_private
                         (Ghost.reveal 'server_private_key_bytes);
                     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                    M.body = B.empty;
                   } in
                   Seq.equal
                     network_out_bytes
@@ -362,6 +366,7 @@ fn process_send_certificate_serialized
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+                 B.length (Ghost.reveal cert).M.body == 0 /\
                  (Ghost.reveal cert).M.chain <> [] /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -492,6 +497,7 @@ fn process_send_certificate_verify_serialized
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+                 B.length (Ghost.reveal cv).M.body == 0 /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
@@ -561,6 +567,7 @@ fn process_send_stored_certificate_verify_serialized
                     ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
                   'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                     Some (Ghost.reveal cv) /\
+                  B.length (Ghost.reveal cv).M.body == 0 /\
                   B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                     SZ.v fragment_len <= Bounds.max_transcript_len /\
                   CS.legal_event

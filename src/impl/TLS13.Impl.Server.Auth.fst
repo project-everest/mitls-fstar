@@ -316,6 +316,7 @@ fn process_sign_certificate_verify
       let cv : erased M.certificate_verify = Ghost.hide {
         M.scheme = T.RsaPssRsaeSha256;
         M.signature = Ghost.reveal signature;
+        M.body = B.empty;
       };
       let lcv = {
         IM.certificate_verify_scheme = 0x0804us;

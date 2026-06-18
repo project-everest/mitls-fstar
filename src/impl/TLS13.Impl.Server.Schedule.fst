@@ -219,6 +219,7 @@ fn next_local_action
         CL.message_direction = CL.Sent;
         CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
       })));
+    assert (pure (B.length (Ghost.reveal cv).M.body == 0));
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendCertificateVerify;

@@ -2362,6 +2362,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | _, _, _ -> False)
   | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
+    B.length cv.M.body == 0 /\
     hs.hs_certificate_verify == None /\
     (match hs.hs_certificate, hs.hs_server_selection with
      | Some _, Some selection ->
@@ -2438,6 +2439,7 @@ let legal_handshake_message
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate <> None /\
     hs.hs_certificate_verify_verified /\
+    B.length cv.M.body == 0 /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv

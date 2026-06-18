@@ -439,6 +439,7 @@ fn build_server_hello_from_arrays
                   M.random = Ghost.reveal 'server_random_bytes;
                   M.key_share = Ghost.reveal 'server_key_share_bytes;
                   M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                  M.body = B.empty;
                 })
   returns lsh:IM.server_hello
   ensures pts_to server_random 'server_random_bytes **
@@ -492,6 +493,7 @@ fn process_send_server_hello_from_arrays
                    M.random = Ghost.reveal 'server_random_bytes;
                    M.key_share = Ghost.reveal 'server_key_share_bytes;
                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                   M.body = B.empty;
                  } in
                  CM.can_send_server_hello
                    'st0
@@ -513,6 +515,7 @@ fn process_send_server_hello_from_arrays
                     M.random = Ghost.reveal 'server_random_bytes;
                     M.key_share = Ghost.reveal 'server_key_share_bytes;
                     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                    M.body = B.empty;
                   } in
                   Seq.equal
                     network_out_bytes
@@ -536,6 +539,7 @@ fn process_send_server_hello_from_arrays
     M.random = Ghost.reveal 'server_random_bytes;
     M.key_share = Ghost.reveal 'server_key_share_bytes;
     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    M.body = B.empty;
   };
   let lsh =
     build_server_hello_from_arrays
@@ -577,6 +581,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                      CryptoSpec.x25519_public_from_private
                        (Ghost.reveal 'server_private_key_bytes);
                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                   M.body = B.empty;
                  } in
                  CM.can_send_server_hello
                    'st0
@@ -600,6 +605,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                       CryptoSpec.x25519_public_from_private
                         (Ghost.reveal 'server_private_key_bytes);
                     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                    M.body = B.empty;
                   } in
                   Seq.equal
                     network_out_bytes
@@ -629,6 +635,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
     M.random = Ghost.reveal 'server_random_bytes;
     M.key_share = server_key_share_bytes;
     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    M.body = B.empty;
   };
   assert (pure (CM.can_send_server_hello
     'st0
@@ -746,11 +753,13 @@ fn process_send_encrypted_extensions_serialized
     M.random = Seq.create 32 0uy;
     M.key_share = Seq.create 32 0uy;
     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    M.body = B.empty;
   };
   let dummy_cert : erased M.certificate_msg = Ghost.hide { M.chain = []; M.body = B.empty };
   let dummy_cv : erased M.certificate_verify = Ghost.hide {
     M.scheme = T.RsaPssRsaeSha256;
     M.signature = B.empty;
+    M.body = B.empty;
   };
   let dummy_fin : erased M.finished = Ghost.hide { M.verify_data = Seq.create 32 0uy };
   W.lemma_fixed_server_handshake_serializers
@@ -1095,6 +1104,7 @@ fn process_send_certificate_serialized
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+                 B.length (Ghost.reveal cert).M.body == 0 /\
                  (Ghost.reveal cert).M.chain <> [] /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -1155,9 +1165,10 @@ fn process_send_certificate_serialized
       M.random = Seq.create 32 0uy;
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      M.body = B.empty;
     }
     (Ghost.reveal cert)
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty }
+    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
     { M.verify_data = Seq.create 32 0uy };
   assert (pure (Seq.equal
     (W.serialize_certificate_from_credential (Ghost.reveal cert))
@@ -1511,6 +1522,7 @@ fn process_send_certificate_verify_serialized
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+                 B.length (Ghost.reveal cv).M.body == 0 /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
@@ -1570,6 +1582,7 @@ fn process_send_certificate_verify_serialized
       M.random = Seq.create 32 0uy;
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      M.body = B.empty;
     }
     { M.chain = []; M.body = B.empty }
     (Ghost.reveal cv)
@@ -1809,6 +1822,7 @@ fn process_send_stored_certificate_verify_serialized
                    ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                    Some (Ghost.reveal cv) /\
+                 B.length (Ghost.reveal cv).M.body == 0 /\
                  B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                    SZ.v fragment_len <= Bounds.max_transcript_len /\
                  CS.legal_event
@@ -1865,6 +1879,7 @@ fn process_send_stored_certificate_verify_serialized
       M.random = Seq.create 32 0uy;
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      M.body = B.empty;
     }
     { M.chain = []; M.body = B.empty }
     (Ghost.reveal cv)
@@ -2239,9 +2254,10 @@ fn process_send_server_finished_serialized
       M.random = Seq.create 32 0uy;
       M.key_share = Seq.create 32 0uy;
       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      M.body = B.empty;
     }
     { M.chain = []; M.body = B.empty }
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty }
+    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
     (Ghost.reveal fin);
   assert (pure (Seq.equal
     (W.serialize_server_finished (Ghost.reveal fin))

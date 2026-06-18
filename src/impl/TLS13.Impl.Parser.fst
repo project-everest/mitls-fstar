@@ -3207,7 +3207,7 @@ fn peek_decrypt_record
       B.length (Ghost.reveal raw_bytes) == SZ.v raw_len /\
       SZ.v raw_len == 5 + SZ.v flen /\
       SZ.v flen <= 16640 /\
-      WS.parse_record (Ghost.reveal raw_bytes) ==
+      WS.parse_record_wire (Ghost.reveal raw_bytes) ==
         Some (T.ApplicationData,
               Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen),
               SZ.v raw_len))
@@ -3275,6 +3275,9 @@ fn peek_decrypt_record
         Some df -> {
           with payload_bytes. assert (V.pts_to df.df_payload payload_bytes);
           (* opened == out_bytes; plaintext == Some?.v (parse_plaintext out_bytes). *)
+          WS.lemma_parse_record_implies_parse_record_wire (Ghost.reveal raw_bytes);
+          assert (pure (WS.parse_record (Ghost.reveal raw_bytes) ==
+                        WS.parse_record_wire (Ghost.reveal raw_bytes)));
           DW.lemma_mk_protected_decoder_fragment_relation
             (reveal st0) df.df_ct payload_bytes (Ghost.reveal raw_bytes)
             (Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen))
@@ -3332,7 +3335,7 @@ fn build_decoded_record_ok
       V.length fragment_vec == SZ.v fragment_len /\
       B.length (Ghost.reveal fragment_bytes) == SZ.v fragment_len /\
       (exists outer_ct outer_fragment.
-         WS.parse_record (Ghost.reveal raw_bytes) ==
+         WS.parse_record_wire (Ghost.reveal raw_bytes) ==
            Some (outer_ct, outer_fragment, B.length (Ghost.reveal raw_bytes))) /\
       CT.network_input_wf
         (Ghost.reveal st0) content_type
@@ -3377,7 +3380,7 @@ fn build_decoded_record_ok
           B.length fragment_bytes2 ==
             SZ.v decoded.L.decoded_record_fragment_len /\
           (exists outer_ct outer_fragment.
-             WS.parse_record (Ghost.reveal raw_bytes) ==
+             WS.parse_record_wire (Ghost.reveal raw_bytes) ==
                Some (outer_ct, outer_fragment, B.length (Ghost.reveal raw_bytes))) /\
           CT.network_input_wf
             (Ghost.reveal st0)
@@ -3440,7 +3443,7 @@ fn decode_network_record
                 B.length fragment_bytes ==
                   SZ.v decoded.L.decoded_record_fragment_len /\
                 (exists outer_ct outer_fragment.
-                  WS.parse_record (Ghost.reveal 'raw_bytes) ==
+                  WS.parse_record_wire (Ghost.reveal 'raw_bytes) ==
                     Some (outer_ct, outer_fragment, B.length (Ghost.reveal 'raw_bytes))) /\
                 CT.network_input_wf
                   'st0
@@ -3470,6 +3473,14 @@ fn decode_network_record
          else if b0 = 0x16uy then T.Handshake
          else T.ApplicationData);
       if (b0 = 0x17uy) {
+        WS.lemma_parse_record_implies_parse_record_wire (Ghost.reveal 'raw_bytes);
+        assert (pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) ==
+                      WS.parse_record (Ghost.reveal 'raw_bytes)));
+        assert (pure (outer_ct == T.ApplicationData));
+        assert (pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) ==
+                      Some (T.ApplicationData,
+                            Seq.slice (Ghost.reveal 'raw_bytes) 5 (5 + SZ.v flen),
+                            SZ.v raw_len)));
         (* PROTECTED path (ApplicationData): decrypt + strip inner plaintext. *)
         let inner = peek_decrypt_record c raw raw_len flen;
         match inner {
@@ -3544,7 +3555,7 @@ fn decode_network_record
    [build_decoded_record_ok]: it packages the owned raw-record prefix + decoded
    fragment + parse result into a [NetworkBufferOk].  All semantic obligations
    (the [Seq.slice] relation between the prefix and the input buffer, the
-   [WS.parse_record] fact on the prefix, and [network_input_wf] computed against
+   [WS.parse_record_wire] fact on the prefix, and [network_input_wf] computed against
    the prefix) are discharged by the caller and threaded through. *)
 fn build_decoded_buffer_ok
   (content_type: U8.t)
@@ -3584,7 +3595,7 @@ fn build_decoded_buffer_ok
       Seq.equal (Ghost.reveal raw_record_bytes)
                 (Seq.slice (Ghost.reveal raw_bytes) 0 (SZ.v consumed_len)) /\
       (exists outer_ct outer_fragment.
-         WS.parse_record (Ghost.reveal raw_record_bytes) ==
+         WS.parse_record_wire (Ghost.reveal raw_record_bytes) ==
            Some (outer_ct, outer_fragment, B.length (Ghost.reveal raw_record_bytes))) /\
       V.is_full_vec fragment_vec /\
       V.length fragment_vec == SZ.v fragment_len /\
@@ -3643,7 +3654,7 @@ fn build_decoded_buffer_ok
              0
              (SZ.v decoded.L.decoded_buffer_consumed_len)) /\
           (exists outer_ct outer_fragment.
-             WS.parse_record raw_record_bytes2 ==
+             WS.parse_record_wire raw_record_bytes2 ==
                Some (outer_ct, outer_fragment, B.length raw_record_bytes2)) /\
           V.is_full_vec decoded.L.decoded_buffer_fragment /\
           V.length decoded.L.decoded_buffer_fragment ==
@@ -3725,7 +3736,7 @@ fn decode_network_buffer
                    0
                    (SZ.v decoded.L.decoded_buffer_consumed_len)) /\
                 (exists outer_ct outer_fragment.
-                   WS.parse_record raw_record_bytes ==
+                   WS.parse_record_wire raw_record_bytes ==
                      Some (outer_ct, outer_fragment, B.length raw_record_bytes)) /\
                 V.is_full_vec decoded.L.decoded_buffer_fragment /\
                 V.length decoded.L.decoded_buffer_fragment ==
@@ -3765,6 +3776,14 @@ fn decode_network_buffer
            else if b0 = 0x16uy then T.Handshake
            else T.ApplicationData);
         if (b0 = 0x17uy) {
+          WS.lemma_parse_record_implies_parse_record_wire (Ghost.reveal raw_record_bytes);
+          assert (pure (WS.parse_record_wire (Ghost.reveal raw_record_bytes) ==
+                        WS.parse_record (Ghost.reveal raw_record_bytes)));
+          assert (pure (outer_ct == T.ApplicationData));
+          assert (pure (WS.parse_record_wire (Ghost.reveal raw_record_bytes) ==
+                        Some (T.ApplicationData,
+                              Seq.slice (Ghost.reveal raw_record_bytes) 5 (5 + SZ.v flen),
+                              SZ.v consumed_len)));
           (* PROTECTED path: decrypt the prefix + strip inner plaintext. *)
           V.to_array_pts_to raw_record_vec;
           let inner = peek_decrypt_record c (V.vec_to_array raw_record_vec) consumed_len flen;

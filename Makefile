@@ -34,9 +34,10 @@ export PATH := $(Z3_DIR):$(PATH)
 GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
 FSTAR_PREFIX    = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
-FSTAR_ULIB      = $(FSTAR_PREFIX)/lib/fstar/ulib
-FSTAR_PULSE_COMMON = $(FSTAR_PREFIX)/lib/fstar/pulse/common
-FSTAR_PULSE_LIB = $(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib
+FSTAR_SOURCE_ROOT ?= $(FSTAR_HOME)
+FSTAR_ULIB      = $(FSTAR_SOURCE_ROOT)/ulib
+FSTAR_PULSE_COMMON = $(FSTAR_SOURCE_ROOT)/pulse/lib/common
+FSTAR_PULSE_LIB = $(FSTAR_SOURCE_ROOT)/pulse/lib/pulse/lib
 
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
@@ -69,6 +70,18 @@ FSTAR_FLAGS = \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
+
+FSTAR_EXTRACT_FLAGS = \
+  $(OTHERFLAGS) \
+  --cache_checked_modules \
+  --cache_dir $(CACHE_DIR) \
+  --odir $(OUTPUT_DIR) \
+  --warn_error -321 \
+  --report_assumes warn \
+  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+  $(INCLUDES)
+
+FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
@@ -304,16 +317,116 @@ BUNDLE_KRML_FILES = $(filter-out \
   $(OUTPUT_DIR)/TLS13_IO.krml,$(FULL_KRML_FILES))
 
 DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/driver_bundle
-DRIVER_KRML_FILES = $(filter-out \
-  $(OUTPUT_DIR)/TLS13_Extract_Smoke.krml \
-  $(OUTPUT_DIR)/FStar_Errors_Msg.krml \
-  $(OUTPUT_DIR)/FStar_Tactics_%.krml \
-  $(OUTPUT_DIR)/FStar_Reflection_%.krml \
-  $(OUTPUT_DIR)/FStar_Syntax_Syntax.krml \
-  $(OUTPUT_DIR)/FStar_TypeChecker_%.krml \
-  $(OUTPUT_DIR)/FStar_VConfig.krml \
-  $(OUTPUT_DIR)/TLS13_X509.krml \
-  $(OUTPUT_DIR)/TLS13_MachineTypes.krml,$(FULL_KRML_FILES))
+DRIVER_IMPL_MODULES = \
+  TLS13.Impl.Endpoint.Types \
+  TLS13.Impl.Client.Types \
+  TLS13.Impl.ConnectionState.Bounds \
+  TLS13.Impl.ConnectionState.Model \
+  TLS13.Impl.ConnectionState.Tags \
+  TLS13.Impl.ConnectionState.Repr \
+  TLS13.Impl.ConnectionState.Queries \
+  TLS13.Impl.ConnectionState.Fail \
+  TLS13.Impl.ConnectionState.LocalHandshake \
+  TLS13.Impl.ConnectionState.LocalAuth \
+  TLS13.Impl.ConnectionState.LocalSend \
+  TLS13.Impl.ConnectionState.LocalApp \
+  TLS13.Impl.ConnectionState.Network \
+  TLS13.Impl.Handle.Alert \
+  TLS13.Impl.Handle.ApplicationData \
+  TLS13.Impl.Handle.ChangeCipherSpec \
+  TLS13.Impl.Handle.DecodeError \
+  TLS13.Impl.Handle.Dispatch \
+  TLS13.Impl.Handle.Handshake \
+  TLS13.Impl.Handle.Local \
+  TLS13.Impl.Messages \
+  TLS13.KeySchedule \
+  TLS13.Impl.Client
+DRIVER_KRML_FILES = \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(DRIVER_IMPL_MODULES))) \
+  $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml
+DRIVER_EXTRACT_SELECTOR = \
+  *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
+  +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -TLS13.Impl.Driver.Pairing,-TLS13.X509,-TLS13.MachineTypes
+
+define POSTPROCESS_DRIVER_BUNDLE_PY
+import os
+from pathlib import Path
+
+bundle_dir = Path(os.environ["DRIVER_BUNDLE_DIR"])
+repr_h = bundle_dir / "TLS13_Impl_ConnectionState_Repr.h"
+if repr_h.exists():
+    contents = repr_h.read_text()
+    contents = contents.replace('#include "TLS13_Impl_ConnectionState_Queries.h"\n', "")
+    repr_h.write_text(contents)
+
+bound_aliases = (
+    "max_hostname_len",
+    "max_public_key_len",
+    "max_cipher_suites",
+    "max_signature_schemes",
+    "max_client_hello_len",
+    "max_server_hello_len",
+    "max_handshake_flight_len",
+    "max_transcript_len",
+    "max_certificate_verify_input_len",
+    "max_trust_anchors_len",
+    "max_pending_plaintext_len",
+    "max_pending_raw_len",
+)
+bounds_h = bundle_dir / "TLS13_Impl_ConnectionState_Bounds.h"
+if bounds_h.exists():
+    contents = bounds_h.read_text()
+    alias_block = "".join(
+        f"#define TLS13_Impl_ConnectionState_Bounds_{name} "
+        f"TLS13_Impl_ConnectionState_Bounds_{name}_sz\n"
+        for name in bound_aliases
+    )
+    if "TLS13_Impl_ConnectionState_Bounds_max_hostname_len " not in contents:
+        contents = contents.replace(
+            "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
+            "\n" + alias_block + "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
+        )
+    bounds_h.write_text(contents)
+
+backend_include = '#include "../../c_stubs/tls13_connection_backend.h"\n'
+bounds_include = '#include "TLS13_Impl_ConnectionState_Bounds.h"\n'
+backend_triggers = (
+    "TLS13_Impl_Parser_",
+    "TLS13_Impl_Serializer_",
+    "TLS13_Connection_Backend_",
+    "TLS13_Impl_ConnectionState_Repr_copy_",
+    "TLS13_Crypto_sha256_prefix",
+)
+
+def insert_after_include_block(contents, include_line):
+    if include_line in contents:
+        return contents
+    lines = contents.splitlines(keepends=True)
+    last_include = -1
+    seen_include = False
+    for i, line in enumerate(lines):
+        if line.startswith("#include "):
+            seen_include = True
+            last_include = i
+            continue
+        if seen_include and line.strip() != "":
+            break
+    if last_include >= 0:
+        lines.insert(last_include + 1, include_line)
+    else:
+        lines.insert(0, include_line)
+    return "".join(lines)
+
+for c_path in bundle_dir.glob("*.c"):
+    contents = c_path.read_text()
+    if any(trigger in contents for trigger in backend_triggers):
+        contents = insert_after_include_block(contents, backend_include)
+    if "TLS13_Impl_ConnectionState_Bounds_" in contents:
+        contents = insert_after_include_block(contents, bounds_include)
+    c_path.write_text(contents)
+endef
+export POSTPROCESS_DRIVER_BUNDLE_PY
 
 SERVER_DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/server_driver_bundle
 SERVER_DRIVER_MODULES = \
@@ -374,6 +487,33 @@ $(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
 	  --codegen krml --extract_module FStar.SizeT \
 	  $(FSTAR_ULIB)/FStar.SizeT.fst --krmloutput $@
 
+$(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Client.Driver.fst | $(OUTPUT_DIR)
+	$(FSTAR_EXTRACT) --codegen krml --extract '$(DRIVER_EXTRACT_SELECTOR)' \
+	  src/impl/TLS13.Impl.Client.Driver.fst --krmloutput $@
+
+$(OUTPUT_DIR)/%.krml: | $(OUTPUT_DIR)
+	@target_base=$$(basename "$@" .krml); \
+	module=; src=; \
+	for ext in fst fsti; do \
+	  for dir in src/spec src/impl $(GENERATED_DIR) $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse \
+	      $(FSTAR_ULIB) $(FSTAR_PULSE_COMMON) $(FSTAR_PULSE_LIB); do \
+	    test -d "$$dir" || continue; \
+	    for candidate in "$$dir"/*.$$ext; do \
+	      test -f "$$candidate" || continue; \
+	      candidate_module=$$(basename "$$candidate" .$$ext); \
+	      candidate_base=$$(printf '%s' "$$candidate_module" | tr . _); \
+	      if test "$$candidate_base" = "$$target_base"; then \
+	        module=$$candidate_module; src=$$candidate; break 3; \
+	      fi; \
+	    done; \
+	  done; \
+	done; \
+	if test -z "$$module" || test -z "$$src"; then \
+	  echo "Could not locate F* source for $@"; \
+	  exit 1; \
+	fi; \
+	$(FSTAR) --codegen krml --extract_module "$$module" "$$src" --krmloutput "$@"
+
 extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
 extract-driver-krml: $(DRIVER_KRML_FILES)
@@ -414,6 +554,7 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -bundle 'LowParse.\*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -warn-error '@2-26' \
+	  -warn-error '-2' \
 	  -warn-error '+9' \
 	  -no-prefix TLS13.Impl.Client \
 	  $(DRIVER_KRML_FILES)

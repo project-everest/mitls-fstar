@@ -254,91 +254,103 @@ val lemma_serialize_client_hello_reveal:
         (u24 (B.length (WS.serialize_client_hello hello)))
         (WS.serialize_client_hello hello))))
 
-let client_hello_byte (n:nat) : B.byte =
-  U8.uint_to_t (n % 256)
+val client_hello_byte:
+  n:nat ->
+  GTot B.byte
 
-let client_hello_common_extensions_bytes (key_share:B.bytes) : B.bytes =
-  B.append
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])
+val client_hello_common_extensions_bytes:
+  key_share:B.bytes ->
+  GTot B.bytes
+
+val client_hello_server_name_extension_bytes:
+  hostname:B.bytes ->
+  GTot B.bytes
+
+val client_hello_extensions_bytes:
+  hostname:B.bytes ->
+  key_share:B.bytes ->
+  GTot B.bytes
+
+val client_hello_prefix_bytes:
+  body_len:nat ->
+  extensions_len:nat ->
+  random:B.bytes ->
+  GTot B.bytes
+
+val client_hello_body_bytes:
+  random:B.bytes ->
+  hostname:B.bytes ->
+  key_share:B.bytes ->
+  GTot B.bytes
+
+val client_hello_handshake_bytes:
+  random:B.bytes ->
+  hostname:B.bytes ->
+  key_share:B.bytes ->
+  GTot B.bytes
+
+val lemma_client_hello_common_extensions_bytes_reveal:
+  key_share:B.bytes{B.length key_share == 32} ->
+  Lemma (Seq.equal
+    (client_hello_common_extensions_bytes key_share)
     (B.append
-      (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
+      (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])
       (B.append
+        (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
         (B.append
-          (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-          key_share)
-        (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy])))
+          (B.append
+            (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+            key_share)
+          (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy])))))
 
-let client_hello_server_name_extension_bytes (hostname:B.bytes) : B.bytes =
-  if B.length hostname = 0 then B.empty
-  else
-    B.append
+val lemma_client_hello_extensions_bytes_shape:
+  hostname:B.bytes{B.length hostname <= 255} ->
+  key_share:B.bytes{B.length key_share == 32} ->
+  Lemma (Seq.equal
+    (client_hello_extensions_bytes hostname key_share)
+    (B.append
+      (client_hello_server_name_extension_bytes hostname)
+      (client_hello_common_extensions_bytes key_share)))
+
+val lemma_client_hello_server_name_extension_bytes_reveal:
+  hostname:B.bytes{0 < B.length hostname /\ B.length hostname <= 255} ->
+  Lemma (Seq.equal
+    (client_hello_server_name_extension_bytes hostname)
+    (B.append
       (B.of_list [
         0uy; 0uy;
-        client_hello_byte ((5 + B.length hostname) / 256);
-        client_hello_byte (5 + B.length hostname);
-        client_hello_byte ((3 + B.length hostname) / 256);
-        client_hello_byte (3 + B.length hostname);
+        U8.uint_to_t (((5 + B.length hostname) / 256) % 256);
+        U8.uint_to_t ((5 + B.length hostname) % 256);
+        U8.uint_to_t (((3 + B.length hostname) / 256) % 256);
+        U8.uint_to_t ((3 + B.length hostname) % 256);
         0uy;
-        client_hello_byte (B.length hostname / 256);
-        client_hello_byte (B.length hostname)])
-      hostname
+        U8.uint_to_t ((B.length hostname / 256) % 256);
+        U8.uint_to_t (B.length hostname % 256)])
+      hostname))
 
-let client_hello_extensions_bytes (hostname:B.bytes) (key_share:B.bytes) : B.bytes =
-  B.append
-    (client_hello_server_name_extension_bytes hostname)
-    (client_hello_common_extensions_bytes key_share)
+val lemma_client_hello_server_name_extension_bytes_empty:
+  hostname:B.bytes{B.length hostname == 0} ->
+  Lemma (Seq.equal (client_hello_server_name_extension_bytes hostname) B.empty)
 
-let client_hello_prefix_bytes (body_len:nat) (extensions_len:nat) (random:B.bytes) : B.bytes =
-  B.append
-    (B.of_list [
-      1uy;
-      client_hello_byte (body_len / 65536);
-      client_hello_byte (body_len / 256);
-      client_hello_byte body_len;
-      0x03uy; 0x03uy])
+val lemma_client_hello_prefix_bytes_reveal:
+  body_len:nat ->
+  extensions_len:nat ->
+  random:B.bytes{B.length random == 32} ->
+  Lemma (Seq.equal
+    (client_hello_prefix_bytes body_len extensions_len random)
     (B.append
-      random
       (B.of_list [
-        0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
-        client_hello_byte (extensions_len / 256);
-        client_hello_byte extensions_len]))
-
-let client_hello_body_bytes
-  (random:B.bytes)
-  (hostname:B.bytes)
-  (key_share:B.bytes)
-  : B.bytes =
-  let extensions = client_hello_extensions_bytes hostname key_share in
-  B.append
-    (B.of_list [0x03uy; 0x03uy])
-    (B.append
-      random
+        1uy;
+        U8.uint_to_t ((body_len / 65536) % 256);
+        U8.uint_to_t ((body_len / 256) % 256);
+        U8.uint_to_t (body_len % 256);
+        0x03uy; 0x03uy])
       (B.append
-        (B.of_list [0uy])
-        (B.append
-          (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
-          (B.append
-            (B.of_list [0uy])
-            (B.append
-              (B.of_list [
-                client_hello_byte (B.length extensions / 256);
-                client_hello_byte (B.length extensions)])
-              extensions)))))
-
-let client_hello_handshake_bytes
-  (random:B.bytes)
-  (hostname:B.bytes)
-  (key_share:B.bytes)
-  : B.bytes =
-  let body = client_hello_body_bytes random hostname key_share in
-  B.append
-    (B.of_list [1uy])
-    (B.append
-      (B.of_list [
-        client_hello_byte (B.length body / 65536);
-        client_hello_byte (B.length body / 256);
-        client_hello_byte (B.length body)])
-      body)
+        random
+        (B.of_list [
+          0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
+          U8.uint_to_t ((extensions_len / 256) % 256);
+          U8.uint_to_t (extensions_len % 256)]))))
 
 val lemma_client_hello_common_extensions_len:
   key_share:B.bytes{B.length key_share == 32} ->
@@ -355,6 +367,19 @@ val lemma_client_hello_extensions_len:
   Lemma (B.length (client_hello_extensions_bytes hostname key_share) ==
     65 + (if B.length hostname == 0 then 0 else 9 + B.length hostname))
 
+val lemma_client_hello_handshake_bytes_prefix:
+  random:B.bytes{B.length random == 32} ->
+  hostname:B.bytes{B.length hostname <= 255} ->
+  key_share:B.bytes{B.length key_share == 32} ->
+  Lemma (Seq.equal
+    (client_hello_handshake_bytes random hostname key_share)
+    (B.append
+      (client_hello_prefix_bytes
+        (43 + B.length (client_hello_extensions_bytes hostname key_share))
+        (B.length (client_hello_extensions_bytes hostname key_share))
+        random)
+      (client_hello_extensions_bytes hostname key_share)))
+
 val lemma_client_hello_handshake_bytes_reveal:
   hello:M.client_hello{B.length hello.M.random == 32 /\
                        B.length hello.M.key_share == 32 /\
@@ -369,19 +394,6 @@ val lemma_client_hello_handshake_bytes_reveal:
        | Some h -> h
        | None -> B.empty)
       hello.M.key_share))
-
-val lemma_client_hello_handshake_bytes_prefix:
-  random:B.bytes{B.length random == 32} ->
-  hostname:B.bytes{B.length hostname <= 255} ->
-  key_share:B.bytes{B.length key_share == 32} ->
-  Lemma (Seq.equal
-    (client_hello_handshake_bytes random hostname key_share)
-    (B.append
-      (client_hello_prefix_bytes
-        (43 + B.length (client_hello_extensions_bytes hostname key_share))
-        (B.length (client_hello_extensions_bytes hostname key_share))
-        random)
-      (client_hello_extensions_bytes hostname key_share)))
 
 val lemma_ptm_alert (fragment:B.bytes)
   : Lemma (ensures (
