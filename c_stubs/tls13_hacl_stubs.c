@@ -255,6 +255,7 @@ bool tls13_hacl_chacha20_poly1305_open_combined(
       ciphertext_and_tag + plaintext_len);
 }
 
+#ifndef TLS13_USE_EXTRACTED_RECORD
 static bool tls13_record_state_valid(TLS13_Record_record_state st) {
   return st.key != NULL && st.iv != NULL && st.seq != NULL && st.installed != NULL;
 }
@@ -448,3 +449,4 @@ bool TLS13_Record_open_application_runtime(
     uint8_t *out) {
   return tls13_record_open(st, aad, aad_len, cipher, cipher_len, out, true);
 }
+#endif

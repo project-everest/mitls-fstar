@@ -41,11 +41,13 @@ typedef struct TLS13_X509_Spec_validation_time_s {
   size_t seconds_since_epoch;
 } TLS13_X509_Spec_validation_time;
 
+#if !defined(TLS13_Record_H) && !defined(TLS13_USE_EXTRACTED_RECORD)
 typedef struct TLS13_Record_record_state_s {
   uint8_t *key;
   uint8_t *iv;
   uint64_t *seq;
   bool *installed;
 } TLS13_Record_record_state;
+#endif
 
 #endif /* TLS13_SPEC_TYPES_H */

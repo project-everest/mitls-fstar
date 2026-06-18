@@ -92,6 +92,7 @@ bool tls13_hacl_chacha20_poly1305_open_combined(
     const uint8_t *ciphertext_and_tag,
     size_t ciphertext_and_tag_len);
 
+#ifndef TLS13_USE_EXTRACTED_RECORD
 TLS13_Record_record_state TLS13_Record_record_state_new(void);
 void TLS13_Record_record_state_free(TLS13_Record_record_state st);
 bool TLS13_Record_can_advance_seq(TLS13_Record_record_state st);
@@ -157,5 +158,6 @@ bool TLS13_Record_open_application_runtime(
     uint8_t *cipher,
     size_t cipher_len,
     uint8_t *out);
+#endif
 
 #endif

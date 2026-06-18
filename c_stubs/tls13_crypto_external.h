@@ -62,6 +62,8 @@ void TLS13_Crypto_hmac_sha256(
 
 bool TLS13_Crypto_equal32(uint8_t *a, uint8_t *b);
 
+bool TLS13_Crypto_equal12(uint8_t *a, uint8_t *b);
+
 void TLS13_Crypto_hkdf_extract(
     uint8_t *salt,
     size_t salt_len,

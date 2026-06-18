@@ -323,6 +323,48 @@ static inline uint8_t *TLS13_Connection_Backend_dup_bytes(const uint8_t *src, si
 #define TLS13_Impl_ConnectionState_Repr_copy_array_to_public_key_sized_bytes(src, dst, nbytes, ...) \
   ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src), (nbytes)))
 
+#define TLS13_Crypto_random_bytes(out, out_len, ...) \
+  TLS13_Crypto_random_bytes((out), (out_len))
+
+#define TLS13_Crypto_sha256_empty(out, ...) \
+  TLS13_Crypto_sha256_empty((out))
+
+#define TLS13_Crypto_equal32(a, b, ...) \
+  TLS13_Crypto_equal32((a), (b))
+
+#define TLS13_Crypto_equal12(a, b, ...) \
+  TLS13_Crypto_equal12((a), (b))
+
+#define TLS13_Crypto_hmac_sha256(key, key_len, msg, msg_len, out, ...) \
+  TLS13_Crypto_hmac_sha256((key), (key_len), (msg), (msg_len), (out))
+
+#define TLS13_Crypto_hkdf_extract(salt, salt_len, ikm, ikm_len, out, ...) \
+  TLS13_Crypto_hkdf_extract((salt), (salt_len), (ikm), (ikm_len), (out))
+
+#define TLS13_Crypto_hkdf_expand_label(secret, label, label_len, context, context_len, out, out_len, ...) \
+  TLS13_Crypto_hkdf_expand_label( \
+      (secret), (label), (label_len), (context), (context_len), (out), (out_len))
+
+#define TLS13_Crypto_hkdf_expand_label_empty_context(secret, label, label_len, out, out_len, ...) \
+  TLS13_Crypto_hkdf_expand_label_empty_context((secret), (label), (label_len), (out), (out_len))
+
+#define TLS13_Crypto_x25519_public_from_private(sk, out, ...) \
+  TLS13_Crypto_x25519_public_from_private((sk), (out))
+
+#define TLS13_Crypto_x25519_shared_runtime(sk, pk, out, ...) \
+  TLS13_Crypto_x25519_shared_runtime((sk), (pk), (out))
+
+#define TLS13_Crypto_tls13_record_nonce(static_iv, sequence_number, out, ...) \
+  TLS13_Crypto_tls13_record_nonce((static_iv), (sequence_number), (out))
+
+#define TLS13_Crypto_chacha20_poly1305_seal(key, nonce, aad, aad_len, plain, plain_len, out, ...) \
+  TLS13_Crypto_chacha20_poly1305_seal( \
+      (key), (nonce), (aad), (aad_len), (plain), (plain_len), (out))
+
+#define TLS13_Crypto_chacha20_poly1305_open(key, nonce, aad, aad_len, cipher, cipher_len, out, ...) \
+  TLS13_Crypto_chacha20_poly1305_open( \
+      (key), (nonce), (aad), (aad_len), (cipher), (cipher_len), (out))
+
 #define TLS13_Crypto_sha256_prefix(input, input_len, out, ...) \
   TLS13_Crypto_sha256((input), (input_len), (out))
 
@@ -500,6 +542,17 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
   return total_len;
 }
 
+#ifdef TLS13_USE_EXTRACTED_RECORD
+#define TLS13_Impl_Serializer_serialize_server_hello_from_selection(sh_erased, lsh, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_server_hello_fixed( \
+      (lsh).server_hello_random, (lsh).server_hello_key_share, \
+      (lsh).server_hello_cipher_suite, (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_server_hello_record_from_selection(sh_erased, lsh, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_server_hello_record_fixed( \
+      (lsh).server_hello_random, (lsh).server_hello_key_share, \
+      (lsh).server_hello_cipher_suite, (out), (out_len))
+#else
 #define TLS13_Impl_Serializer_serialize_server_hello_from_selection(lsh, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_server_hello_fixed( \
       (lsh).server_hello_random, (lsh).server_hello_key_share, \
@@ -509,10 +562,26 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
   TLS13_Connection_Backend_serialize_server_hello_record_fixed( \
       (lsh).server_hello_random, (lsh).server_hello_key_share, \
       (lsh).server_hello_cipher_suite, (out), (out_len))
+#endif
 
 #define TLS13_Impl_Serializer_serialize_empty_encrypted_extensions(out, out_len, ...) \
   TLS13_Connection_Backend_serialize_empty_encrypted_extensions_fixed((out), (out_len))
 
+#ifdef TLS13_USE_EXTRACTED_RECORD
+#define TLS13_Impl_Serializer_serialize_certificate_from_credential(cert_erased, lcert, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_certificate_msg_fixed( \
+      (lcert).certificate_msg_chain_bytes, (lcert).certificate_msg_chain_bytes_len, \
+      (lcert).certificate_msg_cert_offsets, (lcert).certificate_msg_cert_lens, \
+      (lcert).certificate_msg_cert_count, (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_certificate_verify_from_signature(cv_erased, lcv, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_certificate_verify_fixed( \
+      (lcv).certificate_verify_scheme, (lcv).certificate_verify_signature, \
+      (lcv).certificate_verify_signature_len, (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_server_finished(fin_erased, lfin, out, out_len, ...) \
+  TLS13_Impl_Serializer_serialize_finished_handshake((fin_erased), (lfin), (out), (out_len), NULL)
+#else
 #define TLS13_Impl_Serializer_serialize_certificate_from_credential(lcert, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_certificate_msg_fixed( \
       (lcert).certificate_msg_chain_bytes, (lcert).certificate_msg_chain_bytes_len, \
@@ -526,6 +595,7 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
 
 #define TLS13_Impl_Serializer_serialize_server_finished(lfin, out, out_len, ...) \
   TLS13_Impl_Serializer_serialize_finished_handshake((lfin), (out), (out_len))
+#endif
 
 static inline size_t TLS13_Connection_Backend_serialize_raw_application_data_record(
     uint8_t *fragment,
@@ -592,6 +662,21 @@ static inline size_t TLS13_Connection_Backend_serialize_protected_handshake_reco
   return written;
 }
 
+#ifdef TLS13_USE_EXTRACTED_RECORD
+#define TLS13_Impl_Serializer_serialize_protected_handshake_record(msg_erased, write_state, handshake, handshake_len, network_out, network_out_len, ...) \
+  ({ \
+    __auto_type _tls13_write_state = (write_state); \
+    TLS13_Connection_Backend_serialize_protected_handshake_record( \
+        _tls13_write_state.key, \
+        _tls13_write_state.iv, \
+        *_tls13_write_state.seq, \
+        *_tls13_write_state.installed, \
+        (handshake), \
+        (handshake_len), \
+        (network_out), \
+        (network_out_len)); \
+  })
+#else
 #define TLS13_Impl_Serializer_serialize_protected_handshake_record(write_state, handshake, handshake_len, network_out, network_out_len, ...) \
   ({ \
     __auto_type _tls13_write_state = (write_state); \
@@ -605,6 +690,7 @@ static inline size_t TLS13_Connection_Backend_serialize_protected_handshake_reco
         (network_out), \
         (network_out_len)); \
   })
+#endif
 
 static inline size_t TLS13_Connection_Backend_serialize_client_finished_outputs(
     const uint8_t *write_key,
@@ -676,8 +762,13 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
   return 36u;
 }
 
+#ifdef TLS13_USE_EXTRACTED_RECORD
+#define TLS13_Impl_Serializer_serialize_finished_handshake(fin_erased, lfin, handshake_out, handshake_out_len, ...) \
+  TLS13_Connection_Backend_serialize_finished_handshake((lfin), (handshake_out), (handshake_out_len))
+#else
 #define TLS13_Impl_Serializer_serialize_finished_handshake(lfin, handshake_out, handshake_out_len, ...) \
   TLS13_Connection_Backend_serialize_finished_handshake((lfin), (handshake_out), (handshake_out_len))
+#endif
 
 #define TLS13_Impl_Parser_parse_tls_message(content_type, input, input_len, ...) \
   ({ \
@@ -1332,6 +1423,25 @@ static inline size_t TLS13_Connection_Backend_serialize_client_hello_from_start_
   return record_len;
 }
 
+#ifdef TLS13_USE_EXTRACTED_RECORD
+#define TLS13_Impl_Serializer_serialize_client_hello_from_start( \
+    start_erased, ch_erased, start_random, start_server_name, start_server_name_len, \
+    start_key_share, start_cipher_suites, start_cipher_suites_len, \
+    start_signature_schemes, start_signature_schemes_len, client_hello_present, l, \
+    client_hello_bytes, client_hello_bytes_len, network_out, network_out_len, ...) \
+  ((l).client_hello_server_name_len = *(start_server_name_len), \
+   (l).client_hello_has_server_name = true, \
+   (l).client_hello_cipher_suites_len = *(start_cipher_suites_len), \
+   (l).client_hello_signature_schemes_len = *(start_signature_schemes_len), \
+   TLS13_Connection_Backend_serialize_client_hello_from_start_impl( \
+       (start_random), (start_server_name), (start_server_name_len), (start_key_share), \
+       (start_cipher_suites), (start_cipher_suites_len), \
+       (start_signature_schemes), (start_signature_schemes_len), \
+       (client_hello_present), (l).client_hello_random, (l).client_hello_server_name, \
+       (l).client_hello_key_share, (l).client_hello_cipher_suites, \
+       (l).client_hello_signature_schemes, (client_hello_bytes), \
+       (client_hello_bytes_len), (network_out), (network_out_len)))
+#else
 #define TLS13_Impl_Serializer_serialize_client_hello_from_start( \
     start_random, start_server_name, start_server_name_len, \
     start_key_share, start_cipher_suites, start_cipher_suites_len, \
@@ -1349,5 +1459,6 @@ static inline size_t TLS13_Connection_Backend_serialize_client_hello_from_start_
        (l).client_hello_key_share, (l).client_hello_cipher_suites, \
        (l).client_hello_signature_schemes, (client_hello_bytes), \
        (client_hello_bytes_len), (network_out), (network_out_len)))
+#endif
 
 #endif

@@ -396,6 +396,7 @@ backend_triggers = (
     "TLS13_Impl_Serializer_",
     "TLS13_Connection_Backend_",
     "TLS13_Impl_ConnectionState_Repr_copy_",
+    "TLS13_Crypto_",
     "TLS13_Crypto_sha256_prefix",
 )
 
@@ -427,6 +428,93 @@ for c_path in bundle_dir.glob("*.c"):
     c_path.write_text(contents)
 endef
 export POSTPROCESS_DRIVER_BUNDLE_PY
+
+define POSTPROCESS_SERVER_DRIVER_BUNDLE_PY
+import os
+from pathlib import Path
+
+bundle_dir = Path(os.environ["SERVER_DRIVER_BUNDLE_DIR"])
+
+def insert_after_include_block(contents, include_line):
+    if include_line in contents:
+        return contents
+    lines = contents.splitlines(keepends=True)
+    last_include = -1
+    seen_include = False
+    for i, line in enumerate(lines):
+        if line.startswith("#include "):
+            seen_include = True
+            last_include = i
+            continue
+        if seen_include and line.strip() != "":
+            break
+    if last_include >= 0:
+        lines.insert(last_include + 1, include_line)
+    else:
+        lines.insert(0, include_line)
+    return "".join(lines)
+
+bound_aliases = (
+    "max_hostname_len",
+    "max_public_key_len",
+    "max_cipher_suites",
+    "max_signature_schemes",
+    "max_client_hello_len",
+    "max_server_hello_len",
+    "max_handshake_flight_len",
+    "max_transcript_len",
+    "max_certificate_verify_input_len",
+    "max_trust_anchors_len",
+    "max_pending_plaintext_len",
+    "max_pending_raw_len",
+)
+bounds_h = bundle_dir / "TLS13_Impl_ConnectionState_Bounds.h"
+if bounds_h.exists():
+    contents = bounds_h.read_text()
+    alias_block = "".join(
+        f"#define TLS13_Impl_ConnectionState_Bounds_{name} "
+        f"TLS13_Impl_ConnectionState_Bounds_{name}_sz\n"
+        for name in bound_aliases
+    )
+    if "TLS13_Impl_ConnectionState_Bounds_max_hostname_len " not in contents:
+        contents = contents.replace(
+            "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
+            "\n" + alias_block + "\n#define TLS13_Impl_ConnectionState_Bounds_H_DEFINED\n",
+        )
+    bounds_h.write_text(contents)
+
+repr_h = bundle_dir / "TLS13_Impl_ConnectionState_Repr.h"
+if repr_h.exists():
+    contents = repr_h.read_text()
+    contents = contents.replace('#include "TLS13_Impl_ConnectionState_Queries.h"\n', "")
+    repr_h.write_text(contents)
+
+backend_include = '#include "../../c_stubs/tls13_connection_backend.h"\n'
+server_shims_include = '#include "../../c_stubs/tls13_server_extraction_shims.h"\n'
+bounds_include = '#include "TLS13_Impl_ConnectionState_Bounds.h"\n'
+backend_triggers = (
+    "TLS13_Impl_Parser_",
+    "TLS13_Impl_Serializer_",
+    "TLS13_Connection_Backend_",
+    "TLS13_Impl_ConnectionState_Repr_copy_",
+    "TLS13_Crypto_",
+    "TLS13_Crypto_sha256_prefix",
+)
+server_shims_triggers = (
+    "TLS13_Impl_Server_Material_copy_server_random_and_private_from_payload",
+)
+
+for c_path in bundle_dir.glob("*.c"):
+    contents = c_path.read_text()
+    if any(trigger in contents for trigger in server_shims_triggers):
+        contents = insert_after_include_block(contents, server_shims_include)
+    if any(trigger in contents for trigger in backend_triggers):
+        contents = insert_after_include_block(contents, backend_include)
+    if "TLS13_Impl_ConnectionState_Bounds_" in contents:
+        contents = insert_after_include_block(contents, bounds_include)
+    c_path.write_text(contents)
+endef
+export POSTPROCESS_SERVER_DRIVER_BUNDLE_PY
 
 SERVER_DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/server_driver_bundle
 SERVER_DRIVER_MODULES = \
@@ -569,7 +657,6 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -tmpdir $(SERVER_DRIVER_BUNDLE_DIR) \
 	  -skip-compilation \
 	  -warn-error -2-9-17-6 \
-	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
@@ -578,6 +665,7 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -no-prefix TLS13.Impl.Server \
 	  $(SERVER_DRIVER_KRML_FILES) \
 	  _output/FStar_Pervasives_Native.krml
+	SERVER_DRIVER_BUNDLE_DIR="$(SERVER_DRIVER_BUNDLE_DIR)" python3 -c "$$POSTPROCESS_SERVER_DRIVER_BUNDLE_PY"
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
 
@@ -646,9 +734,10 @@ LDFLAGS_COMMON = -Wl,--gc-sections
 # ──────────────────────────────────────────────────────────────────────────────
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
-.PHONY: test test-extracted-client-openssl-echo test-openssl-echo check-c-stubs
+.PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
+  test-openssl-sclient check-c-stubs
 
-test: verify check-c-stubs test-openssl-echo
+test: verify check-c-stubs test-openssl-echo test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: | check-deps
@@ -712,6 +801,32 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 	  ./test/test_extracted_client_openssl_echo 127.0.0.1 $$port test/certs/ca.pem; \
 	  wait $$server_pid
 
+# ── Extracted Server / OpenSSL Client Test ─────────────────────────
+test/test_extracted_server_openssl_client: \
+  test/unit/test_extracted_server_openssl_client.c extract-server-driver-bundle \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  c_stubs/tls13_server_extraction_shims.c c_stubs/tls13_server_extraction_shims.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+	$(CC) $(CFLAGS_COMMON) -DTLS13_USE_EXTRACTED_RECORD \
+	  -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
+	  _extract/server_driver_bundle/*.c \
+	  c_stubs/tls13_crypto_external.c \
+	  c_stubs/tls13_pulse_shims.c \
+	  c_stubs/tls13_prims_runtime.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/tls13_io_karamel.c \
+	  c_stubs/tls13_io_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  c_stubs/tls13_server_extraction_shims.c \
+	  test/unit/test_extracted_server_openssl_client.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+test-openssl-sclient: test/test_extracted_server_openssl_client \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
+	./test/test_extracted_server_openssl_client
+
 # ── Dependency Checks ──────────────────────────────────────────────
 check-toolchain:
 	@if [ ! -x "$(FSTAR_EXE)" ] && ! command -v "$(FSTAR_EXE)" >/dev/null 2>&1; then \
@@ -740,7 +855,9 @@ check-deps:
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
-	  test/openssl_echo_server test/openssl_echo_server.port \
+	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
+	  test/test_extracted_server_openssl_client \
+	  test/openssl_echo_server.port \
 	  test/openssl_echo_server.log
 	find src test -name '*.checked' -delete
 
