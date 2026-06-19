@@ -2431,13 +2431,61 @@ fn process_send_server_finished_serialized
     B.empty
     network_out_bytes
     'old_app_out));
+  assert (pure (Ghost.reveal ev == CS.ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+  }));
+  assert (pure (ST.legal_response_for_event
+    'st0
+    (CM.sent_server_finished_state 'st0 (Ghost.reveal fin) network_out_bytes)
+    resp
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+    })
+    network_out_bytes
+    B.empty
+    network_out_bytes
+    'old_app_out));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalSendServerFinished
+    B.empty
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+    }));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalSendServerFinished
+    B.empty
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+    })));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalSendServerFinished
+    B.empty
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+    })));
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+    })
+    network_out_bytes));
+  assert (pure (resp.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.sent_server_finished_state 'st0 (Ghost.reveal fin) network_out_bytes)
     resp
     ST.LocalSendServerFinished
     B.empty
-    (Ghost.reveal ev)
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+    })
     network_out_bytes
     B.empty
     network_out_bytes

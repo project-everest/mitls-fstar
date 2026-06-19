@@ -9,6 +9,7 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module GCE = TLS13.Wire.Generated.CertificateEntry
 module GCert = TLS13.Wire.Generated.Certificate
+module GCH = TLS13.Wire.Generated.ClientHello
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
@@ -81,6 +82,10 @@ val lemma_key_exchange_to_key32:
 val synth_signature_scheme:
   s:GSS.signatureScheme ->
   GTot T.signature_scheme
+
+val synth_client_hello:
+  c:GCH.clientHello ->
+  GTot (option M.client_hello)
 
 val parse_client_hello:
   input:B.bytes ->

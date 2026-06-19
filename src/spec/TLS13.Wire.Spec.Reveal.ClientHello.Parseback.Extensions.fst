@@ -489,6 +489,17 @@ let mk_sne (hn: GHN.hostName{Seq.length hn <= 255})
   let _ = GSNL.serverNameList_list_bytesize_nil in
   mk_snl hn
 
+let lemma_mk_snl_shape (hn: GHN.hostName{Seq.length hn <= 255})
+  : Lemma (mk_snl hn == [GSNM.Name_host_name hn])
+=
+  assert_norm (mk_snl hn == [GSNM.Name_host_name hn])
+
+let lemma_mk_sne_shape (hn: GHN.hostName{Seq.length hn <= 255})
+  : Lemma (mk_sne hn == [GSNM.Name_host_name hn])
+=
+  lemma_mk_snl_shape hn;
+  assert_norm (mk_sne hn == mk_snl hn)
+
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 100 --split_queries always"
 let lemma_lp_sn_extension (hn: GHN.hostName{Seq.length hn <= 255 /\ Seq.length hn > 0})
   : Lemma (Seq.equal (LP.serialize GECH.extensionClientHello_serializer

@@ -102,6 +102,9 @@ module RCH = TLS13.Wire.Spec.Reveal.ClientHello
 
 let byte = RR.byte
 
+let lemma_byte_value n =
+  RR.lemma_byte_value n
+
 let lemma_ptm_change_cipher_spec = RR.lemma_ptm_change_cipher_spec
 
 let lemma_ptm_application_data = RR.lemma_ptm_application_data
@@ -133,11 +136,9 @@ let lemma_serialize_application_data_record_reveal = RR.lemma_serialize_applicat
 let lemma_application_data_record_header = RR.lemma_application_data_record_header
 
 let application_data_record_header_bytes = RR.application_data_record_header_bytes
-
 let lemma_application_data_record_header_bytes = RR.lemma_application_data_record_header_bytes
-
 let lemma_application_data_record_header_bytes_reveal = RR.lemma_application_data_record_header_bytes_reveal
-
+let lemma_parse_application_data_record_header_bytes = RR.lemma_parse_application_data_record_header_bytes
 let lemma_serialize_plaintext_reveal = RR.lemma_serialize_plaintext_reveal
 
 let lemma_plaintext_roundtrip_reveal = RR.lemma_plaintext_roundtrip_reveal
@@ -207,6 +208,8 @@ let lemma_serialize_client_hello_reveal hello =
 #pop-options
 
 let client_hello_byte n = RCH.client_hello_byte n
+
+let lemma_client_hello_byte_v n = RCH.lemma_client_hello_byte_v n
 
 let client_hello_common_extensions_bytes key_share =
   RCH.client_hello_common_extensions_bytes key_share
@@ -320,6 +323,10 @@ let rec list_drop (#a:Type) (n:nat) (l:list a) : Tot (list a) (decreases n) =
     | [] -> []
     | _ :: tl -> list_drop (n - 1) tl
   )
+
+let lemma_list_drop_zero (#a:Type) (l:list a)
+  : Lemma (ensures list_drop 0 l == l)
+  = ()
 
 let lemma_list_drop_cons_succ (#a:Type) (hd:a) (tl:list a) (n:nat)
   : Lemma (ensures list_drop (n + 1) (hd :: tl) == list_drop n tl)

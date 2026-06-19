@@ -50,6 +50,10 @@ val byte:
   n:nat ->
   GTot U8.t
 
+val lemma_byte_value:
+  n:nat ->
+  Lemma (U8.v (byte n) == n % 256)
+
 val lemma_ptm_change_cipher_spec (fragment:B.bytes)
   : Lemma (ensures WS.parse_tls_message T.ChangeCipherSpec fragment ==
                    (if B.length fragment = 1 && U8.v (Seq.index fragment 0) = 1
@@ -158,6 +162,11 @@ val lemma_application_data_record_header_bytes_reveal:
       byte (fragment_len / 256);
       byte fragment_len
     ]))
+
+val lemma_parse_application_data_record_header_bytes:
+  fragment_len:nat{fragment_len <= 16640} ->
+  Lemma (WS.parse_record_header (application_data_record_header_bytes fragment_len) ==
+         Some (T.ApplicationData, fragment_len))
 
 val lemma_serialize_plaintext_reveal:
   pt:M.plaintext ->
@@ -275,6 +284,10 @@ val lemma_serialize_client_hello_reveal:
 val client_hello_byte:
   n:nat ->
   GTot B.byte
+
+val lemma_client_hello_byte_v:
+  n:nat ->
+  Lemma (U8.v (client_hello_byte n) == n % 256)
 
 val client_hello_common_extensions_bytes:
   key_share:B.bytes ->
@@ -620,6 +633,10 @@ val list_drop:
   n:nat ->
   l:list a ->
   Tot (list a)
+
+(* Dropping zero elements leaves the list unchanged. *)
+val lemma_list_drop_zero (#a:Type) (l:list a)
+  : Lemma (ensures list_drop 0 l == l)
 
 (* Stepping the suffix exposes the head element at index [i]. *)
 val lemma_list_drop_index (#a:Type) (l:list a) (i:nat)

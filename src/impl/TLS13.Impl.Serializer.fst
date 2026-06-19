@@ -65,6 +65,13 @@ let u8_of_sizet_div2_byte (n:SZ.t)
   : Lemma (u8_of_sizet (SZ.div (SZ.div n 256sz) 256sz) == byte (SZ.v n / 65536))
   = FStar.Math.Lemmas.division_multiplication_lemma (SZ.v n) 256 256
 
+let lemma_client_hello_byte_eq (n:nat)
+  : Lemma (byte n == WSR.client_hello_byte n)
+=
+  WSR.lemma_client_hello_byte_v n;
+  assert_norm (U8.v (byte n) == n % 256);
+  U8.v_inj (byte n) (WSR.client_hello_byte n)
+
 let write_u16_bytes (n:nat) : GTot B.bytes =
   B.of_list [byte (n / 256); byte n]
 
@@ -83,13 +90,23 @@ let lemma_handshake_record_header_bytes (n:nat)
       (WSR.serialize_record_header T.Handshake n))
 =
   WSR.lemma_serialize_handshake_record_header_reveal n;
+  WSR.lemma_byte_value (n / 256);
+  WSR.lemma_byte_value n;
   assert_norm (handshake_record_header_bytes n == B.of_list [0x16uy; 0x03uy; 0x03uy; byte (n / 256); byte n]);
+  assert_norm (U8.v (byte (n / 256)) == (n / 256) % 256);
+  assert_norm (U8.v (byte n) == n % 256);
+  U8.v_inj (WSR.byte (n / 256)) (byte (n / 256));
+  U8.v_inj (WSR.byte n) (byte n);
+  assert (WSR.byte (n / 256) == byte (n / 256));
+  assert (WSR.byte n == byte n);
   assert_norm (B.of_list [
       0x16uy; 0x03uy; 0x03uy;
       U8.uint_to_t ((n / 256) % 256);
       U8.uint_to_t (n % 256)
     ] == B.of_list [0x16uy; 0x03uy; 0x03uy; byte (n / 256); byte n]);
-  Seq.lemma_eq_refl (handshake_record_header_bytes n) (WSR.serialize_record_header T.Handshake n)
+  Seq.lemma_eq_elim
+    (B.of_list [0x16uy; 0x03uy; 0x03uy; WSR.byte (n / 256); WSR.byte n])
+    (handshake_record_header_bytes n)
 
 let lemma_eq_handshake_record_header_from_indices (s:B.bytes) (n:nat)
   : Lemma
@@ -137,6 +154,14 @@ let lemma_application_data_header_bytes (n:nat)
       (WSR.application_data_record_header_bytes n))
 =
   WSR.lemma_application_data_record_header_bytes_reveal n;
+  WSR.lemma_byte_value (n / 256);
+  WSR.lemma_byte_value n;
+  assert_norm (U8.v (byte (n / 256)) == (n / 256) % 256);
+  assert_norm (U8.v (byte n) == n % 256);
+  U8.v_inj (WSR.byte (n / 256)) (byte (n / 256));
+  U8.v_inj (WSR.byte n) (byte n);
+  assert (WSR.byte (n / 256) == byte (n / 256));
+  assert (WSR.byte n == byte n);
   Seq.lemma_eq_elim
     (WSR.application_data_record_header_bytes n)
     (B.of_list [0x17uy; 0x03uy; 0x03uy; byte (n / 256); byte n]);
@@ -1366,6 +1391,7 @@ fn serialize_application_data_header
   Seq.lemma_eq_elim
     (CS.application_data_record_header (SZ.v fragment_len))
     (WSR.application_data_record_header_bytes (SZ.v fragment_len));
+  WSR.lemma_parse_application_data_record_header_bytes (SZ.v fragment_len);
   assert (pure (Seq.equal
     header_bytes
     (CS.application_data_record_header (SZ.v fragment_len))));
@@ -2639,7 +2665,69 @@ fn write_client_hello_sni_and_common_extensions
     (CL.raw_slice (Ghost.reveal 'old_out) 0 47)));
   assert (pure (B.length (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len)) ==
     SZ.v hostname_len));
+  lemma_client_hello_byte_eq ((5 + SZ.v hostname_len) / 256);
+  lemma_client_hello_byte_eq (5 + SZ.v hostname_len);
+  lemma_client_hello_byte_eq ((3 + SZ.v hostname_len) / 256);
+  lemma_client_hello_byte_eq (3 + SZ.v hostname_len);
+  lemma_client_hello_byte_eq (SZ.v hostname_len / 256);
+  lemma_client_hello_byte_eq (SZ.v hostname_len);
+  WSR.lemma_client_hello_byte_v ((5 + SZ.v hostname_len) / 256);
+  WSR.lemma_client_hello_byte_v (5 + SZ.v hostname_len);
+  WSR.lemma_client_hello_byte_v ((3 + SZ.v hostname_len) / 256);
+  WSR.lemma_client_hello_byte_v (3 + SZ.v hostname_len);
+  WSR.lemma_client_hello_byte_v (SZ.v hostname_len / 256);
+  WSR.lemma_client_hello_byte_v (SZ.v hostname_len);
+  assert (pure (u8_of_sizet (SZ.div sni_data_len 256sz) ==
+    WSR.client_hello_byte ((5 + SZ.v hostname_len) / 256)));
+  assert (pure (u8_of_sizet sni_data_len ==
+    WSR.client_hello_byte (5 + SZ.v hostname_len)));
+  assert (pure (u8_of_sizet (SZ.div sni_list_len 256sz) ==
+    WSR.client_hello_byte ((3 + SZ.v hostname_len) / 256)));
+  assert (pure (u8_of_sizet sni_list_len ==
+    WSR.client_hello_byte (3 + SZ.v hostname_len)));
+  assert (pure (u8_of_sizet (SZ.div hostname_len 256sz) ==
+    WSR.client_hello_byte (SZ.v hostname_len / 256)));
+  assert (pure (u8_of_sizet hostname_len ==
+    WSR.client_hello_byte (SZ.v hostname_len)));
+  assert (pure (Seq.equal
+    (CL.raw_slice out_before_common_extensions 47 56)
+    (B.of_list [
+      0uy; 0uy;
+      WSR.client_hello_byte ((5 + SZ.v hostname_len) / 256);
+      WSR.client_hello_byte (5 + SZ.v hostname_len);
+      WSR.client_hello_byte ((3 + SZ.v hostname_len) / 256);
+      WSR.client_hello_byte (3 + SZ.v hostname_len);
+      0uy;
+      WSR.client_hello_byte (SZ.v hostname_len / 256);
+      WSR.client_hello_byte (SZ.v hostname_len)])));
+  lemma_copy_expr_copied_slice
+    (Ghost.reveal 'old_out)
+    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
+    56
+    (SZ.v hostname_len)
+    (SZ.v out_len);
+  assert (pure (Seq.equal
+    (CL.raw_slice out_before_common_extensions 56 (SZ.v common_extensions_off))
+    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))));
+  SeqP.append_slices
+    (CL.raw_slice out_before_common_extensions 47 56)
+    (CL.raw_slice out_before_common_extensions 56 (SZ.v common_extensions_off));
+  CL.lemma_raw_slice_split out_before_common_extensions 47 56 (SZ.v common_extensions_off);
   WSR.lemma_client_hello_server_name_extension_bytes_reveal
+    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len));
+  Seq.lemma_eq_elim
+    (CL.raw_slice out_before_common_extensions 47 56)
+    (B.of_list [
+      0uy; 0uy;
+      WSR.client_hello_byte ((5 + SZ.v hostname_len) / 256);
+      WSR.client_hello_byte (5 + SZ.v hostname_len);
+      WSR.client_hello_byte ((3 + SZ.v hostname_len) / 256);
+      WSR.client_hello_byte (3 + SZ.v hostname_len);
+      0uy;
+      WSR.client_hello_byte (SZ.v hostname_len / 256);
+      WSR.client_hello_byte (SZ.v hostname_len)]);
+  Seq.lemma_eq_elim
+    (CL.raw_slice out_before_common_extensions 56 (SZ.v common_extensions_off))
     (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len));
   assert (pure (Seq.equal
     (CL.raw_slice out_before_common_extensions 47 (SZ.v common_extensions_off))
@@ -3023,6 +3111,17 @@ fn serialize_client_hello_from_start
     (SZ.v body_len)
     (SZ.v extensions_len)
     random;
+  u8_of_sizet_v_byte (SZ.div body_len 256sz);
+  u8_of_sizet_v_byte body_len;
+  u8_of_sizet_v_byte (SZ.div extensions_len 256sz);
+  u8_of_sizet_v_byte extensions_len;
+  assert (pure (SZ.v (SZ.div body_len 256sz) == SZ.v body_len / 256));
+  assert (pure (SZ.v (SZ.div extensions_len 256sz) == SZ.v extensions_len / 256));
+  lemma_client_hello_byte_eq (SZ.v body_len / 65536);
+  lemma_client_hello_byte_eq (SZ.v body_len / 256);
+  lemma_client_hello_byte_eq (SZ.v body_len);
+  lemma_client_hello_byte_eq (SZ.v extensions_len / 256);
+  lemma_client_hello_byte_eq (SZ.v extensions_len);
   assert (pure (Seq.equal
     (CL.raw_slice client_hello_prefix 0 47)
     (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)));

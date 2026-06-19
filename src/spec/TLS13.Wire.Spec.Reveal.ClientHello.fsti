@@ -45,6 +45,29 @@ val client_hello_handshake_bytes:
   key_share:B.bytes ->
   GTot B.bytes
 
+val lemma_client_hello_body_bytes_shape:
+  random:B.bytes ->
+  hostname:B.bytes ->
+  key_share:B.bytes ->
+  Lemma (Seq.equal
+    (client_hello_body_bytes random hostname key_share)
+    (let extensions = client_hello_extensions_bytes hostname key_share in
+     B.append
+       (B.of_list [0x03uy; 0x03uy])
+       (B.append
+         random
+         (B.append
+           (B.of_list [0uy])
+           (B.append
+             (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+             (B.append
+               (B.of_list [0uy])
+               (B.append
+                 (B.of_list [
+                   client_hello_byte (B.length extensions / 256);
+                   client_hello_byte (B.length extensions)])
+                 extensions)))))))
+
 val lemma_client_hello_common_extensions_bytes_reveal:
   key_share:B.bytes{B.length key_share == 32} ->
   Lemma (Seq.equal

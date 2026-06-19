@@ -122,6 +122,64 @@ let client_hello_handshake_bytes
       client_hello_byte (B.length body)])
     body
 
+let lemma_client_hello_body_bytes_shape
+  (random:B.bytes)
+  (hostname:B.bytes)
+  (key_share:B.bytes)
+  : Lemma (Seq.equal
+    (client_hello_body_bytes random hostname key_share)
+    (let extensions = client_hello_extensions_bytes hostname key_share in
+     B.append
+       (B.of_list [0x03uy; 0x03uy])
+       (B.append
+         random
+         (B.append
+           (B.of_list [0uy])
+           (B.append
+             (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+             (B.append
+               (B.of_list [0uy])
+               (B.append
+                 (B.of_list [
+                   client_hello_byte (B.length extensions / 256);
+                   client_hello_byte (B.length extensions)])
+                 extensions)))))))
+=
+  let extensions = client_hello_extensions_bytes hostname key_share in
+  assert_norm (client_hello_body_bytes random hostname key_share ==
+    B.append
+      (B.of_list [0x03uy; 0x03uy])
+      (B.append
+        random
+        (B.append
+          (B.of_list [0uy])
+          (B.append
+            (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+            (B.append
+              (B.of_list [0uy])
+              (B.append
+                (B.of_list [
+                  client_hello_byte (B.length extensions / 256);
+                  client_hello_byte (B.length extensions)])
+                extensions))))));
+  Seq.lemma_eq_refl
+    (client_hello_body_bytes random hostname key_share)
+    (B.append
+      (B.of_list [0x03uy; 0x03uy])
+      (B.append
+        random
+        (B.append
+          (B.of_list [0uy])
+          (B.append
+            (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+            (B.append
+              (B.of_list [0uy])
+              (B.append
+                (B.of_list [
+                  client_hello_byte (B.length extensions / 256);
+                  client_hello_byte (B.length extensions)])
+                extensions))))))
+
 let lemma_client_hello_common_extensions_bytes_reveal
   (key_share:B.bytes{B.length key_share == 32})
 =

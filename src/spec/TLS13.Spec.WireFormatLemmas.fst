@@ -9,6 +9,7 @@ module Seq = FStar.Seq
 module T = TLS13.Types
 module W = TLS13.Wire.Spec
 module WR = TLS13.Wire.Spec.Reveal
+module WRCP = TLS13.Wire.Spec.Reveal.ClientHello.Parseback
 module WRD = TLS13.Wire.Spec.RevealDecode
 module ID = FStar.IndefiniteDescription
 module RTC = FStar.ReflexiveTransitiveClosure
@@ -42,7 +43,7 @@ let lemma_parse_client_hello_serialize_client_hello
       (requires exact_client_hello_wire_parseback_profile ch)
       (ensures W.parse_client_hello (W.serialize_client_hello ch) == Some ch)
 =
-  WR.lemma_parse_client_hello_serialize_client_hello ch
+  WRCP.lemma_parse_client_hello_serialize_client_hello ch
 
 (* ------------------------------------------------------------------------- *)
 (* Vacuity workhorse: the received-message synthesizer never returns a       *)

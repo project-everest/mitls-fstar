@@ -17,15 +17,18 @@ friend TLS13.Wire.Generated.ExtensionClientHello_extension_data_server_name
 friend TLS13.Wire.Generated.ExtensionClientHello
 friend TLS13.Wire.Generated.ClientHello_extensions
 friend TLS13.Wire.Generated.ClientHello
+friend TLS13.Wire.Spec
 
 module B = TLS13.Bytes
 module M = TLS13.Messages
+module T = TLS13.Types
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module LP = LowParse.Spec
 module RCH = TLS13.Wire.Spec.Reveal.ClientHello
+module WS = TLS13.Wire.Spec
 module GPV = TLS13.Wire.Generated.ProtocolVersion
 module GRandom = TLS13.Wire.Generated.Random
 module GSID = TLS13.Wire.Generated.ClientHello_legacy_session_id
@@ -33,8 +36,11 @@ module GComp = TLS13.Wire.Generated.ClientHello_legacy_compression_methods
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GCCS = TLS13.Wire.Generated.ClientHello_cipher_suites
 module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GSNM = TLS13.Wire.Generated.ServerName
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GSS = TLS13.Wire.Generated.SignatureScheme
+module GHN = TLS13.Wire.Generated.HostName
+module GKSEKE = TLS13.Wire.Generated.KeyShareEntry_key_exchange
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GCHEXT = TLS13.Wire.Generated.ClientHello_extensions
 module GCH = TLS13.Wire.Generated.ClientHello
@@ -66,21 +72,141 @@ let lemma_bounded_int_2_fits_raw = U.lemma_bounded_int_2_fits_raw
 let lemma_bounded_int_2_raw = U.lemma_bounded_int_2_raw
 let lemma_vldata_strong_unfold_raw = U.lemma_vldata_strong_unfold_raw
 
-/// LP extensions serializer == extension list bytes
-// The ext_list for Some hostname case
-#push-options "--z3rlimit 100 --fuel 4 --ifuel 4"
-let mk_ext_list_some
+let as_key_exchange
+  (key: B.bytes{B.length key == 32})
+  : (key_x: GKSEKE.keyShareEntry_key_exchange{key_x == key /\ Seq.length key_x == 32})
+=
+  assert (LP.parse_bounded_seq_vlbytes_pred 1 65535 key);
+  key
+
+let as_host_name
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
+  : (hn: GHN.hostName{hn == hostname /\ Seq.length hn <= 255 /\ Seq.length hn > 0})
+=
+  assert (LP.parse_bounded_seq_vlbytes_pred 1 65535 hostname);
+  hostname
+
+let empty_session_id ()
+  : (sid: GSID.clientHello_legacy_session_id{sid == B.empty})
+=
+  assert (LP.parse_bounded_seq_vlbytes_pred 0 32 B.empty);
+  B.empty
+
+let singleton_cipher_suites ()
+  : (suites: GCCS.clientHello_cipher_suites{suites == [GCS.TLS_CHACHA20_POLY1305_SHA256]})
+=
+  [GCS.TLS_CHACHA20_POLY1305_SHA256]
+
+let null_compression_methods ()
+  : (comp: GComp.clientHello_legacy_compression_methods{comp == B.of_list [0uy]})
+=
+  assert_norm (B.length (B.of_list [0uy]) == 1);
+  assert (LP.parse_bounded_seq_vlbytes_pred 1 255 (B.of_list [0uy]));
+  B.of_list [0uy]
+
+let lemma_ext_list_some_bounds
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
+  (e_sn e_sg e_sa e_ks e_sv: GECH.extensionClientHello)
+  : Lemma
+      (requires
+        GECH.extensionClientHello_bytesize e_sn == 9 + B.length hostname /\
+        GECH.extensionClientHello_bytesize e_sg == 8 /\
+        GECH.extensionClientHello_bytesize e_sa == 8 /\
+        GECH.extensionClientHello_bytesize e_ks == 42 /\
+        GECH.extensionClientHello_bytesize e_sv == 7)
+      (ensures (
+        let l = [e_sn; e_sg; e_sa; e_ks; e_sv] in
+        let x = GCHEXT.clientHello_extensions_list_bytesize l in
+        8 <= x /\ x <= 65535))
+=
+  let l : list GECH.extensionClientHello = [e_sn; e_sg; e_sa; e_ks; e_sv] in
+  let _ = GCHEXT.clientHello_extensions_list_bytesize_nil in
+  GCHEXT.clientHello_extensions_list_bytesize_cons e_sv [];
+  GCHEXT.clientHello_extensions_list_bytesize_cons e_ks [e_sv];
+  GCHEXT.clientHello_extensions_list_bytesize_cons e_sa [e_ks; e_sv];
+  GCHEXT.clientHello_extensions_list_bytesize_cons e_sg [e_sa; e_ks; e_sv];
+  GCHEXT.clientHello_extensions_list_bytesize_cons e_sn [e_sg; e_sa; e_ks; e_sv];
+  assert (GCHEXT.clientHello_extensions_list_bytesize l == 74 + B.length hostname);
+  assert (8 <= 74 + B.length hostname);
+  assert (B.length hostname <= 255);
+  assert (74 + B.length hostname <= 329);
+  assert (329 <= 65535);
+  assert (74 + B.length hostname <= 65535)
+
+let lemma_sni_extension_len_nonempty
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
+  : Lemma (B.length (client_hello_server_name_extension_bytes hostname) ==
+           9 + B.length hostname)
+=
+  assert (not (B.length hostname = 0));
+  RCH.lemma_client_hello_server_name_extension_bytes_reveal hostname;
+  let sni_prefix = B.of_list [
+    0uy; 0uy;
+    client_hello_byte ((5 + B.length hostname) / 256);
+    client_hello_byte (5 + B.length hostname);
+    client_hello_byte ((3 + B.length hostname) / 256);
+    client_hello_byte (3 + B.length hostname);
+    0uy;
+    client_hello_byte (B.length hostname / 256);
+    client_hello_byte (B.length hostname)] in
+  assert_norm (B.length sni_prefix == 9);
+  Seq.lemma_len_append sni_prefix hostname;
+  Seq.lemma_eq_elim (client_hello_server_name_extension_bytes hostname)
+    (B.append sni_prefix hostname)
+
+#push-options "--z3rlimit 200 --fuel 4 --ifuel 4"
+let mk_ext_list_some_raw
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
   (key: B.bytes{B.length key == 32})
-  : GCHEXT.clientHello_extensions
+  : list GECH.extensionClientHello
 =
-  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key } in
-  lemma_lp_sn_extension hostname;
+  let hn = as_host_name hostname in
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
+  lemma_lp_sn_extension hn;
   lemma_lp_sg_extension ();
   lemma_lp_sa_extension ();
-  lemma_lp_ks_extension key;
+  lemma_lp_ks_extension key_x;
   lemma_lp_sv_extension ();
-  let e_sn = GECH.Extension_data_server_name (mk_sne hostname) in
+  [ GECH.Extension_data_server_name (mk_sne hn);
+    GECH.Extension_data_supported_groups [GNG.X25519];
+    GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256];
+    GECH.Extension_data_key_share [ks];
+    GECH.Extension_data_supported_versions [GPV.TLS_1p3] ]
+
+let mk_ext_list_none_raw
+  (key: B.bytes{B.length key == 32})
+  : list GECH.extensionClientHello
+=
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
+  lemma_lp_sg_extension ();
+  lemma_lp_sa_extension ();
+  lemma_lp_ks_extension key_x;
+  lemma_lp_sv_extension ();
+  [ GECH.Extension_data_supported_groups [GNG.X25519];
+    GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256];
+    GECH.Extension_data_key_share [ks];
+    GECH.Extension_data_supported_versions [GPV.TLS_1p3] ]
+
+/// LP extensions serializer == extension list bytes
+let lemma_ext_list_some_raw_wf
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
+  (key: B.bytes{B.length key == 32})
+  : Lemma (
+      let l = mk_ext_list_some_raw hostname key in
+      let x = GCHEXT.clientHello_extensions_list_bytesize l in
+      8 <= x /\ x <= 65535)
+=
+  let hn = as_host_name hostname in
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
+  lemma_lp_sn_extension hn;
+  lemma_lp_sg_extension ();
+  lemma_lp_sa_extension ();
+  lemma_lp_ks_extension key_x;
+  lemma_lp_sv_extension ();
+  let e_sn = GECH.Extension_data_server_name (mk_sne hn) in
   let e_sg = GECH.Extension_data_supported_groups [GNG.X25519] in
   let e_sa = GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256] in
   let e_ks = GECH.Extension_data_key_share [ks] in
@@ -99,6 +225,8 @@ let mk_ext_list_some
   Seq.lemma_eq_elim
     (LP.serialize GECH.extensionClientHello_serializer e_sa)
     (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy]);
+  assert (key_x == key);
+  assert (Seq.length key_x == 32);
   Seq.lemma_eq_elim
     (LP.serialize GECH.extensionClientHello_serializer e_ks)
     (Seq.append (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy]) key);
@@ -115,6 +243,7 @@ let mk_ext_list_some
   assert (not (B.length hostname = 0));
   assert ((if B.length hostname == 0 then 0 else 9 + B.length hostname) ==
           9 + B.length hostname);
+  lemma_sni_extension_len_nonempty hostname;
   assert (B.length (client_hello_server_name_extension_bytes hostname) == 9 + B.length hostname);
   assert (GECH.extensionClientHello_bytesize e_sn == Seq.length (LP.serialize GECH.extensionClientHello_serializer e_sn));
   assert (Seq.length (LP.serialize GECH.extensionClientHello_serializer e_sn) ==
@@ -124,32 +253,29 @@ let mk_ext_list_some
   assert (GECH.extensionClientHello_bytesize e_sa == 8);
   assert (GECH.extensionClientHello_bytesize e_ks == 42);
   assert (GECH.extensionClientHello_bytesize e_sv == 7);
-  let l : list GECH.extensionClientHello = [e_sn; e_sg; e_sa; e_ks; e_sv] in
-  let _ = GCHEXT.clientHello_extensions_list_bytesize_nil in
-  GCHEXT.clientHello_extensions_list_bytesize_cons e_sv [];
-  GCHEXT.clientHello_extensions_list_bytesize_cons e_ks [e_sv];
-  GCHEXT.clientHello_extensions_list_bytesize_cons e_sa [e_ks; e_sv];
-  GCHEXT.clientHello_extensions_list_bytesize_cons e_sg [e_sa; e_ks; e_sv];
-  GCHEXT.clientHello_extensions_list_bytesize_cons e_sn [e_sg; e_sa; e_ks; e_sv];
-  assert (GCHEXT.clientHello_extensions_list_bytesize l == 74 + B.length hostname);
-  assert (8 <= GCHEXT.clientHello_extensions_list_bytesize l);
-  assert (B.length hostname <= 255);
-  assert (74 + B.length hostname <= 329);
-  assert (329 <= 65535);
-  assert (GCHEXT.clientHello_extensions_list_bytesize l <= 65535);
-  assert_spinoff (let x = GCHEXT.clientHello_extensions_list_bytesize l in 8 <= x /\ x <= 65535);
-  let refined : GCHEXT.clientHello_extensions = l in
-  refined
+  lemma_ext_list_some_bounds hostname e_sn e_sg e_sa e_ks e_sv;
+  assert_norm (mk_ext_list_some_raw hostname key == [e_sn; e_sg; e_sa; e_ks; e_sv])
 
-// The ext_list for None case
-let mk_ext_list_none
+let mk_ext_list_some
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
   (key: B.bytes{B.length key == 32})
   : GCHEXT.clientHello_extensions
 =
-  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key } in
+  lemma_ext_list_some_raw_wf hostname key;
+  mk_ext_list_some_raw hostname key
+
+let lemma_ext_list_none_raw_wf
+  (key: B.bytes{B.length key == 32})
+  : Lemma (
+      let l = mk_ext_list_none_raw key in
+      let x = GCHEXT.clientHello_extensions_list_bytesize l in
+      8 <= x /\ x <= 65535)
+=
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
   lemma_lp_sg_extension ();
   lemma_lp_sa_extension ();
-  lemma_lp_ks_extension key;
+  lemma_lp_ks_extension key_x;
   lemma_lp_sv_extension ();
   let e_sg = GECH.Extension_data_supported_groups [GNG.X25519] in
   let e_sa = GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256] in
@@ -165,6 +291,8 @@ let mk_ext_list_none
   Seq.lemma_eq_elim
     (LP.serialize GECH.extensionClientHello_serializer e_sa)
     (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy]);
+  assert (key_x == key);
+  assert (Seq.length key_x == 32);
   Seq.lemma_eq_elim
     (LP.serialize GECH.extensionClientHello_serializer e_ks)
     (Seq.append (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy]) key);
@@ -190,9 +318,179 @@ let mk_ext_list_none
   assert (8 <= GCHEXT.clientHello_extensions_list_bytesize l);
   assert (GCHEXT.clientHello_extensions_list_bytesize l <= 65535);
   assert_spinoff (let x = GCHEXT.clientHello_extensions_list_bytesize l in 8 <= x /\ x <= 65535);
-  let refined : GCHEXT.clientHello_extensions = l in
-  refined
+  assert_norm (mk_ext_list_none_raw key == l)
+
+let mk_ext_list_none
+  (key: B.bytes{B.length key == 32})
+  : GCHEXT.clientHello_extensions
+=
+  lemma_ext_list_none_raw_wf key;
+  mk_ext_list_none_raw key
+
+let mk_ch_low_some
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32})
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
+  : GCH.clientHello
+=
+  { GCH.legacy_version = GPV.TLS_1p2;
+    GCH.random = ch.M.random;
+    GCH.legacy_session_id = B.empty;
+    GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+    GCH.legacy_compression_methods = B.of_list [0uy];
+    GCH.extensions = mk_ext_list_some hostname ch.M.key_share }
+
+let mk_ch_low_none
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32})
+  : GCH.clientHello
+=
+  { GCH.legacy_version = GPV.TLS_1p2;
+    GCH.random = ch.M.random;
+    GCH.legacy_session_id = B.empty;
+    GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+    GCH.legacy_compression_methods = B.of_list [0uy];
+    GCH.extensions = mk_ext_list_none ch.M.key_share }
 #pop-options
+
+#push-options "--z3rlimit 10 --fuel 4 --ifuel 4"
+let lemma_ch_extensions_some_raw
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0})
+  (key: B.bytes{B.length key == 32})
+  : Lemma (
+      WS.ch_extensions (mk_ext_list_some_raw hostname key) None None false [] ==
+      Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]))
+=
+  let hn = as_host_name hostname in
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
+  let tail_sv = [GECH.Extension_data_supported_versions [GPV.TLS_1p3]] in
+  let tail_ks = GECH.Extension_data_key_share [ks] :: tail_sv in
+  let tail_sa = GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256] :: tail_ks in
+  let tail_sg = GECH.Extension_data_supported_groups [GNG.X25519] :: tail_sa in
+  let exts = GECH.Extension_data_server_name (E.mk_sne hn) :: tail_sg in
+  E.lemma_mk_sne_shape hn;
+  assert (hn == hostname);
+  assert (E.mk_sne hn == [GSNM.Name_host_name hn]);
+  assert (WS.ch_server_name (E.mk_sne hn) == Some hostname);
+  WS.lemma_key_exchange_to_key32 key_x;
+  assert (WS.key_exchange_to_key32 key_x == Some key);
+  assert (WS.ch_find_key_share [ks] == Some key);
+  assert_norm (WS.synth_sig_schemes [GSS.Rsa_pss_rsae_sha256] == [T.RsaPssRsaeSha256]);
+  assert_norm (List.Tot.mem GPV.TLS_1p3 [GPV.TLS_1p3]);
+  assert_norm (WS.ch_extensions [] (Some hostname) (Some key) true [T.RsaPssRsaeSha256] ==
+    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions tail_sv (Some hostname) (Some key) false [T.RsaPssRsaeSha256] ==
+    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions tail_ks (Some hostname) None false [T.RsaPssRsaeSha256] ==
+    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions tail_sa (Some hostname) None false [] ==
+    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions tail_sg (Some hostname) None false [] ==
+    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions exts None None false [] ==
+    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+  assert_norm (mk_ext_list_some_raw hostname key == exts)
+
+let lemma_ch_extensions_none_raw
+  (key: B.bytes{B.length key == 32})
+  : Lemma (
+      WS.ch_extensions (mk_ext_list_none_raw key) None None false [] ==
+      Some (None, Some key, true, [T.RsaPssRsaeSha256]))
+=
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
+  let tail_sv = [GECH.Extension_data_supported_versions [GPV.TLS_1p3]] in
+  let tail_ks = GECH.Extension_data_key_share [ks] :: tail_sv in
+  let tail_sa = GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256] :: tail_ks in
+  let exts = GECH.Extension_data_supported_groups [GNG.X25519] :: tail_sa in
+  WS.lemma_key_exchange_to_key32 key_x;
+  assert (WS.key_exchange_to_key32 key_x == Some key);
+  assert (WS.ch_find_key_share [ks] == Some key);
+  assert_norm (WS.synth_sig_schemes [GSS.Rsa_pss_rsae_sha256] == [T.RsaPssRsaeSha256]);
+  assert_norm (List.Tot.mem GPV.TLS_1p3 [GPV.TLS_1p3]);
+  assert_norm (WS.ch_extensions [] None (Some key) true [T.RsaPssRsaeSha256] ==
+    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions tail_sv None (Some key) false [T.RsaPssRsaeSha256] ==
+    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions tail_ks None None false [T.RsaPssRsaeSha256] ==
+    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions tail_sa None None false [] ==
+    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions exts None None false [] ==
+    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+  assert_norm (mk_ext_list_none_raw key == exts)
+#pop-options
+
+let lemma_synth_client_hello_some
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
+  : Lemma (
+      let low : GCH.clientHello =
+        { GCH.legacy_version = GPV.TLS_1p2;
+          GCH.random = ch.M.random;
+          GCH.legacy_session_id = B.empty;
+          GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+          GCH.legacy_compression_methods = B.of_list [0uy];
+          GCH.extensions = mk_ext_list_some hostname ch.M.key_share } in
+      WS.synth_client_hello low == Some ch)
+=
+  let ext_raw = mk_ext_list_some_raw hostname ch.M.key_share in
+  let low : GCH.clientHello =
+    { GCH.legacy_version = GPV.TLS_1p2;
+      GCH.random = ch.M.random;
+      GCH.legacy_session_id = B.empty;
+      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.extensions = mk_ext_list_some hostname ch.M.key_share } in
+  let hn = as_host_name hostname in
+  E.lemma_mk_sne_shape hn;
+  assert (hn == hostname);
+  assert (E.mk_sne hn == [GSNM.Name_host_name hn]);
+  assert (mk_ext_list_some hostname ch.M.key_share == ext_raw);
+  assert (low.GCH.extensions == ext_raw);
+  lemma_ch_extensions_some_raw hostname ch.M.key_share;
+  assert (WS.ch_extensions ext_raw None None false [] ==
+    Some (Some hostname, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions low.GCH.extensions None None false [] ==
+    Some (Some hostname, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+  assert_norm (WS.synth_cipher_suites low.GCH.cipher_suites ==
+    [T.TLS_CHACHA20_POLY1305_SHA256]);
+  assert (WS.synth_client_hello low == Some ch)
+
+let lemma_synth_client_hello_none
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.server_name == None})
+  : Lemma (
+      let low : GCH.clientHello =
+        { GCH.legacy_version = GPV.TLS_1p2;
+          GCH.random = ch.M.random;
+          GCH.legacy_session_id = B.empty;
+          GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+          GCH.legacy_compression_methods = B.of_list [0uy];
+          GCH.extensions = mk_ext_list_none ch.M.key_share } in
+      WS.synth_client_hello low == Some ch)
+=
+  let ext_raw = mk_ext_list_none_raw ch.M.key_share in
+  let low : GCH.clientHello =
+    { GCH.legacy_version = GPV.TLS_1p2;
+      GCH.random = ch.M.random;
+      GCH.legacy_session_id = B.empty;
+      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.extensions = mk_ext_list_none ch.M.key_share } in
+  assert (mk_ext_list_none ch.M.key_share == ext_raw);
+  assert (low.GCH.extensions == ext_raw);
+  lemma_ch_extensions_none_raw ch.M.key_share;
+  assert (WS.ch_extensions ext_raw None None false [] ==
+    Some (None, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+  assert (WS.ch_extensions low.GCH.extensions None None false [] ==
+    Some (None, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+  assert_norm (WS.synth_cipher_suites low.GCH.cipher_suites ==
+    [T.TLS_CHACHA20_POLY1305_SHA256]);
+  assert (WS.synth_client_hello low == Some ch)
 
 /// Prove that LP extensions list bytes == client_hello_extensions_bytes (common part)
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 100"
@@ -203,12 +501,14 @@ private let lemma_lp_ext_list_bytes_common
                     (mk_ext_list_none key))
       (client_hello_common_extensions_bytes key))
 =
-  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key } in
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
   let l = mk_ext_list_none key in
   let e_sg = GECH.Extension_data_supported_groups [GNG.X25519] in
   let e_sa = GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256] in
   let e_ks = GECH.Extension_data_key_share [ks] in
   let e_sv = GECH.Extension_data_supported_versions [GPV.TLS_1p3] in
+  assert_norm (mk_ext_list_none key == [e_sg; e_sa; e_ks; e_sv]);
   LP.serialize_list_nil GECH.extensionClientHello_parser GECH.extensionClientHello_serializer;
   LP.serialize_list_cons GECH.extensionClientHello_parser GECH.extensionClientHello_serializer e_sv [];
   LP.serialize_list_cons GECH.extensionClientHello_parser GECH.extensionClientHello_serializer e_ks [e_sv];
@@ -216,8 +516,37 @@ private let lemma_lp_ext_list_bytes_common
   LP.serialize_list_cons GECH.extensionClientHello_parser GECH.extensionClientHello_serializer e_sg [e_sa; e_ks; e_sv];
   lemma_lp_sg_extension ();
   lemma_lp_sa_extension ();
-  lemma_lp_ks_extension key;
-  lemma_lp_sv_extension ()
+  lemma_lp_ks_extension key_x;
+  lemma_lp_sv_extension ();
+  let sg_bytes = B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy] in
+  let sa_bytes = B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy] in
+  let ks_prefix = B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy] in
+  let sv_bytes = B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy] in
+  Seq.lemma_eq_elim (LP.serialize GECH.extensionClientHello_serializer e_sg) sg_bytes;
+  Seq.lemma_eq_elim (LP.serialize GECH.extensionClientHello_serializer e_sa) sa_bytes;
+  assert (key_x == key);
+  Seq.lemma_eq_elim
+    (Seq.append ks_prefix key_x)
+    (Seq.append ks_prefix key);
+  Seq.lemma_eq_elim
+    (LP.serialize GECH.extensionClientHello_serializer e_ks)
+    (Seq.append ks_prefix key);
+  Seq.lemma_eq_elim (LP.serialize GECH.extensionClientHello_serializer e_sv) sv_bytes;
+  Seq.append_empty_r sv_bytes;
+  RCH.lemma_client_hello_common_extensions_bytes_reveal key;
+  Seq.lemma_eq_elim
+    (client_hello_common_extensions_bytes key)
+    (B.append
+      sg_bytes
+      (B.append
+        sa_bytes
+        (B.append
+          (B.append ks_prefix key)
+          sv_bytes)));
+  assert (Seq.equal
+    (LP.serialize (LP.serialize_list _ GECH.extensionClientHello_serializer)
+                  (mk_ext_list_none key))
+    (client_hello_common_extensions_bytes key))
 #pop-options
 
 #restart-solver
@@ -231,12 +560,15 @@ private let lemma_lp_ext_list_bytes_some
                     (mk_ext_list_some hostname key))
       (client_hello_extensions_bytes hostname key))
 =
-  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key } in
-  let e_sn = GECH.Extension_data_server_name (mk_sne hostname) in
+  let hn = as_host_name hostname in
+  let key_x = as_key_exchange key in
+  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
+  let e_sn = GECH.Extension_data_server_name (mk_sne hn) in
   let e_sg = GECH.Extension_data_supported_groups [GNG.X25519] in
   let e_sa = GECH.Extension_data_signature_algorithms [GSS.Rsa_pss_rsae_sha256] in
   let e_ks = GECH.Extension_data_key_share [ks] in
   let e_sv = GECH.Extension_data_supported_versions [GPV.TLS_1p3] in
+  assert_norm (mk_ext_list_some hostname key == [e_sn; e_sg; e_sa; e_ks; e_sv]);
   LP.serialize_list_nil GECH.extensionClientHello_parser GECH.extensionClientHello_serializer;
   LP.serialize_list_cons GECH.extensionClientHello_parser GECH.extensionClientHello_serializer e_sv [];
   LP.serialize_list_cons GECH.extensionClientHello_parser GECH.extensionClientHello_serializer e_ks [e_sv];
@@ -244,11 +576,50 @@ private let lemma_lp_ext_list_bytes_some
   LP.serialize_list_cons GECH.extensionClientHello_parser GECH.extensionClientHello_serializer e_sg [e_sa; e_ks; e_sv];
   LP.serialize_list_cons GECH.extensionClientHello_parser GECH.extensionClientHello_serializer e_sn
     [e_sg; e_sa; e_ks; e_sv];
-  lemma_lp_sn_extension hostname;
+  lemma_lp_sn_extension hn;
   lemma_lp_sg_extension ();
   lemma_lp_sa_extension ();
-  lemma_lp_ks_extension key;
-  lemma_lp_sv_extension ()
+  lemma_lp_ks_extension key_x;
+  lemma_lp_sv_extension ();
+  let sn_bytes = client_hello_server_name_extension_bytes hostname in
+  let sg_bytes = B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy] in
+  let sa_bytes = B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy] in
+  let ks_prefix = B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy] in
+  let sv_bytes = B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy] in
+  assert (hn == hostname);
+  Seq.lemma_eq_elim
+    (client_hello_server_name_extension_bytes hn)
+    sn_bytes;
+  Seq.lemma_eq_elim (LP.serialize GECH.extensionClientHello_serializer e_sn) sn_bytes;
+  Seq.lemma_eq_elim (LP.serialize GECH.extensionClientHello_serializer e_sg) sg_bytes;
+  Seq.lemma_eq_elim (LP.serialize GECH.extensionClientHello_serializer e_sa) sa_bytes;
+  assert (key_x == key);
+  Seq.lemma_eq_elim
+    (Seq.append ks_prefix key_x)
+    (Seq.append ks_prefix key);
+  Seq.lemma_eq_elim
+    (LP.serialize GECH.extensionClientHello_serializer e_ks)
+    (Seq.append ks_prefix key);
+  Seq.lemma_eq_elim (LP.serialize GECH.extensionClientHello_serializer e_sv) sv_bytes;
+  Seq.append_empty_r sv_bytes;
+  RCH.lemma_client_hello_common_extensions_bytes_reveal key;
+  Seq.lemma_eq_elim
+    (client_hello_common_extensions_bytes key)
+    (B.append
+      sg_bytes
+      (B.append
+        sa_bytes
+        (B.append
+          (B.append ks_prefix key)
+          sv_bytes)));
+  RCH.lemma_client_hello_extensions_bytes_shape hostname key;
+  Seq.lemma_eq_elim
+    (client_hello_extensions_bytes hostname key)
+    (B.append sn_bytes (client_hello_common_extensions_bytes key));
+  assert (Seq.equal
+    (LP.serialize (LP.serialize_list _ GECH.extensionClientHello_serializer)
+                  (mk_ext_list_some hostname key))
+    (client_hello_extensions_bytes hostname key))
 #pop-options
 
 #restart-solver
@@ -338,11 +709,12 @@ let lemma_lp_ch_ext_ser_none
 
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 200 --split_queries always"
 let lemma_lp_ch_low_bytes_some
-  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32})
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
-      (let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ch.M.key_share } in
-       let low : GCH.clientHello =
+      (let low : GCH.clientHello =
          { GCH.legacy_version = GPV.TLS_1p2;
            GCH.random = ch.M.random;
            GCH.legacy_session_id = B.empty;
@@ -350,15 +722,25 @@ let lemma_lp_ch_low_bytes_some
            GCH.legacy_compression_methods = B.of_list [0uy];
            GCH.extensions = mk_ext_list_some hostname ch.M.key_share } in
        Seq.equal (LP.serialize GCH.clientHello_serializer low)
-                 (client_hello_body_bytes ch.M.random hostname ch.M.key_share))
+                 (client_hello_body_bytes ch.M.random hostname ch.M.key_share) /\
+       Seq.equal (LP.serialize GCH.clientHello_serializer low)
+                 (client_hello_body_bytes
+                   ch.M.random
+                   (match ch.M.server_name with
+                    | Some h -> h
+                    | None -> B.empty)
+                   ch.M.key_share) /\
+       WS.synth_client_hello low == Some ch)
 =
-  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ch.M.key_share } in
+  let sid = empty_session_id () in
+  let suites = singleton_cipher_suites () in
+  let comp = null_compression_methods () in
   let low : GCH.clientHello =
     { GCH.legacy_version = GPV.TLS_1p2;
       GCH.random = ch.M.random;
-      GCH.legacy_session_id = B.empty;
-      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
-      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.legacy_session_id = sid;
+      GCH.cipher_suites = suites;
+      GCH.legacy_compression_methods = comp;
       GCH.extensions = mk_ext_list_some hostname ch.M.key_share } in
   // Step 1: expand clientHello_serializer via serialize_synth_eq
   GCH.synth_clientHello_injective ();
@@ -366,8 +748,8 @@ let lemma_lp_ch_low_bytes_some
   LP.serialize_synth_eq GCH.clientHello'_parser GCH.synth_clientHello
     GCH.clientHello'_serializer GCH.synth_clientHello_recip () low;
   assert (GCH.synth_clientHello_recip low ==
-    (((GPV.TLS_1p2, ch.M.random), (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256])),
-     (B.of_list [0uy], mk_ext_list_some hostname ch.M.key_share)));
+    (((GPV.TLS_1p2, ch.M.random), (sid, suites)),
+     (comp, mk_ext_list_some hostname ch.M.key_share)));
   // Step 2: expand clientHello'_serializer via nondep_then_eq
   let s1 = GPV.protocolVersion_serializer in
   let s2 = GRandom.random_serializer in
@@ -380,14 +762,14 @@ let lemma_lp_ch_low_bytes_some
   let s56 = LP.serialize_nondep_then s5 s6 in
   let s1234 = LP.serialize_nondep_then s12 s34 in
   LP.serialize_nondep_then_eq s1234 s56
-    (((GPV.TLS_1p2, ch.M.random), (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256])),
-     (B.of_list [0uy], mk_ext_list_some hostname ch.M.key_share));
+    (((GPV.TLS_1p2, ch.M.random), (sid, suites)),
+     (comp, mk_ext_list_some hostname ch.M.key_share));
   LP.serialize_nondep_then_eq s12 s34
-    ((GPV.TLS_1p2, ch.M.random), (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256]));
+    ((GPV.TLS_1p2, ch.M.random), (sid, suites));
   LP.serialize_nondep_then_eq s5 s6
-    (B.of_list [0uy], mk_ext_list_some hostname ch.M.key_share);
+    (comp, mk_ext_list_some hostname ch.M.key_share);
   LP.serialize_nondep_then_eq s1 s2 (GPV.TLS_1p2, ch.M.random);
-  LP.serialize_nondep_then_eq s3 s4 (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256]);
+  LP.serialize_nondep_then_eq s3 s4 (sid, suites);
   // Step 3: leaf fields
   lemma_lp_pv_tls12 ();
   lemma_lp_random ch.M.random;
@@ -402,9 +784,9 @@ let lemma_lp_ch_low_bytes_some
   lemma_client_hello_extensions_len hostname ch.M.key_share;
   let ext_len_bytes = B.of_list [client_hello_byte (ext_len / 256); client_hello_byte ext_len] in
   Seq.lemma_eq_elim (LP.serialize s1 GPV.TLS_1p2) (B.of_list [0x03uy; 0x03uy]);
-  Seq.lemma_eq_elim (LP.serialize s3 B.empty) (B.of_list [0uy]);
-  Seq.lemma_eq_elim (LP.serialize s4 [GCS.TLS_CHACHA20_POLY1305_SHA256]) (B.of_list [0uy; 2uy; 0x13uy; 0x03uy]);
-  Seq.lemma_eq_elim (LP.serialize s5 (B.of_list [0uy])) (B.of_list [1uy; 0uy]);
+  Seq.lemma_eq_elim (LP.serialize s3 sid) (B.of_list [0uy]);
+  Seq.lemma_eq_elim (LP.serialize s4 suites) (B.of_list [0uy; 2uy; 0x13uy; 0x03uy]);
+  Seq.lemma_eq_elim (LP.serialize s5 comp) (B.of_list [1uy; 0uy]);
   Seq.lemma_eq_elim
     (LP.serialize s6 (mk_ext_list_some hostname ch.M.key_share))
     (Seq.append ext_len_bytes ext_bytes);
@@ -446,17 +828,42 @@ let lemma_lp_ch_low_bytes_some
   Seq.append_assoc (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy]) (B.of_list [0uy]) (Seq.append ext_len_bytes ext_bytes);
   // ext_with_len = ext_len_bytes ++ ext_bytes
   Seq.append_assoc (B.of_list [0uy]) ext_len_bytes ext_bytes;
+  RCH.lemma_client_hello_body_bytes_shape ch.M.random hostname ch.M.key_share;
+  Seq.lemma_eq_elim
+    (client_hello_body_bytes ch.M.random hostname ch.M.key_share)
+    (B.append
+      pv
+      (B.append
+        r
+        (B.append
+          sid
+          (B.append
+            (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+            (B.append
+              (B.of_list [0uy])
+              (B.append ext_len_bytes ext_bytes))))));
   assert (Seq.equal
     (LP.serialize GCH.clientHello_serializer low)
-    (client_hello_body_bytes ch.M.random hostname ch.M.key_share))
+    (client_hello_body_bytes ch.M.random hostname ch.M.key_share));
+  assert ((match ch.M.server_name with | Some h -> h | None -> B.empty) == hostname);
+  assert (Seq.equal
+    (LP.serialize GCH.clientHello_serializer low)
+    (client_hello_body_bytes
+      ch.M.random
+      (match ch.M.server_name with | Some h -> h | None -> B.empty)
+      ch.M.key_share));
+  lemma_synth_client_hello_some ch hostname;
+  assert (WS.synth_client_hello low == Some ch)
 #pop-options
 
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 200 --split_queries always"
 let lemma_lp_ch_low_bytes_none
-  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32})
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.server_name == None})
   : Lemma
-      (let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ch.M.key_share } in
-       let low : GCH.clientHello =
+      (let low : GCH.clientHello =
          { GCH.legacy_version = GPV.TLS_1p2;
            GCH.random = ch.M.random;
            GCH.legacy_session_id = B.empty;
@@ -464,23 +871,33 @@ let lemma_lp_ch_low_bytes_none
            GCH.legacy_compression_methods = B.of_list [0uy];
            GCH.extensions = mk_ext_list_none ch.M.key_share } in
        Seq.equal (LP.serialize GCH.clientHello_serializer low)
-                 (client_hello_body_bytes ch.M.random B.empty ch.M.key_share))
+                 (client_hello_body_bytes ch.M.random B.empty ch.M.key_share) /\
+       Seq.equal (LP.serialize GCH.clientHello_serializer low)
+                 (client_hello_body_bytes
+                   ch.M.random
+                   (match ch.M.server_name with
+                    | Some h -> h
+                    | None -> B.empty)
+                   ch.M.key_share) /\
+       WS.synth_client_hello low == Some ch)
 =
-  let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ch.M.key_share } in
+  let sid = empty_session_id () in
+  let suites = singleton_cipher_suites () in
+  let comp = null_compression_methods () in
   let low : GCH.clientHello =
     { GCH.legacy_version = GPV.TLS_1p2;
       GCH.random = ch.M.random;
-      GCH.legacy_session_id = B.empty;
-      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
-      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.legacy_session_id = sid;
+      GCH.cipher_suites = suites;
+      GCH.legacy_compression_methods = comp;
       GCH.extensions = mk_ext_list_none ch.M.key_share } in
   GCH.synth_clientHello_injective ();
   GCH.synth_clientHello_inverse ();
   LP.serialize_synth_eq GCH.clientHello'_parser GCH.synth_clientHello
     GCH.clientHello'_serializer GCH.synth_clientHello_recip () low;
   assert (GCH.synth_clientHello_recip low ==
-    (((GPV.TLS_1p2, ch.M.random), (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256])),
-     (B.of_list [0uy], mk_ext_list_none ch.M.key_share)));
+    (((GPV.TLS_1p2, ch.M.random), (sid, suites)),
+     (comp, mk_ext_list_none ch.M.key_share)));
   let s1 = GPV.protocolVersion_serializer in
   let s2 = GRandom.random_serializer in
   let s3 = GSID.clientHello_legacy_session_id_serializer in
@@ -492,14 +909,14 @@ let lemma_lp_ch_low_bytes_none
   let s56 = LP.serialize_nondep_then s5 s6 in
   let s1234 = LP.serialize_nondep_then s12 s34 in
   LP.serialize_nondep_then_eq s1234 s56
-    (((GPV.TLS_1p2, ch.M.random), (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256])),
-     (B.of_list [0uy], mk_ext_list_none ch.M.key_share));
+    (((GPV.TLS_1p2, ch.M.random), (sid, suites)),
+     (comp, mk_ext_list_none ch.M.key_share));
   LP.serialize_nondep_then_eq s12 s34
-    ((GPV.TLS_1p2, ch.M.random), (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256]));
+    ((GPV.TLS_1p2, ch.M.random), (sid, suites));
   LP.serialize_nondep_then_eq s5 s6
-    (B.of_list [0uy], mk_ext_list_none ch.M.key_share);
+    (comp, mk_ext_list_none ch.M.key_share);
   LP.serialize_nondep_then_eq s1 s2 (GPV.TLS_1p2, ch.M.random);
-  LP.serialize_nondep_then_eq s3 s4 (B.empty, [GCS.TLS_CHACHA20_POLY1305_SHA256]);
+  LP.serialize_nondep_then_eq s3 s4 (sid, suites);
   lemma_lp_pv_tls12 ();
   lemma_lp_random ch.M.random;
   lemma_lp_session_id ();
@@ -511,9 +928,9 @@ let lemma_lp_ch_low_bytes_none
   lemma_client_hello_common_extensions_len ch.M.key_share;
   let ext_len_bytes = B.of_list [client_hello_byte (ext_len / 256); client_hello_byte ext_len] in
   Seq.lemma_eq_elim (LP.serialize s1 GPV.TLS_1p2) (B.of_list [0x03uy; 0x03uy]);
-  Seq.lemma_eq_elim (LP.serialize s3 B.empty) (B.of_list [0uy]);
-  Seq.lemma_eq_elim (LP.serialize s4 [GCS.TLS_CHACHA20_POLY1305_SHA256]) (B.of_list [0uy; 2uy; 0x13uy; 0x03uy]);
-  Seq.lemma_eq_elim (LP.serialize s5 (B.of_list [0uy])) (B.of_list [1uy; 0uy]);
+  Seq.lemma_eq_elim (LP.serialize s3 sid) (B.of_list [0uy]);
+  Seq.lemma_eq_elim (LP.serialize s4 suites) (B.of_list [0uy; 2uy; 0x13uy; 0x03uy]);
+  Seq.lemma_eq_elim (LP.serialize s5 comp) (B.of_list [1uy; 0uy]);
   Seq.lemma_eq_elim
     (LP.serialize s6 (mk_ext_list_none ch.M.key_share))
     (Seq.append ext_len_bytes ext_bytes);
@@ -536,7 +953,121 @@ let lemma_lp_ch_low_bytes_none
   Seq.append_assoc cs comp ext_with_len;
   Seq.append_assoc (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy]) (B.of_list [0uy]) ext_with_len;
   Seq.append_assoc (B.of_list [0uy]) ext_len_bytes ext_bytes;
+  RCH.lemma_client_hello_extensions_bytes_shape B.empty ch.M.key_share;
+  RCH.lemma_client_hello_server_name_extension_bytes_empty B.empty;
+  Seq.lemma_eq_elim (client_hello_server_name_extension_bytes B.empty) B.empty;
+  Seq.append_empty_l ext_bytes;
+  Seq.lemma_eq_elim
+    (client_hello_extensions_bytes B.empty ch.M.key_share)
+    ext_bytes;
+  RCH.lemma_client_hello_body_bytes_shape ch.M.random B.empty ch.M.key_share;
+  Seq.lemma_eq_elim
+    (client_hello_body_bytes ch.M.random B.empty ch.M.key_share)
+    (B.append
+      pv
+      (B.append
+        r
+        (B.append
+          sid
+          (B.append
+            (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+            (B.append
+              (B.of_list [0uy])
+              (B.append ext_len_bytes ext_bytes))))));
   assert (Seq.equal
     (LP.serialize GCH.clientHello_serializer low)
-    (client_hello_body_bytes ch.M.random B.empty ch.M.key_share))
+    (client_hello_body_bytes ch.M.random B.empty ch.M.key_share));
+  assert ((match ch.M.server_name with | Some h -> h | None -> B.empty) == B.empty);
+  assert (Seq.equal
+    (LP.serialize GCH.clientHello_serializer low)
+    (client_hello_body_bytes
+      ch.M.random
+      (match ch.M.server_name with | Some h -> h | None -> B.empty)
+      ch.M.key_share));
+  lemma_synth_client_hello_none ch;
+  assert (WS.synth_client_hello low == Some ch)
 #pop-options
+
+let lemma_lp_ch_low_body_some
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
+  : Lemma
+      (let low = mk_ch_low_some ch hostname in
+       Seq.equal (LP.serialize GCH.clientHello_serializer low)
+                 (client_hello_body_bytes
+                   ch.M.random
+                   (match ch.M.server_name with
+                    | Some h -> h
+                    | None -> B.empty)
+                   ch.M.key_share))
+=
+  assert_norm (mk_ch_low_some ch hostname ==
+    { GCH.legacy_version = GPV.TLS_1p2;
+      GCH.random = ch.M.random;
+      GCH.legacy_session_id = B.empty;
+      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.extensions = mk_ext_list_some hostname ch.M.key_share });
+  lemma_lp_ch_low_bytes_some ch hostname
+
+let lemma_lp_ch_low_body_none
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.server_name == None})
+  : Lemma
+      (let low = mk_ch_low_none ch in
+       Seq.equal (LP.serialize GCH.clientHello_serializer low)
+                 (client_hello_body_bytes
+                   ch.M.random
+                   (match ch.M.server_name with
+                    | Some h -> h
+                    | None -> B.empty)
+                   ch.M.key_share))
+=
+  assert_norm (mk_ch_low_none ch ==
+    { GCH.legacy_version = GPV.TLS_1p2;
+      GCH.random = ch.M.random;
+      GCH.legacy_session_id = B.empty;
+      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.extensions = mk_ext_list_none ch.M.key_share });
+  lemma_lp_ch_low_bytes_none ch
+
+let lemma_lp_ch_low_synth_some
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
+  (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
+  : Lemma
+      (let low = mk_ch_low_some ch hostname in
+       WS.synth_client_hello low == Some ch)
+=
+  assert_norm (mk_ch_low_some ch hostname ==
+    { GCH.legacy_version = GPV.TLS_1p2;
+      GCH.random = ch.M.random;
+      GCH.legacy_session_id = B.empty;
+      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.extensions = mk_ext_list_some hostname ch.M.key_share });
+  lemma_lp_ch_low_bytes_some ch hostname
+
+let lemma_lp_ch_low_synth_none
+  (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
+                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.server_name == None})
+  : Lemma
+      (let low = mk_ch_low_none ch in
+       WS.synth_client_hello low == Some ch)
+=
+  assert_norm (mk_ch_low_none ch ==
+    { GCH.legacy_version = GPV.TLS_1p2;
+      GCH.random = ch.M.random;
+      GCH.legacy_session_id = B.empty;
+      GCH.cipher_suites = [GCS.TLS_CHACHA20_POLY1305_SHA256];
+      GCH.legacy_compression_methods = B.of_list [0uy];
+      GCH.extensions = mk_ext_list_none ch.M.key_share });
+  lemma_lp_ch_low_bytes_none ch

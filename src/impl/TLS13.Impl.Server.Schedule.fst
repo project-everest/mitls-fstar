@@ -16,8 +16,90 @@ module R = TLS13.Record.Spec
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module T = TLS13.Types
+module U8 = FStar.UInt8
 module U64 = FStar.UInt64
 module W = TLS13.Wire.Spec
+
+let lemma_control_snapshot_matches_hs_server_hello_sent
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires CR.control_snapshot_matches snapshot st /\
+                U8.v snapshot.CR.snapshot_control_tag == 1 /\
+                U8.v snapshot.CR.snapshot_handshake_stage_tag == 14)
+      (ensures st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloSent)
+=
+  assert (Tags.control_state_matches
+    snapshot.CR.snapshot_control_tag
+    snapshot.CR.snapshot_handshake_stage_tag
+    snapshot.CR.snapshot_failure_present
+    snapshot.CR.snapshot_failure_code
+    snapshot.CR.snapshot_failure_alert
+    st.CS.cs_model.CS.model_control);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking stage ->
+    assert (Tags.handshake_stage_tag_matches
+      snapshot.CR.snapshot_handshake_stage_tag
+      stage);
+    match stage with
+    | CS.HsServerHelloSent -> ()
+    | _ -> assert False
+  | _ -> assert False
+
+let lemma_control_snapshot_matches_hs_server_finished_sent
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires CR.control_snapshot_matches snapshot st /\
+                U8.v snapshot.CR.snapshot_control_tag == 1 /\
+                U8.v snapshot.CR.snapshot_handshake_stage_tag == 16)
+      (ensures st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerFinishedSent)
+=
+  assert (Tags.control_state_matches
+    snapshot.CR.snapshot_control_tag
+    snapshot.CR.snapshot_handshake_stage_tag
+    snapshot.CR.snapshot_failure_present
+    snapshot.CR.snapshot_failure_code
+    snapshot.CR.snapshot_failure_alert
+    st.CS.cs_model.CS.model_control);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking stage ->
+    assert (Tags.handshake_stage_tag_matches
+      snapshot.CR.snapshot_handshake_stage_tag
+      stage);
+    match stage with
+    | CS.HsServerFinishedSent -> ()
+    | _ -> assert False
+  | _ -> assert False
+
+let lemma_control_snapshot_matches_hs_client_finished_received
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires CR.control_snapshot_matches snapshot st /\
+                U8.v snapshot.CR.snapshot_control_tag == 1 /\
+                U8.v snapshot.CR.snapshot_handshake_stage_tag == 17)
+      (ensures st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientFinishedReceived)
+=
+  assert (Tags.control_state_matches
+    snapshot.CR.snapshot_control_tag
+    snapshot.CR.snapshot_handshake_stage_tag
+    snapshot.CR.snapshot_failure_present
+    snapshot.CR.snapshot_failure_code
+    snapshot.CR.snapshot_failure_alert
+    st.CS.cs_model.CS.model_control);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking stage ->
+    assert (Tags.handshake_stage_tag_matches
+      snapshot.CR.snapshot_handshake_stage_tag
+      stage);
+    match stage with
+    | CS.HsClientFinishedReceived -> ()
+    | _ -> assert False
+  | _ -> assert False
 
 fn next_local_action
   (s:server)
@@ -85,8 +167,11 @@ fn next_local_action
   } else if server_handshake_write_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
+    assert (pure (U8.v control.CR.snapshot_control_tag == 1));
+    assert (pure (U8.v control.CR.snapshot_handshake_stage_tag == 14));
     assert_norm (Tags.handshake_stage_tag_matches 14uy CS.HsServerHelloSent);
     assert (pure (CR.control_snapshot_matches control 'st0));
+    lemma_control_snapshot_matches_hs_server_hello_sent control 'st0;
     assert (pure (keys.CR.snapshot_handshake_secret_present));
     assert (pure (not keys.CR.snapshot_server_handshake_traffic_present));
     assert (pure ('st0.CS.cs_model.CS.model_control ==
@@ -104,8 +189,11 @@ fn next_local_action
   } else if client_handshake_read_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
+    assert (pure (U8.v control.CR.snapshot_control_tag == 1));
+    assert (pure (U8.v control.CR.snapshot_handshake_stage_tag == 14));
     assert_norm (Tags.handshake_stage_tag_matches 14uy CS.HsServerHelloSent);
     assert (pure (CR.control_snapshot_matches control 'st0));
+    lemma_control_snapshot_matches_hs_server_hello_sent control 'st0;
     assert (pure (keys.CR.snapshot_handshake_secret_present));
     assert (pure (not keys.CR.snapshot_client_handshake_traffic_present));
     assert (pure ('st0.CS.cs_model.CS.model_control ==
@@ -245,7 +333,11 @@ fn next_local_action
   } else if server_application_write_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 16uy));
+    assert (pure (U8.v control.CR.snapshot_control_tag == 1));
+    assert (pure (U8.v control.CR.snapshot_handshake_stage_tag == 16));
     assert_norm (Tags.handshake_stage_tag_matches 16uy CS.HsServerFinishedSent);
+    assert (pure (CR.control_snapshot_matches control 'st0));
+    lemma_control_snapshot_matches_hs_server_finished_sent control 'st0;
     assert (pure (keys.CR.snapshot_master_secret_present));
     assert (pure (not keys.CR.snapshot_server_application_traffic_present));
     assert (pure ('st0.CS.cs_model.CS.model_control ==
@@ -263,7 +355,11 @@ fn next_local_action
   } else if client_application_read_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 17uy));
+    assert (pure (U8.v control.CR.snapshot_control_tag == 1));
+    assert (pure (U8.v control.CR.snapshot_handshake_stage_tag == 17));
     assert_norm (Tags.handshake_stage_tag_matches 17uy CS.HsClientFinishedReceived);
+    assert (pure (CR.control_snapshot_matches control 'st0));
+    lemma_control_snapshot_matches_hs_client_finished_received control 'st0;
     assert (pure (keys.CR.snapshot_master_secret_present));
     assert (pure (not keys.CR.snapshot_client_application_traffic_present));
     assert (pure ('st0.CS.cs_model.CS.model_control ==
@@ -281,7 +377,18 @@ fn next_local_action
   } else if verify_client_finished_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 17uy));
+    assert (pure (U8.v control.CR.snapshot_control_tag == 1));
+    assert (pure (U8.v control.CR.snapshot_handshake_stage_tag == 17));
     assert_norm (Tags.handshake_stage_tag_matches 17uy CS.HsClientFinishedReceived);
+    assert (pure (CR.control_snapshot_matches control 'st0));
+    assert (pure (Tags.control_state_matches
+      control.CR.snapshot_control_tag
+      control.CR.snapshot_handshake_stage_tag
+      control.CR.snapshot_failure_present
+      control.CR.snapshot_failure_code
+      control.CR.snapshot_failure_alert
+      'st0.CS.cs_model.CS.model_control));
+    lemma_control_snapshot_matches_hs_client_finished_received control 'st0;
     assert (pure (keys.CR.snapshot_client_handshake_traffic_present));
     assert (pure (keys.CR.snapshot_client_application_traffic_present));
     assert (pure (keys.CR.snapshot_server_application_traffic_present));

@@ -670,20 +670,33 @@ fn select_default_server_parameters_from_payload_once
     (Ghost.reveal selection)));
   assert (pure (Some?
     (Ghost.reveal selection).CS.server_key_share_private));
-  assert (pure (
-    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
-      server_private_key_bytes));
-  assert (pure (ST.server_local_event_input_ready
-    st1
-    ST.LocalDeriveSharedSecret
-    server_private_key_bytes));
-  assert (pure (ST.server_end_to_end_invariant st1));
   Seq.lemma_eq_elim
     server_random_bytes
     (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32);
   Seq.lemma_eq_elim
     server_private_key_bytes
     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64);
+  assert (pure (B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64) == 32));
+  assert (pure (
+    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
+      server_private_key_bytes));
+  assert (pure (match st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+    | Some selection1 ->
+      CS.server_selection_key_share_consistent selection1 /\
+      st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection1.CS.server_selected_client_hello /\
+      Some? selection1.CS.server_key_share_private /\
+      Some?.v selection1.CS.server_key_share_private == server_private_key_bytes
+    | None -> False));
+  assert_norm (ST.server_local_event_input_ready
+    st1
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes);
+  assert (pure (ST.server_local_event_input_ready
+    st1
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes));
+  assert (pure (ST.server_end_to_end_invariant st1));
   assert (pure (server_driver_selection_from_payload_correct
     'st0
     st1
@@ -2073,9 +2086,22 @@ fn select_and_derive_shared_secret_once
   Seq.lemma_eq_elim
     server_private_key_bytes
     (CL.raw_slice material_bytes 32 64);
+  assert (pure (B.length (CL.raw_slice material_bytes 32 64) == 32));
   assert (pure (
     Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
       CL.raw_slice material_bytes 32 64));
+  assert (pure (match st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+    | Some selection1 ->
+      CS.server_selection_key_share_consistent selection1 /\
+      st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection1.CS.server_selected_client_hello /\
+      Some? selection1.CS.server_key_share_private /\
+      Some?.v selection1.CS.server_key_share_private == CL.raw_slice material_bytes 32 64
+    | None -> False));
+  assert_norm (ST.server_local_event_input_ready
+    st1
+    ST.LocalDeriveSharedSecret
+    (CL.raw_slice material_bytes 32 64));
   assert (pure (ST.server_local_event_input_ready
     st1
     ST.LocalDeriveSharedSecret

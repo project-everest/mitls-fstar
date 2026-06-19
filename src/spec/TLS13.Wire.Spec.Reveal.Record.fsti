@@ -10,6 +10,10 @@ module WS = TLS13.Wire.Spec
 
 val byte: n:nat -> GTot U8.t
 
+val lemma_byte_value:
+  n:nat ->
+  Lemma (U8.v (byte n) == n % 256)
+
 val lemma_ptm_change_cipher_spec:
   fragment:B.bytes ->
   Lemma (ensures WS.parse_tls_message T.ChangeCipherSpec fragment ==
@@ -111,6 +115,11 @@ val lemma_application_data_record_header_bytes_reveal:
       byte (fragment_len / 256);
       byte fragment_len
     ]))
+
+val lemma_parse_application_data_record_header_bytes:
+  fragment_len:nat{fragment_len <= 16640} ->
+  Lemma (WS.parse_record_header (application_data_record_header_bytes fragment_len) ==
+         Some (T.ApplicationData, fragment_len))
 
 val lemma_serialize_plaintext_reveal:
   pt:M.plaintext ->

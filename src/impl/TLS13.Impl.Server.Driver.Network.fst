@@ -133,6 +133,11 @@ fn compact_buffer_suffix
       with raw_after_write.
         assert (pts_to raw raw_after_write);
       assert (pure (B.length raw_after_write == SZ.v raw_capacity));
+      assert (pure (Seq.index raw_after_write (SZ.v vi) == b));
+      assert (pure (forall (k:nat). k < SZ.v vi ==>
+        Seq.index raw_after_write k == Seq.index raw_before_read k));
+      assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
+        Seq.index raw_after_write k == Seq.index raw_before_read k));
       assert (pure (forall (k:nat). k < SZ.v vi + 1 ==>
         Seq.index raw_after_write k ==
         Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
@@ -1542,13 +1547,22 @@ fn process_buffered_network_bytes_compact_once
       (SZ.v current_len);
   with raw_prefix_mask.
     assert (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask (fun _ -> True));
+  assert (pure (Seq.length raw_prefix_mask == SZ.v current_len));
   assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask ==>
     Some? (Seq.index raw_prefix_mask i)));
+  assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask ==>
+    Seq.index raw_prefix_mask i == Some (Seq.index raw i)));
   A.from_mask raw_prefix_array;
   with raw_prefix.
     assert (pts_to raw_prefix_array raw_prefix);
   assert (pure (B.length raw_prefix == SZ.v current_len));
   assert (pure (SZ.v current_len == SZ.v buffered_len));
+  assert (pure (forall (i:nat). i < B.length raw_prefix ==>
+    Seq.index raw_prefix i == Seq.index raw i));
+  assert (pure (forall (i:nat).
+    i < B.length (Seq.slice raw 0 (SZ.v current_len)) ==>
+    Seq.index raw_prefix i ==
+    Seq.index (Seq.slice raw 0 (SZ.v current_len)) i));
   assert (pure (Seq.equal raw_prefix
     (Seq.slice raw 0 (SZ.v current_len))));
   assert (pure (Seq.equal raw_prefix buffered));

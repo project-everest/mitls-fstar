@@ -38,6 +38,12 @@ val mk_snl (hn: GHN.hostName{Seq.length hn <= 255}) : GSNL.serverNameList
 val mk_sne (hn: GHN.hostName{Seq.length hn <= 255})
   : GSNE.extensionClientHello_extension_data_server_name
 
+val lemma_mk_snl_shape (hn: GHN.hostName{Seq.length hn <= 255})
+  : Lemma (mk_snl hn == [GSNM.Name_host_name hn])
+
+val lemma_mk_sne_shape (hn: GHN.hostName{Seq.length hn <= 255})
+  : Lemma (mk_sne hn == [GSNM.Name_host_name hn])
+
 val lemma_lp_sn_extension (hn: GHN.hostName{Seq.length hn <= 255 /\ Seq.length hn > 0})
   : Lemma (Seq.equal (LP.serialize GECH.extensionClientHello_serializer
                         (GECH.Extension_data_server_name (mk_sne hn)))

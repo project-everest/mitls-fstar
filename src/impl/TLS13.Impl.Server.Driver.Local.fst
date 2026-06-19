@@ -482,6 +482,86 @@ let lemma_legal_handled_local_response_preserves_server_selection_except_select
         network_out
         app_out)
 
+let lemma_server_driver_selection_present_of_some
+  (st:CS.connection_state)
+  : Lemma
+      (requires Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+      (ensures server_driver_selection_present_when_required st)
+=
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking CS.HsServerHelloSent -> ()
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent -> ()
+  | CS.ControlHandshaking CS.HsServerFinishedSent -> ()
+  | CS.ControlHandshaking CS.HsClientFinishedReceived -> ()
+  | CS.ControlApplicationData -> ()
+  | CS.ControlClosing -> ()
+  | CS.ControlClosed -> ()
+  | _ -> ()
+
+let lemma_server_driver_selection_present_from_same_selected
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : Lemma
+      (requires
+        Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+        st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+          st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+      (ensures server_driver_selection_present_when_required st1)
+=
+  assert (Some? st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  lemma_server_driver_selection_present_of_some st1
+
+let lemma_server_local_ready_selection_facts
+  (st:CS.connection_state)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        ST.server_local_event_input_ready_with_credentials
+          st kind payload certificate_chain credential_identity)
+      (ensures
+        (match kind with
+        | ST.LocalDeriveSharedSecret ->
+          Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_selection
+        | ST.LocalInstallClientHandshakeTrafficKeys ->
+          st.CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsServerHelloSent
+        | ST.LocalInstallServerHandshakeTrafficKeys ->
+          st.CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsServerHelloSent
+        | ST.LocalInstallClientApplicationTrafficKeys ->
+          st.CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsClientFinishedReceived
+        | ST.LocalInstallServerApplicationTrafficKeys ->
+          st.CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsServerFinishedSent
+        | ST.LocalDeliverApplicationData ->
+          False
+        | _ ->
+          True))
+=
+  match kind with
+  | ST.LocalDeriveSharedSecret ->
+    assert (ST.server_local_event_input_ready st kind payload);
+    (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+     | Some _ -> ()
+     | None -> assert False)
+  | ST.LocalInstallClientHandshakeTrafficKeys ->
+    assert (ST.server_local_event_input_ready st kind payload)
+  | ST.LocalInstallServerHandshakeTrafficKeys ->
+    assert (ST.server_local_event_input_ready st kind payload)
+  | ST.LocalInstallClientApplicationTrafficKeys ->
+    assert (ST.server_local_event_input_ready st kind payload)
+  | ST.LocalInstallServerApplicationTrafficKeys ->
+    assert (ST.server_local_event_input_ready st kind payload)
+  | ST.LocalDeliverApplicationData ->
+    assert (ST.server_local_event_input_ready st kind payload);
+    assert False
+  | _ ->
+    ()
+
 let lemma_server_driver_local_write_correct_preserves_supported_profile_selection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -571,27 +651,54 @@ let lemma_server_driver_local_write_correct_preserves_supported_profile_selectio
   assert (
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  lemma_server_local_ready_selection_facts
+    st0
+    kind
+    payload
+    certificate_chain
+    credential_identity;
   match kind with
   | ST.LocalStartServer ->
     assert False
   | ST.LocalSelectServerParameters ->
     assert False
   | ST.LocalDeriveSharedSecret ->
-    assert (server_driver_selection_present_when_required st1)
+    assert (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    lemma_server_driver_selection_present_from_same_selected st0 st1
   | ST.LocalInstallClientHandshakeTrafficKeys ->
-    assert (server_driver_selection_present_when_required st1)
+    assert (
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloSent);
+    assert (server_driver_selection_present_when_required st0);
+    assert (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    lemma_server_driver_selection_present_from_same_selected st0 st1
   | ST.LocalInstallServerHandshakeTrafficKeys ->
-    assert (server_driver_selection_present_when_required st1)
+    assert (
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloSent);
+    assert (server_driver_selection_present_when_required st0);
+    assert (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    lemma_server_driver_selection_present_from_same_selected st0 st1
   | ST.LocalInstallClientApplicationTrafficKeys ->
-    assert (server_driver_selection_present_when_required st1)
+    assert (
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientFinishedReceived);
+    assert (server_driver_selection_present_when_required st0);
+    assert (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    lemma_server_driver_selection_present_from_same_selected st0 st1
   | ST.LocalInstallServerApplicationTrafficKeys ->
-    assert (server_driver_selection_present_when_required st1)
+    assert (
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerFinishedSent);
+    assert (server_driver_selection_present_when_required st0);
+    assert (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    lemma_server_driver_selection_present_from_same_selected st0 st1
   | ST.LocalSignCertificateVerify ->
     assert (server_driver_selection_present_when_required st1)
   | ST.LocalVerifyClientFinished ->
     assert (server_driver_selection_present_when_required st1)
   | ST.LocalDeliverApplicationData ->
-    assert (server_driver_selection_present_when_required st1)
+    assert False
   | ST.LocalSendServerHello ->
     assert False
   | ST.LocalSendEncryptedExtensions ->
@@ -1167,12 +1274,30 @@ fn process_empty_local_event_exact_network_len_and_write_once
       (SZ.v exact_network_out_len);
   with exact_network_out_mask.
     assert (A.pts_to_mask exact_network_out #1.0R exact_network_out_mask (fun _ -> True));
+  Seq.lemma_len_slice network_out_mask 0 (SZ.v exact_network_out_len);
+  assert (pure (Seq.length exact_network_out_mask == SZ.v exact_network_out_len));
   assert (pure (forall (i:nat). i < Seq.length exact_network_out_mask ==>
     Some? (Seq.index exact_network_out_mask i)));
   A.from_mask exact_network_out;
   with old_exact_network_out.
     assert (pts_to exact_network_out old_exact_network_out);
+  assert (pure (B.length old_exact_network_out == Seq.length exact_network_out_mask));
   assert (pure (B.length old_exact_network_out == SZ.v exact_network_out_len));
+  Seq.lemma_len_slice network_out 0 (SZ.v exact_network_out_len);
+  assert (pure (forall (i:nat{i < B.length old_exact_network_out}).
+    Some (Seq.index old_exact_network_out i) ==
+      Seq.index (Seq.slice network_out_mask 0 (SZ.v exact_network_out_len)) i));
+  assert (pure (forall (i:nat{i < B.length old_exact_network_out}).
+    Seq.index (Seq.slice network_out_mask 0 (SZ.v exact_network_out_len)) i ==
+      Some (Seq.index network_out i)));
+  assert (pure (forall (i:nat{i < B.length old_exact_network_out}).
+    Seq.index old_exact_network_out i == Seq.index network_out i));
+  assert (pure (forall (i:nat{i < B.length old_exact_network_out}).
+    Seq.index old_exact_network_out i ==
+      Seq.index (Seq.slice network_out 0 (SZ.v exact_network_out_len)) i));
+  Seq.lemma_eq_intro
+    old_exact_network_out
+    (Seq.slice network_out 0 (SZ.v exact_network_out_len));
   assert (pure (Seq.equal old_exact_network_out
     (Seq.slice network_out 0 (SZ.v exact_network_out_len))));
 

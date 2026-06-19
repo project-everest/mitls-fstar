@@ -1144,6 +1144,10 @@ fn scan_ee_alpn
       let mut i = 0sz;
       let mut found = false;
       let mut alpn_len = 0sz;
+      RV.lemma_list_drop_zero cee;
+      assert (pure (RV.list_drop (SZ.v 0sz) cee == cee));
+      assert (pure (RV.reveal_synth_encrypted_extensions cee ==
+                    RV.reveal_synth_encrypted_extensions (RV.list_drop (SZ.v 0sz) cee)));
       while (
         let f = !found;
         let iv = !i;
@@ -1975,6 +1979,10 @@ fn scan_sh_key_share
       let mut saw_sv = false;
       let mut have_key = false;
       let kacc_ref = GR.alloc (None #(B.bytes_of_len 32));
+      RV.lemma_list_drop_zero cext;
+      assert (pure (RV.list_drop (SZ.v 0sz) cext == cext));
+      assert (pure (RV.reveal_sh_key_share cext false None ==
+                    RV.reveal_sh_key_share (RV.list_drop (SZ.v 0sz) cext) false None));
       while (
         let f = !failed;
         let iv = !i;
@@ -2410,6 +2418,11 @@ fn scan_certificate_chain
       let proc_ref = GR.alloc (Nil #B.bytes);
       RV.lemma_synth_cert_chain_nil ();
       RV.lemma_cert_chain_total_bytes_nil ();
+      RV.lemma_list_drop_zero cm;
+      assert (pure (RV.list_drop (SZ.v 0sz) cm == cm));
+      assert (pure (FStar.List.Tot.append []
+                     (RV.reveal_synth_cert_chain (RV.list_drop (SZ.v 0sz) cm))
+                    == RV.reveal_synth_cert_chain cm));
       while (
         let f = !failed;
         let iv = !i;

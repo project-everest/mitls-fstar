@@ -585,6 +585,52 @@ fn process_install_server_handshake_write_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficHandshake));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficWrite));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
@@ -758,6 +804,52 @@ fn process_derive_and_install_server_handshake_write_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficHandshake));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficWrite));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallServerHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
@@ -960,6 +1052,52 @@ fn process_install_client_handshake_read_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficHandshake));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficRead));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
@@ -1133,6 +1271,52 @@ fn process_derive_and_install_client_handshake_read_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficHandshake));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficRead));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallClientHandshakeTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
@@ -1335,6 +1519,52 @@ fn process_install_server_application_write_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficApplication));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficWrite));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
@@ -1514,6 +1744,52 @@ fn process_install_client_application_read_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficApplication));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficRead));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
@@ -1687,6 +1963,52 @@ fn process_derive_and_install_server_application_write_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficApplication));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficWrite));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallServerApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
@@ -1883,6 +2205,52 @@ fn process_derive_and_install_client_application_read_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_epoch ==
+    CS.TrafficApplication));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload.CS.install_direction ==
+    CS.TrafficRead));
+  assert_norm (ST.local_event_kind_matches
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_kind_matches
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_payload_matches_app_sent_delta
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (ST.local_event_supported_profile
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install))));
+  assert (pure (ST.local_event_supported_profile
+    ST.LocalInstallClientApplicationTrafficKeys
+    B.empty
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+  assert_norm (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty);
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
+    B.empty));
+  assert (pure (resp.ST.status == ST.StepOk));
   assert (pure (ST.legal_local_response
     'st0
     (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))

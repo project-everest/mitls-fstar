@@ -63,6 +63,88 @@ noeq type driver = {
   driver_channel: IO.channel;
 }
 
+let lemma_read_append_buffer_matches_raw_prefix_index
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  (k:nat { k < total_len })
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.index (B.append buffered read_chunk) k ==
+      Seq.index (Seq.slice raw_after_read 0 total_len) k)
+  =
+  Seq.lemma_eq_elim buffered (Seq.slice raw 0 current_len);
+  Seq.lemma_eq_elim read_chunk (Seq.slice raw_tail_after 0 read_len);
+  Seq.lemma_len_slice raw_after_read 0 total_len;
+  if k < current_len then (
+    Seq.lemma_index_app1 buffered read_chunk k;
+    Seq.lemma_index_slice raw 0 current_len k;
+    Seq.lemma_index_slice raw_after_read 0 total_len k
+  ) else (
+    assert (current_len <= k);
+    assert (k - current_len < read_len);
+    assert (current_len + (k - current_len) == k);
+    Seq.lemma_index_app2 buffered read_chunk k;
+    Seq.lemma_index_slice raw_tail_after 0 read_len (k - current_len);
+    Seq.lemma_index_slice raw_after_read 0 total_len k
+  )
+
+let lemma_read_append_buffer_matches_raw_prefix
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.equal (B.append buffered read_chunk)
+        (Seq.slice raw_after_read 0 total_len))
+  =
+  Seq.lemma_len_append buffered read_chunk;
+  Seq.lemma_len_slice raw_after_read 0 total_len;
+  let index_proof (k:nat { k < Seq.length (B.append buffered read_chunk) })
+    : Lemma
+      (Seq.index (B.append buffered read_chunk) k ==
+       Seq.index (Seq.slice raw_after_read 0 total_len) k)
+    =
+    lemma_read_append_buffer_matches_raw_prefix_index
+      raw_after_read raw raw_tail_after buffered read_chunk
+      current_len read_len total_len k
+  in
+  FStar.Classical.forall_intro
+    #(k:nat { k < Seq.length (B.append buffered read_chunk) })
+    #(fun k ->
+      Seq.index (B.append buffered read_chunk) k ==
+      Seq.index (Seq.slice raw_after_read 0 total_len) k)
+    index_proof;
+  Seq.lemma_eq_intro
+    (B.append buffered read_chunk)
+    (Seq.slice raw_after_read 0 total_len)
+
 noextract
 let logged_received_bytes_accounted
   (logged:B.bytes)
@@ -2790,6 +2872,9 @@ fn driver_read_buffered_network_bytes_compact_once
   A.to_mask raw_tail_array;
   with raw_tail_mask_after.
     assert (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask_after (fun _ -> True));
+  assert (pure (Seq.length raw_tail_mask_after == B.length raw_tail_after));
+  assert (pure (forall (i:nat). i < Seq.length raw_tail_mask_after ==>
+    Seq.index raw_tail_mask_after i == Some (Seq.index raw_tail_after i)));
   assert (pure (forall (i:nat). i < Seq.length raw_tail_mask_after ==>
     Some? (Seq.index raw_tail_mask_after i)));
   rewrite
@@ -2823,6 +2908,29 @@ fn driver_read_buffered_network_bytes_compact_once
   with raw_after_read.
     assert (pts_to raw raw_after_read);
   assert (pure (B.length raw_after_read == SZ.v raw_capacity));
+  assert (pure (Seq.equal (Ghost.reveal 'buffered)
+    (Seq.slice (Ghost.reveal 'old_raw) 0 (SZ.v buffered_len))));
+  assert (pure (Seq.equal read_chunk
+    (Seq.slice raw_tail_after 0 (SZ.v read_len))));
+  assert (pure (forall (i:nat). i < B.length raw_after_read ==>
+    Some (Seq.index raw_after_read i) == Seq.index raw_joined_mask i));
+  assert (pure (forall (i:nat). i < SZ.v buffered_len ==>
+    Seq.index raw_after_read i == Seq.index (Ghost.reveal 'old_raw) i));
+  assert (pure (forall (i:nat). i < SZ.v read_len ==>
+    Seq.index raw_after_read (SZ.v buffered_len + i) ==
+    Seq.index raw_tail_after i));
+  lemma_read_append_buffer_matches_raw_prefix
+    raw_after_read
+    (Ghost.reveal 'old_raw)
+    raw_tail_after
+    (Ghost.reveal 'buffered)
+    read_chunk
+    (SZ.v buffered_len)
+    (SZ.v read_len)
+    (SZ.v total_len);
+  Seq.lemma_eq_elim
+    (B.append (Ghost.reveal 'buffered) read_chunk)
+    (Seq.slice raw_after_read 0 (SZ.v total_len));
   assert (pure (Seq.equal (Ghost.reveal new_buffered)
     (Seq.slice raw_after_read 0 (SZ.v total_len))));
   rewrite (C.connection_exactly d.driver_client 'st0)
@@ -4049,6 +4157,7 @@ fn rec driver_handshake
       driver_workflow_network = no_op_io;
     }
   } else {
+    assert (pure (0 < SZ.v fuel));
     unfold (top_driver_exactly d 'st0 'buffered buffered_len);
     let snapshot = driver_control_snapshot d.top_driver_core;
     with st_snapshot.
@@ -4420,6 +4529,7 @@ fn rec driver_receive_application_data
       driver_workflow_network = no_op_io;
     }
   } else {
+    assert (pure (0 < SZ.v fuel));
     unfold (top_driver_exactly d 'st0 'buffered buffered_len);
     let network =
       driver_progress_buffered_network_step
@@ -4819,6 +4929,7 @@ fn rec driver_await_peer_close_notify
       driver_workflow_network = no_op_io;
     }
   } else {
+    assert (pure (0 < SZ.v fuel));
     let snapshot = driver_control_snapshot d;
     with st_snapshot.
       assert (driver_exactly d st_snapshot 'buffered buffered_len);

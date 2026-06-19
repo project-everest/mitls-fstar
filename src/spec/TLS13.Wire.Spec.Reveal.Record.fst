@@ -10,8 +10,11 @@ module T = TLS13.Types
 module U = TLS13.Wire.Spec.Reveal.Util
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
+module ML = FStar.Math.Lemmas
 
 let byte n = WS.byte n
+
+let lemma_byte_value n = WS.lemma_byte_v n
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 10"
 let lemma_ptm_change_cipher_spec fragment =
@@ -194,6 +197,34 @@ let lemma_application_data_record_header_bytes fragment_len =
     (application_data_record_header_bytes fragment_len)
 
 let lemma_application_data_record_header_bytes_reveal fragment_len = ()
+
+#push-options "--fuel 4 --ifuel 1 --z3rlimit 20"
+let lemma_parse_application_data_record_header_bytes fragment_len =
+  let header = application_data_record_header_bytes fragment_len in
+  lemma_application_data_record_header_bytes_reveal fragment_len;
+  Seq.lemma_eq_elim
+    header
+    (B.of_list [0x17uy; 0x03uy; 0x03uy; byte (fragment_len / 256); byte fragment_len]);
+  assert_norm (B.length header == 5);
+  assert_norm (Seq.index header 0 == 0x17uy);
+  assert_norm (Seq.index header 1 == 0x03uy);
+  assert_norm (Seq.index header 2 == 0x03uy);
+  assert_norm (Seq.index header 3 == byte (fragment_len / 256));
+  assert_norm (Seq.index header 4 == byte fragment_len);
+  assert_norm (WS.content_type_of_byte (Seq.index header 0) == Some T.ApplicationData);
+  WS.lemma_read_u16_definition header 1;
+  assert_norm (U8.v 0x03uy == 3);
+  assert (WS.read_u16 header 1 == 0x0303);
+  WS.lemma_read_u16_definition header 3;
+  WS.lemma_byte_v (fragment_len / 256);
+  WS.lemma_byte_v fragment_len;
+  assert (fragment_len / 256 < 256);
+  ML.small_mod (fragment_len / 256) 256;
+  ML.lemma_div_mod fragment_len 256;
+  assert (fragment_len == 256 * (fragment_len / 256) + fragment_len % 256);
+  assert (WS.read_u16 header 3 == fragment_len);
+  assert (WS.parse_record_header header == Some (T.ApplicationData, fragment_len))
+#pop-options
 
 let lemma_serialize_plaintext_reveal pt = ()
 

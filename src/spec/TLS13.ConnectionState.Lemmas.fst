@@ -100,6 +100,418 @@ let lemma_step_model_from_failed_results_failed
   | _ ->
     assert False
 
+#push-options "--split_queries always"
+
+let lemma_step_model_local_event_some
+  (model0:connection_model)
+  (local:local_event)
+  (model1:connection_model)
+  : Lemma
+      (requires step_model model0 (ConnLocalEvent local) == Some model1)
+      (ensures step_local_event model0 local == Some model1)
+=
+  calc (==) {
+    step_local_event model0 local;
+  == {}
+    step_model model0 (ConnLocalEvent local);
+  == {}
+    Some model1;
+  }
+
+let lemma_step_model_network_event_some
+  (model0:connection_model)
+  (msg:directed_message M.tls_message)
+  (model1:connection_model)
+  : Lemma
+      (requires step_model model0 (ConnNetworkEvent msg) == Some model1)
+      (ensures
+        step_tls_message
+          model0
+          msg.CL.message_direction
+          msg.CL.message_value == Some model1)
+=
+  calc (==) {
+    step_tls_message model0 msg.CL.message_direction msg.CL.message_value;
+  == {}
+    step_model model0 (ConnNetworkEvent msg);
+  == {}
+    Some model1;
+  }
+
+let lemma_legal_local_event_stable_client_x25519_key_share_projection
+  (st0:connection_state)
+  (local:local_event)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        stable_client_x25519_key_share_projection st0 /\
+        legal_local_event st0.cs_model local /\
+        step_local_event st0.cs_model local == Some st1.cs_model)
+      (ensures stable_client_x25519_key_share_projection st1)
+=
+  assert (client_x25519_key_share_projection st0);
+  assert (client_x25519_key_share_projection_stable_control st0.cs_model.model_control);
+  let hs0 = st0.cs_model.model_handshake in
+  match local, st0.cs_model.model_control with
+  | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
+    assert (st1.cs_model == derive_shared_secret_model st0.cs_model hs0 shared);
+    (match
+       hs0.hs_start,
+       hs0.hs_client_hello,
+       hs0.hs_server_hello,
+       hs0.hs_keys.ks_shared_secret
+     with
+     | Some start, Some ch, Some sh, Some old_shared ->
+       (match start.start_client_key_share_private with
+        | Some sk ->
+          assert (C.x25519_shared sk (server_hello_key_share sh) == Some old_shared);
+          assert (C.x25519_shared sk sh.M.key_share == Some shared);
+          assert (shared == old_shared)
+        | None ->
+          assert False)
+     | _, _, _, _ ->
+       assert False);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalInstallTrafficKeys install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalInstallTrafficKeysForRole role_install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalValidateCertificate peer, ControlHandshaking HsCertificateReceived ->
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalVerifyCertificateSignature cv, ControlHandshaking HsCertificateVerifyReceived ->
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalFail err, _ ->
+    assert (st1.cs_model == fail_model st0.cs_model err);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | _, _ ->
+    assert False;
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+
+let lemma_legal_local_event_stable_server_x25519_key_share_projection
+  (st0:connection_state)
+  (local:local_event)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        stable_server_x25519_key_share_projection st0 /\
+        legal_local_event st0.cs_model local /\
+        step_local_event st0.cs_model local == Some st1.cs_model)
+      (ensures stable_server_x25519_key_share_projection st1)
+=
+  assert (server_x25519_key_share_projection st0);
+  assert (server_x25519_key_share_projection_stable_control st0.cs_model.model_control);
+  let hs0 = st0.cs_model.model_handshake in
+  match local, st0.cs_model.model_control with
+  | LocalInstallTrafficKeys install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalInstallTrafficKeysForRole role_install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
+    assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalVerifyClientFinished fin, ControlHandshaking HsClientFinishedReceived ->
+    assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | LocalFail err, _ ->
+    assert (st1.cs_model == fail_model st0.cs_model err);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | _, _ ->
+    assert False;
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+
+let lemma_legal_tls_message_stable_client_x25519_key_share_projection
+  (st0:connection_state)
+  (msg:directed_message M.tls_message)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        stable_client_x25519_key_share_projection st0 /\
+        legal_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value /\
+        step_tls_message
+          st0.cs_model
+          msg.CL.message_direction
+          msg.CL.message_value == Some st1.cs_model)
+      (ensures stable_client_x25519_key_share_projection st1)
+=
+  assert (client_x25519_key_share_projection st0);
+  assert (client_x25519_key_share_projection_stable_control st0.cs_model.model_control);
+  let hs0 = st0.cs_model.model_handshake in
+  match msg.CL.message_value, st0.cs_model.model_control with
+  | M.TlsHandshake hmsg, _ ->
+    (match msg.CL.message_direction, hmsg, st0.cs_model.model_control with
+     | CL.Received, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloReceived ->
+       assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Received, M.Certificate cert, ControlHandshaking HsEncryptedExtensionsReceived ->
+       assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Received, M.CertificateVerify cv, ControlHandshaking HsCertificateValidated ->
+       assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Received, M.Finished fin, ControlHandshaking HsCertificateVerifyVerified ->
+       assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Sent, M.Finished fin, ControlHandshaking HsServerFinishedVerified ->
+       assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | _, _, _ ->
+       assert False;
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control))
+  | M.TlsApplicationData bytes, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsIgnoredPostHandshake post, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsKeyUpdate req, ControlApplicationData ->
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsAlert T.CloseNotify, ControlClosing ->
+    (match msg.CL.message_direction with
+     | CL.Received ->
+       assert (st1.cs_model.model_handshake == hs0);
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Sent ->
+       assert False;
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control))
+  | M.TlsAlert alert, _ ->
+    assert (st1.cs_model == fail_model st0.cs_model (T.AlertError alert));
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsChangeCipherSpec, ControlHandshaking _ ->
+    assert (st1.cs_model == st0.cs_model);
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | _, _ ->
+    assert False;
+    assert (client_x25519_key_share_projection st1);
+    assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+
+let lemma_legal_tls_message_stable_server_x25519_key_share_projection
+  (st0:connection_state)
+  (msg:directed_message M.tls_message)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        stable_server_x25519_key_share_projection st0 /\
+        legal_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value /\
+        step_tls_message
+          st0.cs_model
+          msg.CL.message_direction
+          msg.CL.message_value == Some st1.cs_model)
+      (ensures stable_server_x25519_key_share_projection st1)
+=
+  assert (server_x25519_key_share_projection st0);
+  assert (server_x25519_key_share_projection_stable_control st0.cs_model.model_control);
+  let hs0 = st0.cs_model.model_handshake in
+  match msg.CL.message_value, st0.cs_model.model_control with
+  | M.TlsHandshake hmsg, _ ->
+    (match msg.CL.message_direction, hmsg, st0.cs_model.model_control with
+     | CL.Sent, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloSent ->
+       assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Sent, M.Certificate cert, ControlHandshaking HsServerEncryptedFlightSent ->
+       assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
+       assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Sent, M.Finished fin, ControlHandshaking HsServerEncryptedFlightSent ->
+       assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Received, M.Finished fin, ControlHandshaking HsServerFinishedSent ->
+       assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | _, _, _ ->
+       assert False;
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control))
+  | M.TlsApplicationData bytes, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsIgnoredPostHandshake post, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsKeyUpdate req, ControlApplicationData ->
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsAlert T.CloseNotify, ControlClosing ->
+    (match msg.CL.message_direction with
+     | CL.Received ->
+       assert (st1.cs_model.model_handshake == hs0);
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+     | CL.Sent ->
+       assert False;
+       assert (server_x25519_key_share_projection st1);
+       assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control))
+  | M.TlsAlert alert, _ ->
+    assert (st1.cs_model == fail_model st0.cs_model (T.AlertError alert));
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | M.TlsChangeCipherSpec, ControlHandshaking _ ->
+    assert (st1.cs_model == st0.cs_model);
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+  | _, _ ->
+    assert False;
+    assert (server_x25519_key_share_projection st1);
+    assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
+
 let lemma_legal_connection_delta_stable_client_x25519_key_share_projection
   (st0:connection_state)
   (delta:connection_delta)
@@ -126,31 +538,61 @@ let lemma_legal_connection_delta_stable_client_x25519_key_share_projection
   | ControlClosing ->
     (match delta.delta_event with
      | ConnLocalEvent local ->
+       assert (delta.delta_event == ConnLocalEvent local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) == Some st1.cs_model);
        assert (legal_local_event st0.cs_model local);
-       assert (step_local_event st0.cs_model local == Some st1.cs_model)
+       assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       lemma_step_model_local_event_some st0.cs_model local st1.cs_model;
+       lemma_legal_local_event_stable_client_x25519_key_share_projection st0 local st1
      | ConnNetworkEvent msg ->
+       assert (delta.delta_event == ConnNetworkEvent msg);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) == Some st1.cs_model);
        assert (legal_tls_message
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value);
+       assert_norm (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       lemma_step_model_network_event_some st0.cs_model msg st1.cs_model;
        assert (step_tls_message
          st0.cs_model
          msg.CL.message_direction
-         msg.CL.message_value == Some st1.cs_model))
+         msg.CL.message_value == Some st1.cs_model);
+       lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1)
   | ControlClosed ->
     (match delta.delta_event with
      | ConnLocalEvent local ->
+       assert (delta.delta_event == ConnLocalEvent local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) == Some st1.cs_model);
        assert (legal_local_event st0.cs_model local);
-       assert (step_local_event st0.cs_model local == Some st1.cs_model)
+       assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       lemma_step_model_local_event_some st0.cs_model local st1.cs_model;
+       lemma_legal_local_event_stable_client_x25519_key_share_projection st0 local st1
      | ConnNetworkEvent msg ->
+       assert (delta.delta_event == ConnNetworkEvent msg);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) == Some st1.cs_model);
        assert (legal_tls_message
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value);
+       assert_norm (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       lemma_step_model_network_event_some st0.cs_model msg st1.cs_model;
        assert (step_tls_message
          st0.cs_model
          msg.CL.message_direction
-         msg.CL.message_value == Some st1.cs_model))
+         msg.CL.message_value == Some st1.cs_model);
+       lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1)
   | ControlFailed _ ->
     lemma_step_model_from_failed_results_failed
       st0.cs_model
@@ -171,6 +613,9 @@ let lemma_legal_connection_delta_stable_server_x25519_key_share_projection
 =
   assert (legal_event st0.cs_model delta.delta_event);
   assert (step_model st0.cs_model delta.delta_event == Some st1.cs_model);
+  assert (stable_server_x25519_key_share_projection st0);
+  assert (server_x25519_key_share_projection st0);
+  assert (server_x25519_key_share_projection_stable_control st0.cs_model.model_control);
   match st0.cs_model.model_control with
   | ControlHandshaking HsServerHelloSent
   | ControlHandshaking HsServerEncryptedFlightSent
@@ -181,31 +626,61 @@ let lemma_legal_connection_delta_stable_server_x25519_key_share_projection
   | ControlClosing ->
     (match delta.delta_event with
      | ConnLocalEvent local ->
+       assert (delta.delta_event == ConnLocalEvent local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) == Some st1.cs_model);
        assert (legal_local_event st0.cs_model local);
-       assert (step_local_event st0.cs_model local == Some st1.cs_model)
+       assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       lemma_step_model_local_event_some st0.cs_model local st1.cs_model;
+       lemma_legal_local_event_stable_server_x25519_key_share_projection st0 local st1
      | ConnNetworkEvent msg ->
+       assert (delta.delta_event == ConnNetworkEvent msg);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) == Some st1.cs_model);
        assert (legal_tls_message
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value);
+       assert_norm (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       lemma_step_model_network_event_some st0.cs_model msg st1.cs_model;
        assert (step_tls_message
          st0.cs_model
          msg.CL.message_direction
-         msg.CL.message_value == Some st1.cs_model))
+         msg.CL.message_value == Some st1.cs_model);
+       lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1)
   | ControlClosed ->
     (match delta.delta_event with
      | ConnLocalEvent local ->
+       assert (delta.delta_event == ConnLocalEvent local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) == Some st1.cs_model);
        assert (legal_local_event st0.cs_model local);
-       assert (step_local_event st0.cs_model local == Some st1.cs_model)
+       assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       assert (step_model st0.cs_model (ConnLocalEvent local) ==
+         step_local_event st0.cs_model local);
+       lemma_step_model_local_event_some st0.cs_model local st1.cs_model;
+       lemma_legal_local_event_stable_server_x25519_key_share_projection st0 local st1
      | ConnNetworkEvent msg ->
+       assert (delta.delta_event == ConnNetworkEvent msg);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) == Some st1.cs_model);
        assert (legal_tls_message
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value);
+       assert_norm (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       assert (step_model st0.cs_model (ConnNetworkEvent msg) ==
+         step_tls_message st0.cs_model msg.CL.message_direction msg.CL.message_value);
+       lemma_step_model_network_event_some st0.cs_model msg st1.cs_model;
        assert (step_tls_message
          st0.cs_model
          msg.CL.message_direction
-         msg.CL.message_value == Some st1.cs_model))
+         msg.CL.message_value == Some st1.cs_model);
+       lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1)
   | ControlFailed _ ->
     lemma_step_model_from_failed_results_failed
       st0.cs_model
@@ -790,6 +1265,175 @@ let server_x25519_reachable_shape
       | _ ->
         True))
 
+let lemma_legal_local_event_client_x25519_reachable_shape
+  (st0:connection_state)
+  (local:local_event)
+  (st1:connection_state)
+  : Lemma
+      (requires
+       client_x25519_reachable_shape st0 /\
+       st0.cs_model.model_config.config_role == ClientEndpoint /\
+       st0.cs_model.model_handshake.hs_keys.ks_shared_secret == None /\
+       legal_local_event st0.cs_model local /\
+       step_local_event st0.cs_model local == Some st1.cs_model)
+      (ensures client_x25519_reachable_shape st1)
+=
+  let hs0 = st0.cs_model.model_handshake in
+  match local, st0.cs_model.model_control with
+  | LocalStartHandshake start, ControlNew ->
+    (match start.start_client_key_share_private with
+     | Some client_sk ->
+      assert (C.x25519_public_from_private client_sk ==
+        start.start_client_key_share_public)
+     | None ->
+      ());
+    assert (client_x25519_reachable_shape st1)
+  | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
+    assert (client_x25519_pre_shared_secret_projection st0);
+    (match hs0.hs_start, hs0.hs_client_hello, hs0.hs_server_hello with
+     | Some start, Some ch, Some sh ->
+      (match start.start_client_key_share_private with
+       | Some client_sk ->
+         assert (client_hello_key_share ch ==
+           start.start_client_key_share_public);
+         assert (C.x25519_public_from_private client_sk ==
+           start.start_client_key_share_public);
+         assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
+           Some shared)
+       | None ->
+         assert False)
+     | _, _, _ ->
+      assert False);
+    assert (stable_client_x25519_key_share_projection st1);
+    assert (client_x25519_reachable_shape st1)
+  | LocalInstallTrafficKeys install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_reachable_shape st1)
+  | LocalInstallTrafficKeysForRole role_install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_reachable_shape st1)
+  | LocalValidateCertificate peer, ControlHandshaking HsCertificateReceived ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_reachable_shape st1)
+  | LocalVerifyCertificateSignature cv, ControlHandshaking HsCertificateVerifyReceived ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_reachable_shape st1)
+  | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (client_x25519_reachable_shape st1)
+  | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (client_x25519_reachable_shape st1)
+  | LocalFail err, _ ->
+    assert (st1.cs_model == fail_model st0.cs_model err);
+    assert (client_x25519_reachable_shape st1)
+  | _, _ ->
+    assert False
+
+let lemma_legal_local_event_server_x25519_reachable_shape
+  (st0:connection_state)
+  (local:local_event)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        server_x25519_reachable_shape st0 /\
+        st0.cs_model.model_config.config_role == ServerEndpoint /\
+        st0.cs_model.model_handshake.hs_keys.ks_shared_secret == None /\
+        legal_local_event st0.cs_model local /\
+        step_local_event st0.cs_model local == Some st1.cs_model)
+      (ensures server_x25519_reachable_shape st1)
+=
+  let hs0 = st0.cs_model.model_handshake in
+  match local, st0.cs_model.model_control with
+  | LocalStartServer, ControlNew ->
+    assert (st1.cs_model.model_handshake.hs_server_selection == None);
+    assert (server_x25519_reachable_shape st1)
+  | LocalSelectServerParameters selection, ControlHandshaking HsClientHelloReceived ->
+    assert (hs0.hs_keys.ks_shared_secret == None);
+    assert (hs0.hs_client_hello == Some selection.server_selected_client_hello);
+    (match selection.server_key_share_private with
+     | Some server_sk ->
+       assert (C.x25519_public_from_private server_sk ==
+         selection.server_key_share_public)
+     | None ->
+       ());
+    assert (server_x25519_reachable_shape st1)
+  | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
+    assert (server_selected_client_hello_reachable_shape st0);
+    (match hs0.hs_server_selection with
+     | Some selection ->
+       (match selection.server_key_share_private with
+        | Some server_sk ->
+          assert (hs0.hs_client_hello ==
+            Some selection.server_selected_client_hello);
+          assert (C.x25519_public_from_private server_sk ==
+            selection.server_key_share_public);
+          assert (C.x25519_shared
+            server_sk
+            (client_hello_key_share selection.server_selected_client_hello) ==
+            Some shared)
+        | None ->
+          assert False)
+     | None ->
+       assert False);
+    assert (server_x25519_reachable_shape st1)
+  | LocalInstallTrafficKeys install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_reachable_shape st1)
+  | LocalInstallTrafficKeysForRole role_install, ControlHandshaking _ ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+    assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_reachable_shape st1)
+  | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_reachable_shape st1)
+  | LocalVerifyClientFinished fin, ControlHandshaking HsClientFinishedReceived ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+      hs0.hs_keys.ks_shared_secret);
+    assert (server_x25519_reachable_shape st1)
+  | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    assert (st1.cs_model.model_control == st0.cs_model.model_control);
+    assert (st1.cs_model.model_handshake == hs0);
+    assert (server_x25519_reachable_shape st1)
+  | LocalFail err, _ ->
+    assert (st1.cs_model == fail_model st0.cs_model err);
+    assert (server_x25519_reachable_shape st1)
+  | _, _ ->
+    assert False
+
 let lemma_connection_delta_client_x25519_reachable_shape
   (st0:connection_state)
   (st1:connection_state)
@@ -830,6 +1474,8 @@ let lemma_connection_delta_client_x25519_reachable_shape
          (match local, st0.cs_model.model_control with
           | LocalStartHandshake start, ControlNew ->
             assert (legal_local_event st0.cs_model local);
+            assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+              step_local_event st0.cs_model local);
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
             (match start.start_client_key_share_private with
              | Some client_sk ->
@@ -841,6 +1487,8 @@ let lemma_connection_delta_client_x25519_reachable_shape
           | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
             assert (client_x25519_pre_shared_secret_projection st0);
             assert (legal_local_event st0.cs_model local);
+            assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+              step_local_event st0.cs_model local);
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
             (match
               st0.cs_model.model_handshake.hs_start,
@@ -864,7 +1512,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
             assert (client_x25519_reachable_shape st1)
           | _, _ ->
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
-            assert (client_x25519_reachable_shape st1))
+            lemma_legal_local_event_client_x25519_reachable_shape st0 local st1)
        | ConnNetworkEvent msg ->
          assert_norm (step_model st0.cs_model (ConnNetworkEvent msg) ==
            step_tls_message
@@ -1048,16 +1696,22 @@ let lemma_connection_delta_server_x25519_reachable_shape
          (match local, st0.cs_model.model_control with
           | LocalStartServer, ControlNew ->
             assert (legal_local_event st0.cs_model local);
+            assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+              step_local_event st0.cs_model local);
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
             assert (server_x25519_reachable_shape st1)
           | LocalSelectServerParameters selection, ControlHandshaking HsClientHelloReceived ->
             assert (legal_local_event st0.cs_model local);
+            assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+              step_local_event st0.cs_model local);
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
             assert (st0.cs_model.model_handshake.hs_keys.ks_shared_secret == None);
             assert (server_x25519_reachable_shape st1)
           | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
             assert (server_selected_client_hello_reachable_shape st0);
             assert (legal_local_event st0.cs_model local);
+            assert_norm (step_model st0.cs_model (ConnLocalEvent local) ==
+              step_local_event st0.cs_model local);
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
             (match st0.cs_model.model_handshake.hs_server_selection with
             | Some selection ->
@@ -1078,7 +1732,7 @@ let lemma_connection_delta_server_x25519_reachable_shape
             assert (server_x25519_reachable_shape st1)
           | _, _ ->
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
-            assert (server_x25519_reachable_shape st1))
+            lemma_legal_local_event_server_x25519_reachable_shape st0 local st1)
        | ConnNetworkEvent msg ->
          assert_norm (step_model st0.cs_model (ConnNetworkEvent msg) ==
            step_tls_message
@@ -7331,6 +7985,11 @@ let lemma_legal_connection_delta_layered_log_consistent
       (ensures connection_state_layered_log_consistent st1)
 =
   assert (st0.cs_model.model_config.config_role == ClientEndpoint);
+  assert (step_model st0.cs_model delta.delta_event == Some st1.cs_model);
+  lemma_step_model_preserves_config_for_x25519_reachable_shape
+    st0.cs_model
+    delta.delta_event
+    st1.cs_model;
   assert (st1.cs_model.model_config == st0.cs_model.model_config);
   lemma_legal_connection_delta_event_log_consistent st0 delta st1;
   lemma_legal_connection_delta_transcript_consistent st0 delta st1;

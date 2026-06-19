@@ -3288,6 +3288,48 @@ let local_event_end_to_end_correct
   (CS.connection_state_received_decode_replay_consistent st0 ==>
    CS.connection_state_received_decode_replay_consistent st1)
 
+let lemma_local_event_end_to_end_correct_intro
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (_auth:unit{local_auth_tcb_projection st0 kind payload})
+  (_app_data:unit{
+    local_send_application_data_supported_projection
+      st0 st1 resp kind payload network_out app_out})
+  (_raw:unit{response_network_out_raw_projection st0 st1 resp network_out app_out})
+  (_seal:unit{response_network_out_seal_projection st0 st1 resp network_out app_out})
+  (_state:unit{client_state_correct st0 ==> client_state_correct st1})
+  (_write_keys:unit{
+    client_state_correct st0 ==>
+    response_network_out_write_key_schedule_projection st0 st1 resp network_out app_out})
+  (_log_view:unit{
+    client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1})
+  (_raw_event:unit{
+    client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1})
+  (_sent_key_schedule:unit{
+    client_state_correct st0 ==>
+    CS.connection_state_sent_seal_key_schedule_replay_consistent st1})
+  (_received_key_schedule:unit{
+    client_state_correct st0 ==>
+    CS.connection_state_received_decode_key_schedule_replay_consistent st1})
+  (_end_to_end:unit{
+    client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1})
+  (_sent_seal:unit{
+    CS.connection_state_sent_seal_replay_consistent st0 ==>
+    CS.connection_state_sent_seal_replay_consistent st1})
+  (_received_decode:unit{
+    CS.connection_state_received_decode_replay_consistent st0 ==>
+    CS.connection_state_received_decode_replay_consistent st1})
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
+=
+  ()
+
 let lemma_local_event_end_to_end_correct_preserves_config
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4691,6 +4733,7 @@ let lemma_decoded_message_event_response_network_out_seal_projection
       CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
   )
 
+#push-options "--split_queries always"
 let lemma_network_bytes_decoded_message_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4830,6 +4873,7 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
     assert (network_bytes_network_out_seal_projection
       st0 st1 buffer_resp network_input network_out app_out)
   )
+#pop-options
 
 let lemma_network_bytes_step_correct_client_state_correct
   (st0:CS.connection_state)
@@ -5094,6 +5138,159 @@ let lemma_local_event_step_correct_client_state_correct
     app_out;
   lemma_some_legal_response_client_state_correct st0 st1 resp network_out app_out
 
+let lemma_local_event_step_correct_client_state_correct_imp
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures client_state_correct st0 ==> client_state_correct st1)
+=
+  if client_state_correct st0 then
+    lemma_local_event_step_correct_client_state_correct
+      st0
+      st1
+      resp
+      kind
+      payload
+      network_out
+      app_out
+
+let lemma_local_event_step_correct_write_key_schedule_imp
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures
+        client_state_correct st0 ==>
+        response_network_out_write_key_schedule_projection st0 st1 resp network_out app_out)
+=
+  assert (some_legal_response st0 st1 resp network_out app_out);
+  if client_state_correct st0 then
+    lemma_some_legal_response_network_out_write_key_schedule_projection
+      st0
+      st1
+      resp
+      network_out
+      app_out
+
+let lemma_local_event_step_correct_connection_log_view_imp
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures
+        client_state_correct st0 ==>
+        CS.connection_state_connection_log_view_consistent st1)
+=
+  lemma_local_event_step_correct_client_state_correct_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  if client_state_correct st0 then (
+    assert (client_state_correct st1);
+    assert (CS.connection_state_connection_log_view_consistent st1)
+  )
+
+let lemma_local_event_step_correct_raw_event_replay_imp
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures
+        client_state_correct st0 ==>
+        CS.connection_state_raw_event_replay_consistent st1)
+=
+  lemma_local_event_step_correct_client_state_correct_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  if client_state_correct st0 then (
+    assert (client_state_correct st1);
+    assert (CS.connection_state_raw_event_replay_consistent st1)
+  )
+
+let lemma_local_event_step_correct_sent_key_schedule_imp
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures
+        client_state_correct st0 ==>
+        CS.connection_state_sent_seal_key_schedule_replay_consistent st1)
+=
+  lemma_local_event_step_correct_client_state_correct_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  if client_state_correct st0 then (
+    assert (client_state_correct st1);
+    assert (CS.connection_state_sent_seal_key_schedule_replay_consistent st1)
+  )
+
+let lemma_local_event_step_correct_received_key_schedule_imp
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures
+        client_state_correct st0 ==>
+        CS.connection_state_received_decode_key_schedule_replay_consistent st1)
+=
+  lemma_local_event_step_correct_client_state_correct_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  if client_state_correct st0 then (
+    assert (client_state_correct st1);
+    assert (CS.connection_state_received_decode_key_schedule_replay_consistent st1)
+  )
+
 let lemma_local_event_step_correct_received_decode_replay_consistent
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5123,7 +5320,33 @@ let lemma_local_event_step_correct_received_decode_replay_consistent
     network_out
     app_out
 
-#push-options "--split_queries always --z3refresh"
+let lemma_local_event_step_correct_client_end_to_end_invariant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        local_event_step_correct st0 st1 resp kind payload network_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  assert (client_state_correct st0);
+  lemma_local_event_step_correct_client_state_correct
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  assert (client_state_correct st1);
+  lemma_client_state_correct_raw_to_message_replay st1
+
+#push-options "--split_queries always --z3refresh --z3rlimit 10"
 let lemma_local_event_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5140,6 +5363,7 @@ let lemma_local_event_step_correct_end_to_end
         local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
 =
   lemma_local_input_wf_auth_tcb_projection st0 kind payload;
+  assert (local_auth_tcb_projection st0 kind payload);
   lemma_legal_handled_local_response_app_data_supported_projection
     st0
     st1
@@ -5148,7 +5372,11 @@ let lemma_local_event_step_correct_end_to_end
     payload
     network_out
     app_out;
+  assert (local_send_application_data_supported_projection
+    st0 st1 resp kind payload network_out app_out);
+  assert (some_legal_response st0 st1 resp network_out app_out);
   lemma_some_legal_response_network_out_raw_projection st0 st1 resp network_out app_out;
+  assert (response_network_out_raw_projection st0 st1 resp network_out app_out);
   lemma_local_event_step_correct_network_out_seal_projection
     st0
     st1
@@ -5157,35 +5385,78 @@ let lemma_local_event_step_correct_end_to_end
     payload
     network_out
     app_out;
-  if client_state_correct st0 then (
-    lemma_some_legal_response_network_out_write_key_schedule_projection
-      st0
-      st1
-      resp
-      network_out
-      app_out;
-    lemma_local_event_step_correct_client_state_correct
+  assert (response_network_out_seal_projection st0 st1 resp network_out app_out);
+  lemma_local_event_step_correct_client_state_correct_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  lemma_local_event_step_correct_write_key_schedule_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  lemma_local_event_step_correct_connection_log_view_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  lemma_local_event_step_correct_raw_event_replay_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  lemma_local_event_step_correct_sent_key_schedule_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  lemma_local_event_step_correct_received_key_schedule_imp
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  if client_end_to_end_invariant st0 then (
+    lemma_local_event_step_correct_client_end_to_end_invariant
       st0
       st1
       resp
       kind
       payload
       network_out
-      app_out
+      app_out;
+    assert (client_end_to_end_invariant st1)
   );
-  if client_end_to_end_invariant st0 then (
-    assert (client_state_correct st0);
-    assert (client_state_correct st1);
-    lemma_client_state_correct_raw_to_message_replay st1
-  );
+  assert (client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1);
   if CS.connection_state_sent_seal_replay_consistent st0 then (
     lemma_some_legal_response_sent_seal_replay_consistent
       st0
       st1
       resp
       network_out
-      app_out
+      app_out;
+    assert (CS.connection_state_sent_seal_replay_consistent st1)
   );
+  assert (CS.connection_state_sent_seal_replay_consistent st0 ==>
+    CS.connection_state_sent_seal_replay_consistent st1);
   if CS.connection_state_received_decode_replay_consistent st0 then (
     lemma_local_event_step_correct_received_decode_replay_consistent
       st0
@@ -5194,8 +5465,60 @@ let lemma_local_event_step_correct_end_to_end
       kind
       payload
       network_out
-      app_out
-  )
+      app_out;
+    assert (CS.connection_state_received_decode_replay_consistent st1)
+  );
+  assert (CS.connection_state_received_decode_replay_consistent st0 ==>
+    CS.connection_state_received_decode_replay_consistent st1);
+  let p_auth = (() <: (_:unit{local_auth_tcb_projection st0 kind payload})) in
+  let p_app_data = (() <: (_:unit{
+    local_send_application_data_supported_projection
+      st0 st1 resp kind payload network_out app_out})) in
+  let p_raw = (() <: (_:unit{response_network_out_raw_projection st0 st1 resp network_out app_out})) in
+  let p_seal = (() <: (_:unit{response_network_out_seal_projection st0 st1 resp network_out app_out})) in
+  let p_state = (() <: (_:unit{client_state_correct st0 ==> client_state_correct st1})) in
+  let p_write_keys = (() <: (_:unit{
+    client_state_correct st0 ==>
+    response_network_out_write_key_schedule_projection st0 st1 resp network_out app_out})) in
+  let p_log_view = (() <: (_:unit{
+    client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1})) in
+  let p_raw_event = (() <: (_:unit{
+    client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1})) in
+  let p_sent_key_schedule = (() <: (_:unit{
+    client_state_correct st0 ==>
+    CS.connection_state_sent_seal_key_schedule_replay_consistent st1})) in
+  let p_received_key_schedule = (() <: (_:unit{
+    client_state_correct st0 ==>
+    CS.connection_state_received_decode_key_schedule_replay_consistent st1})) in
+  let p_end_to_end = (() <: (_:unit{
+    client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1})) in
+  let p_sent_seal = (() <: (_:unit{
+    CS.connection_state_sent_seal_replay_consistent st0 ==>
+    CS.connection_state_sent_seal_replay_consistent st1})) in
+  let p_received_decode = (() <: (_:unit{
+    CS.connection_state_received_decode_replay_consistent st0 ==>
+    CS.connection_state_received_decode_replay_consistent st1})) in
+  lemma_local_event_end_to_end_correct_intro
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out
+    p_auth
+    p_app_data
+    p_raw
+    p_seal
+    p_state
+    p_write_keys
+    p_log_view
+    p_raw_event
+    p_sent_key_schedule
+    p_received_key_schedule
+    p_end_to_end
+    p_sent_seal
+    p_received_decode
 #pop-options
 
 let lemma_legal_network_response_decode_error
