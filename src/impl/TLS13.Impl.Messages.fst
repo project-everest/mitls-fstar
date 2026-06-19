@@ -49,6 +49,8 @@ let max_certificate_chain_entries : nat = 8
 noextract
 let max_signature_len : nat = 4096
 
+inline_for_extraction let max_signature_len_sz : SZ.t = 4096sz
+
 noextract
 let max_record_fragment_len : nat = 16640
 

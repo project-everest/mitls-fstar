@@ -28,3 +28,14 @@ void Pulse_Lib_Array_memcpy_l(
     void *squash) {
   Pulse_Lib_Array_memcpy(len, src, dst, src_bytes, dst_bytes, squash);
 }
+
+void Pulse_Lib_Array_fill(
+    size_t len,
+    uint8_t *dst,
+    uint8_t value,
+    void *squash) {
+  (void)squash;
+  if (len != 0) {
+    memset(dst, value, len);
+  }
+}

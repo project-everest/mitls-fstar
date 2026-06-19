@@ -202,7 +202,7 @@ fn serialize_certificate_verify_from_signature
   with signature. assert (V.pts_to lcv.L.certificate_verify_signature signature);
   V.pts_to_len lcv.L.certificate_verify_signature;
   assert (pure (B.length signature == L.max_signature_len));
-  assert (pure (B.length signature == SZ.v (SZ.uint_to_t L.max_signature_len)));
+  assert (pure (B.length signature == SZ.v L.max_signature_len_sz));
   assert (pure (L.byte_prefix_matches
     signature
     lcv.L.certificate_verify_signature_len
@@ -255,7 +255,7 @@ fn serialize_certificate_verify_from_signature
   V.to_array_pts_to lcv.L.certificate_verify_signature;
   C.copy_array_slice_to_array
     (V.vec_to_array lcv.L.certificate_verify_signature)
-    (SZ.uint_to_t L.max_signature_len)
+    L.max_signature_len_sz
     0sz
     lcv.L.certificate_verify_signature_len
     out

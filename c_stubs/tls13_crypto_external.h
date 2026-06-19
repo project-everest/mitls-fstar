@@ -24,6 +24,9 @@ static inline void TLS13_Pulse_Lib_Array_memcpy_typed(
 
 #define Pulse_Lib_Array_memcpy_l(len, src, dst, ...) \
   TLS13_Pulse_Lib_Array_memcpy_typed((len), (src), (dst), sizeof(*(src)))
+
+#define Pulse_Lib_Array_fill(len, dst, value, ...) \
+  memset((dst), (value), (len) * sizeof(*(dst)))
 #else
 void Pulse_Lib_Array_memcpy(
     size_t len,
@@ -39,6 +42,12 @@ void Pulse_Lib_Array_memcpy_l(
     uint8_t *dst,
     void *src_bytes,
     void *dst_bytes,
+    void *squash);
+
+void Pulse_Lib_Array_fill(
+    size_t len,
+    uint8_t *dst,
+    uint8_t value,
     void *squash);
 #endif
 

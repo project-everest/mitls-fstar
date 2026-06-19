@@ -261,6 +261,23 @@ BUNDLE_DIR = $(EXTRACT_DIR)/bundle
 # TLS13.Impl.Client is the public API module.
 BUNDLE_API_MODULE = TLS13.Impl.Client
 
+SERIALIZER_MODULES = \
+  TLS13.Impl.Serializer.Common \
+  TLS13.Impl.Serializer.Finished \
+  TLS13.Impl.Serializer.EncryptedExtensions \
+  TLS13.Impl.Serializer.CertificateVerify \
+  TLS13.Impl.Serializer.ServerHello \
+  TLS13.Impl.Serializer.Certificate \
+  TLS13.Impl.Serializer.ProtectedRecord \
+  TLS13.Impl.Serializer
+
+SERIALIZER_INTERNAL_MODULES = \
+  TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Finished,\
+  TLS13.Impl.Serializer.EncryptedExtensions,\
+  TLS13.Impl.Serializer.CertificateVerify,TLS13.Impl.Serializer.ServerHello,\
+  TLS13.Impl.Serializer.Certificate,TLS13.Impl.Serializer.ProtectedRecord,\
+  TLS13.Impl.Serializer
+
 # Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
@@ -284,7 +301,7 @@ BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Handle.Dispatch \
   TLS13.Impl.Handle.Handshake \
   TLS13.Impl.Handle.Local \
-  TLS13.Impl.Serializer \
+  $(SERIALIZER_MODULES) \
   TLS13.Impl.Messages \
   TLS13.KeySchedule \
   TLS13.Record
@@ -301,7 +318,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Handle.Alert,TLS13.Impl.Handle.ApplicationData,\
   TLS13.Impl.Handle.ChangeCipherSpec,TLS13.Impl.Handle.DecodeError,\
   TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\
-  TLS13.Impl.Handle.Local,TLS13.Impl.Serializer,TLS13.Impl.Messages,\
+  TLS13.Impl.Handle.Local,$(SERIALIZER_INTERNAL_MODULES),TLS13.Impl.Messages,\
   TLS13.KeySchedule,TLS13.Record
 
 # Interface-only external modules (not implemented in F*):
@@ -344,14 +361,17 @@ DRIVER_IMPL_MODULES = \
   TLS13.Impl.Client
 DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(DRIVER_IMPL_MODULES))) \
-  $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml
+  $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
-  -TLS13.Impl.Driver.Pairing,-TLS13.X509,-TLS13.MachineTypes
+  -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
+  -TLS13.X509,-TLS13.MachineTypes
 SERVER_DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.X509,-TLS13.MachineTypes
 
 SERVER_DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/server_driver_bundle
@@ -391,7 +411,8 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Driver
 SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERVER_DRIVER_MODULES))) \
-  $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml
+  $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
@@ -414,11 +435,11 @@ $(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
 	  --codegen krml --extract_module FStar.SizeT \
 	  $(FSTAR_ULIB)/FStar.SizeT.fst --krmloutput $@
 
-$(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Client.Driver.fst | $(OUTPUT_DIR)
+$(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Client.Driver.fst Makefile | $(OUTPUT_DIR)
 	$(FSTAR_EXTRACT) --codegen krml --extract '$(DRIVER_EXTRACT_SELECTOR)' \
 	  src/impl/TLS13.Impl.Client.Driver.fst --krmloutput $@
 
-$(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Server.Driver.fst | $(OUTPUT_DIR)
+$(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Server.Driver.fst Makefile | $(OUTPUT_DIR)
 	$(FSTAR_EXTRACT) --codegen krml --extract '$(SERVER_DRIVER_EXTRACT_SELECTOR)' \
 	  src/impl/TLS13.Impl.Server.Driver.fst --krmloutput $@
 
@@ -470,19 +491,20 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	$(KRML_EXE) \
 	  -tmpdir $(DRIVER_BUNDLE_DIR) \
 	  -skip-compilation \
+	  -static-header TLS13.Impl.Serializer \
 	  -add-include '<stdbool.h>' \
 	  -add-include '"krml/internal/compat.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
-	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
+	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
 	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.IO \
 	  -library TLS13.OpenSSL \
 	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
-	  -bundle 'LowParse.\*' \
+	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -warn-error '@2-26' \
 	  -warn-error '-2' \
@@ -498,6 +520,7 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	$(KRML_EXE) \
 	  -tmpdir $(SERVER_DRIVER_BUNDLE_DIR) \
 	  -skip-compilation \
+	  -static-header TLS13.Impl.Serializer \
 	  -warn-error -2-9-17-6 \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
@@ -506,7 +529,7 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
-	  -bundle 'LowParse.\*' \
+	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Impl.Server \
 	  $(SERVER_DRIVER_KRML_FILES) \
