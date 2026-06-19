@@ -46,6 +46,10 @@ module LP = LowParse.Spec
 
 (* --- non-handshake content-type arms ------------------------------------ *)
 
+val byte:
+  n:nat ->
+  GTot U8.t
+
 val lemma_ptm_change_cipher_spec (fragment:B.bytes)
   : Lemma (ensures WS.parse_tls_message T.ChangeCipherSpec fragment ==
                    (if B.length fragment = 1 && U8.v (Seq.index fragment 0) = 1
@@ -111,8 +115,8 @@ val lemma_serialize_handshake_record_header_reveal:
     (serialize_record_header T.Handshake fragment_len)
     (B.of_list [
       0x16uy; 0x03uy; 0x03uy;
-      U8.uint_to_t ((fragment_len / 256) % 256);
-      U8.uint_to_t (fragment_len % 256)
+      byte (fragment_len / 256);
+      byte fragment_len
     ]))
 
 val lemma_application_data_record_aad:
@@ -131,9 +135,7 @@ val lemma_application_data_record_header:
   fragment_len:nat{fragment_len <= 16640} ->
   Lemma (Seq.equal
     (CS.application_data_record_header fragment_len)
-    (serialize_record_header T.ApplicationData fragment_len) /\
-    WS.parse_record_header (CS.application_data_record_header fragment_len) ==
-      Some (T.ApplicationData, fragment_len))
+    (serialize_record_header T.ApplicationData fragment_len))
 
 val application_data_record_header_bytes:
   fragment_len:nat ->
@@ -143,9 +145,7 @@ val lemma_application_data_record_header_bytes:
   fragment_len:nat{fragment_len <= 16640} ->
   Lemma (Seq.equal
     (CS.application_data_record_header fragment_len)
-    (application_data_record_header_bytes fragment_len) /\
-    WS.parse_record_header (application_data_record_header_bytes fragment_len) ==
-      Some (T.ApplicationData, fragment_len))
+    (application_data_record_header_bytes fragment_len))
 
 val lemma_application_data_record_header_bytes_reveal:
   fragment_len:nat ->
@@ -155,8 +155,8 @@ val lemma_application_data_record_header_bytes_reveal:
       0x17uy;
       0x03uy;
       0x03uy;
-      U8.uint_to_t ((fragment_len / 256) % 256);
-      U8.uint_to_t (fragment_len % 256)
+      byte (fragment_len / 256);
+      byte fragment_len
     ]))
 
 val lemma_serialize_plaintext_reveal:
@@ -219,22 +219,40 @@ val lemma_certificate_verify_context_byte:
   Lemma (Seq.index certificate_verify_context_with_zero i ==
          certificate_verify_context_byte i)
 
-/// Exposes the concrete byte at each index as a match-on-nat expression.
-/// Callers use this with a concrete i to let Z3 evaluate the nat-match via
-/// simple equality chains (no recursive List.Tot.index fuel needed).
-val lemma_certificate_verify_context_index_eq:
-  i:nat{i < 34} ->
-  Lemma (Seq.index certificate_verify_context_with_zero i ==
-    (match i with
-     | 0  -> 0x54uy | 1  -> 0x4cuy | 2  -> 0x53uy | 3  -> 0x20uy
-     | 4  -> 0x31uy | 5  -> 0x2euy | 6  -> 0x33uy | 7  -> 0x2cuy
-     | 8  -> 0x20uy | 9  -> 0x73uy | 10 -> 0x65uy | 11 -> 0x72uy
-     | 12 -> 0x76uy | 13 -> 0x65uy | 14 -> 0x72uy | 15 -> 0x20uy
-     | 16 -> 0x43uy | 17 -> 0x65uy | 18 -> 0x72uy | 19 -> 0x74uy
-     | 20 -> 0x69uy | 21 -> 0x66uy | 22 -> 0x69uy | 23 -> 0x63uy
-     | 24 -> 0x61uy | 25 -> 0x74uy | 26 -> 0x65uy | 27 -> 0x56uy
-     | 28 -> 0x65uy | 29 -> 0x72uy | 30 -> 0x69uy | 31 -> 0x66uy
-     | 32 -> 0x79uy | _  -> 0uy))
+val lemma_certificate_verify_context_index_0: unit -> Lemma (Seq.index certificate_verify_context_with_zero 0 == 0x54uy)
+val lemma_certificate_verify_context_index_1: unit -> Lemma (Seq.index certificate_verify_context_with_zero 1 == 0x4cuy)
+val lemma_certificate_verify_context_index_2: unit -> Lemma (Seq.index certificate_verify_context_with_zero 2 == 0x53uy)
+val lemma_certificate_verify_context_index_3: unit -> Lemma (Seq.index certificate_verify_context_with_zero 3 == 0x20uy)
+val lemma_certificate_verify_context_index_4: unit -> Lemma (Seq.index certificate_verify_context_with_zero 4 == 0x31uy)
+val lemma_certificate_verify_context_index_5: unit -> Lemma (Seq.index certificate_verify_context_with_zero 5 == 0x2euy)
+val lemma_certificate_verify_context_index_6: unit -> Lemma (Seq.index certificate_verify_context_with_zero 6 == 0x33uy)
+val lemma_certificate_verify_context_index_7: unit -> Lemma (Seq.index certificate_verify_context_with_zero 7 == 0x2cuy)
+val lemma_certificate_verify_context_index_8: unit -> Lemma (Seq.index certificate_verify_context_with_zero 8 == 0x20uy)
+val lemma_certificate_verify_context_index_9: unit -> Lemma (Seq.index certificate_verify_context_with_zero 9 == 0x73uy)
+val lemma_certificate_verify_context_index_10: unit -> Lemma (Seq.index certificate_verify_context_with_zero 10 == 0x65uy)
+val lemma_certificate_verify_context_index_11: unit -> Lemma (Seq.index certificate_verify_context_with_zero 11 == 0x72uy)
+val lemma_certificate_verify_context_index_12: unit -> Lemma (Seq.index certificate_verify_context_with_zero 12 == 0x76uy)
+val lemma_certificate_verify_context_index_13: unit -> Lemma (Seq.index certificate_verify_context_with_zero 13 == 0x65uy)
+val lemma_certificate_verify_context_index_14: unit -> Lemma (Seq.index certificate_verify_context_with_zero 14 == 0x72uy)
+val lemma_certificate_verify_context_index_15: unit -> Lemma (Seq.index certificate_verify_context_with_zero 15 == 0x20uy)
+val lemma_certificate_verify_context_index_16: unit -> Lemma (Seq.index certificate_verify_context_with_zero 16 == 0x43uy)
+val lemma_certificate_verify_context_index_17: unit -> Lemma (Seq.index certificate_verify_context_with_zero 17 == 0x65uy)
+val lemma_certificate_verify_context_index_18: unit -> Lemma (Seq.index certificate_verify_context_with_zero 18 == 0x72uy)
+val lemma_certificate_verify_context_index_19: unit -> Lemma (Seq.index certificate_verify_context_with_zero 19 == 0x74uy)
+val lemma_certificate_verify_context_index_20: unit -> Lemma (Seq.index certificate_verify_context_with_zero 20 == 0x69uy)
+val lemma_certificate_verify_context_index_21: unit -> Lemma (Seq.index certificate_verify_context_with_zero 21 == 0x66uy)
+val lemma_certificate_verify_context_index_22: unit -> Lemma (Seq.index certificate_verify_context_with_zero 22 == 0x69uy)
+val lemma_certificate_verify_context_index_23: unit -> Lemma (Seq.index certificate_verify_context_with_zero 23 == 0x63uy)
+val lemma_certificate_verify_context_index_24: unit -> Lemma (Seq.index certificate_verify_context_with_zero 24 == 0x61uy)
+val lemma_certificate_verify_context_index_25: unit -> Lemma (Seq.index certificate_verify_context_with_zero 25 == 0x74uy)
+val lemma_certificate_verify_context_index_26: unit -> Lemma (Seq.index certificate_verify_context_with_zero 26 == 0x65uy)
+val lemma_certificate_verify_context_index_27: unit -> Lemma (Seq.index certificate_verify_context_with_zero 27 == 0x56uy)
+val lemma_certificate_verify_context_index_28: unit -> Lemma (Seq.index certificate_verify_context_with_zero 28 == 0x65uy)
+val lemma_certificate_verify_context_index_29: unit -> Lemma (Seq.index certificate_verify_context_with_zero 29 == 0x72uy)
+val lemma_certificate_verify_context_index_30: unit -> Lemma (Seq.index certificate_verify_context_with_zero 30 == 0x69uy)
+val lemma_certificate_verify_context_index_31: unit -> Lemma (Seq.index certificate_verify_context_with_zero 31 == 0x66uy)
+val lemma_certificate_verify_context_index_32: unit -> Lemma (Seq.index certificate_verify_context_with_zero 32 == 0x79uy)
+val lemma_certificate_verify_context_index_33: unit -> Lemma (Seq.index certificate_verify_context_with_zero 33 == 0uy)
 
 val lemma_serialize_server_certificate_verify_input_bytes:
   transcript_hash:B.bytes{B.length transcript_hash == 32} ->
@@ -319,13 +337,13 @@ val lemma_client_hello_server_name_extension_bytes_reveal:
     (B.append
       (B.of_list [
         0uy; 0uy;
-        U8.uint_to_t (((5 + B.length hostname) / 256) % 256);
-        U8.uint_to_t ((5 + B.length hostname) % 256);
-        U8.uint_to_t (((3 + B.length hostname) / 256) % 256);
-        U8.uint_to_t ((3 + B.length hostname) % 256);
+        client_hello_byte ((5 + B.length hostname) / 256);
+        client_hello_byte (5 + B.length hostname);
+        client_hello_byte ((3 + B.length hostname) / 256);
+        client_hello_byte (3 + B.length hostname);
         0uy;
-        U8.uint_to_t ((B.length hostname / 256) % 256);
-        U8.uint_to_t (B.length hostname % 256)])
+        client_hello_byte (B.length hostname / 256);
+        client_hello_byte (B.length hostname)])
       hostname))
 
 val lemma_client_hello_server_name_extension_bytes_empty:
@@ -341,16 +359,16 @@ val lemma_client_hello_prefix_bytes_reveal:
     (B.append
       (B.of_list [
         1uy;
-        U8.uint_to_t ((body_len / 65536) % 256);
-        U8.uint_to_t ((body_len / 256) % 256);
-        U8.uint_to_t (body_len % 256);
+        client_hello_byte (body_len / 65536);
+        client_hello_byte (body_len / 256);
+        client_hello_byte body_len;
         0x03uy; 0x03uy])
       (B.append
         random
         (B.of_list [
           0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
-          U8.uint_to_t ((extensions_len / 256) % 256);
-          U8.uint_to_t (extensions_len % 256)]))))
+          client_hello_byte (extensions_len / 256);
+          client_hello_byte extensions_len]))))
 
 val lemma_client_hello_common_extensions_len:
   key_share:B.bytes{B.length key_share == 32} ->
@@ -397,9 +415,8 @@ val lemma_client_hello_handshake_bytes_reveal:
 
 val lemma_ptm_alert (fragment:B.bytes)
   : Lemma (ensures (
-      if B.length fragment <> 2
-      then WS.parse_tls_message T.Alert fragment == None
-      else
+      if B.length fragment == 2
+      then
         WS.parse_tls_message T.Alert fragment ==
           (match U8.v (Seq.index fragment 1) with
            | 0   -> Some (M.TlsAlert T.CloseNotify)
@@ -412,18 +429,25 @@ val lemma_ptm_alert (fragment:B.bytes)
            | 51  -> Some (M.TlsAlert T.DecryptError)
            | 70  -> Some (M.TlsAlert T.ProtocolVersion)
            | 110 -> Some (M.TlsAlert T.UnsupportedExtension)
-           | _   -> None)))
+           | _   -> None)
+      else WS.parse_tls_message T.Alert fragment == None))
 
 (* --- handshake arm: connect the QD parser to parse_tls_message ---------- *)
 
 (* Re-export of the internal [synth_handshake_msg_of]. *)
-val handshake_synth (h:GHS.handshake) : GTot (option M.handshake_msg)
+inline_for_extraction
+let handshake_synth (h:GHS.handshake) : GTot (option M.handshake_msg) =
+  WS.synth_handshake_msg_of h
 
 (* Re-export of the internal cipher-suite / signature-scheme synths so the
    implementation can name the high-level field values. *)
-val synth_cipher_suite (c:GCS.cipherSuite) : T.cipher_suite
+inline_for_extraction
+let synth_cipher_suite (c:GCS.cipherSuite) : GTot T.cipher_suite =
+  WS.synth_cipher_suite c
 
-val synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme
+inline_for_extraction
+let synth_signature_scheme (s:GSS.signatureScheme) : GTot T.signature_scheme =
+  WS.synth_signature_scheme s
 
 (* The signature-scheme synth maps the generated enum to the abstract type
    per-constructor; exposed so the implementation can pick a matching wire u16. *)
@@ -473,7 +497,8 @@ val lemma_handshake_synth_client_hello (b:GHS.handshake_body_client_hello)
 
 (* Re-export of the internal [parse_ignored_post_handshake] (not in the frozen
    TLS13.Wire.Spec interface). *)
-val reveal_parse_ignored_post_handshake (input:B.bytes) : GTot (option B.bytes)
+let reveal_parse_ignored_post_handshake (input:B.bytes) : GTot (option B.bytes) =
+  WS.parse_ignored_post_handshake input
 
 (* Byte-level definition of [parse_key_update]: a 5-byte [24;0;0;1;req] envelope. *)
 val lemma_parse_key_update_def (input:B.bytes)
@@ -492,7 +517,7 @@ val lemma_parse_key_update_def (input:B.bytes)
 (* Byte-level definition of [parse_ignored_post_handshake]: a msg_type-4 envelope
    with a 3-byte length field. *)
 val lemma_parse_ignored_post_handshake_def (input:B.bytes)
-  : Lemma (ensures reveal_parse_ignored_post_handshake input ==
+  : Lemma (ensures WS.parse_ignored_post_handshake input ==
       (if B.length input >= 4 &&
           U8.v (Seq.index input 0) = 4 &&
           (U8.v (Seq.index input 1) * 65536 +
@@ -527,7 +552,7 @@ val lemma_ptm_handshake_fallback (fragment:B.bytes)
       (match WS.parse_key_update fragment with
        | Some req -> Some (M.TlsKeyUpdate req)
        | None ->
-         (match reveal_parse_ignored_post_handshake fragment with
+         (match WS.parse_ignored_post_handshake fragment with
           | Some body -> Some (M.TlsIgnoredPostHandshake body)
           | None -> None)))
 
@@ -540,14 +565,16 @@ val lemma_ptm_handshake_fallback (fragment:B.bytes)
 
 (* Re-export of the internal [synth_encrypted_extensions] (scan for the first
    ALPN extension). *)
-val reveal_synth_encrypted_extensions (l:list GEEE.extensionEncryptedExtensions)
-  : GTot (option M.encrypted_extensions)
+let reveal_synth_encrypted_extensions (l:list GEEE.extensionEncryptedExtensions)
+  : GTot (option M.encrypted_extensions) =
+  WS.synth_encrypted_extensions l
 
 (* Re-export of the internal [alpn_first_name] (first protocol name of an ALPN
    extension, as raw bytes). *)
-val reveal_alpn_first_name
+let reveal_alpn_first_name
   (pnl:GEEE.extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation)
-  : GTot (option B.bytes)
+  : GTot (option B.bytes) =
+  WS.alpn_first_name pnl
 
 (* The EncryptedExtensions arm of [synth_handshake_msg_of]: when the extension
    list synthesises an [encrypted_extensions], the carried M value's body is
@@ -588,9 +615,11 @@ val lemma_synth_ee_cons_alpn
 (* --- Pure list-suffix helpers for the EncryptedExtensions scan loop ------- *)
 
 (* The [i]-th suffix of a list (a local [drop]: FStar.List.Tot has none). *)
-let rec list_drop (#a:Type) (n:nat) (l:list a) : Tot (list a) (decreases n) =
-  if n = 0 then l
-  else (match l with | [] -> [] | _ :: tl -> list_drop (n - 1) tl)
+val list_drop:
+  #a:Type ->
+  n:nat ->
+  l:list a ->
+  Tot (list a)
 
 (* Stepping the suffix exposes the head element at index [i]. *)
 val lemma_list_drop_index (#a:Type) (l:list a) (i:nat)

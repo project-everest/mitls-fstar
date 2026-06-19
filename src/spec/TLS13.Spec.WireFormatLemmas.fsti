@@ -22,13 +22,17 @@ module W = TLS13.Wire.Spec
   The current ClientHello serializer is canonical for the supported profile:
   it emits the single supported cipher suite and signature scheme, and it
   serializes no SNI extension for None or an empty host.  Exact parseback to the
-  original M.client_hello therefore needs to exclude Some empty-host and require
-  the supported singleton offer lists.
+  original M.client_hello therefore needs to exclude Some empty-host, keep the
+  hostname within the extracted serializer's fixed buffer, and require the
+  supported singleton offer lists.
 **)
 noextract
 let supported_client_hello_wire_profile (ch:M.client_hello) : prop =
   ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-  ch.M.signature_schemes == [T.RsaPssRsaeSha256]
+  ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+  (match ch.M.server_name with
+   | None -> True
+   | Some hostname -> B.length hostname <= 255)
 
 noextract
 let exact_client_hello_wire_parseback_profile (ch:M.client_hello) : prop =
@@ -54,6 +58,7 @@ let state_supported_client_hello_wire_profile (st:CS.connection_state) : prop =
 noextract
 let supported_client_config_wire_profile (cfg:CS.connection_config) : prop =
   cfg.CS.config_role == CS.ClientEndpoint /\
+  B.length cfg.CS.config_server_name <= 255 /\
   cfg.CS.config_cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
   cfg.CS.config_signature_schemes == [T.RsaPssRsaeSha256]
 
@@ -112,66 +117,45 @@ val lemma_parse_client_hello_serialize_client_hello
       (requires exact_client_hello_wire_parseback_profile ch)
       (ensures W.parse_client_hello (W.serialize_client_hello ch) == Some ch)
 
-val lemma_parse_server_hello_serialize_server_hello
-  (sh:M.server_hello)
-  : Lemma
-      (ensures W.parse_server_hello (W.serialize_server_hello sh) == Some sh)
+(**
+  Removed scaffolding lemmas (none of them are referenced by any consumer; the
+  only client of this module is TLS13.Impl.Driver.Pairing, which uses solely the
+  three [lemma_*_from_raw_replay] / [lemma_state_supported_*] lemmas and the
+  predicates [paired_cleartext_hello_key_shares],
+  [state_exact_client_hello_wire_parseback_profile] and
+  [supported_client_config_wire_profile]).
 
-val lemma_parse_tls_message_serialize_client_hello
-  (ch:M.client_hello)
-  : Lemma
-      (requires exact_client_hello_wire_parseback_profile ch)
-      (ensures
-        W.parse_tls_message
-          T.Handshake
-          (W.serialize_handshake (M.ClientHello ch)) ==
-            Some (M.TlsHandshake (M.ClientHello ch)))
+  - [lemma_parse_server_hello_serialize_server_hello]: FALSE as originally
+    stated.  [parse_server_hello] routes through [synth_server_hello], which
+    hardcodes [M.body = B.empty], and [serialize_server_hello] ignores
+    [sh.M.body], so exact parseback to an arbitrary [sh] cannot hold (any [sh]
+    with a non-empty body is a counterexample).
 
-val lemma_parse_tls_message_serialize_server_hello
-  (sh:M.server_hello)
-  : Lemma
-      (ensures
-        W.parse_tls_message
-          T.Handshake
-          (W.serialize_handshake (M.ServerHello sh)) ==
-            Some (M.TlsHandshake (M.ServerHello sh)))
+  - [lemma_parse_tls_message_serialize_client_hello]: GENUINELY FALSE.
+    [parse_tls_message T.Handshake (serialize_handshake (ClientHello ch))] is
+    provably [None] (the received-handshake synthesizer rejects ClientHello, see
+    TLS13.Wire.Spec.RevealDecode.lemma_parse_tls_message_no_client_hello), so it
+    can never equal [Some (TlsHandshake (ClientHello ch))].  No precondition on
+    [ch] can repair this.
 
-val lemma_serialized_cleartext_client_hello_parseback
-  (ch:M.client_hello)
-  : Lemma
-      (requires exact_client_hello_wire_parseback_profile ch)
-      (ensures
-        W.parse_record_wire
-          (CS.serialized_cleartext_tls_message
-            (M.TlsHandshake (M.ClientHello ch))) ==
-          Some
-            (T.Handshake,
-             W.serialize_handshake (M.ClientHello ch),
-             B.length
-               (CS.serialized_cleartext_tls_message
-                 (M.TlsHandshake (M.ClientHello ch)))) /\
-        W.parse_tls_message
-          T.Handshake
-          (W.serialize_handshake (M.ClientHello ch)) ==
-            Some (M.TlsHandshake (M.ClientHello ch)))
+  - [lemma_parse_tls_message_serialize_server_hello]: FALSE as stated for the
+    same body-canonicalization reason as the server-hello parseback above.
 
-val lemma_serialized_cleartext_server_hello_parseback
-  (sh:M.server_hello)
-  : Lemma
-      (ensures
-        W.parse_record_wire
-          (CS.serialized_cleartext_tls_message
-            (M.TlsHandshake (M.ServerHello sh))) ==
-          Some
-            (T.Handshake,
-             W.serialize_handshake (M.ServerHello sh),
-             B.length
-               (CS.serialized_cleartext_tls_message
-                 (M.TlsHandshake (M.ServerHello sh)))) /\
-        W.parse_tls_message
-          T.Handshake
-          (W.serialize_handshake (M.ServerHello sh)) ==
-            Some (M.TlsHandshake (M.ServerHello sh)))
+  - [lemma_serialized_cleartext_client_hello_parseback]: its second conjunct is
+    exactly [lemma_parse_tls_message_serialize_client_hello], hence unprovable.
+
+  - [lemma_serialized_cleartext_server_hello_parseback]: depends on
+    [lemma_parse_tls_message_serialize_server_hello].
+
+  - [lemma_server_hello_equal_from_sent_cleartext_and_received_parse]: requires
+    injectivity of [serialize_handshake] on server hellos, which fails because
+    the body is serialized verbatim on the sent side but recovered as empty on
+    the parse side.
+
+  All six were unused; proving corrected (body = empty) versions would require
+  re-deriving the EverParse serverHello grammar round-trip, which is not needed
+  by any consumer, so they are removed instead.
+**)
 
 val lemma_client_hello_equal_from_sent_cleartext_and_received_parse
   (sent_ch:M.client_hello)
@@ -215,22 +199,6 @@ val lemma_state_supported_client_hello_wire_profile_from_config
         CS.client_x25519_key_share_projection st /\
         supported_client_config_wire_profile st.CS.cs_model.CS.model_config)
       (ensures state_supported_client_hello_wire_profile st)
-
-val lemma_server_hello_equal_from_sent_cleartext_and_received_parse
-  (sent_sh:M.server_hello)
-  (received_sh:M.server_hello)
-  (sent_raw:B.bytes)
-  (received_raw:B.bytes)
-  : Lemma
-      (requires
-        Seq.equal sent_raw received_raw /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello sent_sh))
-          sent_raw /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello received_sh))
-          received_raw)
-      (ensures sent_sh == received_sh)
 
 val lemma_paired_cleartext_hello_messages_from_raw_replay
   (client:CS.connection_state)

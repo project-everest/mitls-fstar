@@ -92,6 +92,8 @@ let read_u24 (input:B.bytes) (pos:nat{pos + 3 <= B.length input}) : GTot nat =
   nat_of_byte (Seq.index input (pos + 1)) * 256 +
   nat_of_byte (Seq.index input (pos + 2))
 
+let lemma_read_u24_one (input:B.bytes{B.length input >= 4}) = ()
+
 let take_range
   (input:B.bytes)
   (pos:nat)
@@ -310,6 +312,8 @@ let key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange) : GTot (option (B
   let b : B.bytes = (ke <: B.bytes) in
   if B.length b = 32 then Some (b <: B.bytes_of_len 32) else None
 
+let lemma_key_exchange_to_key32 ke = ()
+
 // Find an x25519 entry carrying a 32-byte key in a ClientHello key_share list.
 let rec ch_find_key_share (l:list GKSE.keyShareEntry)
   : GTot (option (B.bytes_of_len 32)) (decreases l) =
@@ -417,6 +421,10 @@ let rec sh_key_share
              | None -> None)
        else None
      | _ -> sh_key_share tl saw_supported_versions key_share)
+
+let lemma_sh_key_share_nil saw_supported_versions key_share = ()
+
+let lemma_sh_key_share_cons e tl saw_supported_versions key_share = ()
 
 let synth_server_hello (sh:GSH.serverHello) : GTot (option M.server_hello) =
   // A magic-random HelloRetryRequest is NOT a normal ServerHello: reject it here
@@ -542,6 +550,27 @@ let cert_chain_fits (chain:list B.bytes) : GTot bool =
   FStar.List.Tot.length chain <= M.certificate_chain_max_entries &&
   cert_chain_total_bytes chain <= M.certificate_chain_max_bytes
 
+let lemma_synth_cert_chain_nil () = ()
+
+let lemma_synth_cert_chain_cons e tl = ()
+
+let rec lemma_synth_cert_chain_length l =
+  match l with
+  | [] -> ()
+  | _ :: tl -> lemma_synth_cert_chain_length tl
+
+let lemma_cert_chain_total_bytes_nil () = ()
+
+let rec lemma_cert_chain_total_bytes_snoc chain x =
+  match chain with
+  | [] -> ()
+  | _ :: tl -> lemma_cert_chain_total_bytes_snoc tl x
+
+let rec lemma_cert_chain_total_bytes_prefix_le prefix x rest =
+  match prefix with
+  | [] -> ()
+  | _ :: tl -> lemma_cert_chain_total_bytes_prefix_le tl x rest
+
 let parse_certificate_msg (input:B.bytes) : GTot (option M.certificate_msg) =
   match LP.parse GCert.certificate_parser input with
   | Some (c, consumed) ->
@@ -616,6 +645,12 @@ let rec synth_encrypted_extensions (l:list GEEE.extensionEncryptedExtensions)
         | None -> None)
      | _ -> synth_encrypted_extensions tl)
 
+let lemma_synth_encrypted_extensions_nil () = ()
+
+let lemma_synth_encrypted_extensions_cons_non_alpn e tl = ()
+
+let lemma_synth_encrypted_extensions_cons_alpn pnl tl = ()
+
 let parse_encrypted_extensions (input:B.bytes) : GTot (option M.encrypted_extensions) =
   match LP.parse GEE.encryptedExtensions_parser input with
   | Some (exts, consumed) ->
@@ -651,6 +686,8 @@ let parse_ignored_post_handshake (input:B.bytes) : GTot (option B.bytes) =
     then Some (Seq.slice input 4 (body_len + 4))
     else None
 
+let lemma_parse_ignored_post_handshake_def input = ()
+
 let parse_key_update (input:B.bytes) : GTot (option M.key_update_request) =
   if B.length input == 5 &&
      nat_of_byte (Seq.index input 0) == 24 &&
@@ -661,6 +698,9 @@ let parse_key_update (input:B.bytes) : GTot (option M.key_update_request) =
     else if request == 1 then Some M.UpdateRequested
     else None
   else None
+
+let lemma_parse_key_update_def input =
+  if B.length input = 5 then lemma_read_u24_one input else ()
 
 let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
   // The verbatim wire bytes of this handshake message: the QuackyDucky
@@ -713,6 +753,24 @@ let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
     Some (M.Finished ({ M.verify_data = (b <: B.bytes_of_len 32) }))
   | GHS.Body_key_update _ -> None
   | GHS.Body_new_session_ticket _ -> None
+
+let lemma_synth_handshake_msg_finished b = ()
+
+let lemma_synth_handshake_msg_certificate_verify b = ()
+
+let lemma_synth_handshake_msg_key_update b = ()
+
+let lemma_synth_handshake_msg_client_hello b = ()
+
+let lemma_synth_handshake_msg_server_hello_bad_version b = ()
+
+let lemma_synth_handshake_msg_server_hello_hrr b shb = ()
+
+let lemma_synth_handshake_msg_server_hello_sh b sf = ()
+
+let lemma_synth_handshake_msg_encrypted_extensions b = ()
+
+let lemma_synth_handshake_msg_certificate b = ()
 
 let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
   match LP.parse GHS.handshake_parser input with
@@ -1225,6 +1283,12 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
     if B.length fragment == 1 && nat_of_byte (Seq.index fragment 0) == 1
     then Some M.TlsChangeCipherSpec
     else None
+
+let lemma_parse_handshake_none_of_lp_none fragment = ()
+
+let lemma_parse_handshake_none_of_synth_none fragment v consumed = ()
+
+let lemma_ptm_handshake_fallback fragment = ()
 
 let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) =
   match msg with
