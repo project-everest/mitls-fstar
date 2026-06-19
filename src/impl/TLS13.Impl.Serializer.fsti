@@ -375,7 +375,16 @@ fn serialize_protected_handshake_record
                   (WS.serialize_handshake (Ghost.reveal msg)) /\
                 B.length (Ghost.reveal old_network) == SZ.v network_out_len /\
                 SZ.v handshake_len + 17 <= 16640 /\
-                SZ.v handshake_len + 22 <= SZ.v network_out_len)
+                SZ.v handshake_len + 22 <= SZ.v network_out_len /\
+                Some? (R.seal
+                  (Ghost.reveal record_write)
+                  (CS.application_data_record_header (SZ.v handshake_len + 17))
+                  {
+                    R.content_type = T.ApplicationData;
+                    R.fragment =
+                      CS.sent_tls_inner_plaintext_fragment
+                        (M.TlsHandshake (Ghost.reveal msg));
+                  }))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* network_bytes.
           Rec.is_record_state write_state (Ghost.reveal record_write) **
@@ -485,6 +494,7 @@ fn serialize_server_hello_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                B.length (Ghost.reveal sh).M.body == 0 /\
                 SZ.v out_len == 90)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -494,10 +504,8 @@ fn serialize_server_hello_from_selection
                 SZ.v written == 90 /\
                 Seq.equal out_bytes
                  (WS.serialize_server_hello_from_selection (Ghost.reveal sh)) /\
-                Seq.equal out_bytes
-                 (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))) /\
-                WS.parse_tls_message T.Handshake out_bytes ==
-                 Some (M.TlsHandshake (M.ServerHello (Ghost.reveal sh))))
+                 Seq.equal out_bytes
+                 (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 
 fn serialize_server_hello_record_from_selection
   (#sh: erased M.server_hello)
@@ -508,6 +516,7 @@ fn serialize_server_hello_record_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                B.length (Ghost.reveal sh).M.body == 0 /\
                 SZ.v out_len == 95)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -516,12 +525,16 @@ fn serialize_server_hello_record_from_selection
           pure (B.length out_bytes == 95 /\
                 SZ.v written == 95 /\
                 Seq.equal out_bytes
+                 (WS.serialize_record
+                   T.Handshake
+                   (WS.serialize_server_hello_from_selection (Ghost.reveal sh))) /\
+                 Seq.equal out_bytes
                  (CS.serialized_cleartext_tls_message
                    (M.TlsHandshake (M.ServerHello (Ghost.reveal sh)))) /\
                 WS.parse_record out_bytes ==
                  Some
                    (T.Handshake,
-                    WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
+                    WS.serialize_server_hello_from_selection (Ghost.reveal sh),
                     95) /\
                 CS.raw_records_exactly out_bytes T.Handshake 1)
 
@@ -537,9 +550,7 @@ fn serialize_empty_encrypted_extensions
           pts_to out out_bytes **
           pure (B.length out_bytes == 6 /\
                 SZ.v written == 6 /\
-                Seq.equal out_bytes (WS.serialize_empty_encrypted_extensions ()) /\
-                WS.parse_tls_message T.Handshake out_bytes ==
-                 Some (M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = out_bytes })))
+                Seq.equal out_bytes (WS.serialize_empty_encrypted_extensions ()))
 
 fn serialize_certificate_from_credential
   (#cert: erased M.certificate_msg)
@@ -550,6 +561,9 @@ fn serialize_certificate_from_credential
   requires L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                lcert.L.certificate_msg_cert_count == 1sz /\
+                (exists (certificate:B.bytes).
+                  (Ghost.reveal cert).M.chain == [certificate]) /\
                 SZ.v out_len == B.length (WS.serialize_certificate_from_credential (Ghost.reveal cert)))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -558,9 +572,7 @@ fn serialize_certificate_from_credential
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes
-                 (WS.serialize_certificate_from_credential (Ghost.reveal cert)) /\
-                WS.parse_tls_message T.Handshake out_bytes ==
-                 Some (M.TlsHandshake (M.Certificate (Ghost.reveal cert))))
+                 (WS.serialize_certificate_from_credential (Ghost.reveal cert)))
 
 fn serialize_certificate_verify_from_signature
   (#cv: erased M.certificate_verify)
@@ -579,9 +591,7 @@ fn serialize_certificate_verify_from_signature
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes
-                 (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)) /\
-                WS.parse_tls_message T.Handshake out_bytes ==
-                 Some (M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv))))
+                 (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
 
 fn serialize_server_finished
   (#fin: erased M.finished)

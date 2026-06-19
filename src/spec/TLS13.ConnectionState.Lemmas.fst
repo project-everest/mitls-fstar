@@ -1887,6 +1887,375 @@ let lemma_connection_state_consistent_server_x25519_reachable_shape
   assert (connection_state_evolves (initial st.cs_model.model_config) st);
   assert (p st)
 
+let server_handshake_write_key_shape_control
+  (control:connection_control_state)
+  : bool =
+  match control with
+  | ControlNew
+  | ControlHandshaking HsAwaitingClientHello
+  | ControlHandshaking HsClientHelloReceived
+  | ControlHandshaking HsServerHelloSent
+  | ControlHandshaking HsServerEncryptedFlightSent ->
+    true
+  | _ ->
+    false
+
+let server_handshake_write_key_reachable_shape
+  (model:connection_model)
+  : prop =
+  model.model_config.config_role == ServerEndpoint ==>
+  server_handshake_write_key_shape_control model.model_control == true ==>
+  Some? model.model_handshake.hs_keys.ks_server_handshake_traffic ==>
+  traffic_material_option_matches_record_direction
+    model.model_handshake.hs_keys.ks_server_handshake_traffic
+    model.model_record.record_write
+
+let lemma_traffic_material_option_matches_record_direction_next_seq
+  (material:option traffic_key_material)
+  (st:R.direction_state)
+  : Lemma
+      (requires traffic_material_option_matches_record_direction material st)
+      (ensures traffic_material_option_matches_record_direction material (R.next_seq st))
+=
+  match material with
+  | Some _ -> ()
+  | None -> assert False
+
+let lemma_server_handshake_write_key_shape_unchanged
+  (model:connection_model)
+  (model':connection_model)
+  : Lemma
+      (requires
+        server_handshake_write_key_reachable_shape model /\
+        model'.model_config == model.model_config /\
+        model'.model_control == model.model_control /\
+        model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+          model.model_handshake.hs_keys.ks_server_handshake_traffic /\
+        model'.model_record.record_write == model.model_record.record_write)
+      (ensures server_handshake_write_key_reachable_shape model')
+=
+  ()
+
+let lemma_server_handshake_write_key_shape_control_advance
+  (model:connection_model)
+  (model':connection_model)
+  : Lemma
+      (requires
+        server_handshake_write_key_reachable_shape model /\
+        model'.model_config == model.model_config /\
+        model.model_config.config_role == ServerEndpoint /\
+        server_handshake_write_key_shape_control model.model_control == true /\
+        server_handshake_write_key_shape_control model'.model_control == true /\
+        model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+          model.model_handshake.hs_keys.ks_server_handshake_traffic /\
+        model'.model_record.record_write == model.model_record.record_write)
+      (ensures server_handshake_write_key_reachable_shape model')
+=
+  if Some? model'.model_handshake.hs_keys.ks_server_handshake_traffic then begin
+    assert (Some? model.model_handshake.hs_keys.ks_server_handshake_traffic);
+    assert (traffic_material_option_matches_record_direction
+      model.model_handshake.hs_keys.ks_server_handshake_traffic
+      model.model_record.record_write)
+  end
+
+let lemma_server_handshake_write_key_shape_next_seq
+  (model:connection_model)
+  (model':connection_model)
+  : Lemma
+      (requires
+        server_handshake_write_key_reachable_shape model /\
+        model'.model_config == model.model_config /\
+        model.model_config.config_role == ServerEndpoint /\
+        server_handshake_write_key_shape_control model.model_control == true /\
+        server_handshake_write_key_shape_control model'.model_control == true /\
+        model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+          model.model_handshake.hs_keys.ks_server_handshake_traffic /\
+        model'.model_record.record_write == R.next_seq model.model_record.record_write)
+      (ensures server_handshake_write_key_reachable_shape model')
+=
+  if model'.model_config.config_role == ServerEndpoint then begin
+    assert (model.model_config.config_role == ServerEndpoint);
+    if server_handshake_write_key_shape_control model'.model_control then begin
+      if Some? model'.model_handshake.hs_keys.ks_server_handshake_traffic then begin
+        assert (Some? model.model_handshake.hs_keys.ks_server_handshake_traffic);
+        assert (traffic_material_option_matches_record_direction
+          model.model_handshake.hs_keys.ks_server_handshake_traffic
+          model.model_record.record_write);
+        lemma_traffic_material_option_matches_record_direction_next_seq
+          model.model_handshake.hs_keys.ks_server_handshake_traffic
+          model.model_record.record_write
+      end
+    end
+  end
+
+let lemma_step_model_server_handshake_write_key_reachable_shape
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires
+        server_handshake_write_key_reachable_shape model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures server_handshake_write_key_reachable_shape model')
+=
+  assert (model'.model_config == model.model_config);
+  if model'.model_config.config_role == ServerEndpoint then begin
+    assert (model.model_config.config_role == ServerEndpoint);
+    match ev with
+    | ConnLocalEvent local ->
+      assert (legal_local_event model local);
+      assert (step_local_event model local == Some model');
+      (match local with
+      | LocalStartServer ->
+        (match model.model_control with
+        | ControlNew ->
+          assert (model'.model_control == ControlHandshaking HsAwaitingClientHello);
+          assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+            model.model_handshake.hs_keys.ks_server_handshake_traffic);
+          assert (model'.model_record.record_write == model.model_record.record_write);
+          lemma_server_handshake_write_key_shape_control_advance model model'
+        | _ -> assert False)
+      | LocalSelectServerParameters _ ->
+        (match model.model_control with
+        | ControlHandshaking HsClientHelloReceived ->
+          assert (model'.model_control == model.model_control);
+          assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+            model.model_handshake.hs_keys.ks_server_handshake_traffic);
+          assert (model'.model_record.record_write == model.model_record.record_write);
+          lemma_server_handshake_write_key_shape_unchanged model model'
+        | _ -> assert False)
+      | LocalDeriveSharedSecret _ ->
+        (match model.model_control with
+        | ControlHandshaking HsClientHelloReceived ->
+          assert (model'.model_control == model.model_control);
+          assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+            model.model_handshake.hs_keys.ks_server_handshake_traffic);
+          assert (model'.model_record.record_write == model.model_record.record_write);
+          lemma_server_handshake_write_key_shape_unchanged model model'
+        | ControlHandshaking HsServerHelloReceived ->
+          assert False
+        | _ -> assert False)
+      | LocalInstallTrafficKeys _ ->
+        assert False
+      | LocalInstallTrafficKeysForRole role_install ->
+        (match model.model_control with
+        | ControlHandshaking stage ->
+          assert (role_install.install_role == ServerEndpoint);
+          let install = role_install.install_payload in
+          assert (traffic_install_allowed_at_stage_for_role
+            ServerEndpoint
+            stage
+            install);
+          (match install.install_epoch, install.install_direction with
+          | TrafficHandshake, TrafficWrite ->
+            assert (stage == HsServerHelloSent);
+            assert (model'.model_control == model.model_control);
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+            assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+              Some install.install_material);
+            assert (model'.model_record.record_write ==
+              R.install_keys
+                model.model_record.record_write
+                R.Handshake
+                install.install_material.traffic_key
+                install.install_material.traffic_iv);
+            assert (traffic_material_option_matches_record_direction
+              model'.model_handshake.hs_keys.ks_server_handshake_traffic
+              model'.model_record.record_write)
+          | TrafficHandshake, TrafficRead ->
+            assert (stage == HsServerHelloSent);
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+            assert (model'.model_control == model.model_control);
+            assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+              model.model_handshake.hs_keys.ks_server_handshake_traffic);
+            assert (model'.model_record.record_write == model.model_record.record_write);
+            lemma_server_handshake_write_key_shape_unchanged model model'
+          | TrafficApplication, TrafficWrite ->
+            assert (stage == HsServerFinishedSent)
+          | TrafficApplication, TrafficRead ->
+            assert (stage == HsClientFinishedReceived))
+        | _ -> assert False)
+      | LocalSignCertificateVerify _ ->
+        (match model.model_control with
+        | ControlHandshaking HsServerEncryptedFlightSent ->
+          assert (model'.model_control == model.model_control);
+          assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+            model.model_handshake.hs_keys.ks_server_handshake_traffic);
+          assert (model'.model_record.record_write == model.model_record.record_write);
+          lemma_server_handshake_write_key_shape_unchanged model model'
+        | _ -> assert False)
+      | LocalVerifyClientFinished _ ->
+        (match model.model_control with
+        | ControlHandshaking HsClientFinishedReceived -> ()
+        | _ -> assert False)
+      | LocalDeliverApplicationData _ ->
+        (match model.model_control with
+        | ControlApplicationData -> ()
+        | _ -> assert False)
+      | LocalFail _ ->
+        ()
+      | _ ->
+        assert False)
+    | ConnNetworkEvent msg ->
+      assert (legal_tls_message
+        model
+        msg.CL.message_direction
+        msg.CL.message_value);
+      assert (step_tls_message
+        model
+        msg.CL.message_direction
+        msg.CL.message_value == Some model');
+      (match msg.CL.message_value, msg.CL.message_direction, model.model_control with
+      | M.TlsHandshake (M.ClientHello _), CL.Received,
+        ControlHandshaking HsAwaitingClientHello ->
+        assert (model'.model_control == ControlHandshaking HsClientHelloReceived);
+        assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+          model.model_handshake.hs_keys.ks_server_handshake_traffic);
+        assert (model'.model_record.record_write == model.model_record.record_write);
+        lemma_server_handshake_write_key_shape_control_advance model model'
+      | M.TlsHandshake (M.ServerHello _), CL.Sent,
+        ControlHandshaking HsClientHelloReceived ->
+        assert (model'.model_control == ControlHandshaking HsServerHelloSent);
+        assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+          model.model_handshake.hs_keys.ks_server_handshake_traffic);
+        assert (model'.model_record.record_write == model.model_record.record_write);
+        lemma_server_handshake_write_key_shape_control_advance model model'
+      | M.TlsHandshake (M.EncryptedExtensions _), CL.Sent,
+        ControlHandshaking HsServerHelloSent
+      | M.TlsHandshake (M.Certificate _), CL.Sent,
+        ControlHandshaking HsServerEncryptedFlightSent
+      | M.TlsHandshake (M.CertificateVerify _), CL.Sent,
+        ControlHandshaking HsServerEncryptedFlightSent ->
+        assert (model'.model_control == ControlHandshaking HsServerEncryptedFlightSent);
+        assert (model'.model_handshake.hs_keys.ks_server_handshake_traffic ==
+          model.model_handshake.hs_keys.ks_server_handshake_traffic);
+        assert (model'.model_record.record_write == R.next_seq model.model_record.record_write);
+        lemma_server_handshake_write_key_shape_next_seq model model'
+      | M.TlsHandshake (M.Finished _), CL.Sent,
+        ControlHandshaking HsServerEncryptedFlightSent ->
+        assert (model'.model_control == ControlHandshaking HsServerFinishedSent)
+      | M.TlsHandshake (M.Finished _), CL.Received,
+        ControlHandshaking HsServerFinishedSent ->
+        assert (model'.model_control == ControlHandshaking HsClientFinishedReceived)
+      | M.TlsApplicationData _, _, ControlApplicationData
+      | M.TlsIgnoredPostHandshake _, _, ControlApplicationData
+      | M.TlsKeyUpdate _, _, ControlApplicationData
+      | M.TlsAlert T.CloseNotify, _, ControlApplicationData
+      | M.TlsAlert T.CloseNotify, _, ControlClosing ->
+        ()
+      | M.TlsAlert _, _,
+        _ ->
+        ()
+      | M.TlsChangeCipherSpec, _,
+        ControlHandshaking _ ->
+        assert (model' == model);
+        lemma_server_handshake_write_key_shape_unchanged model model'
+      | _ ->
+        assert False)
+  end
+
+let lemma_connection_delta_server_handshake_write_key_reachable_shape
+  (st0:connection_state)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        server_handshake_write_key_reachable_shape st0.cs_model /\
+        connection_state_single_step st0 st1)
+      (ensures server_handshake_write_key_reachable_shape st1.cs_model)
+=
+  match st1 with
+  | _ ->
+    assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    assert (legal_event st0.cs_model delta.delta_event);
+    assert (step_model st0.cs_model delta.delta_event == Some st1.cs_model);
+    lemma_step_model_server_handshake_write_key_reachable_shape
+      st0.cs_model
+      delta.delta_event
+      st1.cs_model
+
+let lemma_initial_server_handshake_write_key_reachable_shape
+  (cfg:connection_config)
+  : Lemma
+      (ensures server_handshake_write_key_reachable_shape (initial_model cfg))
+=
+  ()
+
+let lemma_connection_state_single_step_server_handshake_write_key_reachable_shape
+  ()
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (server_handshake_write_key_reachable_shape y.cs_model);
+                     (connection_state_single_step x y)}
+          server_handshake_write_key_reachable_shape x.cs_model /\
+          connection_state_single_step x y ==>
+          server_handshake_write_key_reachable_shape y.cs_model)
+=
+  introduce forall x y.
+    server_handshake_write_key_reachable_shape x.cs_model /\
+    connection_state_single_step x y ==>
+    server_handshake_write_key_reachable_shape y.cs_model
+  with
+    introduce _ ==> _ with _.
+    lemma_connection_delta_server_handshake_write_key_reachable_shape x y
+
+let lemma_connection_state_consistent_server_handshake_write_key_reachable_shape
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures server_handshake_write_key_reachable_shape st.cs_model)
+=
+  let p (st:connection_state) =
+    server_handshake_write_key_reachable_shape st.cs_model in
+  lemma_initial_server_handshake_write_key_reachable_shape st.cs_model.model_config;
+  lemma_connection_state_single_step_server_handshake_write_key_reachable_shape ();
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+
+let lemma_server_handshake_write_record_has_keys
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        (st.cs_model.model_control == ControlHandshaking HsServerHelloSent \/
+         st.cs_model.model_control == ControlHandshaking HsServerEncryptedFlightSent) /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic)
+      (ensures
+        (match
+          st.cs_model.model_record.record_write.R.key,
+          st.cs_model.model_record.record_write.R.static_iv
+        with
+        | Some _, Some _ -> True
+        | _, _ -> False))
+=
+  lemma_connection_state_consistent_server_handshake_write_key_reachable_shape st;
+  assert (server_handshake_write_key_reachable_shape st.cs_model);
+  assert (server_handshake_write_key_shape_control st.cs_model.model_control == true);
+  assert (traffic_material_option_matches_record_direction
+    st.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic
+    st.cs_model.model_record.record_write);
+  match st.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic with
+  | Some _ -> ()
+  | None -> assert False
+
 let no_application_traffic_keys
   (keys:key_schedule_state)
   : prop =

@@ -2521,6 +2521,11 @@ fn compact_buffer_suffix
       with raw_after_write.
         assert (pts_to raw raw_after_write);
       assert (pure (B.length raw_after_write == SZ.v raw_capacity));
+      assert (pure (Seq.index raw_after_write (SZ.v vi) == b));
+      assert (pure (forall (k:nat). k < SZ.v vi ==>
+        Seq.index raw_after_write k == Seq.index raw_before_read k));
+      assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
+        Seq.index raw_after_write k == Seq.index raw_before_read k));
       assert (pure (forall (k:nat). k < SZ.v vi + 1 ==>
         Seq.index raw_after_write k ==
         Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));

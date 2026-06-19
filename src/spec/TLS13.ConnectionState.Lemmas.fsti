@@ -101,6 +101,23 @@ val lemma_connection_application_keys_supported_profile_key_schedule_lineage
         application_record_keys_installed_for_role role st.cs_model)
       (ensures connection_supported_profile_key_schedule_lineage st)
 
+val lemma_server_handshake_write_record_has_keys
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        (st.cs_model.model_control == ControlHandshaking HsServerHelloSent \/
+         st.cs_model.model_control == ControlHandshaking HsServerEncryptedFlightSent) /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic)
+      (ensures
+        (match
+          st.cs_model.model_record.record_write.R.key,
+          st.cs_model.model_record.record_write.R.static_iv
+        with
+        | Some _, Some _ -> True
+        | _, _ -> False))
+
 val lemma_connection_application_ready_record_epochs_installed
   (role:endpoint_role)
   (st:connection_state)

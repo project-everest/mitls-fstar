@@ -1836,7 +1836,8 @@ let server_hello_matches_selection
   : prop =
   Seq.equal sh.M.random selection.server_random /\
   Seq.equal sh.M.key_share selection.server_key_share_public /\
-  sh.M.cipher_suite == selection.server_selected_cipher_suite
+  sh.M.cipher_suite == selection.server_selected_cipher_suite /\
+  B.length sh.M.body == 0
 
 let certificate_msg_matches_server_config
   (cfg:server_config)

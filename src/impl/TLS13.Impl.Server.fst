@@ -1047,6 +1047,9 @@ fn process_send_certificate_serialized
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
                  B.length (Ghost.reveal cert).M.body == 0 /\
+                 lcert.IM.certificate_msg_cert_count == 1sz /\
+                 (exists (certificate:B.bytes).
+                   (Ghost.reveal cert).M.chain == [certificate]) /\
                  (Ghost.reveal cert).M.chain <> [] /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
