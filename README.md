@@ -1,15 +1,17 @@
 # agentic-tls
 
-Experimental TLS 1.3 client implementation in F*/Pulse, extracted to C. The
-current codebase has a working scoped client path and an in-progress
-functional-correctness proof being redesigned around a buffer-oriented verified
-core.
+Experimental TLS 1.3 client implementation in F*/Pulse, extracted to C. 
+
 
 ## Read next
 
+- `calc_sample/CALC_DESIGN_AND_IMPL.md` - canonical calc-sample methodology reference.
 - `TLS_OUTLINE.md` - concise task statement and proof requirements.
 - `TLS_DESIGN_AND_IMPL.md` - canonical TLS design, proof plan, TCB, extraction notes, and validation workflow.
-- `calc_sample/CALC_DESIGN_AND_IMPL.md` - canonical calc-sample methodology reference.
+
+A proof of a TLS server is in progress and its design is currently in
+
+- `TLS_SERVER_DESIGN_AND_IMPL.md` - TLS design extended to server with a key derivation agreement theorem
 
 ## Scope
 
