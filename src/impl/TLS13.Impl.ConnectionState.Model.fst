@@ -121,18 +121,26 @@ let lemma_signature_schemes_match_first_rsa_offer
     lemma_signature_schemes_match_length wire len schemes;
     assert False
 
-let lemma_nonempty_cipher_suites_offer
+let lemma_cipher_suites_match_first_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
   (suites:list T.cipher_suite)
-  (suite:T.cipher_suite)
   : Lemma
-      (requires suites <> [])
-      (ensures CS.cipher_suite_offered suites suite)
+      (requires IM.cipher_suites_match wire len suites /\
+                0 < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire 0) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
 =
   match suites with
-  | [] -> ()
-  | _ :: _ ->
-    match suite with
+  | suite :: _ ->
+    assert (IM.cipher_suite_matches (Seq.index wire 0) suite);
+    (match suite with
     | T.TLS_CHACHA20_POLY1305_SHA256 -> ()
+    | T.UnknownCipherSuite _ -> assert False)
+  | [] ->
+    lemma_cipher_suites_match_length wire len suites;
+    assert False
 
 let lemma_client_hello_of_start_matches
   (start:CS.handshake_start)

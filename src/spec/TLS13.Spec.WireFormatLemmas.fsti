@@ -1,14 +1,6 @@
 module TLS13.Spec.WireFormatLemmas
 
-(**
-  Assumption boundary for supported-profile wire-format parseback and
-  injectivity lemmas.
-
-  These lemmas are intentionally stated in an interface-only module for now:
-  they can be implemented by direct F* proofs over TLS13.Wire.Spec, or replaced
-  by EverParse-derived codec theorems.  The rest of the end-to-end agreement
-  proof should depend on this narrow surface rather than on ad-hoc parser facts.
-**)
+(** Proven supported-profile wire-format parseback and injectivity lemmas. *)
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
@@ -27,12 +19,17 @@ module W = TLS13.Wire.Spec
   supported singleton offer lists.
 **)
 noextract
-let supported_client_hello_wire_profile (ch:M.client_hello) : prop =
+let supported_client_hello_fields_profile (ch:M.client_hello) : prop =
   ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
   ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
   (match ch.M.server_name with
    | None -> True
    | Some hostname -> B.length hostname <= 255)
+
+noextract
+let supported_client_hello_wire_profile (ch:M.client_hello) : prop =
+  supported_client_hello_fields_profile ch /\
+  B.length ch.M.body == 0
 
 noextract
 let exact_client_hello_wire_parseback_profile (ch:M.client_hello) : prop =
@@ -79,8 +76,58 @@ let client_hello_wire_equivalent
   client_hello_server_name_wire_equivalent sent_ch received_ch /\
   Seq.equal sent_ch.M.key_share received_ch.M.key_share /\
   supported_client_hello_wire_profile sent_ch /\
-  supported_client_hello_wire_profile received_ch
+  supported_client_hello_fields_profile received_ch
 
+(**
+  ServerHello is asymmetric in the model:
+
+  * a server-sent value is required by [CS.server_hello_matches_selection] to
+    have [body = B.empty], so [W.serialize_handshake] uses the canonical
+    serializer over the structured fields; but
+  * a client-received value produced by the wire parser carries the full
+    handshake bytes in [body], so [W.serialize_handshake] replays [body] and does
+    not inspect [random/key_share/cipher_suite].
+
+  Therefore raw replay can soundly imply equality of the ServerHello wire image
+  below, but not equality of [M.server_hello] records and not equality of
+  [key_share] fields unless an additional invariant connects a received
+  ServerHello's structured fields to its carried [body].
+**)
+noextract
+let server_hello_wire_equivalent
+  (sent_sh:M.server_hello)
+  (received_sh:M.server_hello)
+  : prop =
+  Seq.equal
+    (W.serialize_handshake (M.ServerHello sent_sh))
+    (W.serialize_handshake (M.ServerHello received_sh))
+
+noextract
+let paired_cleartext_hello_wire_equivalent
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  let client_hs = client.CS.cs_model.CS.model_handshake in
+  let server_hs = server.CS.cs_model.CS.model_handshake in
+  match
+    client_hs.CS.hs_client_hello,
+    server_hs.CS.hs_client_hello,
+    client_hs.CS.hs_server_hello,
+    server_hs.CS.hs_server_hello
+  with
+  | Some client_ch, Some server_ch, Some client_sh, Some server_sh ->
+    client_hello_wire_equivalent client_ch server_ch /\
+    server_hello_wire_equivalent server_sh client_sh
+  | _, _, _, _ ->
+    False
+
+(**
+  Stronger than [paired_cleartext_hello_wire_equivalent]: this records the
+  key-share equality callers need for X25519 reasoning.  It is intentionally not
+  advertised as a consequence of raw replay alone; a received ServerHello with a
+  non-empty [body] serializes from [body], so raw bytes alone do not constrain its
+  [key_share] field.
+**)
 noextract
 let paired_cleartext_hello_key_shares
   (client:CS.connection_state)
@@ -118,46 +165,16 @@ val lemma_parse_client_hello_serialize_client_hello
       (ensures W.parse_client_hello (W.serialize_client_hello ch) == Some ch)
 
 (**
-  Removed scaffolding lemmas (none of them are referenced by any consumer; the
-  only client of this module is TLS13.Impl.Driver.Pairing, which uses solely the
-  three [lemma_*_from_raw_replay] / [lemma_state_supported_*] lemmas and the
-  predicates [paired_cleartext_hello_key_shares],
-  [state_exact_client_hello_wire_parseback_profile] and
-  [supported_client_config_wire_profile]).
-
-  - [lemma_parse_server_hello_serialize_server_hello]: FALSE as originally
-    stated.  [parse_server_hello] routes through [synth_server_hello], which
-    hardcodes [M.body = B.empty], and [serialize_server_hello] ignores
-    [sh.M.body], so exact parseback to an arbitrary [sh] cannot hold (any [sh]
-    with a non-empty body is a counterexample).
-
-  - [lemma_parse_tls_message_serialize_client_hello]: GENUINELY FALSE.
-    [parse_tls_message T.Handshake (serialize_handshake (ClientHello ch))] is
-    provably [None] (the received-handshake synthesizer rejects ClientHello, see
-    TLS13.Wire.Spec.RevealDecode.lemma_parse_tls_message_no_client_hello), so it
-    can never equal [Some (TlsHandshake (ClientHello ch))].  No precondition on
-    [ch] can repair this.
-
-  - [lemma_parse_tls_message_serialize_server_hello]: FALSE as stated for the
-    same body-canonicalization reason as the server-hello parseback above.
-
-  - [lemma_serialized_cleartext_client_hello_parseback]: its second conjunct is
-    exactly [lemma_parse_tls_message_serialize_client_hello], hence unprovable.
-
-  - [lemma_serialized_cleartext_server_hello_parseback]: depends on
-    [lemma_parse_tls_message_serialize_server_hello].
-
-  - [lemma_server_hello_equal_from_sent_cleartext_and_received_parse]: requires
-    injectivity of [serialize_handshake] on server hellos, which fails because
-    the body is serialized verbatim on the sent side but recovered as empty on
-    the parse side.
-
-  All six were unused; proving corrected (body = empty) versions would require
-  re-deriving the EverParse serverHello grammar round-trip, which is not needed
-  by any consumer, so they are removed instead.
+  ClientHello TLS-message parseback is now proved in
+  TLS13.Wire.Spec.Reveal.ClientHello.Parseback.  Exact ServerHello message
+  equality from raw replay remains intentionally unexposed: server-sent
+  ServerHello values serialize canonically with [body = B.empty], while received
+  values may carry the full wire body, so raw bytes alone imply only
+  [server_hello_wire_equivalent], not record equality (nor ServerHello key-share
+  equality).
 **)
 
-val lemma_client_hello_equal_from_sent_cleartext_and_received_parse
+val lemma_client_hello_received_body_from_sent_cleartext_and_received_parse
   (sent_ch:M.client_hello)
   (received_ch:M.client_hello)
   (sent_raw:B.bytes)
@@ -172,7 +189,13 @@ val lemma_client_hello_equal_from_sent_cleartext_and_received_parse
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ClientHello received_ch))
           received_raw)
-      (ensures sent_ch == received_ch)
+      (ensures
+        Seq.equal sent_ch.M.random received_ch.M.random /\
+        sent_ch.M.server_name == received_ch.M.server_name /\
+        Seq.equal sent_ch.M.key_share received_ch.M.key_share /\
+        sent_ch.M.cipher_suites == received_ch.M.cipher_suites /\
+        sent_ch.M.signature_schemes == received_ch.M.signature_schemes /\
+        received_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch))
 
 val lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
   (sent_ch:M.client_hello)
@@ -191,6 +214,63 @@ val lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
           received_raw)
       (ensures client_hello_wire_equivalent sent_ch received_ch)
 
+val lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
+  (sent_sh:M.server_hello)
+  (received_sh:M.server_hello)
+  (sent_raw:B.bytes)
+  (received_raw:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal sent_raw received_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello sent_sh))
+          sent_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello received_sh))
+          received_raw)
+      (ensures server_hello_wire_equivalent sent_sh received_sh)
+
+(**
+  Corrected paired raw-bytes lemma.  A state-level raw replay proof first needs
+  to identify the matching cleartext ClientHello and ServerHello record slices in
+  the two logs.  Once those slices are available, the sound conclusion is
+  [paired_cleartext_hello_wire_equivalent], not exact
+  [CS.paired_cleartext_hello_messages] and not ServerHello key-share equality.
+**)
+val lemma_paired_cleartext_hello_wire_equivalent_from_cleartext_raw
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+        supported_client_hello_wire_profile client_ch /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw)
+      (ensures paired_cleartext_hello_wire_equivalent client server)
+
 val lemma_state_supported_client_hello_wire_profile_from_config
   (st:CS.connection_state)
   : Lemma
@@ -199,29 +279,3 @@ val lemma_state_supported_client_hello_wire_profile_from_config
         CS.client_x25519_key_share_projection st /\
         supported_client_config_wire_profile st.CS.cs_model.CS.model_config)
       (ensures state_supported_client_hello_wire_profile st)
-
-val lemma_paired_cleartext_hello_messages_from_raw_replay
-  (client:CS.connection_state)
-  (server:CS.connection_state)
-  : Lemma
-      (requires
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
-        CS.paired_wire_logs client server /\
-        CS.client_x25519_key_share_projection client /\
-        CS.server_x25519_key_share_projection server /\
-        state_exact_client_hello_wire_parseback_profile client)
-      (ensures CS.paired_cleartext_hello_messages client server)
-
-val lemma_paired_cleartext_hello_key_shares_from_raw_replay
-  (client:CS.connection_state)
-  (server:CS.connection_state)
-  : Lemma
-      (requires
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
-        CS.paired_wire_logs client server /\
-        CS.client_x25519_key_share_projection client /\
-        CS.server_x25519_key_share_projection server /\
-        state_supported_client_hello_wire_profile client)
-      (ensures paired_cleartext_hello_key_shares client server)

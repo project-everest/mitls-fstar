@@ -423,7 +423,8 @@ let lemma_ch_extensions_none_raw
 let lemma_synth_client_hello_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma (
       let low : GCH.clientHello =
@@ -456,13 +457,16 @@ let lemma_synth_client_hello_some
     Some (Some hostname, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
   assert_norm (WS.synth_cipher_suites low.GCH.cipher_suites ==
     [T.TLS_CHACHA20_POLY1305_SHA256]);
+  Seq.lemma_eq_intro ch.M.body B.empty;
+  Seq.lemma_eq_elim ch.M.body B.empty;
   assert (WS.synth_client_hello low == Some ch)
 
 let lemma_synth_client_hello_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
                        ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
-                       ch.M.server_name == None})
+                       ch.M.server_name == None /\
+                       B.length ch.M.body == 0})
   : Lemma (
       let low : GCH.clientHello =
         { GCH.legacy_version = GPV.TLS_1p2;
@@ -490,6 +494,8 @@ let lemma_synth_client_hello_none
     Some (None, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
   assert_norm (WS.synth_cipher_suites low.GCH.cipher_suites ==
     [T.TLS_CHACHA20_POLY1305_SHA256]);
+  Seq.lemma_eq_intro ch.M.body B.empty;
+  Seq.lemma_eq_elim ch.M.body B.empty;
   assert (WS.synth_client_hello low == Some ch)
 
 /// Prove that LP extensions list bytes == client_hello_extensions_bytes (common part)
@@ -711,7 +717,8 @@ let lemma_lp_ch_ext_ser_none
 let lemma_lp_ch_low_bytes_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
       (let low : GCH.clientHello =
@@ -861,7 +868,8 @@ let lemma_lp_ch_low_bytes_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
                        ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
-                       ch.M.server_name == None})
+                       ch.M.server_name == None /\
+                       B.length ch.M.body == 0})
   : Lemma
       (let low : GCH.clientHello =
          { GCH.legacy_version = GPV.TLS_1p2;
@@ -991,7 +999,8 @@ let lemma_lp_ch_low_bytes_none
 let lemma_lp_ch_low_body_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
       (let low = mk_ch_low_some ch hostname in
@@ -1016,7 +1025,8 @@ let lemma_lp_ch_low_body_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
                        ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
-                       ch.M.server_name == None})
+                       ch.M.server_name == None /\
+                       B.length ch.M.body == 0})
   : Lemma
       (let low = mk_ch_low_none ch in
        Seq.equal (LP.serialize GCH.clientHello_serializer low)
@@ -1039,7 +1049,8 @@ let lemma_lp_ch_low_body_none
 let lemma_lp_ch_low_synth_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256]})
+                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
       (let low = mk_ch_low_some ch hostname in
@@ -1058,7 +1069,8 @@ let lemma_lp_ch_low_synth_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
                        ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
-                       ch.M.server_name == None})
+                       ch.M.server_name == None /\
+                       B.length ch.M.body == 0})
   : Lemma
       (let low = mk_ch_low_none ch in
        WS.synth_client_hello low == Some ch)

@@ -1439,9 +1439,6 @@ fn process_network_bytes
                 fragment_bytes
                 (IM.LTlsHandshake (IM.LClientHello lch))
                 (M.TlsHandshake (M.ClientHello ch))));
-              assert (pure (Seq.equal
-                fragment_bytes
-                (W.serialize_handshake (M.ClientHello ch))));
               assert (pure (CT.wire_parse_success
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes

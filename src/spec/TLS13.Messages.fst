@@ -5,12 +5,18 @@ module C = TLS13.Crypto.Spec
 module T = TLS13.Types
 module X = TLS13.X509.Spec
 
+// Received ClientHello messages carry their full handshake fragment verbatim for
+// transcript replay.  The generated handshake grammar bounds a serialized
+// handshake message to a uint24 body plus the one-byte handshake tag.
+let client_hello_max_len : nat = 16777219
+
 type client_hello = {
   random: B.bytes_of_len 32;
   server_name: option T.hostname;
   key_share: C.x25519_public;
   cipher_suites: list T.cipher_suite;
   signature_schemes: list T.signature_scheme;
+  body: b:B.bytes{B.length b <= client_hello_max_len};
 }
 
 // Upper bound (in bytes) on a wire-encoded ServerHello handshake message.  Kept
@@ -28,6 +34,9 @@ let server_hello_max_len : nat = 4096
 let signature_max_len : nat = 4096
 let certificate_chain_max_bytes : nat = 32768
 let certificate_chain_max_entries : nat = 8
+let client_hello_server_name_max_len : nat = 255
+let client_hello_max_cipher_suites : nat = 16
+let client_hello_max_signature_schemes : nat = 16
 
 // The wire-encoded extensions of received messages are carried verbatim (as a
 // "bytes payload", including unknown extensions) so that re-serialization is

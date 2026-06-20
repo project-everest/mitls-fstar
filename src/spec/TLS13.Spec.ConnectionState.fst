@@ -1828,7 +1828,8 @@ let client_hello_matches_start (start:handshake_start) (ch:M.client_hello) : pro
   ch.M.server_name == Some start.start_server_name /\
   Seq.equal ch.M.key_share start.start_client_key_share_public /\
   ch.M.cipher_suites == start.start_cipher_suites /\
-  ch.M.signature_schemes == start.start_signature_schemes
+  ch.M.signature_schemes == start.start_signature_schemes /\
+  B.length ch.M.body == 0
 
 let server_hello_matches_selection
   (selection:server_handshake_selection)

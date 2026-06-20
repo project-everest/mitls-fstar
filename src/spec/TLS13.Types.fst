@@ -26,6 +26,7 @@ type alert_description =
 
 type cipher_suite =
   | TLS_CHACHA20_POLY1305_SHA256
+  | UnknownCipherSuite of nat
 
 type named_group =
   | X25519

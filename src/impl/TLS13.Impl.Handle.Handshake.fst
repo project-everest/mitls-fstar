@@ -17,6 +17,7 @@ module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
@@ -275,6 +276,9 @@ fn handle_handshake_message
           with sh. _;
           assert (pure (mhs == M.ServerHello sh));
           assert (pure (m == M.TlsHandshake (M.ServerHello sh)));
+          unfold (L.is_valid_server_hello lsh sh);
+          with sh_random sh_key_share. assert (pure (sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256));
+          fold (L.is_valid_server_hello lsh sh);
           assert (pure (CT.parsed_message_wire_success_for
             content_type
             (Ghost.reveal 'fragment_bytes)

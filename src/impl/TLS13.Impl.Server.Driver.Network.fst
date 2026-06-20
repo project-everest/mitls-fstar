@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -486,6 +487,7 @@ let lemma_legal_response_for_event_preserves_supported_profile_selection
     }
     st1);
   assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  CSL.lemma_step_model_preserves_config st0.CS.cs_model ev st1.CS.cs_model;
   assert (
     st1.CS.cs_model.CS.model_config ==
       st0.CS.cs_model.CS.model_config);

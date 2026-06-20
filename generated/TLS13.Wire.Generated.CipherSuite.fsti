@@ -34,11 +34,17 @@ module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
 
+let cipherSuite_repr = U16.t
+inline_for_extraction let cipherSuite_repr_eq (x1 x2: cipherSuite_repr) : Tot bool = (x1 = x2)
+let known_cipherSuite_repr (v:U16.t) : bool = v `cipherSuite_repr_eq` 4867us || (false)
+
 type cipherSuite =
   | TLS_CHACHA20_POLY1305_SHA256
+  | Unknown_cipherSuite of (v:U16.t{not (known_cipherSuite_repr v)})
 
 let string_of_cipherSuite = function
   | TLS_CHACHA20_POLY1305_SHA256 -> "TLS_CHACHA20_POLY1305_SHA256"
+  | Unknown_cipherSuite _ -> "Unknown_cipherSuite"
 
 [@LT.Norm] inline_for_extraction noextract let cipherSuite_enum : LP.enum cipherSuite U16.t =
   [@inline_let] let e = [
@@ -51,7 +57,7 @@ let string_of_cipherSuite = function
     assert_norm (L.noRepeats (LP.list_map snd e))
   in e
 
-inline_for_extraction noextract let cipherSuite_parser_kind = LP.strong_parser_kind 2 2 None
+inline_for_extraction noextract let cipherSuite_parser_kind = LP.strong_parser_kind 2 2 (Some LP.ParserKindMetadataTotal)
 
 noextract val cipherSuite_parser: LP.parser cipherSuite_parser_kind cipherSuite
 
@@ -61,7 +67,7 @@ noextract let cipherSuite_bytesize (x:cipherSuite) : GTot nat = Seq.length (LP.s
 
 noextract val cipherSuite_bytesize_eq (x:cipherSuite) : Lemma (cipherSuite_bytesize x == Seq.length (LP.serialize cipherSuite_serializer x))
 
-val cipherSuite_validator: LPS.validator cipherSuite_parser
+let cipherSuite_validator: LPS.validator cipherSuite_parser = LPS.validate_total_constant_size cipherSuite_parser 2sz
 
 let cipherSuite_jumper: LPS.jumper cipherSuite_parser = LPS.jump_constant_size cipherSuite_parser 2sz
 
@@ -86,4 +92,3 @@ val free_cipherSuite : PPB.free_t cipherSuite_vmatch
 val write_cipherSuite : PPB.l2r_safe_writer cipherSuite_vmatch cipherSuite_serializer cipherSuite_conv
 
 val size_cipherSuite : PPB.l2r_safe_size cipherSuite_vmatch cipherSuite_serializer cipherSuite_conv
-

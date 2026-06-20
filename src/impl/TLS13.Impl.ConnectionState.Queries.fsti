@@ -224,7 +224,8 @@ fn can_receive_server_hello
   (c:connection_state)
   (#sh:erased M.server_hello)
   (#st0:erased CS.connection_state)
-  requires connection_exactly c st0
+  requires connection_exactly c st0 **
+           pure (sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
   returns ok: bool
   ensures connection_exactly c st0 **
           pure (ok ==>

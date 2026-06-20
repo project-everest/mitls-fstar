@@ -177,6 +177,7 @@ val lemma_client_hello_handshake_bytes_prefix:
 val lemma_client_hello_handshake_bytes_reveal:
   hello:M.client_hello{B.length hello.M.random == 32 /\
                        B.length hello.M.key_share == 32 /\
+                       B.length hello.M.body == 0 /\
                        (match hello.M.server_name with
                         | Some h -> B.length h <= 255
                         | None -> True)} ->

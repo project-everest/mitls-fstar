@@ -12,6 +12,7 @@ include TLS13.Messages
 let is_supported_cipher_suite (suite:T.cipher_suite) : bool =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> true
+  | T.UnknownCipherSuite _ -> false
 
 let is_supported_group (group:T.named_group) : bool =
   match group with

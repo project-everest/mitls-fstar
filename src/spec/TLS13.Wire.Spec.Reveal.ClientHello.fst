@@ -10,7 +10,7 @@ module WS = TLS13.Wire.Spec
 module RU = TLS13.Wire.Spec.Reveal.Util
 
 #push-options "--z3rlimit 20"
-let lemma_serialize_client_hello_reveal (hello:M.client_hello)
+let lemma_serialize_client_hello_reveal (hello:M.client_hello{B.length hello.M.body == 0})
   : Lemma (Seq.equal
     (WS.serialize_handshake (M.ClientHello hello))
     (B.append
@@ -1042,6 +1042,7 @@ let lemma_client_hello_handshake_bytes_prefix
 let lemma_client_hello_handshake_bytes_reveal
   (hello:M.client_hello{B.length hello.M.random == 32 /\
                        B.length hello.M.key_share == 32 /\
+                       B.length hello.M.body == 0 /\
                        (match hello.M.server_name with
                         | Some h -> B.length h <= 255
                         | None -> True)})

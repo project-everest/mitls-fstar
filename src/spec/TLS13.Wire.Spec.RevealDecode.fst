@@ -24,6 +24,28 @@ let lemma_parse_record_from_header raw =
      | _ -> None));
   ()
 
+let lemma_parse_record_wire_from_header raw =
+  let flen = U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) in
+  assert (WS.read_u16 raw 3 == flen);
+  assert (WS.content_type_of_byte (Seq.index raw 0) ==
+    (match U8.v (Seq.index raw 0) with
+     | 0x14 -> Some T.ChangeCipherSpec
+     | 0x15 -> Some T.Alert
+     | 0x16 -> Some T.Handshake
+     | 0x17 -> Some T.ApplicationData
+     | _ -> None));
+  if U8.v (Seq.index raw 2) == 0x03 then (
+    assert (WS.read_u16 raw 1 == 0x0303);
+    lemma_parse_record_from_header raw;
+    WS.lemma_parse_record_implies_parse_record_wire raw
+  ) else (
+    assert (U8.v (Seq.index raw 0) == 0x16);
+    assert (U8.v (Seq.index raw 2) == 0x01);
+    assert (WS.read_u16 raw 1 == 0x0301);
+    assert (WS.parse_record raw == None);
+    assert (Seq.equal (Seq.slice raw 5 (5 + flen)) (Seq.slice raw 5 (5 + flen)))
+  )
+
 let lemma_parse_plaintext_some input =
   let cpos = B.length input - 1 in
   assert (WS.content_type_of_byte (Seq.index input cpos) ==
@@ -47,22 +69,3 @@ let lemma_parse_tls_message_change_cipher_spec fragment =
   WS.lemma_byte_v 1;
   assert (U8.v (Seq.index ccs 0) == 1);
   Seq.lemma_eq_intro fragment ccs
-
-let lemma_parse_tls_message_no_client_hello ct fragment ch =
-  match ct with
-  | T.Handshake ->
-    (match LP.parse GHS.handshake_parser fragment with
-     | None -> ()
-     | Some (h, _) ->
-       match h with
-       | GHS.Body_client_hello _ -> ()
-       | GHS.Body_server_hello _ -> ()
-       | GHS.Body_encrypted_extensions _ -> ()
-       | GHS.Body_certificate _ -> ()
-       | GHS.Body_certificate_verify _ -> ()
-       | GHS.Body_finished _ -> ()
-       | GHS.Body_key_update _ -> ()
-       | GHS.Body_new_session_ticket _ -> ())
-  | T.ApplicationData -> ()
-  | T.Alert -> ()
-  | T.ChangeCipherSpec -> ()

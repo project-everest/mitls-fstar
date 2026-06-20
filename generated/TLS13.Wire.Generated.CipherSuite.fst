@@ -49,66 +49,82 @@ inline_for_extraction noextract let cipherSuite_repr_reader = (PPB.leaf_reader_o
 
 inline_for_extraction noextract let cipherSuite_repr_writer = (LPPI.l2r_leaf_write_u16 ())
 
-inline_for_extraction let synth_cipherSuite (x: LP.enum_key cipherSuite_enum) : Tot cipherSuite = x
+inline_for_extraction let synth_cipherSuite (x:LP.maybe_enum_key cipherSuite_enum) : cipherSuite =
+  match x with
+  | LP.Known k -> k
+  | LP.Unknown y ->
+    [@inline_let] let v : U16.t = y in
+    [@inline_let] let _ = assert_norm (LP.list_mem v (LP.list_map snd cipherSuite_enum) == known_cipherSuite_repr v) in
+    Unknown_cipherSuite v
 
-inline_for_extraction let synth_cipherSuite_inv (x: cipherSuite) : Tot (LP.enum_key cipherSuite_enum) =
-  [@inline_let] let _ : squash (LP.list_mem x (LP.list_map fst cipherSuite_enum)) =
-    _ by (LP.synth_maybe_enum_key_inv_unknown_tac x)
-  in
-  x
+inline_for_extraction let synth_cipherSuite_inv (x:cipherSuite) : LP.maybe_enum_key cipherSuite_enum =
+  match x with
+  | Unknown_cipherSuite y ->
+    [@inline_let] let v : U16.t = y in
+    [@inline_let] let _ = assert_norm (LP.list_mem v (LP.list_map snd cipherSuite_enum) == known_cipherSuite_repr v) in
+    LP.Unknown v
+  | x ->
+    [@inline_let] let x1 : cipherSuite = x in
+    [@inline_let] let _ : squash(not (Unknown_cipherSuite? x1) ==> LP.list_mem x1 (LP.list_map fst cipherSuite_enum)) =
+      _ by (LP.synth_maybe_enum_key_inv_unknown_tac x1)
+    in
+    LP.Known (x1 <: LP.enum_key cipherSuite_enum)
+
+let lemma_synth_cipherSuite_inv' () : Lemma
+  (LP.synth_inverse synth_cipherSuite_inv synth_cipherSuite)
+= LP.forall_maybe_enum_key cipherSuite_enum (fun x -> synth_cipherSuite_inv (synth_cipherSuite x) == x)
+    (_ by (LP.forall_maybe_enum_key_known_tac ()))
+    (_ by (LP.forall_maybe_enum_key_unknown_tac ()))
 
 let lemma_synth_cipherSuite_inj () : Lemma
-  (LP.synth_injective synth_cipherSuite) = ()
+  (LP.synth_injective synth_cipherSuite) =
+  lemma_synth_cipherSuite_inv' ();
+  LP.synth_inverse_synth_injective synth_cipherSuite synth_cipherSuite_inv
 
+#push-options "--max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 let lemma_synth_cipherSuite_inv () : Lemma
-  (LP.synth_inverse synth_cipherSuite synth_cipherSuite_inv) = ()
+  (LP.synth_inverse synth_cipherSuite synth_cipherSuite_inv) = allow_inversion cipherSuite; ()
 
-noextract let parse_cipherSuite_key : LP.parser _ (LP.enum_key cipherSuite_enum) =
-  LP.parse_enum_key cipherSuite_repr_parser cipherSuite_enum
+#pop-options
 
-noextract let serialize_cipherSuite_key : LP.serializer parse_cipherSuite_key =
-  LP.serialize_enum_key cipherSuite_repr_parser cipherSuite_repr_serializer cipherSuite_enum
+noextract let parse_maybe_cipherSuite_key : LP.parser _ (LP.maybe_enum_key cipherSuite_enum) =
+  LP.parse_maybe_enum_key cipherSuite_repr_parser cipherSuite_enum
+
+noextract let serialize_maybe_cipherSuite_key : LP.serializer parse_maybe_cipherSuite_key =
+  LP.serialize_maybe_enum_key cipherSuite_repr_parser cipherSuite_repr_serializer cipherSuite_enum
 
 noextract let cipherSuite_parser : LP.parser _ cipherSuite =
   lemma_synth_cipherSuite_inj ();
-  parse_cipherSuite_key `LP.parse_synth` synth_cipherSuite
+  parse_maybe_cipherSuite_key `LP.parse_synth` synth_cipherSuite
 
 noextract let cipherSuite_serializer : LP.serializer cipherSuite_parser =
   lemma_synth_cipherSuite_inj ();
   lemma_synth_cipherSuite_inv ();
-  LP.serialize_synth _ synth_cipherSuite serialize_cipherSuite_key synth_cipherSuite_inv ()
+  LP.serialize_synth _ synth_cipherSuite serialize_maybe_cipherSuite_key synth_cipherSuite_inv ()
 
 let cipherSuite_bytesize_eq x = ()
 
 [@@ (LT.postprocess_with LT.pp_norm_tac)]
-inline_for_extraction let validate_cipherSuite_key : LPS.validator parse_cipherSuite_key =
-    PPE.mk_validate_enum_key cipherSuite_repr_validator cipherSuite_repr_reader cipherSuite_enum ()
-
-let cipherSuite_validator =
-  lemma_synth_cipherSuite_inj ();
-  LPC.validate_synth validate_cipherSuite_key synth_cipherSuite
-
-[@@ (LT.postprocess_with LT.pp_norm_tac)]
-inline_for_extraction let read_cipherSuite_key : PPB.leaf_reader parse_cipherSuite_key =
-  PPE.mk_read_enum_key cipherSuite_repr_reader cipherSuite_enum ()
+inline_for_extraction let read_maybe_cipherSuite_key : PPB.leaf_reader parse_maybe_cipherSuite_key =
+    PPE.mk_read_maybe_enum_key cipherSuite_repr_reader cipherSuite_enum
 
 let cipherSuite_reader =
  lemma_synth_cipherSuite_inj ();
- PPB.leaf_reader_of_reader (PPC.read_synth' (PPB.reader_of_leaf_reader read_cipherSuite_key) synth_cipherSuite synth_cipherSuite_inv)
+ PPB.leaf_reader_of_reader (PPC.read_synth' (PPB.reader_of_leaf_reader read_maybe_cipherSuite_key) synth_cipherSuite synth_cipherSuite_inv)
 
-inline_for_extraction let write_cipherSuite_key : LPS.l2r_leaf_writer (serialize_cipherSuite_key) =
-  LPPS.l2r_leaf_write_enum_key cipherSuite_repr_writer cipherSuite_enum (_ by (LP.enum_repr_of_key_tac cipherSuite_enum))
+inline_for_extraction let write_maybe_cipherSuite_key : LPS.l2r_leaf_writer (serialize_maybe_cipherSuite_key) =
+  LPPS.l2r_leaf_write_maybe_enum_key cipherSuite_repr_writer cipherSuite_enum (_ by (LP.enum_repr_of_key_tac cipherSuite_enum))
 
 let cipherSuite_writer =
   [@inline_let] let _ = lemma_synth_cipherSuite_inj (); lemma_synth_cipherSuite_inv () in
-  LPC.l2r_leaf_write_synth write_cipherSuite_key synth_cipherSuite synth_cipherSuite_inv (fun x -> synth_cipherSuite_inv x)
+  LPC.l2r_leaf_write_synth write_maybe_cipherSuite_key synth_cipherSuite synth_cipherSuite_inv (fun x -> synth_cipherSuite_inv x)
 
-inline_for_extraction let size_cipherSuite_key : LPS.leaf_size (serialize_cipherSuite_key) =
-  LPS.leaf_size_constant_size serialize_cipherSuite_key 2sz (_ by (FStar.Tactics.norm [delta; iota; zeta; primops]; FStar.Tactics.smt ()))
+inline_for_extraction let size_maybe_cipherSuite_key : LPS.leaf_size (serialize_maybe_cipherSuite_key) =
+  LPS.leaf_size_constant_size serialize_maybe_cipherSuite_key 2sz (_ by (FStar.Tactics.norm [delta; iota; zeta; primops]; FStar.Tactics.smt ()))
 
 let cipherSuite_leaf_size =
   [@inline_let] let _ = lemma_synth_cipherSuite_inj (); lemma_synth_cipherSuite_inv () in
-  LPC.leaf_size_synth size_cipherSuite_key synth_cipherSuite synth_cipherSuite_inv (fun x -> synth_cipherSuite_inv x)
+  LPC.leaf_size_synth size_maybe_cipherSuite_key synth_cipherSuite synth_cipherSuite_inv (fun x -> synth_cipherSuite_inv x)
 
 let read_cipherSuite = PPB.copyful_parse_leaf cipherSuite_reader
 
@@ -117,4 +133,3 @@ let free_cipherSuite = PPB.free_leaf
 let write_cipherSuite = PPB.l2r_safe_writer_leaf cipherSuite_serializer 2sz cipherSuite_writer
 
 let size_cipherSuite = PPB.l2r_safe_size_leaf cipherSuite_serializer 2sz
-

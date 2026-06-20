@@ -65,9 +65,15 @@ let lemma_wire_parse_unique
    notion of "cleartext when received". *)
 let l_is_received_cleartext (l:L.tls_message) : bool =
   match l with
+  | L.LTlsHandshake (L.LClientHello _) -> true
   | L.LTlsHandshake (L.LServerHello _) -> true
   | L.LTlsHandshake L.LHelloRetryRequest -> true
   | L.LTlsChangeCipherSpec -> true
+  | _ -> false
+
+let l_is_client_hello (l:L.tls_message) : bool =
+  match l with
+  | L.LTlsHandshake (L.LClientHello _) -> true
   | _ -> false
 
 // This lemma states that the local representation and spec representation agree
@@ -78,25 +84,14 @@ let lemma_l_received_cleartext_matches
   : Lemma
     (requires CT.parsed_message_wire_success_for content_type fragment l m)
     (ensures CS.network_message_is_cleartext CL.Received m == l_is_received_cleartext l)
-=
-  match l, m with
-  | L.LTlsHandshake (L.LClientHello _), M.TlsHandshake (M.ClientHello ch) ->
-    assert (CT.wire_parse_success content_type fragment m);
-    assert (exists ct.
-      L.content_type_matches content_type ct /\
-      WS.parse_tls_message ct fragment == Some m);
-    let ct =
-      ID.indefinite_description_ghost T.content_type
-        (fun ct -> L.content_type_matches content_type ct /\
-                   WS.parse_tls_message ct fragment == Some m) in
-    RV.lemma_parse_tls_message_no_client_hello ct fragment ch
-  | _, _ -> ()
+= ()
 #pop-options
 
 (* The outer record content type must agree with the message's own content type
    for the cleartext-raw relation to hold. *)
 let cleartext_outer_ct_ok (outer_ct:T.content_type) (m:M.tls_message) : prop =
   match m with
+  | M.TlsHandshake (M.ClientHello _) -> outer_ct == T.Handshake
   | M.TlsHandshake (M.ServerHello _) -> outer_ct == T.Handshake
   | M.TlsHandshake M.HelloRetryRequest -> outer_ct == T.Handshake
   | M.TlsChangeCipherSpec -> outer_ct == T.ChangeCipherSpec
@@ -106,6 +101,7 @@ let cleartext_outer_ct_ok (outer_ct:T.content_type) (m:M.tls_message) : prop =
    byte that the decoder checks before accepting a cleartext record. *)
 let cleartext_consistent (content_type:U8.t) (l:L.tls_message) : bool =
   match l with
+  | L.LTlsHandshake (L.LClientHello _) -> U8.eq content_type 0x16uy
   | L.LTlsHandshake (L.LServerHello _) -> U8.eq content_type 0x16uy
   | L.LTlsHandshake L.LHelloRetryRequest -> U8.eq content_type 0x16uy
   | L.LTlsChangeCipherSpec -> U8.eq content_type 0x14uy
@@ -122,9 +118,49 @@ let lemma_cleartext_consistent_implies
     (ensures l_is_received_cleartext l /\ cleartext_outer_ct_ok outer_ct m)
 = ()
 
+let received_cleartext_record_compatible
+  (raw:B.bytes) (outer_ct:T.content_type) (fragment:B.bytes) (m:M.tls_message)
+  : prop =
+  WS.parse_record raw == Some (outer_ct, fragment, B.length raw) \/
+  (match m with
+  | M.TlsHandshake (M.ClientHello _) -> True
+  | _ -> False)
+
+let lemma_l_client_hello_compatible
+  (raw:B.bytes) (outer_ct:T.content_type) (fragment:B.bytes)
+  (content_type:U8.t) (l:L.tls_message) (m:M.tls_message)
+  : Lemma
+    (requires
+      CT.parsed_message_wire_success_for content_type fragment l m /\
+      l_is_client_hello l)
+    (ensures received_cleartext_record_compatible raw outer_ct fragment m)
+=
+  match l, m with
+  | L.LTlsHandshake (L.LClientHello _), M.TlsHandshake (M.ClientHello _) -> ()
+  | _, _ -> assert False
+
+let lemma_parse_record_full_eq_serialize
+  (raw:B.bytes) (outer_ct:T.content_type) (fragment:B.bytes)
+  : Lemma
+   (requires WS.parse_record raw == Some (outer_ct, fragment, B.length raw))
+   (ensures Seq.equal raw (WS.serialize_record outer_ct fragment))
+=
+  WS.lemma_parse_record_serializes raw;
+  assert (Seq.equal
+   (WS.serialize_record outer_ct fragment)
+   (Seq.slice raw 0 (B.length raw)));
+  assert (B.length (Seq.slice raw 0 (B.length raw)) == B.length raw);
+  assert (forall (i:nat{i < B.length raw}).
+   Seq.index raw i == Seq.index (Seq.slice raw 0 (B.length raw)) i);
+  Seq.lemma_eq_intro raw (Seq.slice raw 0 (B.length raw));
+  Seq.lemma_eq_elim raw (Seq.slice raw 0 (B.length raw));
+  Seq.lemma_eq_elim
+   (WS.serialize_record outer_ct fragment)
+   (Seq.slice raw 0 (B.length raw));
+  Seq.lemma_eq_intro raw (WS.serialize_record outer_ct fragment)
 
 (* From an exact outer-record parse and the wire-success round trip, recover the
-   model's [cleartext_tls_message_raw] for a received cleartext message. *)
+   model's received-cleartext raw relation. *)
 #push-options "--z3rlimit 50 --fuel 2 --ifuel 2"
 let lemma_cleartext_tls_message_raw_of_parse
   (content_type:U8.t) (outer_ct:T.content_type)
@@ -132,29 +168,19 @@ let lemma_cleartext_tls_message_raw_of_parse
   (l:L.tls_message) (m:M.tls_message)
   : Lemma
     (requires
-      WS.parse_record raw == Some (outer_ct, fragment, B.length raw) /\
+      WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
+      received_cleartext_record_compatible raw outer_ct fragment m /\
       L.content_type_matches content_type outer_ct /\
       CT.parsed_message_wire_success_for content_type fragment l m /\
       CS.network_message_is_cleartext CL.Received m /\
       cleartext_outer_ct_ok outer_ct m)
-    (ensures CS.cleartext_tls_message_raw m raw)
+    (ensures CS.received_cleartext_tls_message_raw m raw)
 =
-  WS.lemma_parse_record_serializes raw;
-  assert (Seq.equal
-    (WS.serialize_record outer_ct fragment)
-    (Seq.slice raw 0 (B.length raw)));
-  assert (B.length (Seq.slice raw 0 (B.length raw)) == B.length raw);
-  assert (forall (i:nat{i < B.length raw}).
-    Seq.index raw i == Seq.index (Seq.slice raw 0 (B.length raw)) i);
-  Seq.lemma_eq_intro raw (Seq.slice raw 0 (B.length raw));
-  Seq.lemma_eq_elim raw (Seq.slice raw 0 (B.length raw));
-  Seq.lemma_eq_elim
-    (WS.serialize_record outer_ct fragment)
-    (Seq.slice raw 0 (B.length raw));
-
   match m with
   | M.TlsHandshake (M.ServerHello sh) ->
     assert (outer_ct == T.Handshake);
+    assert (WS.parse_record raw == Some (outer_ct, fragment, B.length raw));
+    lemma_parse_record_full_eq_serialize raw outer_ct fragment;
     assert (Seq.equal fragment (WS.serialize_handshake (M.ServerHello sh)));
     Seq.lemma_eq_elim fragment (WS.serialize_handshake (M.ServerHello sh));
     RV.lemma_serialize_tls_message_handshake (M.ServerHello sh);
@@ -165,9 +191,12 @@ let lemma_cleartext_tls_message_raw_of_parse
     Seq.lemma_eq_intro raw (CS.serialized_cleartext_tls_message m)
   | M.TlsHandshake M.HelloRetryRequest ->
     assert (outer_ct == T.Handshake);
+    assert (WS.parse_record raw == Some (outer_ct, fragment, B.length raw));
     CSL.lemma_parse_record_full_raw_records_exactly raw outer_ct fragment
   | M.TlsChangeCipherSpec ->
     assert (outer_ct == T.ChangeCipherSpec);
+    assert (WS.parse_record raw == Some (outer_ct, fragment, B.length raw));
+    lemma_parse_record_full_eq_serialize raw outer_ct fragment;
     assert (CT.wire_parse_success content_type fragment m);
     assert (exists ct.
       L.content_type_matches content_type ct /\
@@ -185,6 +214,7 @@ let lemma_cleartext_tls_message_raw_of_parse
       WS.serialize_record outer_ct fragment);
     Seq.lemma_eq_intro raw (CS.serialized_cleartext_tls_message m)
   | M.TlsHandshake (M.ClientHello ch) ->
+    assert (outer_ct == T.Handshake);
     assert (CT.wire_parse_success content_type fragment m);
     assert (exists ct.
       L.content_type_matches content_type ct /\
@@ -193,7 +223,9 @@ let lemma_cleartext_tls_message_raw_of_parse
       ID.indefinite_description_ghost T.content_type
         (fun ct -> L.content_type_matches content_type ct /\
                    WS.parse_tls_message ct fragment == Some m) in
-    RV.lemma_parse_tls_message_no_client_hello ct fragment ch
+    lemma_content_type_matches_injective content_type ct outer_ct;
+    assert (ct == T.Handshake);
+    assert (WS.parse_tls_message T.Handshake fragment == Some m)
   | _ -> ()
 #pop-options
 (* decoder_fragment_relation, cleartext (non-ApplicationData outer) branch. *)
@@ -202,12 +234,12 @@ let lemma_mk_cleartext_decoder_fragment_relation
   (fragment:B.bytes) (raw:B.bytes)
   : Lemma
     (requires
-      WS.parse_record raw == Some (outer_ct, fragment, B.length raw) /\
+      WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
       ~(outer_ct == T.ApplicationData) /\
       L.content_type_matches content_type outer_ct)
     (ensures CT.decoder_fragment_relation st0 content_type fragment raw)
 =
-  WS.lemma_parse_record_implies_parse_record_wire raw
+  ()
 
 (* network_input_wf for a successfully-parsed received cleartext message. *)
 let lemma_mk_cleartext_network_input_wf
@@ -216,7 +248,8 @@ let lemma_mk_cleartext_network_input_wf
   (l:L.tls_message) (m:M.tls_message)
   : Lemma
     (requires
-      WS.parse_record raw == Some (outer_ct, fragment, B.length raw) /\
+      WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
+      received_cleartext_record_compatible raw outer_ct fragment m /\
       ~(outer_ct == T.ApplicationData) /\
       L.content_type_matches content_type outer_ct /\
       CT.parsed_message_wire_success_for content_type fragment l m /\
@@ -224,6 +257,7 @@ let lemma_mk_cleartext_network_input_wf
       cleartext_outer_ct_ok outer_ct m)
     (ensures CT.network_input_wf st0 content_type fragment raw)
 =
+  WS.lemma_parse_record_implies_parse_record_wire raw;
   lemma_mk_cleartext_decoder_fragment_relation st0 content_type outer_ct fragment raw;
   introduce forall msg.
     CT.wire_parse_success content_type fragment msg ==>
@@ -243,7 +277,8 @@ let lemma_mk_cleartext_network_input_wf_consistent
   (l:L.tls_message) (m:M.tls_message)
   : Lemma
     (requires
-      WS.parse_record raw == Some (outer_ct, fragment, B.length raw) /\
+      WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
+      received_cleartext_record_compatible raw outer_ct fragment m /\
       ~(outer_ct == T.ApplicationData) /\
       L.content_type_matches content_type outer_ct /\
       CT.parsed_message_wire_success_for content_type fragment l m /\
@@ -259,7 +294,7 @@ let lemma_mk_cleartext_network_input_wf_none
   (fragment:B.bytes) (raw:B.bytes)
   : Lemma
     (requires
-      WS.parse_record raw == Some (outer_ct, fragment, B.length raw) /\
+      WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
       ~(outer_ct == T.ApplicationData) /\
       L.content_type_matches content_type outer_ct /\
       CT.wire_parse_failure content_type fragment)
@@ -384,3 +419,41 @@ let lemma_parse_record_buffer_prefix
   Seq.lemma_index_slice raw 0 (5 + flen) 3;
   Seq.lemma_index_slice raw 0 (5 + flen) 4;
   RV.lemma_parse_record_from_header prefix
+
+let lemma_parse_record_wire_buffer_prefix
+  (raw:B.bytes) (prefix:B.bytes) (flen:nat)
+  : Lemma
+    (requires
+      flen <= 16640 /\
+      5 + flen <= B.length raw /\
+      B.length prefix == 5 + flen /\
+      prefix == Seq.slice raw 0 (5 + flen) /\
+      (let b0 = U8.v (Seq.index raw 0) in
+       b0 = 0x14 \/ b0 = 0x15 \/ b0 = 0x16 \/ b0 = 0x17) /\
+      U8.v (Seq.index raw 1) = 0x03 /\
+      (let b0 = U8.v (Seq.index raw 0) in
+       U8.v (Seq.index raw 2) = 0x03 \/
+       (b0 = 0x16 /\ U8.v (Seq.index raw 2) = 0x01)) /\
+      U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) == flen)
+    (ensures
+      (match WS.parse_record_wire prefix with
+       | None -> False
+       | Some (ct, frag, consumed) ->
+         consumed == 5 + flen /\
+         Seq.equal frag (Seq.slice prefix 5 (5 + flen)) /\
+         (U8.v (Seq.index raw 0) = 0x14 ==> ct == T.ChangeCipherSpec) /\
+         (U8.v (Seq.index raw 0) = 0x15 ==> ct == T.Alert) /\
+         (U8.v (Seq.index raw 0) = 0x16 ==> ct == T.Handshake) /\
+         (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.ApplicationData)))
+=
+  Seq.lemma_index_slice raw 0 (5 + flen) 0;
+  Seq.lemma_index_slice raw 0 (5 + flen) 1;
+  Seq.lemma_index_slice raw 0 (5 + flen) 2;
+  Seq.lemma_index_slice raw 0 (5 + flen) 3;
+  Seq.lemma_index_slice raw 0 (5 + flen) 4;
+  if U8.v (Seq.index raw 2) == 0x03 then (
+    lemma_parse_record_buffer_prefix raw prefix flen;
+    WS.lemma_parse_record_implies_parse_record_wire prefix
+  ) else (
+    RV.lemma_parse_record_wire_from_header prefix
+  )

@@ -135,11 +135,12 @@ let signature_scheme_of_u16 (scheme:nat) : GTot T.signature_scheme =
 let cipher_suite_to_u16 (suite:T.cipher_suite) : GTot nat =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> 0x1303
+  | T.UnknownCipherSuite n -> n
 
 let cipher_suite_of_u16 (suite:nat) : GTot (option T.cipher_suite) =
   match suite with
   | 0x1303 -> Some T.TLS_CHACHA20_POLY1305_SHA256
-  | _ -> None
+  | _ -> Some (T.UnknownCipherSuite suite)
 
 let alert_description_to_byte (alert:T.alert_description) : GTot nat =
   match alert with
@@ -299,6 +300,9 @@ let rec parse_client_hello_extensions
 let synth_cipher_suite (c:GCS.cipherSuite) : T.cipher_suite =
   match c with
   | GCS.TLS_CHACHA20_POLY1305_SHA256 -> T.TLS_CHACHA20_POLY1305_SHA256
+  | GCS.Unknown_cipherSuite v -> T.UnknownCipherSuite (U16.v v)
+
+let lemma_synth_cipher_suite c = ()
 
 let rec synth_cipher_suites (l:list GCS.cipherSuite)
   : GTot (list T.cipher_suite)
@@ -307,6 +311,10 @@ let rec synth_cipher_suites (l:list GCS.cipherSuite)
   match l with
   | [] -> []
   | c :: tl -> synth_cipher_suite c :: synth_cipher_suites tl
+
+let lemma_synth_cipher_suites_nil () = ()
+
+let lemma_synth_cipher_suites_cons c tl = ()
 
 let key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange) : GTot (option (B.bytes_of_len 32)) =
   let b : B.bytes = (ke <: B.bytes) in
@@ -326,6 +334,10 @@ let rec ch_find_key_share (l:list GKSE.keyShareEntry)
           | None -> ch_find_key_share tl)
     else ch_find_key_share tl
 
+let lemma_ch_find_key_share_nil () = ()
+
+let lemma_ch_find_key_share_cons e tl = ()
+
 let synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme =
   match s with
   | GSS.Ecdsa_secp256r1_sha256 -> T.EcdsaSecp256r1Sha256
@@ -338,11 +350,19 @@ let rec synth_sig_schemes (l:list GSS.signatureScheme) : GTot (list T.signature_
   | [] -> []
   | s :: tl -> synth_signature_scheme s :: synth_sig_schemes tl
 
+let lemma_synth_sig_schemes_nil () = ()
+
+let lemma_synth_sig_schemes_cons s tl = ()
+
 // Hostname from the first host_name entry of a ClientHello server_name list.
 let ch_server_name (snl:list GSN.serverName) : GTot (option T.hostname) =
   match snl with
   | (GSN.Name_host_name h) :: _ -> Some ((h <: B.bytes) <: T.hostname)
   | _ -> None
+
+let lemma_ch_server_name_nil () = ()
+
+let lemma_ch_server_name_host h tl = ()
 
 let rec ch_extensions
   (l:list GECH.extensionClientHello)
@@ -378,6 +398,20 @@ let rec ch_extensions
        else None
      | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
 
+let lemma_ch_extensions_nil sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sn snl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sg sgl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sa ssl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_ks kscl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sv svl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_other e tl sn ks sv ss = ()
+
 let synth_client_hello (c:GCH.clientHello) : GTot (option M.client_hello) =
   // RFC 8446 4.1.2: ClientHello.legacy_version MUST be 0x0303 (TLS_1p2). The high
   // M.client_hello has no version field, so requiring the canonical value here both
@@ -386,12 +420,23 @@ let synth_client_hello (c:GCH.clientHello) : GTot (option M.client_hello) =
   else
   match ch_extensions c.GCH.extensions None None false [] with
   | Some (server_name, Some key_share, _, signature_schemes) ->
-    Some ({ M.random = (c.GCH.random <: B.bytes_of_len 32);
-            M.server_name = server_name;
-            M.key_share = key_share;
-            M.cipher_suites = synth_cipher_suites c.GCH.cipher_suites;
-            M.signature_schemes = signature_schemes })
+    let cipher_suites = synth_cipher_suites c.GCH.cipher_suites in
+    if List.Tot.length cipher_suites <= M.client_hello_max_cipher_suites &&
+       List.Tot.length signature_schemes <= M.client_hello_max_signature_schemes &&
+       (match server_name with
+        | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
+        | None -> True)
+    then
+      Some ({ M.random = (c.GCH.random <: B.bytes_of_len 32);
+              M.server_name = server_name;
+              M.key_share = key_share;
+              M.cipher_suites = cipher_suites;
+              M.signature_schemes = signature_schemes;
+              M.body = B.empty })
+    else None
   | _ -> None
+
+let lemma_synth_client_hello c = ()
 
 let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
   match LP.parse GCH.clientHello_parser input with
@@ -444,12 +489,15 @@ let synth_server_hello (sh:GSH.serverHello) : GTot (option M.server_hello) =
     else
       match sh_key_share body.GSHBody.extensions false None with
       | Some ks ->
-        Some ({ M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
-                M.key_share = ks;
-                M.cipher_suite = synth_cipher_suite body.GSHBody.cipher_suite;
-                // Overridden with the verbatim wire bytes in synth_handshake_msg_of;
-                // this standalone entry point is unused by the round-trip path.
-                M.body = B.empty })
+        (match body.GSHBody.cipher_suite with
+         | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
+           Some ({ M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
+                   M.key_share = ks;
+                   M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                   // Overridden with the verbatim wire bytes in synth_handshake_msg_of;
+                   // this standalone entry point is unused by the round-trip path.
+                   M.body = B.empty })
+         | GCS.Unknown_cipherSuite _ -> None)
       | None -> None
 
 let parse_server_hello (input:B.bytes) : GTot (option M.server_hello) =
@@ -710,12 +758,12 @@ let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
   let full = LP.serialize GHS.handshake_serializer h in
   match h with
   | GHS.Body_client_hello b ->
-    // A TLS client never legitimately receives a ClientHello; the dispatcher
-    // would reject it as an unexpected handshake message anyway.  Modelling it
-    // as a parse failure (rather than Some (M.ClientHello _)) keeps the received
-    // message space to what a client can actually accept, and lets the verified
-    // parser reject it without the (never-exercised) ClientHello field copy.
-    None
+    (match synth_client_hello b with
+     | Some ch ->
+       if B.length full <= M.client_hello_max_len
+       then Some (M.ClientHello ({ ch with M.body = full }))
+       else None
+     | None -> None)
   | GHS.Body_server_hello b ->
     // legacy_version MUST be 0x0303 (matches synth_server_hello and the original
     // parser, which rejected non-0x0303 before inspecting random/body).
@@ -972,6 +1020,8 @@ let serialize_handshake_body (msg:M.handshake_msg) : GTot (option (nat & B.bytes
 // canonical server-side serializers backed by the C stubs.
 let serialize_handshake (msg:M.handshake_msg) : GTot B.bytes =
   match msg with
+  | M.ClientHello ch ->
+    if B.length ch.M.body == 0 then serialize_supported_client_hello ch else ch.M.body
   | M.ServerHello sh ->
     if B.length sh.M.body == 0 then serialize_server_hello_from_selection_canonical sh else sh.M.body
   | M.EncryptedExtensions ee ->
@@ -1107,21 +1157,24 @@ let parse_record (input:B.bytes) : GTot (option (T.content_type & M.sealed_recor
           | None -> None
 
 let parse_record_wire (input:B.bytes) : GTot (option (T.content_type & M.sealed_record & nat)) =
-  parse_record input
+  let parsed = parse_record input in
+  if Some? parsed then parsed
+  else
+    if B.length input < 5 then None
+    else
+      if Seq.index input 0 <> 0x16uy || read_u16 input 1 <> 0x0301 then None
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then None
+        else Some (T.Handshake, Seq.slice input 5 (5 + fragment_len), 5 + fragment_len)
 
-let lemma_parse_record_implies_parse_record_wire (input:B.bytes)
-  : Lemma
-    (ensures parse_record_wire input == parse_record input)
-=
-  ()
-
-let lemma_parse_record_wire_some_consumed_positive
+let lemma_parse_record_some_consumed_positive
   (input:B.bytes)
   (content_type:T.content_type)
   (fragment:M.sealed_record)
   (consumed:nat)
   : Lemma
-    (requires parse_record_wire input == Some (content_type, fragment, consumed))
+    (requires parse_record input == Some (content_type, fragment, consumed))
     (ensures consumed > 0 /\ consumed <= B.length input)
 =
   if B.length input < 5 then ()
@@ -1141,6 +1194,44 @@ let lemma_parse_record_wire_some_consumed_positive
             assert (consumed <= B.length input)
           | None -> ()
 
+let lemma_parse_record_implies_parse_record_wire (input:B.bytes)
+  : Lemma
+    (ensures (
+      match parse_record input with
+      | Some (content_type, fragment, consumed) ->
+        parse_record_wire input == Some (content_type, fragment, consumed)
+      | None -> True))
+=
+  ()
+
+let lemma_parse_record_wire_some_consumed_positive
+  (input:B.bytes)
+  (content_type:T.content_type)
+  (fragment:M.sealed_record)
+  (consumed:nat)
+  : Lemma
+    (requires parse_record_wire input == Some (content_type, fragment, consumed))
+    (ensures consumed > 0 /\ consumed <= B.length input)
+=
+  match parse_record input with
+  | Some (ct, frag, consumed') ->
+    assert (content_type == ct);
+    assert (fragment == frag);
+    assert (consumed == consumed');
+    lemma_parse_record_some_consumed_positive input ct frag consumed'
+  | None ->
+    if B.length input < 5 then ()
+    else
+      if Seq.index input 0 <> 0x16uy || read_u16 input 1 <> 0x0301 then ()
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
+        else (
+          assert (consumed == 5 + fragment_len);
+          assert (consumed > 0);
+          assert (consumed <= B.length input)
+        )
+
 // Parse just the 5-byte record header (without requiring the fragment data)
 let parse_record_header (input:B.bytes) : GTot (option (T.content_type & nat)) =
   if B.length input < 5 then None
@@ -1148,7 +1239,10 @@ let parse_record_header (input:B.bytes) : GTot (option (T.content_type & nat)) =
     match content_type_of_byte (Seq.index input 0) with
     | None -> None
     | Some content_type ->
-      if read_u16 input 1 <> 0x0303 then None
+      if not (
+           read_u16 input 1 == 0x0303 ||
+           (content_type == T.Handshake && read_u16 input 1 == 0x0301))
+      then None
       else
         let fragment_len = read_u16 input 3 in
         if fragment_len > 16384 + 256 then None
@@ -1161,7 +1255,8 @@ let lemma_parse_record_header_some_iff (input:B.bytes{B.length input == 5})
       Seq.index input 0 = 0x16uy ||
       Seq.index input 0 = 0x17uy) &&
      Seq.index input 1 = 0x03uy &&
-     Seq.index input 2 = 0x03uy &&
+     (Seq.index input 2 = 0x03uy ||
+      (Seq.index input 0 = 0x16uy && Seq.index input 2 = 0x01uy)) &&
      read_u16 input 3 <= 16640))
 =
   ()
@@ -1304,6 +1399,11 @@ let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) 
       | M.UpdateRequested -> 1 in
     (T.Handshake, append3 (u8 24) (u24 1) (u8 request_byte))
 
+let lemma_serialize_tls_message_handshake (hs:M.handshake_msg)
+  : Lemma (serialize_tls_message (M.TlsHandshake hs) == (T.Handshake, serialize_handshake hs))
+=
+  ()
+
 let lemma_serialize_tls_message_application_data (data:B.bytes)
   : Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.ApplicationData, data))
 =
@@ -1422,7 +1522,8 @@ let lemma_parse_record_wire_fragment_bound (input:B.bytes)
 
 // Round-trip: a handshake message accepted by parse_tls_message re-serializes to
 // exactly the input fragment, for the messages whose M-value carries the verbatim
-// wire body (ServerHello, EncryptedExtensions, Certificate, CertificateVerify).
+// wire body (ClientHello, ServerHello, EncryptedExtensions, Certificate,
+// CertificateVerify).
 // This is the spec obligation a verified parser discharges for
 // CT.parsed_message_wire_success_for.  Proof: synth sets m.body to the QuackyDucky
 // serialization of the parsed handshake value h, and LowParse's parsed_data_is_serialize
@@ -1433,6 +1534,8 @@ let lemma_parse_tls_message_round_trip
   : Lemma
     (ensures (
       match parse_tls_message content_type fragment with
+      | Some (M.TlsHandshake (M.ClientHello ch)) ->
+        Seq.equal fragment (serialize_handshake (M.ClientHello ch))
       | Some (M.TlsHandshake (M.ServerHello sh)) ->
         Seq.equal fragment (serialize_handshake (M.ServerHello sh))
       | Some (M.TlsHandshake (M.EncryptedExtensions ee)) ->

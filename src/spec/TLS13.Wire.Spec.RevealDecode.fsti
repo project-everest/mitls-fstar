@@ -43,6 +43,30 @@ val lemma_parse_record_from_header (raw:B.bytes)
          (U8.v (Seq.index raw 0) = 0x16 ==> ct == T.Handshake) /\
          (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.ApplicationData)))
 
+val lemma_parse_record_wire_from_header (raw:B.bytes)
+  : Lemma
+    (requires
+      B.length raw >= 5 /\
+      (let b0 = U8.v (Seq.index raw 0) in
+       b0 = 0x14 \/ b0 = 0x15 \/ b0 = 0x16 \/ b0 = 0x17) /\
+      U8.v (Seq.index raw 1) = 0x03 /\
+      (let b0 = U8.v (Seq.index raw 0) in
+       U8.v (Seq.index raw 2) = 0x03 \/
+       (b0 = 0x16 /\ U8.v (Seq.index raw 2) = 0x01)) /\
+      (let flen = U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) in
+       flen <= 16640 /\ 5 + flen <= B.length raw))
+    (ensures
+      (let flen = U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) in
+       match WS.parse_record_wire raw with
+       | None -> False
+       | Some (ct, frag, consumed) ->
+         consumed == 5 + flen /\
+         Seq.equal frag (Seq.slice raw 5 (5 + flen)) /\
+         (U8.v (Seq.index raw 0) = 0x14 ==> ct == T.ChangeCipherSpec) /\
+         (U8.v (Seq.index raw 0) = 0x15 ==> ct == T.Alert) /\
+         (U8.v (Seq.index raw 0) = 0x16 ==> ct == T.Handshake) /\
+         (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.ApplicationData)))
+
 (* Construct [parse_plaintext]'s result for a TLSInnerPlaintext whose last byte
    is a recognised content type (no trailing zero padding): the recovered
    fragment is the prefix, and the content type matches the last byte. *)
@@ -79,13 +103,3 @@ val lemma_parse_tls_message_change_cipher_spec (fragment:B.bytes)
   : Lemma
     (requires WS.parse_tls_message T.ChangeCipherSpec fragment == Some M.TlsChangeCipherSpec)
     (ensures Seq.equal fragment (snd (WS.serialize_tls_message M.TlsChangeCipherSpec)))
-
-(* The received-message handshake synthesizer rejects ClientHello; the server
-   side has a separate parser path for incoming ClientHello records. *)
-val lemma_parse_tls_message_no_client_hello
-  (ct:T.content_type)
-  (fragment:B.bytes)
-  (ch:M.client_hello)
-  : Lemma
-    (requires WS.parse_tls_message ct fragment == Some (M.TlsHandshake (M.ClientHello ch)))
-    (ensures False)

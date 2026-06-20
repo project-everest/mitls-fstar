@@ -149,6 +149,7 @@ fn serialize_client_hello_from_start
                   M.key_share = (Ghost.reveal start).CS.start_client_key_share_public;
                   M.cipher_suites = (Ghost.reveal start).CS.start_cipher_suites;
                   M.signature_schemes = (Ghost.reveal start).CS.start_signature_schemes;
+                  M.body = B.empty;
                 })
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* random server_name server_name_len key_share

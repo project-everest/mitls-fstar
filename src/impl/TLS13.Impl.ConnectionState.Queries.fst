@@ -944,7 +944,8 @@ fn can_receive_server_hello
   (c:connection_state)
   (#sh:erased M.server_hello)
   (#st0:erased CS.connection_state)
-  requires connection_exactly c st0
+  requires connection_exactly c st0 **
+           pure (sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
   returns ok: bool
   ensures connection_exactly c st0 **
           pure (ok ==>
@@ -1022,17 +1023,34 @@ fn can_receive_server_hello
           c.handshake.start.cipher_suites
           max_cipher_suites
           start_spec.CS.start_cipher_suites);
-        with cipher_items cipher_len. assert (pure True);
+        with cipher_items cipher_len. assert (
+          V.pts_to c.handshake.start.cipher_suites.items cipher_items **
+          Box.pts_to c.handshake.start.cipher_suites.len cipher_len **
+          pure (V.is_full_vec c.handshake.start.cipher_suites.items /\
+                V.length c.handshake.start.cipher_suites.items == max_cipher_suites /\
+                Seq.length cipher_items == max_cipher_suites /\
+                SZ.v cipher_len <= max_cipher_suites /\
+                IM.cipher_suites_match
+                  cipher_items
+                  (SZ.v cipher_len)
+                  start_spec.CS.start_cipher_suites));
         let offered_len = !c.handshake.start.cipher_suites.len;
         assert (pure (offered_len == cipher_len));
         let offered_nonempty = SZ.gt offered_len 0sz;
-        if offered_nonempty {
+        let first_cipher = V.op_Array_Access c.handshake.start.cipher_suites.items 0sz;
+        let offers_chacha = first_cipher = 0x1303us;
+        if (offered_nonempty && offers_chacha) {
+          assert (pure (Seq.length cipher_items == max_cipher_suites));
+          assert (pure (0 < Seq.length cipher_items));
           assert (pure (SZ.v cipher_len > 0));
           assert (pure (SZ.v offered_len == SZ.v cipher_len));
           assert (pure (start_spec.CS.start_cipher_suites <> []));
-          lemma_nonempty_cipher_suites_offer
-            start_spec.CS.start_cipher_suites
-            sh.M.cipher_suite;
+          assert (pure (U16.v (Seq.index cipher_items 0) == 0x1303));
+          lemma_cipher_suites_match_first_chacha_offer
+            cipher_items
+            (SZ.v cipher_len)
+            start_spec.CS.start_cipher_suites;
+          assert (pure (sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256));
           assert (pure (CS.cipher_suite_offered
             start_spec.CS.start_cipher_suites
             sh.M.cipher_suite));
@@ -1473,6 +1491,13 @@ fn can_select_supported_server_parameters_runtime
   assert (pure (cipher_suites_len == ch_cipher_suites_len));
   assert (pure (signature_schemes_len == ch_signature_schemes_len));
 
+  assert (pure (SZ.v 0sz < max_cipher_suites));
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
+  let first_cipher =
+    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_cipher_suites).(0sz);
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
+  assert (pure (first_cipher == Seq.index ch_cipher_suites 0));
+
   assert (pure (SZ.v 0sz < max_signature_schemes));
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
   let first_signature =
@@ -1507,6 +1532,7 @@ fn can_select_supported_server_parameters_runtime
   let selection_absent = not has_selection;
   let shared_secret_absent = not shared_secret_is_present;
   let cipher_nonempty = SZ.gt cipher_suites_len 0sz;
+  let cipher_supported = first_cipher = 0x1303us;
   let signature_nonempty = SZ.gt signature_schemes_len 0sz;
   let signature_supported = first_signature = 0x0804us;
   let ok =
@@ -1516,6 +1542,7 @@ fn can_select_supported_server_parameters_runtime
     has_client_hello &&
     has_server_name &&
     cipher_nonempty &&
+    cipher_supported &&
     signature_nonempty &&
     signature_supported;
 
@@ -1562,9 +1589,15 @@ fn can_select_supported_server_parameters_runtime
       (Ghost.reveal ch).M.cipher_suites;
     assert (pure (length (Ghost.reveal ch).M.cipher_suites > 0));
     assert (pure ((Ghost.reveal ch).M.cipher_suites <> []));
-    lemma_nonempty_cipher_suites_offer
-      (Ghost.reveal ch).M.cipher_suites
-      T.TLS_CHACHA20_POLY1305_SHA256;
+    assert (pure (0 < SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch))));
+    assert (pure (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)) <=
+      Seq.length ch_cipher_suites));
+    assert (pure (U16.v first_cipher == 0x1303));
+    assert (pure (U16.v (Seq.index ch_cipher_suites 0) == 0x1303));
+    lemma_cipher_suites_match_first_chacha_offer
+      ch_cipher_suites
+      (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)))
+      (Ghost.reveal ch).M.cipher_suites;
     assert (pure (CS.cipher_suite_offered
       (Ghost.reveal ch).M.cipher_suites
       T.TLS_CHACHA20_POLY1305_SHA256));

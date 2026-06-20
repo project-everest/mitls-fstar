@@ -117,6 +117,25 @@ let u16 n = WS.u16 n
 
 let u24 n = WS.u24 n
 
+let lemma_u24_reveal n =
+  let w0 = WS.byte (n / 65536) in
+  let w1 = WS.byte (n / 256) in
+  let w2 = WS.byte n in
+  let r0 = RR.byte (n / 65536) in
+  let r1 = RR.byte (n / 256) in
+  let r2 = RR.byte n in
+  WS.lemma_byte_v (n / 65536);
+  WS.lemma_byte_v (n / 256);
+  WS.lemma_byte_v n;
+  RR.lemma_byte_value (n / 65536);
+  RR.lemma_byte_value (n / 256);
+  RR.lemma_byte_value n;
+  U8.v_inj w0 r0;
+  U8.v_inj w1 r1;
+  U8.v_inj w2 r2
+
+let lemma_serialize_tls_message_handshake hs = ()
+
 let content_type_byte = RR.content_type_byte
 
 let lemma_content_type_byte_value = RR.lemma_content_type_byte_value
@@ -194,7 +213,7 @@ let lemma_certificate_verify_context_index_33 = RCV.lemma_certificate_verify_con
 let lemma_serialize_server_certificate_verify_input_bytes = RCV.lemma_serialize_server_certificate_verify_input_bytes
 
 #push-options "--z3rlimit 20"
-let lemma_serialize_client_hello_reveal hello =
+let lemma_serialize_client_hello_reveal (hello:M.client_hello{B.length hello.M.body == 0}) =
   let body = WS.serialize_client_hello hello in
   WS.lemma_byte_v 1;
   assert_norm (U8.v 1uy == 1);
@@ -204,6 +223,7 @@ let lemma_serialize_client_hello_reveal hello =
   assert (WS.byte 1 == 1uy);
   assert (B.singleton (WS.byte 1) == B.singleton 1uy);
   RU.lemma_singleton_of_list 1uy;
+  assert (Seq.equal (B.singleton 1uy) (B.of_list [1uy]));
   Seq.lemma_eq_elim (B.singleton 1uy) (B.of_list [1uy])
 #pop-options
 
@@ -430,7 +450,8 @@ let lemma_handshake_synth_server_hello_sh b sf =
     match reveal_sh_key_share sf.GSHB.value.GSHBody.extensions false None with
     | Some _ ->
       (match sf.GSHB.value.GSHBody.cipher_suite with
-       | GCS.TLS_CHACHA20_POLY1305_SHA256 -> ())
+       | GCS.TLS_CHACHA20_POLY1305_SHA256 -> ()
+       | GCS.Unknown_cipherSuite _ -> ())
     | None -> ()
 
 (* --- Certificate reveal interface --------------------------------------- *)
@@ -459,3 +480,82 @@ let lemma_handshake_synth_certificate b =
           WS.synth_cert_chain (b.GCert.certificate_list <: list GCE.certificateEntry));
   let chain = reveal_synth_cert_chain (b.GCert.certificate_list <: list GCE.certificateEntry) in
   assert (reveal_cert_chain_total_bytes chain == WS.cert_chain_total_bytes chain)
+
+(* ---- ClientHello parsing reveals ---------------------------------------- *)
+
+let reveal_synth_cipher_suites l = WS.synth_cipher_suites l
+
+let lemma_reveal_synth_cipher_suites_nil () = WS.lemma_synth_cipher_suites_nil ()
+
+let lemma_reveal_synth_cipher_suites_cons c tl = WS.lemma_synth_cipher_suites_cons c tl
+
+let reveal_synth_sig_schemes l = WS.synth_sig_schemes l
+
+let lemma_reveal_synth_sig_schemes_nil () = WS.lemma_synth_sig_schemes_nil ()
+
+let lemma_reveal_synth_sig_schemes_cons s tl = WS.lemma_synth_sig_schemes_cons s tl
+
+let reveal_ch_server_name snl = WS.ch_server_name snl
+
+let lemma_reveal_ch_server_name_nil () = WS.lemma_ch_server_name_nil ()
+
+let lemma_reveal_ch_server_name_host h tl = WS.lemma_ch_server_name_host h tl
+
+let reveal_ch_find_key_share l = WS.ch_find_key_share l
+
+let lemma_reveal_ch_find_key_share_nil () = WS.lemma_ch_find_key_share_nil ()
+
+let lemma_reveal_ch_find_key_share_cons e tl =
+  WS.lemma_ch_find_key_share_cons e tl;
+  assert (reveal_key_exchange_to_key32 e.GKSE.key_exchange ==
+          WS.key_exchange_to_key32 e.GKSE.key_exchange);
+  (match WS.key_exchange_to_key32 e.GKSE.key_exchange with
+   | Some k -> assert (reveal_ch_find_key_share tl == WS.ch_find_key_share tl)
+   | None -> assert (reveal_ch_find_key_share tl == WS.ch_find_key_share tl))
+
+let reveal_ch_extensions l sn ks sv ss = WS.ch_extensions l sn ks sv ss
+
+let lemma_reveal_ch_extensions_nil sn ks sv ss = WS.lemma_ch_extensions_nil sn ks sv ss
+
+let lemma_reveal_ch_extensions_cons_sn snl tl sn ks sv ss =
+  WS.lemma_ch_extensions_cons_sn snl tl sn ks sv ss;
+  assert (reveal_ch_server_name snl == WS.ch_server_name snl);
+  (match WS.ch_server_name snl with
+   | Some name ->
+     assert (reveal_ch_extensions tl (Some name) ks sv ss ==
+             WS.ch_extensions tl (Some name) ks sv ss)
+   | None -> ())
+
+let lemma_reveal_ch_extensions_cons_sg sgl tl sn ks sv ss =
+  WS.lemma_ch_extensions_cons_sg sgl tl sn ks sv ss;
+  assert (reveal_ch_extensions tl sn ks sv ss == WS.ch_extensions tl sn ks sv ss)
+
+let lemma_reveal_ch_extensions_cons_sa ssl tl sn ks sv ss =
+  WS.lemma_ch_extensions_cons_sa ssl tl sn ks sv ss;
+  assert (reveal_synth_sig_schemes ssl == WS.synth_sig_schemes ssl);
+  assert (reveal_ch_extensions tl sn ks sv (WS.synth_sig_schemes ssl) ==
+          WS.ch_extensions tl sn ks sv (WS.synth_sig_schemes ssl))
+
+let lemma_reveal_ch_extensions_cons_ks kscl tl sn ks sv ss =
+  WS.lemma_ch_extensions_cons_ks kscl tl sn ks sv ss;
+  assert (reveal_ch_find_key_share kscl == WS.ch_find_key_share kscl);
+  (match WS.ch_find_key_share kscl with
+   | Some k ->
+     assert (reveal_ch_extensions tl sn (Some k) sv ss ==
+             WS.ch_extensions tl sn (Some k) sv ss)
+   | None -> ())
+
+let lemma_reveal_ch_extensions_cons_sv svl tl sn ks sv ss =
+  WS.lemma_ch_extensions_cons_sv svl tl sn ks sv ss;
+  assert (reveal_ch_extensions tl sn ks true ss == WS.ch_extensions tl sn ks true ss)
+
+let lemma_reveal_ch_extensions_cons_other e tl sn ks sv ss =
+  WS.lemma_ch_extensions_cons_other e tl sn ks sv ss;
+  assert (reveal_ch_extensions tl sn ks sv ss == WS.ch_extensions tl sn ks sv ss)
+
+let lemma_synth_client_hello_reveal c =
+  WS.lemma_synth_client_hello c;
+  let cs : list GCS.cipherSuite = c.GCH.cipher_suites in
+  let ext : list GECH.extensionClientHello = c.GCH.extensions in
+  assert (reveal_ch_extensions ext None None false [] == WS.ch_extensions ext None None false []);
+  assert (reveal_synth_cipher_suites cs == WS.synth_cipher_suites cs)

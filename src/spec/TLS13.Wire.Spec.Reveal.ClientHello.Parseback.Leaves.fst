@@ -73,9 +73,13 @@ let lemma_lp_cipher_suites ()
   LP.serialize_list_cons GCS.cipherSuite_parser GCS.cipherSuite_serializer GCS.TLS_CHACHA20_POLY1305_SHA256 [];
   GCS.lemma_synth_cipherSuite_inj ();
   GCS.lemma_synth_cipherSuite_inv ();
-  LP.serialize_synth_eq _ GCS.synth_cipherSuite GCS.serialize_cipherSuite_key GCS.synth_cipherSuite_inv () GCS.TLS_CHACHA20_POLY1305_SHA256;
-  LP.serialize_enum_key_eq GCS.cipherSuite_repr_serializer GCS.cipherSuite_enum GCS.TLS_CHACHA20_POLY1305_SHA256;
+  LP.serialize_synth_eq _ GCS.synth_cipherSuite GCS.serialize_maybe_cipherSuite_key GCS.synth_cipherSuite_inv () GCS.TLS_CHACHA20_POLY1305_SHA256;
+  let chacha_key : LP.enum_key GCS.cipherSuite_enum = GCS.TLS_CHACHA20_POLY1305_SHA256 in
+  let chacha_mkey : LP.maybe_enum_key GCS.cipherSuite_enum = LP.Known chacha_key in
+  assert (GCS.synth_cipherSuite_inv GCS.TLS_CHACHA20_POLY1305_SHA256 == chacha_mkey);
+  LP.serialize_maybe_enum_key_eq GCS.cipherSuite_repr_serializer GCS.cipherSuite_enum chacha_mkey;
   assert_norm (LP.enum_repr_of_key GCS.cipherSuite_enum GCS.TLS_CHACHA20_POLY1305_SHA256 == 4867us);
+  assert (LP.repr_of_maybe_enum_key GCS.cipherSuite_enum chacha_mkey == 4867us);
   lemma_u16_parts_fit_raw 4867us;
   lemma_serialize_u16_bytes_raw 4867us;
   assert_norm (U16.v 4867us / 256 == 19);

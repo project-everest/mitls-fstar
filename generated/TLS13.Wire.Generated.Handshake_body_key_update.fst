@@ -53,11 +53,11 @@ let handshake_body_key_update_accessor = PPVD.accessor_bounded_vldata_payload 0 
 let read_handshake_body_key_update : PPB.copyful_parse handshake_body_key_update_vmatch handshake_body_key_update_parser handshake_body_key_update_conv =
   PPVD.copyful_parse_bounded_vldata_payload 0 16777215 read_keyUpdate (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
 
-let free_handshake_body_key_update : PPB.free_t handshake_body_key_update_vmatch = free_keyUpdate
+let free_handshake_body_key_update : PPB.free_t handshake_body_key_update_vmatch =
+  TLS13.Wire.Generated.KeyUpdateRequest.free_keyUpdateRequest
 
 let write_handshake_body_key_update : PPB.l2r_safe_writer handshake_body_key_update_vmatch handshake_body_key_update_serializer handshake_body_key_update_conv =
   PPVD.l2r_safe_writer_bounded_vldata_payload 0 0sz 16777215 (LSeqB.mk_seq_sizet 16777215 fits_u64_squash) keyUpdate_serializer write_keyUpdate fits_u64_squash
 
 let handshake_body_key_update_bytesize_eqn x =
   (keyUpdate_bytesize_eq (x))
-

@@ -42,6 +42,15 @@ module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
 module GCert = TLS13.Wire.Generated.Certificate
 module GCE = TLS13.Wire.Generated.CertificateEntry
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GESN = TLS13.Wire.Generated.ExtensionClientHello_extension_data_server_name
+module GESA = TLS13.Wire.Generated.ExtensionClientHello_extension_data_signature_algorithms
+module GESK = TLS13.Wire.Generated.ExtensionClientHello_extension_data_key_share
+module GESV = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_versions
+module GESG = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_groups
+module GSN = TLS13.Wire.Generated.ServerName
+module GHN = TLS13.Wire.Generated.HostName
+module GCH = TLS13.Wire.Generated.ClientHello
 module LP = LowParse.Spec
 
 (* --- non-handshake content-type arms ------------------------------------ *)
@@ -82,6 +91,14 @@ val u16:
 val u24:
   n:nat ->
   GTot B.bytes
+
+val lemma_u24_reveal:
+  n:nat ->
+  Lemma (Seq.equal (u24 n) (B.of_list [byte (n / 65536); byte (n / 256); byte n]))
+
+val lemma_serialize_tls_message_handshake:
+  hs:M.handshake_msg ->
+  Lemma (WS.serialize_tls_message (M.TlsHandshake hs) == (T.Handshake, WS.serialize_handshake hs))
 
 val content_type_byte:
   ct:T.content_type ->
@@ -272,7 +289,7 @@ val lemma_serialize_server_certificate_verify_input_bytes:
       transcript_hash))
 
 val lemma_serialize_client_hello_reveal:
-  hello:M.client_hello ->
+  hello:M.client_hello{B.length hello.M.body == 0} ->
   Lemma (Seq.equal
     (WS.serialize_handshake (M.ClientHello hello))
     (B.append
@@ -414,6 +431,7 @@ val lemma_client_hello_handshake_bytes_prefix:
 val lemma_client_hello_handshake_bytes_reveal:
   hello:M.client_hello{B.length hello.M.random == 32 /\
                        B.length hello.M.key_share == 32 /\
+                       B.length hello.M.body == 0 /\
                        (match hello.M.server_name with
                         | Some h -> B.length h <= 255
                         | None -> True)} ->
@@ -504,9 +522,16 @@ val lemma_handshake_synth_certificate_verify (b:GHS.handshake_body_certificate_v
 val lemma_handshake_synth_key_update (b:GHS.handshake_body_key_update)
   : Lemma (ensures handshake_synth (GHS.Body_key_update b) == None)
 
-(* A client never legitimately receives a ClientHello; synth maps it to None. *)
+(* ClientHello handshakes synthesize through the ordinary ClientHello parser. *)
 val lemma_handshake_synth_client_hello (b:GHS.handshake_body_client_hello)
-  : Lemma (ensures handshake_synth (GHS.Body_client_hello b) == None)(* --- byte-level fallback formats (outside the QD handshake grammar) ------ *)
+  : Lemma (ensures handshake_synth (GHS.Body_client_hello b) ==
+      (match WS.synth_client_hello b with
+       | Some ch ->
+         let full = LP.serialize GHS.handshake_serializer (GHS.Body_client_hello b) in
+         if B.length full <= M.client_hello_max_len
+         then Some (M.ClientHello ({ ch with M.body = full }))
+         else None
+       | None -> None))(* --- byte-level fallback formats (outside the QD handshake grammar) ------ *)
 
 (* Re-export of the internal [parse_ignored_post_handshake] (not in the frozen
    TLS13.Wire.Spec interface). *)
@@ -732,11 +757,14 @@ val lemma_handshake_synth_server_hello_sh
             | Some ks ->
               if B.length (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b))
                  <= M.server_hello_max_len
-              then Some (M.ServerHello ({
-                     M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
-                     M.key_share = ks;
-                     M.cipher_suite = synth_cipher_suite sf.GSHB.value.GSHBody.cipher_suite;
-                     M.body = LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b) }))
+              then (match sf.GSHB.value.GSHBody.cipher_suite with
+                    | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
+                      Some (M.ServerHello ({
+                        M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
+                        M.key_share = ks;
+                        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                        M.body = LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b) }))
+                    | GCS.Unknown_cipherSuite _ -> None)
               else None
             | None -> None))
 
@@ -797,3 +825,147 @@ val lemma_handshake_synth_certificate (b:GHS.handshake_body_certificate)
              then Some (M.Certificate ({ M.chain = chain;
                     M.body = LP.serialize GHS.handshake_serializer (GHS.Body_certificate b) }))
              else None))
+
+(* ---- ClientHello parsing reveals ---------------------------------------- *)
+
+(* Convert one low cipherSuite to a high T.cipher_suite. *)
+val reveal_synth_cipher_suites
+  (l: list GCS.cipherSuite)
+  : GTot (list T.cipher_suite)
+
+val lemma_reveal_synth_cipher_suites_nil (_:unit)
+  : Lemma (reveal_synth_cipher_suites [] == [])
+
+val lemma_reveal_synth_cipher_suites_cons (c: GCS.cipherSuite) (tl: list GCS.cipherSuite)
+  : Lemma (reveal_synth_cipher_suites (c :: tl) ==
+           WS.synth_cipher_suite c :: reveal_synth_cipher_suites tl)
+
+(* Convert one low signatureScheme to a high T.signature_scheme list. *)
+val reveal_synth_sig_schemes
+  (l: list GSS.signatureScheme)
+  : GTot (list T.signature_scheme)
+
+val lemma_reveal_synth_sig_schemes_nil (_:unit)
+  : Lemma (reveal_synth_sig_schemes [] == [])
+
+val lemma_reveal_synth_sig_schemes_cons (s: GSS.signatureScheme) (tl: list GSS.signatureScheme)
+  : Lemma (reveal_synth_sig_schemes (s :: tl) ==
+           WS.synth_signature_scheme s :: reveal_synth_sig_schemes tl)
+
+(* Get the first hostname from a serverName list (None if empty). *)
+val reveal_ch_server_name
+  (snl: list GSN.serverName)
+  : GTot (option T.hostname)
+
+val lemma_reveal_ch_server_name_nil (_:unit)
+  : Lemma (reveal_ch_server_name [] == None)
+
+val lemma_reveal_ch_server_name_host (h: GHN.hostName) (tl: list GSN.serverName)
+  : Lemma (reveal_ch_server_name (GSN.Name_host_name h :: tl) == Some ((h <: B.bytes) <: T.hostname))
+
+(* Find the first x25519/32-byte key_share in a keyShareEntry list. *)
+val reveal_ch_find_key_share
+  (l: list GKSE.keyShareEntry)
+  : GTot (option (B.bytes_of_len 32))
+
+val lemma_reveal_ch_find_key_share_nil (_:unit)
+  : Lemma (reveal_ch_find_key_share [] == None)
+
+val lemma_reveal_ch_find_key_share_cons (e: GKSE.keyShareEntry) (tl: list GKSE.keyShareEntry)
+  : Lemma (reveal_ch_find_key_share (e :: tl) ==
+           (if GNG.X25519? e.GKSE.group
+            then (match reveal_key_exchange_to_key32 e.GKSE.key_exchange with
+                  | Some k -> Some k
+                  | None -> reveal_ch_find_key_share tl)
+            else reveal_ch_find_key_share tl))
+
+(* Scan the ClientHello extension list accumulating
+   (server_name, key_share, saw_supported_versions, sig_schemes). *)
+val reveal_ch_extensions
+  (l: list GECH.extensionClientHello)
+  (server_name: option T.hostname)
+  (key_share: option (B.bytes_of_len 32))
+  (saw_supported_versions: bool)
+  (sig_schemes: list T.signature_scheme)
+  : GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme))
+
+val lemma_reveal_ch_extensions_nil
+  (sn: option T.hostname) (ks: option (B.bytes_of_len 32)) (sv: bool) (ss: list T.signature_scheme)
+  : Lemma (reveal_ch_extensions [] sn ks sv ss == (if sv then Some (sn, ks, sv, ss) else None))
+
+val lemma_reveal_ch_extensions_cons_sn
+  (snl: GESN.extensionClientHello_extension_data_server_name)
+  (tl: list GECH.extensionClientHello)
+  (sn: option T.hostname) (ks: option (B.bytes_of_len 32)) (sv: bool) (ss: list T.signature_scheme)
+  : Lemma (reveal_ch_extensions (GECH.Extension_data_server_name snl :: tl) sn ks sv ss ==
+           (match reveal_ch_server_name snl with
+            | Some name -> reveal_ch_extensions tl (Some name) ks sv ss
+            | None -> None))
+
+val lemma_reveal_ch_extensions_cons_sg
+  (sgl: GESG.extensionClientHello_extension_data_supported_groups)
+  (tl: list GECH.extensionClientHello)
+  (sn: option T.hostname) (ks: option (B.bytes_of_len 32)) (sv: bool) (ss: list T.signature_scheme)
+  : Lemma (reveal_ch_extensions (GECH.Extension_data_supported_groups sgl :: tl) sn ks sv ss ==
+           reveal_ch_extensions tl sn ks sv ss)
+
+val lemma_reveal_ch_extensions_cons_sa
+  (ssl: GESA.extensionClientHello_extension_data_signature_algorithms)
+  (tl: list GECH.extensionClientHello)
+  (sn: option T.hostname) (ks: option (B.bytes_of_len 32)) (sv: bool) (ss: list T.signature_scheme)
+  : Lemma (reveal_ch_extensions (GECH.Extension_data_signature_algorithms ssl :: tl) sn ks sv ss ==
+           reveal_ch_extensions tl sn ks sv (reveal_synth_sig_schemes ssl))
+
+val lemma_reveal_ch_extensions_cons_ks
+  (kscl: GESK.extensionClientHello_extension_data_key_share)
+  (tl: list GECH.extensionClientHello)
+  (sn: option T.hostname) (ks: option (B.bytes_of_len 32)) (sv: bool) (ss: list T.signature_scheme)
+  : Lemma (reveal_ch_extensions (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
+           (match reveal_ch_find_key_share kscl with
+            | Some k -> reveal_ch_extensions tl sn (Some k) sv ss
+            | None -> None))
+
+val lemma_reveal_ch_extensions_cons_sv
+  (svl: GESV.extensionClientHello_extension_data_supported_versions)
+  (tl: list GECH.extensionClientHello)
+  (sn: option T.hostname) (ks: option (B.bytes_of_len 32)) (sv: bool) (ss: list T.signature_scheme)
+  : Lemma (reveal_ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
+           (if FStar.List.Tot.mem GPV.TLS_1p3 svl
+            then reveal_ch_extensions tl sn ks true ss
+            else None))
+
+val lemma_reveal_ch_extensions_cons_other
+  (e: GECH.extensionClientHello)
+  (tl: list GECH.extensionClientHello)
+  (sn: option T.hostname) (ks: option (B.bytes_of_len 32)) (sv: bool) (ss: list T.signature_scheme)
+  : Lemma
+    (requires
+      not (GECH.Extension_data_server_name? e) /\
+      not (GECH.Extension_data_supported_groups? e) /\
+      not (GECH.Extension_data_signature_algorithms? e) /\
+      not (GECH.Extension_data_key_share? e) /\
+      not (GECH.Extension_data_supported_versions? e))
+    (ensures reveal_ch_extensions (e :: tl) sn ks sv ss ==
+             reveal_ch_extensions tl sn ks sv ss)
+
+(* Link reveal_ch_extensions to WS.synth_client_hello. *)
+val lemma_synth_client_hello_reveal
+  (c: GCH.clientHello)
+  : Lemma (WS.synth_client_hello c ==
+           (if not (GPV.TLS_1p2? c.GCH.legacy_version) then None
+            else match reveal_ch_extensions c.GCH.extensions None None false [] with
+                 | Some (server_name, Some key_share, _, sig_schemes) ->
+                   let cipher_suites = reveal_synth_cipher_suites c.GCH.cipher_suites in
+                   if FStar.List.Tot.length cipher_suites <= M.client_hello_max_cipher_suites &&
+                      FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes &&
+                      (match server_name with
+                       | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
+                       | None -> True)
+                   then Some ({ M.random = (c.GCH.random <: B.bytes_of_len 32);
+                                M.server_name = server_name;
+                                M.key_share = key_share;
+                                M.cipher_suites = cipher_suites;
+                                M.signature_schemes = sig_schemes;
+                                M.body = B.empty })
+                   else None
+                 | _ -> None))

@@ -270,7 +270,8 @@ let lemma_server_hello_bytes_len (random key_share:B.bytes)
 let lemma_server_hello_bytes_spec (sh:M.server_hello)
   : Lemma
       (requires B.length sh.M.random == 32 /\
-                B.length sh.M.key_share == 32)
+                B.length sh.M.key_share == 32 /\
+                sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
       (ensures Seq.equal
         (server_hello_bytes sh.M.random sh.M.key_share)
         (WS.serialize_server_hello_from_selection sh))
@@ -297,7 +298,7 @@ let lemma_server_hello_bytes_spec (sh:M.server_hello)
         (B.append
           (WS.server_key_share_extension sh.M.key_share)
           (WS.server_supported_versions_extension ()))));
-  assert_norm (WS.cipher_suite_to_u16 sh.M.cipher_suite == 0x1303);
+  assert (WS.cipher_suite_to_u16 sh.M.cipher_suite == 0x1303);
   assert (B.length (server_key_share_extension_bytes sh.M.key_share) == 40);
   assert (B.length server_supported_versions_extension_bytes == 6);
   assert (B.length (server_hello_extensions_bytes sh.M.key_share) == 46);

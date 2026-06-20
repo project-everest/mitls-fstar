@@ -311,6 +311,7 @@ noextract
 let cipher_suite_matches (wire:U16.t) (suite:T.cipher_suite) : prop =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> U16.v wire == 0x1303
+  | T.UnknownCipherSuite n -> U16.v wire == n /\ n <> 0x1303
 
 noextract
 let signature_scheme_matches (wire:U16.t) (scheme:T.signature_scheme) : prop =
@@ -464,7 +465,8 @@ let is_valid_server_hello ([@@@mkey] l:server_hello) (m:M.server_hello) : slprop
       V.length l.server_hello_key_share == 32 /\
       Seq.equal random m.M.random /\
       Seq.equal key_share m.M.key_share /\
-      cipher_suite_matches l.server_hello_cipher_suite m.M.cipher_suite)
+      cipher_suite_matches l.server_hello_cipher_suite m.M.cipher_suite /\
+      m.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
 
 let is_valid_encrypted_extensions
   ([@@@mkey] l:encrypted_extensions)

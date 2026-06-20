@@ -104,12 +104,16 @@ let tls_hello_retry_request_rejected_error : T.tls_error = T.HelloRetryRequestRe
 
 let tls_bad_finished_error : T.tls_error = T.BadFinished
 
-val lemma_nonempty_cipher_suites_offer
+val lemma_cipher_suites_match_first_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
   (suites:list T.cipher_suite)
-  (suite:T.cipher_suite)
   : Lemma
-      (requires suites <> [])
-      (ensures CS.cipher_suite_offered suites suite)
+      (requires IM.cipher_suites_match wire len suites /\
+                0 < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire 0) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
 
 noextract
 let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_state =
@@ -130,6 +134,7 @@ let client_hello_of_start (start:CS.handshake_start) : M.client_hello =
     M.key_share = start.CS.start_client_key_share_public;
     M.cipher_suites = start.CS.start_cipher_suites;
     M.signature_schemes = start.CS.start_signature_schemes;
+    M.body = B.empty;
   }
 
 noextract

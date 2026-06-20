@@ -12,31 +12,6 @@
 #include <stdint.h>
 #include <string.h>
 
-static inline void TLS13_Generated_copy_array_slice_to_array(
-    const uint8_t *src,
-    size_t src_total_len,
-    size_t src_offset,
-    size_t copy_len,
-    uint8_t *dst,
-    size_t dst_len,
-    size_t dst_offset) {
-  (void)src_total_len;
-  (void)dst_len;
-  if (copy_len != 0u) {
-    memcpy(dst + dst_offset, src + src_offset, copy_len);
-  }
-}
-
-#define TLS13_Impl_Serializer_Common_copy_array_slice_to_array( \
-    src, src_total_len, src_offset, copy_len, dst, dst_len, dst_offset, ...) \
-  TLS13_Generated_copy_array_slice_to_array( \
-      (src), (src_total_len), (src_offset), (copy_len), (dst), (dst_len), (dst_offset))
-
-#define TLS13_Impl_Serializer_copy_array_slice_to_array( \
-    src, src_total_len, src_offset, copy_len, dst, dst_len, dst_offset, ...) \
-  TLS13_Generated_copy_array_slice_to_array( \
-      (src), (src_total_len), (src_offset), (copy_len), (dst), (dst_len), (dst_offset))
-
 #if defined(__has_include)
 #if __has_include("TLS13_Crypto.h")
 #include "TLS13_Crypto.h"
@@ -55,6 +30,9 @@ static inline void TLS13_Generated_copy_array_slice_to_array(
 #endif
 #if __has_include("TLS13_Impl_ConnectionState_Queries.h")
 #include "TLS13_Impl_ConnectionState_Queries.h"
+#endif
+#if __has_include("TLS13_Impl_Parser.h")
+#include "TLS13_Impl_Parser.h"
 #endif
 #if __has_include("TLS13_Impl_Serializer.h")
 #include "TLS13_Impl_Serializer.h"
@@ -113,7 +91,6 @@ static inline void TLS13_Generated_copy_array_slice_to_array(
 #define TLS13_Impl_ConnectionState_Bounds_max_pending_raw_len \
   TLS13_Impl_ConnectionState_Bounds_max_pending_raw_len_sz
 
-#include "tls13_server_extraction_shims.h"
 #include "tls13_connection_backend.h"
 
 #endif
