@@ -13,7 +13,7 @@
 
 ### 2. Conflicts Resolved (5/12)
 ✅ **TLS_SERVER.md**: Deleted (kept main's deletion, we have STATUS_SERVER.md)  
-✅ **c_stubs/tls13_connection_backend.h**: Kept our version  
+✅ **c_stubs/tls13_connection_backend.h**: Later removed after parser/serializer extraction wiring
 ✅ **Makefile**: Resolved by taking main's EverParse infrastructure and keeping our SERVER_DRIVER_BUNDLE sections  
 ✅ **c_stubs/tls13_crypto_external.h**: Took main's (erased option types, simplified signatures)  
 ✅ **c_stubs/tls13_openssl_karamel.c**: Took main's (erased FStar.Pervasives.Native options)  

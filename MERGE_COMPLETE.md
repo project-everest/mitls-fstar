@@ -18,7 +18,7 @@
    - ✅ ConnectionState files: Merged server predicates with EverParse changes
    - ✅ Client.Types.fst: Took main's assertion improvements
    - ✅ C stubs: Took main's erased-option signatures
-   - ✅ Deleted TLS_SERVER.md, kept c_stubs/tls13_connection_backend.h
+   - ✅ Deleted TLS_SERVER.md; the obsolete c_stubs/tls13_connection_backend.h shim was later removed
 
 3. **All Critical Files Preserved**:
    - ✅ TLS13.Impl.Driver.Pairing.fst/.fsti (paired agreement theorem)

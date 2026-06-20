@@ -31,17 +31,13 @@ typedef struct FStar_Pervasives_Native_option__TLS13_IO_listener_s {
   TLS13_IO_listener v;
 } FStar_Pervasives_Native_option__TLS13_IO_listener;
 
-TLS13_IO_channel tls13_io_channel_from_fd(int fd) {
+static TLS13_IO_channel tls13_io_channel_from_fd(int fd) {
   TLS13_IO_channel ch = malloc(sizeof *ch);
   if (ch == NULL) {
     return NULL;
   }
   ch->fd = fd;
   return ch;
-}
-
-void tls13_io_channel_free(TLS13_IO_channel ch) {
-  free(ch);
 }
 
 static TLS13_IO_listener tls13_io_listener_from_fd(int fd) {

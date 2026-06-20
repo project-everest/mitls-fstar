@@ -227,8 +227,8 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
     server Finished, all definitionally tied to `serialize_handshake`.
   - `TLS13.Impl.Serializer.fsti` exposes L-level fixed server handshake builders
     with exact emitted bytes and parse-back postconditions.
-  - `c_stubs/tls13_connection_backend.h` implements matching C TCB helpers over
-    concrete L-level server message storage.
+  - The earlier C TCB serializer helpers have been removed; server message
+    construction now comes from the extracted `TLS13.Impl.Serializer.*` modules.
   - The serializer TCB now also exposes
     `serialize_protected_handshake_record`, a generic protected handshake-record
     builder whose postcondition gives the outer `ApplicationData` parse,
@@ -335,15 +335,9 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas
   instead of the current state-preserving refusal cases.
-- [x] Removed the immediate C parser backend blocker for that dispatcher:
-  `c_stubs/tls13_connection_backend.h` now decodes canonical supported-profile
-  `ClientHello` handshake records into `LClientHello`, matching the serializer
-  order and profile for legacy version, one ChaCha20/Poly1305 suite, optional
-  non-empty SNI, supported_groups X25519, signature_algorithms RSA-PSS-RSAE
-  SHA-256, X25519 key_share, and TLS 1.3 supported_versions. The remaining
-  dispatcher work is to expose the corresponding server-oriented
-  parser/consumed-prefix theorem surface beyond the current invariant-preserving
-  byte-step predicate.
+- [x] Removed the immediate parser backend blocker for that dispatcher by
+  wiring the extracted parser path. The old `c_stubs/tls13_connection_backend.h`
+  parser/serializer TCB shim has since been deleted.
 - [x] Added `TLS13.Impl.ConnectionState.Queries.can_receive_client_hello`, the
   concrete readiness check needed by the upcoming buffer dispatcher. It reads
   only role/control, stored-ClientHello presence, and transcript length, and
@@ -2768,9 +2762,8 @@ Checklist:
       credential files by path in the first verified API.
 - [x] Use concrete C stub names
       `c_stubs/tls13_openssl_karamel.c/.h`, `c_stubs/tls13_io_karamel.c/.h`,
-      and `c_stubs/tls13_io_stubs.c/.h`, with
-      `c_stubs/tls13_connection_backend.h` extended for typed serializer and IO
-      ABI typedefs.
+      and `c_stubs/tls13_io_stubs.c/.h`; generated bounds aliases live in
+      `c_stubs/tls13_generated_shims.h`.
 - [x] Add server-driver extraction targets:
       `extract-server-driver-krml` and `extract-server-driver-bundle`.
 - [ ] Add any separate non-driver server-core extraction target if later needed.

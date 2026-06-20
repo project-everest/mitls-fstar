@@ -593,7 +593,6 @@ HACL_WRAPPER_SOURCES = \
 
 ECHO_STUB_SOURCES = \
   c_stubs/tls13_crypto_external.c \
-  c_stubs/tls13_pulse_shims.c \
   c_stubs/tls13_prims_runtime.c \
   c_stubs/tls13_io_karamel.c \
   c_stubs/tls13_io_stubs.c \
@@ -602,7 +601,6 @@ ECHO_STUB_SOURCES = \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
-  c_stubs/tls13_connection_backend.h \
   c_stubs/tls13_crypto_external.h \
   c_stubs/tls13_generated_shims.h \
   c_stubs/tls13_hacl_stubs.h \
@@ -664,7 +662,6 @@ test/test_extracted_client_openssl_echo: \
 	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
 	  _extract/driver_bundle/obj/*.o \
 	  c_stubs/tls13_crypto_external.c \
-	  c_stubs/tls13_pulse_shims.c \
 	  c_stubs/tls13_prims_runtime.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/tls13_io_karamel.c \
@@ -723,7 +720,6 @@ test/test_extracted_server_openssl_client: \
 	  -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
 	  _extract/server_driver_bundle/obj/*.o \
 	  c_stubs/tls13_crypto_external.c \
-	  c_stubs/tls13_pulse_shims.c \
 	  c_stubs/tls13_prims_runtime.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/tls13_io_karamel.c \

@@ -4,52 +4,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
-
-#include "tls13_spec_types.h"
-
-#ifndef TLS13_PULSE_SHIMS_IMPLEMENTATION
-static inline void TLS13_Pulse_Lib_Array_memcpy_typed(
-    size_t len,
-    const void *src,
-    void *dst,
-    size_t elem_size) {
-  if (len != 0) {
-    memcpy(dst, src, len * elem_size);
-  }
-}
-
-#define Pulse_Lib_Array_memcpy(len, src, dst, ...) \
-  TLS13_Pulse_Lib_Array_memcpy_typed((len), (src), (dst), sizeof(*(src)))
-
-#define Pulse_Lib_Array_memcpy_l(len, src, dst, ...) \
-  TLS13_Pulse_Lib_Array_memcpy_typed((len), (src), (dst), sizeof(*(src)))
-
-#define Pulse_Lib_Array_fill(len, dst, value, ...) \
-  memset((dst), (value), (len) * sizeof(*(dst)))
-#else
-void Pulse_Lib_Array_memcpy(
-    size_t len,
-    uint8_t *src,
-    uint8_t *dst,
-    void *src_bytes,
-    void *dst_bytes,
-    void *squash);
-
-void Pulse_Lib_Array_memcpy_l(
-    size_t len,
-    uint8_t *src,
-    uint8_t *dst,
-    void *src_bytes,
-    void *dst_bytes,
-    void *squash);
-
-void Pulse_Lib_Array_fill(
-    size_t len,
-    uint8_t *dst,
-    uint8_t value,
-    void *squash);
-#endif
 
 void TLS13_Crypto_sha256_empty(uint8_t *out);
 
