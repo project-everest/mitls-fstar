@@ -1214,11 +1214,12 @@ fn can_receive_client_hello
   assert (pure (SZ.v current_transcript_len ==
     B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
 
-  let fragment_fits = SZ.lte fragment_len (SZ.uint_to_t max_transcript_len);
+  let fragment_fits = SZ.lte fragment_len max_transcript_len_sz;
+  lemma_sizet_lte_plain fragment_len max_transcript_len_sz;
   if fragment_fits {
     assert (pure (SZ.v fragment_len <= max_transcript_len));
     assert (pure (SZ.fits (max_transcript_len - SZ.v fragment_len)));
-    let max_start = SZ.uint_to_t (max_transcript_len - SZ.v fragment_len);
+    let max_start = SZ.sub max_transcript_len_sz fragment_len;
     let transcript_room = SZ.lte current_transcript_len max_start;
     let control_ok = tag_ok && stage_ok && role_ok;
     let ok = control_ok && no_client_hello && transcript_room;
@@ -1763,7 +1764,7 @@ fn can_send_server_hello_runtime
   let shared_secret_present = !c.handshake.keys.shared_secret.present;
   let current_transcript_len = !c.handshake.transcript.len;
   let no_server_hello = None? server_hello;
-  let max_start = SZ.uint_to_t (max_transcript_len - 90);
+  let max_start = SZ.sub max_transcript_len_sz 90sz;
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
   let ok =
@@ -2414,7 +2415,7 @@ fn can_send_encrypted_extensions_runtime
   let stage = !c.control.handshake_stage_tag;
   let has_server_handshake_keys = !c.handshake.keys.server_handshake_traffic.present;
   let seq_ok = Rec.can_advance_seq c.records.write;
-  let max_start = SZ.uint_to_t (max_transcript_len - 6);
+  let max_start = SZ.sub max_transcript_len_sz 6sz;
   let current_transcript_len = !c.handshake.transcript.len;
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
@@ -2609,7 +2610,7 @@ fn can_send_certificate_runtime
   assert_norm (max_transcript_len == 65535);
   let max_certificate_fragment_len = 16623sz;
   assert (pure (SZ.v max_certificate_fragment_len == 13 + max_server_certificate_chain_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let max_start = SZ.sub max_len max_certificate_fragment_len;
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
@@ -2977,7 +2978,7 @@ fn can_send_certificate_verify_runtime
       SZ.v fragment_len ==
         B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
     assert (pure (SZ.v fragment_len <= max_transcript_len));
-    let max_len = SZ.uint_to_t max_transcript_len;
+    let max_len = max_transcript_len_sz;
     let max_start = SZ.sub max_len fragment_len;
     let transcript_room = sizet_lte_plain current_transcript_len max_start;
     lemma_sizet_lte_plain current_transcript_len max_start;
@@ -3145,7 +3146,7 @@ fn can_send_server_finished_runtime
   let current_transcript_len = !c.handshake.transcript.len;
   assert (pure (current_transcript_len == transcript_len));
 
-  let max_start = SZ.uint_to_t (max_transcript_len - 36);
+  let max_start = SZ.sub max_transcript_len_sz 36sz;
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
 
@@ -4522,7 +4523,7 @@ fn can_verify_client_finished_runtime
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
 
   assert (pure (SZ.fits max_transcript_len));
-  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_len = max_transcript_len_sz;
   let finished_len = 36sz;
   let transcript_room = (
     if SZ.lte finished_len max_len then

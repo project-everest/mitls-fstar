@@ -8,6 +8,7 @@ let length (b:bytes) : nat = Seq.length b
 
 let zero : byte = 0uy
 
+noextract
 let empty : bytes = Seq.create 0 zero
 
 let of_list (l:list byte) : bytes = Seq.seq_of_list l

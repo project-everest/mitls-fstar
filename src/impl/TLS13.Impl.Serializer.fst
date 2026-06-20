@@ -37,14 +37,13 @@ module WS = TLS13.Wire.Spec
 module WSR = TLS13.Wire.Spec.Reveal
 module WSRD = TLS13.Wire.Spec.RevealDecode
 
+noextract
 let byte (n:nat) : B.byte =
   U8.uint_to_t (n % 256)
 
 (* Machine-native low byte of a [SZ.t]: extract [n mod 256] entirely in machine
-   integers (sizet -> uint32 -> uint8), with no detour through the mathematical
-   [SZ.v n] view.  This keeps the extracted C free of [FStar_SizeT_v] /
-   [Prims_op_Division] / [Prims_op_Modulus] at the wire-length byte-split sites:
-   it lowers to a couple of [size_t]->[uint32_t]->[uint8_t] casts. *)
+   integers (sizet -> uint32 -> uint8), with no detour through mathematical
+   integer runtime helpers at the wire-length byte-split sites. *)
 inline_for_extraction
 let u8_of_sizet (n:SZ.t) : Tot (b:U8.t { U8.v b == SZ.v n % 256 }) =
   let r = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 n) in

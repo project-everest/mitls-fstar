@@ -169,6 +169,7 @@ let can_start_handshake
     st.CS.cs_model
     (CS.ConnLocalEvent (CS.LocalStartHandshake start))
 
+noextract
 let started_server_state
   (st:CS.connection_state)
   : CS.connection_state =
@@ -197,6 +198,7 @@ let can_start_server
     st.CS.cs_model
     (CS.ConnLocalEvent CS.LocalStartServer)
 
+noextract
 let selected_server_parameters_state
   (st:CS.connection_state)
   (selection:CS.server_handshake_selection)
@@ -383,6 +385,7 @@ let installed_traffic_keys_state
       st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install)];
   }
 
+noextract
 let installed_traffic_keys_for_role_state
   (st:CS.connection_state)
   (role_install:CS.role_traffic_key_install)

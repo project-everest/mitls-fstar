@@ -14,6 +14,7 @@ module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module Cast = FStar.Int.Cast
 
+noextract
 let byte (n:nat) : B.byte =
   U8.uint_to_t (n % 256)
 

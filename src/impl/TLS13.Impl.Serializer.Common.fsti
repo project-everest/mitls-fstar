@@ -11,6 +11,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
+noextract
 val byte : n:nat -> B.byte
 
 val lemma_byte_reveal :

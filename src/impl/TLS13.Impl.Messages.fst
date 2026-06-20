@@ -255,18 +255,17 @@ let key_update_request_matches (wire:U8.t) (req:M.key_update_request) : prop =
 let alert_description_of_wire_or_unexpected
   (wire:U8.t)
   : T.alert_description =
-  match U8.v wire with
-  | 0 -> T.CloseNotify
-  | 10 -> T.UnexpectedMessage
-  | 20 -> T.BadRecordMac
-  | 40 -> T.HandshakeFailure
-  | 46 -> T.CertificateUnknown
-  | 47 -> T.IllegalParameter
-  | 50 -> T.DecodeError
-  | 51 -> T.DecryptError
-  | 70 -> T.ProtocolVersion
-  | 110 -> T.UnsupportedExtension
-  | _ -> T.UnexpectedMessage
+  if wire = 0uy then T.CloseNotify
+  else if wire = 10uy then T.UnexpectedMessage
+  else if wire = 20uy then T.BadRecordMac
+  else if wire = 40uy then T.HandshakeFailure
+  else if wire = 46uy then T.CertificateUnknown
+  else if wire = 47uy then T.IllegalParameter
+  else if wire = 50uy then T.DecodeError
+  else if wire = 51uy then T.DecryptError
+  else if wire = 70uy then T.ProtocolVersion
+  else if wire = 110uy then T.UnsupportedExtension
+  else T.UnexpectedMessage
 
 let lemma_alert_description_of_wire_matches
   (wire:U8.t)

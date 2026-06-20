@@ -474,7 +474,6 @@ HACL_WRAPPER_SOURCES = \
 ECHO_STUB_SOURCES = \
   c_stubs/tls13_crypto_external.c \
   c_stubs/tls13_pulse_shims.c \
-  c_stubs/tls13_prims_runtime.c \
   c_stubs/tls13_io_karamel.c \
   c_stubs/tls13_io_stubs.c \
   c_stubs/tls13_openssl_karamel.c \
@@ -533,7 +532,6 @@ test/test_extracted_client_openssl_echo: \
 	  _extract/driver_bundle/*.c \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \
-	  c_stubs/tls13_prims_runtime.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/tls13_io_karamel.c \
 	  c_stubs/tls13_io_stubs.c \

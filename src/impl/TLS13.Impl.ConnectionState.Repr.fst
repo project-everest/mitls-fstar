@@ -1684,7 +1684,7 @@ fn copy_array_prefix_to_transcript
   V.to_array_pts_to dst;
 
   assert (pure (SZ.fits max_transcript_len));
-  let dst_cap = SZ.uint_to_t max_transcript_len;
+  let dst_cap = max_transcript_len_sz;
   let src_slice = Slice.from_array src src_len;
   let dst_slice = Slice.from_array (V.vec_to_array dst) dst_cap;
 
