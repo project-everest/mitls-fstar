@@ -1,4 +1,5 @@
-/* Spec-level and abstract implementation types needed by extracted C. */
+/* Compatibility definitions for symbols that generated headers use before
+   KaRaMeL emits a concrete C definition for them. */
 #ifndef TLS13_SPEC_TYPES_H
 #define TLS13_SPEC_TYPES_H
 
@@ -13,21 +14,10 @@
 #define FStar_SizeT_v(n) ((size_t)(n))
 #endif
 
-/* Keep this C shim ABI-compatible with KaRaMeL's uint8_t extraction. */
-#ifndef TLS13_Record_Spec_Initial
-#define TLS13_Record_Spec_Initial 0
-#endif
-#ifndef TLS13_Record_Spec_Handshake
-#define TLS13_Record_Spec_Handshake 1
-#endif
-#ifndef TLS13_Record_Spec_Application
-#define TLS13_Record_Spec_Application 2
-#endif
-
+/* Test code historically used the Epoch suffixes; generated code emits the
+   unsuffixed names. */
 #define TLS13_Record_Spec_HandshakeEpoch TLS13_Record_Spec_Handshake
 #define TLS13_Record_Spec_ApplicationEpoch TLS13_Record_Spec_Application
-
-typedef uint8_t TLS13_Record_Spec_epoch;
 
 #ifndef TLS13_X509_SPEC_TRUST_STORE_DEFINED
 #define TLS13_X509_SPEC_TRUST_STORE_DEFINED
