@@ -244,7 +244,8 @@ EXTRACT_MODULES = \
 KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(EXTRACT_MODULES)))
 
 .PHONY: extract-krml extract-connection extract-smoke \
-  extract-driver-krml extract-driver-bundle
+  extract-driver-krml extract-server-driver-krml extract-tls13-driver-krml \
+  extract-driver-bundle extract-server-driver-bundle extract-tls13-bundle
 
 extract-krml: $(KRML_FILES)
 
@@ -352,7 +353,12 @@ BUNDLE_KRML_FILES = $(filter-out \
   $(OUTPUT_DIR)/TLS13_OpenSSL.krml \
   $(OUTPUT_DIR)/TLS13_IO.krml,$(FULL_KRML_FILES))
 
-DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/driver_bundle
+TLS13_BUNDLE_DIR = $(EXTRACT_DIR)/tls13_bundle
+TLS13_BUNDLE_STAMP = $(TLS13_BUNDLE_DIR)/.generated
+TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
+TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
+TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
+TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
 DRIVER_IMPL_MODULES = \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
@@ -397,7 +403,6 @@ SERVER_DRIVER_EXTRACT_SELECTOR = \
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*,\
   -TLS13.X509,-TLS13.MachineTypes
 
-SERVER_DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/server_driver_bundle
 SERVER_DRIVER_MODULES = \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -438,6 +443,10 @@ SERVER_DRIVER_KRML_FILES = \
   $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
+TLS13_DRIVER_KRML_FILES = \
+  $(DRIVER_KRML_FILES) \
+  $(filter-out $(DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
+  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
@@ -493,28 +502,34 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 
 extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
-extract-driver-krml: $(DRIVER_KRML_FILES)
+extract-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
 
-# The supported extracted artifact is the OpenSSL echo client driver. The older
-# all-client bundle sent a much larger dependency closure through KaRaMeL, where
-# reachability happens only after several expensive whole-AST passes.
-extract-bundle: extract-driver-bundle
-	@echo "Extracted OpenSSL echo driver bundle to $(DRIVER_BUNDLE_DIR)"
+extract-server-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
+
+extract-tls13-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
+
+$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | $(OUTPUT_DIR)
+	$(MAKE) $(TLS13_DRIVER_KRML_FILES)
+	@touch $@
+
+extract-bundle: extract-tls13-bundle
+	@echo "Extracted TLS13 client/server driver bundle to $(TLS13_BUNDLE_DIR)"
 
 $(BUNDLE_DIR):
 	mkdir -p $@
 
-$(DRIVER_BUNDLE_DIR):
-	mkdir -p $@
+$(TLS13_BUNDLE_DIR):
+	mkdir -p $@ $@/internal
 
-$(SERVER_DRIVER_BUNDLE_DIR):
-	mkdir -p $@
+extract-tls13-bundle: $(TLS13_BUNDLE_STAMP)
 
-extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
-	@echo "Extracting TLS13 client driver slice..."
-	@rm -f $(DRIVER_BUNDLE_DIR)/*.c $(DRIVER_BUNDLE_DIR)/*.h $(DRIVER_BUNDLE_DIR)/internal/*.h
+$(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
+	@echo "Extracting TLS13 client/server driver bundle..."
+	@rm -f $(TLS13_BUNDLE_DIR)/*.c $(TLS13_BUNDLE_DIR)/*.h $(TLS13_BUNDLE_DIR)/internal/*.h
+	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
+	@mkdir -p $(TLS13_BUNDLE_DIR)/internal
 	$(KRML_EXE) \
-	  -tmpdir $(DRIVER_BUNDLE_DIR) \
+	  -tmpdir $(TLS13_BUNDLE_DIR) \
 	  -skip-compilation \
 	  -static-header TLS13.Impl.Serializer \
 	  -add-include '<stdbool.h>' \
@@ -529,32 +544,13 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
-	  -warn-error '@2-26' \
-	  -warn-error '-2' \
-	  -warn-error '+9' \
-	  -no-prefix TLS13.Impl.Client \
-	  $(DRIVER_KRML_FILES)
-
-extract-server-driver-krml: $(SERVER_DRIVER_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
-
-extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDLE_DIR)
-	@echo "Extracting TLS13 server driver slice..."
-	@rm -f $(SERVER_DRIVER_BUNDLE_DIR)/*.c $(SERVER_DRIVER_BUNDLE_DIR)/*.h $(SERVER_DRIVER_BUNDLE_DIR)/internal/*.h
-	$(KRML_EXE) \
-	  -tmpdir $(SERVER_DRIVER_BUNDLE_DIR) \
-	  -skip-compilation \
-	  -static-header TLS13.Impl.Serializer \
 	  -warn-error -2-9-17-6 \
-	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
-	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
-	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
-	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
-	  -bundle 'TLS13.Wire.Generated.*' \
-	  -bundle 'LowParse.*' \
-	  -bundle 'FStar.*,PulseCore.*,Prims' \
-	  -no-prefix TLS13.Impl.Server \
-	  $(SERVER_DRIVER_KRML_FILES) \
-	  _output/FStar_Pervasives_Native.krml
+	  $(TLS13_DRIVER_KRML_FILES)
+	@touch $@
+
+extract-driver-bundle: extract-tls13-bundle
+
+extract-server-driver-bundle: extract-tls13-bundle
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
 
@@ -617,6 +613,16 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
 
 LDFLAGS_COMMON = -Wl,--gc-sections
 
+$(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile | check-deps
+	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
+	@mkdir -p $(TLS13_BUNDLE_OBJ_DIR)
+	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	  obj="$(TLS13_BUNDLE_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
@@ -639,20 +645,12 @@ test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: 
 	scripts/generate-test-certs.sh test/certs
 
 test/test_extracted_client_openssl_echo: \
-  test/unit/test_extracted_client_openssl_echo.c extract-driver-bundle \
+  test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
-	@rm -rf $(DRIVER_BUNDLE_DIR)/obj
-	@mkdir -p $(DRIVER_BUNDLE_DIR)/obj
-	@set -e; for src in $(DRIVER_BUNDLE_DIR)/*.c; do \
-	  obj="$(DRIVER_BUNDLE_DIR)/obj/$$(basename "$$src" .c).o"; \
-	  $(CC) $(CFLAGS_COMMON) \
-	    -I_extract/driver_bundle -I_extract/driver_bundle/internal \
-	    -c "$$src" -o "$$obj"; \
-	done
 	$(CC) $(CFLAGS_COMMON) \
-	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
-	  _extract/driver_bundle/obj/*.o \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/tls13_io_karamel.c \
@@ -695,20 +693,12 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 
 # ── Extracted Server / OpenSSL Client Test ─────────────────────────
 test/test_extracted_server_openssl_client: \
-  test/unit/test_extracted_server_openssl_client.c extract-server-driver-bundle \
+  test/unit/test_extracted_server_openssl_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
   $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
-	@rm -rf $(SERVER_DRIVER_BUNDLE_DIR)/obj
-	@mkdir -p $(SERVER_DRIVER_BUNDLE_DIR)/obj
-	@set -e; for src in $(SERVER_DRIVER_BUNDLE_DIR)/*.c; do \
-	  obj="$(SERVER_DRIVER_BUNDLE_DIR)/obj/$$(basename "$$src" .c).o"; \
-	  $(CC) $(CFLAGS_COMMON) \
-	    -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
-	    -c "$$src" -o "$$obj"; \
-	done
 	$(CC) $(CFLAGS_COMMON) \
-	  -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
-	  _extract/server_driver_bundle/obj/*.o \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/tls13_io_karamel.c \
