@@ -295,18 +295,12 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
           sizeof finished_key) != 0) {
     return 1;
   }
-  if (!tls13_hacl_finished_verify_data_sha256(
-          finished, server_handshake_traffic_secret, transcript_hash)) {
+  if (!tls13_hacl_hmac_sha256(
+          finished, finished_key, sizeof finished_key, transcript_hash, sizeof transcript_hash)) {
     fprintf(stderr, "failed to calculate RFC 8448 server Finished\n");
     return 1;
   }
   if (expect_bytes("RFC8448 server Finished", finished, expected_finished, sizeof finished) != 0) {
-    return 1;
-  }
-  if (tls13_hacl_finished_verify_data_sha256(NULL, server_handshake_traffic_secret, transcript_hash) ||
-      tls13_hacl_finished_verify_data_sha256(finished, NULL, transcript_hash) ||
-      tls13_hacl_finished_verify_data_sha256(finished, server_handshake_traffic_secret, NULL)) {
-    fprintf(stderr, "Finished helper accepted a null buffer\n");
     return 1;
   }
   return 0;
@@ -369,9 +363,7 @@ static int test_chacha20_poly1305_roundtrip(void) {
   uint8_t nonce[12];
   uint8_t aad[13];
   uint8_t plaintext[129];
-  uint8_t ciphertext[sizeof plaintext];
   uint8_t decrypted[sizeof plaintext];
-  uint8_t tag[16];
 
   for (size_t i = 0; i < sizeof key; ++i) key[i] = (uint8_t)i;
   for (size_t i = 0; i < sizeof nonce; ++i) nonce[i] = (uint8_t)(0xa0 + i);
@@ -379,28 +371,7 @@ static int test_chacha20_poly1305_roundtrip(void) {
   for (size_t i = 0; i < sizeof plaintext; ++i) plaintext[i] = (uint8_t)(i * 3u + 1u);
   memset(decrypted, 0, sizeof decrypted);
 
-  if (!tls13_hacl_chacha20_poly1305_seal(
-          ciphertext, tag, key, nonce, aad, sizeof aad, plaintext, sizeof plaintext)) {
-    fprintf(stderr, "chacha20-poly1305 seal failed\n");
-    return 1;
-  }
-  if (!tls13_hacl_chacha20_poly1305_open(
-          decrypted, key, nonce, aad, sizeof aad, ciphertext, sizeof ciphertext, tag)) {
-    fprintf(stderr, "chacha20-poly1305 open failed\n");
-    return 1;
-  }
-  if (expect_bytes("chacha20-poly1305 roundtrip", decrypted, plaintext, sizeof plaintext) != 0) {
-    return 1;
-  }
-  tag[0] ^= 1u;
-  if (tls13_hacl_chacha20_poly1305_open(
-          decrypted, key, nonce, aad, sizeof aad, ciphertext, sizeof ciphertext, tag)) {
-    fprintf(stderr, "chacha20-poly1305 accepted a tampered tag\n");
-    return 1;
-  }
-
   uint8_t combined[sizeof plaintext + 16];
-  memset(decrypted, 0, sizeof decrypted);
   if (!tls13_hacl_chacha20_poly1305_seal_combined(
           combined, sizeof combined, key, nonce, aad, sizeof aad, plaintext, sizeof plaintext)) {
     fprintf(stderr, "combined chacha20-poly1305 seal failed\n");

@@ -401,7 +401,6 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -skip-compilation \
 	  -add-include '<stdbool.h>' \
 	  -add-include '"krml/internal/compat.h"' \
-	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
@@ -426,7 +425,6 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -tmpdir $(SERVER_DRIVER_BUNDLE_DIR) \
 	  -skip-compilation \
 	  -warn-error -2-9-17-6 \
-	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
@@ -471,7 +469,6 @@ HACL_WRAPPER_SOURCES = \
 
 ECHO_STUB_SOURCES = \
   c_stubs/tls13_crypto_external.c \
-  c_stubs/tls13_pulse_shims.c \
   c_stubs/tls13_io_karamel.c \
   c_stubs/tls13_io_stubs.c \
   c_stubs/tls13_openssl_karamel.c \
@@ -528,7 +525,6 @@ test/test_extracted_client_openssl_echo: \
 	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
 	  _extract/driver_bundle/*.c \
 	  c_stubs/tls13_crypto_external.c \
-	  c_stubs/tls13_pulse_shims.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/tls13_io_karamel.c \
 	  c_stubs/tls13_io_stubs.c \

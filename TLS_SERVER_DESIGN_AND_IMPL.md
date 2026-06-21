@@ -2762,8 +2762,8 @@ Checklist:
       credential files by path in the first verified API.
 - [x] Use concrete C stub names
       `c_stubs/tls13_openssl_karamel.c/.h`, `c_stubs/tls13_io_karamel.c/.h`,
-      and `c_stubs/tls13_io_stubs.c/.h`; generated bounds aliases live in
-      `c_stubs/tls13_generated_shims.h`.
+      and `c_stubs/tls13_io_stubs.c/.h`; generated bounds now use their
+      extracted `_sz` constants directly.
 - [x] Add server-driver extraction targets:
       `extract-server-driver-krml` and `extract-server-driver-bundle`.
 - [ ] Add any separate non-driver server-core extraction target if later needed.

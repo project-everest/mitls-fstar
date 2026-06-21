@@ -114,23 +114,6 @@ bool tls13_hacl_hkdf_expand_label_sha256(
   return tls13_hacl_hkdf_expand_sha256(out, out_len, prk, info, info_len);
 }
 
-bool tls13_hacl_finished_verify_data_sha256(
-    uint8_t out[32],
-    const uint8_t base_key[32],
-    const uint8_t transcript_hash[32]) {
-  static const uint8_t label[] = {'f', 'i', 'n', 'i', 's', 'h', 'e', 'd'};
-  uint8_t finished_key[32];
-
-  if (out == NULL || base_key == NULL || transcript_hash == NULL) {
-    return false;
-  }
-  if (!tls13_hacl_hkdf_expand_label_sha256(
-          finished_key, sizeof finished_key, base_key, label, sizeof label, NULL, 0)) {
-    return false;
-  }
-  return tls13_hacl_hmac_sha256(out, finished_key, sizeof finished_key, transcript_hash, 32);
-}
-
 bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]) {
   if (out == NULL || sk == NULL) {
     return false;
@@ -158,7 +141,7 @@ bool tls13_record_nonce(uint8_t out[12], const uint8_t static_iv[12], uint64_t s
   return true;
 }
 
-bool tls13_hacl_chacha20_poly1305_seal(
+static bool tls13_hacl_chacha20_poly1305_seal(
     uint8_t *ciphertext,
     uint8_t tag[16],
     const uint8_t key[32],
@@ -184,7 +167,7 @@ bool tls13_hacl_chacha20_poly1305_seal(
   return true;
 }
 
-bool tls13_hacl_chacha20_poly1305_open(
+static bool tls13_hacl_chacha20_poly1305_open(
     uint8_t *plaintext,
     const uint8_t key[32],
     const uint8_t nonce[12],

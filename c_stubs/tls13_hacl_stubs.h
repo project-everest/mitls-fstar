@@ -39,36 +39,11 @@ bool tls13_hacl_hkdf_expand_label_sha256(
     const uint8_t *context,
     size_t context_len);
 
-bool tls13_hacl_finished_verify_data_sha256(
-    uint8_t out[32],
-    const uint8_t base_key[32],
-    const uint8_t transcript_hash[32]);
-
 bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]);
 
 bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8_t pk[32]);
 
 bool tls13_record_nonce(uint8_t out[12], const uint8_t static_iv[12], uint64_t sequence_number);
-
-bool tls13_hacl_chacha20_poly1305_seal(
-    uint8_t *ciphertext,
-    uint8_t tag[16],
-    const uint8_t key[32],
-    const uint8_t nonce[12],
-    const uint8_t *aad,
-    size_t aad_len,
-    const uint8_t *plaintext,
-    size_t plaintext_len);
-
-bool tls13_hacl_chacha20_poly1305_open(
-    uint8_t *plaintext,
-    const uint8_t key[32],
-    const uint8_t nonce[12],
-    const uint8_t *aad,
-    size_t aad_len,
-    const uint8_t *ciphertext,
-    size_t ciphertext_len,
-    const uint8_t tag[16]);
 
 bool tls13_hacl_chacha20_poly1305_seal_combined(
     uint8_t *ciphertext_and_tag,

@@ -73,7 +73,6 @@ digraph TLS13Architecture {
     MachineTypes [label="TLS13.MachineTypes.fsti\nmachine/runtime types", fillcolor="#ffe8e8", color="#c9342c"];
     CryptoC [label="tls13_crypto_external.c\nHACL glue", fillcolor="#ffe8e8", color="#c9342c"];
     X509C [label="tls13_openssl_stubs.c\nOpenSSL validation/signature checks", fillcolor="#ffe8e8", color="#c9342c"];
-    PulseShims [label="tls13_pulse_shims.c\nextraction support", fillcolor="#ffe8e8", color="#c9342c"];
     HACL [label="HACL* C snapshot", fillcolor="#ffe8e8", color="#c9342c"];
     OpenSSL [label="OpenSSL library", fillcolor="#ffe8e8", color="#c9342c"];
     Runtime [label="KaRaMeL/Pulse/C runtime,\nallocator, compiler, libc", fillcolor="#eeeeee", color="#777777"];
@@ -134,8 +133,6 @@ digraph TLS13Architecture {
   X509ABI -> X509C;
   CryptoC -> HACL;
   X509C -> OpenSSL;
-  CryptoC -> PulseShims;
-  PulseShims -> Runtime;
 
   ImplMessages -> Messages [style=dashed, label="L/M validity", color="#777777"];
   Parser -> WireSpec [style=dashed, label="postconditions", color="#777777"];

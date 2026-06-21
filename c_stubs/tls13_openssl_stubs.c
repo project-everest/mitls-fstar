@@ -126,25 +126,6 @@ done:
   return ok;
 }
 
-bool tls13_openssl_validate_chain_pem(
-    const char *hostname,
-    const uint8_t *trust_anchor_pem,
-    size_t trust_anchor_pem_len,
-    const uint8_t *chain_pem,
-    size_t chain_pem_len,
-    tls13_peer_identity **out_peer) {
-  if (hostname == NULL || trust_anchor_pem == NULL || chain_pem == NULL || out_peer == NULL ||
-      trust_anchor_pem_len > INT_MAX || chain_pem_len > INT_MAX) {
-    return false;
-  }
-
-  X509 *leaf = NULL;
-  leaf = read_single_cert_pem(chain_pem, chain_pem_len);
-  bool ok = validate_leaf_cert(hostname, trust_anchor_pem, trust_anchor_pem_len, leaf, out_peer);
-  X509_free(leaf);
-  return ok;
-}
-
 bool tls13_openssl_validate_leaf_der(
     const char *hostname,
     const uint8_t *trust_anchor_pem,

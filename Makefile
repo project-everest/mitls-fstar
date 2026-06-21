@@ -519,7 +519,6 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -static-header TLS13.Impl.Serializer \
 	  -add-include '<stdbool.h>' \
 	  -add-include '"krml/internal/compat.h"' \
-	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
@@ -546,7 +545,6 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -skip-compilation \
 	  -static-header TLS13.Impl.Serializer \
 	  -warn-error -2-9-17-6 \
-	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
@@ -599,7 +597,6 @@ ECHO_STUB_SOURCES = \
 
 ECHO_STUB_HEADERS = \
   c_stubs/tls13_crypto_external.h \
-  c_stubs/tls13_generated_shims.h \
   c_stubs/tls13_hacl_stubs.h \
   c_stubs/tls13_io_karamel.h \
   c_stubs/tls13_io_stubs.h \
@@ -651,7 +648,6 @@ test/test_extracted_client_openssl_echo: \
 	  obj="$(DRIVER_BUNDLE_DIR)/obj/$$(basename "$$src" .c).o"; \
 	  $(CC) $(CFLAGS_COMMON) \
 	    -I_extract/driver_bundle -I_extract/driver_bundle/internal \
-	    -include c_stubs/tls13_generated_shims.h \
 	    -c "$$src" -o "$$obj"; \
 	done
 	$(CC) $(CFLAGS_COMMON) \
@@ -708,7 +704,6 @@ test/test_extracted_server_openssl_client: \
 	  obj="$(SERVER_DRIVER_BUNDLE_DIR)/obj/$$(basename "$$src" .c).o"; \
 	  $(CC) $(CFLAGS_COMMON) \
 	    -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
-	    -include c_stubs/tls13_generated_shims.h \
 	    -c "$$src" -o "$$obj"; \
 	done
 	$(CC) $(CFLAGS_COMMON) \
