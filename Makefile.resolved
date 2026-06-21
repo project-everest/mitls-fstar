@@ -402,7 +402,6 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -add-include '<stdbool.h>' \
 	  -add-include '"krml/internal/compat.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
-	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
@@ -428,7 +427,6 @@ extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDL
 	  -skip-compilation \
 	  -warn-error -2-9-17-6 \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
-	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
@@ -486,8 +484,7 @@ ECHO_STUB_HEADERS = \
   c_stubs/tls13_io_karamel.h \
   c_stubs/tls13_io_stubs.h \
   c_stubs/tls13_openssl_karamel.h \
-  c_stubs/tls13_openssl_stubs.h \
-  c_stubs/tls13_spec_types.h
+  c_stubs/tls13_openssl_stubs.h
 
 # Common C flags for all test builds
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \

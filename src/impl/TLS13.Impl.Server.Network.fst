@@ -1488,15 +1488,13 @@ fn process_network_bytes
                     lch.IM.client_hello_server_name_len
                     ch;
                 assert (pure (SZ.fits Bounds.max_client_hello_len));
-                let max_client_hello_len_sz =
-                  SZ.uint_to_t Bounds.max_client_hello_len;
                 let fragment_fits =
                   CM.sizet_lte_plain
                     decoded_buffer.IM.decoded_buffer_fragment_len
-                    max_client_hello_len_sz;
+                    Bounds.max_client_hello_len_sz;
                 CM.lemma_sizet_lte_plain
                   decoded_buffer.IM.decoded_buffer_fragment_len
-                  max_client_hello_len_sz;
+                  Bounds.max_client_hello_len_sz;
                 fold (IM.is_valid_client_hello lch ch);
                 if fragment_fits {
                   assert (pure (SZ.v decoded_buffer.IM.decoded_buffer_fragment_len <=

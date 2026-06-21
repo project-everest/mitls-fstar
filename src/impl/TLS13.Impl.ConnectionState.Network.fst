@@ -665,7 +665,7 @@ fn mark_received_client_hello
   V.to_array_pts_to lch.IM.client_hello_server_name;
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_server_name;
   Arr.memcpy
-    (SZ.uint_to_t max_hostname_len)
+    max_hostname_len_sz
     (V.vec_to_array lch.IM.client_hello_server_name)
     (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_server_name);
   V.to_vec_pts_to lch.IM.client_hello_server_name;
@@ -683,7 +683,7 @@ fn mark_received_client_hello
   V.to_array_pts_to lch.IM.client_hello_cipher_suites;
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
   Arr.memcpy
-    (SZ.uint_to_t max_cipher_suites)
+    max_cipher_suites_sz
     (V.vec_to_array lch.IM.client_hello_cipher_suites)
     (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_cipher_suites);
   V.to_vec_pts_to lch.IM.client_hello_cipher_suites;
@@ -692,7 +692,7 @@ fn mark_received_client_hello
   V.to_array_pts_to lch.IM.client_hello_signature_schemes;
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
   Arr.memcpy
-    (SZ.uint_to_t max_signature_schemes)
+    max_signature_schemes_sz
     (V.vec_to_array lch.IM.client_hello_signature_schemes)
     (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_signature_schemes);
   V.to_vec_pts_to lch.IM.client_hello_signature_schemes;

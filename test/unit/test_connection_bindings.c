@@ -103,7 +103,7 @@ static int install_server_handshake_sealer(
   return install_server_sealer(
       sealer,
       c.handshake.keys.server_handshake_traffic,
-      TLS13_Record_Spec_HandshakeEpoch,
+      TLS13_Record_Spec_Handshake,
       label);
 }
 
@@ -114,7 +114,7 @@ static int install_server_application_sealer(
   return install_server_sealer(
       sealer,
       c.handshake.keys.server_application_traffic,
-      TLS13_Record_Spec_ApplicationEpoch,
+      TLS13_Record_Spec_Application,
       label);
 }
 
