@@ -12,7 +12,7 @@
 
 1. **Merge Executed**: 226 files changed, 12 conflicts resolved
 2. **All Conflicts Resolved Systematically**:
-   - ✅ Makefile: Merged EverParse infrastructure with SERVER_DRIVER_BUNDLE targets
+   - ✅ Makefile: Merged EverParse infrastructure with server extraction support, now consolidated into the unified TLS13 bundle
    - ✅ Wire.Spec.fst: Took main's EverParse refactored version
    - ✅ Record.fst/.fsti: Merged both - kept seq_eq/application_keys_match + has_seal_keys
    - ✅ ConnectionState files: Merged server predicates with EverParse changes
@@ -82,14 +82,14 @@ make check-admits       # Ensure no new admits
 ### Steps
 
 ```bash
-make extract-bundle          # Extract client with verified parsers
+make extract-tls13-bundle    # Extract unified client/server driver bundle
 make test-openssl-echo       # Client interop
 make test-openssl-sclient    # Client s_client test
 ```
 
-**For Server** (still using c_stubs temporarily):
+**For Server**:
 ```bash
-make extract-server-driver-bundle
+make extract-tls13-bundle
 make test-extracted-server-driver-slice
 make test-extracted-server-openssl-client
 ```

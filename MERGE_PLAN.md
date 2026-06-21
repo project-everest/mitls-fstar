@@ -213,7 +213,7 @@ This is a **major merge** (~288 file changes) that will:
      - `TLS13.Impl.Driver.Pairing.fst/.fsti`
      - `TLS13.Spec.WireFormatLemmas.fsti`
      - `AUDIT_0616.md`, `STATUS_SERVER.md`, `TLS_SERVER_DESIGN_AND_IMPL.md`
-     - Server Makefile extraction targets
+     - Unified client/server Makefile extraction target
      - Server C runtime and tests
 
 ### Phase 2: Restore Build and Verification
@@ -254,7 +254,7 @@ This is a **major merge** (~288 file changes) that will:
 
 11. **Client Extraction**
     ```bash
-    make extract-bundle  # Should now use verified parser/serializer
+    make extract-tls13-bundle  # Should now use verified parser/serializer
     ```
 
 12. **Client Interop Tests**

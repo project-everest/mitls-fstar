@@ -512,7 +512,7 @@ make verify
 make check-c-stubs
 
 # generate extracted C
-make extract-bundle
+make extract-tls13-bundle
 
 # local OpenSSL TLS 1.3 interop
 make test-openssl-echo

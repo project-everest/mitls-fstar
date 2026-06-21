@@ -148,8 +148,8 @@ verify-generated: | check-toolchain
 # Extract the generated parsers and serializers to C (standalone library) via
 # KaRaMeL.  Output lands in generated/out/*.c,*.h.  Consumers must call
 # krmlinit_globals() at startup to initialise the enum lookup tables (the
-# parsers/serializers library is what the verified client links against; the
-# client driver wires krmlinit_globals — see extract-driver-bundle).
+# parsers/serializers library is what the verified drivers link against; the
+# C driver wrappers wire krmlinit_globals.
 #
 # Depends on $(GENERATED_STAMP): verification happens there (once).  The `verify`
 # goal below is then satisfied by the preserved $(GENERATED_DIR)/cache, so this
@@ -244,8 +244,7 @@ EXTRACT_MODULES = \
 KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(EXTRACT_MODULES)))
 
 .PHONY: extract-krml extract-connection extract-smoke \
-  extract-driver-krml extract-server-driver-krml extract-tls13-driver-krml \
-  extract-driver-bundle extract-server-driver-bundle extract-tls13-bundle
+  extract-tls13-driver-krml extract-tls13-bundle
 
 extract-krml: $(KRML_FILES)
 
@@ -359,7 +358,7 @@ TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
-DRIVER_IMPL_MODULES = \
+CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -384,9 +383,9 @@ DRIVER_IMPL_MODULES = \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Client
-DRIVER_KRML_FILES = \
+CLIENT_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(DRIVER_IMPL_MODULES))) \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES))) \
   $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
@@ -443,9 +442,9 @@ SERVER_DRIVER_KRML_FILES = \
   $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
-TLS13_DRIVER_KRML_FILES = \
-  $(DRIVER_KRML_FILES) \
-  $(filter-out $(DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
+TLS13_BUNDLE_KRML_FILES = \
+  $(CLIENT_DRIVER_KRML_FILES) \
+  $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
 # Extract FStar.Pervasives.Native for tuple support
@@ -502,18 +501,11 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 
 extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
-extract-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
-
-extract-server-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
-
 extract-tls13-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
 
 $(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | $(OUTPUT_DIR)
-	$(MAKE) $(TLS13_DRIVER_KRML_FILES)
+	$(MAKE) $(TLS13_BUNDLE_KRML_FILES)
 	@touch $@
-
-extract-bundle: extract-tls13-bundle
-	@echo "Extracted TLS13 client/server driver bundle to $(TLS13_BUNDLE_DIR)"
 
 $(BUNDLE_DIR):
 	mkdir -p $@
@@ -545,12 +537,8 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
 	  -warn-error -2-9-17-6 \
-	  $(TLS13_DRIVER_KRML_FILES)
+	  $(TLS13_BUNDLE_KRML_FILES)
 	@touch $@
-
-extract-driver-bundle: extract-tls13-bundle
-
-extract-server-driver-bundle: extract-tls13-bundle
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
 
@@ -747,7 +735,8 @@ clean:
 	  test/openssl_echo_server.log
 	find src test -name '*.checked' -delete
 
-.PHONY: all verify test extract-krml extract-connection extract-smoke extract-bundle \
+.PHONY: all verify test extract-krml extract-connection extract-smoke \
+  extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-openssl-sclient \
   check-c-stubs check-toolchain check-deps clean

@@ -1174,7 +1174,7 @@ problematic switch-branch call sites without weakening the public network theore
 surface. Proof-only response predicates in `TLS13.Impl.Server.Types` are marked
 `noextract`, and the setup/start delta is kept erased, reducing proof artifacts
 in generated C. The server driver bundle target
-`extract-server-driver-bundle` now extracts the full top-level driver facade and
+`extract-tls13-bundle` now extracts the full top-level driver facade and
 emits prefixed C symbols for only the intended public API:
 `TLS13_Impl_Server_Driver_new_server`, `accept`, `send`, `receive`, and `close`.
 `test-extracted-server-driver-slice` compiles that bundle with the IO/OpenSSL C
@@ -1949,7 +1949,7 @@ Validation:
 
 - [ ] `make verify`
 - [ ] `make check-admits`
-- [ ] `make extract-driver-bundle`
+- [ ] `make extract-tls13-bundle`
 - [ ] `make test-extracted-client-driver-slice`
 - [ ] `make test-openssl-echo`
 
@@ -2765,7 +2765,7 @@ Checklist:
       and `c_stubs/tls13_io_stubs.c/.h`; generated bounds now use their
       extracted `_sz` constants directly.
 - [x] Add server-driver extraction targets:
-      `extract-server-driver-krml` and `extract-server-driver-bundle`.
+      `extract-tls13-driver-krml` and `extract-tls13-bundle`.
 - [ ] Add any separate non-driver server-core extraction target if later needed.
 - [x] Add `test-extracted-server-driver-slice`.
 - [x] Add `test-openssl-sclient` harness.

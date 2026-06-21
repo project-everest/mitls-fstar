@@ -54,7 +54,7 @@ different toolchain when invoking `make`.
 make parsers         # QuackyDucky: regenerate, verify, and extract the TLS wire
                      #   parsers/serializers from tls.qd.rfc (generated/)
 make verify          # verify all F*/Pulse modules
-make extract-bundle  # extract the OpenSSL echo client driver bundle
+make extract-tls13-bundle  # extract the unified client/server driver bundle
 make test            # verify, check echo stubs, and run OpenSSL echo interop
 ```
 
