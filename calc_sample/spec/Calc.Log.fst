@@ -3,6 +3,11 @@ module Calc.Log
 (**
   Ghost log with monotonic references for calc sample.
   Demonstrates wire-to-semantic correspondence pattern with full byte parsing.
+
+  The per-message leaf codec (parse_request / serialize_response) is the
+  QuackyDucky-generated parser/serializer (Calc.Wire.Generated.{Request,Response});
+  this module supplies only the calc-specific stream/log framing on top of it
+  (parse_requests / serialize_responses / all_parse) plus the monotonic ghost log.
 **)
 
 module L = FStar.List.Tot
@@ -10,14 +15,35 @@ open FStar.List.Tot
 open Calc.Spec
 module Seq = FStar.Seq
 module R = FStar.ReflexiveTransitiveClosure
-open Calc.Wire
 open FStar.Preorder
 
-type bytes = Seq.seq FStar.UInt8.t
+module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module LP = LowParse.Spec
+open Calc.Wire.Generated.OpType
+open Calc.Wire.Generated.Request
+open Calc.Wire.Generated.RespType
+open Calc.Wire.Generated.Response
+
+type bytes = Seq.seq U8.t
+
+(** Per-message leaf codec, via the generated QuackyDucky parser/serializer.
+    Both messages are constant 5-byte (request_parser_kind/response_parser_kind
+    are strong_parser_kind 5 5), so parse on a 5-byte buffer consumes exactly 5
+    and serialize produces exactly 5. **)
+
+let parse_request (b: bytes{Seq.length b == 5}) : GTot (option request) =
+  match LP.parse request_parser b with
+  | Some (r, _) -> Some r
+  | None -> None
+
+let serialize_response (r: response) : GTot (b: bytes{Seq.length b == 5}) =
+  LP.serialize_length response_serializer r;
+  LP.serialize response_serializer r
 
 (** Parse sequence of request bytes (each request is 5 bytes) **)
-let rec parse_requests (b: bytes) 
-  : Tot (list request) (decreases (Seq.length b))
+let rec parse_requests (b: bytes)
+  : GTot (list request) (decreases (Seq.length b))
   =
   if Seq.length b < 5 then []
   else
@@ -28,16 +54,16 @@ let rec parse_requests (b: bytes)
     | Some req -> req :: parse_requests rest
 
 (** Serialize sequence of responses (each response is 5 bytes) **)
-let rec serialize_responses (resps: list response) 
-  : Tot bytes (decreases resps)
+let rec serialize_responses (resps: list response)
+  : GTot bytes (decreases resps)
   =
   match resps with
   | [] -> Seq.empty
   | r :: rs -> Seq.append (serialize_response r) (serialize_responses rs)
 
 (** All messages in bytes parse successfully **)
-let rec all_parse (b: bytes{Seq.length b % 5 == 0}) 
-  : Tot prop (decreases (Seq.length b))
+let rec all_parse (b: bytes{Seq.length b % 5 == 0})
+  : GTot prop (decreases (Seq.length b))
   =
   if Seq.length b < 5 then True
   else
@@ -49,7 +75,7 @@ let rec all_parse (b: bytes{Seq.length b % 5 == 0})
 noeq
 type calc_log = {
   input_bytes: bytes;           // All request bytes received
-  output_bytes: bytes;          // All response bytes sent  
+  output_bytes: bytes;          // All response bytes sent
   requests: list request;       // Parsed requests
   responses: list response;     // Responses sent
   current_state: calc_stack;    // Current stack state
@@ -64,11 +90,11 @@ let initial_log : calc_log = {
   current_state = [];
 }
 
-(** 
+(**
   Log consistency: Full wire-to-semantic correspondence
-  
+
   1. input_bytes parses to requests
-  2. output_bytes serializes responses  
+  2. output_bytes serializes responses
   3. current_state matches running requests through state machine
   4. responses match state machine outputs
 **)
@@ -86,12 +112,16 @@ let log_consistent (log:calc_log) : prop =
   parse_requests log.input_bytes == log.requests /\
   serialize_responses log.responses `Seq.equal` log.output_bytes
 
-(** Update log for Push operation **)
-let step_log_push (value: int) (req_bytes: bytes{Seq.length req_bytes == 5})
-                  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-                  (log: calc_log)
+(** Update the log for one processed request.
+
+    Because the generated request type is a uniform record { op; operand }, a
+    single step_log handles every operation (the dispatch happens inside step),
+    replacing the six per-op step_log_* of the hand-written codec. **)
+let step_log (req: request)
+             (req_bytes: bytes{Seq.length req_bytes == 5})
+             (resp_bytes: bytes{Seq.length resp_bytes == 5})
+             (log: calc_log)
   : calc_log =
-  let req = Push value in
   let (new_state, response) = step log.current_state req in
   {
     input_bytes = Seq.append log.input_bytes req_bytes;
@@ -101,108 +131,13 @@ let step_log_push (value: int) (req_bytes: bytes{Seq.length req_bytes == 5})
     current_state = new_state;
   }
 
-(** Update log for Peek operation **)
-let step_log_peek (req_bytes: bytes{Seq.length req_bytes == 5})
-                  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-                  (log: calc_log)
-  : calc_log =
-  let req = Peek in
-  let (new_state, response) = step log.current_state req in
-  {
-    input_bytes = Seq.append log.input_bytes req_bytes;
-    output_bytes = Seq.append log.output_bytes resp_bytes;
-    requests = log.requests @ [req];
-    responses = log.responses @ [response];
-    current_state = new_state;
-  }
-
-(** Update log for Add operation **)
-let step_log_add (req_bytes: bytes{Seq.length req_bytes == 5})
-                 (resp_bytes: bytes{Seq.length resp_bytes == 5})
-                 (log: calc_log)
-  : calc_log =
-  let req = Add in
-  let (new_state, response) = step log.current_state req in
-  {
-    input_bytes = Seq.append log.input_bytes req_bytes;
-    output_bytes = Seq.append log.output_bytes resp_bytes;
-    requests = log.requests @ [req];
-    responses = log.responses @ [response];
-    current_state = new_state;
-  }
-
-(** Update log for Sub operation **)
-let step_log_sub (req_bytes: bytes{Seq.length req_bytes == 5})
-                 (resp_bytes: bytes{Seq.length resp_bytes == 5})
-                 (log: calc_log)
-  : calc_log =
-  let req = Sub in
-  let (new_state, response) = step log.current_state req in
-  {
-    input_bytes = Seq.append log.input_bytes req_bytes;
-    output_bytes = Seq.append log.output_bytes resp_bytes;
-    requests = log.requests @ [req];
-    responses = log.responses @ [response];
-    current_state = new_state;
-  }
-
-(** Update log for Mul operation **)
-let step_log_mul (req_bytes: bytes{Seq.length req_bytes == 5})
-                 (resp_bytes: bytes{Seq.length resp_bytes == 5})
-                 (log: calc_log)
-  : calc_log =
-  let req = Mul in
-  let (new_state, response) = step log.current_state req in
-  {
-    input_bytes = Seq.append log.input_bytes req_bytes;
-    output_bytes = Seq.append log.output_bytes resp_bytes;
-    requests = log.requests @ [req];
-    responses = log.responses @ [response];
-    current_state = new_state;
-  }
-
-(** Update log for Div operation **)
-let step_log_div (req_bytes: bytes{Seq.length req_bytes == 5})
-                 (resp_bytes: bytes{Seq.length resp_bytes == 5})
-                 (log: calc_log)
-  : calc_log =
-  let req = Div in
-  let (new_state, response) = step log.current_state req in
-  {
-    input_bytes = Seq.append log.input_bytes req_bytes;
-    output_bytes = Seq.append log.output_bytes resp_bytes;
-    requests = log.requests @ [req];
-    responses = log.responses @ [response];
-    current_state = new_state;
-  }
-
-(** Define single-step evolution relation **)
+(** Single-step evolution relation **)
 let log_single_step : R.binrel calc_log =
   fun log0 log1 ->
-    // Push
-    (exists (value:int) (req_bytes:bytes{Seq.length req_bytes == 5})
-                        (resp_bytes:bytes{Seq.length resp_bytes == 5}).
-       log1 == step_log_push value req_bytes resp_bytes log0) \/
-    // Peek
-    (exists (req_bytes:bytes{Seq.length req_bytes == 5})
+    (exists (req:request)
+            (req_bytes:bytes{Seq.length req_bytes == 5})
             (resp_bytes:bytes{Seq.length resp_bytes == 5}).
-       log1 == step_log_peek req_bytes resp_bytes log0) \/
-    // Add
-    (exists (req_bytes:bytes{Seq.length req_bytes == 5})
-            (resp_bytes:bytes{Seq.length resp_bytes == 5}).
-       log1 == step_log_add req_bytes resp_bytes log0) \/
-    // Sub
-    (exists (req_bytes:bytes{Seq.length req_bytes == 5})
-            (resp_bytes:bytes{Seq.length resp_bytes == 5}).
-       log1 == step_log_sub req_bytes resp_bytes log0) \/
-    // Mul
-    (exists (req_bytes:bytes{Seq.length req_bytes == 5})
-            (resp_bytes:bytes{Seq.length resp_bytes == 5}).
-       log1 == step_log_mul req_bytes resp_bytes log0) \/
-    // Div
-    (exists (req_bytes:bytes{Seq.length req_bytes == 5})
-            (resp_bytes:bytes{Seq.length resp_bytes == 5}).
-       log1 == step_log_div req_bytes resp_bytes log0)
+       log1 == step_log req req_bytes resp_bytes log0)
 
 (** Preorder for monotonic ghost reference **)
 let log_evolves : preorder calc_log = R.closure log_single_step
@@ -221,7 +156,7 @@ val lemma_run_extend
   (s'':calc_stack)
   (resp:response)
   : Lemma
-      (requires 
+      (requires
         run s reqs == (s', resps) /\
         step s' req == (s'', resp))
       (ensures
@@ -249,13 +184,14 @@ let rec lemma_serialize_responses_length resps =
 
 (** Helper lemma: parse_requests on a single 5-byte message **)
 val lemma_parse_requests_single
-  (bytes: bytes{Seq.length bytes == 5})
+  (b: bytes{Seq.length b == 5})
   (req: request)
-  : Lemma 
-      (requires parse_request bytes == Some req)
-      (ensures parse_requests bytes == [req])
+  : Lemma
+      (requires parse_request b == Some req)
+      (ensures parse_requests b == [req])
 
-let lemma_parse_requests_single bytes req = ()
+let lemma_parse_requests_single b req =
+  Seq.lemma_eq_intro (Seq.slice b 0 5) b
 
 (** Helper lemma: serializing a list appends the serializations **)
 val lemma_serialize_responses_append
@@ -269,12 +205,6 @@ let rec lemma_serialize_responses_append resps1 resps2 =
   | [] -> ()
   | r :: rest ->
       lemma_serialize_responses_append rest resps2
-      // serialize_responses ((r :: rest) @ resps2)
-      // = serialize_response r ++ serialize_responses (rest @ resps2)
-      // = serialize_response r ++ (serialize_responses rest ++ serialize_responses resps2)
-      // = (serialize_response r ++ serialize_responses rest) ++ serialize_responses resps2
-      // = serialize_responses (r :: rest) ++ serialize_responses resps2
-      // Append is associative by definition on sequences
 
 (** Helper lemma: serialize_responses of a singleton list **)
 val lemma_serialize_responses_single
@@ -301,14 +231,17 @@ val lemma_parse_requests_append_one
   (bytes1: bytes{Seq.length bytes1 % 5 == 0})
   (msg_bytes: bytes{Seq.length msg_bytes == 5})
   (req: request)
-  : Lemma 
+  : Lemma
       (requires parse_request msg_bytes == Some req /\ all_parse bytes1)
       (ensures parse_requests (Seq.append bytes1 msg_bytes) == parse_requests bytes1 @ [req])
       (decreases (Seq.length bytes1))
 
 #push-options "--z3rlimit 30 --fuel 2 --ifuel 1"
 let rec lemma_parse_requests_append_one bytes1 msg_bytes req =
-  if Seq.length bytes1 < 5 then ()
+  if Seq.length bytes1 < 5 then begin
+    Seq.lemma_eq_intro (Seq.append bytes1 msg_bytes) msg_bytes;
+    lemma_parse_requests_single msg_bytes req
+  end
   else begin
     lemma_slice_append_prefix bytes1 msg_bytes;
     FStar.Seq.Properties.lemma_slice_first_in_append bytes1 msg_bytes 5;
@@ -330,7 +263,8 @@ val lemma_all_parse_append
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 20"
 let rec lemma_all_parse_append b1 b2 =
-  if Seq.length b1 < 5 then ()
+  if Seq.length b1 < 5 then
+    Seq.lemma_eq_intro (Seq.append b1 b2) b2
   else begin
     let msg1 = Seq.slice b1 0 5 in
     let rest1 = Seq.slice b1 5 (Seq.length b1) in
@@ -340,46 +274,45 @@ let rec lemma_all_parse_append b1 b2 =
   end
 #pop-options
 
-(** Lemma: step_log_push preserves consistency **)
-val lemma_step_log_push_consistent
-  (value: int)
+(** Lemma: step_log preserves consistency (uniform over the request) **)
+val lemma_step_log_consistent
+  (req: request)
   (req_bytes: bytes{Seq.length req_bytes == 5})
   (resp_bytes: bytes{Seq.length resp_bytes == 5})
   (log: calc_log{log_consistent log})
-  : Lemma 
-      (requires 
-        parse_request req_bytes == Some (Push value) /\
-        serialize_response (snd (step log.current_state (Push value))) `Seq.equal` resp_bytes)
-      (ensures log_consistent (step_log_push value req_bytes resp_bytes log))
+  : Lemma
+      (requires
+        parse_request req_bytes == Some req /\
+        serialize_response (snd (step log.current_state req)) `Seq.equal` resp_bytes)
+      (ensures log_consistent (step_log req req_bytes resp_bytes log))
 
-let lemma_step_log_push_consistent value req_bytes resp_bytes log =
-  let new_log = step_log_push value req_bytes resp_bytes log in
-  let req = Push value in
+let lemma_step_log_consistent req req_bytes resp_bytes log =
+  let new_log = step_log req req_bytes resp_bytes log in
   let (new_state, spec_resp) = step log.current_state req in
-  
-  // Get existing state and responses
+
+  // Existing state and responses
   let (old_state, old_resps) = run [] log.requests in
   assert (old_state == log.current_state);
   assert (old_resps == log.responses);
-  
-  // Prove extended run (semantic consistency)
+
+  // Semantic consistency: extend the run by one request
   lemma_run_extend [] log.requests req old_state old_resps new_state spec_resp;
   assert (run [] (log.requests @ [req]) == (new_state, old_resps @ [spec_resp]));
-  
-  // Prove wire-to-semantic correspondence for requests
+
+  // Wire-to-semantic correspondence for requests
   lemma_parse_requests_single req_bytes req;
   lemma_parse_requests_append_one log.input_bytes req_bytes req;
   assert (parse_requests new_log.input_bytes == new_log.requests);
-  
+
   // Length invariants (needed for all_parse refinement)
   assert (Seq.length new_log.input_bytes % 5 == 0);
   assert (Seq.length new_log.output_bytes % 5 == 0);
-  
-  // Prove all_parse for new log
+
+  // all_parse for the new log
   lemma_all_parse_append log.input_bytes req_bytes;
   assert (all_parse new_log.input_bytes);
-  
-  // Prove wire-to-semantic correspondence for responses
+
+  // Wire-to-semantic correspondence for responses
   lemma_serialize_responses_single spec_resp;
   lemma_serialize_responses_append log.responses [spec_resp];
   assert (serialize_responses new_log.responses `Seq.equal` new_log.output_bytes)
@@ -388,237 +321,12 @@ let lemma_step_log_push_consistent value req_bytes resp_bytes log =
 val lemma_initial_log_consistent : unit -> Lemma (log_consistent initial_log)
 let lemma_initial_log_consistent () = ()
 
-(** Lemma: step_log_push produces evolution **)
-val lemma_step_log_push_evolves
-  (value: int)
+(** Lemma: step_log produces a single-step evolution **)
+val lemma_step_log_evolves
+  (req: request)
   (req_bytes: bytes{Seq.length req_bytes == 5})
   (resp_bytes: bytes{Seq.length resp_bytes == 5})
   (log: calc_log)
-  : Lemma (log_single_step log (step_log_push value req_bytes resp_bytes log))
+  : Lemma (log_single_step log (step_log req req_bytes resp_bytes log))
 
-let lemma_step_log_push_evolves value req_bytes resp_bytes log = ()
-
-(** Lemma: step_log_push preserves wire-to-semantic correspondence **)
-val lemma_step_log_push_properties
-  (value: int)
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log{log_consistent log})
-  : Lemma 
-      (requires
-        parse_request req_bytes == Some (Push value) /\
-        serialize_response (snd (step log.current_state (Push value))) `Seq.equal` resp_bytes)
-      (ensures (
-        let log1 = step_log_push value req_bytes resp_bytes log in
-        log1.input_bytes `Seq.equal` Seq.append log.input_bytes req_bytes /\
-        log1.output_bytes `Seq.equal` Seq.append log.output_bytes resp_bytes /\
-        log_consistent log1
-      ))
-
-let lemma_step_log_push_properties value req_bytes resp_bytes log =
-  lemma_step_log_push_consistent value req_bytes resp_bytes log
-
-(** Lemma: step_log_peek preserves consistency **)
-val lemma_step_log_peek_consistent
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log{log_consistent log})
-  : Lemma
-      (requires
-        parse_request req_bytes == Some Peek /\
-        serialize_response (snd (step log.current_state Peek)) `Seq.equal` resp_bytes)
-      (ensures log_consistent (step_log_peek req_bytes resp_bytes log))
-
-let lemma_step_log_peek_consistent req_bytes resp_bytes log =
-  let new_log = step_log_peek req_bytes resp_bytes log in
-  let req = Peek in
-  let (new_state, spec_resp) = step log.current_state req in
-  
-  // Get existing state and responses
-  let (old_state, old_resps) = run [] log.requests in
-  assert (old_state == log.current_state);
-  assert (old_resps == log.responses);
-  
-  // Prove extended run (semantic consistency)
-  lemma_run_extend [] log.requests req old_state old_resps new_state spec_resp;
-  
-  // Prove wire-to-semantic correspondence for requests
-  lemma_parse_requests_single req_bytes req;
-  lemma_parse_requests_append_one log.input_bytes req_bytes req;
-  
-  // Length invariants (needed for all_parse refinement)
-  assert (Seq.length new_log.input_bytes % 5 == 0);
-  assert (Seq.length new_log.output_bytes % 5 == 0);
-  
-  // Prove all_parse for new log
-  lemma_all_parse_append log.input_bytes req_bytes;
-  assert (all_parse new_log.input_bytes);
-  
-  // Prove wire-to-semantic correspondence for responses
-  lemma_serialize_responses_single spec_resp;
-  lemma_serialize_responses_append log.responses [spec_resp]
-
-(** Lemma: step_log_peek produces evolution **)
-val lemma_step_log_peek_evolves
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log)
-  : Lemma (log_single_step log (step_log_peek req_bytes resp_bytes log))
-
-let lemma_step_log_peek_evolves req_bytes resp_bytes log = ()
-
-(** Lemma: step_log_add preserves consistency **)
-val lemma_step_log_add_consistent
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log{log_consistent log})
-  : Lemma
-      (requires
-        parse_request req_bytes == Some Add /\
-        serialize_response (snd (step log.current_state Add)) `Seq.equal` resp_bytes)
-      (ensures log_consistent (step_log_add req_bytes resp_bytes log))
-
-let lemma_step_log_add_consistent req_bytes resp_bytes log =
-  let new_log = step_log_add req_bytes resp_bytes log in
-  let req = Add in
-  let (new_state, spec_resp) = step log.current_state req in
-  
-  let (old_state, old_resps) = run [] log.requests in
-  lemma_run_extend [] log.requests req old_state old_resps new_state spec_resp;
-  
-  lemma_parse_requests_single req_bytes req;
-  lemma_parse_requests_append_one log.input_bytes req_bytes req;
-  
-  // Length invariants (needed for all_parse refinement)
-  assert (Seq.length new_log.input_bytes % 5 == 0);
-  assert (Seq.length new_log.output_bytes % 5 == 0);
-  
-  // Prove all_parse for new log
-  lemma_all_parse_append log.input_bytes req_bytes;
-  assert (all_parse new_log.input_bytes);
-  
-  lemma_serialize_responses_single spec_resp;
-  lemma_serialize_responses_append log.responses [spec_resp]
-
-val lemma_step_log_add_evolves
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log)
-  : Lemma (log_single_step log (step_log_add req_bytes resp_bytes log))
-
-let lemma_step_log_add_evolves req_bytes resp_bytes log = ()
-
-(** Lemmas for Sub/Mul/Div - same pattern as Add **)
-val lemma_step_log_sub_consistent
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log{log_consistent log})
-  : Lemma
-      (requires
-        parse_request req_bytes == Some Sub /\
-        serialize_response (snd (step log.current_state Sub)) `Seq.equal` resp_bytes)
-      (ensures log_consistent (step_log_sub req_bytes resp_bytes log))
-
-let lemma_step_log_sub_consistent req_bytes resp_bytes log =
-  let new_log = step_log_sub req_bytes resp_bytes log in
-  let (new_state, spec_resp) = step log.current_state Sub in
-  let (old_state, old_resps) = run [] log.requests in
-  lemma_run_extend [] log.requests Sub old_state old_resps new_state spec_resp;
-  
-  lemma_parse_requests_single req_bytes Sub;
-  lemma_parse_requests_append_one log.input_bytes req_bytes Sub;
-  
-  // Length invariants (needed for all_parse refinement)
-  assert (Seq.length new_log.input_bytes % 5 == 0);
-  assert (Seq.length new_log.output_bytes % 5 == 0);
-  
-  // Prove all_parse for new log
-  lemma_all_parse_append log.input_bytes req_bytes;
-  assert (all_parse new_log.input_bytes);
-  
-  lemma_serialize_responses_single spec_resp;
-  lemma_serialize_responses_append log.responses [spec_resp]
-
-val lemma_step_log_sub_evolves
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log)
-  : Lemma (log_single_step log (step_log_sub req_bytes resp_bytes log))
-
-let lemma_step_log_sub_evolves req_bytes resp_bytes log = ()
-
-val lemma_step_log_mul_consistent
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log{log_consistent log})
-  : Lemma
-      (requires
-        parse_request req_bytes == Some Mul /\
-        serialize_response (snd (step log.current_state Mul)) `Seq.equal` resp_bytes)
-      (ensures log_consistent (step_log_mul req_bytes resp_bytes log))
-
-let lemma_step_log_mul_consistent req_bytes resp_bytes log =
-  let new_log = step_log_mul req_bytes resp_bytes log in
-  let (new_state, spec_resp) = step log.current_state Mul in
-  let (old_state, old_resps) = run [] log.requests in
-  lemma_run_extend [] log.requests Mul old_state old_resps new_state spec_resp;
-  
-  lemma_parse_requests_single req_bytes Mul;
-  lemma_parse_requests_append_one log.input_bytes req_bytes Mul;
-  
-  // Length invariants (needed for all_parse refinement)
-  assert (Seq.length new_log.input_bytes % 5 == 0);
-  assert (Seq.length new_log.output_bytes % 5 == 0);
-  
-  // Prove all_parse for new log
-  lemma_all_parse_append log.input_bytes req_bytes;
-  assert (all_parse new_log.input_bytes);
-  
-  lemma_serialize_responses_single spec_resp;
-  lemma_serialize_responses_append log.responses [spec_resp]
-
-val lemma_step_log_mul_evolves
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log)
-  : Lemma (log_single_step log (step_log_mul req_bytes resp_bytes log))
-
-let lemma_step_log_mul_evolves req_bytes resp_bytes log = ()
-
-val lemma_step_log_div_consistent
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log{log_consistent log})
-  : Lemma
-      (requires
-        parse_request req_bytes == Some Div /\
-        serialize_response (snd (step log.current_state Div)) `Seq.equal` resp_bytes)
-      (ensures log_consistent (step_log_div req_bytes resp_bytes log))
-
-let lemma_step_log_div_consistent req_bytes resp_bytes log =
-  let new_log = step_log_div req_bytes resp_bytes log in
-  let (new_state, spec_resp) = step log.current_state Div in
-  let (old_state, old_resps) = run [] log.requests in
-  lemma_run_extend [] log.requests Div old_state old_resps new_state spec_resp;
-  
-  lemma_parse_requests_single req_bytes Div;
-  lemma_parse_requests_append_one log.input_bytes req_bytes Div;
-  
-  // Length invariants (needed for all_parse refinement)
-  assert (Seq.length new_log.input_bytes % 5 == 0);
-  assert (Seq.length new_log.output_bytes % 5 == 0);
-  
-  // Prove all_parse for new log
-  lemma_all_parse_append log.input_bytes req_bytes;
-  assert (all_parse new_log.input_bytes);
-  
-  lemma_serialize_responses_single spec_resp;
-  lemma_serialize_responses_append log.responses [spec_resp]
-
-val lemma_step_log_div_evolves
-  (req_bytes: bytes{Seq.length req_bytes == 5})
-  (resp_bytes: bytes{Seq.length resp_bytes == 5})
-  (log: calc_log)
-  : Lemma (log_single_step log (step_log_div req_bytes resp_bytes log))
-
-let lemma_step_log_div_evolves req_bytes resp_bytes log = ()
+let lemma_step_log_evolves req req_bytes resp_bytes log = ()
