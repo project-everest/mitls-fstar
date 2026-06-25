@@ -1,0 +1,56 @@
+/*
+ * calc.qd.rfc
+ *
+ * QuackyDucky data-format description for the calculator protocol.
+ *
+ * This replaces the hand-written wire spec (spec/Calc.Wire.fst) and its
+ * directly-proven Pulse parser/serializer (impl/Calc.Impl.Parser.fst and the
+ * per-op write_*_response helpers). It is compiled with
+ *   qd.exe -pulse -prefix "Calc.Wire.Generated." -odir generated calc.qd.rfc
+ * (the -pulse backend emits the Pulse/PulseParse reader/writer the server uses).
+ *
+ * Wire format (unchanged from the original hand-written codec): every message is
+ * a fixed 5 bytes = [tag:1][payload:uint32 big-endian]. Requests and responses
+ * are each modelled as a 1-byte enum tag followed by a 4-byte big-endian uint32,
+ * so the on-wire bytes are byte-for-byte identical to the original protocol and
+ * the C test harness (test_main.c) is unchanged.
+ *
+ * The op/response enums are CLOSED (no /*@open*/), so the generated parser
+ * rejects unknown tags (>= 6 for requests, >= 3 for responses) exactly as the
+ * old parse_request returned None.
+ *
+ * The payload field of Request is named `operand` and that of Response `value`
+ * (deliberately distinct) so a consumer may `open` both generated record modules
+ * without a record-field-name clash.
+ */
+
+/* Request opcode. payload `operand` is meaningful only for push; for the other
+   ops it is present on the wire (kept 5 bytes) but ignored by the semantics. */
+enum {
+    push(0),
+    peek(1),
+    add(2),
+    sub(3),
+    mul(4),
+    div(5),
+    (255)
+} OpType;
+
+struct {
+    OpType op;
+    uint32 operand;
+} Request;
+
+/* Response tag. payload `value` is meaningful only for result; ok/error carry a
+   zero payload on the wire. */
+enum {
+    ok(0),
+    result(1),
+    error(2),
+    (255)
+} RespType;
+
+struct {
+    RespType tag;
+    uint32   value;
+} Response;
