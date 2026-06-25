@@ -73,6 +73,50 @@ let tls_record_wire_format : CP.wire_format M.tls_record =
     CP.wf_history_matches = tls_wire_history_matches;
   }
 
+let tls_parse_network
+  (bytes:TCP.bytes)
+  : GTot (option (list M.tls_record & TCP.bytes))
+  =
+  let view = CL.parse_record_prefix bytes in
+  Some (view.CL.values, view.CL.residual)
+
+let tls_serialize_network
+  (record:M.tls_record)
+  : GTot (option TCP.bytes)
+  =
+  None
+
+let tls_serialized_network
+  (record:M.tls_record)
+  (bytes:TCP.bytes)
+  : GTot prop =
+  False
+
+let lemma_tls_parse_network_correct
+  (bytes:TCP.bytes)
+  : Lemma
+      (ensures
+        (match tls_parse_network bytes with
+        | None -> True
+        | Some (records, residual) ->
+          tls_record_wire_format.CP.wf_stream_matches
+            CP.NetworkReceived
+            bytes
+            records
+            residual))
+  =
+  CL.lemma_parse_record_prefix_serializes bytes
+
+let lemma_tls_serialize_network_correct
+  (record:M.tls_record)
+  : Lemma
+      (ensures
+        (match tls_serialize_network record with
+        | None -> True
+        | Some bytes -> tls_serialized_network record bytes))
+  =
+  ()
+
 let tls_transport_exact (tcp:TCP.history) (st:CS.connection_state) : GTot prop =
   TCP.history_equal tcp (tls_processed_history st)
 

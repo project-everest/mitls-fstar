@@ -146,6 +146,21 @@ let calc_state_valid (log:calc_log) : prop =
     log /\
   calc_events_refine_wire log
 
+let lemma_calc_state_valid_from_log_consistent
+  (log:calc_log)
+  : Lemma
+      (requires log_consistent log)
+      (ensures calc_state_valid log)
+  =
+  assert (parse_requests log.input_bytes == log.requests);
+  assert (calc_all_parse_bytes log.input_bytes);
+  assert (serialize_responses log.responses `Seq.equal` log.output_bytes);
+  assert (calc_wire_format.CP.wf_history_matches
+    (calc_processed_history log)
+    (calc_wire_log log));
+  assert (calc_transport_matches (calc_processed_history log) log);
+  assert (calc_events_refine_wire log)
+
 let lemma_calc_state_valid_layers
   (log:calc_log)
   : Lemma
