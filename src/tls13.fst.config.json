@@ -3,6 +3,7 @@
   "options": [
   ],
   "include_dirs": [
+    "../common",
     "./spec",
     "./impl",
     "../_cache"

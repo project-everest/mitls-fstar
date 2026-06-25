@@ -5,10 +5,12 @@
     "--cache_dir", "_cache",
     "--already_cached", "Prims,FStar,Pulse,PulseCore",
     "--warn_error", "-321-241-272-288",
+    "--include", "../common",
     "--include", "spec",
     "--include", "impl"
   ],
   "include_dirs": [
+    "../common",
     "spec",
     "impl"
   ]

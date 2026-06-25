@@ -49,6 +49,7 @@ HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
+  --include common \
   --include src/spec \
   --include src/impl \
   --include $(GENERATED_DIR) \
@@ -84,9 +85,10 @@ FSTAR_EXTRACT_FLAGS = \
 FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
+COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
 SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
-ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES)
+ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
