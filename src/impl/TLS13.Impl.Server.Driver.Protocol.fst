@@ -292,22 +292,6 @@ ensures server_local_post d args status
   status
 }
 
-let server_network_signature
-  (d:D.server_driver)
-  (args:server_network_args)
-  : GTot Type0 =
-  stt D.server_receive_result
-    (server_network_pre d args)
-    (server_network_post d args)
-
-let server_local_signature
-  (d:D.server_driver)
-  (args:server_local_args)
-  : GTot Type0 =
-  stt D.server_workflow_status
-    (server_local_pre d args)
-    (server_local_post d args)
-
 noextract
 let tls_server_driver_protocol_implementation
   : CPI.protocol_implementation
@@ -336,6 +320,6 @@ let tls_server_driver_protocol_implementation
     CPI.pi_network_post = server_network_post;
     CPI.pi_local_pre = server_local_pre;
     CPI.pi_local_post = server_local_post;
-    CPI.pi_network_signature = server_network_signature;
-    CPI.pi_local_signature = server_local_signature;
+    CPI.pi_process_network = server_process_network;
+    CPI.pi_process_local = server_process_local;
   }

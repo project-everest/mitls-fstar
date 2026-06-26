@@ -242,22 +242,6 @@ ensures calc_server_local_post srv args r
   CalcLocalProcessed
 }
 
-let calc_network_signature
-  (srv:server_state)
-  (args:calc_network_args)
-  : GTot Type0 =
-  stt calc_network_result
-    (calc_server_network_pre srv args)
-    (calc_server_network_post srv args)
-
-let calc_local_signature
-  (srv:server_state)
-  (args:calc_local_args)
-  : GTot Type0 =
-  stt calc_local_result
-    (calc_server_local_pre srv args)
-    (calc_server_local_post srv args)
-
 noextract
 let calc_server_protocol_implementation
   : CPI.protocol_implementation
@@ -286,6 +270,6 @@ let calc_server_protocol_implementation
     CPI.pi_network_post = calc_server_network_post;
     CPI.pi_local_pre = calc_server_local_pre;
     CPI.pi_local_post = calc_server_local_post;
-    CPI.pi_network_signature = calc_network_signature;
-    CPI.pi_local_signature = calc_local_signature;
+    CPI.pi_process_network = calc_process_network;
+    CPI.pi_process_local = calc_process_local;
   }

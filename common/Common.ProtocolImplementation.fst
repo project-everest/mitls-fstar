@@ -107,13 +107,17 @@ class protocol_implementation
     local_result ->
     slprop;
 
-  pi_network_signature:
-    impl ->
-    network_args ->
-    GTot Type0;
+  pi_process_network:
+    i:impl ->
+    args:network_args ->
+      stt network_result
+        (pi_network_pre i args)
+        (fun result -> pi_network_post i args result);
 
-  pi_local_signature:
-    impl ->
-    local_args ->
-    GTot Type0;
+  pi_process_local:
+    i:impl ->
+    args:local_args ->
+      stt local_result
+        (pi_local_pre i args)
+        (fun result -> pi_local_post i args result);
 }
