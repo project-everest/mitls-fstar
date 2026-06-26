@@ -55,11 +55,10 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     // Peek success: read top element
     let top = Vec.op_Array_Access srv.stack (SZ.sub csz 1sz);
     assert (pure (top == L.index log0.current_state 0));
-    let resp = { tag = Result; value = top };
-    Calc.Impl.Types.write_response resp_slice resp;
+    Calc.Impl.Types.write_response resp_slice Result top;
     with resp_bytes1. _;
 
-    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == resp));
+    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == ({ tag = Result; value = top })));
     assert (pure (serialize_response (snd (step log0.current_state (Ghost.reveal req))) `Seq.equal` resp_bytes1));
 
     lemma_step_log_consistent (Ghost.reveal req) req_bytes resp_bytes1 log0;
@@ -68,11 +67,10 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     fold (server_exactly srv (step_log (Ghost.reveal req) req_bytes resp_bytes1 log0))
   } else {
     // Peek error: empty stack
-    let resp = { tag = Error; value = 0ul };
-    Calc.Impl.Types.write_response resp_slice resp;
+    Calc.Impl.Types.write_response resp_slice Error 0ul;
     with resp_bytes1. _;
 
-    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == resp));
+    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == ({ tag = Error; value = 0ul })));
     assert (pure (serialize_response (snd (step log0.current_state (Ghost.reveal req))) `Seq.equal` resp_bytes1));
 
     lemma_step_log_consistent (Ghost.reveal req) req_bytes resp_bytes1 log0;

@@ -60,11 +60,10 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
 
     if U32.eq v_top 0ul {
       // Div error: divide by zero
-      let resp = { tag = Error; value = 0ul };
-      Calc.Impl.Types.write_response resp_slice resp;
+      Calc.Impl.Types.write_response resp_slice Error 0ul;
       with resp_bytes1. _;
 
-      assert (pure (snd (step log0.current_state (Ghost.reveal req)) == resp));
+      assert (pure (snd (step log0.current_state (Ghost.reveal req)) == ({ tag = Error; value = 0ul })));
       assert (pure (serialize_response (snd (step log0.current_state (Ghost.reveal req))) `Seq.equal` resp_bytes1));
 
       lemma_step_log_consistent (Ghost.reveal req) req_bytes resp_bytes1 log0;
@@ -76,11 +75,10 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
       let result = U32.div v_second v_top;                          // div y x, as in step
       Vec.op_Array_Assignment srv.stack (SZ.sub csz 2sz) result;
       Vec.op_Array_Assignment srv.size 0sz (SZ.sub csz 1sz);
-      let resp = { tag = Ok; value = 0ul };
-      Calc.Impl.Types.write_response resp_slice resp;
+      Calc.Impl.Types.write_response resp_slice Ok 0ul;
       with resp_bytes1. _;
 
-      assert (pure (snd (step log0.current_state (Ghost.reveal req)) == resp));
+      assert (pure (snd (step log0.current_state (Ghost.reveal req)) == ({ tag = Ok; value = 0ul })));
       assert (pure (serialize_response (snd (step log0.current_state (Ghost.reveal req))) `Seq.equal` resp_bytes1));
 
       lemma_step_log_consistent (Ghost.reveal req) req_bytes resp_bytes1 log0;
@@ -90,11 +88,10 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     }
   } else {
     // Div error: stack underflow
-    let resp = { tag = Error; value = 0ul };
-    Calc.Impl.Types.write_response resp_slice resp;
+    Calc.Impl.Types.write_response resp_slice Error 0ul;
     with resp_bytes1. _;
 
-    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == resp));
+    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == ({ tag = Error; value = 0ul })));
     assert (pure (serialize_response (snd (step log0.current_state (Ghost.reveal req))) `Seq.equal` resp_bytes1));
 
     lemma_step_log_consistent (Ghost.reveal req) req_bytes resp_bytes1 log0;

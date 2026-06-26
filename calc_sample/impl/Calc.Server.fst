@@ -25,6 +25,8 @@ module S = Pulse.Lib.Slice
 module Trade = Pulse.Lib.Trade.Util
 module PPB = LowParse.PulseParse.Base
 module LPB = LowParse.Spec.Base
+module LPS = LowParse.Pulse.Base
+module LPC = LowParse.Pulse.Combinators
 
 open Calc.Spec
 open Calc.Log
@@ -69,23 +71,63 @@ fn new_server ()
 }
 
 (**
-  Dispatch the parsed request [req] (raw bytes [req_bytes]) to the matching
-  handler.  Factored as its own function so the [match] is a tail conditional
-  and Pulse can take each handler's postcondition as the result.
+  Recover the field equalities from the COPYFUL reader's packed read-result.
+
+  [read_request] returns the low-level pair [reslow : (opType & U32.t)] together
+  with [vmatch_conv request_vmatch request_conv reslow req] relating it to the
+  ghost [request] record [req].  Unfolding the [vmatch_pair]/[eq_as_slprop]
+  structure (the reverse of [intro_response_vmatch]) and the [request_conv]
+  exposes [fst reslow == req.op /\ snd reslow == req.operand], which is all the
+  dispatcher needs.  This confines the request-side vmatch plumbing here.
+**)
+let lemma_request_conv (vm: request_mid) (req: request)
+  : Lemma
+    (requires request_conv vm == Some req)
+    (ensures req.op == fst vm /\ req.operand == snd vm)
+  = ()
+
+ghost
+fn elim_request_vmatch (reslow: request_lowtype) (#req_value: erased request)
+  requires PPB.vmatch_conv request_vmatch request_conv reslow req_value
+  ensures pure (fst reslow == (Ghost.reveal req_value).op /\
+                snd reslow == (Ghost.reveal req_value).operand)
+{
+  PPB.elim_vmatch_conv request_vmatch request_conv reslow req_value;
+  with vm. assert (request_vmatch reslow vm **
+                   pure (request_conv vm == Some (Ghost.reveal req_value)));
+  rewrite (request_vmatch reslow vm)
+      as (LPC.vmatch_pair opType_vmatch (LPS.eq_as_slprop U32.t) reslow vm);
+  unfold (LPC.vmatch_pair opType_vmatch (LPS.eq_as_slprop U32.t) reslow vm);
+  rewrite (opType_vmatch (fst reslow) (fst vm))
+      as (LPS.eq_as_slprop opType (fst reslow) (fst vm));
+  unfold (LPS.eq_as_slprop opType (fst reslow) (fst vm));
+  unfold (LPS.eq_as_slprop U32.t (snd reslow) (snd vm));
+  lemma_request_conv vm (Ghost.reveal req_value);
+}
+
+(**
+  Dispatch the request -- given as the low-level [(opType & U32.t)] pair [reslow]
+  (extractable) plus the ghost [request] record [req] it relates to -- to the
+  matching handler.  Factored as its own function so the [match] is a tail
+  conditional and Pulse can take each handler's postcondition as the result.
 **)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 fn dispatch
   (srv: server_state)
-  (req: request)
+  (reslow: request_lowtype)
   (resp_slice: S.slice U8.t)
   (#log0: erased calc_log)
+  (#req: erased request)
   (#req_bytes: erased (b: bytes { Seq.length b == 5 }))
 requires
   server_exactly srv log0 **
   S.pts_to resp_slice 'rb **
   pure (
     Seq.length 'rb == 5 /\
-    parse_request req_bytes == Some req
+    Seq.length req_bytes == 5 /\
+    parse_request req_bytes == Some (Ghost.reveal req) /\
+    fst reslow == (Ghost.reveal req).op /\
+    snd reslow == (Ghost.reveal req).operand
   )
 ensures exists* (resp_bytes1: bytes) (log1: calc_log).
   server_exactly srv log1 **
@@ -97,24 +139,24 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
   )
 {
-  match req.op {
+  match fst reslow {
     Push -> {
-      Push.process_push srv req.operand resp_slice #log0 #(Ghost.hide req) #req_bytes;
+      Push.process_push srv (snd reslow) resp_slice #log0 #req #req_bytes;
     }
     Peek -> {
-      Peek.process_peek srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+      Peek.process_peek srv resp_slice #log0 #req #req_bytes;
     }
     Add -> {
-      Add.process_add srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+      Add.process_add srv resp_slice #log0 #req #req_bytes;
     }
     Sub -> {
-      Sub.process_sub srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+      Sub.process_sub srv resp_slice #log0 #req #req_bytes;
     }
     Mul -> {
-      Mul.process_mul srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+      Mul.process_mul srv resp_slice #log0 #req #req_bytes;
     }
     Div -> {
-      Div.process_div srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+      Div.process_div srv resp_slice #log0 #req #req_bytes;
     }
   }
 }
@@ -154,14 +196,16 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
   )
 {
-  // (a) Read the request via a slice and the generated leaf reader.
+  // (a) Read the request via a slice and the generated COPYFUL reader.
   Vec.pts_to_len req_buf;
   Vec.to_array_pts_to req_buf;
   let req_slice = S.from_array (Vec.vec_to_array req_buf) 5sz;
   let req_value : Ghost.erased request = Ghost.hide (Some?.v (parse_request 'req_bytes));
   LPB.parser_kind_prop_equiv request_parser_kind request_parser;
   PPB.pts_to_parsed_intro_injective request_parser req_slice (Ghost.reveal req_value);
-  let req = request_reader req_slice;
+  let reslow = read_request req_slice;
+  // reslow : (opType & U32.t); recover the field equalities to the ghost request.
+  elim_request_vmatch reslow #req_value;
   Trade.elim
     (PPB.pts_to_parsed request_parser req_slice (Ghost.reveal req_value))
     (S.pts_to req_slice 'req_bytes);
@@ -173,8 +217,8 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
   Vec.to_array_pts_to resp_buf;
   let resp_slice = S.from_array (Vec.vec_to_array resp_buf) 5sz;
 
-  // (c) Dispatch on the parsed op.
-  dispatch srv req resp_slice #log0
+  // (c) Dispatch on the parsed op (low-level pair + ghost request).
+  dispatch srv reslow resp_slice #log0 #req_value
     #(Ghost.hide #(b: bytes { Seq.length b == 5 }) (Ghost.reveal 'req_bytes));
 
   // (d) Bridge the response slice back to resp_buf.

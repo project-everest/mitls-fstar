@@ -64,11 +64,10 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     // Push success: stack not full
     Vec.op_Array_Assignment srv.stack csz operand;
     Vec.op_Array_Assignment srv.size 0sz (SZ.add csz 1sz);
-    let resp = { tag = Ok; value = 0ul };
-    Calc.Impl.Types.write_response resp_slice resp;
+    Calc.Impl.Types.write_response resp_slice Ok 0ul;
     with resp_bytes1. _;
 
-    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == resp));
+    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == ({ tag = Ok; value = 0ul })));
     assert (pure (serialize_response (snd (step log0.current_state (Ghost.reveal req))) `Seq.equal` resp_bytes1));
 
     lemma_step_log_consistent (Ghost.reveal req) req_bytes resp_bytes1 log0;
@@ -77,11 +76,10 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     fold (server_exactly srv (step_log (Ghost.reveal req) req_bytes resp_bytes1 log0))
   } else {
     // Push error: stack full
-    let resp = { tag = Error; value = 0ul };
-    Calc.Impl.Types.write_response resp_slice resp;
+    Calc.Impl.Types.write_response resp_slice Error 0ul;
     with resp_bytes1. _;
 
-    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == resp));
+    assert (pure (snd (step log0.current_state (Ghost.reveal req)) == ({ tag = Error; value = 0ul })));
     assert (pure (serialize_response (snd (step log0.current_state (Ghost.reveal req))) `Seq.equal` resp_bytes1));
 
     lemma_step_log_consistent (Ghost.reveal req) req_bytes resp_bytes1 log0;
