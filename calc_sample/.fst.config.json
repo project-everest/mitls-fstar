@@ -1,15 +1,21 @@
 {
-  "fstar_exe": "../tools/everparse/opt/FStar/out/bin/fstar.exe",
+  "fstar_exe": "../tools/everparse/opt/FStar/bin/fstar.exe",
   "options": [
     "--cache_checked_modules",
     "--cache_dir", "_cache",
-    "--already_cached", "Prims,FStar,Pulse,PulseCore",
+    "--already_cached", "Prims,FStar,Pulse,PulseCore,LowParse,LowStar,C,Spec.Loops",
     "--warn_error", "-321-241-272-288",
     "--include", "spec",
-    "--include", "impl"
+    "--include", "impl",
+    "--include", "generated",
+    "--include", "../tools/everparse/src/lowparse",
+    "--include", "../tools/everparse/src/lowparse/pulse"
   ],
   "include_dirs": [
     "spec",
-    "impl"
+    "impl",
+    "generated",
+    "../tools/everparse/src/lowparse",
+    "../tools/everparse/src/lowparse/pulse"
   ]
 }
