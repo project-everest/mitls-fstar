@@ -7,22 +7,35 @@
 FSTAR_EXE ?= fstar.exe
 KRML ?= krml
 
+# EverParse toolchain: provides LowParse (+ LowParse.Pulse) that the generated
+# QuackyDucky codec depends on, plus the pinned Z3.  Override EVERPARSE_HOME to
+# point at a different toolchain checkout.
+EVERPARSE_HOME ?= $(realpath $(CURDIR)/../tools/everparse)
+LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
+# F* locates Z3 by looking for z3-<version> on PATH; the toolchain ships it.
+Z3_DIR         ?= $(EVERPARSE_HOME)/opt/z3
+export PATH := $(Z3_DIR):$(PATH)
+
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR = _cache
 SPEC_DIR  = spec
 IMPL_DIR  = impl
+GENERATED_DIR = generated
 OUTPUT_DIR = _output
 EXTRACT_DIR = _extract
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include $(SPEC_DIR) \
-  --include $(IMPL_DIR)
+  --include $(IMPL_DIR) \
+  --include $(GENERATED_DIR) \
+  --include $(LOWPARSE_HOME) \
+  --include $(LOWPARSE_HOME)/pulse
 
 FSTAR_FLAGS = \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
-  --already_cached 'Prims,FStar,Pulse,PulseCore' \
+  --already_cached 'Prims,FStar,Pulse,PulseCore,LowParse,LowStar,C,Spec.Loops' \
   --warn_error -321-241-272-288 \
   $(INCLUDES)
 

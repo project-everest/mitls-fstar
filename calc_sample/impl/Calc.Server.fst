@@ -4,7 +4,12 @@ module Calc.Server
 
 (**
   Modular Pulse implementation with separate handler modules.
-  Demonstrates clean dispatcher architecture with wire-to-semantic proof.
+
+  The request is parsed ONCE here with the QuackyDucky-generated
+  [request_reader]; the parsed [request] value is then dispatched (as a ghost
+  together with the raw request bytes) to the per-op handlers, each of which
+  produces the wire response with the generated [response_writer] and advances
+  the monotonic ghost log by the single uniform [step_log].
 **)
 
 module U8 = FStar.UInt8
@@ -16,12 +21,16 @@ open Pulse.Lib.Pervasives
 module Vec = Pulse.Lib.Vec
 module B = Pulse.Lib.Box
 module MR = Pulse.Lib.MonotonicGhostRef
+module S = Pulse.Lib.Slice
+module Trade = Pulse.Lib.Trade.Util
+module PPB = LowParse.PulseParse.Base
+module LPB = LowParse.Spec.Base
 
-open Calc.Wire
-open Calc.Wire.Lemmas
+open Calc.Spec
 open Calc.Log
 open Calc.Impl.Types
-open Calc.Impl.Parser
+open Calc.Wire.Generated.OpType
+open Calc.Wire.Generated.Request
 
 // Import all handlers
 module Push = Calc.Impl.Push
@@ -49,37 +58,78 @@ fn new_server ()
     size = size_vec;
     ghost_log = ghost_log;
   };
-  
+
   // Rewrite predicates to match srv fields
   with stack_bytes. rewrite (Vec.pts_to stack stack_bytes) as (Vec.pts_to srv.stack stack_bytes);
   with size_seq. rewrite (Vec.pts_to size_vec size_seq) as (Vec.pts_to srv.size size_seq);
   rewrite (MR.pts_to ghost_log #1.0R initial_log) as (MR.pts_to srv.ghost_log #1.0R initial_log);
-  
+
   fold (server_exactly srv initial_log);
   srv
 }
 
-(** Lemma: parse_request b <> None => first byte tag is in [0..5] **)
-let lemma_valid_tag (b: bytes{Seq.length b == 5 /\ parse_request b <> None})
-  : Lemma (U8.v (Seq.index b 0) < 6)
-  = ()
+(**
+  Dispatch the parsed request [req] (raw bytes [req_bytes]) to the matching
+  handler.  Factored as its own function so the [match] is a tail conditional
+  and Pulse can take each handler's postcondition as the result.
+**)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+fn dispatch
+  (srv: server_state)
+  (req: request)
+  (resp_slice: S.slice U8.t)
+  (#log0: erased calc_log)
+  (#req_bytes: erased (b: bytes { Seq.length b == 5 }))
+requires
+  server_exactly srv log0 **
+  S.pts_to resp_slice 'rb **
+  pure (
+    Seq.length 'rb == 5 /\
+    parse_request req_bytes == Some req
+  )
+ensures exists* (resp_bytes1: bytes) (log1: calc_log).
+  server_exactly srv log1 **
+  S.pts_to resp_slice resp_bytes1 **
+  pure (
+    Seq.length resp_bytes1 == 5 /\
+    log1 == step_log req req_bytes resp_bytes1 log0 /\
+    log1.input_bytes `Seq.equal` Seq.append log0.input_bytes req_bytes /\
+    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
+  )
+{
+  match req.op {
+    Push -> {
+      Push.process_push srv req.operand resp_slice #log0 #(Ghost.hide req) #req_bytes;
+    }
+    Peek -> {
+      Peek.process_peek srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+    }
+    Add -> {
+      Add.process_add srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+    }
+    Sub -> {
+      Sub.process_sub srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+    }
+    Mul -> {
+      Mul.process_mul srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+    }
+    Div -> {
+      Div.process_div srv resp_slice #log0 #(Ghost.hide req) #req_bytes;
+    }
+  }
+}
+#pop-options
 
 (**
   process_request: modular dispatcher.
-  
-  Architecture:
-  1. Parse tag from request buffer
-  2. For Push: parse value, dispatch to Push.process_push
-  3. For other ops: dispatch to appropriate handler module
-  
-  Postcondition (strengthened):
-  - log1 contains exact step_log_* transformation
-  - log1.input_bytes == log0.input_bytes @ req_bytes
-  - log1.output_bytes == log0.output_bytes @ resp_bytes1
-  - log_single_step log0 log1 (witnesses progression)
-  - log_consistent log1
+
+  1. Read the request from [req_buf] via a slice and the generated reader.
+  2. Bridge [resp_buf] to a slice.
+  3. Dispatch on the parsed op to the matching handler.
+  4. Bridge the response slice back to [resp_buf].
+  5. Conclude single-step progression of the ghost log.
 **)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 fn process_request
   (srv: server_state)
   (req_buf: Vec.vec U8.t)
@@ -104,57 +154,35 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
   )
 {
-  lemma_valid_tag 'req_bytes;
-  let tag = parse_tag req_buf;
-  assert (pure (U8.v tag < 6));
-  
-  if U8.eq tag 0uy {
-    // PUSH - parse value (postcondition proves be_to_n correspondence)
-    let value = parse_push_value req_buf;
-    
-    // Connect unrefined to be_to_n and parse_request
-    Calc.Wire.Lemmas.lemma_be_to_n_equiv (Seq.slice 'req_bytes 1 5);
-    assert (pure (U32.v value == be_to_n (Seq.slice 'req_bytes 1 5)));
-    assert (pure (parse_request 'req_bytes == Some (Push (U32.v value))));
-    
-    Push.process_push srv value req_buf resp_buf;
-    // Postcondition from Push.process_push gives us log1 == step_log_push ...
-    // Need to show log_single_step log0 log1
-    with resp_bytes1 log1. _;
-    assert (pure (log_single_step log0 log1))
-  } else if U8.eq tag 1uy {
-    // PEEK
-    assert (pure (parse_request 'req_bytes == Some Peek));
-    Peek.process_peek srv req_buf resp_buf;
-    with resp_bytes1 log1. _;
-    assert (pure (log_single_step log0 log1))
-  } else if U8.eq tag 2uy {
-    // ADD
-    assert (pure (parse_request 'req_bytes == Some Add));
-    Add.process_add srv req_buf resp_buf;
-    with resp_bytes1 log1. _;
-    assert (pure (log_single_step log0 log1))
-  } else if U8.eq tag 3uy {
-    // SUB
-    assert (pure (parse_request 'req_bytes == Some Sub));
-    Sub.process_sub srv req_buf resp_buf;
-    with resp_bytes1 log1. _;
-    assert (pure (log_single_step log0 log1))
-  } else if U8.eq tag 4uy {
-    // MUL
-    assert (pure (parse_request 'req_bytes == Some Mul));
-    Mul.process_mul srv req_buf resp_buf;
-    with resp_bytes1 log1. _;
-    assert (pure (log_single_step log0 log1))
-  } else if U8.eq tag 5uy {
-    // DIV
-    assert (pure (parse_request 'req_bytes == Some Div));
-    Div.process_div srv req_buf resp_buf;
-    with resp_bytes1 log1. _;
-    assert (pure (log_single_step log0 log1))
-  } else {
-    // Unreachable: tag < 6 /\ tag != 0..5 → False
-    assert (pure False)
-  }
+  // (a) Read the request via a slice and the generated leaf reader.
+  Vec.pts_to_len req_buf;
+  Vec.to_array_pts_to req_buf;
+  let req_slice = S.from_array (Vec.vec_to_array req_buf) 5sz;
+  let req_value : Ghost.erased request = Ghost.hide (Some?.v (parse_request 'req_bytes));
+  LPB.parser_kind_prop_equiv request_parser_kind request_parser;
+  PPB.pts_to_parsed_intro_injective request_parser req_slice (Ghost.reveal req_value);
+  let req = request_reader req_slice;
+  Trade.elim
+    (PPB.pts_to_parsed request_parser req_slice (Ghost.reveal req_value))
+    (S.pts_to req_slice 'req_bytes);
+  S.to_array req_slice;
+  Vec.to_vec_pts_to req_buf;
+
+  // (b) Bridge resp_buf to a slice for the handlers.
+  Vec.pts_to_len resp_buf;
+  Vec.to_array_pts_to resp_buf;
+  let resp_slice = S.from_array (Vec.vec_to_array resp_buf) 5sz;
+
+  // (c) Dispatch on the parsed op.
+  dispatch srv req resp_slice #log0
+    #(Ghost.hide #(b: bytes { Seq.length b == 5 }) (Ghost.reveal 'req_bytes));
+
+  // (d) Bridge the response slice back to resp_buf.
+  with resp_bytes1 log1. _;
+  S.to_array resp_slice;
+  Vec.to_vec_pts_to resp_buf;
+
+  // (e) Conclude single-step progression of the ghost log.
+  assert (pure (log_single_step log0 log1))
 }
 #pop-options
