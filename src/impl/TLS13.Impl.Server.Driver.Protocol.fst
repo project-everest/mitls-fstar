@@ -140,33 +140,55 @@ let server_driver_invariant_correct
   server_protocol_valid st /\
   server_driver_transport_matches tcp st
 
+let server_tcp_history_matches
+  (tcp:TCP.history)
+  (st:CS.connection_state)
+  : GTot prop =
+  D.server_driver_sent_log_exact st tcp.TCP.tcp_sent /\
+  D.server_driver_received_log_accounted st tcp.TCP.tcp_received
+
+let server_network_args_state
+  (args:server_network_args)
+  : GTot CS.connection_state =
+  Ghost.reveal args.server_network_st0
+
+let server_network_args_tcp
+  (args:server_network_args)
+  : GTot TCP.history =
+  Ghost.reveal args.server_network_tcp0
+
+let server_local_args_state
+  (args:server_local_args)
+  : GTot CS.connection_state =
+  Ghost.reveal args.server_local_st0
+
+let server_local_args_tcp
+  (args:server_local_args)
+  : GTot TCP.history =
+  Ghost.reveal args.server_local_tcp0
+
 noextract
 [@@pulse_unfold]
-let server_network_pre
+let server_network_frame
   (d:D.server_driver)
   (args:server_network_args)
   : slprop =
-  let st0 = Ghost.reveal args.server_network_st0 in
-  let tcp0 = Ghost.reveal args.server_network_tcp0 in
-  server_driver_invariant d st0 tcp0 **
   exists* (old_out: Ghost.erased B.bytes).
     pts_to args.server_network_out old_out **
     pure (B.length (Ghost.reveal old_out) == SZ.v args.server_network_out_len)
 
 noextract
 [@@pulse_unfold]
-let server_network_post
+let server_network_extra_post
   (d:D.server_driver)
   (args:server_network_args)
   (result:D.server_receive_result)
+  (st1:CS.connection_state)
+  (tcp1:TCP.history)
   : slprop =
   let st0 = Ghost.reveal args.server_network_st0 in
   let tcp0 = Ghost.reveal args.server_network_tcp0 in
-  exists* st1 received1 sent1 out_bytes.
-    server_driver_invariant
-      d
-      st1
-      { TCP.tcp_received = received1; TCP.tcp_sent = sent1 } **
+  exists* out_bytes.
     pts_to args.server_network_out out_bytes **
     pure (
       B.length out_bytes == SZ.v args.server_network_out_len /\
@@ -175,8 +197,8 @@ let server_network_post
         st0.CS.cs_model.CS.model_config /\
       D.server_driver_sent_log_exact st0 tcp0.TCP.tcp_sent /\
       D.server_driver_received_log_accounted st0 tcp0.TCP.tcp_received /\
-      D.server_driver_sent_log_exact st1 sent1 /\
-      D.server_driver_received_log_accounted st1 received1 /\
+      D.server_driver_sent_log_exact st1 tcp1.TCP.tcp_sent /\
+      D.server_driver_received_log_accounted st1 tcp1.TCP.tcp_received /\
       (exists loop app_out.
         D.server_driver_receive_correct
           st0
@@ -184,19 +206,91 @@ let server_network_post
           result
           loop
           tcp0.TCP.tcp_sent
-          sent1
+          tcp1.TCP.tcp_sent
           app_out
           out_bytes))
 
+let server_network_effect
+  (args:server_network_args)
+  (result:D.server_receive_result)
+  (st0:CS.connection_state)
+  (tcp0:TCP.history)
+  (st1:CS.connection_state)
+  (tcp1:TCP.history)
+  : GTot prop =
+  st1.CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config /\
+  D.server_driver_sent_log_exact st0 tcp0.TCP.tcp_sent /\
+  D.server_driver_received_log_accounted st0 tcp0.TCP.tcp_received /\
+  D.server_driver_sent_log_exact st1 tcp1.TCP.tcp_sent /\
+  D.server_driver_received_log_accounted st1 tcp1.TCP.tcp_received /\
+  (exists out_bytes loop app_out.
+    D.server_driver_receive_correct
+      st0
+      st1
+      result
+      loop
+      tcp0.TCP.tcp_sent
+      tcp1.TCP.tcp_sent
+      app_out
+      out_bytes)
+
 noextract
 [@@pulse_unfold]
-let server_local_pre
+let server_network_pre
+  (d:D.server_driver)
+  (args:server_network_args)
+  : slprop =
+  let st0 = server_network_args_state args in
+  let tcp0 = server_network_args_tcp args in
+  server_driver_invariant d st0 tcp0 **
+  server_network_frame d args **
+  pure (CPI.protocol_state_transport
+    tls_server_protocol
+    server_tcp_history_matches
+    tcp0
+    st0)
+
+noextract
+[@@pulse_unfold]
+let server_network_post
+  (d:D.server_driver)
+  (args:server_network_args)
+  (result:D.server_receive_result)
+  : slprop =
+  let st0 = server_network_args_state args in
+  let tcp0 = server_network_args_tcp args in
+  exists* (st1: Ghost.erased CS.connection_state) (tcp1: Ghost.erased TCP.history).
+    server_driver_invariant d (Ghost.reveal st1) (Ghost.reveal tcp1) **
+    server_network_extra_post
+      d
+      args
+      result
+      (Ghost.reveal st1)
+      (Ghost.reveal tcp1) **
+    pure (
+      CPI.protocol_network_step
+        tls_server_protocol
+        server_tcp_history_matches
+        st0
+        tcp0
+        (Ghost.reveal st1)
+        (Ghost.reveal tcp1) /\
+      server_network_effect
+        args
+        result
+        st0
+        tcp0
+        (Ghost.reveal st1)
+        (Ghost.reveal tcp1))
+
+noextract
+[@@pulse_unfold]
+let server_local_frame
   (d:D.server_driver)
   (args:server_local_args)
   : slprop =
   let st0 = Ghost.reveal args.server_local_st0 in
-  let tcp0 = Ghost.reveal args.server_local_tcp0 in
-  server_driver_invariant d st0 tcp0 **
   exists* (payload_bytes: Ghost.erased B.bytes).
     pts_to args.server_local_payload payload_bytes **
     pure (
@@ -208,19 +302,16 @@ let server_local_pre
 
 noextract
 [@@pulse_unfold]
-let server_local_post
+let server_local_extra_post
   (d:D.server_driver)
   (args:server_local_args)
   (status:D.server_workflow_status)
+  (st1:CS.connection_state)
+  (tcp1:TCP.history)
   : slprop =
   let st0 = Ghost.reveal args.server_local_st0 in
   let tcp0 = Ghost.reveal args.server_local_tcp0 in
-  exists* st1 sent1.
-    server_driver_invariant
-      d
-      st1
-      { TCP.tcp_received = tcp0.TCP.tcp_received; TCP.tcp_sent = sent1 } **
-    exists* (payload_bytes: Ghost.erased B.bytes).
+  exists* (payload_bytes: Ghost.erased B.bytes).
       pts_to args.server_local_payload payload_bytes **
       pure (
         D.server_driver_send_correct
@@ -229,13 +320,85 @@ let server_local_post
           status
           (Ghost.reveal payload_bytes)
           tcp0.TCP.tcp_sent
-          sent1 /\
+          tcp1.TCP.tcp_sent /\
         st1.CS.cs_model.CS.model_config ==
           st0.CS.cs_model.CS.model_config /\
         D.server_driver_sent_log_exact st0 tcp0.TCP.tcp_sent /\
         D.server_driver_received_log_accounted st0 tcp0.TCP.tcp_received /\
-        D.server_driver_sent_log_exact st1 sent1 /\
-        D.server_driver_received_log_accounted st1 tcp0.TCP.tcp_received)
+        D.server_driver_sent_log_exact st1 tcp1.TCP.tcp_sent /\
+        D.server_driver_received_log_accounted st1 tcp1.TCP.tcp_received)
+
+let server_local_effect
+  (args:server_local_args)
+  (status:D.server_workflow_status)
+  (st0:CS.connection_state)
+  (tcp0:TCP.history)
+  (st1:CS.connection_state)
+  (tcp1:TCP.history)
+  : GTot prop =
+  st1.CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config /\
+  D.server_driver_sent_log_exact st0 tcp0.TCP.tcp_sent /\
+  D.server_driver_received_log_accounted st0 tcp0.TCP.tcp_received /\
+  D.server_driver_sent_log_exact st1 tcp1.TCP.tcp_sent /\
+  D.server_driver_received_log_accounted st1 tcp1.TCP.tcp_received /\
+  (exists payload.
+    D.server_driver_send_correct
+      st0
+      st1
+      status
+      payload
+      tcp0.TCP.tcp_sent
+      tcp1.TCP.tcp_sent)
+
+noextract
+[@@pulse_unfold]
+let server_local_pre
+  (d:D.server_driver)
+  (args:server_local_args)
+  : slprop =
+  let st0 = server_local_args_state args in
+  let tcp0 = server_local_args_tcp args in
+  server_driver_invariant d st0 tcp0 **
+  server_local_frame d args **
+  pure (CPI.protocol_state_transport
+    tls_server_protocol
+    server_tcp_history_matches
+    tcp0
+    st0)
+
+noextract
+[@@pulse_unfold]
+let server_local_post
+  (d:D.server_driver)
+  (args:server_local_args)
+  (status:D.server_workflow_status)
+  : slprop =
+  let st0 = server_local_args_state args in
+  let tcp0 = server_local_args_tcp args in
+  exists* (st1: Ghost.erased CS.connection_state) (tcp1: Ghost.erased TCP.history).
+    server_driver_invariant d (Ghost.reveal st1) (Ghost.reveal tcp1) **
+    server_local_extra_post
+      d
+      args
+      status
+      (Ghost.reveal st1)
+      (Ghost.reveal tcp1) **
+    pure (
+      CPI.protocol_local_step
+        tls_server_protocol
+        server_tcp_history_matches
+        st0
+        tcp0
+        (Ghost.reveal st1)
+        (Ghost.reveal tcp1) /\
+      server_local_effect
+        args
+        status
+        st0
+        tcp0
+        (Ghost.reveal st1)
+        (Ghost.reveal tcp1))
 
 fn server_process_network
   (d:D.server_driver)
@@ -245,6 +408,8 @@ returns result: D.server_receive_result
 ensures server_network_post d args result
 {
   unfold (server_network_pre d args);
+  unfold (server_network_frame d args);
+  with old_out. _;
   unfold (server_driver_invariant d args.server_network_st0 args.server_network_tcp0);
   with certificate_chain credential_identity. _;
   let result =
@@ -255,12 +420,59 @@ ensures server_network_post d args result
       args.server_network_local_fuel
       args.server_network_fuel;
   with st1 received1 sent1 out_bytes. _;
+  let st1e = Ghost.hide st1;
+  let tcp1 = Ghost.hide { TCP.tcp_received = received1; TCP.tcp_sent = sent1 };
+  assert (pure (Ghost.reveal st1e == st1));
+  assert (pure (Ghost.reveal tcp1 ==
+    { TCP.tcp_received = received1; TCP.tcp_sent = sent1 }));
+  TLSP.lemma_tls_wire_history_matches_processed st1;
+  assert (pure (CPI.protocol_state_transport
+    tls_server_protocol
+    server_tcp_history_matches
+    (Ghost.reveal tcp1)
+    (Ghost.reveal st1e)));
+  rewrite
+    (D.server_driver_connected
+      d
+      st1
+      certificate_chain
+      credential_identity
+      received1
+      sent1)
+    as
+    (D.server_driver_connected
+      d
+      (Ghost.reveal st1e)
+      certificate_chain
+      credential_identity
+      (Ghost.reveal tcp1).TCP.tcp_received
+      (Ghost.reveal tcp1).TCP.tcp_sent);
   with certificate_chain credential_identity.
   fold (server_driver_invariant
     d
-    st1
-    { TCP.tcp_received = received1; TCP.tcp_sent = sent1 });
-  with st1 received1 sent1 out_bytes.
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1));
+  with out_bytes. fold (server_network_extra_post
+    d
+    args
+    result
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1));
+  assert (pure (server_network_effect
+    args
+    result
+    args.server_network_st0
+    args.server_network_tcp0
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1)));
+  assert (pure (CPI.protocol_network_step
+    tls_server_protocol
+    server_tcp_history_matches
+    args.server_network_st0
+    args.server_network_tcp0
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1)));
+  with st1e tcp1.
   fold (server_network_post d args result);
   result
 }
@@ -273,6 +485,8 @@ returns status: D.server_workflow_status
 ensures server_local_post d args status
 {
   unfold (server_local_pre d args);
+  unfold (server_local_frame d args);
+  with payload_bytes. _;
   unfold (server_driver_invariant d args.server_local_st0 args.server_local_tcp0);
   with certificate_chain credential_identity. _;
   let status =
@@ -281,13 +495,63 @@ ensures server_local_post d args status
       args.server_local_payload
       args.server_local_payload_len;
   with st1 sent1. _;
+  let st1e = Ghost.hide st1;
+  let tcp1 =
+    Ghost.hide
+      { TCP.tcp_received = args.server_local_tcp0.TCP.tcp_received;
+        TCP.tcp_sent = sent1 };
+  assert (pure (Ghost.reveal st1e == st1));
+  assert (pure (Ghost.reveal tcp1 ==
+    { TCP.tcp_received = args.server_local_tcp0.TCP.tcp_received;
+      TCP.tcp_sent = sent1 }));
+  TLSP.lemma_tls_wire_history_matches_processed st1;
+  assert (pure (CPI.protocol_state_transport
+    tls_server_protocol
+    server_tcp_history_matches
+    (Ghost.reveal tcp1)
+    (Ghost.reveal st1e)));
+  rewrite
+    (D.server_driver_connected
+      d
+      st1
+      certificate_chain
+      credential_identity
+      args.server_local_tcp0.TCP.tcp_received
+      sent1)
+    as
+    (D.server_driver_connected
+      d
+      (Ghost.reveal st1e)
+      certificate_chain
+      credential_identity
+      (Ghost.reveal tcp1).TCP.tcp_received
+      (Ghost.reveal tcp1).TCP.tcp_sent);
   with certificate_chain credential_identity.
   fold (server_driver_invariant
     d
-    st1
-    { TCP.tcp_received = args.server_local_tcp0.TCP.tcp_received;
-      TCP.tcp_sent = sent1 });
-  with st1 sent1.
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1));
+  with payload_bytes. fold (server_local_extra_post
+    d
+    args
+    status
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1));
+  assert (pure (server_local_effect
+    args
+    status
+    args.server_local_st0
+    args.server_local_tcp0
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1)));
+  assert (pure (CPI.protocol_local_step
+    tls_server_protocol
+    server_tcp_history_matches
+    args.server_local_st0
+    args.server_local_tcp0
+    (Ghost.reveal st1e)
+    (Ghost.reveal tcp1)));
+  with st1e tcp1.
   fold (server_local_post d args status);
   status
 }
@@ -315,11 +579,17 @@ let tls_server_driver_protocol_implementation
     CPI.pi_ghost_log = server_driver_ghost_log;
     CPI.pi_runtime_resources = server_driver_runtime_resources;
     CPI.pi_invariant = server_driver_invariant;
-    CPI.pi_invariant_correct = server_driver_invariant_correct;
-    CPI.pi_network_pre = server_network_pre;
-    CPI.pi_network_post = server_network_post;
-    CPI.pi_local_pre = server_local_pre;
-    CPI.pi_local_post = server_local_post;
+    CPI.pi_tcp_history_matches = server_tcp_history_matches;
+    CPI.pi_network_args_state = server_network_args_state;
+    CPI.pi_network_args_tcp = server_network_args_tcp;
+    CPI.pi_local_args_state = server_local_args_state;
+    CPI.pi_local_args_tcp = server_local_args_tcp;
+    CPI.pi_network_frame = server_network_frame;
+    CPI.pi_network_extra_post = server_network_extra_post;
+    CPI.pi_network_effect = server_network_effect;
+    CPI.pi_local_frame = server_local_frame;
+    CPI.pi_local_extra_post = server_local_extra_post;
+    CPI.pi_local_effect = server_local_effect;
     CPI.pi_process_network = server_process_network;
     CPI.pi_process_local = server_process_local;
   }
