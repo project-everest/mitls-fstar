@@ -230,6 +230,13 @@ let serialize_handshake (msg:M.handshake_msg) : GTot B.bytes =
 let serialize_handshake_msg (msg:M.handshake_msg) : GTot B.bytes =
   serialize_handshake msg
 
+let lemma_serialize_handshake_client_hello ch = ()
+let lemma_serialize_handshake_server_hello sh = ()
+let lemma_serialize_handshake_encrypted_extensions ee = ()
+let lemma_serialize_handshake_certificate cert = ()
+let lemma_serialize_handshake_certificate_verify cv = ()
+let lemma_serialize_handshake_finished fin = ()
+
 let serialize_server_certificate_verify_input (transcript_hash:B.bytes) : GTot B.bytes =
   if B.length transcript_hash == 32
   then H.certificate_verify_input transcript_hash
@@ -684,3 +691,6 @@ let lemma_parse_tls_message_round_trip
        else ()
      | None -> ())
   | _ -> ()
+
+let lemma_parse_serialize_handshake_finished fin =
+  LP.parse_serialize GHS.handshake_serializer (GHS.Body_finished fin)

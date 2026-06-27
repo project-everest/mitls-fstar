@@ -12,6 +12,8 @@ module GCert = TLS13.Wire.Generated.Certificate
 module GCH = TLS13.Wire.Generated.ClientHello
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GCV = TLS13.Wire.Generated.CertificateVerify
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GFin = TLS13.Wire.Generated.Finished
 module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GECH = TLS13.Wire.Generated.ExtensionClientHello
@@ -125,6 +127,38 @@ val serialize_handshake:
 val serialize_handshake_msg:
   msg:M.handshake_msg ->
   GTot B.bytes
+
+(* Per-constructor unfolding lemmas for [serialize_handshake] (opaque to
+   consumers). The build-direction serializers need these to connect the bytes
+   produced by the generated copyful writer [GHS.write_handshake] (which yields
+   [LP.serialize GHS.handshake_serializer (Body_* record)]) to the
+   [serialize_handshake (M.<Ctor> record)] spec. Each holds definitionally. *)
+val lemma_serialize_handshake_client_hello (ch:GCH.clientHello) :
+  Lemma (Seq.equal (serialize_handshake (M.ClientHello ch))
+                   (LP.serialize GHS.handshake_serializer (GHS.Body_client_hello ch)))
+
+val lemma_serialize_handshake_server_hello (sh:GSH.serverHello) :
+  Lemma (Seq.equal (serialize_handshake (M.ServerHello sh))
+                   (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello sh)))
+
+val lemma_serialize_handshake_encrypted_extensions (ee:GEE.encryptedExtensions) :
+  Lemma (Seq.equal (serialize_handshake (M.EncryptedExtensions ee))
+                   (LP.serialize GHS.handshake_serializer (GHS.Body_encrypted_extensions ee)))
+
+val lemma_serialize_handshake_certificate (cert:GCert.certificate) :
+  Lemma (requires GCert.certificate_bytesize cert <= 16777215)
+        (ensures Seq.equal (serialize_handshake (M.Certificate cert))
+                   (LP.serialize GHS.handshake_serializer
+                      (GHS.Body_certificate (cert <: GHS.handshake_body_certificate))))
+
+val lemma_serialize_handshake_certificate_verify (cv:GCV.certificateVerify) :
+  Lemma (Seq.equal (serialize_handshake (M.CertificateVerify cv))
+                   (LP.serialize GHS.handshake_serializer (GHS.Body_certificate_verify cv)))
+
+val lemma_serialize_handshake_finished (fin:GFin.finished) :
+  Lemma (Seq.equal (serialize_handshake (M.Finished fin))
+                   (LP.serialize GHS.handshake_serializer (GHS.Body_finished fin)))
+
 
 val serialize_server_certificate_verify_input:
   transcript_hash:B.bytes ->
@@ -323,3 +357,12 @@ val lemma_parse_tls_message_round_trip:
       | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
         Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
       | _ -> True))
+
+(* Forward parse/serialize round-trip for a sent Finished: re-parsing its wire
+   bytes recovers the message. Provable from the LowParse [parse_serialize]
+   round-trip on the generated handshake codec + the structural [synth] dispatch.
+   The build-direction serializers need this for the [parse_tls_message] clause
+   of their postconditions (formerly supplied by the deleted Reveal layer). *)
+val lemma_parse_serialize_handshake_finished (fin:GFin.finished) :
+  Lemma (parse_tls_message T.Handshake (serialize_handshake (M.Finished fin))
+           == Some (M.TlsHandshake (M.Finished fin)))
