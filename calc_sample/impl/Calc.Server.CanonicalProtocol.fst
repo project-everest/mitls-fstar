@@ -1037,7 +1037,7 @@ let calc_server_protocol_implementation
       unit
   =
   {
-    CPI.pi_system = CalcP.calc_frame_wire_format_state_machine;
+    CPI.pi_system = (fun _ -> CalcP.calc_frame_wire_format_state_machine);
     CPI.pi_invariant = canonical_server_exactly;
     CPI.pi_snapshot = canonical_server_snapshot;
     CPI.pi_network_frame = calc_network_frame;

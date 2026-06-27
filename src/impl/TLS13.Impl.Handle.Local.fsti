@@ -54,4 +54,7 @@ fn handle_local_event
                   (Ghost.reveal 'payload_bytes)
                   network_out_bytes
                   app_out_bytes /\
-                CT.response_network_out_parse_success resp network_out_bytes)
+                CT.response_network_out_parse_success resp network_out_bytes /\
+                (resp.CT.status == CT.StepOk \/
+                 resp.CT.status == CT.IllegalTransition \/
+                 resp.CT.status == CT.ConnectionFailed))

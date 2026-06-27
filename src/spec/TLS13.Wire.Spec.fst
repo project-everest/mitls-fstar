@@ -1415,6 +1415,12 @@ let lemma_serialize_tls_message_close_notify ()
 =
   ()
 
+let lemma_serialize_tls_message_change_cipher_spec ()
+  : Lemma (serialize_tls_message M.TlsChangeCipherSpec ==
+    (T.ChangeCipherSpec, B.singleton 1uy))
+=
+  ()
+
 let lemma_serialize_tls_message_key_update_not_requested ()
   : Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) ==
     (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]))

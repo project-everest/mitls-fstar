@@ -5,27 +5,35 @@ module M = TLS13.Messages
 module Seq = FStar.Seq
 module T = TLS13.Types
 module WF = Common.WireFormat
+module RVD = TLS13.Wire.Spec.RevealDecode
 module WS = TLS13.Wire.Spec
 
 (**
-  A first canonical Common.WireFormat adapter for TLS records.
+  A Common.WireFormat adapter for raw TLS records.
 
-  The message is the parsed TLS record together with the standard TLS record
-  fragment bound.  The parser uses [parse_record_wire], so it accepts the
-  legacy-version ClientHello record form used by the low-level endpoint
-  decoders.  Serialization is canonical TLS record serialization; this module
-  intentionally does not yet preserve the exact raw bytes of legacy-version
-  records.  See the canonical protocol modules for the role-specific boundary
-  definitions and the remaining raw-byte proof obligations.
+  The message preserves the exact record bytes consumed from the TCP stream.
+  This is important for TLS 1.3 because the server must accept the legacy
+  ClientHello record version while the canonical serializer always emits the
+  TLS 1.2 record version.  Keeping the raw prefix in the message lets the common
+  protocol class account for TCP histories without canonicalizing away those
+  audit-relevant bytes.
  **)
-type wire_message = r:M.tls_record { B.length r.M.record_fragment <= 16640 }
+noeq
+type wire_message = {
+  wm_raw: B.bytes;
+  wm_content_type: T.content_type;
+  wm_fragment: M.sealed_record;
+  wm_parse_ok:
+    squash
+      (WS.parse_record_wire wm_raw ==
+        Some (wm_content_type, wm_fragment, B.length wm_raw));
+}
 
 let wire_equal (x y:wire_message) : GTot prop =
-  x.M.record_outer_type == y.M.record_outer_type /\
-  Seq.equal x.M.record_fragment y.M.record_fragment
+  Seq.equal x.wm_raw y.wm_raw
 
 let wire_serialize (msg:wire_message) : GTot B.bytes =
-  WS.serialize_record msg.M.record_outer_type msg.M.record_fragment
+  msg.wm_raw
 
 let wire_parse (bytes:B.bytes) : GTot (WF.parse_result wire_message) =
   match WS.parse_record_wire bytes with
@@ -37,11 +45,33 @@ let wire_parse (bytes:B.bytes) : GTot (WF.parse_result wire_message) =
       content_type
       fragment
       consumed;
-    let msg : wire_message = {
-      M.record_outer_type = content_type;
-      M.record_fragment = fragment;
+    let raw = Seq.slice bytes 0 consumed in
+    RVD.lemma_parse_record_wire_prefix bytes content_type fragment consumed;
+    let msg = {
+      wm_raw = raw;
+      wm_content_type = content_type;
+      wm_fragment = fragment;
+      wm_parse_ok = ();
     } in
     Some (msg, Seq.slice bytes consumed (B.length bytes))
+
+let empty_wire_outputs : list wire_message = []
+
+let wire_outputs_of_full_record (raw:B.bytes) : GTot (list wire_message) =
+  if B.length raw == 0 then []
+  else
+    match WS.parse_record_wire raw with
+    | None -> []
+    | Some (content_type, fragment, consumed) ->
+      if consumed == B.length raw then (
+        WS.lemma_parse_record_wire_fragment_bound raw;
+        [{
+          wm_raw = raw;
+          wm_content_type = content_type;
+          wm_fragment = fragment;
+          wm_parse_ok = ();
+        }]
+      ) else []
 
 let lemma_wire_parse_serialize_exact
   (msg:wire_message)
@@ -51,26 +81,20 @@ let lemma_wire_parse_serialize_exact
           wire_parse (wire_serialize msg) == Some (parsed, Seq.empty) /\
           wire_equal parsed msg)
 =
-  WS.lemma_parse_record_serialize_record
-    msg.M.record_outer_type
-    msg.M.record_fragment;
-  WS.lemma_parse_record_implies_parse_record_wire (wire_serialize msg);
-  WS.lemma_parse_record_wire_fragment_bound (wire_serialize msg);
-  assert (WS.parse_record_wire (wire_serialize msg) ==
-    Some (
-      msg.M.record_outer_type,
-      msg.M.record_fragment,
-      B.length (wire_serialize msg)));
+  assert (WS.parse_record_wire msg.wm_raw ==
+    Some (msg.wm_content_type, msg.wm_fragment, B.length msg.wm_raw));
+  WS.lemma_parse_record_wire_fragment_bound msg.wm_raw;
   Seq.lemma_len_slice
-    (wire_serialize msg)
-    (B.length (wire_serialize msg))
-    (B.length (wire_serialize msg));
+    msg.wm_raw
+    0
+    (B.length msg.wm_raw);
   assert (Seq.equal
     (Seq.slice
-      (wire_serialize msg)
-      (B.length (wire_serialize msg))
-      (B.length (wire_serialize msg)))
+      msg.wm_raw
+      (B.length msg.wm_raw)
+      (B.length msg.wm_raw))
     Seq.empty);
+  assert (Seq.equal (Seq.slice msg.wm_raw 0 (B.length msg.wm_raw)) msg.wm_raw);
   assert (exists parsed.
     wire_parse (wire_serialize msg) == Some (parsed, Seq.empty) /\
     wire_equal parsed msg)
@@ -83,3 +107,49 @@ let tls_record_wire_format : WF.wire_format wire_message =
     WF.wf_parse = wire_parse;
     WF.wf_parse_serialize_exact = lemma_wire_parse_serialize_exact;
   }
+
+let lemma_wire_outputs_of_empty ()
+  : Lemma
+      (ensures
+        wire_outputs_of_full_record B.empty == [] /\
+        Seq.equal
+          (WF.serialize_all tls_record_wire_format (wire_outputs_of_full_record B.empty))
+          B.empty)
+=
+  ()
+
+let lemma_wire_outputs_of_full_record_serializes
+  (raw:B.bytes)
+  (content_type:T.content_type)
+  (fragment:M.sealed_record)
+  : Lemma
+      (requires
+        WS.parse_record_wire raw == Some (content_type, fragment, B.length raw))
+      (ensures
+        Seq.equal
+          (WF.serialize_all tls_record_wire_format (wire_outputs_of_full_record raw))
+          raw)
+=
+  WS.lemma_parse_record_wire_some_consumed_positive
+    raw
+    content_type
+    fragment
+    (B.length raw);
+  assert (B.length raw > 0);
+  WS.lemma_parse_record_wire_fragment_bound raw;
+  match WS.parse_record_wire raw with
+  | Some (ct, frag, consumed) ->
+    assert (ct == content_type);
+    assert (frag == fragment);
+    assert (consumed == B.length raw);
+    (match wire_outputs_of_full_record raw with
+    | [msg] ->
+      assert (msg.wm_raw == raw);
+      Seq.append_empty_r msg.wm_raw;
+      assert (Seq.equal
+        (WF.serialize_all tls_record_wire_format [msg])
+        raw)
+    | _ ->
+      assert False)
+  | None ->
+    assert False

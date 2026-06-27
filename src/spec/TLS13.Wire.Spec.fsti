@@ -808,6 +808,11 @@ val lemma_serialize_tls_message_close_notify:
   Lemma (serialize_tls_message (M.TlsAlert T.CloseNotify) ==
     (T.Alert, B.of_list [2uy; 0uy]))
 
+val lemma_serialize_tls_message_change_cipher_spec:
+  unit ->
+  Lemma (serialize_tls_message M.TlsChangeCipherSpec ==
+    (T.ChangeCipherSpec, B.singleton 1uy))
+
 val lemma_serialize_tls_message_key_update_not_requested:
   unit ->
   Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) ==

@@ -40,6 +40,22 @@ let rec local_outputs_bytes (outs:list local_output) : Tot (list B.bytes)
 let local_outputs_app_bytes (outs:list local_output) : B.bytes =
   CL.concat_bytes (local_outputs_bytes outs)
 
+noextract
+let local_outputs_of_app_bytes (bytes:B.bytes) : GTot (list local_output) =
+  if B.length bytes == 0 then [] else [AppOut bytes]
+
+let lemma_local_outputs_of_app_bytes_exact (bytes:B.bytes)
+  : Lemma
+      (ensures Seq.equal
+        (local_outputs_app_bytes (local_outputs_of_app_bytes bytes))
+        bytes)
+=
+  if B.length bytes == 0 then (
+    Seq.lemma_eq_intro bytes B.empty
+  ) else (
+    Seq.append_empty_r bytes
+  )
+
 type client_api_event = {
   client_local_kind: CT.local_event_kind;
   client_local_payload: B.bytes;

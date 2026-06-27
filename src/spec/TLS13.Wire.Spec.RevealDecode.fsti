@@ -67,6 +67,32 @@ val lemma_parse_record_wire_from_header (raw:B.bytes)
          (U8.v (Seq.index raw 0) = 0x16 ==> ct == T.Handshake) /\
          (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.ApplicationData)))
 
+val lemma_parse_record_wire_prefix
+  (input:B.bytes)
+  (content_type:T.content_type)
+  (fragment:M.sealed_record)
+  (consumed:nat)
+  : Lemma
+    (requires
+      WS.parse_record_wire input == Some (content_type, fragment, consumed) /\
+      consumed <= B.length input)
+    (ensures
+      WS.parse_record_wire (Seq.slice input 0 consumed) ==
+        Some (content_type, fragment, consumed))
+
+val lemma_parse_record_wire_from_prefix
+  (input:B.bytes)
+  (content_type:T.content_type)
+  (fragment:M.sealed_record)
+  (consumed:nat)
+  : Lemma
+    (requires
+      consumed <= B.length input /\
+      WS.parse_record_wire (Seq.slice input 0 consumed) ==
+        Some (content_type, fragment, consumed))
+    (ensures
+      WS.parse_record_wire input == Some (content_type, fragment, consumed))
+
 (* Construct [parse_plaintext]'s result for a TLSInnerPlaintext whose last byte
    is a recognised content type (no trailing zero padding): the recovered
    fragment is the prefix, and the content type matches the last byte. *)

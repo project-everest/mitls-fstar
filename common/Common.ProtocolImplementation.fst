@@ -402,7 +402,8 @@ class protocol_implementation
   =
 {
   pi_system:
-    WFSM.wire_format_state_machine state wire_message local_event local_output;
+    impl ->
+      GTot (WFSM.wire_format_state_machine state wire_message local_event local_output);
 
   pi_invariant:
     impl ->
@@ -488,7 +489,7 @@ class protocol_implementation
             (Ghost.reveal st) **
           pure (
             WFSM.valid_byte_trace
-              pi_system
+              (pi_system i)
               (Ghost.reveal received)
               (Ghost.reveal st)
               (Ghost.reveal sent)
@@ -549,7 +550,7 @@ class protocol_implementation
             (Ghost.reveal current_state) **
           pure (
             state_ahead
-              pi_system
+              (pi_system i)
               (Ghost.reveal snapshot_state)
               (Ghost.reveal current_state)));
 
@@ -616,7 +617,7 @@ class protocol_implementation
             pts_to out out_contents **
             pure (
               network_process_correct
-                pi_system
+                (pi_system i)
                 (Ghost.reveal input_contents)
                 input_len
                 (Ghost.reveal old_out)
@@ -683,7 +684,7 @@ class protocol_implementation
             pts_to out out_contents **
             pure (
               local_process_correct
-                pi_system
+                (pi_system i)
                 ev
                 (Ghost.reveal old_out)
                 out_contents

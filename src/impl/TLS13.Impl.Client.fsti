@@ -394,4 +394,7 @@ fn process_local_event
                   kind
                   (Ghost.reveal 'payload_bytes)
                   network_out_bytes
-                  app_out_bytes)
+                  app_out_bytes /\
+                (resp.CT.status == CT.StepOk \/
+                 resp.CT.status == CT.IllegalTransition \/
+                 resp.CT.status == CT.ConnectionFailed))
