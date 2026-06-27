@@ -325,7 +325,7 @@ let calc_frame_step
   (log0:calc_log)
   (ev:SM.event calc_frame calc_frame_local_event)
   (log1:calc_log)
-  (outputs:list calc_frame)
+  (output:SM.step_output calc_frame unit)
   : GTot prop =
   match ev with
   | SM.WireEvent msg ->
@@ -337,14 +337,16 @@ let calc_frame_step
     log1.responses == log0.responses @ [resp] /\
     Seq.equal log1.input_bytes (Seq.append log0.input_bytes msg) /\
     Seq.equal log1.output_bytes (Seq.append log0.output_bytes resp_msg) /\
-    outputs == [resp_msg]
+    output.SM.so_wire_outputs == [resp_msg] /\
+    output.SM.so_local_outputs == []
   | SM.LocalEvent CalcFrameLocalNoop ->
     log1 == log0 /\
-    outputs == []
+    output.SM.so_wire_outputs == [] /\
+    output.SM.so_local_outputs == []
 
 noextract
 let calc_frame_state_machine
-  : SM.state_machine calc_log calc_frame calc_frame_local_event =
+  : SM.state_machine calc_log calc_frame calc_frame_local_event unit =
   {
     SM.sm_initial_state = initial_log;
     SM.sm_step = calc_frame_step;
@@ -352,7 +354,7 @@ let calc_frame_state_machine
 
 noextract
 let calc_frame_wire_format_state_machine
-  : WFSM.wire_format_state_machine calc_log calc_frame calc_frame_local_event =
+  : WFSM.wire_format_state_machine calc_log calc_frame calc_frame_local_event unit =
   {
     WFSM.wfsm_state_machine = calc_frame_state_machine;
     WFSM.wfsm_wire_format = calc_frame_wire_format;

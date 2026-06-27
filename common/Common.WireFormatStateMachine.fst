@@ -11,10 +11,11 @@ class wire_format_state_machine
   (state:Type0)
   (wire_message:Type0)
   (local_event:Type0)
+  (local_output:Type0)
   =
 {
   wfsm_state_machine:
-    SM.state_machine state wire_message local_event;
+    SM.state_machine state wire_message local_event local_output;
 
   wfsm_wire_format:
     WF.wire_format wire_message;
@@ -33,7 +34,8 @@ let rec trace_input_messages
   (#state:Type0)
   (#wire_message:Type0)
   (#local_event:Type0)
-  (trace:list (SM.transition state wire_message local_event))
+  (#local_output:Type0)
+  (trace:list (SM.transition state wire_message local_event local_output))
   : Tot (list wire_message)
         (decreases trace)
 =
@@ -46,7 +48,8 @@ let valid_byte_trace
   (#state:Type0)
   (#wire_message:Type0)
   (#local_event:Type0)
-  (system:wire_format_state_machine state wire_message local_event)
+  (#local_output:Type0)
+  (system:wire_format_state_machine state wire_message local_event local_output)
   (input_bytes:TCP.bytes)
   (st1:state)
   (output_bytes:TCP.bytes)
@@ -67,16 +70,26 @@ let valid_byte_trace
       output_bytes
       (WF.serialize_all
         system.wfsm_wire_format
-        (SM.trace_outputs trace))
+        (SM.trace_wire_outputs trace))
+
+let trace_local_outputs
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (trace:list (SM.transition state wire_message local_event local_output))
+  : Tot (list local_output) =
+  SM.trace_local_outputs trace
 
 let lemma_serialized_trace_inputs_refine_bytes
   (#state:Type0)
   (#wire_message:Type0)
   (#local_event:Type0)
-  (system:wire_format_state_machine state wire_message local_event)
+  (#local_output:Type0)
+  (system:wire_format_state_machine state wire_message local_event local_output)
   (laws:WF.wire_format_stream_laws wire_message system.wfsm_wire_format)
   (st0:state)
-  (trace:list (SM.transition state wire_message local_event))
+  (trace:list (SM.transition state wire_message local_event local_output))
   (st1:state)
   (residual_input:TCP.bytes)
   : Lemma
@@ -93,7 +106,7 @@ let lemma_serialized_trace_inputs_refine_bytes
           st1
           (WF.serialize_all
             system.wfsm_wire_format
-            (SM.trace_outputs trace))
+            (SM.trace_wire_outputs trace))
           residual_input)
 =
   WF.lemma_parse_serialize_with_tail_inverse
@@ -112,10 +125,10 @@ let lemma_serialized_trace_inputs_refine_bytes
   assert (Seq.equal
     (WF.serialize_all
       system.wfsm_wire_format
-      (SM.trace_outputs trace))
+      (SM.trace_wire_outputs trace))
     (WF.serialize_all
       system.wfsm_wire_format
-    (SM.trace_outputs trace)));
+    (SM.trace_wire_outputs trace)));
   if st0 == system.wfsm_state_machine.SM.sm_initial_state then
     assert (exists trace'.
     SM.trace_reaches
@@ -134,7 +147,7 @@ let lemma_serialized_trace_inputs_refine_bytes
     Seq.equal
       (WF.serialize_all
         system.wfsm_wire_format
-        (SM.trace_outputs trace))
+        (SM.trace_wire_outputs trace))
       (WF.serialize_all
         system.wfsm_wire_format
-        (SM.trace_outputs trace')))
+        (SM.trace_wire_outputs trace')))

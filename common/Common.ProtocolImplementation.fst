@@ -86,18 +86,31 @@ let state_ahead
   (#state:Type0)
   (#wire_message:Type0)
   (#local_event:Type0)
-  (system:WFSM.wire_format_state_machine state wire_message local_event)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
   (st0:state)
   (st1:state)
   : prop =
   exists trace.
     SM.trace_reaches system.WFSM.wfsm_state_machine st0 trace st1
 
+let step_output
+  (#wire_message:Type0)
+  (#local_output:Type0)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : SM.step_output wire_message local_output =
+  {
+    SM.so_wire_outputs = wire_outputs;
+    SM.so_local_outputs = local_outputs;
+  }
+
 let network_process_correct
   (#state:Type0)
   (#wire_message:Type0)
   (#local_event:Type0)
-  (system:WFSM.wire_format_state_machine state wire_message local_event)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
   (input:TCP.bytes)
   (input_len:SZ.t)
   (old_out out_bytes:TCP.bytes)
@@ -107,12 +120,15 @@ let network_process_correct
   (result:process_result)
   (received1 sent1:TCP.bytes)
   (st1:state)
+  (consumed:TCP.bytes)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
   : prop =
   buffers_wf input input_len old_out out_len /\
   Seq.length out_bytes == Seq.length old_out /\
   (match result.process_status with
   | ProcessOk ->
-    exists msg consumed residual outputs produced.
+    exists msg residual produced.
       consumed_by_parse
         system.WFSM.wfsm_wire_format
         (input_bytes input input_len)
@@ -124,36 +140,40 @@ let network_process_correct
         st0
         (SM.WireEvent msg)
         st1
-        outputs /\
+        (step_output wire_outputs local_outputs) /\
       Seq.equal
         produced
-        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+        (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
       output_written out_bytes result.process_produced_len produced /\
       Seq.equal received1 (Seq.append received0 consumed) /\
       Seq.equal sent1 (Seq.append sent0 produced)
   | ParseFailed ->
     system.WFSM.wfsm_wire_format.WF.wf_parse (input_bytes input input_len) == None /\
+    Seq.equal consumed Seq.empty /\
+    wire_outputs == [] /\
+    local_outputs == [] /\
     result.process_consumed_len == 0sz /\
     result.process_produced_len == 0sz /\
     same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
     Seq.equal out_bytes old_out
   | OutputTooSmall ->
-    exists msg consumed residual outputs produced st_candidate.
+    exists msg parsed_consumed residual produced st_candidate.
       consumed_by_parse
         system.WFSM.wfsm_wire_format
         (input_bytes input input_len)
         msg
-        consumed
+        parsed_consumed
         residual /\
       system.WFSM.wfsm_state_machine.SM.sm_step
         st0
         (SM.WireEvent msg)
         st_candidate
-        outputs /\
+        (step_output wire_outputs local_outputs) /\
       Seq.equal
         produced
-        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+        (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
       SZ.v out_len < Seq.length produced /\
+      Seq.equal consumed Seq.empty /\
       result.process_consumed_len == 0sz /\
       result.process_produced_len == 0sz /\
       same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
@@ -163,7 +183,8 @@ let local_process_correct
   (#state:Type0)
   (#wire_message:Type0)
   (#local_event:Type0)
-  (system:WFSM.wire_format_state_machine state wire_message local_event)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
   (ev:local_event)
   (old_out out_bytes:TCP.bytes)
   (out_len:SZ.t)
@@ -172,40 +193,153 @@ let local_process_correct
   (result:process_result)
   (received1 sent1:TCP.bytes)
   (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
   : prop =
   SZ.v out_len == Seq.length old_out /\
   Seq.length out_bytes == Seq.length old_out /\
   result.process_consumed_len == 0sz /\
   (match result.process_status with
   | ProcessOk ->
-    exists outputs produced.
+    exists produced.
       system.WFSM.wfsm_state_machine.SM.sm_step
         st0
         (SM.LocalEvent ev)
         st1
-        outputs /\
+        (step_output wire_outputs local_outputs) /\
       Seq.equal
         produced
-        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+        (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
       output_written out_bytes result.process_produced_len produced /\
       Seq.equal received1 received0 /\
       Seq.equal sent1 (Seq.append sent0 produced)
   | ParseFailed ->
     False
   | OutputTooSmall ->
-    exists outputs produced st_candidate.
+    exists produced st_candidate.
       system.WFSM.wfsm_state_machine.SM.sm_step
         st0
         (SM.LocalEvent ev)
         st_candidate
-        outputs /\
+        (step_output wire_outputs local_outputs) /\
       Seq.equal
         produced
-        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+        (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
       SZ.v out_len < Seq.length produced /\
       result.process_produced_len == 0sz /\
       same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
       Seq.equal out_bytes old_out)
+
+let lemma_network_process_ok_refines_transition
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (input:TCP.bytes)
+  (input_len:SZ.t)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:process_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (consumed:TCP.bytes)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+      (requires
+        network_process_correct
+          system
+          input
+          input_len
+          old_out
+          out_bytes
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          consumed
+          wire_outputs
+          local_outputs /\
+        result.process_status == ProcessOk)
+      (ensures
+        exists msg residual produced.
+          consumed_by_parse
+            system.WFSM.wfsm_wire_format
+            (input_bytes input input_len)
+            msg
+            consumed
+            residual /\
+          SZ.v result.process_consumed_len == Seq.length consumed /\
+          system.WFSM.wfsm_state_machine.SM.sm_step
+            st0
+            (SM.WireEvent msg)
+            st1
+            (step_output wire_outputs local_outputs) /\
+          Seq.equal
+            produced
+            (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+          output_written out_bytes result.process_produced_len produced /\
+          Seq.equal received1 (Seq.append received0 consumed) /\
+          Seq.equal sent1 (Seq.append sent0 produced))
+=
+  ()
+
+let lemma_local_process_ok_refines_transition
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (ev:local_event)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:process_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+      (requires
+        local_process_correct
+          system
+          ev
+          old_out
+          out_bytes
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          wire_outputs
+          local_outputs /\
+        result.process_status == ProcessOk)
+      (ensures
+        exists produced.
+          system.WFSM.wfsm_state_machine.SM.sm_step
+            st0
+            (SM.LocalEvent ev)
+            st1
+            (step_output wire_outputs local_outputs) /\
+          Seq.equal
+            produced
+            (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+          output_written out_bytes result.process_produced_len produced /\
+          Seq.equal received1 received0 /\
+          Seq.equal sent1 (Seq.append sent0 produced))
+=
+  ()
 
 noextract
 class protocol_implementation
@@ -213,10 +347,11 @@ class protocol_implementation
   (state:Type0)
   (wire_message:Type0)
   (local_event:Type0)
+  (local_output:Type0)
   =
 {
   pi_system:
-    WFSM.wire_format_state_machine state wire_message local_event;
+    WFSM.wire_format_state_machine state wire_message local_event local_output;
 
   pi_invariant:
     impl ->
@@ -235,16 +370,42 @@ class protocol_implementation
   pi_network_frame:
     Type0;
 
-  pi_network_frame_slprop:
+  pi_network_frame_pre:
     pi_network_frame ->
+    slprop;
+
+  pi_network_frame_post:
+    pi_network_frame ->
+    process_result ->
+    TCP.bytes ->
+    SZ.t ->
+    TCP.bytes ->
+    TCP.bytes ->
+    state ->
+    state ->
+    TCP.bytes ->
+    list wire_message ->
+    list local_output ->
     slprop;
 
   pi_local_frame:
     Type0;
 
-  pi_local_frame_slprop:
+  pi_local_frame_pre:
     local_event ->
     pi_local_frame ->
+    slprop;
+
+  pi_local_frame_post:
+    local_event ->
+    pi_local_frame ->
+    process_result ->
+    TCP.bytes ->
+    TCP.bytes ->
+    state ->
+    state ->
+    list wire_message ->
+    list local_output ->
     slprop;
 
   pi_invariant_valid:
@@ -349,7 +510,7 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
-         pi_network_frame_slprop frame **
+          pi_network_frame_pre frame **
          pts_to input (Ghost.reveal input_contents) **
          pts_to out (Ghost.reveal old_out) **
          pure (
@@ -362,13 +523,27 @@ class protocol_implementation
           exists* (received1:Ghost.erased TCP.bytes)
                   (sent1:Ghost.erased TCP.bytes)
                   (st1:Ghost.erased state)
-                  (out_contents:TCP.bytes).
+                  (out_contents:TCP.bytes)
+                  (consumed:TCP.bytes)
+                  (wire_outputs:list wire_message)
+                  (local_outputs:list local_output).
             pi_invariant
               i
               (Ghost.reveal received1)
               (Ghost.reveal sent1)
               (Ghost.reveal st1) **
-            pi_network_frame_slprop frame **
+            pi_network_frame_post
+              frame
+              result
+              (Ghost.reveal input_contents)
+              input_len
+              (Ghost.reveal old_out)
+              out_contents
+              (Ghost.reveal st0)
+              (Ghost.reveal st1)
+              consumed
+              wire_outputs
+              local_outputs **
             pts_to input (Ghost.reveal input_contents) **
             pts_to out out_contents **
             pure (
@@ -385,7 +560,10 @@ class protocol_implementation
                 result
                 (Ghost.reveal received1)
                 (Ghost.reveal sent1)
-                (Ghost.reveal st1)));
+                (Ghost.reveal st1)
+                consumed
+                wire_outputs
+                local_outputs));
 
   pi_process_local:
     i:impl ->
@@ -403,20 +581,31 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
-         pi_local_frame_slprop ev frame **
+         pi_local_frame_pre ev frame **
          pts_to out (Ghost.reveal old_out) **
          pure (SZ.v out_len == Seq.length (Ghost.reveal old_out)))
         (fun result ->
           exists* (received1:Ghost.erased TCP.bytes)
                   (sent1:Ghost.erased TCP.bytes)
                   (st1:Ghost.erased state)
-                  (out_contents:TCP.bytes).
+                  (out_contents:TCP.bytes)
+                  (wire_outputs:list wire_message)
+                  (local_outputs:list local_output).
             pi_invariant
               i
               (Ghost.reveal received1)
               (Ghost.reveal sent1)
               (Ghost.reveal st1) **
-            pi_local_frame_slprop ev frame **
+            pi_local_frame_post
+              ev
+              frame
+              result
+              (Ghost.reveal old_out)
+              out_contents
+              (Ghost.reveal st0)
+              (Ghost.reveal st1)
+              wire_outputs
+              local_outputs **
             pts_to out out_contents **
             pure (
               local_process_correct
@@ -431,5 +620,7 @@ class protocol_implementation
                 result
                 (Ghost.reveal received1)
                 (Ghost.reveal sent1)
-                (Ghost.reveal st1)));
+                (Ghost.reveal st1)
+                wire_outputs
+                local_outputs));
 }
