@@ -40,6 +40,13 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -760,13 +767,20 @@ fn select_server_parameters_with_private_from_array
   fold (connection_exactly c (selected_server_parameters_state st0 (Ghost.reveal selection)))
 }
 
+let lemma_sent_server_hello_state_server_hello
+  (st:CS.connection_state) (sh:GSH.serverHello) (raw:B.bytes)
+  : Lemma
+      (ensures (sent_server_hello_state st sh raw).CS.cs_model.CS.model_handshake.CS.hs_server_hello
+               == Some sh)
+  = ()
+
 fn mark_sent_server_hello
   (c:connection_state)
   (raw:array U8.t)
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -806,11 +820,10 @@ fn mark_sent_server_hello
     (Ghost.reveal 'raw_bytes)
     B.empty));
 
-  W.lemma_serialize_server_hello_len sh;
-  assert (pure (B.length (Ghost.reveal 'fragment_bytes) == SZ.v fragment_len));
   assert (pure (Seq.equal
     (Ghost.reveal 'fragment_bytes)
     (W.serialize_handshake (M.ServerHello sh))));
+  Seq.lemma_eq_elim (Ghost.reveal 'fragment_bytes) (W.serialize_handshake (M.ServerHello sh));
   assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == SZ.v fragment_len));
 
   unfold (connection_exactly c st0);
@@ -824,7 +837,7 @@ fn mark_sent_server_hello
     c.handshake.server_key_share
     32
     (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> Some sh.M.key_share
+     | Some sh -> CS.server_hello_key_share sh
      | None -> None));
   with old_server_key_share_present old_server_key_share_storage. _;
 
@@ -865,12 +878,16 @@ fn mark_sent_server_hello
   V.to_vec_pts_to c.handshake.server_key_share.bytes;
   c.handshake.server_key_share.present := true;
   with copied_server_key_share. assert (V.pts_to c.handshake.server_key_share.bytes copied_server_key_share);
-  assert (pure (Seq.equal copied_server_key_share (Ghost.reveal sh).M.key_share));
-  assert (pure (optional_fixed_bytes_match true copied_server_key_share 32 (Some (Ghost.reveal sh).M.key_share)));
+  assert (pure (Some? (CS.server_hello_key_share (Ghost.reveal sh)) /\
+    Seq.equal copied_server_key_share (Some?.v (CS.server_hello_key_share (Ghost.reveal sh)))));
+  assert (pure (optional_fixed_bytes_match true copied_server_key_share 32 (CS.server_hello_key_share (Ghost.reveal sh))));
+  lemma_sent_server_hello_state_server_hello st0 sh (Ghost.reveal 'raw_bytes);
   fold (optional_fixed_bytes_exactly
     c.handshake.server_key_share
     32
-    (Some (Ghost.reveal sh).M.key_share));
+    (match (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+     | Some sh -> CS.server_hello_key_share sh
+     | None -> None));
   fold (server_key_share_exactly
     c.handshake.server_key_share
     (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
@@ -980,7 +997,7 @@ fn mark_sent_encrypted_extensions
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lee:IM.encrypted_extensions)
-  (#ee:erased M.encrypted_extensions)
+  (#ee:erased GEE.encryptedExtensions)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
          ArrPts.pts_to raw 'raw_bytes **
@@ -1001,7 +1018,7 @@ fn mark_sent_encrypted_extensions
     CS.ControlHandshaking CS.HsServerHelloSent));
   assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role ==
     CS.ServerEndpoint));
-  assert (pure ((Ghost.reveal ee).M.negotiated_alpn == None));
+  assert (pure (Sem.encryptedExtensions_alpn (Ghost.reveal ee) == None));
   assert (pure (Some?
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
   assert (pure (U64.fits
@@ -1179,7 +1196,7 @@ fn mark_sent_certificate
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lcert:IM.certificate_msg)
-  (#cert:erased M.certificate_msg)
+  (#cert:erased GCert.certificate)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -1190,14 +1207,14 @@ fn mark_sent_certificate
                    (Ghost.reveal 'fragment_bytes)
                    (W.serialize_handshake (M.Certificate cert)) /\
                  st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
-                 (Ghost.reveal cert).M.chain <> [] /\
+                 Sem.certificate_entries (Ghost.reveal cert) <> [] /\
                  can_send_certificate st0 cert (Ghost.reveal 'raw_bytes))
   ensures connection_exactly
             c
             (sent_certificate_state st0 cert (Ghost.reveal 'raw_bytes)) **
           ArrPts.pts_to raw 'raw_bytes **
           ArrPts.pts_to fragment 'fragment_bytes **
-          pure (match (Ghost.reveal cert).M.chain with
+          pure (match Sem.certificate_entries (Ghost.reveal cert) with
                 | leaf :: _ ->
                   (sent_certificate_state st0 cert (Ghost.reveal 'raw_bytes)).
                     CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der ==
@@ -1210,7 +1227,7 @@ fn mark_sent_certificate
     CS.ServerEndpoint));
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
-  assert (pure ((Ghost.reveal cert).M.chain <> []));
+  assert (pure (Sem.certificate_entries (Ghost.reveal cert) <> []));
   assert (pure (Some?
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
   assert (pure (U64.fits
@@ -1293,7 +1310,7 @@ fn mark_sent_certificate
     offsets
     lens
     (SZ.v lcert.IM.certificate_msg_cert_count)
-    (Ghost.reveal cert).M.chain;
+    (Sem.certificate_entries (Ghost.reveal cert));
 
   assert (pure (SZ.v 0sz < IM.max_certificate_chain_entries));
   V.to_array_pts_to lcert.IM.certificate_msg_cert_offsets;
@@ -1307,7 +1324,7 @@ fn mark_sent_certificate
 
   let leaf =
     Ghost.hide
-      (match (Ghost.reveal cert).M.chain with
+      (match Sem.certificate_entries (Ghost.reveal cert) with
        | cert_leaf :: _ -> cert_leaf
        | [] -> B.empty);
   assert (pure (Seq.equal
@@ -1471,7 +1488,7 @@ fn mark_sent_certificate
 fn mark_signed_certificate_verify
   (c:connection_state)
   (lcv:IM.certificate_verify)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            IM.is_valid_certificate_verify lcv cv **
@@ -1728,7 +1745,7 @@ fn mark_sent_certificate_verify
   (raw:array U8.t)
   (fragment:array U8.t)
   (fragment_len:SZ.t)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -1928,7 +1945,7 @@ fn mark_sent_certificate_verify
 
 fn serialize_stored_certificate_verify_fragment
   (c:connection_state)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (#st0:erased CS.connection_state)
@@ -1937,20 +1954,15 @@ fn serialize_stored_certificate_verify_fragment
            pure (B.length 'old_fragment_bytes == SZ.v fragment_len /\
                  st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                    Some (Ghost.reveal cv) /\
-                 B.length (Ghost.reveal cv).M.body == 0 /\
                  SZ.v fragment_len ==
-                   B.length (W.serialize_certificate_verify_from_signature
-                     (Ghost.reveal cv)))
+                   B.length (W.serialize_handshake
+                     (M.CertificateVerify (Ghost.reveal cv))))
   returns written_fragment:(n:SZ.t{SZ.v n <= SZ.v fragment_len})
   ensures exists* fragment_bytes.
            connection_exactly c st0 **
            ArrPts.pts_to fragment fragment_bytes **
            pure (B.length fragment_bytes == SZ.v fragment_len /\
                  SZ.v written_fragment == SZ.v fragment_len /\
-                 Seq.equal
-                   fragment_bytes
-                   (W.serialize_certificate_verify_from_signature
-                     (Ghost.reveal cv)) /\
                  Seq.equal
                    fragment_bytes
                    (W.serialize_handshake
@@ -1988,22 +2000,6 @@ fn serialize_stored_certificate_verify_fragment
   assert (pure (SZ.v written_fragment == SZ.v fragment_len));
   assert (pure (Seq.equal
     fragment_bytes
-    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
-  W.lemma_fixed_server_handshake_serializers
-    {
-      M.random = Seq.create 32 0uy;
-      M.key_share = Seq.create 32 0uy;
-      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-      M.body = B.empty;
-    }
-    { M.chain = []; M.body = B.empty }
-    (Ghost.reveal cv)
-    { M.verify_data = Seq.create 32 0uy };
-  assert (pure (Seq.equal
-    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))
-    (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
-  assert (pure (Seq.equal
-    fragment_bytes
     (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
   rewrite (IM.is_valid_certificate_verify lcv (Ghost.reveal cv))
     as (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
@@ -2026,7 +2022,7 @@ fn mark_sent_server_finished
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -2232,6 +2228,60 @@ fn mark_sent_server_finished
     (sent_server_finished_state st0 fin (Ghost.reveal 'raw_bytes)))
 }
 
+(* Faithful replacement for the (now-weakened) Model
+   lemma_client_hello_len_helpers_from_start: the build-direction client hello
+   serializer exposes optional_byte_prefix_matches / cipher_suites_match /
+   signature_schemes_match relating the runtime metadata lengths to the
+   profile-relevant fields of the generated clientHello record [ch]. From those
+   we recover client_hello_*_len_for ch == *_len directly, independent of the
+   placeholder client_hello_of_start. *)
+let lemma_client_hello_len_for_from_serializer
+  (ch:GCH.clientHello)
+  (server_name:B.bytes)
+  (server_name_len:SZ.t)
+  (cipher_suites:Seq.seq U16.t)
+  (cipher_suites_len:SZ.t)
+  (signature_schemes:Seq.seq U16.t)
+  (signature_schemes_len:SZ.t)
+  : Lemma
+    (requires
+      IM.optional_byte_prefix_matches true server_name server_name_len
+        (Sem.clientHello_server_name ch) /\
+      IM.cipher_suites_match cipher_suites (SZ.v cipher_suites_len)
+        (Sem.clientHello_cipher_suites ch) /\
+      (match Sem.clientHello_sig_algs ch with
+       | Some sas ->
+         IM.signature_schemes_match signature_schemes (SZ.v signature_schemes_len) sas
+       | None -> False) /\
+      SZ.v server_name_len <= B.length server_name /\
+      B.length server_name == IM.max_server_name_len /\
+      SZ.v cipher_suites_len <= Seq.length cipher_suites /\
+      Seq.length cipher_suites == IM.max_cipher_suites /\
+      SZ.v signature_schemes_len <= Seq.length signature_schemes /\
+      Seq.length signature_schemes == IM.max_signature_schemes)
+    (ensures
+      client_hello_server_name_len_for ch == server_name_len /\
+      client_hello_cipher_suites_len_for ch == cipher_suites_len /\
+      client_hello_signature_schemes_len_for ch == signature_schemes_len)
+  =
+  (* server_name: optional_byte_prefix_matches forces Some b with B.length b == len *)
+  (match Sem.clientHello_server_name ch with
+   | Some b ->
+     assert (IM.byte_prefix_matches server_name server_name_len b);
+     assert (B.length b == SZ.v server_name_len);
+     lemma_bounded_u16_sizet_of_sizet (B.length b) server_name_len
+   | None -> ());
+  (* cipher_suites: list length == cipher_suites_len *)
+  lemma_cipher_suites_match_length cipher_suites (SZ.v cipher_suites_len)
+    (Sem.clientHello_cipher_suites ch);
+  lemma_bounded_u16_sizet_of_sizet (length (Sem.clientHello_cipher_suites ch)) cipher_suites_len;
+  (* signature_schemes: Some sas with list length == signature_schemes_len *)
+  (match Sem.clientHello_sig_algs ch with
+   | Some sas ->
+     lemma_signature_schemes_match_length signature_schemes (SZ.v signature_schemes_len) sas;
+     lemma_bounded_u16_sizet_of_sizet (length sas) signature_schemes_len
+   | None -> ())
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)
@@ -2367,6 +2417,22 @@ fn try_send_client_hello
     let ch = Ghost.hide (client_hello_of_start (Ghost.reveal start));
     assert (pure (Ghost.reveal ch == client_hello_of_start start_spec));
     lemma_client_hello_of_start_matches (Ghost.reveal start);
+    // TODO-A1: BLOCKED on upstream Model faithful `client_hello_of_start`.
+    // The serializer `Ser.serialize_client_hello_from_start` (and the assert
+    // below) require its precondition
+    //   CS.client_hello_matches_start start_spec (client_hello_of_start start_spec)
+    // i.e. the built clientHello's Sem.* accessors return start's actual
+    // random/server_name/key_share/cipher_suites/sig_algs.  But Model's
+    // `client_hello_of_start` is a fixed placeholder (Model.fst:167: faithful
+    // random only; fixed cipher [TLS_CHACHA20_POLY1305_SHA256], single
+    // [Ed25519] sig ext, NO server_name/key_share extensions), so the property
+    // is genuinely false for it and `lemma_client_hello_of_start_matches`
+    // (Model.fst:188) is weakened to `Lemma (True)`.  Establishing this needs a
+    // faithful builder constructing the server_name/key_share/sig_algs generated
+    // extension records (with their wire bytesize refinements) + the 5 accessor
+    // round-trips — an upstream Model TODO-A1, not read-direction retargeting.
+    // Diagnostic (`assume_` of the line below) confirms this is the ONLY blocker:
+    // the whole module otherwise verifies.
     assert (pure (CS.client_hello_matches_start start_spec (Ghost.reveal ch)));
 
     let written =
@@ -2423,8 +2489,7 @@ fn try_send_client_hello
       B.length (W.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
     assert (pure (SZ.v handshake_len <= max_client_hello_len));
     assert (pure (SZ.v (server_name_len) <= B.length server_name));
-    lemma_client_hello_len_helpers_from_start
-      start_spec
+    lemma_client_hello_len_for_from_serializer
       (Ghost.reveal ch)
       server_name
       server_name_len
@@ -4409,7 +4474,7 @@ fn try_derive_shared_secret
     c.handshake.server_key_share
     32
     (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> Some sh.M.key_share
+     | Some sh -> CS.server_hello_key_share sh
      | None -> None));
   unfold (key_schedule_exactly
     c.handshake.keys
@@ -4446,7 +4511,7 @@ fn try_derive_shared_secret
       server_share_storage
       32
       (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-       | Some sh -> Some sh.M.key_share
+       | Some sh -> CS.server_hello_key_share sh
        | None -> None);
     lemma_server_key_share_option_some
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello
@@ -4455,7 +4520,7 @@ fn try_derive_shared_secret
     assert (pure (st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerHelloReceived));
     assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some (Ghost.reveal sh)));
-    assert (pure (server_share_storage == (Ghost.reveal sh).M.key_share));
+    assert (pure (CS.server_hello_key_share (Ghost.reveal sh) == Some server_share_storage));
 
     if has_start {
     unfold (handshake_start_payload_exactly
@@ -4510,7 +4575,8 @@ fn try_derive_shared_secret
           let shared_secret = Ghost.hide (Some?.v (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e)));
           assert (pure (Ghost.reveal shared_secret == shared));
           assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) == Some (Ghost.reveal shared_secret)));
-          assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_spec) (Ghost.reveal sh).M.key_share == Some (Ghost.reveal shared_secret)));
+          assert (pure (CS.server_hello_key_share (Ghost.reveal sh) == Some (Ghost.reveal server_share_storage_e)));
+          assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_spec) (Ghost.reveal server_share_storage_e) == Some (Ghost.reveal shared_secret)));
           assert (pure (CS.legal_event
             st0.CS.cs_model
             (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret (Ghost.reveal shared_secret)))));
@@ -4556,7 +4622,7 @@ fn try_derive_shared_secret
             c.handshake.server_key_share
             32
             (match (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-             | Some sh -> Some sh.M.key_share
+             | Some sh -> CS.server_hello_key_share sh
              | None -> None));
           fold (server_key_share_exactly
             c.handshake.server_key_share
@@ -4597,7 +4663,7 @@ fn try_derive_shared_secret
             c.handshake.server_key_share
             32
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-             | Some sh -> Some sh.M.key_share
+             | Some sh -> CS.server_hello_key_share sh
              | None -> None));
           fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
           fold (key_schedule_exactly
@@ -4630,7 +4696,7 @@ fn try_derive_shared_secret
         c.handshake.server_key_share
         32
         (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-         | Some sh -> Some sh.M.key_share
+         | Some sh -> CS.server_hello_key_share sh
          | None -> None));
       fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
       fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
@@ -4649,7 +4715,7 @@ fn try_derive_shared_secret
         c.handshake.server_key_share
         32
         (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-         | Some sh -> Some sh.M.key_share
+         | Some sh -> CS.server_hello_key_share sh
          | None -> None));
       fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
       fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
@@ -4671,7 +4737,7 @@ fn try_derive_shared_secret
         c.handshake.server_key_share
         32
         (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-         | Some sh -> Some sh.M.key_share
+         | Some sh -> CS.server_hello_key_share sh
          | None -> None));
       fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
       fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
@@ -4715,9 +4781,12 @@ fn try_derive_server_shared_secret_from_private_array
                ArrPts.pts_to server_private_key 'server_private_key_bytes **
                pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
                       | Some ch ->
-                        TLS13.Crypto.Spec.x25519_shared
-                          (Ghost.reveal 'server_private_key_bytes)
-                          ch.M.key_share == Some shared
+                        (match CS.client_hello_key_share ch with
+                         | Some k ->
+                           TLS13.Crypto.Spec.x25519_shared
+                             (Ghost.reveal 'server_private_key_bytes)
+                             k == Some shared
+                         | None -> False)
                       | None -> False) /\
                      CS.legal_connection_delta
                        st0
@@ -4753,9 +4822,10 @@ fn try_derive_server_shared_secret_from_private_array
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
     Some (Ghost.reveal ch)));
   assert (pure ch_present);
-  assert (pure (Seq.equal ch_key_share (Ghost.reveal ch).M.key_share));
-  Seq.lemma_eq_intro ch_key_share (Ghost.reveal ch).M.key_share;
-  assert (pure (ch_key_share == (Ghost.reveal ch).M.key_share));
+  assert (pure (Some? (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)) /\
+    Seq.equal ch_key_share (Some?.v (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)))));
+  Seq.lemma_eq_elim ch_key_share (Some?.v (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)));
+  assert (pure (CS.client_hello_key_share (Ghost.reveal ch) == Some ch_key_share));
   assert (pure (B.length ch_key_share == 32));
   assert (pure (B.length (Ghost.reveal 'server_private_key_bytes) == 32));
 
@@ -4803,18 +4873,19 @@ fn try_derive_server_shared_secret_from_private_array
       ch_key_share == Some shared));
     assert (pure (TLS13.Crypto.Spec.x25519_shared
       (Ghost.reveal 'server_private_key_bytes)
-      (Ghost.reveal ch).M.key_share == Some shared));
+      ch_key_share == Some shared));
     let shared_secret =
       Ghost.hide (Some?.v (TLS13.Crypto.Spec.x25519_shared
         (Ghost.reveal 'server_private_key_bytes)
-        (Ghost.reveal ch).M.key_share));
+        ch_key_share));
     assert (pure (Ghost.reveal shared_secret == shared));
     assert (pure (TLS13.Crypto.Spec.x25519_shared
       (Ghost.reveal 'server_private_key_bytes)
-      (Ghost.reveal ch).M.key_share == Some (Ghost.reveal shared_secret)));
+      ch_key_share == Some (Ghost.reveal shared_secret)));
+    assert (pure (CS.client_hello_key_share (Ghost.reveal selection).CS.server_selected_client_hello == Some ch_key_share));
     assert (pure (TLS13.Crypto.Spec.x25519_shared
       (Some?.v (Ghost.reveal selection).CS.server_key_share_private)
-      (Ghost.reveal selection).CS.server_selected_client_hello.M.key_share ==
+      ch_key_share ==
       Some (Ghost.reveal shared_secret)));
     assert (pure (CS.legal_event
       st0.CS.cs_model

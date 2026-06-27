@@ -41,6 +41,13 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -109,7 +116,7 @@ fn mark_sent_client_finished
   (lfin:IM.finished)
   (network_out:array U8.t)
   (written:SZ.t)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#raw_sent:erased B.bytes)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
@@ -485,7 +492,8 @@ fn try_send_client_finished
     fold (connection_model_exactly c st0.CS.cs_model);
     fold (connection_exactly c st0);
 
-    let fin = Ghost.hide ({ M.verify_data = verify_data_bytes });
+    assert (pure (B.length verify_data_bytes == 32));
+    let fin = Ghost.hide (verify_data_bytes <: GFin.finished);
     let fin_vec = V.alloc 0uy 32sz;
     copy_fixed32_array_to_vec verify_data fin_vec;
     let lfin = { IM.finished_verify_data = fin_vec };
@@ -495,7 +503,7 @@ fn try_send_client_finished
     rewrite (V.pts_to fin_vec fin_vec_bytes)
       as (V.pts_to lfin.IM.finished_verify_data fin_vec_bytes);
     assert (pure (B.length verify_data_bytes == 32));
-    assert (pure (Seq.equal fin_vec_bytes (Ghost.reveal fin).M.verify_data));
+    assert (pure (Seq.equal fin_vec_bytes (Sem.finished_verify_data (Ghost.reveal fin))));
     fold (IM.is_valid_finished lfin (Ghost.reveal fin));
     lemma_seal_some_of_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
@@ -559,7 +567,12 @@ fn try_send_client_finished
       })
       (Ghost.reveal raw_sent)
       B.empty));
-    W.lemma_serialize_finished_len (Ghost.reveal fin_sent);
+    // Phase 5: deleted W.lemma_serialize_finished_len.  The fixed 36-byte length of
+    // serialize_handshake (M.Finished fin_sent) is recovered from the serializer
+    // output facts above (B.length serialized_finished_bytes == 36 and
+    // serialized_finished_bytes == serialize_handshake (M.Finished fin_sent)).
+    assert (pure (B.length (W.serialize_handshake (M.Finished (Ghost.reveal fin_sent))) ==
+      B.length serialized_finished_bytes));
     assert (pure (B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
       B.length (W.serialize_handshake (M.Finished (Ghost.reveal fin_sent))) <= max_transcript_len));
     assert (pure (can_send_client_finished st0 (Ghost.reveal fin_sent) (Ghost.reveal raw_sent)));

@@ -40,6 +40,13 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -69,7 +76,7 @@ fn mark_sent_client_finished
   (lfin:IM.finished)
   (network_out:array U8.t)
   (written:SZ.t)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#raw_sent:erased B.bytes)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
