@@ -14,8 +14,12 @@ module WFSM = Common.WireFormatStateMachine
 
 type process_status =
   | ProcessOk
+  | NeedMoreInput
   | ParseFailed
+  | DecodeError
+  | IllegalTransition
   | OutputTooSmall
+  | ConnectionFailed
 
 noeq
 type process_result = {
@@ -82,6 +86,19 @@ let same_abstract_state
   Seq.equal sent1 sent0 /\
   st1 == st0
 
+let no_progress_status (status:process_status) : bool =
+  match status with
+  | NeedMoreInput
+  | ParseFailed -> true
+  | _ -> false
+
+let non_step_status (status:process_status) : bool =
+  match status with
+  | DecodeError
+  | IllegalTransition
+  | ConnectionFailed -> true
+  | _ -> false
+
 let state_ahead
   (#state:Type0)
   (#wire_message:Type0)
@@ -147,6 +164,15 @@ let network_process_correct
       output_written out_bytes result.process_produced_len produced /\
       Seq.equal received1 (Seq.append received0 consumed) /\
       Seq.equal sent1 (Seq.append sent0 produced)
+  | NeedMoreInput ->
+    system.WFSM.wfsm_wire_format.WF.wf_parse (input_bytes input input_len) == None /\
+    Seq.equal consumed Seq.empty /\
+    wire_outputs == [] /\
+    local_outputs == [] /\
+    result.process_consumed_len == 0sz /\
+    result.process_produced_len == 0sz /\
+    same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
+    Seq.equal out_bytes old_out
   | ParseFailed ->
     system.WFSM.wfsm_wire_format.WF.wf_parse (input_bytes input input_len) == None /\
     Seq.equal consumed Seq.empty /\
@@ -177,7 +203,18 @@ let network_process_correct
       result.process_consumed_len == 0sz /\
       result.process_produced_len == 0sz /\
       same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
-      Seq.equal out_bytes old_out)
+      Seq.equal out_bytes old_out
+  | DecodeError
+  | IllegalTransition
+  | ConnectionFailed ->
+    exists produced.
+      SZ.v result.process_consumed_len == Seq.length consumed /\
+      Seq.equal
+        produced
+        (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+      output_written out_bytes result.process_produced_len produced /\
+      Seq.equal received1 (Seq.append received0 consumed) /\
+      Seq.equal sent1 (Seq.append sent0 produced))
 
 let local_process_correct
   (#state:Type0)
@@ -213,6 +250,8 @@ let local_process_correct
       output_written out_bytes result.process_produced_len produced /\
       Seq.equal received1 received0 /\
       Seq.equal sent1 (Seq.append sent0 produced)
+  | NeedMoreInput ->
+    False
   | ParseFailed ->
     False
   | OutputTooSmall ->
@@ -228,7 +267,17 @@ let local_process_correct
       SZ.v out_len < Seq.length produced /\
       result.process_produced_len == 0sz /\
       same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
-      Seq.equal out_bytes old_out)
+      Seq.equal out_bytes old_out
+  | DecodeError
+  | IllegalTransition
+  | ConnectionFailed ->
+    exists produced.
+      Seq.equal
+        produced
+        (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+      output_written out_bytes result.process_produced_len produced /\
+      Seq.equal received1 received0 /\
+      Seq.equal sent1 (Seq.append sent0 produced))
 
 let lemma_network_process_ok_refines_transition
   (#state:Type0)
@@ -372,6 +421,12 @@ class protocol_implementation
 
   pi_network_frame_pre:
     pi_network_frame ->
+    array U8.t ->
+    SZ.t ->
+    array U8.t ->
+    SZ.t ->
+    TCP.bytes ->
+    TCP.bytes ->
     slprop;
 
   pi_network_frame_post:
@@ -394,6 +449,9 @@ class protocol_implementation
   pi_local_frame_pre:
     local_event ->
     pi_local_frame ->
+    array U8.t ->
+    SZ.t ->
+    TCP.bytes ->
     slprop;
 
   pi_local_frame_post:
@@ -510,7 +568,14 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
-          pi_network_frame_pre frame **
+          pi_network_frame_pre
+            frame
+            input
+            input_len
+            out
+            out_len
+            (Ghost.reveal input_contents)
+            (Ghost.reveal old_out) **
          pts_to input (Ghost.reveal input_contents) **
          pts_to out (Ghost.reveal old_out) **
          pure (
@@ -581,7 +646,12 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
-         pi_local_frame_pre ev frame **
+         pi_local_frame_pre
+           ev
+           frame
+           out
+           out_len
+           (Ghost.reveal old_out) **
          pts_to out (Ghost.reveal old_out) **
          pure (SZ.v out_len == Seq.length (Ghost.reveal old_out)))
         (fun result ->
