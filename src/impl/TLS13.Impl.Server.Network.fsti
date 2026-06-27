@@ -13,6 +13,9 @@ module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GFin = TLS13.Wire.Generated.Finished
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -30,7 +33,7 @@ fn process_client_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lch:IM.client_hello)
-  (#ch:erased M.client_hello)
+  (#ch:erased GCH.clientHello)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -107,7 +110,7 @@ fn process_client_finished
   (raw:array U8.t)
   (raw_len:SZ.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)

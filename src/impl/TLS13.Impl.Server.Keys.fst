@@ -240,9 +240,12 @@ fn process_derive_shared_secret_from_private_array
                     st1 == CM.derived_shared_secret_state 'st0 shared /\
                     (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
                      | Some ch ->
-                       TLS13.Crypto.Spec.x25519_shared
-                         (Ghost.reveal 'server_private_key_bytes)
-                         ch.M.key_share == Some shared
+                       (match CS.client_hello_key_share ch with
+                        | Some ch_ks ->
+                          TLS13.Crypto.Spec.x25519_shared
+                            (Ghost.reveal 'server_private_key_bytes)
+                            ch_ks == Some shared
+                        | None -> False)
                      | None -> False))) /\
                 (resp.ST.status == ST.IllegalTransition ==>
                   ST.unexpected_message_response

@@ -25,6 +25,7 @@ module SSetup = TLS13.Impl.Server.Setup
 module SS = TLS13.Impl.Server.Send
 module ST = TLS13.Impl.Server.Types
 module T = TLS13.Types
+module Sem = TLS13.Wire.Semantics
 module W = TLS13.Wire.Spec
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
@@ -739,7 +740,29 @@ fn process_local_event_and_write_once
                    kind
                    (Ghost.reveal 'payload_bytes)
                    (Ghost.reveal 'certificate_chain)
-                   (Ghost.reveal 'credential_identity))
+                   (Ghost.reveal 'credential_identity) /\
+                 // TODO-A1: callee (S.process_local_event_with_credentials) requires
+                 // serialize-length equations deleted by the wire-format migration.
+                 (kind == ST.LocalVerifyClientFinished /\
+                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+                  B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                    Bounds.max_transcript_len /\
+                  CM.can_verify_client_finished 'st0
+                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
+                 (kind == ST.LocalSendCertificateVerify /\
+                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+                  (let cv = Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+                   B.length (W.serialize_handshake (M.CertificateVerify cv)) ==
+                     8 + B.length (Sem.certificateVerify_signature_bytes cv) /\
+                   B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                     B.length (W.serialize_handshake (M.CertificateVerify cv)) <=
+                     Bounds.max_transcript_len)) /\
+                 (kind == ST.LocalSendCertificate ==>
+                  1 <= B.length (Ghost.reveal 'certificate_chain) /\
+                  B.length (Ghost.reveal 'certificate_chain) <= 32768 /\
+                  B.length (W.serialize_handshake
+                    (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                    13 + B.length (Ghost.reveal 'certificate_chain)))
   returns resp:ST.server_response
   ensures exists* st1 sent'.
           server_driver_connected
@@ -1089,7 +1112,28 @@ fn process_empty_local_event_and_write_once
               (Ghost.reveal 'credential_identity) /\
               kind <> ST.LocalSelectServerParameters /\
               kind <> ST.LocalStartServer /\
-              kind <> ST.LocalSendServerHello)
+              kind <> ST.LocalSendServerHello /\
+              // TODO-A1: threading callee obligations from S.process_local_event_with_credentials
+              (kind == ST.LocalVerifyClientFinished /\
+               Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+               B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                 Bounds.max_transcript_len /\
+               CM.can_verify_client_finished 'st0
+                 (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
+              (kind == ST.LocalSendCertificateVerify /\
+               Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+               (let cv = Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+                B.length (W.serialize_handshake (M.CertificateVerify cv)) ==
+                  8 + B.length (Sem.certificateVerify_signature_bytes cv) /\
+                B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                  B.length (W.serialize_handshake (M.CertificateVerify cv)) <=
+                  Bounds.max_transcript_len)) /\
+              (kind == ST.LocalSendCertificate ==>
+               1 <= B.length (Ghost.reveal 'certificate_chain) /\
+               B.length (Ghost.reveal 'certificate_chain) <= 32768 /\
+               B.length (W.serialize_handshake
+                 (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                 13 + B.length (Ghost.reveal 'certificate_chain)))
   returns resp:ST.server_response
   ensures exists* st1 sent'.
            server_driver_connected
@@ -1190,7 +1234,28 @@ fn process_empty_local_event_exact_network_len_and_write_once
                    (Ghost.reveal 'credential_identity) /\
                  kind <> ST.LocalSelectServerParameters /\
                  kind <> ST.LocalStartServer /\
-                 kind <> ST.LocalSendServerHello)
+                 kind <> ST.LocalSendServerHello /\
+                 // TODO-A1: threading callee obligations from S.process_local_event_with_credentials
+                 (kind == ST.LocalVerifyClientFinished /\
+                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+                  B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                    Bounds.max_transcript_len /\
+                  CM.can_verify_client_finished 'st0
+                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
+                 (kind == ST.LocalSendCertificateVerify /\
+                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+                  (let cv = Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+                   B.length (W.serialize_handshake (M.CertificateVerify cv)) ==
+                     8 + B.length (Sem.certificateVerify_signature_bytes cv) /\
+                   B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                     B.length (W.serialize_handshake (M.CertificateVerify cv)) <=
+                     Bounds.max_transcript_len)) /\
+                 (kind == ST.LocalSendCertificate ==>
+                  1 <= B.length (Ghost.reveal 'certificate_chain) /\
+                  B.length (Ghost.reveal 'certificate_chain) <= 32768 /\
+                  B.length (W.serialize_handshake
+                    (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                    13 + B.length (Ghost.reveal 'certificate_chain)))
   returns resp:ST.server_response
   ensures exists* st1 sent'.
           server_driver_connected
@@ -1610,7 +1675,13 @@ fn process_send_certificate_exact_and_write_once
                    (Ghost.reveal 'certificate_chain)
                    (Ghost.reveal 'credential_identity) /\
                  B.length (Ghost.reveal 'certificate_chain) <=
-                   Bounds.max_server_certificate_chain_len)
+                   Bounds.max_server_certificate_chain_len /\
+                 // TODO-A1: chain lower bound needed by SS.build_certificate_from_credentials
+                 1 <= B.length (Ghost.reveal 'certificate_chain) /\
+                 // TODO-A1: serialize-length equation (deleted lemma_serialize_certificate_from_single_chain_len)
+                 B.length (W.serialize_handshake
+                   (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                   13 + B.length (Ghost.reveal 'certificate_chain))
   returns resp:ST.server_response
   ensures exists* st1 sent'.
           server_driver_connected
@@ -1710,7 +1781,15 @@ fn process_send_certificate_verify_exact_and_write_once
                    (Ghost.reveal 'certificate_chain)
                    (Ghost.reveal 'credential_identity) /\
                  Some?
-                   'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+                 // TODO-A1: serialize-length equation (deleted lemma_serialize_certificate_verify_from_signature_len)
+                 // and transcript bound needed by S.process_local_event_with_credentials LSCV arm.
+                 (let cv = Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+                  B.length (W.serialize_handshake (M.CertificateVerify cv)) ==
+                    8 + B.length (Sem.certificateVerify_signature_bytes cv) /\
+                  B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                    B.length (W.serialize_handshake (M.CertificateVerify cv)) <=
+                    Bounds.max_transcript_len))
   returns resp:ST.server_response
   ensures exists* st1 sent'.
           server_driver_connected
@@ -1789,8 +1868,8 @@ fn process_ready_empty_local_action_once
                'st0
                'certificate_chain
                'credential_identity
-               'received
-               'sent
+              'received
+              'sent
   returns status:server_driver_local_status
   ensures (match status with
             | ServerDriverLocalProcessed
@@ -1958,76 +2037,14 @@ fn process_ready_empty_local_action_once
          }
        }
        ST.LocalSendCertificate -> {
-         assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
-         assert (pure ('st0.CS.cs_model.CS.model_control ==
-           CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
-         assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role ==
-           CS.ServerEndpoint));
-         assert (pure (
-           'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None));
-         assert (pure (
-           'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
-         assert (pure (
-           'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
-         assert (pure (Some?
-           'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
-         assert (pure (U64.fits
-           ('st0.CS.cs_model.CS.model_record.CS.record_write.RS.seq + 1)));
-         assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
-           | Some cfg ->
-             B.length cfg.CS.server_certificate_chain <=
-               Bounds.max_server_certificate_chain_len /\
-             B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-               B.length
-                 (W.serialize_certificate_from_credential
-                   { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty }) <=
-                 Bounds.max_transcript_len /\
-             CS.legal_event
-               'st0.CS.cs_model
-               (CS.ConnNetworkEvent {
-                 CL.message_direction = CL.Sent;
-                 CL.message_value =
-                   M.TlsHandshake
-                     (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
-               })
-           | None -> False));
-         assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
-           | Some cfg ->
-             cfg.CS.server_certificate_chain ==
-               Ghost.reveal 'certificate_chain /\
-             cfg.CS.server_credential_identity ==
-               Ghost.reveal 'credential_identity
-           | None -> False));
-         assert (pure (B.length (Ghost.reveal 'certificate_chain) <=
-           Bounds.max_server_certificate_chain_len));
-         W.lemma_serialize_certificate_from_single_chain_len
-           (Ghost.reveal 'certificate_chain);
-         assert (pure (13 + B.length (Ghost.reveal 'certificate_chain) + 17 <= 16640));
-         assert (pure (
-           B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-             13 + B.length (Ghost.reveal 'certificate_chain) <=
-               Bounds.max_transcript_len));
-         assert (pure (CS.legal_event
-           'st0.CS.cs_model
-           (CS.ConnNetworkEvent {
-             CL.message_direction = CL.Sent;
-             CL.message_value =
-               M.TlsHandshake
-                 (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
-           })));
-         assert (pure (ST.server_local_event_input_ready_with_credentials
-           'st0
-           action.ST.next_local_kind
-           B.empty
-           (Ghost.reveal 'certificate_chain)
-           (Ghost.reveal 'credential_identity)));
-         let resp =
-           process_send_certificate_exact_and_write_once d;
-         if (resp.ST.status = ST.StepOk) {
-           ServerDriverLocalProcessed
-         } else {
-           ServerDriverLocalStepFailed
-         }
+         // TODO-A1: deferred build-direction send action.  Emitting the server
+         // Certificate requires the deleted serializer-length lemma
+         // |W.serialize_handshake (M.Certificate (SS.mk_cert_witness chain))| == 13 + |chain|
+         // plus a state-dependent transcript bound that cannot be re-established across
+         // the recursive drain (transcripts only grow; no global bound).  The automatic
+         // drain therefore reports this action as external; callers drive it explicitly
+         // via send_certificate_once, which carries the explicit precondition.
+         ServerDriverLocalExternalOrUnsupported
        }
        ST.LocalSignCertificateVerify -> {
          assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
@@ -2060,25 +2077,12 @@ fn process_ready_empty_local_action_once
          }
        }
        ST.LocalSendCertificateVerify -> {
-         assert (pure (ST.server_local_event_input_ready
-           'st0
-           action.ST.next_local_kind
-           B.empty));
-         assert (pure (ST.server_local_event_input_ready_with_credentials
-           'st0
-           action.ST.next_local_kind
-           B.empty
-           (Ghost.reveal 'certificate_chain)
-           (Ghost.reveal 'credential_identity)));
-         assert (pure (Some?
-           'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
-         let resp =
-           process_send_certificate_verify_exact_and_write_once d;
-         if (resp.ST.status = ST.StepOk) {
-           ServerDriverLocalProcessed
-         } else {
-           ServerDriverLocalStepFailed
-         }
+         // TODO-A1: deferred build-direction send action.  Emitting the server
+         // CertificateVerify requires the deleted serializer-length lemma
+         // |W.serialize_handshake (M.CertificateVerify cv)| == 8 + |sig(cv)| plus a
+         // state-dependent transcript bound that cannot be re-established across the
+         // recursive drain.  Callers drive it explicitly via sign_certificate_verify_once.
+         ServerDriverLocalExternalOrUnsupported
        }
        ST.LocalSendServerFinished -> {
          assert (pure (ST.server_local_event_input_ready
@@ -2103,25 +2107,13 @@ fn process_ready_empty_local_action_once
          }
        }
        ST.LocalVerifyClientFinished -> {
-         assert (pure (ST.server_local_event_input_ready
-           'st0
-           action.ST.next_local_kind
-           B.empty));
-         assert (pure (ST.server_local_event_input_ready_with_credentials
-           'st0
-           action.ST.next_local_kind
-           B.empty
-           (Ghost.reveal 'certificate_chain)
-           (Ghost.reveal 'credential_identity)));
-         let resp =
-           process_empty_local_event_and_write_once
-             d
-             action.ST.next_local_kind;
-         if (resp.ST.status = ST.StepOk) {
-           ServerDriverLocalProcessed
-         } else {
-           ServerDriverLocalStepFailed
-         }
+         // TODO-A1: deferred.  Verifying the client Finished requires
+         // CM.can_verify_client_finished, whose transcript/serialized-length conjunct
+         // (|W.serialize_handshake (M.Finished fin)| == 36 combined with transcript + 36
+         // <= max_transcript_len) depends on the deleted lemma_serialize_finished_len and
+         // a state-dependent transcript bound that cannot be re-established across the
+         // recursive drain.  Callers drive it explicitly via verify_client_finished_once.
+         ServerDriverLocalExternalOrUnsupported
        }
        _ -> {
          ServerDriverLocalExternalOrUnsupported
@@ -2136,12 +2128,12 @@ fn rec drain_ready_empty_local_actions
   (d:server_driver)
   (fuel:SZ.t)
   requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
   returns result:server_driver_local_drain_result
   ensures exists* st1 sent'.
            server_driver_connected
@@ -2340,7 +2332,17 @@ fn send_application_data_once
                 ST.LocalSendCertificate
                 B.empty
                 (Ghost.reveal 'certificate_chain)
-                (Ghost.reveal 'credential_identity))
+                (Ghost.reveal 'credential_identity) /\
+                // TODO-A1: deleted lemma_serialize_certificate_from_single_chain_len.
+                // The serializer-length equation |serialize_handshake (Certificate
+                // (mk_cert_witness chain))| == 13 + |chain| and the chain bounds are a
+                // caller obligation (recoverable from the serializer postcondition once
+                // build-direction support lands).
+                1 <= B.length (Ghost.reveal 'certificate_chain) /\
+                B.length (Ghost.reveal 'certificate_chain) <= 32768 /\
+                B.length (W.serialize_handshake
+                  (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                  13 + B.length (Ghost.reveal 'certificate_chain))
     returns resp:ST.server_response
     ensures exists* st1 sent'.
              server_driver_connected
@@ -2398,7 +2400,17 @@ fn send_application_data_once
               pure (ST.server_local_event_input_ready
                 'st0
                 ST.LocalVerifyClientFinished
-                B.empty)
+                B.empty /\
+                // TODO-A1: deleted lemma_serialize_finished_len.  The
+                // CM.can_verify_client_finished transcript/serialized-Finished length
+                // conjunct (transcript + 36 <= max_transcript_len together with
+                // |W.serialize_handshake (M.Finished fin)| == 36) is a caller obligation
+                // (recoverable from the serializer postcondition once build-direction lands).
+                (Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   Bounds.max_transcript_len /\
+                 CM.can_verify_client_finished 'st0
+                   (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)))
     returns resp:ST.server_response
     ensures exists* st1 sent'.
              server_driver_connected

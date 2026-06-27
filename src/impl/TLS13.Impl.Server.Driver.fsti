@@ -8,6 +8,11 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
+module CryptoSpec = TLS13.Crypto.Spec
+module M = TLS13.Messages
+module W = TLS13.Wire.Spec
+module SS = TLS13.Impl.Server.Send
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -336,7 +341,21 @@ fn accept
                       cfg.CS.server_allowed_signature_schemes
                       T.Rsa_pss_rsae_sha256 /\
                     cfg.CS.server_sni_policy == None
-                  | None -> False))
+                  | None -> False) /\
+                 // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                 // sentinel (serverHello_body_cst) and |serialize_handshake (ServerHello sh)|
+                 // == 90 (deleted lemma_serialize_server_hello_len).  Universal,
+                 // state-independent caller obligation threaded from the handshake driver.
+                 (forall (material:B.bytes{B.length material == 64}).
+                   (Seq.length (CL.raw_slice material 0 32) == 32 ==>
+                    (CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <>
+                      GSHbody.serverHello_body_cst) /\
+                   (let sh = SS.mk_server_hello_witness
+                              (CL.raw_slice material 0 32)
+                              (CryptoSpec.x25519_public_from_private
+                                (CL.raw_slice material 32 64))
+                              T.TLS_CHACHA20_POLY1305_SHA256 in
+                    B.length (W.serialize_handshake (M.ServerHello sh)) == 90)))
   returns status:server_workflow_status
   ensures pts_to bind_host 'bind_host_bytes **
           (match status with

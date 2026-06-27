@@ -12,6 +12,7 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -316,11 +317,11 @@ fn copy_certificate_verify_signature
                 SZ.v snapshot.CR.cv_signature_len <= B.length out_bytes /\
                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                 | Some cv ->
-                  L.signature_scheme_matches snapshot.CR.cv_signature_scheme cv.M.scheme /\
-                  SZ.v snapshot.CR.cv_signature_len == B.length cv.M.signature /\
+                  L.signature_scheme_matches snapshot.CR.cv_signature_scheme (Sem.certificateVerify_scheme cv) /\
+                  SZ.v snapshot.CR.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv) /\
                   Seq.equal
                     (Seq.slice out_bytes 0 (SZ.v snapshot.CR.cv_signature_len))
-                    cv.M.signature
+                    (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
 fn process_network_bytes

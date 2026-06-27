@@ -8,6 +8,7 @@ module CSL = TLS13.ConnectionState.Lemmas
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
+module Sem = TLS13.Wire.Semantics
 module ID = FStar.IndefiniteDescription
 module Seq = FStar.Seq
 module SM = TLS13.StateMachine
@@ -171,7 +172,7 @@ let local_input_wf
          st.CS.cs_model.CS.model_config.CS.config_server_name
          st.CS.cs_model.CS.model_config.CS.config_validation_time
          st.CS.cs_model.CS.model_config.CS.config_trust_store
-         cert.M.chain ==
+         (Sem.certificate_entries cert) ==
            Some (local_validation_peer st payload) /\
        CS.legal_event
          st.CS.cs_model
@@ -186,10 +187,10 @@ let local_input_wf
            st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input with
      | Some cv, Some peer, Some verify_input ->
        C.verify_signature
-         cv.M.scheme
+         (Sem.certificateVerify_scheme cv)
          peer.X.leaf_public_key
          verify_input
-         cv.M.signature == true /\
+         (Sem.certificateVerify_signature_bytes cv) == true /\
        CS.legal_event
          st.CS.cs_model
          (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv))
