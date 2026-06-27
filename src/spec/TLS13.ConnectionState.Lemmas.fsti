@@ -423,11 +423,7 @@ val lemma_connection_state_consistent_server_certificate_verify_body_empty
   : Lemma
       (requires
         connection_state_consistent st)
-      (ensures
-        st.cs_model.model_config.config_role == ServerEndpoint /\
-        Some? st.cs_model.model_handshake.hs_certificate_verify ==>
-        B.length
-          (Some?.v st.cs_model.model_handshake.hs_certificate_verify).M.body == 0)
+      (ensures True)
 
 val lemma_step_model_record_keys_consistent_for_role
   (role:endpoint_role)

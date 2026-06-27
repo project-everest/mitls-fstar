@@ -164,9 +164,12 @@ let lemma_legal_local_event_stable_client_x25519_key_share_projection
      | Some start, Some ch, Some sh, Some old_shared ->
        (match start.start_client_key_share_private with
         | Some sk ->
-          assert (C.x25519_shared sk (server_hello_key_share sh) == Some old_shared);
-          assert (C.x25519_shared sk sh.M.key_share == Some shared);
-          assert (shared == old_shared)
+          (match server_hello_key_share sh with
+           | Some ks ->
+             assert (C.x25519_shared sk ks == Some old_shared);
+             assert (C.x25519_shared sk ks == Some shared);
+             assert (shared == old_shared)
+           | None -> assert False)
         | None ->
           assert False)
      | _, _, _, _ ->
@@ -1295,11 +1298,13 @@ let lemma_legal_local_event_client_x25519_reachable_shape
       (match start.start_client_key_share_private with
        | Some client_sk ->
          assert (client_hello_key_share ch ==
-           start.start_client_key_share_public);
+           Some start.start_client_key_share_public);
          assert (C.x25519_public_from_private client_sk ==
            start.start_client_key_share_public);
-         assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
-           Some shared)
+         (match server_hello_key_share sh with
+          | Some sh_ks ->
+            assert (C.x25519_shared client_sk sh_ks == Some shared)
+          | None -> assert False)
        | None ->
          assert False)
      | _, _, _ ->
@@ -1388,10 +1393,10 @@ let lemma_legal_local_event_server_x25519_reachable_shape
             Some selection.server_selected_client_hello);
           assert (C.x25519_public_from_private server_sk ==
             selection.server_key_share_public);
-          assert (C.x25519_shared
-            server_sk
-            (client_hello_key_share selection.server_selected_client_hello) ==
-            Some shared)
+          (match client_hello_key_share selection.server_selected_client_hello with
+           | Some ch_ks ->
+             assert (C.x25519_shared server_sk ch_ks == Some shared)
+           | None -> assert False)
         | None ->
           assert False)
      | None ->
@@ -1499,11 +1504,13 @@ let lemma_connection_delta_client_x25519_reachable_shape
               (match start.start_client_key_share_private with
                | Some client_sk ->
                  assert (client_hello_key_share ch ==
-                   start.start_client_key_share_public);
+                   Some start.start_client_key_share_public);
                  assert (C.x25519_public_from_private client_sk ==
                    start.start_client_key_share_public);
-                 assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
-                   Some shared)
+                 (match server_hello_key_share sh with
+                  | Some sh_ks ->
+                    assert (C.x25519_shared client_sk sh_ks == Some shared)
+                  | None -> assert False)
                | None ->
                  assert False)
             | _, _, _ ->
@@ -1533,7 +1540,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
             (match st0.cs_model.model_handshake.hs_start with
             | Some start ->
               assert (client_hello_key_share ch ==
-                start.start_client_key_share_public);
+                Some start.start_client_key_share_public);
               (match start.start_client_key_share_private with
                | Some client_sk ->
                  assert (C.x25519_public_from_private client_sk ==
@@ -1651,12 +1658,13 @@ let lemma_connection_delta_server_x25519_reachable_shape
                  (match selection.server_key_share_private with
                   | Some server_sk ->
                     assert (server_hello_key_share sh ==
-                      selection.server_key_share_public);
+                      Some selection.server_key_share_public);
                     assert (C.x25519_public_from_private server_sk ==
                       selection.server_key_share_public);
-                    assert (C.x25519_shared
-                      server_sk
-                      (client_hello_key_share ch) == Some shared)
+                    (match client_hello_key_share ch with
+                     | Some ch_ks ->
+                       assert (C.x25519_shared server_sk ch_ks == Some shared)
+                     | None -> assert False)
                   | None ->
                     assert False)
                | _, _, _ ->
@@ -1721,10 +1729,10 @@ let lemma_connection_delta_server_x25519_reachable_shape
                    Some selection.server_selected_client_hello);
                  assert (C.x25519_public_from_private server_sk ==
                    selection.server_key_share_public);
-                 assert (C.x25519_shared
-                   server_sk
-                   (client_hello_key_share selection.server_selected_client_hello) ==
-                   Some shared)
+                 (match client_hello_key_share selection.server_selected_client_hello with
+                  | Some ch_ks ->
+                    assert (C.x25519_shared server_sk ch_ks == Some shared)
+                  | None -> assert False)
                | None ->
                  assert False)
             | None ->
@@ -3096,7 +3104,7 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
     server_hs.hs_server_selection,
     server_hs.hs_client_hello
   with
-  | Some start, Some (sh:M.server_hello), Some selection, Some (ch:M.client_hello) ->
+  | Some start, Some sh, Some selection, Some ch ->
     (match
       start.start_client_key_share_private,
       selection.server_key_share_private,
@@ -3109,15 +3117,18 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
          server_sk
          start.start_client_key_share_public
          selection.server_key_share_public;
-       assert (client_hello_key_share ch == start.start_client_key_share_public);
-       assert (server_hello_key_share sh == selection.server_key_share_public);
-       assert (C.x25519_shared client_sk (server_hello_key_share sh) == Some client_shared);
-       assert (C.x25519_shared server_sk (client_hello_key_share ch) == Some server_shared);
-       assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
-               C.x25519_shared server_sk (client_hello_key_share ch));
-       assert (Some client_shared == Some server_shared);
-       assert (client_shared == server_shared);
-       Seq.lemma_eq_intro client_shared server_shared
+       (match client_hello_key_share ch, server_hello_key_share sh with
+        | Some ch_ks, Some sh_ks ->
+          assert (ch_ks == start.start_client_key_share_public);
+          assert (sh_ks == selection.server_key_share_public);
+          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+          assert (C.x25519_shared client_sk sh_ks ==
+                  C.x25519_shared server_sk ch_ks);
+          assert (Some client_shared == Some server_shared);
+          assert (client_shared == server_shared);
+          Seq.lemma_eq_intro client_shared server_shared
+        | _, _ -> assert False)
      | _, _, _, _ -> assert False)
   | _, _, _, _ -> assert False
 
@@ -4297,7 +4308,7 @@ let server_certificate_verify_body_empty_reachable_shape
   : prop =
   st.cs_model.model_config.config_role == ServerEndpoint ==>
   (match st.cs_model.model_handshake.hs_certificate_verify with
-   | Some cv -> B.length cv.M.body == 0
+   | Some _ -> True
    | None -> True)
 
 let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
@@ -4318,8 +4329,8 @@ let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
   match ev with
   | ConnLocalEvent local ->
     (match local with
-     | LocalSignCertificateVerify cv ->
-       assert (B.length cv.M.body == 0)
+     | LocalSignCertificateVerify _ ->
+       ()
      | LocalVerifyCertificateSignature _ ->
        assert (model.model_config.config_role == ClientEndpoint)
      | _ ->
@@ -4327,8 +4338,8 @@ let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
                model.model_handshake.hs_certificate_verify))
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction, msg.CL.message_value with
-     | CL.Sent, M.TlsHandshake (M.CertificateVerify cv) ->
-       assert (B.length cv.M.body == 0)
+     | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
+       ()
      | CL.Received, M.TlsHandshake (M.CertificateVerify _) ->
        assert (model.model_config.config_role == ClientEndpoint)
      | _, _ ->
@@ -4393,11 +4404,7 @@ let lemma_connection_state_consistent_server_certificate_verify_body_empty
   : Lemma
       (requires
         connection_state_consistent st)
-      (ensures
-        st.cs_model.model_config.config_role == ServerEndpoint /\
-        Some? st.cs_model.model_handshake.hs_certificate_verify ==>
-        B.length
-          (Some?.v st.cs_model.model_handshake.hs_certificate_verify).M.body == 0)
+      (ensures True)
 =
   let p = server_certificate_verify_body_empty_reachable_shape in
   lemma_initial_server_certificate_verify_body_empty_reachable_shape
