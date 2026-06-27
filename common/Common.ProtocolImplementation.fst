@@ -60,7 +60,9 @@ let consumed_by_parse
   (consumed:TCP.bytes)
   (residual:TCP.bytes)
   : prop =
-  fmt.WF.wf_parse available == Some (msg, residual) /\
+  exists parsed_msg.
+    fmt.WF.wf_parse available == Some (parsed_msg, residual) /\
+    fmt.WF.wf_equal parsed_msg msg /\
   Seq.equal available (Seq.append consumed residual)
 
 let output_written
