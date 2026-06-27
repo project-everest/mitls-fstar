@@ -3,272 +3,411 @@ module Common.ProtocolImplementation
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
 
-module P = Common.Protocol
+module Seq = FStar.Seq
+module SM = Common.StateMachine
+module SZ = FStar.SizeT
 module TCP = Common.TCP
+module U8 = FStar.UInt8
+module WF = Common.WireFormat
+module WFSM = Common.WireFormatStateMachine
 
-type parsed_messages (wire_message:Type0) =
-  option (list wire_message & TCP.bytes)
+type process_status =
+  | ProcessOk
+  | ParseFailed
+  | OutputTooSmall
 
-let protocol_state_transport
+noeq
+type process_result = {
+  process_status: process_status;
+  process_consumed_len: SZ.t;
+  process_produced_len: SZ.t;
+}
+
+let bounded_len
+  (bytes:TCP.bytes)
+  (len:SZ.t)
+  : nat =
+  if SZ.v len <= Seq.length bytes then SZ.v len else Seq.length bytes
+
+let input_bytes
+  (input:TCP.bytes)
+  (input_len:SZ.t)
+  : TCP.bytes =
+  Seq.slice input 0 (bounded_len input input_len)
+
+let output_prefix
+  (out:TCP.bytes)
+  (produced_len:SZ.t)
+  : TCP.bytes =
+  Seq.slice out 0 (bounded_len out produced_len)
+
+let buffers_wf
+  (input:TCP.bytes)
+  (input_len:SZ.t)
+  (out:TCP.bytes)
+  (out_len:SZ.t)
+  : prop =
+  SZ.v input_len <= Seq.length input /\
+  SZ.v out_len == Seq.length out
+
+let consumed_by_parse
+  (#wire_message:Type0)
+  (fmt:WF.wire_format wire_message)
+  (available:TCP.bytes)
+  (msg:wire_message)
+  (consumed:TCP.bytes)
+  (residual:TCP.bytes)
+  : prop =
+  fmt.WF.wf_parse available == Some (msg, residual) /\
+  Seq.equal available (Seq.append consumed residual)
+
+let output_written
+  (out_bytes:TCP.bytes)
+  (produced_len:SZ.t)
+  (produced:TCP.bytes)
+  : prop =
+  SZ.v produced_len == Seq.length produced /\
+  SZ.v produced_len <= Seq.length out_bytes /\
+  Seq.equal (output_prefix out_bytes produced_len) produced
+
+let same_abstract_state
+  (#state:Type0)
+  (received0 sent0 received1 sent1:TCP.bytes)
+  (st0 st1:state)
+  : prop =
+  Seq.equal received1 received0 /\
+  Seq.equal sent1 sent0 /\
+  st1 == st0
+
+let state_ahead
   (#state:Type0)
   (#wire_message:Type0)
-  (#event:Type0)
-  (protocol:P.state_machine_protocol state wire_message event)
-  (tcp_history_matches:TCP.history -> state -> GTot prop)
-  (tcp:TCP.history)
-  (st:state)
-  : GTot prop =
-  tcp_history_matches tcp st /\
-  protocol.P.sm_wire_format.P.wf_history_matches
-    (protocol.P.sm_processed_history st)
-    (protocol.P.sm_wire_log st) /\
-  protocol.P.sm_transport_matches
-    (protocol.P.sm_processed_history st)
-    st
-
-let protocol_network_step
-  (#state:Type0)
-  (#wire_message:Type0)
-  (#event:Type0)
-  (protocol:P.state_machine_protocol state wire_message event)
-  (tcp_history_matches:TCP.history -> state -> GTot prop)
+  (#local_event:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event)
   (st0:state)
-  (tcp0:TCP.history)
   (st1:state)
-  (tcp1:TCP.history)
-  : GTot prop =
-  protocol_state_transport protocol tcp_history_matches tcp0 st0 /\
-  protocol_state_transport protocol tcp_history_matches tcp1 st1
+  : prop =
+  exists trace.
+    SM.trace_reaches system.WFSM.wfsm_state_machine st0 trace st1
 
-let protocol_local_step
+let network_process_correct
   (#state:Type0)
   (#wire_message:Type0)
-  (#event:Type0)
-  (protocol:P.state_machine_protocol state wire_message event)
-  (tcp_history_matches:TCP.history -> state -> GTot prop)
+  (#local_event:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event)
+  (input:TCP.bytes)
+  (input_len:SZ.t)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
   (st0:state)
-  (tcp0:TCP.history)
+  (result:process_result)
+  (received1 sent1:TCP.bytes)
   (st1:state)
-  (tcp1:TCP.history)
-  : GTot prop =
-  protocol_state_transport protocol tcp_history_matches tcp0 st0 /\
-  protocol_state_transport protocol tcp_history_matches tcp1 st1
+  : prop =
+  buffers_wf input input_len old_out out_len /\
+  Seq.length out_bytes == Seq.length old_out /\
+  (match result.process_status with
+  | ProcessOk ->
+    exists msg consumed residual outputs produced.
+      consumed_by_parse
+        system.WFSM.wfsm_wire_format
+        (input_bytes input input_len)
+        msg
+        consumed
+        residual /\
+      SZ.v result.process_consumed_len == Seq.length consumed /\
+      system.WFSM.wfsm_state_machine.SM.sm_step
+        st0
+        (SM.WireEvent msg)
+        st1
+        outputs /\
+      Seq.equal
+        produced
+        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+      output_written out_bytes result.process_produced_len produced /\
+      Seq.equal received1 (Seq.append received0 consumed) /\
+      Seq.equal sent1 (Seq.append sent0 produced)
+  | ParseFailed ->
+    system.WFSM.wfsm_wire_format.WF.wf_parse (input_bytes input input_len) == None /\
+    result.process_consumed_len == 0sz /\
+    result.process_produced_len == 0sz /\
+    same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
+    Seq.equal out_bytes old_out
+  | OutputTooSmall ->
+    exists msg consumed residual outputs produced st_candidate.
+      consumed_by_parse
+        system.WFSM.wfsm_wire_format
+        (input_bytes input input_len)
+        msg
+        consumed
+        residual /\
+      system.WFSM.wfsm_state_machine.SM.sm_step
+        st0
+        (SM.WireEvent msg)
+        st_candidate
+        outputs /\
+      Seq.equal
+        produced
+        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+      SZ.v out_len < Seq.length produced /\
+      result.process_consumed_len == 0sz /\
+      result.process_produced_len == 0sz /\
+      same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
+      Seq.equal out_bytes old_out)
+
+let local_process_correct
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event)
+  (ev:local_event)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:process_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  : prop =
+  SZ.v out_len == Seq.length old_out /\
+  Seq.length out_bytes == Seq.length old_out /\
+  result.process_consumed_len == 0sz /\
+  (match result.process_status with
+  | ProcessOk ->
+    exists outputs produced.
+      system.WFSM.wfsm_state_machine.SM.sm_step
+        st0
+        (SM.LocalEvent ev)
+        st1
+        outputs /\
+      Seq.equal
+        produced
+        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+      output_written out_bytes result.process_produced_len produced /\
+      Seq.equal received1 received0 /\
+      Seq.equal sent1 (Seq.append sent0 produced)
+  | ParseFailed ->
+    False
+  | OutputTooSmall ->
+    exists outputs produced st_candidate.
+      system.WFSM.wfsm_state_machine.SM.sm_step
+        st0
+        (SM.LocalEvent ev)
+        st_candidate
+        outputs /\
+      Seq.equal
+        produced
+        (WF.serialize_all system.WFSM.wfsm_wire_format outputs) /\
+      SZ.v out_len < Seq.length produced /\
+      result.process_produced_len == 0sz /\
+      same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
+      Seq.equal out_bytes old_out)
 
 noextract
-(**
-  A protocol implementation owns one canonical shape of process specification:
-  the argument record determines the old protocol state and TCP history; the
-  precondition owns the representation invariant plus any call-frame resources;
-  the postcondition returns a new representation invariant indexed by a new TCP
-  history, proves both old and new TCP histories match the protocol wire log,
-  and records the instance-specific state-machine effect of the operation.
-**)
 class protocol_implementation
   (impl:Type0)
   (state:Type0)
   (wire_message:Type0)
-  (event:Type0)
-  (network_args:Type0)
-  (network_result:Type0)
-  (local_args:Type0)
-  (local_result:Type0)
+  (local_event:Type0)
   =
 {
-  pi_protocol:
-    P.state_machine_protocol state wire_message event;
-
-  pi_parse_network:
-    TCP.bytes -> GTot (parsed_messages wire_message);
-
-  pi_serialize_network:
-    wire_message -> GTot (option TCP.bytes);
-
-  pi_serialized_network:
-    wire_message ->
-    TCP.bytes ->
-    GTot prop;
-
-  pi_parse_network_correct:
-    bytes:TCP.bytes ->
-      Lemma
-        (ensures
-          (match pi_parse_network bytes with
-          | None -> True
-          | Some (msgs, residual) ->
-            pi_protocol.P.sm_wire_format.P.wf_stream_matches
-              P.NetworkReceived
-              bytes
-              msgs
-              residual));
-
-  pi_serialize_network_correct:
-    msg:wire_message ->
-      Lemma
-        (ensures
-          (match pi_serialize_network msg with
-          | None -> True
-          | Some bytes ->
-            pi_serialized_network msg bytes));
-
-  pi_tcp_channel:
-    impl ->
-    TCP.history ->
-    slprop;
-
-  pi_ghost_log:
-    impl ->
-    state ->
-    slprop;
-
-  pi_runtime_resources:
-    impl ->
-    state ->
-    TCP.history ->
-    slprop;
+  pi_system:
+    WFSM.wire_format_state_machine state wire_message local_event;
 
   pi_invariant:
     impl ->
+    TCP.bytes ->
+    TCP.bytes ->
     state ->
-    TCP.history ->
     slprop;
 
-  pi_tcp_history_matches:
-    TCP.history ->
-    state ->
-    GTot prop;
-
-  pi_network_args_state:
-    network_args -> GTot state;
-
-  pi_network_args_tcp:
-    network_args -> GTot TCP.history;
-
-  pi_local_args_state:
-    local_args -> GTot state;
-
-  pi_local_args_tcp:
-    local_args -> GTot TCP.history;
-
-  pi_network_frame:
+  pi_snapshot:
     impl ->
-    network_args ->
+    TCP.bytes ->
+    TCP.bytes ->
+    state ->
     slprop;
 
-  pi_network_extra_post:
-    impl ->
-    network_args ->
-    network_result ->
-    state ->
-    TCP.history ->
-    slprop;
+  pi_invariant_valid:
+    i:impl ->
+    received:Ghost.erased TCP.bytes ->
+    sent:Ghost.erased TCP.bytes ->
+    st:Ghost.erased state ->
+      stt unit
+        (pi_invariant
+          i
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st))
+        (fun _ ->
+          pi_invariant
+            i
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st) **
+          pure (
+            WFSM.valid_byte_trace
+              pi_system
+              (Ghost.reveal received)
+              (Ghost.reveal st)
+              (Ghost.reveal sent)
+              Seq.empty));
 
-  pi_network_effect:
-    network_args ->
-    network_result ->
-    state ->
-    TCP.history ->
-    state ->
-    TCP.history ->
-    GTot prop;
+  pi_take_snapshot:
+    i:impl ->
+    received:Ghost.erased TCP.bytes ->
+    sent:Ghost.erased TCP.bytes ->
+    st:Ghost.erased state ->
+      stt unit
+        (pi_invariant
+          i
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st))
+        (fun _ ->
+          pi_invariant
+            i
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st) **
+          pi_snapshot
+            i
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
 
-  pi_local_frame:
-    impl ->
-    local_args ->
-    slprop;
-
-  pi_local_extra_post:
-    impl ->
-    local_args ->
-    local_result ->
-    state ->
-    TCP.history ->
-    slprop;
-
-  pi_local_effect:
-    local_args ->
-    local_result ->
-    state ->
-    TCP.history ->
-    state ->
-    TCP.history ->
-    GTot prop;
+  pi_recall_snapshot:
+    i:impl ->
+    snapshot_received:Ghost.erased TCP.bytes ->
+    snapshot_sent:Ghost.erased TCP.bytes ->
+    snapshot_state:Ghost.erased state ->
+    current_received:Ghost.erased TCP.bytes ->
+    current_sent:Ghost.erased TCP.bytes ->
+    current_state:Ghost.erased state ->
+      stt unit
+        (pi_snapshot
+          i
+          (Ghost.reveal snapshot_received)
+          (Ghost.reveal snapshot_sent)
+          (Ghost.reveal snapshot_state) **
+         pi_invariant
+          i
+          (Ghost.reveal current_received)
+          (Ghost.reveal current_sent)
+          (Ghost.reveal current_state))
+        (fun _ ->
+          pi_snapshot
+            i
+            (Ghost.reveal snapshot_received)
+            (Ghost.reveal snapshot_sent)
+            (Ghost.reveal snapshot_state) **
+          pi_invariant
+            i
+            (Ghost.reveal current_received)
+            (Ghost.reveal current_sent)
+            (Ghost.reveal current_state) **
+          pure (
+            state_ahead
+              pi_system
+              (Ghost.reveal snapshot_state)
+              (Ghost.reveal current_state)));
 
   pi_process_network:
     i:impl ->
-    args:network_args ->
-      stt network_result
+    input:array U8.t ->
+    input_len:SZ.t ->
+    out:array U8.t ->
+    out_len:SZ.t ->
+    received0:Ghost.erased TCP.bytes ->
+    sent0:Ghost.erased TCP.bytes ->
+    st0:Ghost.erased state ->
+    input_contents:Ghost.erased TCP.bytes ->
+    old_out:Ghost.erased TCP.bytes ->
+      stt process_result
         (pi_invariant
           i
-          (pi_network_args_state args)
-          (pi_network_args_tcp args) **
-         pi_network_frame i args **
-         pure (protocol_state_transport
-          pi_protocol
-          pi_tcp_history_matches
-          (pi_network_args_tcp args)
-          (pi_network_args_state args)))
+          (Ghost.reveal received0)
+          (Ghost.reveal sent0)
+          (Ghost.reveal st0) **
+         pts_to input (Ghost.reveal input_contents) **
+         pts_to out (Ghost.reveal old_out) **
+         pure (
+          buffers_wf
+            (Ghost.reveal input_contents)
+            input_len
+            (Ghost.reveal old_out)
+            out_len))
         (fun result ->
-          exists* (st1: Ghost.erased state) (tcp1: Ghost.erased TCP.history).
-            pi_invariant i (Ghost.reveal st1) (Ghost.reveal tcp1) **
-            pi_network_extra_post
+          exists* (received1:Ghost.erased TCP.bytes)
+                  (sent1:Ghost.erased TCP.bytes)
+                  (st1:Ghost.erased state)
+                  (out_contents:TCP.bytes).
+            pi_invariant
               i
-              args
-              result
-              (Ghost.reveal st1)
-              (Ghost.reveal tcp1) **
+              (Ghost.reveal received1)
+              (Ghost.reveal sent1)
+              (Ghost.reveal st1) **
+            pts_to input (Ghost.reveal input_contents) **
+            pts_to out out_contents **
             pure (
-              protocol_network_step
-                pi_protocol
-                pi_tcp_history_matches
-                (pi_network_args_state args)
-                (pi_network_args_tcp args)
-                (Ghost.reveal st1)
-                (Ghost.reveal tcp1) /\
-              pi_network_effect
-                args
+              network_process_correct
+                pi_system
+                (Ghost.reveal input_contents)
+                input_len
+                (Ghost.reveal old_out)
+                out_contents
+                out_len
+                (Ghost.reveal received0)
+                (Ghost.reveal sent0)
+                (Ghost.reveal st0)
                 result
-                (pi_network_args_state args)
-                (pi_network_args_tcp args)
-                (Ghost.reveal st1)
-                (Ghost.reveal tcp1)));
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1)));
 
   pi_process_local:
     i:impl ->
-    args:local_args ->
-      stt local_result
+    ev:local_event ->
+    out:array U8.t ->
+    out_len:SZ.t ->
+    received0:Ghost.erased TCP.bytes ->
+    sent0:Ghost.erased TCP.bytes ->
+    st0:Ghost.erased state ->
+    old_out:Ghost.erased TCP.bytes ->
+      stt process_result
         (pi_invariant
           i
-          (pi_local_args_state args)
-          (pi_local_args_tcp args) **
-         pi_local_frame i args **
-         pure (protocol_state_transport
-          pi_protocol
-          pi_tcp_history_matches
-          (pi_local_args_tcp args)
-          (pi_local_args_state args)))
+          (Ghost.reveal received0)
+          (Ghost.reveal sent0)
+          (Ghost.reveal st0) **
+         pts_to out (Ghost.reveal old_out) **
+         pure (SZ.v out_len == Seq.length (Ghost.reveal old_out)))
         (fun result ->
-          exists* (st1: Ghost.erased state) (tcp1: Ghost.erased TCP.history).
-            pi_invariant i (Ghost.reveal st1) (Ghost.reveal tcp1) **
-            pi_local_extra_post
+          exists* (received1:Ghost.erased TCP.bytes)
+                  (sent1:Ghost.erased TCP.bytes)
+                  (st1:Ghost.erased state)
+                  (out_contents:TCP.bytes).
+            pi_invariant
               i
-              args
-              result
-              (Ghost.reveal st1)
-              (Ghost.reveal tcp1) **
+              (Ghost.reveal received1)
+              (Ghost.reveal sent1)
+              (Ghost.reveal st1) **
+            pts_to out out_contents **
             pure (
-              protocol_local_step
-                pi_protocol
-                pi_tcp_history_matches
-                (pi_local_args_state args)
-                (pi_local_args_tcp args)
-                (Ghost.reveal st1)
-                (Ghost.reveal tcp1) /\
-              pi_local_effect
-                args
+              local_process_correct
+                pi_system
+                ev
+                (Ghost.reveal old_out)
+                out_contents
+                out_len
+                (Ghost.reveal received0)
+                (Ghost.reveal sent0)
+                (Ghost.reveal st0)
                 result
-                (pi_local_args_state args)
-                (pi_local_args_tcp args)
-                (Ghost.reveal st1)
-                (Ghost.reveal tcp1)));
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1)));
 }
