@@ -357,7 +357,7 @@ let lemma_ch_extensions_some_raw
   (key: B.bytes{B.length key == 32})
   : Lemma (
       WS.ch_extensions (mk_ext_list_some_raw hostname key) None None false [] ==
-      Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]))
+      Some (Some hostname, Some key, true, [T.Rsa_pss_rsae_sha256]))
 =
   let hn = as_host_name hostname in
   let key_x = as_key_exchange key in
@@ -374,27 +374,27 @@ let lemma_ch_extensions_some_raw
   WS.lemma_key_exchange_to_key32 key_x;
   assert (WS.key_exchange_to_key32 key_x == Some key);
   assert (WS.ch_find_key_share [ks] == Some key);
-  assert_norm (WS.synth_sig_schemes [GSS.Rsa_pss_rsae_sha256] == [T.RsaPssRsaeSha256]);
+  assert_norm (WS.synth_sig_schemes [GSS.Rsa_pss_rsae_sha256] == [T.Rsa_pss_rsae_sha256]);
   assert_norm (List.Tot.mem GPV.TLS_1p3 [GPV.TLS_1p3]);
-  assert_norm (WS.ch_extensions [] (Some hostname) (Some key) true [T.RsaPssRsaeSha256] ==
-    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
-  assert (WS.ch_extensions tail_sv (Some hostname) (Some key) false [T.RsaPssRsaeSha256] ==
-    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
-  assert (WS.ch_extensions tail_ks (Some hostname) None false [T.RsaPssRsaeSha256] ==
-    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+  assert_norm (WS.ch_extensions [] (Some hostname) (Some key) true [T.Rsa_pss_rsae_sha256] ==
+    Some (Some hostname, Some key, true, [T.Rsa_pss_rsae_sha256]));
+  assert (WS.ch_extensions tail_sv (Some hostname) (Some key) false [T.Rsa_pss_rsae_sha256] ==
+    Some (Some hostname, Some key, true, [T.Rsa_pss_rsae_sha256]));
+  assert (WS.ch_extensions tail_ks (Some hostname) None false [T.Rsa_pss_rsae_sha256] ==
+    Some (Some hostname, Some key, true, [T.Rsa_pss_rsae_sha256]));
   assert (WS.ch_extensions tail_sa (Some hostname) None false [] ==
-    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+    Some (Some hostname, Some key, true, [T.Rsa_pss_rsae_sha256]));
   assert (WS.ch_extensions tail_sg (Some hostname) None false [] ==
-    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+    Some (Some hostname, Some key, true, [T.Rsa_pss_rsae_sha256]));
   assert (WS.ch_extensions exts None None false [] ==
-    Some (Some hostname, Some key, true, [T.RsaPssRsaeSha256]));
+    Some (Some hostname, Some key, true, [T.Rsa_pss_rsae_sha256]));
   assert_norm (mk_ext_list_some_raw hostname key == exts)
 
 let lemma_ch_extensions_none_raw
   (key: B.bytes{B.length key == 32})
   : Lemma (
       WS.ch_extensions (mk_ext_list_none_raw key) None None false [] ==
-      Some (None, Some key, true, [T.RsaPssRsaeSha256]))
+      Some (None, Some key, true, [T.Rsa_pss_rsae_sha256]))
 =
   let key_x = as_key_exchange key in
   let ks : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = key_x } in
@@ -405,25 +405,25 @@ let lemma_ch_extensions_none_raw
   WS.lemma_key_exchange_to_key32 key_x;
   assert (WS.key_exchange_to_key32 key_x == Some key);
   assert (WS.ch_find_key_share [ks] == Some key);
-  assert_norm (WS.synth_sig_schemes [GSS.Rsa_pss_rsae_sha256] == [T.RsaPssRsaeSha256]);
+  assert_norm (WS.synth_sig_schemes [GSS.Rsa_pss_rsae_sha256] == [T.Rsa_pss_rsae_sha256]);
   assert_norm (List.Tot.mem GPV.TLS_1p3 [GPV.TLS_1p3]);
-  assert_norm (WS.ch_extensions [] None (Some key) true [T.RsaPssRsaeSha256] ==
-    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
-  assert (WS.ch_extensions tail_sv None (Some key) false [T.RsaPssRsaeSha256] ==
-    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
-  assert (WS.ch_extensions tail_ks None None false [T.RsaPssRsaeSha256] ==
-    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+  assert_norm (WS.ch_extensions [] None (Some key) true [T.Rsa_pss_rsae_sha256] ==
+    Some (None, Some key, true, [T.Rsa_pss_rsae_sha256]));
+  assert (WS.ch_extensions tail_sv None (Some key) false [T.Rsa_pss_rsae_sha256] ==
+    Some (None, Some key, true, [T.Rsa_pss_rsae_sha256]));
+  assert (WS.ch_extensions tail_ks None None false [T.Rsa_pss_rsae_sha256] ==
+    Some (None, Some key, true, [T.Rsa_pss_rsae_sha256]));
   assert (WS.ch_extensions tail_sa None None false [] ==
-    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+    Some (None, Some key, true, [T.Rsa_pss_rsae_sha256]));
   assert (WS.ch_extensions exts None None false [] ==
-    Some (None, Some key, true, [T.RsaPssRsaeSha256]));
+    Some (None, Some key, true, [T.Rsa_pss_rsae_sha256]));
   assert_norm (mk_ext_list_none_raw key == exts)
 #pop-options
 
 let lemma_synth_client_hello_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma (
@@ -452,9 +452,9 @@ let lemma_synth_client_hello_some
   assert (low.GCH.extensions == ext_raw);
   lemma_ch_extensions_some_raw hostname ch.M.key_share;
   assert (WS.ch_extensions ext_raw None None false [] ==
-    Some (Some hostname, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+    Some (Some hostname, Some ch.M.key_share, true, [T.Rsa_pss_rsae_sha256]));
   assert (WS.ch_extensions low.GCH.extensions None None false [] ==
-    Some (Some hostname, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+    Some (Some hostname, Some ch.M.key_share, true, [T.Rsa_pss_rsae_sha256]));
   assert_norm (WS.synth_cipher_suites low.GCH.cipher_suites ==
     [T.TLS_CHACHA20_POLY1305_SHA256]);
   Seq.lemma_eq_intro ch.M.body B.empty;
@@ -464,7 +464,7 @@ let lemma_synth_client_hello_some
 let lemma_synth_client_hello_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        ch.M.server_name == None /\
                        B.length ch.M.body == 0})
   : Lemma (
@@ -489,9 +489,9 @@ let lemma_synth_client_hello_none
   assert (low.GCH.extensions == ext_raw);
   lemma_ch_extensions_none_raw ch.M.key_share;
   assert (WS.ch_extensions ext_raw None None false [] ==
-    Some (None, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+    Some (None, Some ch.M.key_share, true, [T.Rsa_pss_rsae_sha256]));
   assert (WS.ch_extensions low.GCH.extensions None None false [] ==
-    Some (None, Some ch.M.key_share, true, [T.RsaPssRsaeSha256]));
+    Some (None, Some ch.M.key_share, true, [T.Rsa_pss_rsae_sha256]));
   assert_norm (WS.synth_cipher_suites low.GCH.cipher_suites ==
     [T.TLS_CHACHA20_POLY1305_SHA256]);
   Seq.lemma_eq_intro ch.M.body B.empty;
@@ -717,7 +717,7 @@ let lemma_lp_ch_ext_ser_none
 let lemma_lp_ch_low_bytes_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
@@ -867,7 +867,7 @@ let lemma_lp_ch_low_bytes_some
 let lemma_lp_ch_low_bytes_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        ch.M.server_name == None /\
                        B.length ch.M.body == 0})
   : Lemma
@@ -999,7 +999,7 @@ let lemma_lp_ch_low_bytes_none
 let lemma_lp_ch_low_body_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
@@ -1024,7 +1024,7 @@ let lemma_lp_ch_low_body_some
 let lemma_lp_ch_low_body_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        ch.M.server_name == None /\
                        B.length ch.M.body == 0})
   : Lemma
@@ -1049,7 +1049,7 @@ let lemma_lp_ch_low_body_none
 let lemma_lp_ch_low_synth_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
@@ -1068,7 +1068,7 @@ let lemma_lp_ch_low_synth_some
 let lemma_lp_ch_low_synth_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        ch.M.server_name == None /\
                        B.length ch.M.body == 0})
   : Lemma

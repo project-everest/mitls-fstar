@@ -16,16 +16,16 @@ private let lemma_nat_of_byte_reveal (b:B.byte)
 private let lemma_alert_description_of_byte_reveal (b:B.byte)
   : Lemma (WS.alert_description_of_byte b ==
       (match U8.v b with
-       | 0   -> Some T.CloseNotify
-       | 10  -> Some T.UnexpectedMessage
-       | 20  -> Some T.BadRecordMac
-       | 40  -> Some T.HandshakeFailure
-       | 46  -> Some T.CertificateUnknown
-       | 47  -> Some T.IllegalParameter
-       | 50  -> Some T.DecodeError
-       | 51  -> Some T.DecryptError
-       | 70  -> Some T.ProtocolVersion
-       | 110 -> Some T.UnsupportedExtension
+       | 0   -> Some T.Close_notify
+       | 10  -> Some T.Unexpected_message
+       | 20  -> Some T.Bad_record_mac
+       | 40  -> Some T.Handshake_failure
+       | 46  -> Some T.Certificate_unknown
+       | 47  -> Some T.Illegal_parameter
+       | 50  -> Some T.Decode_error
+       | 51  -> Some T.Decrypt_error
+       | 70  -> Some T.Protocol_version
+       | 110 -> Some T.Unsupported_extension
        | _   -> None)) =
   lemma_nat_of_byte_reveal b;
   match WS.nat_of_byte b with

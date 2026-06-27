@@ -349,9 +349,9 @@ fn alloc_default_signature_schemes ()
   assert (pure (Seq.length (Seq.create max_signature_schemes 0x0804us) == max_signature_schemes));
   Seq.lemma_index_create max_signature_schemes 0x0804us 0;
   assert (pure (Seq.index (Seq.create max_signature_schemes 0x0804us) 0 == 0x0804us));
-  assert_norm (IM.signature_scheme_matches 0x0804us T.RsaPssRsaeSha256);
+  assert_norm (IM.signature_scheme_matches 0x0804us T.Rsa_pss_rsae_sha256);
   assert_norm (default_connection_config.CS.config_signature_schemes ==
-    [T.RsaPssRsaeSha256]);
+    [T.Rsa_pss_rsae_sha256]);
   assert (pure (IM.signature_schemes_match
     (Seq.create max_signature_schemes 0x0804us)
     1

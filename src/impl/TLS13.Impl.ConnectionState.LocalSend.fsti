@@ -111,7 +111,7 @@ fn try_send_client_finished
                     can_send_client_finished st0 fin raw_sent /\
                     (exists outer_fragment.
                        W.parse_record (Seq.slice network_out_bytes 0 58) ==
-                         Some (T.ApplicationData, outer_fragment, 58)) /\
+                         Some (T.Application_data, outer_fragment, 58)) /\
                     Seq.equal raw_sent (Seq.slice network_out_bytes 0 58))
           else
             connection_exactly c st0 **
@@ -229,7 +229,7 @@ fn try_send_application_data
                        W.parse_record
                          (Seq.slice network_out_bytes 0 (SZ.v payload_len + 22)) ==
                          Some
-                           (T.ApplicationData,
+                           (T.Application_data,
                             outer_fragment,
                             SZ.v payload_len + 22)) /\
                     Seq.equal
@@ -264,7 +264,7 @@ fn try_send_close_notify
                       raw_sent /\
                     (exists outer_fragment.
                        W.parse_record (Seq.slice network_out_bytes 0 24) ==
-                         Some (T.ApplicationData, outer_fragment, 24)) /\
+                         Some (T.Application_data, outer_fragment, 24)) /\
                     Seq.equal
                       raw_sent
                       (Seq.slice network_out_bytes 0 24))
@@ -296,7 +296,7 @@ fn try_send_key_update
                       raw_sent /\
                     (exists outer_fragment.
                        W.parse_record (Seq.slice network_out_bytes 0 27) ==
-                         Some (T.ApplicationData, outer_fragment, 27)) /\
+                         Some (T.Application_data, outer_fragment, 27)) /\
                     Seq.equal
                       raw_sent
                       (Seq.slice network_out_bytes 0 27))

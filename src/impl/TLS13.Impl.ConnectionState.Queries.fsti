@@ -285,7 +285,7 @@ fn can_select_supported_server_parameters_runtime
                        T.X25519 /\
                      CS.signature_scheme_offered
                        cfg.CS.server_allowed_signature_schemes
-                       T.RsaPssRsaeSha256 /\
+                       T.Rsa_pss_rsae_sha256 /\
                      CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
                    | _, _ -> True))
   returns ok: bool
@@ -307,7 +307,7 @@ fn can_select_supported_server_parameters_runtime
                   CS.server_selected_cipher_suite =
                     T.TLS_CHACHA20_POLY1305_SHA256;
                   CS.server_selected_group = T.X25519;
-                  CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                  CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                   CS.server_random = Ghost.reveal server_random;
                   CS.server_key_share_private =
                     Some (Ghost.reveal server_private_key);

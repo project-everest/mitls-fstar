@@ -60,7 +60,7 @@ let append5 (a b c d e:B.bytes) : GTot B.bytes =
 let append6 (a b c d e f:B.bytes) : GTot B.bytes =
   B.append a (B.append b (B.append c (B.append d (B.append e f))))
 
-let read_u16 (input:B.bytes) (pos:nat{pos + 2 <= B.length input}) : GTot nat =
+let read_u16 (input:B.bytes) (pos:nat{pos + 2 <= B.length input}) : GTot (n:nat{n < 65536}) =
   nat_of_byte (Seq.index input pos) * 256 +
   nat_of_byte (Seq.index input (pos + 1))
 
@@ -105,68 +105,70 @@ let take_range
 
 let content_type_to_byte (ct:T.content_type) : GTot nat =
   match ct with
-  | T.ChangeCipherSpec -> 20
+  | T.Invalid -> 0
+  | T.Change_cipher_spec -> 20
   | T.Alert -> 21
   | T.Handshake -> 22
-  | T.ApplicationData -> 23
+  | T.Application_data -> 23
 
 let content_type_of_byte (b:B.byte) : GTot (option T.content_type) =
   match nat_of_byte b with
-  | 20 -> Some T.ChangeCipherSpec
+  | 0 -> Some T.Invalid
+  | 20 -> Some T.Change_cipher_spec
   | 21 -> Some T.Alert
   | 22 -> Some T.Handshake
-  | 23 -> Some T.ApplicationData
+  | 23 -> Some T.Application_data
   | _ -> None
 
 let signature_scheme_to_u16 (scheme:T.signature_scheme) : GTot nat =
   match scheme with
-  | T.RsaPssRsaeSha256 -> 0x0804
-  | T.EcdsaSecp256r1Sha256 -> 0x0403
+  | T.Rsa_pss_rsae_sha256 -> 0x0804
+  | T.Ecdsa_secp256r1_sha256 -> 0x0403
   | T.Ed25519 -> 0x0807
-  | T.UnsupportedSignatureScheme n -> n
+  | T.Unknown_signatureScheme n -> U16.v n
 
-let signature_scheme_of_u16 (scheme:nat) : GTot T.signature_scheme =
+let signature_scheme_of_u16 (scheme:nat{scheme < 65536}) : GTot T.signature_scheme =
   match scheme with
-  | 0x0804 -> T.RsaPssRsaeSha256
-  | 0x0403 -> T.EcdsaSecp256r1Sha256
+  | 0x0804 -> T.Rsa_pss_rsae_sha256
+  | 0x0403 -> T.Ecdsa_secp256r1_sha256
   | 0x0807 -> T.Ed25519
-  | _ -> T.UnsupportedSignatureScheme scheme
+  | _ -> T.Unknown_signatureScheme (U16.uint_to_t scheme)
 
 let cipher_suite_to_u16 (suite:T.cipher_suite) : GTot nat =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> 0x1303
-  | T.UnknownCipherSuite n -> n
+  | T.Unknown_cipherSuite n -> U16.v n
 
-let cipher_suite_of_u16 (suite:nat) : GTot (option T.cipher_suite) =
+let cipher_suite_of_u16 (suite:nat{suite < 65536}) : GTot (option T.cipher_suite) =
   match suite with
   | 0x1303 -> Some T.TLS_CHACHA20_POLY1305_SHA256
-  | _ -> Some (T.UnknownCipherSuite suite)
+  | _ -> Some (T.Unknown_cipherSuite (U16.uint_to_t suite))
 
 let alert_description_to_byte (alert:T.alert_description) : GTot nat =
   match alert with
-  | T.CloseNotify -> 0
-  | T.UnexpectedMessage -> 10
-  | T.BadRecordMac -> 20
-  | T.HandshakeFailure -> 40
-  | T.DecodeError -> 50
-  | T.DecryptError -> 51
-  | T.ProtocolVersion -> 70
-  | T.UnsupportedExtension -> 110
-  | T.CertificateUnknown -> 46
-  | T.IllegalParameter -> 47
+  | T.Close_notify -> 0
+  | T.Unexpected_message -> 10
+  | T.Bad_record_mac -> 20
+  | T.Handshake_failure -> 40
+  | T.Decode_error -> 50
+  | T.Decrypt_error -> 51
+  | T.Protocol_version -> 70
+  | T.Unsupported_extension -> 110
+  | T.Certificate_unknown -> 46
+  | T.Illegal_parameter -> 47
 
 let alert_description_of_byte (b:B.byte) : GTot (option T.alert_description) =
   match nat_of_byte b with
-  | 0 -> Some T.CloseNotify
-  | 10 -> Some T.UnexpectedMessage
-  | 20 -> Some T.BadRecordMac
-  | 40 -> Some T.HandshakeFailure
-  | 50 -> Some T.DecodeError
-  | 51 -> Some T.DecryptError
-  | 70 -> Some T.ProtocolVersion
-  | 110 -> Some T.UnsupportedExtension
-  | 46 -> Some T.CertificateUnknown
-  | 47 -> Some T.IllegalParameter
+  | 0 -> Some T.Close_notify
+  | 10 -> Some T.Unexpected_message
+  | 20 -> Some T.Bad_record_mac
+  | 40 -> Some T.Handshake_failure
+  | 50 -> Some T.Decode_error
+  | 51 -> Some T.Decrypt_error
+  | 70 -> Some T.Protocol_version
+  | 110 -> Some T.Unsupported_extension
+  | 46 -> Some T.Certificate_unknown
+  | 47 -> Some T.Illegal_parameter
   | _ -> None
 
 let rec bytes_equal_at
@@ -300,7 +302,7 @@ let rec parse_client_hello_extensions
 let synth_cipher_suite (c:GCS.cipherSuite) : T.cipher_suite =
   match c with
   | GCS.TLS_CHACHA20_POLY1305_SHA256 -> T.TLS_CHACHA20_POLY1305_SHA256
-  | GCS.Unknown_cipherSuite v -> T.UnknownCipherSuite (U16.v v)
+  | GCS.Unknown_cipherSuite v -> T.Unknown_cipherSuite v
 
 let lemma_synth_cipher_suite c = ()
 
@@ -340,10 +342,10 @@ let lemma_ch_find_key_share_cons e tl = ()
 
 let synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme =
   match s with
-  | GSS.Ecdsa_secp256r1_sha256 -> T.EcdsaSecp256r1Sha256
-  | GSS.Rsa_pss_rsae_sha256 -> T.RsaPssRsaeSha256
+  | GSS.Ecdsa_secp256r1_sha256 -> T.Ecdsa_secp256r1_sha256
+  | GSS.Rsa_pss_rsae_sha256 -> T.Rsa_pss_rsae_sha256
   | GSS.Ed25519 -> T.Ed25519
-  | GSS.Unknown_signatureScheme v -> T.UnsupportedSignatureScheme (U16.v v)
+  | GSS.Unknown_signatureScheme v -> T.Unknown_signatureScheme v
 
 let rec synth_sig_schemes (l:list GSS.signatureScheme) : GTot (list T.signature_scheme) (decreases l) =
   match l with
@@ -1250,7 +1252,8 @@ let parse_record_header (input:B.bytes) : GTot (option (T.content_type & nat)) =
 
 let lemma_parse_record_header_some_iff (input:B.bytes{B.length input == 5})
   : Lemma (Some? (parse_record_header input) <==>
-    ((Seq.index input 0 = 0x14uy ||
+    ((Seq.index input 0 = 0x00uy ||
+      Seq.index input 0 = 0x14uy ||
       Seq.index input 0 = 0x15uy ||
       Seq.index input 0 = 0x16uy ||
       Seq.index input 0 = 0x17uy) &&
@@ -1295,10 +1298,11 @@ let lemma_parse_record_serialize_record
   assert (Seq.index raw 0 == byte (content_type_to_byte content_type));
   lemma_byte_v (content_type_to_byte content_type);
   (match content_type with
-   | T.ChangeCipherSpec -> ()
+   | T.Invalid -> ()
+   | T.Change_cipher_spec -> ()
    | T.Alert -> ()
    | T.Handshake -> ()
-   | T.ApplicationData -> ());
+   | T.Application_data -> ());
   assert (content_type_of_byte (Seq.index raw 0) == Some content_type);
 
   Seq.lemma_index_app2 ct tail1 1;
@@ -1355,6 +1359,7 @@ let serialize_sealed_record (record:M.sealed_record) : GTot B.bytes =
 
 let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (option M.tls_message) =
   match content_type with
+  | T.Invalid -> None
   | T.Handshake ->
     (match parse_handshake fragment with
      | Some (msg, consumed) ->
@@ -1366,7 +1371,7 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
          match parse_ignored_post_handshake fragment with
          | Some body -> Some (M.TlsIgnoredPostHandshake body)
          | None -> None)
-  | T.ApplicationData -> Some (M.TlsApplicationData fragment)
+  | T.Application_data -> Some (M.TlsApplicationData fragment)
   | T.Alert ->
     if B.length fragment == 2
     then
@@ -1374,10 +1379,12 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
       | Some alert -> Some (M.TlsAlert alert)
       | None -> None
     else None
-  | T.ChangeCipherSpec ->
+  | T.Change_cipher_spec ->
     if B.length fragment == 1 && nat_of_byte (Seq.index fragment 0) == 1
     then Some M.TlsChangeCipherSpec
     else None
+
+let lemma_parse_tls_message_invalid_none fragment = ()
 
 let lemma_parse_handshake_none_of_lp_none fragment = ()
 
@@ -1388,9 +1395,9 @@ let lemma_ptm_handshake_fallback fragment = ()
 let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) =
   match msg with
   | M.TlsHandshake hs -> (T.Handshake, serialize_handshake hs)
-  | M.TlsApplicationData data -> (T.ApplicationData, data)
+  | M.TlsApplicationData data -> (T.Application_data, data)
   | M.TlsAlert alert -> (T.Alert, B.of_list [byte 2; byte (alert_description_to_byte alert)])
-  | M.TlsChangeCipherSpec -> (T.ChangeCipherSpec, B.singleton (byte 1))
+  | M.TlsChangeCipherSpec -> (T.Change_cipher_spec, B.singleton (byte 1))
   | M.TlsIgnoredPostHandshake body -> (T.Handshake, append3 (u8 4) (u24 (B.length body)) body)
   | M.TlsKeyUpdate req ->
     let request_byte =
@@ -1405,12 +1412,12 @@ let lemma_serialize_tls_message_handshake (hs:M.handshake_msg)
   ()
 
 let lemma_serialize_tls_message_application_data (data:B.bytes)
-  : Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.ApplicationData, data))
+  : Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.Application_data, data))
 =
   ()
 
 let lemma_serialize_tls_message_close_notify ()
-  : Lemma (serialize_tls_message (M.TlsAlert T.CloseNotify) ==
+  : Lemma (serialize_tls_message (M.TlsAlert T.Close_notify) ==
     (T.Alert, B.of_list [2uy; 0uy]))
 =
   ()
@@ -1428,7 +1435,8 @@ let lemma_serialize_tls_message_key_update_not_requested ()
   assert (B.length rhs == 5);
   assert (forall (i:nat{i < B.length lhs}). Seq.index lhs i == Seq.index rhs i);
   Seq.lemma_eq_intro lhs rhs;
-  Seq.lemma_eq_elim lhs rhs
+  Seq.lemma_eq_elim lhs rhs;
+  assert (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) == (T.Handshake, lhs))
 
 let parse_tls_record (input:B.bytes) : GTot (option (M.tls_record & nat)) =
   match parse_record input with

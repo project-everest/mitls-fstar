@@ -467,7 +467,7 @@ let lemma_legal_handled_local_response_preserves_server_selection_except_select
         st0
         st1
         resp
-        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
         B.empty
         B.empty
         network_out
@@ -476,7 +476,7 @@ let lemma_legal_handled_local_response_preserves_server_selection_except_select
         st0
         st1
         resp
-        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
         B.empty
         B.empty
         network_out

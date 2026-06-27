@@ -1593,7 +1593,7 @@ fn handle_local_event
         resp
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsAlert T.CloseNotify;
+          CL.message_value = M.TlsAlert T.Close_notify;
         })
         raw_sent
         B.empty
@@ -1609,7 +1609,7 @@ fn handle_local_event
         (Ghost.reveal 'payload_bytes)
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsAlert T.CloseNotify;
+          CL.message_value = M.TlsAlert T.Close_notify;
         })
         raw_sent
         B.empty

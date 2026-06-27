@@ -419,7 +419,7 @@ fn process_send_close_notify_local_event
 
     let ev = Ghost.hide (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     });
     let delta = Ghost.hide {
       CS.delta_event = Ghost.reveal ev;

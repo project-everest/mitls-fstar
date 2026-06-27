@@ -8,7 +8,7 @@ module Seq = FStar.Seq
 
 val lemma_parse_client_hello_serialize_client_hello
   (ch:M.client_hello{ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                     ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                     ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                      B.length ch.M.body == 0 /\
                      (match ch.M.server_name with
                       | None -> True
@@ -21,7 +21,7 @@ val lemma_parse_client_hello_serialize_client_hello
 
 val lemma_parse_tls_message_serialize_client_hello
   (ch:M.client_hello{ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                      ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                      ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                       B.length ch.M.body == 0 /\
                       (match ch.M.server_name with
                        | None -> True

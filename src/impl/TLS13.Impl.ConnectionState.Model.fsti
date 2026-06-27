@@ -80,7 +80,7 @@ val lemma_signature_schemes_match_first_rsa_offer
                 0 < len /\
                 len <= Seq.length wire /\
                 U16.v (Seq.index wire 0) == 0x0804)
-      (ensures CS.signature_scheme_offered schemes T.RsaPssRsaeSha256)
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
 
 noextract
 let client_hello_server_name_len_for (m:M.client_hello) : SZ.t =
@@ -96,9 +96,9 @@ noextract
 let client_hello_signature_schemes_len_for (m:M.client_hello) : SZ.t =
   bounded_u16_sizet (length m.M.signature_schemes)
 
-let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
+let tls_decode_error : T.tls_error = T.AlertError T.Decode_error
 
-let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage
+let tls_unexpected_message_error : T.tls_error = T.AlertError T.Unexpected_message
 
 let tls_hello_retry_request_rejected_error : T.tls_error = T.HelloRetryRequestRejected
 
@@ -1347,7 +1347,7 @@ let received_close_notify_state
       st.CS.cs_event_log @
       [CS.ConnNetworkEvent {
         CL.message_direction = CL.Received;
-        CL.message_value = M.TlsAlert T.CloseNotify;
+        CL.message_value = M.TlsAlert T.Close_notify;
       }];
   }
 
@@ -1376,7 +1376,7 @@ let sent_close_notify_state
       st.CS.cs_event_log @
       [CS.ConnNetworkEvent {
         CL.message_direction = CL.Sent;
-        CL.message_value = M.TlsAlert T.CloseNotify;
+        CL.message_value = M.TlsAlert T.Close_notify;
       }];
   }
 
@@ -1627,7 +1627,7 @@ val lemma_seal_application_success_next_seq
       (requires R.seal
                   s
                   aad
-                  { R.content_type = T.ApplicationData;
+                  { R.content_type = T.Application_data;
                     R.fragment = payload } == Some (ciphertext, s'))
       (ensures s' == R.next_seq s)
 
@@ -1689,13 +1689,13 @@ let can_send_close_notify
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     }) /\
   CS.event_raw_delta_legal
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     })
     raw_sent
     B.empty /\
@@ -1703,7 +1703,7 @@ let can_send_close_notify
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     })
     raw_sent
 
@@ -2741,7 +2741,7 @@ val lemma_received_alert_failure_state_evolves
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
-                alert <> T.CloseNotify /\
+                alert <> T.Close_notify /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -2782,7 +2782,7 @@ val lemma_received_close_notify_state_evolves_for_role
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
                     CL.message_direction = CL.Received;
-                    CL.message_value = M.TlsAlert T.CloseNotify;
+                    CL.message_value = M.TlsAlert T.Close_notify;
                   })
                   B.empty
                   raw_received)
@@ -2797,7 +2797,7 @@ val lemma_received_close_notify_state_evolves_for_role
                    CS.delta_event =
                      CS.ConnNetworkEvent {
                        CL.message_direction = CL.Received;
-                       CL.message_value = M.TlsAlert T.CloseNotify;
+                       CL.message_value = M.TlsAlert T.Close_notify;
                      };
                    CS.delta_raw_sent = B.empty;
                    CS.delta_raw_received = raw_received;
@@ -2817,7 +2817,7 @@ val lemma_received_close_notify_state_evolves
                  st.CS.cs_model
                  (CS.ConnNetworkEvent {
                    CL.message_direction = CL.Received;
-                   CL.message_value = M.TlsAlert T.CloseNotify;
+                   CL.message_value = M.TlsAlert T.Close_notify;
                  })
                  B.empty
                  raw_received)
@@ -2832,7 +2832,7 @@ val lemma_received_close_notify_state_evolves
                   CS.delta_event =
                     CS.ConnNetworkEvent {
                       CL.message_direction = CL.Received;
-                      CL.message_value = M.TlsAlert T.CloseNotify;
+                      CL.message_value = M.TlsAlert T.Close_notify;
                     };
                   CS.delta_raw_sent = B.empty;
                   CS.delta_raw_received = raw_received;
@@ -2856,7 +2856,7 @@ val lemma_sent_close_notify_state_evolves
                    CS.delta_event =
                      CS.ConnNetworkEvent {
                        CL.message_direction = CL.Sent;
-                       CL.message_value = M.TlsAlert T.CloseNotify;
+                       CL.message_value = M.TlsAlert T.Close_notify;
                      };
                    CS.delta_raw_sent = raw_sent;
                    CS.delta_raw_received = B.empty;

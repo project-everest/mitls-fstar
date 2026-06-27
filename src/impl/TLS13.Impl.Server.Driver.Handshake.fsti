@@ -96,7 +96,7 @@ let server_driver_selection_from_payload_correct
        CS.server_selected_client_hello = ch;
        CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
        CS.server_selected_group = T.X25519;
-       CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
        CS.server_random = CL.raw_slice payload 0 32;
        CS.server_key_share_private = Some (CL.raw_slice payload 32 64);
        CS.server_key_share_public =
@@ -333,7 +333,7 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                         T.X25519 /\
                       CS.signature_scheme_offered
                         cfg.CS.server_allowed_signature_schemes
-                        T.RsaPssRsaeSha256 /\
+                        T.Rsa_pss_rsae_sha256 /\
                       CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
                     | _, _ -> True))
   returns status:DL.server_driver_local_status
@@ -551,7 +551,7 @@ fn select_and_derive_shared_secret_if_ready_once
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
                   | _, _ -> True))
   returns status:DL.server_driver_local_status
@@ -601,7 +601,7 @@ fn accept_start_read_client_hello_select_derive_once
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns result:server_driver_accept_select_derive_result
@@ -684,7 +684,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         T.X25519 /\
                       CS.signature_scheme_offered
                         cfg.CS.server_allowed_signature_schemes
-                        T.RsaPssRsaeSha256 /\
+                        T.Rsa_pss_rsae_sha256 /\
                       cfg.CS.server_sni_policy == None
                     | None -> False))
   returns result:server_driver_accept_server_hello_result
@@ -756,7 +756,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                         T.X25519 /\
                       CS.signature_scheme_offered
                         cfg.CS.server_allowed_signature_schemes
-                        T.RsaPssRsaeSha256 /\
+                        T.Rsa_pss_rsae_sha256 /\
                       cfg.CS.server_sni_policy == None
                     | None -> False))
   returns result:server_driver_accept_server_hello_drain_result

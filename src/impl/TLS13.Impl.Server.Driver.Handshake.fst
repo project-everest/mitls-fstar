@@ -65,7 +65,7 @@ let lemma_select_server_parameters_ready_payload_irrelevant
     CS.server_selected_client_hello = ch;
     CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
     CS.server_random = CL.raw_slice payload0 0 32;
     CS.server_key_share_private = Some (CL.raw_slice payload0 32 64);
     CS.server_key_share_public =
@@ -76,7 +76,7 @@ let lemma_select_server_parameters_ready_payload_irrelevant
     CS.server_selected_client_hello = ch;
     CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
     CS.server_random = CL.raw_slice payload1 0 32;
     CS.server_key_share_private = Some (CL.raw_slice payload1 32 64);
     CS.server_key_share_public =
@@ -96,10 +96,10 @@ let lemma_select_server_parameters_ready_payload_irrelevant
     T.X25519);
   assert (CS.signature_scheme_offered
     cfg.CS.server_allowed_signature_schemes
-    T.RsaPssRsaeSha256);
+    T.Rsa_pss_rsae_sha256);
   assert (CS.signature_scheme_offered
     ch.M.signature_schemes
-    T.RsaPssRsaeSha256);
+    T.Rsa_pss_rsae_sha256);
   assert (CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name);
   assert (CS.server_selection_key_share_consistent selection1);
   assert (CS.server_selection_acceptable cfg selection1);
@@ -189,7 +189,7 @@ let lemma_select_derive_success_server_hello_ready
        CS.server_selected_client_hello = ch;
        CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
        CS.server_selected_group = T.X25519;
-       CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
        CS.server_random = server_random;
        CS.server_key_share_private = Some server_private_key;
        CS.server_key_share_public =
@@ -206,7 +206,7 @@ let lemma_select_derive_success_server_hello_ready
     CS.server_selected_client_hello = selected_ch;
     CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
     CS.server_random = server_random;
     CS.server_key_share_private = Some server_private_key;
     CS.server_key_share_public =
@@ -227,7 +227,7 @@ let lemma_select_derive_success_server_hello_ready
   W.lemma_fixed_server_handshake_serializers
     sh
     { M.chain = []; M.body = B.empty }
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
+    { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
     { M.verify_data = Seq.create 32 0uy };
   W.lemma_serialize_server_hello_len sh;
   assert (B.length (W.serialize_handshake (M.ServerHello sh)) == 90);
@@ -428,7 +428,7 @@ fn select_default_server_parameters_once
     CS.server_selected_client_hello = Ghost.reveal selected_ch;
     CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
     CS.server_random = server_random_bytes;
     CS.server_key_share_private = Some server_private_key_bytes;
     CS.server_key_share_public =
@@ -617,7 +617,7 @@ fn select_default_server_parameters_from_payload_once
     CS.server_selected_client_hello = Ghost.reveal selected_ch;
     CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
     CS.server_random = server_random_bytes;
     CS.server_key_share_private = Some server_private_key_bytes;
     CS.server_key_share_public =
@@ -1091,7 +1091,7 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
                   | _, _ -> True))
   returns status:server_driver_local_status
@@ -1192,7 +1192,7 @@ fn select_supported_server_parameters_from_payload_if_ready_once
           CS.server_selected_cipher_suite =
             T.TLS_CHACHA20_POLY1305_SHA256;
           CS.server_selected_group = T.X25519;
-          CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+          CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
           CS.server_random = Ghost.reveal server_random;
           CS.server_key_share_private = Some (Ghost.reveal server_private_key);
           CS.server_key_share_public =
@@ -2024,7 +2024,7 @@ fn select_and_derive_shared_secret_once
     CS.server_selected_client_hello = Ghost.reveal selected_ch;
     CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
     CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
     CS.server_random = server_random_bytes;
     CS.server_key_share_private = Some server_private_key_bytes;
     CS.server_key_share_public =
@@ -2178,7 +2178,7 @@ fn select_and_derive_shared_secret_if_ready_once
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
                   | _, _ -> True))
   returns status:server_driver_local_status
@@ -2284,7 +2284,7 @@ fn select_and_derive_shared_secret_if_ready_once
           CS.server_selected_cipher_suite =
             T.TLS_CHACHA20_POLY1305_SHA256;
           CS.server_selected_group = T.X25519;
-          CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+          CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
           CS.server_random = Ghost.reveal server_random;
           CS.server_key_share_private = Some (Ghost.reveal server_private_key);
           CS.server_key_share_public =
@@ -2476,7 +2476,7 @@ fn accept_start_read_client_hello_select_derive_once
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns result:server_driver_accept_select_derive_result
@@ -2596,7 +2596,7 @@ fn accept_start_read_client_hello_select_derive_once
               T.X25519 /\
             CS.signature_scheme_offered
               cfg.CS.server_allowed_signature_schemes
-              T.RsaPssRsaeSha256 /\
+              T.Rsa_pss_rsae_sha256 /\
             cfg.CS.server_sni_policy == None
           | None -> False));
         assert (pure (
@@ -2611,7 +2611,7 @@ fn accept_start_read_client_hello_select_derive_once
               T.X25519 /\
             CS.signature_scheme_offered
               cfg.CS.server_allowed_signature_schemes
-              T.RsaPssRsaeSha256 /\
+              T.Rsa_pss_rsae_sha256 /\
             CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
           | _, _ -> True));
         let material_ok = generate_server_material_once d;
@@ -2636,7 +2636,7 @@ fn accept_start_read_client_hello_select_derive_once
                  T.X25519 /\
                CS.signature_scheme_offered
                  cfg.CS.server_allowed_signature_schemes
-                 T.RsaPssRsaeSha256 /\
+                 T.Rsa_pss_rsae_sha256 /\
                CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
              | _, _ -> True)));
           let status = select_and_derive_shared_secret_if_ready_once d;
@@ -2705,7 +2705,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                                 T.X25519 /\
                               CS.signature_scheme_offered
                                 cfg.CS.server_allowed_signature_schemes
-                                T.RsaPssRsaeSha256 /\
+                                T.Rsa_pss_rsae_sha256 /\
                               cfg.CS.server_sni_policy == None
                             | None -> False))
             returns result:server_driver_accept_server_hello_result
@@ -2814,7 +2814,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         T.X25519 /\
                       CS.signature_scheme_offered
                         cfg.CS.server_allowed_signature_schemes
-                        T.RsaPssRsaeSha256 /\
+                        T.Rsa_pss_rsae_sha256 /\
                       cfg.CS.server_sni_policy == None
                     | None -> False));
                   assert (pure (
@@ -2829,7 +2829,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         T.X25519 /\
                       CS.signature_scheme_offered
                         cfg.CS.server_allowed_signature_schemes
-                        T.RsaPssRsaeSha256 /\
+                        T.Rsa_pss_rsae_sha256 /\
                       CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
                     | _, _ -> True));
 
@@ -2904,7 +2904,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                             CS.server_selected_cipher_suite =
                               T.TLS_CHACHA20_POLY1305_SHA256;
                             CS.server_selected_group = T.X25519;
-                            CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                            CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                             CS.server_random = Ghost.reveal server_random;
                             CS.server_key_share_private = Some (Ghost.reveal server_private_key);
                             CS.server_key_share_public =
@@ -3000,7 +3000,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns result:server_driver_accept_server_hello_drain_result

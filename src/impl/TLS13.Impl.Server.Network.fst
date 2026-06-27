@@ -658,12 +658,12 @@ fn process_close_notify
                  U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                  CT.received_tls_raw_delta_legal
                    'st0
-                   (M.TlsAlert T.CloseNotify)
+                   (M.TlsAlert T.Close_notify)
                    (Ghost.reveal 'raw_bytes) /\
                  CS.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
-                     (M.TlsAlert T.CloseNotify))
+                     (M.TlsAlert T.Close_notify))
                    (Ghost.reveal 'raw_bytes))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -681,7 +681,7 @@ fn process_close_notify
                   'st0
                   st1
                   resp
-                  (M.TlsAlert T.CloseNotify)
+                  (M.TlsAlert T.Close_notify)
                   (Ghost.reveal 'raw_bytes)
                   network_out_bytes
                   app_out_bytes)
@@ -710,7 +710,7 @@ fn process_close_notify
   assert (pure (CS.legal_connection_delta
     'st0
     (ST.received_message_delta
-      (M.TlsAlert T.CloseNotify)
+      (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes))
     (CM.received_close_notify_state
       'st0
@@ -720,7 +720,7 @@ fn process_close_notify
     CS.ServerEndpoint
     'st0
     (ST.received_message_delta
-      (M.TlsAlert T.CloseNotify)
+      (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes))
     (CM.received_close_notify_state
       'st0
@@ -728,7 +728,7 @@ fn process_close_notify
   CSL.lemma_legal_connection_delta_raw_event_replay_consistent
     'st0
     (ST.received_message_delta
-      (M.TlsAlert T.CloseNotify)
+      (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes))
     (CM.received_close_notify_state
       'st0
@@ -740,7 +740,7 @@ fn process_close_notify
   CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
     'st0
     (ST.received_message_delta
-      (M.TlsAlert T.CloseNotify)
+      (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes))
     (CM.received_close_notify_state
       'st0
@@ -748,7 +748,7 @@ fn process_close_notify
   CSL.lemma_legal_connection_delta_received_decode_replay_consistent
     'st0
     (ST.received_message_delta
-      (M.TlsAlert T.CloseNotify)
+      (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes))
     (CM.received_close_notify_state
       'st0
@@ -778,7 +778,7 @@ fn process_close_notify
     'st0
     (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
     resp
-    (ST.received_message_event (M.TlsAlert T.CloseNotify))
+    (ST.received_message_event (M.TlsAlert T.Close_notify))
     B.empty
     (Ghost.reveal 'raw_bytes)
     'old_network_out
@@ -787,7 +787,7 @@ fn process_close_notify
     'st0
     (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
     resp
-    (M.TlsAlert T.CloseNotify)
+    (M.TlsAlert T.Close_notify)
     (Ghost.reveal 'raw_bytes)
     'old_network_out
     'old_app_out));
@@ -795,7 +795,7 @@ fn process_close_notify
     'st0
     (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
     resp
-    (M.TlsAlert T.CloseNotify)
+    (M.TlsAlert T.Close_notify)
     (Ghost.reveal 'raw_bytes)
     'old_network_out
     'old_app_out));
@@ -821,7 +821,7 @@ fn process_alert_failure
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
-                 Ghost.reveal alert <> T.CloseNotify /\
+                 Ghost.reveal alert <> T.Close_notify /\
                  Tags.alert_tag_matches alert_wire (Ghost.reveal alert) /\
                  CT.received_tls_raw_delta_legal
                    'st0
@@ -2267,49 +2267,49 @@ fn process_network_bytes
             let close_notify = alert = 0uy;
             if close_notify {
               assert (pure (U8.v alert == 0));
-              assert (pure (Ghost.reveal parsed_alert == T.CloseNotify));
-              assert (pure (IM.alert_description_matches alert T.CloseNotify));
+              assert (pure (Ghost.reveal parsed_alert == T.Close_notify));
+              assert (pure (IM.alert_description_matches alert T.Close_notify));
               assert (pure (CT.parsed_message_wire_success_for
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
                 (IM.LTlsAlert alert)
-                (M.TlsAlert T.CloseNotify)));
+                (M.TlsAlert T.Close_notify)));
               assert (pure (CT.wire_parse_success
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
-                (M.TlsAlert T.CloseNotify)));
+                (M.TlsAlert T.Close_notify)));
               assert (pure (CT.received_tls_raw_delta_legal
                 'st0
-                (M.TlsAlert T.CloseNotify)
+                (M.TlsAlert T.Close_notify)
                 raw_record_bytes));
               CT.lemma_parsed_message_network_input_projection
                 'st0
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
                 (IM.LTlsAlert alert)
-                (M.TlsAlert T.CloseNotify)
+                (M.TlsAlert T.Close_notify)
                 raw_record_bytes;
               assert (pure (CT.network_input_message_projection
                 'st0
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
-                (M.TlsAlert T.CloseNotify)
+                (M.TlsAlert T.Close_notify)
                 raw_record_bytes));
               assert (pure (CS.network_message_is_cleartext
                 CL.Received
-                (M.TlsAlert T.CloseNotify) == false));
+                (M.TlsAlert T.Close_notify) == false));
               assert (pure (CT.protected_record_decodes_to_message
                 'st0
                 raw_record_bytes
-                (M.TlsAlert T.CloseNotify)));
+                (M.TlsAlert T.Close_notify)));
               CT.lemma_protected_record_decodes_to_received_single_decode
                 'st0
                 raw_record_bytes
-                (M.TlsAlert T.CloseNotify);
+                (M.TlsAlert T.Close_notify);
               assert (pure (CS.received_event_nonempty_decode_projection
                 'st0.CS.cs_model
                 (ST.received_message_event
-                  (M.TlsAlert T.CloseNotify))
+                  (M.TlsAlert T.Close_notify))
                 raw_record_bytes));
               unfold (connection_exactly s 'st0);
               let ready =
@@ -2368,7 +2368,7 @@ fn process_network_bytes
                   'st0
                   st1
                   resp
-                  (M.TlsAlert T.CloseNotify)
+                  (M.TlsAlert T.Close_notify)
                   raw_record_bytes
                   network_out_bytes
                   app_out_bytes));
@@ -2383,7 +2383,7 @@ fn process_network_bytes
                 assert (pure (ST.server_protected_record_decode_correct
                   'st0
                   raw_record_bytes
-                  (M.TlsAlert T.CloseNotify)));
+                  (M.TlsAlert T.Close_notify)));
                 assert (pure (ST.server_network_step_ok_received_decode_projection
                   'st0
                   st1
@@ -2450,7 +2450,7 @@ fn process_network_bytes
               IM.lemma_alert_description_nonzero_not_close_notify
                 alert
                 (Ghost.reveal parsed_alert);
-              assert (pure (Ghost.reveal parsed_alert <> T.CloseNotify));
+              assert (pure (Ghost.reveal parsed_alert <> T.Close_notify));
               assert (pure (CT.parsed_message_wire_success_for
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes

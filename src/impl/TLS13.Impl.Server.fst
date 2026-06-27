@@ -366,7 +366,7 @@ fn process_select_default_server_parameters_from_arrays
                     CS.server_selected_cipher_suite =
                       T.TLS_CHACHA20_POLY1305_SHA256;
                     CS.server_selected_group = T.X25519;
-                    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                     CS.server_random = Ghost.reveal 'server_random_bytes;
                     CS.server_key_share_private = None;
                     CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
@@ -393,7 +393,7 @@ fn process_select_default_server_parameters_from_arrays
                       CS.server_selected_cipher_suite =
                         T.TLS_CHACHA20_POLY1305_SHA256;
                       CS.server_selected_group = T.X25519;
-                      CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                       CS.server_random = Ghost.reveal 'server_random_bytes;
                       CS.server_key_share_private = None;
                       CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
@@ -464,7 +464,7 @@ fn process_select_default_server_parameters_with_private_from_arrays
                     CS.server_selected_cipher_suite =
                       T.TLS_CHACHA20_POLY1305_SHA256;
                     CS.server_selected_group = T.X25519;
-                    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                     CS.server_random = Ghost.reveal 'server_random_bytes;
                     CS.server_key_share_private =
                       Some (Ghost.reveal 'server_private_key_bytes);
@@ -494,7 +494,7 @@ fn process_select_default_server_parameters_with_private_from_arrays
                       CS.server_selected_cipher_suite =
                         T.TLS_CHACHA20_POLY1305_SHA256;
                       CS.server_selected_group = T.X25519;
-                      CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                       CS.server_random = Ghost.reveal 'server_random_bytes;
                       CS.server_key_share_private =
                         Some (Ghost.reveal 'server_private_key_bytes);
@@ -565,7 +565,7 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                    CS.server_selected_cipher_suite =
                      T.TLS_CHACHA20_POLY1305_SHA256;
                    CS.server_selected_group = T.X25519;
-                   CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                   CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                    CS.server_random = Ghost.reveal 'server_random_bytes;
                    CS.server_key_share_private =
                      Some (Ghost.reveal 'server_private_key_bytes);
@@ -595,7 +595,7 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                      CS.server_selected_cipher_suite =
                        T.TLS_CHACHA20_POLY1305_SHA256;
                      CS.server_selected_group = T.X25519;
-                     CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                     CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                      CS.server_random = Ghost.reveal 'server_random_bytes;
                      CS.server_key_share_private =
                        Some (Ghost.reveal 'server_private_key_bytes);
@@ -2409,12 +2409,12 @@ fn process_sign_certificate_verify
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     selection.CS.server_selected_signature_scheme ==
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     selection.CS.server_selected_credential ==
                       Ghost.reveal 'credential_identity /\
                     CS.signature_scheme_offered
                       'st0.CS.cs_model.CS.model_config.CS.config_signature_schemes
-                      T.RsaPssRsaeSha256
+                      T.Rsa_pss_rsae_sha256
                   | None -> False))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.

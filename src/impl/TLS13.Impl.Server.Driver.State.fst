@@ -323,7 +323,7 @@ let lemma_local_event_wire_lengths
       st0
       st1
       resp
-      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
       B.empty
       B.empty
       network_out
@@ -332,7 +332,7 @@ let lemma_local_event_wire_lengths
       st0
       st1
       resp
-      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
       B.empty
       B.empty
       network_out

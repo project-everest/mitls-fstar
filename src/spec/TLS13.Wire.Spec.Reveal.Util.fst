@@ -20,10 +20,11 @@ let content_type_byte ct = WS.byte (WS.content_type_to_byte ct)
 
 let lemma_content_type_byte_value ct =
   match ct with
-  | T.ChangeCipherSpec -> WS.lemma_byte_v 20
+  | T.Invalid -> WS.lemma_byte_v 0
+  | T.Change_cipher_spec -> WS.lemma_byte_v 20
   | T.Alert -> WS.lemma_byte_v 21
   | T.Handshake -> WS.lemma_byte_v 22
-  | T.ApplicationData -> WS.lemma_byte_v 23
+  | T.Application_data -> WS.lemma_byte_v 23
 
 let serialize_record_header content_type fragment_len =
   B.append
@@ -107,10 +108,10 @@ let lemma_byte_0303_lo () =
   U8.v_inj (WS.byte 0x0303) 0x03uy
 
 let lemma_content_type_change_cipher_spec_byte () =
-  lemma_content_type_byte_value T.ChangeCipherSpec;
+  lemma_content_type_byte_value T.Change_cipher_spec;
   assert_norm (U8.v 0x14uy == 20);
-  assert (U8.v (content_type_byte T.ChangeCipherSpec) == U8.v 0x14uy);
-  U8.v_inj (content_type_byte T.ChangeCipherSpec) 0x14uy
+  assert (U8.v (content_type_byte T.Change_cipher_spec) == U8.v 0x14uy);
+  U8.v_inj (content_type_byte T.Change_cipher_spec) 0x14uy
 
 let lemma_content_type_alert_byte () =
   lemma_content_type_byte_value T.Alert;
@@ -125,10 +126,10 @@ let lemma_content_type_handshake_byte () =
   U8.v_inj (content_type_byte T.Handshake) 0x16uy
 
 let lemma_content_type_application_data_byte () =
-  lemma_content_type_byte_value T.ApplicationData;
+  lemma_content_type_byte_value T.Application_data;
   assert_norm (U8.v 0x17uy == 23);
-  assert (U8.v (content_type_byte T.ApplicationData) == U8.v 0x17uy);
-  U8.v_inj (content_type_byte T.ApplicationData) 0x17uy
+  assert (U8.v (content_type_byte T.Application_data) == U8.v 0x17uy);
+  U8.v_inj (content_type_byte T.Application_data) 0x17uy
 
 let lemma_u8_reveal (n:nat)
   : Lemma (Seq.equal (u8 n) (B.singleton (byte n)))

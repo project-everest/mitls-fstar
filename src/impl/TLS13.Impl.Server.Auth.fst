@@ -163,12 +163,12 @@ fn process_sign_certificate_verify
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     selection.CS.server_selected_signature_scheme ==
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     selection.CS.server_selected_credential ==
                       Ghost.reveal 'credential_identity /\
                     CS.signature_scheme_offered
                       'st0.CS.cs_model.CS.model_config.CS.config_signature_schemes
-                      T.RsaPssRsaeSha256
+                      T.Rsa_pss_rsae_sha256
                   | None -> False))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -299,7 +299,7 @@ fn process_sign_certificate_verify
         (Seq.slice signature_bytes 0 (SZ.v signature_len))));
       assert (pure (B.length (Ghost.reveal signature) == SZ.v signature_len));
       assert (pure (TLS13.Crypto.Spec.verify_signature
-        T.RsaPssRsaeSha256
+        T.Rsa_pss_rsae_sha256
         (Ghost.reveal 'credential_identity)
         (Seq.slice (Ghost.reveal certificate_verify_input_bytes) 0 130)
         (Ghost.reveal signature)));
@@ -308,13 +308,13 @@ fn process_sign_certificate_verify
         (H.certificate_verify_input
           (Tr.hash 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript))));
       assert (pure (TLS13.Crypto.Spec.verify_signature
-        T.RsaPssRsaeSha256
+        T.Rsa_pss_rsae_sha256
         (Ghost.reveal 'credential_identity)
         (H.certificate_verify_input
           (Tr.hash 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript))
         (Ghost.reveal signature)));
       let cv : erased M.certificate_verify = Ghost.hide {
-        M.scheme = T.RsaPssRsaeSha256;
+        M.scheme = T.Rsa_pss_rsae_sha256;
         M.signature = Ghost.reveal signature;
         M.body = B.empty;
       };
@@ -329,7 +329,7 @@ fn process_sign_certificate_verify
       assert (pure (lcv.IM.certificate_verify_scheme == 0x0804us));
       rewrite (V.pts_to signature_vec signature_bytes)
         as (V.pts_to lcv.IM.certificate_verify_signature signature_bytes);
-      assert_norm (IM.signature_scheme_matches 0x0804us T.RsaPssRsaeSha256);
+      assert_norm (IM.signature_scheme_matches 0x0804us T.Rsa_pss_rsae_sha256);
       assert (pure (IM.byte_prefix_matches
         signature_bytes
         signature_len

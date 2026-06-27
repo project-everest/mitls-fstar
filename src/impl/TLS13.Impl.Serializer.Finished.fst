@@ -71,7 +71,7 @@ fn serialize_server_finished
       M.body = B.empty;
     }
     { M.chain = []; M.body = B.empty }
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
+    { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
     (Ghost.reveal fin);
   assert (pure (Seq.equal
     (WS.serialize_server_finished (Ghost.reveal fin))
