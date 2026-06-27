@@ -3,13 +3,13 @@ module Common.ProtocolImplementation
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Pulse.Lib.Array.PtsTo
 
 module Seq = FStar.Seq
 module SM = Common.StateMachine
 module SZ = FStar.SizeT
 module TCP = Common.TCP
 module U8 = FStar.UInt8
+module Vec = Pulse.Lib.Vec
 module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
 
@@ -319,9 +319,9 @@ class protocol_implementation
 
   pi_process_network:
     i:impl ->
-    input:array U8.t ->
+    input:Vec.vec U8.t ->
     input_len:SZ.t ->
-    out:array U8.t ->
+    out:Vec.vec U8.t ->
     out_len:SZ.t ->
     received0:Ghost.erased TCP.bytes ->
     sent0:Ghost.erased TCP.bytes ->
@@ -334,8 +334,8 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
-         pts_to input (Ghost.reveal input_contents) **
-         pts_to out (Ghost.reveal old_out) **
+         Vec.pts_to input (Ghost.reveal input_contents) **
+         Vec.pts_to out (Ghost.reveal old_out) **
          pure (
           buffers_wf
             (Ghost.reveal input_contents)
@@ -352,8 +352,8 @@ class protocol_implementation
               (Ghost.reveal received1)
               (Ghost.reveal sent1)
               (Ghost.reveal st1) **
-            pts_to input (Ghost.reveal input_contents) **
-            pts_to out out_contents **
+            Vec.pts_to input (Ghost.reveal input_contents) **
+            Vec.pts_to out out_contents **
             pure (
               network_process_correct
                 pi_system
@@ -373,7 +373,7 @@ class protocol_implementation
   pi_process_local:
     i:impl ->
     ev:local_event ->
-    out:array U8.t ->
+    out:Vec.vec U8.t ->
     out_len:SZ.t ->
     received0:Ghost.erased TCP.bytes ->
     sent0:Ghost.erased TCP.bytes ->
@@ -385,7 +385,7 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
-         pts_to out (Ghost.reveal old_out) **
+         Vec.pts_to out (Ghost.reveal old_out) **
          pure (SZ.v out_len == Seq.length (Ghost.reveal old_out)))
         (fun result ->
           exists* (received1:Ghost.erased TCP.bytes)
@@ -397,7 +397,7 @@ class protocol_implementation
               (Ghost.reveal received1)
               (Ghost.reveal sent1)
               (Ghost.reveal st1) **
-            pts_to out out_contents **
+            Vec.pts_to out out_contents **
             pure (
               local_process_correct
                 pi_system
