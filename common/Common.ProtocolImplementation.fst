@@ -13,12 +13,12 @@ module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
 
 type process_status =
-  | ProcessOk
+  | StepOk
   | NeedMoreInput
   | ParseFailed
   | DecodeError
   | IllegalTransition
-  | OutputTooSmall
+  | OutputBufferTooSmall
   | ConnectionFailed
 
 noeq
@@ -26,6 +26,7 @@ type process_result = {
   process_status: process_status;
   process_consumed_len: SZ.t;
   process_produced_len: SZ.t;
+  process_app_len: SZ.t;
 }
 
 let bounded_len
@@ -96,6 +97,7 @@ let non_step_status (status:process_status) : bool =
   match status with
   | DecodeError
   | IllegalTransition
+  | OutputBufferTooSmall
   | ConnectionFailed -> true
   | _ -> false
 
@@ -144,7 +146,7 @@ let network_process_correct
   buffers_wf input input_len old_out out_len /\
   Seq.length out_bytes == Seq.length old_out /\
   (match result.process_status with
-  | ProcessOk ->
+  | StepOk ->
     exists msg residual produced.
       consumed_by_parse
         system.WFSM.wfsm_wire_format
@@ -182,7 +184,7 @@ let network_process_correct
     result.process_produced_len == 0sz /\
     same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
     Seq.equal out_bytes old_out
-  | OutputTooSmall ->
+  | OutputBufferTooSmall ->
     exists msg parsed_consumed residual produced st_candidate.
       consumed_by_parse
         system.WFSM.wfsm_wire_format
@@ -237,7 +239,7 @@ let local_process_correct
   Seq.length out_bytes == Seq.length old_out /\
   result.process_consumed_len == 0sz /\
   (match result.process_status with
-  | ProcessOk ->
+  | StepOk ->
     exists produced.
       system.WFSM.wfsm_state_machine.SM.sm_step
         st0
@@ -254,7 +256,7 @@ let local_process_correct
     False
   | ParseFailed ->
     False
-  | OutputTooSmall ->
+  | OutputBufferTooSmall ->
     exists produced st_candidate.
       system.WFSM.wfsm_state_machine.SM.sm_step
         st0
@@ -316,7 +318,7 @@ let lemma_network_process_ok_refines_transition
           consumed
           wire_outputs
           local_outputs /\
-        result.process_status == ProcessOk)
+        result.process_status == StepOk)
       (ensures
         exists msg residual produced.
           consumed_by_parse
@@ -373,7 +375,7 @@ let lemma_local_process_ok_refines_transition
           st1
           wire_outputs
           local_outputs /\
-        result.process_status == ProcessOk)
+        result.process_status == StepOk)
       (ensures
         exists produced.
           system.WFSM.wfsm_state_machine.SM.sm_step
@@ -449,6 +451,7 @@ class protocol_implementation
   pi_local_frame_pre:
     local_event ->
     pi_local_frame ->
+    state ->
     array U8.t ->
     SZ.t ->
     TCP.bytes ->
@@ -649,6 +652,7 @@ class protocol_implementation
          pi_local_frame_pre
            ev
            frame
+           (Ghost.reveal st0)
            out
            out_len
            (Ghost.reveal old_out) **
