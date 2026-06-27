@@ -232,6 +232,21 @@ class protocol_implementation
     state ->
     slprop;
 
+  pi_network_frame:
+    Type0;
+
+  pi_network_frame_slprop:
+    pi_network_frame ->
+    slprop;
+
+  pi_local_frame:
+    Type0;
+
+  pi_local_frame_slprop:
+    local_event ->
+    pi_local_frame ->
+    slprop;
+
   pi_invariant_valid:
     i:impl ->
     received:Ghost.erased TCP.bytes ->
@@ -318,6 +333,7 @@ class protocol_implementation
 
   pi_process_network:
     i:impl ->
+    frame:pi_network_frame ->
     input:array U8.t ->
     input_len:SZ.t ->
     out:array U8.t ->
@@ -333,6 +349,7 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
+         pi_network_frame_slprop frame **
          pts_to input (Ghost.reveal input_contents) **
          pts_to out (Ghost.reveal old_out) **
          pure (
@@ -351,6 +368,7 @@ class protocol_implementation
               (Ghost.reveal received1)
               (Ghost.reveal sent1)
               (Ghost.reveal st1) **
+            pi_network_frame_slprop frame **
             pts_to input (Ghost.reveal input_contents) **
             pts_to out out_contents **
             pure (
@@ -372,6 +390,7 @@ class protocol_implementation
   pi_process_local:
     i:impl ->
     ev:local_event ->
+    frame:pi_local_frame ->
     out:array U8.t ->
     out_len:SZ.t ->
     received0:Ghost.erased TCP.bytes ->
@@ -384,6 +403,7 @@ class protocol_implementation
           (Ghost.reveal received0)
           (Ghost.reveal sent0)
           (Ghost.reveal st0) **
+         pi_local_frame_slprop ev frame **
          pts_to out (Ghost.reveal old_out) **
          pure (SZ.v out_len == Seq.length (Ghost.reveal old_out)))
         (fun result ->
@@ -396,6 +416,7 @@ class protocol_implementation
               (Ghost.reveal received1)
               (Ghost.reveal sent1)
               (Ghost.reveal st1) **
+            pi_local_frame_slprop ev frame **
             pts_to out out_contents **
             pure (
               local_process_correct
