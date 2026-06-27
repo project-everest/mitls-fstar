@@ -7,7 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CP = Common.Protocol
-module CPI = Common.ProtocolImplementation
+module CPI = Common.LegacyProtocolImplementation
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module D = TLS13.Impl.Client.Driver

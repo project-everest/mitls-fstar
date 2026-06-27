@@ -5,7 +5,7 @@ module Calc.Server.Protocol
 open Pulse.Lib.Pervasives
 
 module CP = Common.Protocol
-module CPI = Common.ProtocolImplementation
+module CPI = Common.LegacyProtocolImplementation
 module TCP = Common.TCP
 module CalcP = Calc.Protocol
 module Seq = FStar.Seq
