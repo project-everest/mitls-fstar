@@ -22,6 +22,14 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
 
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
+
 (**
   Serializer interface at the M/L boundary.
 
@@ -54,7 +62,7 @@ fn build_server_certificate_verify_input
 
 fn serialize_client_hello_from_start
   (#start: erased CS.handshake_start)
-  (#ch: erased M.client_hello)
+  (#ch: erased GCH.clientHello)
   (start_random: V.vec U8.t)
   (start_server_name: V.vec U8.t)
   (start_server_name_len: box SZ.t)
@@ -143,14 +151,7 @@ fn serialize_client_hello_from_start
                   signature_schemes
                   (SZ.v signature_schemes_len)
                   (Ghost.reveal start).CS.start_signature_schemes /\
-                Ghost.reveal ch == {
-                  M.random = (Ghost.reveal start).CS.start_client_random;
-                  M.server_name = Some (Ghost.reveal start).CS.start_server_name;
-                  M.key_share = (Ghost.reveal start).CS.start_client_key_share_public;
-                  M.cipher_suites = (Ghost.reveal start).CS.start_cipher_suites;
-                  M.signature_schemes = (Ghost.reveal start).CS.start_signature_schemes;
-                  M.body = B.empty;
-                })
+                CS.client_hello_matches_start (Ghost.reveal start) (Ghost.reveal ch))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* random server_name server_name_len key_share
                  cipher_suites cipher_suites_len
@@ -217,21 +218,26 @@ fn serialize_client_hello_from_start
                  signature_schemes
                  (SZ.v signature_schemes_len)
                  (Ghost.reveal start).CS.start_signature_schemes /\
-               Seq.equal random (Ghost.reveal ch).M.random /\
+               Seq.equal random (Sem.clientHello_random (Ghost.reveal ch)) /\
                L.optional_byte_prefix_matches
                  true
                  server_name
                  server_name_len
-                 (Ghost.reveal ch).M.server_name /\
-               Seq.equal key_share (Ghost.reveal ch).M.key_share /\
+                 (Sem.clientHello_server_name (Ghost.reveal ch)) /\
+               (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
+                | Some k -> B.length k == 32 /\ Seq.equal key_share k
+                | None -> False) /\
                L.cipher_suites_match
                  cipher_suites
                  (SZ.v cipher_suites_len)
-                 (Ghost.reveal ch).M.cipher_suites /\
-               L.signature_schemes_match
-                 signature_schemes
-                 (SZ.v signature_schemes_len)
-                 (Ghost.reveal ch).M.signature_schemes /\
+                 (Sem.clientHello_cipher_suites (Ghost.reveal ch)) /\
+               (match Sem.clientHello_sig_algs (Ghost.reveal ch) with
+                | Some sas ->
+                  L.signature_schemes_match
+                    signature_schemes
+                    (SZ.v signature_schemes_len)
+                    sas
+                | None -> False) /\
                SZ.v handshake_len == B.length (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))) /\
                SZ.v handshake_len <= B.length handshake_bytes /\
                Seq.equal
@@ -468,7 +474,7 @@ fn serialize_client_finished_outputs
                      Some (outer_fragment, R.next_seq 'record_write))))
 
 fn serialize_finished_handshake
-  (#fin: erased M.finished)
+  (#fin: erased GFin.finished)
   (lfin: L.finished)
   (handshake_out: array U8.t)
   (handshake_out_len: SZ.t)
@@ -487,7 +493,7 @@ fn serialize_finished_handshake
                   Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
 
 fn serialize_server_hello_from_selection
-  (#sh: erased M.server_hello)
+  (#sh: erased GSH.serverHello)
   (lsh: L.server_hello)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -495,7 +501,6 @@ fn serialize_server_hello_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                B.length (Ghost.reveal sh).M.body == 0 /\
                 SZ.v out_len == 90)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -504,12 +509,10 @@ fn serialize_server_hello_from_selection
           pure (B.length out_bytes == 90 /\
                 SZ.v written == 90 /\
                 Seq.equal out_bytes
-                 (WS.serialize_server_hello_from_selection (Ghost.reveal sh)) /\
-                 Seq.equal out_bytes
                  (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 
 fn serialize_server_hello_record_from_selection
-  (#sh: erased M.server_hello)
+  (#sh: erased GSH.serverHello)
   (lsh: L.server_hello)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -517,7 +520,6 @@ fn serialize_server_hello_record_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                B.length (Ghost.reveal sh).M.body == 0 /\
                 SZ.v out_len == 95)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -528,14 +530,14 @@ fn serialize_server_hello_record_from_selection
                 Seq.equal out_bytes
                  (WS.serialize_record
                    T.Handshake
-                   (WS.serialize_server_hello_from_selection (Ghost.reveal sh))) /\
+                   (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)))) /\
                  Seq.equal out_bytes
                  (CS.serialized_cleartext_tls_message
                    (M.TlsHandshake (M.ServerHello (Ghost.reveal sh)))) /\
                 WS.parse_record out_bytes ==
                  Some
                    (T.Handshake,
-                    WS.serialize_server_hello_from_selection (Ghost.reveal sh),
+                    WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
                     95) /\
                 CS.raw_records_exactly out_bytes T.Handshake 1)
 
@@ -551,10 +553,14 @@ fn serialize_empty_encrypted_extensions
           pts_to out out_bytes **
           pure (B.length out_bytes == 6 /\
                 SZ.v written == 6 /\
-                Seq.equal out_bytes (WS.serialize_empty_encrypted_extensions ()))
+                // empty EncryptedExtensions handshake message: [] is the canonical
+                // empty generated record (its serialize_handshake is the same 6 bytes
+                // the deleted WS.serialize_empty_encrypted_extensions () produced).
+                Seq.equal out_bytes
+                 (WS.serialize_handshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions))))
 
 fn serialize_certificate_from_credential
-  (#cert: erased M.certificate_msg)
+  (#cert: erased GCert.certificate)
   (lcert: L.certificate_msg)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -564,8 +570,8 @@ fn serialize_certificate_from_credential
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                 lcert.L.certificate_msg_cert_count == 1sz /\
                 (exists (certificate:B.bytes).
-                  (Ghost.reveal cert).M.chain == [certificate]) /\
-                SZ.v out_len == B.length (WS.serialize_certificate_from_credential (Ghost.reveal cert)))
+                  Sem.certificate_entries (Ghost.reveal cert) == [certificate]) /\
+                SZ.v out_len == B.length (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
@@ -573,10 +579,10 @@ fn serialize_certificate_from_credential
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes
-                 (WS.serialize_certificate_from_credential (Ghost.reveal cert)))
+                 (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
 
 fn serialize_certificate_verify_from_signature
-  (#cv: erased M.certificate_verify)
+  (#cv: erased GCV.certificateVerify)
   (lcv: L.certificate_verify)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -584,7 +590,7 @@ fn serialize_certificate_verify_from_signature
   requires L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == B.length (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
+                SZ.v out_len == B.length (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
@@ -592,10 +598,10 @@ fn serialize_certificate_verify_from_signature
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes
-                 (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
+                 (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
 
 fn serialize_server_finished
-  (#fin: erased M.finished)
+  (#fin: erased GFin.finished)
   (lfin: L.finished)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -611,6 +617,6 @@ fn serialize_server_finished
           pure (B.length out_bytes == 36 /\
                 SZ.v written == 36 /\
                 Seq.equal out_bytes
-                 (WS.serialize_server_finished (Ghost.reveal fin)) /\
+                 (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
                 WS.parse_tls_message T.Handshake out_bytes ==
                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
