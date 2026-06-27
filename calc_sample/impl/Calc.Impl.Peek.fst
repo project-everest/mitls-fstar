@@ -98,7 +98,8 @@ ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_lo
   pure (
     log1 == step_log_peek req_bytes resp_bytes1 log0 /\
     log1.input_bytes `Seq.equal` Seq.append log0.input_bytes req_bytes /\
-    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
+    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1 /\
+    serialize_response (snd (step log0.current_state Peek)) `Seq.equal` resp_bytes1
   )
 {
   unfold (server_exactly srv log0);

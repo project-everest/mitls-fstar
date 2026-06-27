@@ -11,6 +11,7 @@ module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
+module SM = Common.StateMachine
 
 open Pulse.Lib.Pervasives
 module Vec = Pulse.Lib.Vec
@@ -21,6 +22,7 @@ open Calc.Wire
 open Calc.Wire.Lemmas
 open Calc.Log
 open Calc.Impl.Types
+module CalcP = Calc.Protocol
 open Calc.Impl.Parser
 
 // Import all handlers
@@ -99,9 +101,12 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
   Vec.pts_to req_buf 'req_bytes **
   Vec.pts_to resp_buf resp_bytes1 **
   pure (
+    Seq.length 'req_bytes == 5 /\
+    parse_request 'req_bytes <> None /\
     log_single_step log0 log1 /\
     log1.input_bytes `Seq.equal` Seq.append log0.input_bytes 'req_bytes /\
-    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
+    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1 /\
+    CalcP.calc_frame_network_step_ok log0 'req_bytes log1 resp_bytes1
   )
 {
   lemma_valid_tag 'req_bytes;
@@ -121,36 +126,42 @@ ensures exists* (resp_bytes1: bytes) (log1: calc_log).
     // Postcondition from Push.process_push gives us log1 == step_log_push ...
     // Need to show log_single_step log0 log1
     with resp_bytes1 log1. _;
+    assert (pure (CalcP.calc_frame_network_step_ok log0 'req_bytes log1 resp_bytes1));
     assert (pure (log_single_step log0 log1))
   } else if U8.eq tag 1uy {
     // PEEK
     assert (pure (parse_request 'req_bytes == Some Peek));
     Peek.process_peek srv req_buf resp_buf;
     with resp_bytes1 log1. _;
+    assert (pure (CalcP.calc_frame_network_step_ok log0 'req_bytes log1 resp_bytes1));
     assert (pure (log_single_step log0 log1))
   } else if U8.eq tag 2uy {
     // ADD
     assert (pure (parse_request 'req_bytes == Some Add));
     Add.process_add srv req_buf resp_buf;
     with resp_bytes1 log1. _;
+    assert (pure (CalcP.calc_frame_network_step_ok log0 'req_bytes log1 resp_bytes1));
     assert (pure (log_single_step log0 log1))
   } else if U8.eq tag 3uy {
     // SUB
     assert (pure (parse_request 'req_bytes == Some Sub));
     Sub.process_sub srv req_buf resp_buf;
     with resp_bytes1 log1. _;
+    assert (pure (CalcP.calc_frame_network_step_ok log0 'req_bytes log1 resp_bytes1));
     assert (pure (log_single_step log0 log1))
   } else if U8.eq tag 4uy {
     // MUL
     assert (pure (parse_request 'req_bytes == Some Mul));
     Mul.process_mul srv req_buf resp_buf;
     with resp_bytes1 log1. _;
+    assert (pure (CalcP.calc_frame_network_step_ok log0 'req_bytes log1 resp_bytes1));
     assert (pure (log_single_step log0 log1))
   } else if U8.eq tag 5uy {
     // DIV
     assert (pure (parse_request 'req_bytes == Some Div));
     Div.process_div srv req_buf resp_buf;
     with resp_bytes1 log1. _;
+    assert (pure (CalcP.calc_frame_network_step_ok log0 'req_bytes log1 resp_bytes1));
     assert (pure (log_single_step log0 log1))
   } else {
     // Unreachable: tag < 6 /\ tag != 0..5 → False

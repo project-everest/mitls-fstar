@@ -344,6 +344,269 @@ let calc_frame_step
     output.SM.so_wire_outputs == [] /\
     output.SM.so_local_outputs == []
 
+let calc_frame_response_for
+  (log0:calc_log)
+  (msg:calc_frame)
+  : calc_frame =
+  let req = calc_frame_request msg in
+  let (_next_stack, resp) = step log0.current_state req in
+  calc_response_frame resp
+
+let calc_frame_network_step_ok
+  (log0:calc_log)
+  (msg:calc_frame)
+  (log1:calc_log)
+  (actual_output:bytes)
+  : prop =
+  let response_msg = calc_frame_response_for log0 msg in
+  calc_frame_step
+    log0
+    (SM.WireEvent msg)
+    log1
+    {
+      SM.so_wire_outputs = [response_msg];
+      SM.so_local_outputs = [];
+    } /\
+  Seq.equal response_msg actual_output
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10"
+
+let lemma_seq_equal_keep
+  (#a:Type0)
+  (s0 s1:Seq.seq a)
+  : Lemma
+      (requires Seq.equal s0 s1)
+      (ensures Seq.equal s0 s1)
+=
+  ()
+
+let rec lemma_calc_serialize_all_append
+  (msgs0:list calc_frame)
+  (msgs1:list calc_frame)
+  : Lemma
+      (ensures
+        Seq.equal
+          (WF.serialize_all calc_frame_wire_format (L.append msgs0 msgs1))
+          (Seq.append
+            (WF.serialize_all calc_frame_wire_format msgs0)
+            (WF.serialize_all calc_frame_wire_format msgs1)))
+      (decreases msgs0)
+=
+  match msgs0 with
+  | [] ->
+    assert (Seq.equal
+      (WF.serialize_all calc_frame_wire_format msgs1)
+      (Seq.append Seq.empty (WF.serialize_all calc_frame_wire_format msgs1)));
+    lemma_seq_equal_keep
+      (WF.serialize_all calc_frame_wire_format (L.append [] msgs1))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format [])
+        (WF.serialize_all calc_frame_wire_format msgs1))
+  | msg :: rest ->
+    lemma_calc_serialize_all_append rest msgs1;
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format (L.append rest msgs1))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format rest)
+        (WF.serialize_all calc_frame_wire_format msgs1));
+    Seq.append_assoc
+      (calc_serialize_frame msg)
+      (WF.serialize_all calc_frame_wire_format rest)
+      (WF.serialize_all calc_frame_wire_format msgs1);
+    assert (Seq.equal
+      (WF.serialize_all calc_frame_wire_format (L.append (msg :: rest) msgs1))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (msg :: rest))
+        (WF.serialize_all calc_frame_wire_format msgs1)));
+    lemma_seq_equal_keep
+      (WF.serialize_all calc_frame_wire_format (L.append (msg :: rest) msgs1))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (msg :: rest))
+        (WF.serialize_all calc_frame_wire_format msgs1))
+
+let rec lemma_calc_trace_input_bytes_append_one
+  (trace:list (SM.transition calc_log calc_frame calc_frame_local_event unit))
+  (tr:SM.transition calc_log calc_frame calc_frame_local_event unit)
+  : Lemma
+      (ensures
+        Seq.equal
+          (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (L.append trace [tr])))
+          (Seq.append
+            (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages trace))
+            (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event))))
+      (decreases trace)
+=
+  match trace with
+  | [] ->
+    lemma_calc_serialize_all_append (WFSM.event_input_messages tr.SM.tr_event) [];
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format (L.append (WFSM.event_input_messages tr.SM.tr_event) []))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event))
+        (WF.serialize_all calc_frame_wire_format []));
+    lemma_seq_equal_keep
+      (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (L.append trace [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages trace))
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event)))
+  | hd :: rest ->
+    lemma_calc_trace_input_bytes_append_one rest tr;
+    assert (
+      WFSM.trace_input_messages (L.append (hd :: rest) [tr]) ==
+      L.append
+        (WFSM.event_input_messages hd.SM.tr_event)
+        (WFSM.trace_input_messages (L.append rest [tr])));
+    lemma_calc_serialize_all_append
+      (WFSM.event_input_messages hd.SM.tr_event)
+      (WFSM.trace_input_messages (L.append rest [tr]));
+    lemma_calc_serialize_all_append
+      (WFSM.event_input_messages hd.SM.tr_event)
+      (WFSM.trace_input_messages rest);
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format
+        (L.append
+          (WFSM.event_input_messages hd.SM.tr_event)
+          (WFSM.trace_input_messages (L.append rest [tr]))))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages hd.SM.tr_event))
+        (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (L.append rest [tr]))));
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format
+        (L.append
+          (WFSM.event_input_messages hd.SM.tr_event)
+          (WFSM.trace_input_messages rest)))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages hd.SM.tr_event))
+        (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages rest)));
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (L.append rest [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages rest))
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event)));
+    Seq.append_assoc
+      (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages hd.SM.tr_event))
+      (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages rest))
+      (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event));
+    assert (
+      Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages hd.SM.tr_event))
+        (Seq.append
+          (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages rest))
+          (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event))) ==
+      Seq.append
+        (Seq.append
+          (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages hd.SM.tr_event))
+          (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages rest)))
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event)));
+    Seq.lemma_eq_refl
+      (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (L.append (hd :: rest) [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (hd :: rest)))
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event)));
+    assert (Seq.equal
+      (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (L.append trace [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages trace))
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event))));
+    lemma_seq_equal_keep
+      (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages (L.append trace [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (WFSM.trace_input_messages trace))
+        (WF.serialize_all calc_frame_wire_format (WFSM.event_input_messages tr.SM.tr_event)))
+
+val lemma_calc_trace_wire_bytes_append_one
+  (trace:list (SM.transition calc_log calc_frame calc_frame_local_event unit))
+  (tr:SM.transition calc_log calc_frame calc_frame_local_event unit)
+  : Lemma
+      (ensures
+        Seq.equal
+          (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (L.append trace [tr])))
+          (Seq.append
+            (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs trace))
+            (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs)))
+      (decreases trace)
+
+let rec lemma_calc_trace_wire_bytes_append_one trace tr =
+  match trace with
+  | [] ->
+    lemma_calc_serialize_all_append tr.SM.tr_output.SM.so_wire_outputs [];
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format (L.append tr.SM.tr_output.SM.so_wire_outputs []))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs)
+        (WF.serialize_all calc_frame_wire_format []));
+    lemma_seq_equal_keep
+      (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (L.append trace [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs trace))
+        (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs))
+  | hd :: rest ->
+    lemma_calc_trace_wire_bytes_append_one rest tr;
+    assert (
+      SM.trace_wire_outputs (L.append (hd :: rest) [tr]) ==
+      L.append
+        hd.SM.tr_output.SM.so_wire_outputs
+        (SM.trace_wire_outputs (L.append rest [tr])));
+    lemma_calc_serialize_all_append
+      hd.SM.tr_output.SM.so_wire_outputs
+      (SM.trace_wire_outputs (L.append rest [tr]));
+    lemma_calc_serialize_all_append
+      hd.SM.tr_output.SM.so_wire_outputs
+      (SM.trace_wire_outputs rest);
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format
+        (L.append
+          hd.SM.tr_output.SM.so_wire_outputs
+          (SM.trace_wire_outputs (L.append rest [tr]))))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format hd.SM.tr_output.SM.so_wire_outputs)
+        (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (L.append rest [tr]))));
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format
+        (L.append
+          hd.SM.tr_output.SM.so_wire_outputs
+          (SM.trace_wire_outputs rest)))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format hd.SM.tr_output.SM.so_wire_outputs)
+        (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs rest)));
+    Seq.lemma_eq_elim
+      (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (L.append rest [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs rest))
+        (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs));
+    Seq.append_assoc
+      (WF.serialize_all calc_frame_wire_format hd.SM.tr_output.SM.so_wire_outputs)
+      (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs rest))
+      (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs);
+    assert (
+      Seq.append
+        (WF.serialize_all calc_frame_wire_format hd.SM.tr_output.SM.so_wire_outputs)
+        (Seq.append
+          (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs rest))
+          (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs)) ==
+      Seq.append
+        (Seq.append
+          (WF.serialize_all calc_frame_wire_format hd.SM.tr_output.SM.so_wire_outputs)
+          (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs rest)))
+        (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs));
+    Seq.lemma_eq_refl
+      (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (L.append (hd :: rest) [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (hd :: rest)))
+        (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs));
+    assert (Seq.equal
+      (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (L.append trace [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs trace))
+        (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs)));
+    lemma_seq_equal_keep
+      (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs (L.append trace [tr])))
+      (Seq.append
+        (WF.serialize_all calc_frame_wire_format (SM.trace_wire_outputs trace))
+        (WF.serialize_all calc_frame_wire_format tr.SM.tr_output.SM.so_wire_outputs))
+
+#pop-options
+
 noextract
 let calc_frame_state_machine
   : SM.state_machine calc_log calc_frame calc_frame_local_event unit =

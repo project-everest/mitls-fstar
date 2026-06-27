@@ -91,7 +91,8 @@ ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_lo
   pure (
     log1 == step_log_push (U32.v value) req_bytes resp_bytes1 log0 /\
     log1.input_bytes `Seq.equal` Seq.append log0.input_bytes req_bytes /\
-    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
+    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1 /\
+    serialize_response (snd (step log0.current_state (Push (U32.v value)))) `Seq.equal` resp_bytes1
   )
 {
   let v_int : int = U32.v value;
