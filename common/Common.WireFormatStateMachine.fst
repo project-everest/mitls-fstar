@@ -74,6 +74,7 @@ let lemma_serialized_trace_inputs_refine_bytes
   (#wire_message:Type0)
   (#local_event:Type0)
   (system:wire_format_state_machine state wire_message local_event)
+  (laws:WF.wire_format_stream_laws wire_message system.wfsm_wire_format)
   (st0:state)
   (trace:list (SM.transition state wire_message local_event))
   (st1:state)
@@ -97,6 +98,7 @@ let lemma_serialized_trace_inputs_refine_bytes
 =
   WF.lemma_parse_serialize_with_tail_inverse
     system.wfsm_wire_format
+    laws
     (trace_input_messages trace)
     residual_input;
   assert (WF.parses_as

@@ -25,15 +25,23 @@ class wire_format (wire_message:Type0) =
           exists parsed.
             wf_parse (wf_serialize msg) == Some (parsed, Seq.empty) /\
             wf_equal parsed msg);
+}
 
-  wf_parse_serialize_prefix:
+noextract
+class wire_format_stream_laws
+  (wire_message:Type0)
+  (fmt:wire_format wire_message)
+  =
+{
+  wfsl_parse_serialize_prefix:
     msg:wire_message ->
     rest:TCP.bytes ->
       Lemma
         (ensures
           exists parsed.
-            wf_parse (Seq.append (wf_serialize msg) rest) == Some (parsed, rest) /\
-            wf_equal parsed msg);
+            fmt.wf_parse (Seq.append (fmt.wf_serialize msg) rest) ==
+              Some (parsed, rest) /\
+            fmt.wf_equal parsed msg);
 }
 
 let rec serialize_with_tail
@@ -77,6 +85,7 @@ let rec parses_as
 let rec lemma_parse_serialize_with_tail_inverse
   (#wire_message:Type0)
   (fmt:wire_format wire_message)
+  (laws:wire_format_stream_laws wire_message fmt)
   (msgs:list wire_message)
   (tail:TCP.bytes)
   : Lemma
@@ -87,8 +96,8 @@ let rec lemma_parse_serialize_with_tail_inverse
   | [] ->
     assert (Seq.equal tail tail)
   | msg :: rest ->
-    fmt.wf_parse_serialize_prefix msg (serialize_with_tail fmt rest tail);
-    lemma_parse_serialize_with_tail_inverse fmt rest tail;
+    laws.wfsl_parse_serialize_prefix msg (serialize_with_tail fmt rest tail);
+    lemma_parse_serialize_with_tail_inverse fmt laws rest tail;
     assert (parses_as fmt (serialize_with_tail fmt rest tail) rest tail);
     assert (exists parsed_msg bytes_after_msg.
       fmt.wf_parse (serialize_with_tail fmt (msg :: rest) tail) ==
@@ -99,8 +108,9 @@ let rec lemma_parse_serialize_with_tail_inverse
 let lemma_parse_serialize_all_inverse
   (#wire_message:Type0)
   (fmt:wire_format wire_message)
+  (laws:wire_format_stream_laws wire_message fmt)
   (msgs:list wire_message)
   : Lemma
       (ensures parses_as fmt (serialize_all fmt msgs) msgs Seq.empty)
 =
-  lemma_parse_serialize_with_tail_inverse fmt msgs Seq.empty
+  lemma_parse_serialize_with_tail_inverse fmt laws msgs Seq.empty

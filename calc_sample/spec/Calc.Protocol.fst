@@ -312,7 +312,13 @@ let calc_frame_wire_format : WF.wire_format calc_frame =
     WF.wf_serialize = calc_serialize_frame;
     WF.wf_parse = calc_parse_frame;
     WF.wf_parse_serialize_exact = lemma_calc_parse_serialize_exact;
-    WF.wf_parse_serialize_prefix = lemma_calc_parse_serialize_prefix;
+  }
+
+noextract
+let calc_frame_wire_format_stream_laws :
+  WF.wire_format_stream_laws calc_frame calc_frame_wire_format =
+  {
+    WF.wfsl_parse_serialize_prefix = lemma_calc_parse_serialize_prefix;
   }
 
 let calc_frame_step
