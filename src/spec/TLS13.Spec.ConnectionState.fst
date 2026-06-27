@@ -16,6 +16,13 @@ module H = TLS13.Handshake.Spec
 module ID = FStar.IndefiniteDescription
 module K = TLS13.Keys
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 module R = TLS13.Record.Spec
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.StateMachine
@@ -221,7 +228,7 @@ let empty_handshake_buffer_state : handshake_buffer_state = {
 }
 
 type server_handshake_selection = {
-  server_selected_client_hello: M.client_hello;
+  server_selected_client_hello: GCH.clientHello;
   server_selected_cipher_suite: T.cipher_suite;
   server_selected_group: T.named_group;
   server_selected_signature_scheme: T.signature_scheme;
@@ -241,16 +248,16 @@ let server_selection_key_share_consistent
 type handshake_state = {
   hs_start: option handshake_start;
   hs_server_selection: option server_handshake_selection;
-  hs_client_hello: option M.client_hello;
-  hs_server_hello: option M.server_hello;
-  hs_encrypted_extensions: option M.encrypted_extensions;
-  hs_certificate: option M.certificate_msg;
+  hs_client_hello: option GCH.clientHello;
+  hs_server_hello: option GSH.serverHello;
+  hs_encrypted_extensions: option GEE.encryptedExtensions;
+  hs_certificate: option GCert.certificate;
   hs_validated_peer: option X.peer_identity;
-  hs_certificate_verify: option M.certificate_verify;
+  hs_certificate_verify: option GCV.certificateVerify;
   hs_certificate_verify_verified: bool;
-  hs_server_finished: option M.finished;
+  hs_server_finished: option GFin.finished;
   hs_server_finished_verified: bool;
-  hs_client_finished: option M.finished;
+  hs_client_finished: option GFin.finished;
   hs_transcript: Tr.transcript;
   hs_buffers: handshake_buffer_state;
   hs_keys: key_schedule_state;
@@ -274,11 +281,15 @@ let empty_handshake_state : handshake_state = {
   hs_keys = empty_key_schedule_state;
 }
 
-let client_hello_key_share (ch:M.client_hello) : C.x25519_public =
-  ch.M.key_share
+let client_hello_key_share (ch:GCH.clientHello) : option C.x25519_public =
+  match Sem.clientHello_key_share_x25519 ch with
+  | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
+  | None -> None
 
-let server_hello_key_share (sh:M.server_hello) : C.x25519_public =
-  sh.M.key_share
+let server_hello_key_share (sh:GSH.serverHello) : option C.x25519_public =
+  match Sem.serverHello_key_share_x25519 sh with
+  | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
+  | None -> None
 
 let append_handshake_bytes (prefix:B.bytes) (msg:M.handshake_msg) : GTot B.bytes =
   B.append prefix (W.serialize_handshake msg)
@@ -423,10 +434,10 @@ type local_event =
   | LocalInstallTrafficKeys of traffic_key_install
   | LocalInstallTrafficKeysForRole of role_traffic_key_install
   | LocalValidateCertificate of X.peer_identity
-  | LocalVerifyCertificateSignature of M.certificate_verify
-  | LocalSignCertificateVerify of M.certificate_verify
-  | LocalVerifyFinished of M.finished
-  | LocalVerifyClientFinished of M.finished
+  | LocalVerifyCertificateSignature of GCV.certificateVerify
+  | LocalSignCertificateVerify of GCV.certificateVerify
+  | LocalVerifyFinished of GFin.finished
+  | LocalVerifyClientFinished of GFin.finished
   | LocalDeliverApplicationData of B.bytes
   | LocalFail of T.tls_error
 
@@ -554,7 +565,7 @@ let paired_x25519_key_shares
     server_hs.hs_server_selection,
     server_hs.hs_client_hello
   with
-  | Some start, Some (sh:M.server_hello), Some selection, Some (ch:M.client_hello) ->
+  | Some start, Some (sh:GSH.serverHello), Some selection, Some (ch:GCH.clientHello) ->
     (match
       start.start_client_key_share_private,
       selection.server_key_share_private,
@@ -562,12 +573,15 @@ let paired_x25519_key_shares
       server_hs.hs_keys.ks_shared_secret
      with
      | Some client_sk, Some server_sk, Some client_shared, Some server_shared ->
-       client_hello_key_share ch == start.start_client_key_share_public /\
-       server_hello_key_share sh == selection.server_key_share_public /\
-       C.x25519_public_from_private client_sk == start.start_client_key_share_public /\
-       C.x25519_public_from_private server_sk == selection.server_key_share_public /\
-       C.x25519_shared client_sk (server_hello_key_share sh) == Some client_shared /\
-       C.x25519_shared server_sk (client_hello_key_share ch) == Some server_shared
+       (match client_hello_key_share ch, server_hello_key_share sh with
+        | Some ch_ks, Some sh_ks ->
+          ch_ks == start.start_client_key_share_public /\
+          sh_ks == selection.server_key_share_public /\
+          C.x25519_public_from_private client_sk == start.start_client_key_share_public /\
+          C.x25519_public_from_private server_sk == selection.server_key_share_public /\
+          C.x25519_shared client_sk sh_ks == Some client_shared /\
+          C.x25519_shared server_sk ch_ks == Some server_shared
+        | _, _ -> False)
      | _, _, _, _ -> False)
   | _, _, _, _ -> False
 
@@ -584,10 +598,13 @@ let client_x25519_key_share_projection
   | Some start, Some ch, Some sh, Some shared ->
     (match start.start_client_key_share_private with
      | Some client_sk ->
-      client_hello_key_share ch == start.start_client_key_share_public /\
-      C.x25519_public_from_private client_sk ==
-        start.start_client_key_share_public /\
-      C.x25519_shared client_sk (server_hello_key_share sh) == Some shared
+      (match client_hello_key_share ch, server_hello_key_share sh with
+       | Some ch_ks, Some sh_ks ->
+        ch_ks == start.start_client_key_share_public /\
+        C.x25519_public_from_private client_sk ==
+          start.start_client_key_share_public /\
+        C.x25519_shared client_sk sh_ks == Some shared
+       | _, _ -> False)
      | None ->
       False)
   | _, _, _, _ ->
@@ -599,7 +616,7 @@ let client_x25519_pre_shared_secret_projection
   let hs = client.cs_model.model_handshake in
   match hs.hs_start, hs.hs_client_hello with
   | Some start, Some ch ->
-    client_hello_key_share ch == start.start_client_key_share_public /\
+    client_hello_key_share ch == Some start.start_client_key_share_public /\
     (match start.start_client_key_share_private with
      | Some client_sk ->
        C.x25519_public_from_private client_sk ==
@@ -650,10 +667,13 @@ let server_x25519_key_share_projection
   | Some selection, Some ch, Some sh, Some shared ->
     (match selection.server_key_share_private with
      | Some server_sk ->
-      server_hello_key_share sh == selection.server_key_share_public /\
-      C.x25519_public_from_private server_sk ==
-        selection.server_key_share_public /\
-      C.x25519_shared server_sk (client_hello_key_share ch) == Some shared
+      (match server_hello_key_share sh, client_hello_key_share ch with
+       | Some sh_ks, Some ch_ks ->
+        sh_ks == selection.server_key_share_public /\
+        C.x25519_public_from_private server_sk ==
+          selection.server_key_share_public /\
+        C.x25519_shared server_sk ch_ks == Some shared
+       | _, _ -> False)
      | None ->
       False)
   | _, _, _, _ ->
@@ -671,10 +691,13 @@ let server_x25519_pre_server_hello_projection
   | Some selection, Some ch, Some shared ->
     (match selection.server_key_share_private with
      | Some server_sk ->
-       selection.server_selected_client_hello == ch /\
-       C.x25519_public_from_private server_sk ==
-         selection.server_key_share_public /\
-       C.x25519_shared server_sk (client_hello_key_share ch) == Some shared
+       (match client_hello_key_share ch with
+        | Some ch_ks ->
+          selection.server_selected_client_hello == ch /\
+          C.x25519_public_from_private server_sk ==
+            selection.server_key_share_public /\
+          C.x25519_shared server_sk ch_ks == Some shared
+        | None -> False)
      | None ->
        False)
   | _, _, _ ->
@@ -1462,7 +1485,7 @@ let step_handshake_message
             hs_buffers =
             { hs.hs_buffers with
                 hb_certificate_leaf_der =
-                  (match cert.M.chain with
+                  (match (Sem.certificate_entries cert) with
                    | leaf :: _ -> Some leaf
                    | [] -> None);
             };
@@ -1519,7 +1542,7 @@ let step_handshake_message
             hs_buffers =
             { hs.hs_buffers with
                 hb_certificate_leaf_der =
-                  (match cert.M.chain with
+                  (match (Sem.certificate_entries cert) with
                    | leaf :: _ -> Some leaf
                    | [] -> None);
             };
@@ -1794,7 +1817,7 @@ let server_selection_acceptable
     cfg.server_supported_cipher_suites
     selection.server_selected_cipher_suite /\
   cipher_suite_offered
-    ch.M.cipher_suites
+    (Sem.clientHello_cipher_suites ch)
     selection.server_selected_cipher_suite /\
   named_group_offered
     cfg.server_supported_groups
@@ -1802,11 +1825,12 @@ let server_selection_acceptable
   signature_scheme_offered
     cfg.server_allowed_signature_schemes
     selection.server_selected_signature_scheme /\
-  signature_scheme_offered
-    ch.M.signature_schemes
-    selection.server_selected_signature_scheme /\
+  (match Sem.clientHello_sig_algs ch with
+   | Some sas ->
+     signature_scheme_offered sas selection.server_selected_signature_scheme
+   | None -> False) /\
   selection.server_selected_credential == cfg.server_credential_identity /\
-  sni_policy_accepts cfg.server_sni_policy ch.M.server_name /\
+  sni_policy_accepts cfg.server_sni_policy (Sem.clientHello_server_name ch) /\
   server_selection_key_share_consistent selection
 
 let start_matches_config (cfg:connection_config) (start:handshake_start) : prop =
@@ -1823,40 +1847,44 @@ let handshake_start_key_share_consistent (start:handshake_start) : prop =
   | None ->
     True
 
-let client_hello_matches_start (start:handshake_start) (ch:M.client_hello) : prop =
-  Seq.equal ch.M.random start.start_client_random /\
-  ch.M.server_name == Some start.start_server_name /\
-  Seq.equal ch.M.key_share start.start_client_key_share_public /\
-  ch.M.cipher_suites == start.start_cipher_suites /\
-  ch.M.signature_schemes == start.start_signature_schemes /\
-  B.length ch.M.body == 0
+let client_hello_matches_start (start:handshake_start) (ch:GCH.clientHello) : prop =
+  Seq.equal (Sem.clientHello_random ch) start.start_client_random /\
+  Sem.clientHello_server_name ch == Some start.start_server_name /\
+  (match Sem.clientHello_key_share_x25519 ch with
+   | Some k -> B.length k = 32 /\ Seq.equal k start.start_client_key_share_public
+   | None -> False) /\
+  Sem.clientHello_cipher_suites ch == start.start_cipher_suites /\
+  Sem.clientHello_sig_algs ch == Some start.start_signature_schemes
 
 let server_hello_matches_selection
   (selection:server_handshake_selection)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   : prop =
-  Seq.equal sh.M.random selection.server_random /\
-  Seq.equal sh.M.key_share selection.server_key_share_public /\
-  sh.M.cipher_suite == selection.server_selected_cipher_suite /\
-  B.length sh.M.body == 0
+  (match Sem.serverHello_random sh with
+   | Some r -> Seq.equal r selection.server_random
+   | None -> False) /\
+  (match Sem.serverHello_key_share_x25519 sh with
+   | Some k -> B.length k = 32 /\ Seq.equal k selection.server_key_share_public
+   | None -> False) /\
+  Sem.serverHello_cipher_suite sh == Some selection.server_selected_cipher_suite
 
 let certificate_msg_matches_server_config
   (cfg:server_config)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   : prop =
-  cert.M.chain == [cfg.server_certificate_chain]
+  (Sem.certificate_entries cert) == [cfg.server_certificate_chain]
 
 let server_certificate_verify_signature_valid
   (selection:server_handshake_selection)
   (hs:handshake_state)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   : prop =
-  cv.M.scheme == selection.server_selected_signature_scheme /\
+  Sem.certificateVerify_scheme cv == selection.server_selected_signature_scheme /\
   C.verify_signature
-    cv.M.scheme
+    (Sem.certificateVerify_scheme cv)
     selection.server_selected_credential
     (H.certificate_verify_input (Tr.hash hs.hs_transcript))
-    cv.M.signature
+    (Sem.certificateVerify_signature_bytes cv)
 
 let traffic_secret_for_label
   (hs:handshake_state)
@@ -2316,7 +2344,10 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | Some start, Some sh ->
        handshake_start_key_share_consistent start /\
        (match start.start_client_key_share_private with
-        | Some sk -> C.x25519_shared sk sh.M.key_share == Some shared
+        | Some sk ->
+          (match server_hello_key_share sh with
+           | Some k -> C.x25519_shared sk k == Some shared
+           | None -> False)
         | None -> False)
      | _, _ -> False)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
@@ -2326,9 +2357,9 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
        server_selection_key_share_consistent selection /\
        (match selection.server_key_share_private with
        | Some sk ->
-         C.x25519_shared
-           sk
-           selection.server_selected_client_hello.M.key_share == Some shared
+         (match client_hello_key_share selection.server_selected_client_hello with
+          | Some k -> C.x25519_shared sk k == Some shared
+          | None -> False)
        | None -> False)
      | None -> False)
   | LocalInstallTrafficKeys install, ControlHandshaking stage ->
@@ -2353,25 +2384,24 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
          model.model_config.config_server_name
          model.model_config.config_validation_time
          model.model_config.config_trust_store
-         cert.M.chain == Some peer
+         (Sem.certificate_entries cert) == Some peer
      | None -> False)
   | LocalVerifyCertificateSignature cv, ControlHandshaking HsCertificateVerifyReceived ->
     model.model_config.config_role == ClientEndpoint /\
     (match hs.hs_validated_peer, hs.hs_certificate_verify, hs.hs_buffers.hb_certificate_verify_input with
      | Some peer, Some stored_cv, Some input ->
        stored_cv == cv /\
-       C.verify_signature cv.M.scheme peer.X.leaf_public_key input cv.M.signature
+       C.verify_signature (Sem.certificateVerify_scheme cv) peer.X.leaf_public_key input (Sem.certificateVerify_signature_bytes cv)
      | _, _, _ -> False)
   | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
-    B.length cv.M.body == 0 /\
     hs.hs_certificate_verify == None /\
     (match hs.hs_certificate, hs.hs_server_selection with
      | Some _, Some selection ->
        server_certificate_verify_signature_valid selection hs cv /\
        signature_scheme_offered
          model.model_config.config_signature_schemes
-         cv.M.scheme
+         (Sem.certificateVerify_scheme cv)
      | _, _ -> False)
   | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
     model.model_config.config_role == ClientEndpoint /\
@@ -2415,9 +2445,12 @@ let legal_handshake_message
      | None -> False)
   | CL.Received, M.ServerHello sh, ControlHandshaking HsClientHelloSent ->
     model.model_config.config_role == ClientEndpoint /\
-    H.is_supported_cipher_suite sh.M.cipher_suite /\
-    (match hs.hs_start with
-     | Some start -> cipher_suite_offered start.start_cipher_suites sh.M.cipher_suite
+    (match Sem.serverHello_cipher_suite sh with
+     | Some cs ->
+       H.is_supported_cipher_suite cs /\
+       (match hs.hs_start with
+        | Some start -> cipher_suite_offered start.start_cipher_suites cs
+        | None -> False)
      | None -> False)
   | CL.Sent, M.ServerHello sh, ControlHandshaking HsClientHelloReceived ->
     model.model_config.config_role == ServerEndpoint /\
@@ -2427,7 +2460,7 @@ let legal_handshake_message
      | None -> False)
   | CL.Sent, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloSent ->
     model.model_config.config_role == ServerEndpoint /\
-    ee.M.negotiated_alpn == None /\
+    Sem.encryptedExtensions_alpn ee == None /\
     Some? hs.hs_keys.ks_server_handshake_traffic
   | CL.Sent, M.Certificate cert, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
@@ -2441,7 +2474,6 @@ let legal_handshake_message
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate <> None /\
     hs.hs_certificate_verify_verified /\
-    B.length cv.M.body == 0 /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv
@@ -2458,7 +2490,7 @@ let legal_handshake_message
     Some? hs.hs_keys.ks_server_handshake_traffic
   | CL.Received, M.Certificate cert, ControlHandshaking HsEncryptedExtensionsReceived ->
     model.model_config.config_role == ClientEndpoint /\
-    cert.M.chain <> []
+    (Sem.certificate_entries cert) <> []
   | CL.Received, M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_validated_peer
