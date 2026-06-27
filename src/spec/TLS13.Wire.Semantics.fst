@@ -37,6 +37,8 @@ module GEEE    = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GPN     = TLS13.Wire.Generated.ProtocolName
 module GCV     = TLS13.Wire.Generated.CertificateVerify
 module GFin    = TLS13.Wire.Generated.Finished
+module GCert   = TLS13.Wire.Generated.Certificate
+module GCertE  = TLS13.Wire.Generated.CertificateEntry
 
 #set-options "--z3rlimit 5 --fuel 1 --ifuel 1"
 
@@ -197,3 +199,23 @@ let certificateVerify_signature_bytes (cv: GCV.certificateVerify) : Seq.seq U8.t
 /// The 32-byte verify_data of a Finished message (identity).
 let finished_verify_data (f: GFin.finished) : Seq.lseq U8.t 32 =
   f
+
+(* ------------------------------------------------------------------ *)
+(* Certificate                                                         *)
+(* ------------------------------------------------------------------ *)
+
+/// The raw cert_data bytes of each entry of a certificate_list.  The wire
+/// CertificateEntry carries a vlbytes [cert_data] (the raw certificate DER)
+/// plus per-entry extensions; downstream code compares these raw DER blobs
+/// against the configured leaf certificate.
+let rec cert_entries_data (l: list GCertE.certificateEntry)
+  : Tot (list (Seq.seq U8.t)) (decreases l)
+  = match l with
+    | [] -> []
+    | e :: tl -> (e.GCertE.cert_data <: Seq.seq U8.t) :: cert_entries_data tl
+
+/// The list of raw certificate DER blobs carried by a Certificate message,
+/// one per CertificateEntry, in wire order (mirrors the old M.certificate_msg
+/// [chain : X.cert_chain] projection field).
+let certificate_entries (c: GCert.certificate) : list (Seq.seq U8.t) =
+  cert_entries_data (c.GCert.certificate_list <: list GCertE.certificateEntry)
