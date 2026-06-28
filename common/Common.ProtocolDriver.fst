@@ -135,14 +135,12 @@ ensures
         i
         cfg
         frame
+        ch
+        nio
         network_frame
-        (endpoint.PE.pe_network_input nio)
-        (endpoint.PE.pe_network_input_len nio)
-        (endpoint.PE.pe_network_output nio)
-        (endpoint.PE.pe_network_output_len nio)
-        st
-        (endpoint.PE.pe_network_input_contents nio)
-        (endpoint.PE.pe_network_old_output nio);
+        received
+        sent
+        st;
       let process_network = protocol.CPI.pi_process_network;
       let process_result =
         process_network
@@ -256,12 +254,13 @@ ensures
         i
         cfg
         frame
+        ch
+        lio
         ev
         local_frame
-        (endpoint.PE.pe_local_output lio)
-        (endpoint.PE.pe_local_output_len lio)
-        st
-        (endpoint.PE.pe_local_old_output lio);
+        received
+        sent
+        st;
       let process_local = protocol.CPI.pi_process_local;
       let process_result =
         process_local

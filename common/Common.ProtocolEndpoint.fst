@@ -176,61 +176,6 @@ class protocol_endpoint
             frame
             (Ghost.reveal st));
 
-  pe_prepare_network_action:
-    i:impl ->
-    cfg:pe_config ->
-    frame:pe_frame ->
-    network_frame:protocol.CPI.pi_network_frame ->
-    input:array U8.t ->
-    input_len:SZ.t ->
-    out:array U8.t ->
-    out_len:SZ.t ->
-    st:Ghost.erased state ->
-    input_contents:Ghost.erased TCP.bytes ->
-    old_out:Ghost.erased TCP.bytes ->
-      stt unit
-        (pe_action_frame
-          i
-          cfg
-          frame
-          (Ghost.reveal st)
-          (EndpointNeedInput network_frame) **
-         network_buffers
-          input
-          input_len
-          out
-          out_len
-          (Ghost.reveal input_contents)
-          (Ghost.reveal old_out))
-        (fun _ ->
-          protocol.CPI.pi_network_frame_pre
-            network_frame
-            input
-            input_len
-            out
-            out_len
-            (Ghost.reveal input_contents)
-            (Ghost.reveal old_out) **
-          pe_network_continuation
-            i
-            cfg
-            frame
-            (Ghost.reveal st)
-            network_frame **
-          network_buffers
-            input
-            input_len
-            out
-            out_len
-            (Ghost.reveal input_contents)
-            (Ghost.reveal old_out) **
-          pure (
-            CPI.buffers_wf
-              (Ghost.reveal input_contents)
-              input_len
-              (Ghost.reveal old_out)
-              out_len));
-
   pe_finish_network_action:
     i:impl ->
     cfg:pe_config ->
@@ -271,47 +216,6 @@ class protocol_endpoint
             cfg
             frame
             (Ghost.reveal st1));
-
-  pe_prepare_local_action:
-    i:impl ->
-    cfg:pe_config ->
-    frame:pe_frame ->
-    ev:local_event ->
-    local_frame:protocol.CPI.pi_local_frame ->
-    out:array U8.t ->
-    out_len:SZ.t ->
-    st:Ghost.erased state ->
-    old_out:Ghost.erased TCP.bytes ->
-      stt unit
-        (pe_action_frame
-          i
-          cfg
-          frame
-          (Ghost.reveal st)
-          (EndpointLocal ev local_frame) **
-         local_output_buffer
-          out
-          out_len
-          (Ghost.reveal old_out))
-        (fun _ ->
-          protocol.CPI.pi_local_frame_pre
-            ev
-            local_frame
-            (Ghost.reveal st)
-            out
-            out_len
-            (Ghost.reveal old_out) **
-          pe_local_continuation
-            i
-            cfg
-            frame
-            (Ghost.reveal st)
-            ev
-            local_frame **
-          local_output_buffer
-            out
-            out_len
-            (Ghost.reveal old_out));
 
   pe_finish_local_action:
     i:impl ->
@@ -420,6 +324,75 @@ class protocol_endpoint
             (Ghost.reveal (pe_network_input_contents nio))
             (Ghost.reveal (pe_network_old_output nio)));
 
+  pe_prepare_network_action:
+    i:impl ->
+    cfg:pe_config ->
+    frame:pe_frame ->
+    ch:pe_channel ->
+    nio:pe_network_io ->
+    network_frame:protocol.CPI.pi_network_frame ->
+    received:Ghost.erased TCP.bytes ->
+    sent:Ghost.erased TCP.bytes ->
+    st:Ghost.erased state ->
+      stt unit
+        (pe_action_frame
+          i
+          cfg
+          frame
+          (Ghost.reveal st)
+          (EndpointNeedInput network_frame) **
+         pe_network_io_continuation
+          i
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st)
+          nio **
+         network_buffers
+          (pe_network_input nio)
+          (pe_network_input_len nio)
+          (pe_network_output nio)
+          (pe_network_output_len nio)
+          (Ghost.reveal (pe_network_input_contents nio))
+          (Ghost.reveal (pe_network_old_output nio)))
+        (fun _ ->
+          protocol.CPI.pi_network_frame_pre
+            network_frame
+            (pe_network_input nio)
+            (pe_network_input_len nio)
+            (pe_network_output nio)
+            (pe_network_output_len nio)
+            (Ghost.reveal (pe_network_input_contents nio))
+            (Ghost.reveal (pe_network_old_output nio)) **
+          pe_network_continuation
+            i
+            cfg
+            frame
+            (Ghost.reveal st)
+            network_frame **
+          pe_network_io_continuation
+            i
+            ch
+            frame
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st)
+            nio **
+          network_buffers
+            (pe_network_input nio)
+            (pe_network_input_len nio)
+            (pe_network_output nio)
+            (pe_network_output_len nio)
+            (Ghost.reveal (pe_network_input_contents nio))
+            (Ghost.reveal (pe_network_old_output nio)) **
+          pure (
+            CPI.buffers_wf
+              (Ghost.reveal (pe_network_input_contents nio))
+              (pe_network_input_len nio)
+              (Ghost.reveal (pe_network_old_output nio))
+              (pe_network_output_len nio)));
+
   pe_finish_network_io:
     i:impl ->
     ch:pe_channel ->
@@ -521,6 +494,66 @@ class protocol_endpoint
           (Ghost.reveal sent)
           (Ghost.reveal st))
         (fun lio ->
+          pe_local_io_continuation
+            i
+            ch
+            frame
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st)
+            ev
+            lio **
+          local_output_buffer
+            (pe_local_output lio)
+            (pe_local_output_len lio)
+            (Ghost.reveal (pe_local_old_output lio)));
+
+  pe_prepare_local_action:
+    i:impl ->
+    cfg:pe_config ->
+    frame:pe_frame ->
+    ch:pe_channel ->
+    lio:pe_local_io ->
+    ev:local_event ->
+    local_frame:protocol.CPI.pi_local_frame ->
+    received:Ghost.erased TCP.bytes ->
+    sent:Ghost.erased TCP.bytes ->
+    st:Ghost.erased state ->
+      stt unit
+        (pe_action_frame
+          i
+          cfg
+          frame
+          (Ghost.reveal st)
+          (EndpointLocal ev local_frame) **
+         pe_local_io_continuation
+          i
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st)
+          ev
+          lio **
+         local_output_buffer
+          (pe_local_output lio)
+          (pe_local_output_len lio)
+          (Ghost.reveal (pe_local_old_output lio)))
+        (fun _ ->
+          protocol.CPI.pi_local_frame_pre
+            ev
+            local_frame
+            (Ghost.reveal st)
+            (pe_local_output lio)
+            (pe_local_output_len lio)
+            (Ghost.reveal (pe_local_old_output lio)) **
+          pe_local_continuation
+            i
+            cfg
+            frame
+            (Ghost.reveal st)
+            ev
+            local_frame **
           pe_local_io_continuation
             i
             ch
