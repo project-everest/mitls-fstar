@@ -84,6 +84,19 @@ fn read (ch: channel) (out: array U8.t) (max_len: SZ.t)
                    then Seq.slice bytes 0 (SZ.v n)
                    else Seq.create 0 0uy))
 
+fn read_full (ch: channel) (out: array U8.t) (len: SZ.t)
+  requires is_channel ch 'received 'sent **
+           pts_to out 'old **
+           pure (Seq.length 'old == SZ.v len)
+  returns n: SZ.t
+  ensures exists* bytes chunk.
+          is_channel ch (Seq.append (Ghost.reveal 'received) chunk) (Ghost.reveal 'sent) **
+          pts_to out bytes **
+          pure (Seq.length bytes == SZ.v len /\
+                n == len /\
+                Seq.length chunk == SZ.v len /\
+                Seq.equal chunk (Seq.slice bytes 0 (SZ.v len)))
+
 fn write (ch: channel) (buf: array U8.t) (len: SZ.t)
   requires is_channel ch 'received 'sent **
            pts_to buf 'bytes **

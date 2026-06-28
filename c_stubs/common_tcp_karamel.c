@@ -151,6 +151,24 @@ size_t Common_TCP_read(
   return (size_t)n;
 }
 
+size_t Common_TCP_read_full(
+    Common_TCP_channel ch,
+    uint8_t *out,
+    size_t len) {
+  if (ch == NULL) {
+    return 0;
+  }
+  size_t off = 0;
+  while (off < len) {
+    ssize_t n = common_tcp_read_fd(ch->fd, out + off, len - off);
+    if (n <= 0) {
+      return off;
+    }
+    off += (size_t)n;
+  }
+  return off;
+}
+
 size_t Common_TCP_write(
     Common_TCP_channel ch,
     uint8_t *buf,
