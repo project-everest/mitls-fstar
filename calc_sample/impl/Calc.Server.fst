@@ -40,7 +40,9 @@ let max_stack_size : SZ.t = 10sz
 fn new_server ()
   requires emp
   returns srv: server_state
-  ensures server_exactly srv initial_log
+  ensures
+    server_exactly srv initial_log **
+    pure (Vec.is_full_vec srv.stack /\ Vec.is_full_vec srv.size)
 {
   lemma_initial_log_consistent ();
   let stack = Vec.alloc 0ul 10sz;
@@ -58,6 +60,8 @@ fn new_server ()
   rewrite (MR.pts_to ghost_log #1.0R initial_log) as (MR.pts_to srv.ghost_log #1.0R initial_log);
   
   fold (server_exactly srv initial_log);
+  assert (pure (Vec.is_full_vec srv.stack));
+  assert (pure (Vec.is_full_vec srv.size));
   srv
 }
 

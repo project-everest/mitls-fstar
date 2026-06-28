@@ -40,6 +40,10 @@ static Common_TCP_channel common_tcp_channel_from_fd(int fd) {
   return ch;
 }
 
+Common_TCP_channel Common_TCP_channel_of_fd(int fd) {
+  return common_tcp_channel_from_fd(fd);
+}
+
 static Common_TCP_listener common_tcp_listener_from_fd(int fd) {
   Common_TCP_listener l = malloc(sizeof *l);
   if (l == NULL) {
@@ -154,7 +158,13 @@ size_t Common_TCP_read(
 size_t Common_TCP_read_full(
     Common_TCP_channel ch,
     uint8_t *out,
-    size_t len) {
+    size_t len,
+    void *erased0,
+    void *erased1,
+    void *erased2) {
+  (void)erased0;
+  (void)erased1;
+  (void)erased2;
   if (ch == NULL) {
     return 0;
   }
@@ -172,7 +182,13 @@ size_t Common_TCP_read_full(
 size_t Common_TCP_write(
     Common_TCP_channel ch,
     uint8_t *buf,
-    size_t len) {
+    size_t len,
+    void *erased0,
+    void *erased1,
+    void *erased2) {
+  (void)erased0;
+  (void)erased1;
+  (void)erased2;
   if (ch == NULL) {
     return 0;
   }
@@ -187,7 +203,9 @@ size_t Common_TCP_write(
   return off;
 }
 
-void Common_TCP_close(Common_TCP_channel ch) {
+void Common_TCP_close(Common_TCP_channel ch, void *erased0, void *erased1) {
+  (void)erased0;
+  (void)erased1;
   if (ch == NULL) {
     return;
   }

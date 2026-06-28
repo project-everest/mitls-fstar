@@ -12,6 +12,7 @@ FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
 KRML_HOME ?= $(FSTAR_HOME)/karamel
 KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
+FSTAR_LIB ?= $(shell $(FSTAR_EXE) --locate_lib)
 export PATH := $(Z3_DIR):$(PATH)
 
 # ── Directories ────────────────────────────────────────────────────
@@ -146,10 +147,13 @@ IMPL_MODULES = \
   Calc.Impl.Sub \
   Calc.Impl.Mul \
   Calc.Impl.Div \
-  Calc.Server
+  Calc.Server \
+  Calc.Server.Socket
 
 # Convert module names to .krml filenames
-KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES)))
+KRML_FILES = \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES))) \
+  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
 $(OUTPUT_DIR):
 	@mkdir -p $@
@@ -166,6 +170,12 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	  --odir $(OUTPUT_DIR) \
 	  $(IMPL_DIR)/$(subst _,.,$*).fst
 
+$(OUTPUT_DIR)/FStar_Pervasives_Native.krml: | $(OUTPUT_DIR)
+	@echo "Extracting FStar.Pervasives.Native to .krml"
+	@$(FSTAR_EXE) --odir $(OUTPUT_DIR) --already_cached 'Prims,FStar' \
+	  --codegen krml --extract_module FStar.Pervasives.Native \
+	  $(FSTAR_LIB)/ulib/FStar.Pervasives.Native.fst --krmloutput $@
+
 extract-krml: $(KRML_FILES)
 	@echo "✅ All modules extracted to .krml"
 
@@ -176,9 +186,11 @@ extract-c: extract-krml | $(EXTRACT_DIR)
 	  -tmpdir $(EXTRACT_DIR) \
 	  -skip-compilation \
 	  -warn-error -2-9-17 \
-	  -bundle 'Calc.Server=Calc.*[rename=Calc_Server]' \
+	  -add-include '"common_tcp_karamel.h"' \
+	  -library Common.TCP \
+	  -bundle 'Calc.Server.Socket=Calc.*[rename=Calc_Server]' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
-	  -no-prefix Calc.Server \
+	  -no-prefix Calc.Server.Socket \
 	  $(KRML_FILES)
 	@echo "✅ C code generated in $(EXTRACT_DIR)/"
 	@ls -lh $(EXTRACT_DIR)/Calc_Server.c $(EXTRACT_DIR)/Calc_Server.h
@@ -191,12 +203,15 @@ KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 
 test-c: extract-c
 	@echo "Compiling C test..."
-	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
+	@gcc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I../c_stubs \
 	  -c $(EXTRACT_DIR)/Calc_Server.c -o $(EXTRACT_DIR)/Calc_Server.o
-	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
+	@gcc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I../c_stubs \
 	  -o $(EXTRACT_DIR)/calc_test \
 	  $(EXTRACT_DIR)/Calc_Server.o \
-	  test_main.c
+	  ../c_stubs/common_tcp_karamel.c \
+	  ../c_stubs/common_tcp_stubs.c \
+	  test_main.c \
+	  -pthread
 	@echo "✅ C code compiled successfully"
 	@echo ""
 	@echo "Running C test..."

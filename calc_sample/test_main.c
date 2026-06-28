@@ -1,193 +1,209 @@
-/**
- * test_main.c - Test driver for verified calculator server
- * 
- * Tests the extracted C code with sample inputs.
- */
-
-#include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
 #include "Calc_Server.h"
 
-// Helper to print a 5-byte buffer in hex
-void print_buffer(const char *label, uint8_t *buf) {
-    printf("%s: ", label);
-    for (int i = 0; i < 5; i++) {
-        printf("%02x ", buf[i]);
-    }
-    printf("\n");
+#include <arpa/inet.h>
+#include <errno.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <time.h>
+#include <unistd.h>
+
+#define CALC_FRAME_LEN 5
+#define CALC_TEST_STEPS 9
+
+struct server_args {
+  uint16_t port;
+  size_t steps;
+  bool ok;
+};
+
+static void make_push_request(uint8_t *buf, int32_t value) {
+  buf[0] = 0x00;
+  buf[1] = (uint8_t)((uint32_t)value >> 24);
+  buf[2] = (uint8_t)((uint32_t)value >> 16);
+  buf[3] = (uint8_t)((uint32_t)value >> 8);
+  buf[4] = (uint8_t)value;
 }
 
-// Helper to create a Push request
-void make_push_request(uint8_t *buf, int32_t value) {
-    buf[0] = 0x00; // Push opcode (tag 0)
-    buf[1] = (value >> 24) & 0xFF;
-    buf[2] = (value >> 16) & 0xFF;
-    buf[3] = (value >> 8) & 0xFF;
-    buf[4] = value & 0xFF;
+static void make_op_request(uint8_t *buf, uint8_t opcode) {
+  buf[0] = opcode;
+  buf[1] = 0;
+  buf[2] = 0;
+  buf[3] = 0;
+  buf[4] = 0;
 }
 
-// Helper to create an operation request
-void make_op_request(uint8_t *buf, uint8_t opcode) {
-    buf[0] = opcode;
-    buf[1] = 0;
-    buf[2] = 0;
-    buf[3] = 0;
-    buf[4] = 0;
+static int32_t get_int32_be(const uint8_t *buf) {
+  return (int32_t)(((uint32_t)buf[1] << 24) |
+                   ((uint32_t)buf[2] << 16) |
+                   ((uint32_t)buf[3] << 8) |
+                   (uint32_t)buf[4]);
 }
 
-// Extract int32 from big-endian bytes
-int32_t get_int32_be(uint8_t *buf, int offset) {
-    return (buf[offset] << 24) | (buf[offset+1] << 16) | 
-           (buf[offset+2] << 8) | buf[offset+3];
+static bool write_full(int fd, const uint8_t *buf, size_t len) {
+  size_t off = 0;
+  while (off < len) {
+    ssize_t n = write(fd, buf + off, len - off);
+    if (n < 0 && errno == EINTR) {
+      continue;
+    }
+    if (n <= 0) {
+      return false;
+    }
+    off += (size_t)n;
+  }
+  return true;
 }
 
-int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  Verified Calculator Server - C Extraction Test\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+static bool read_full(int fd, uint8_t *buf, size_t len) {
+  size_t off = 0;
+  while (off < len) {
+    ssize_t n = read(fd, buf + off, len - off);
+    if (n < 0 && errno == EINTR) {
+      continue;
+    }
+    if (n <= 0) {
+      return false;
+    }
+    off += (size_t)n;
+  }
+  return true;
+}
 
-    // Create server
-    printf("Creating new server...\n");
-    Calc_Impl_Types_server_state srv = new_server();
-    printf("✅ Server created\n\n");
-
-    // Test buffers
-    uint8_t request[5];
-    uint8_t response[5];
-
-    // Test 1: Push 42
-    printf("Test 1: Push 42\n");
-    make_push_request(request, 42);
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x00) {
-        printf("✅ PASS (Ok response)\n\n");
-    } else {
-        printf("❌ FAIL: Expected Ok response (0x00), got 0x%02x\n\n", response[0]);
-        return 1;
+static int connect_with_retry(uint16_t port) {
+  for (int attempt = 0; attempt < 100; attempt++) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+      return -1;
     }
 
-    // Test 2: Push 10
-    printf("Test 2: Push 10\n");
-    make_push_request(request, 10);
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x00) {
-        printf("✅ PASS (Ok response)\n\n");
-    } else {
-        printf("❌ FAIL: Expected Ok response (0x00), got 0x%02x\n\n", response[0]);
-        return 1;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) {
+      close(fd);
+      return -1;
     }
 
-    // Test 3: Add (42 + 10 = 52)
-    printf("Test 3: Add (42 + 10 = 52)\n");
-    make_op_request(request, 0x02); // Add opcode (tag 2)
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x00) {
-        printf("✅ PASS (Ok response)\n\n");
-    } else {
-        printf("❌ FAIL: Expected Ok response (0x00), got 0x%02x\n\n", response[0]);
-        return 1;
+    if (connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0) {
+      return fd;
     }
+    close(fd);
+    struct timespec ts = {.tv_sec = 0, .tv_nsec = 10000000};
+    nanosleep(&ts, NULL);
+  }
+  return -1;
+}
 
-    // Test 4: Peek (should still be 52)
-    printf("Test 4: Peek (should still be 52)\n");
-    make_op_request(request, 0x01); // Peek opcode (tag 1)
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x01) {  // Result tag
-        int32_t result = get_int32_be(response, 1);
-        printf("Result: %d (expected 52)\n", result);
-        if (result == 52) {
-            printf("✅ PASS\n\n");
-        } else {
-            printf("❌ FAIL: Expected 52, got %d\n\n", result);
-            return 1;
-        }
-    } else {
-        printf("❌ FAIL: Expected Result response (0x01), got 0x%02x\n\n", response[0]);
-        return 1;
-    }
+static void *server_thread(void *arg) {
+  struct server_args *args = (struct server_args *)arg;
+  int listener = socket(AF_INET, SOCK_STREAM, 0);
+  if (listener < 0) {
+    return NULL;
+  }
 
-    // Test 5: Push 5
-    printf("Test 5: Push 5\n");
-    make_push_request(request, 5);
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x00) {
-        printf("✅ PASS (Ok response)\n\n");
-    } else {
-        printf("❌ FAIL: Expected Ok response (0x00), got 0x%02x\n\n", response[0]);
-        return 1;
-    }
+  int one = 1;
+  (void)setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
 
-    // Test 6: Multiply (52 * 5 = 260)
-    printf("Test 6: Multiply (52 * 5 = 260)\n");
-    make_op_request(request, 0x04); // Mul opcode (tag 4)
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x00) {
-        printf("✅ PASS (Ok response)\n\n");
-    } else {
-        printf("❌ FAIL: Expected Ok response (0x00), got 0x%02x\n\n", response[0]);
-        return 1;
-    }
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(args->port);
+  if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1 ||
+      bind(listener, (struct sockaddr *)&addr, sizeof addr) != 0 ||
+      listen(listener, 1) != 0) {
+    close(listener);
+    return NULL;
+  }
 
-    // Test 7: Push 20
-    printf("Test 7: Push 20\n");
-    make_push_request(request, 20);
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x00) {
-        printf("✅ PASS (Ok response)\n\n");
-    } else {
-        printf("❌ FAIL: Expected Ok response (0x00), got 0x%02x\n\n", response[0]);
-        return 1;
-    }
+  int client = accept(listener, NULL, NULL);
+  close(listener);
+  if (client < 0) {
+    return NULL;
+  }
 
-    // Test 8: Divide (260 / 20 = 13)
-    printf("Test 8: Divide (260 / 20 = 13)\n");
-    make_op_request(request, 0x05); // Div opcode (tag 5)
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x00) {
-        printf("✅ PASS (Ok response)\n\n");
-    } else {
-        printf("❌ FAIL: Expected Ok response (0x00), got 0x%02x\n\n", response[0]);
-        return 1;
-    }
+  Common_TCP_channel ch = Common_TCP_channel_of_fd(client);
+  if (ch == NULL) {
+    close(client);
+    return NULL;
+  }
 
-    // Test 9: Error case - Add on empty stack
-    printf("Test 9: Error case - Add on stack with only 1 element (should error)\n");
-    make_op_request(request, 0x02); // Add opcode (tag 2)
-    print_buffer("Request ", request);
-    process_request(srv, request, response);
-    print_buffer("Response", response);
-    if (response[0] == 0x02) {  // Error tag
-        printf("Result: Error (as expected)\n");
-        printf("✅ PASS\n\n");
-    } else {
-        printf("❌ FAIL: Expected error response (0x02), got 0x%02x\n\n", response[0]);
-        return 1;
-    }
+  run_channel(ch, args->steps);
+  args->ok = true;
+  return NULL;
+}
 
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  ✅ ALL TESTS PASSED\n");
-    printf("═══════════════════════════════════════════════════════════════\n");
+static bool send_expect_tag(int fd, const uint8_t *request, uint8_t expected_tag) {
+  uint8_t response[CALC_FRAME_LEN];
+  if (!write_full(fd, request, CALC_FRAME_LEN) ||
+      !read_full(fd, response, CALC_FRAME_LEN)) {
+    return false;
+  }
+  return response[0] == expected_tag;
+}
 
-    // Note: srv.stack and srv.size are heap-allocated via Vec.alloc
-    // In a real program, we should free them here
-    // For this test, we'll let the OS clean up on exit
-    return 0;
+static bool send_expect_result(int fd, const uint8_t *request, int32_t expected) {
+  uint8_t response[CALC_FRAME_LEN];
+  if (!write_full(fd, request, CALC_FRAME_LEN) ||
+      !read_full(fd, response, CALC_FRAME_LEN)) {
+    return false;
+  }
+  return response[0] == 0x01 && get_int32_be(response) == expected;
+}
+
+int main(void) {
+  uint16_t port = (uint16_t)(45678 + (getpid() % 1000));
+  struct server_args args = {.port = port, .steps = CALC_TEST_STEPS, .ok = false};
+
+  pthread_t thread;
+  if (pthread_create(&thread, NULL, server_thread, &args) != 0) {
+    fprintf(stderr, "failed to start server thread\n");
+    return 1;
+  }
+
+  int fd = connect_with_retry(port);
+  if (fd < 0) {
+    fprintf(stderr, "failed to connect to extracted calc server\n");
+    pthread_join(thread, NULL);
+    return 1;
+  }
+
+  uint8_t req[CALC_FRAME_LEN];
+  bool ok = true;
+
+  make_push_request(req, 42);
+  ok = ok && send_expect_tag(fd, req, 0x00);
+  make_push_request(req, 10);
+  ok = ok && send_expect_tag(fd, req, 0x00);
+  make_op_request(req, 0x02);
+  ok = ok && send_expect_tag(fd, req, 0x00);
+  make_op_request(req, 0x01);
+  ok = ok && send_expect_result(fd, req, 52);
+  make_push_request(req, 5);
+  ok = ok && send_expect_tag(fd, req, 0x00);
+  make_op_request(req, 0x04);
+  ok = ok && send_expect_tag(fd, req, 0x00);
+  make_push_request(req, 20);
+  ok = ok && send_expect_tag(fd, req, 0x00);
+  make_op_request(req, 0x05);
+  ok = ok && send_expect_tag(fd, req, 0x00);
+  make_op_request(req, 0x02);
+  ok = ok && send_expect_tag(fd, req, 0x02);
+
+  close(fd);
+  pthread_join(thread, NULL);
+
+  if (!ok || !args.ok) {
+    fprintf(stderr, "calc socket test failed\n");
+    return 1;
+  }
+
+  printf("calc socket test passed\n");
+  return 0;
 }
