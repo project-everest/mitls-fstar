@@ -402,6 +402,14 @@ let empty_calc_trace
 let default_calc_frame : CalcP.calc_frame =
   CalcP.calc_response_frame Error
 
+let parse_request_if_frame
+  (b:TCP.bytes)
+  : GTot (option request) =
+  if Seq.length b == 5 then
+    parse_request b
+  else
+    None
+
 let calc_frame_or_default
   (b:TCP.bytes)
   : GTot CalcP.calc_frame =
@@ -419,6 +427,20 @@ let lemma_calc_frame_or_default_valid
 =
   match parse_request b with
   | Some _ -> ()
+
+let lemma_parse_request_some_if_valid_tag
+  (b:TCP.bytes{Seq.length b == 5 /\ U8.v (Seq.index b 0) < 6})
+  : Lemma
+      (ensures parse_request b <> None)
+=
+  ()
+
+let lemma_parse_request_none_if_invalid_tag
+  (b:TCP.bytes{Seq.length b == 5 /\ 6 <= U8.v (Seq.index b 0)})
+  : Lemma
+      (ensures parse_request b == None)
+=
+  ()
 
 let lemma_network_process_correct_step_ok
   (input:TCP.bytes)
@@ -621,7 +643,6 @@ let calc_network_frame_pre
     Seq.length input_contents == 5 /\
     Seq.length old_out == 5 /\
     input_len == 5sz /\
-    parse_request input_contents <> None /\
     out_len == 5sz)
 
 let calc_network_frame_post
@@ -629,7 +650,7 @@ let calc_network_frame_post
   (result:CPI.process_result)
   (input_contents:TCP.bytes)
   (_input_len:SZ.t)
-  (_old_out:TCP.bytes)
+  (old_out:TCP.bytes)
   (out_contents:TCP.bytes)
   (st0:calc_log)
   (st1:calc_log)
@@ -640,11 +661,23 @@ let calc_network_frame_post
   let msg = calc_frame_or_default input_contents in
   let response_msg = CalcP.calc_frame_response_for st0 msg in
   pure (
-    result == calc_step_ok_result /\
-    consumed == input_contents /\
-    wire_outputs == [response_msg] /\
-    local_outputs == [] /\
-    CalcP.calc_frame_network_step_ok st0 msg st1 out_contents)
+    match result.CPI.process_status with
+    | CPI.StepOk ->
+      result == calc_step_ok_result /\
+      parse_request_if_frame input_contents <> None /\
+      consumed == input_contents /\
+      wire_outputs == [response_msg] /\
+      local_outputs == [] /\
+      CalcP.calc_frame_network_step_ok st0 msg st1 out_contents
+    | CPI.ParseFailed ->
+      result == calc_parse_failed_result /\
+      parse_request_if_frame input_contents == None /\
+      Seq.equal consumed Seq.empty /\
+      wire_outputs == [] /\
+      local_outputs == [] /\
+      st1 == st0 /\
+      Seq.equal out_contents old_out
+    | _ -> False)
 
 [@@pulse_unfold]
 let calc_local_frame_pre
@@ -812,124 +845,179 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
   rewrite (pts_to out old_out) as (pts_to (Vec.vec_to_array frame.calc_network_resp) old_out);
   Vec.to_vec_pts_to frame.calc_network_req;
   Vec.to_vec_pts_to frame.calc_network_resp;
-  Calc.Server.process_request srv.canonical_server_state frame.calc_network_req frame.calc_network_resp;
-  with resp_bytes1 log1. _;
-  Vec.to_array_pts_to frame.calc_network_req;
-  Vec.to_array_pts_to frame.calc_network_resp;
-  rewrite (pts_to (Vec.vec_to_array frame.calc_network_req) input_contents) as (pts_to input input_contents);
-  rewrite (pts_to (Vec.vec_to_array frame.calc_network_resp) resp_bytes1) as (pts_to out resp_bytes1);
-  let msge : erased CalcP.calc_frame = Ghost.hide (Ghost.reveal input_contents);
-  let response_msge : erased CalcP.calc_frame =
-    Ghost.hide (CalcP.calc_frame_response_for log0 (Ghost.reveal msge));
-  lemma_canonical_trace_ok_network_step received0 sent0 log0 (Ghost.reveal msge) log1 resp_bytes1;
-  assert (pure (CalcP.calc_frame_network_step_ok log0 (Ghost.reveal msge) log1 (Ghost.reveal response_msge)));
-  assert (pure (calc_server_step_rel log0 log1));
-  RTC.closure_step calc_server_step_rel log0 log1;
-  MR.update srv.canonical_server_progress log1;
-  let received1e = Ghost.hide (Seq.append received0 input_contents);
-  let sent1e = Ghost.hide (Seq.append sent0 resp_bytes1);
-  let log1e = Ghost.hide log1;
-  fold (canonical_server_exactly
-    srv
-    (Ghost.reveal received1e)
-    (Ghost.reveal sent1e)
-    (Ghost.reveal log1e));
-  lemma_calc_frame_or_default_valid input_contents;
-  fold (calc_network_frame_post
-    frame
-    calc_step_ok_result
-    input_contents
-    input_len
-    old_out
-    resp_bytes1
-    log0
-    (Ghost.reveal log1e)
-    input_contents
-    [Ghost.reveal response_msge]
-    calc_no_local_outputs);
-  CalcP.lemma_slice_full_5 (Ghost.reveal msge);
-  assert (pure (Seq.equal (CPI.input_bytes input_contents input_len) (Ghost.reveal msge)));
-  Seq.lemma_eq_elim (CPI.input_bytes input_contents input_len) (Ghost.reveal msge);
-  CalcP.lemma_calc_parse_serialize_exact (Ghost.reveal msge);
-  Seq.append_empty_r input_contents;
-  assert (pure (CPI.consumed_by_parse
-    CalcP.calc_frame_wire_format
-    (CPI.input_bytes input_contents input_len)
-    (Ghost.reveal msge)
-    input_contents
-    Seq.empty));
-  Seq.lemma_eq_elim (Ghost.reveal response_msge) resp_bytes1;
-  Seq.append_empty_r (Ghost.reveal response_msge);
-  assert (pure (Seq.equal
-    (Ghost.reveal response_msge)
-    (WF.serialize_all CalcP.calc_frame_wire_format [Ghost.reveal response_msge])));
-  assert (pure (CPI.output_written resp_bytes1 5sz (Ghost.reveal response_msge)));
-  assert (pure (SZ.v calc_step_ok_result.CPI.process_consumed_len == Seq.length input_contents));
-  assert (pure (Seq.equal (Ghost.reveal received1e) (Seq.append received0 input_contents)));
-  assert (pure (Seq.equal (Ghost.reveal sent1e) (Seq.append sent0 (Ghost.reveal response_msge))));
-  assert (pure (CalcP.calc_frame_wire_format_state_machine.WFSM.wfsm_state_machine.SM.sm_step
-    log0
-    (SM.WireEvent (Ghost.reveal msge))
-    (Ghost.reveal log1e)
-    (CPI.step_output [Ghost.reveal response_msge] calc_no_local_outputs)));
-  assert (pure (calc_step_ok_result.CPI.process_status == CPI.StepOk));
-  assert (pure (calc_step_ok_result.CPI.process_consumed_len == 5sz));
-  assert (pure (calc_step_ok_result.CPI.process_produced_len == 5sz));
-  assert (pure (CPI.buffers_wf input_contents input_len old_out out_len));
-  assert (pure (Seq.length resp_bytes1 == Seq.length old_out));
-  assert (pure (exists produced.
-    CPI.consumed_by_parse
+  let tag = CalcParser.parse_tag frame.calc_network_req;
+  if U8.lt tag 6uy {
+    assert (pure (U8.v tag < 6));
+    assert (pure (tag == Seq.index input_contents 0));
+    assert (pure (U8.v (Seq.index input_contents 0) < 6));
+    lemma_parse_request_some_if_valid_tag input_contents;
+    assert (pure (parse_request input_contents <> None));
+    Calc.Server.process_request srv.canonical_server_state frame.calc_network_req frame.calc_network_resp;
+    with resp_bytes1 log1. _;
+    Vec.to_array_pts_to frame.calc_network_req;
+    Vec.to_array_pts_to frame.calc_network_resp;
+    rewrite (pts_to (Vec.vec_to_array frame.calc_network_req) input_contents) as (pts_to input input_contents);
+    rewrite (pts_to (Vec.vec_to_array frame.calc_network_resp) resp_bytes1) as (pts_to out resp_bytes1);
+    let msge : erased CalcP.calc_frame = Ghost.hide (Ghost.reveal input_contents);
+    let response_msge : erased CalcP.calc_frame =
+      Ghost.hide (CalcP.calc_frame_response_for log0 (Ghost.reveal msge));
+    lemma_canonical_trace_ok_network_step received0 sent0 log0 (Ghost.reveal msge) log1 resp_bytes1;
+    assert (pure (CalcP.calc_frame_network_step_ok log0 (Ghost.reveal msge) log1 (Ghost.reveal response_msge)));
+    assert (pure (calc_server_step_rel log0 log1));
+    RTC.closure_step calc_server_step_rel log0 log1;
+    MR.update srv.canonical_server_progress log1;
+    let received1e = Ghost.hide (Seq.append received0 input_contents);
+    let sent1e = Ghost.hide (Seq.append sent0 resp_bytes1);
+    let log1e = Ghost.hide log1;
+    fold (canonical_server_exactly
+      srv
+      (Ghost.reveal received1e)
+      (Ghost.reveal sent1e)
+      (Ghost.reveal log1e));
+    lemma_calc_frame_or_default_valid input_contents;
+    fold (calc_network_frame_post
+      frame
+      calc_step_ok_result
+      input_contents
+      input_len
+      old_out
+      resp_bytes1
+      log0
+      (Ghost.reveal log1e)
+      input_contents
+      [Ghost.reveal response_msge]
+      calc_no_local_outputs);
+    CalcP.lemma_slice_full_5 (Ghost.reveal msge);
+    assert (pure (Seq.equal (CPI.input_bytes input_contents input_len) (Ghost.reveal msge)));
+    Seq.lemma_eq_elim (CPI.input_bytes input_contents input_len) (Ghost.reveal msge);
+    CalcP.lemma_calc_parse_serialize_exact (Ghost.reveal msge);
+    Seq.append_empty_r input_contents;
+    assert (pure (CPI.consumed_by_parse
       CalcP.calc_frame_wire_format
       (CPI.input_bytes input_contents input_len)
       (Ghost.reveal msge)
       input_contents
-      Seq.empty /\
-    SZ.v calc_step_ok_result.CPI.process_consumed_len == Seq.length input_contents /\
-    CalcP.calc_frame_wire_format_state_machine.WFSM.wfsm_state_machine.SM.sm_step
+      Seq.empty));
+    Seq.lemma_eq_elim (Ghost.reveal response_msge) resp_bytes1;
+    Seq.append_empty_r (Ghost.reveal response_msge);
+    assert (pure (Seq.equal
+      (Ghost.reveal response_msge)
+      (WF.serialize_all CalcP.calc_frame_wire_format [Ghost.reveal response_msge])));
+    assert (pure (CPI.output_written resp_bytes1 5sz (Ghost.reveal response_msge)));
+    assert (pure (SZ.v calc_step_ok_result.CPI.process_consumed_len == Seq.length input_contents));
+    assert (pure (Seq.equal (Ghost.reveal received1e) (Seq.append received0 input_contents)));
+    assert (pure (Seq.equal (Ghost.reveal sent1e) (Seq.append sent0 (Ghost.reveal response_msge))));
+    assert (pure (CalcP.calc_frame_wire_format_state_machine.WFSM.wfsm_state_machine.SM.sm_step
       log0
       (SM.WireEvent (Ghost.reveal msge))
       (Ghost.reveal log1e)
-      (CPI.step_output [Ghost.reveal response_msge] calc_no_local_outputs) /\
-    Seq.equal
-      produced
-      (WF.serialize_all CalcP.calc_frame_wire_format [Ghost.reveal response_msge]) /\
-    CPI.output_written resp_bytes1 calc_step_ok_result.CPI.process_produced_len produced /\
-    Seq.equal (Ghost.reveal received1e) (Seq.append received0 input_contents) /\
-    Seq.equal (Ghost.reveal sent1e) (Seq.append sent0 produced)));
-  lemma_network_process_correct_step_ok
-    input_contents
-    input_len
-    old_out
-    resp_bytes1
-    out_len
-    received0
-    sent0
-    log0
-    (Ghost.reveal received1e)
-    (Ghost.reveal sent1e)
-    (Ghost.reveal log1e)
-    input_contents
-    [Ghost.reveal response_msge]
-    calc_no_local_outputs
-    (Ghost.reveal response_msge);
-  assert (pure (CPI.network_process_correct
-    CalcP.calc_frame_wire_format_state_machine
-    input_contents
-    input_len
-    old_out
-    resp_bytes1
-    out_len
-    received0
-    sent0
-    log0
+      (CPI.step_output [Ghost.reveal response_msge] calc_no_local_outputs)));
+    assert (pure (calc_step_ok_result.CPI.process_status == CPI.StepOk));
+    assert (pure (calc_step_ok_result.CPI.process_consumed_len == 5sz));
+    assert (pure (calc_step_ok_result.CPI.process_produced_len == 5sz));
+    assert (pure (CPI.buffers_wf input_contents input_len old_out out_len));
+    assert (pure (Seq.length resp_bytes1 == Seq.length old_out));
+    assert (pure (exists produced.
+      CPI.consumed_by_parse
+        CalcP.calc_frame_wire_format
+        (CPI.input_bytes input_contents input_len)
+        (Ghost.reveal msge)
+        input_contents
+        Seq.empty /\
+      SZ.v calc_step_ok_result.CPI.process_consumed_len == Seq.length input_contents /\
+      CalcP.calc_frame_wire_format_state_machine.WFSM.wfsm_state_machine.SM.sm_step
+        log0
+        (SM.WireEvent (Ghost.reveal msge))
+        (Ghost.reveal log1e)
+        (CPI.step_output [Ghost.reveal response_msge] calc_no_local_outputs) /\
+      Seq.equal
+        produced
+        (WF.serialize_all CalcP.calc_frame_wire_format [Ghost.reveal response_msge]) /\
+      CPI.output_written resp_bytes1 calc_step_ok_result.CPI.process_produced_len produced /\
+      Seq.equal (Ghost.reveal received1e) (Seq.append received0 input_contents) /\
+      Seq.equal (Ghost.reveal sent1e) (Seq.append sent0 produced)));
+    lemma_network_process_correct_step_ok
+      input_contents
+      input_len
+      old_out
+      resp_bytes1
+      out_len
+      received0
+      sent0
+      log0
+      (Ghost.reveal received1e)
+      (Ghost.reveal sent1e)
+      (Ghost.reveal log1e)
+      input_contents
+      [Ghost.reveal response_msge]
+      calc_no_local_outputs
+      (Ghost.reveal response_msge);
+    assert (pure (CPI.network_process_correct
+      CalcP.calc_frame_wire_format_state_machine
+      input_contents
+      input_len
+      old_out
+      resp_bytes1
+      out_len
+      received0
+      sent0
+      log0
+      calc_step_ok_result
+      (Ghost.reveal received1e)
+      (Ghost.reveal sent1e)
+      (Ghost.reveal log1e)
+      input_contents
+      [Ghost.reveal response_msge]
+      calc_no_local_outputs));
     calc_step_ok_result
-    (Ghost.reveal received1e)
-    (Ghost.reveal sent1e)
-    (Ghost.reveal log1e)
-    input_contents
-    [Ghost.reveal response_msge]
-    calc_no_local_outputs));
-  calc_step_ok_result
+  } else {
+    assert (pure (6 <= U8.v tag));
+    assert (pure (tag == Seq.index input_contents 0));
+    assert (pure (6 <= U8.v (Seq.index input_contents 0)));
+    lemma_parse_request_none_if_invalid_tag input_contents;
+    Vec.to_array_pts_to frame.calc_network_req;
+    Vec.to_array_pts_to frame.calc_network_resp;
+    rewrite (pts_to (Vec.vec_to_array frame.calc_network_req) input_contents) as (pts_to input input_contents);
+    rewrite (pts_to (Vec.vec_to_array frame.calc_network_resp) old_out) as (pts_to out old_out);
+    fold (canonical_server_exactly srv received0 sent0 log0);
+    fold (calc_network_frame_post
+      frame
+      calc_parse_failed_result
+      input_contents
+      input_len
+      old_out
+      old_out
+      log0
+      log0
+      Seq.empty
+      []
+      []);
+    CalcP.lemma_slice_full_5 input_contents;
+    assert (pure (Seq.equal (CPI.input_bytes input_contents input_len) input_contents));
+    Seq.lemma_eq_elim (CPI.input_bytes input_contents input_len) input_contents;
+    assert (pure (CalcP.calc_frame_wire_format.WF.wf_parse input_contents == None));
+    assert (pure (CPI.buffers_wf input_contents input_len old_out out_len));
+    assert (pure (Seq.length old_out == Seq.length old_out));
+    assert (pure (CPI.same_abstract_state received0 sent0 received0 sent0 log0 log0));
+    assert (pure (CPI.network_process_correct
+      CalcP.calc_frame_wire_format_state_machine
+      input_contents
+      input_len
+      old_out
+      old_out
+      out_len
+      received0
+      sent0
+      log0
+      calc_parse_failed_result
+      received0
+      sent0
+      log0
+      Seq.empty
+      []
+      []));
+    calc_parse_failed_result
+  }
 }
 
 fn calc_process_local
