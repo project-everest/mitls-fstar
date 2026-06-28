@@ -12,13 +12,13 @@
 #ifndef FStar_Pervasives_Native_Some
 #define FStar_Pervasives_Native_Some 1
 #endif
-typedef uint8_t FStar_Pervasives_Native_option__TLS13_IO_channel_tags;
+typedef uint8_t FStar_Pervasives_Native_option_tag;
 typedef struct FStar_Pervasives_Native_option__size_t_s {
-  FStar_Pervasives_Native_option__TLS13_IO_channel_tags tag;
+  FStar_Pervasives_Native_option_tag tag;
   size_t v;
 } FStar_Pervasives_Native_option__size_t;
 typedef struct FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials_s {
-  FStar_Pervasives_Native_option__TLS13_IO_channel_tags tag;
+  FStar_Pervasives_Native_option_tag tag;
   TLS13_OpenSSL_server_credentials v;
 } FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials;
 #endif

@@ -1,4 +1,4 @@
-#include "tls13_io_stubs.h"
+#include "common_tcp_stubs.h"
 
 #include <errno.h>
 #include <netdb.h>
@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-int tls13_io_connect_tcp(const char *hostname, uint16_t port) {
+int common_tcp_connect(const char *hostname, uint16_t port) {
   if (hostname == NULL) {
     errno = EINVAL;
     return -1;
@@ -49,7 +49,7 @@ int tls13_io_connect_tcp(const char *hostname, uint16_t port) {
   return fd;
 }
 
-int tls13_io_listen_tcp(const char *bind_host, uint16_t port) {
+int common_tcp_listen(const char *bind_host, uint16_t port) {
   if (bind_host == NULL) {
     errno = EINVAL;
     return -1;
@@ -93,7 +93,7 @@ int tls13_io_listen_tcp(const char *bind_host, uint16_t port) {
   return fd;
 }
 
-int tls13_io_accept_tcp(int listener_fd) {
+int common_tcp_accept(int listener_fd) {
   int fd;
   do {
     fd = accept(listener_fd, NULL, NULL);
@@ -101,7 +101,7 @@ int tls13_io_accept_tcp(int listener_fd) {
   return fd;
 }
 
-ssize_t tls13_io_read_fd(int fd, uint8_t *out, size_t max_len) {
+ssize_t common_tcp_read_fd(int fd, uint8_t *out, size_t max_len) {
   if (max_len != 0 && out == NULL) {
     errno = EINVAL;
     return -1;
@@ -114,7 +114,7 @@ ssize_t tls13_io_read_fd(int fd, uint8_t *out, size_t max_len) {
   return n;
 }
 
-int tls13_io_close_fd(int fd) {
+int common_tcp_close_fd(int fd) {
   int r;
   do {
     r = close(fd);
@@ -122,7 +122,7 @@ int tls13_io_close_fd(int fd) {
   return r;
 }
 
-ssize_t tls13_io_write_fd(int fd, const uint8_t *buf, size_t len) {
+ssize_t common_tcp_write_fd(int fd, const uint8_t *buf, size_t len) {
   if (len != 0 && buf == NULL) {
     errno = EINVAL;
     return -1;

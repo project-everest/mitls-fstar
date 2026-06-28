@@ -343,7 +343,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.KeySchedule,TLS13.Record
 
 # Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO
+# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, Common.TCP
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 
@@ -352,7 +352,7 @@ FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml
 BUNDLE_KRML_FILES = $(filter-out \
   $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml \
   $(OUTPUT_DIR)/TLS13_OpenSSL.krml \
-  $(OUTPUT_DIR)/TLS13_IO.krml,$(FULL_KRML_FILES))
+  $(OUTPUT_DIR)/Common_TCP.krml,$(FULL_KRML_FILES))
 
 TLS13_BUNDLE_DIR = $(EXTRACT_DIR)/tls13_bundle
 TLS13_BUNDLE_STAMP = $(TLS13_BUNDLE_DIR)/.generated
@@ -430,7 +430,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Auth \
   TLS13.Impl.Server.App \
   TLS13.Impl.Server \
-  TLS13.IO \
+  Common.TCP \
   TLS13.OpenSSL \
   TLS13.Impl.Server.Driver.State \
   TLS13.Impl.Server.Driver.Transport \
@@ -482,7 +482,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@target_base=$$(basename "$@" .krml); \
 	module=; src=; \
 	for ext in fst fsti; do \
-	  for dir in src/spec src/impl $(GENERATED_DIR) $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse \
+	  for dir in common src/spec src/impl $(GENERATED_DIR) $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse \
 	      $(FSTAR_ULIB) $(FSTAR_PULSE_COMMON) $(FSTAR_PULSE_LIB); do \
 	    test -d "$$dir" || continue; \
 	    for candidate in "$$dir"/*.$$ext; do \
@@ -528,10 +528,10 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -static-header TLS13.Impl.Serializer \
 	  -add-include '<stdbool.h>' \
 	  -add-include '"krml/internal/compat.h"' \
-	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
+	  -add-include '"../../c_stubs/common_tcp_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.IO \
+	  -library TLS13.Crypto -library TLS13.X509 -library Common.TCP \
 	  -library TLS13.OpenSSL \
 	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
@@ -574,18 +574,18 @@ HACL_WRAPPER_SOURCES = \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
 
 ECHO_STUB_SOURCES = \
+  c_stubs/common_tcp_karamel.c \
+  c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
-  c_stubs/tls13_io_karamel.c \
-  c_stubs/tls13_io_stubs.c \
   c_stubs/tls13_openssl_karamel.c \
   c_stubs/tls13_openssl_stubs.c \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
+  c_stubs/common_tcp_karamel.h \
+  c_stubs/common_tcp_stubs.h \
   c_stubs/tls13_crypto_external.h \
   c_stubs/tls13_hacl_stubs.h \
-  c_stubs/tls13_io_karamel.h \
-  c_stubs/tls13_io_stubs.h \
   c_stubs/tls13_openssl_karamel.h \
   c_stubs/tls13_openssl_stubs.h
 
@@ -643,8 +643,8 @@ test/test_extracted_client_openssl_echo: \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/tls13_client_driver.c \
-	  c_stubs/tls13_io_karamel.c \
-	  c_stubs/tls13_io_stubs.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
 	  c_stubs/tls13_openssl_karamel.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
@@ -691,8 +691,8 @@ test/test_extracted_server_openssl_client: \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/tls13_io_karamel.c \
-	  c_stubs/tls13_io_stubs.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
 	  c_stubs/tls13_openssl_karamel.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_server_openssl_client.c \

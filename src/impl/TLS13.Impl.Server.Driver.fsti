@@ -43,7 +43,7 @@ val server_driver_live
 noextract
 (**
   Owns a connected server driver together with the concrete TCP byte histories
-  tracked by TLS13.IO. The protocol-level processed wire log is in
+  tracked by Common.TCP. The protocol-level processed wire log is in
   st.cs_wire_log; received may also include bytes retained in the driver's input
   buffer. The predicate includes server_driver_wire_logs_match for that hidden
   retained-byte accounting.

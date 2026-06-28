@@ -16,7 +16,7 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module ID = FStar.IndefiniteDescription
-module IO = TLS13.IO
+module IO = Common.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module O = TLS13.OpenSSL
@@ -144,6 +144,48 @@ let lemma_read_append_buffer_matches_raw_prefix
   Seq.lemma_eq_intro
     (B.append buffered read_chunk)
     (Seq.slice raw_after_read 0 total_len)
+
+let lemma_rejoined_raw_mask_matches_old
+  (old_raw raw_prefix:B.bytes)
+  (raw_mask raw_prefix_mask raw_joined_mask:Seq.seq (option U8.t))
+  (buffered_len:nat)
+  : Lemma
+    (requires
+      Seq.length raw_mask == Seq.length old_raw /\
+      Seq.length raw_joined_mask == Seq.length raw_mask /\
+      Seq.length raw_prefix_mask == buffered_len /\
+      buffered_len <= Seq.length old_raw /\
+      Seq.equal raw_prefix (Seq.slice old_raw 0 buffered_len) /\
+      (forall (i:nat). i < Seq.length raw_mask ==>
+        Seq.index raw_mask i == Some (Seq.index old_raw i)) /\
+      (forall (i:nat). i < Seq.length raw_prefix_mask ==>
+        Seq.index raw_prefix_mask i == Some (Seq.index raw_prefix i)) /\
+      (forall (i:nat). i < Seq.length raw_joined_mask ==>
+        Seq.index raw_joined_mask i ==
+          (if i < buffered_len
+           then Seq.index raw_prefix_mask i
+           else Seq.index raw_mask i)))
+    (ensures
+      forall (i:nat). i < Seq.length raw_joined_mask ==>
+        Seq.index raw_joined_mask i == Some (Seq.index old_raw i))
+=
+  let index_proof
+    (i:nat { i < Seq.length raw_joined_mask })
+    : Lemma
+      (Seq.index raw_joined_mask i == Some (Seq.index old_raw i))
+  =
+    if i < buffered_len then (
+      Seq.lemma_eq_elim raw_prefix (Seq.slice old_raw 0 buffered_len);
+      Seq.lemma_index_slice old_raw 0 buffered_len i
+    ) else (
+      assert (i < Seq.length raw_mask)
+    )
+  in
+  FStar.Classical.forall_intro
+    #(i:nat { i < Seq.length raw_joined_mask })
+    #(fun i ->
+      Seq.index raw_joined_mask i == Some (Seq.index old_raw i))
+    index_proof
 
 noextract
 let logged_received_bytes_accounted
@@ -2247,8 +2289,11 @@ fn driver_process_buffered_network_bytes_once
   A.to_mask raw_prefix_array;
   with raw_prefix_mask_after.
     assert (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask_after (fun _ -> True));
+  assert (pure (Seq.length raw_prefix_mask_after == SZ.v buffered_len));
   assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask_after ==>
     Some? (Seq.index raw_prefix_mask_after i)));
+  assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask_after ==>
+    Seq.index raw_prefix_mask_after i == Some (Seq.index raw_prefix i)));
   rewrite
     (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask_after (fun _ -> True))
     as
@@ -2267,6 +2312,24 @@ fn driver_process_buffered_network_bytes_once
       (fun k ->
         (True /\ ~(0 <= k /\ k < SZ.v buffered_len)) \/
         (0 <= k /\ k < SZ.v buffered_len /\ True)));
+  assert (pure (Seq.length raw_joined_mask == Seq.length raw_mask));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Seq.index raw_joined_mask i ==
+      (if 0 <= i && i < SZ.v buffered_len
+       then Seq.index raw_prefix_mask_after (i - 0)
+       else Seq.index raw_mask i)));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Seq.index raw_joined_mask i ==
+      (if i < SZ.v buffered_len
+       then Seq.index raw_prefix_mask_after i
+       else Seq.index raw_mask i)));
+  lemma_rejoined_raw_mask_matches_old
+    (Ghost.reveal 'old_raw)
+    raw_prefix
+    raw_mask
+    raw_prefix_mask_after
+    raw_joined_mask
+    (SZ.v buffered_len);
   assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
     ((True /\ ~(0 <= i /\ i < SZ.v buffered_len)) \/
      (0 <= i /\ i < SZ.v buffered_len /\ True))));

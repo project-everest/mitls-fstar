@@ -11,7 +11,7 @@ module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
-module IO = TLS13.IO
+module IO = Common.TCP
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
@@ -39,7 +39,7 @@ val client_driver_live
 noextract
 (**
   Owns a connected driver together with the actual TCP byte histories tracked by
-  TLS13.IO. The protocol-level processed wire log is in st.cs_wire_log; received
+  Common.TCP. The protocol-level processed wire log is in st.cs_wire_log; received
   may also include bytes retained in the driver's input buffer. The predicate
   includes client_driver_wire_logs_match for the hidden retained bytes, making
   the public API relation between transport byte contents and protocol wire-log

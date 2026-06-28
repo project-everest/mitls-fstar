@@ -7,7 +7,7 @@ open Pulse.Lib.Array.PtsTo
 open TLS13.Impl.Server.Driver.State
 
 module B = TLS13.Bytes
-module IO = TLS13.IO
+module IO = Common.TCP
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16

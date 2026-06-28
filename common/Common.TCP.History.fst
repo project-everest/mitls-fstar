@@ -1,4 +1,4 @@
-module Common.TCP
+module Common.TCP.History
 
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
@@ -38,4 +38,3 @@ let history_extends (old next:history) : prop =
 let bytes_exact_prefix (prefix full:bytes) : prop =
   Seq.length prefix <= Seq.length full /\
   Seq.equal prefix (Seq.slice full 0 (Seq.length prefix))
-

@@ -1,34 +1,55 @@
-module TLS13.IO
+module Common.TCP
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module B = TLS13.Bytes
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
+type bytes = Seq.seq U8.t
+
+noeq
+type history = {
+  tcp_received: bytes;
+  tcp_sent: bytes;
+}
+
+val empty_history : history
+
+val append_received : history -> bytes -> history
+
+val append_sent : history -> bytes -> history
+
+val history_equal : history -> history -> prop
+
+val bytes_extends : bytes -> bytes -> prop
+
+val history_extends : history -> history -> prop
+
+val bytes_exact_prefix : bytes -> bytes -> prop
+
 val channel : Type0
 val listener : Type0
 
-val is_channel: channel -> received:B.bytes -> sent:B.bytes -> slprop
-val is_listener: listener -> bind_host:B.bytes -> port:U16.t -> slprop
+val is_channel: channel -> received:bytes -> sent:bytes -> slprop
+val is_listener: listener -> bind_host:bytes -> port:U16.t -> slprop
 
 fn connect_tcp (hostname: array U8.t) (hostname_len: SZ.t) (port: U16.t)
   requires pts_to hostname 'hostname_bytes **
-           pure (B.length 'hostname_bytes == SZ.v hostname_len)
+           pure (Seq.length 'hostname_bytes == SZ.v hostname_len)
   returns ch: option channel
   ensures pts_to hostname 'hostname_bytes **
           (match ch with
-           | Some c -> is_channel c B.empty B.empty
+           | Some c -> is_channel c (Seq.create 0 0uy) (Seq.create 0 0uy)
            | None -> emp)
 
 fn listen_tcp (bind_host: array U8.t) (bind_host_len: SZ.t) (port: U16.t)
   requires pts_to bind_host 'bind_host_bytes **
-          pure (B.length 'bind_host_bytes == SZ.v bind_host_len)
+          pure (Seq.length 'bind_host_bytes == SZ.v bind_host_len)
   returns l: option listener
   ensures pts_to bind_host 'bind_host_bytes **
           (match l with
@@ -40,7 +61,7 @@ fn accept_tcp (l: listener)
   returns ch: option channel
   ensures is_listener l 'bind_host 'port **
           (match ch with
-          | Some c -> is_channel c B.empty B.empty
+          | Some c -> is_channel c (Seq.create 0 0uy) (Seq.create 0 0uy)
           | None -> emp)
 
 fn close_listener (l: listener)
@@ -50,29 +71,29 @@ fn close_listener (l: listener)
 fn read (ch: channel) (out: array U8.t) (max_len: SZ.t)
   requires is_channel ch 'received 'sent **
            pts_to out 'old **
-           pure (B.length 'old == SZ.v max_len)
+           pure (Seq.length 'old == SZ.v max_len)
   returns n: SZ.t
   ensures exists* bytes chunk.
-          is_channel ch (B.append (Ghost.reveal 'received) chunk) (Ghost.reveal 'sent) **
+          is_channel ch (Seq.append (Ghost.reveal 'received) chunk) (Ghost.reveal 'sent) **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v max_len /\
+          pure (Seq.length bytes == SZ.v max_len /\
                 SZ.v n <= SZ.v max_len /\
-                B.length chunk == SZ.v n /\
+                Seq.length chunk == SZ.v n /\
                 Seq.equal chunk
-                  (if SZ.v n <= B.length bytes
+                  (if SZ.v n <= Seq.length bytes
                    then Seq.slice bytes 0 (SZ.v n)
-                   else B.empty))
+                   else Seq.create 0 0uy))
 
 fn write (ch: channel) (buf: array U8.t) (len: SZ.t)
   requires is_channel ch 'received 'sent **
            pts_to buf 'bytes **
-           pure (SZ.v len <= B.length 'bytes)
+           pure (SZ.v len <= Seq.length 'bytes)
   returns n: SZ.t
   ensures is_channel ch (Ghost.reveal 'received)
-            (B.append (Ghost.reveal 'sent)
-              (if SZ.v n <= B.length (Ghost.reveal 'bytes)
+            (Seq.append (Ghost.reveal 'sent)
+              (if SZ.v n <= Seq.length (Ghost.reveal 'bytes)
                then Seq.slice (Ghost.reveal 'bytes) 0 (SZ.v n)
-               else B.empty)) **
+               else Seq.create 0 0uy)) **
           pts_to buf 'bytes **
           pure (n == len)
 

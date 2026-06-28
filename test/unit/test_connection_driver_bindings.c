@@ -16,13 +16,13 @@ struct TLS13_Connection_connection_s {
   size_t read_src_len;
 };
 
-struct TLS13_IO_channel_s {
+struct Common_TCP_channel_s {
   int unused;
 };
 
 bool TLS13_Connection_client_connect(
     TLS13_Connection_connection c,
-    TLS13_IO_channel ch,
+    Common_TCP_channel ch,
     void *erased_state_ref,
     void *erased_state,
     void *erased_log_ref,
@@ -40,7 +40,7 @@ bool TLS13_Connection_client_connect(
 
 bool TLS13_Connection_client_write_all(
     TLS13_Connection_connection c,
-    TLS13_IO_channel ch,
+    Common_TCP_channel ch,
     uint8_t *buf,
     size_t len,
     void *erased_bytes,
@@ -64,7 +64,7 @@ bool TLS13_Connection_client_write_all(
 
 bool TLS13_Connection_client_read_exact(
     TLS13_Connection_connection c,
-    TLS13_IO_channel ch,
+    Common_TCP_channel ch,
     uint8_t *out,
     size_t len,
     void *erased_old_bytes,
@@ -124,7 +124,7 @@ static int test_success_path(void) {
       .read_src = inbound_expected,
       .read_src_len = sizeof inbound_expected,
   };
-  struct TLS13_IO_channel_s ch = {0};
+  struct Common_TCP_channel_s ch = {0};
 
   bool ok = TLS13_Connection_Driver_connect_write_read_exact(
       &c, &ch, (uint8_t *)outbound, sizeof outbound, inbound, sizeof inbound);
@@ -154,7 +154,7 @@ static int test_connect_failure_short_circuits(void) {
       .write_ok = true,
       .read_ok = true,
   };
-  struct TLS13_IO_channel_s ch = {0};
+  struct Common_TCP_channel_s ch = {0};
 
   bool ok = TLS13_Connection_Driver_connect_write_read_exact(
       &c, &ch, outbound, sizeof outbound, inbound, sizeof inbound);
@@ -173,7 +173,7 @@ static int test_write_failure_short_circuits(void) {
       .write_ok = false,
       .read_ok = true,
   };
-  struct TLS13_IO_channel_s ch = {0};
+  struct Common_TCP_channel_s ch = {0};
 
   bool ok = TLS13_Connection_Driver_connect_write_read_exact(
       &c, &ch, outbound, sizeof outbound, inbound, sizeof inbound);
