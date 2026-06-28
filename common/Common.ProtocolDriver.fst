@@ -152,15 +152,13 @@ ensures
       st;
   match action {
     PE.EndpointNeedInput network_frame -> {
-      let prepare_network_io = endpoint.PE.pe_prepare_network_io;
-      let nio = prepare_network_io i ch frame received sent st;
-      let prepare_network_action = endpoint.PE.pe_prepare_network_action;
-      prepare_network_action
+      let prepare_network = endpoint.PE.pe_prepare_network;
+      let nio =
+        prepare_network
         i
         cfg
         frame
         ch
-        nio
         network_frame
         received
         sent
@@ -295,15 +293,13 @@ ensures
       }
     }
     PE.EndpointLocal ev local_frame -> {
-      let prepare_local_io = endpoint.PE.pe_prepare_local_io;
-      let lio = prepare_local_io i ch frame ev received sent st;
-      let prepare_local_action = endpoint.PE.pe_prepare_local_action;
-      prepare_local_action
+      let prepare_local = endpoint.PE.pe_prepare_local;
+      let lio =
+        prepare_local
         i
         cfg
         frame
         ch
-        lio
         ev
         local_frame
         received

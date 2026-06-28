@@ -416,6 +416,58 @@ ensures calc_frame_ready srv cfg frame (Ghost.reveal log1)
   fold (calc_frame_ready srv cfg frame (Ghost.reveal log1))
 }
 
+fn calc_prepare_network
+  (srv:CalcCP.canonical_server)
+  (cfg:calc_endpoint_config)
+  (frame:CalcCP.calc_network_frame)
+  (ch:TCP.channel)
+  (network_frame:CalcCP.calc_network_frame)
+  (received:Ghost.erased TCP.bytes)
+  (sent:Ghost.erased TCP.bytes)
+  (log:Ghost.erased calc_log)
+requires
+  calc_action_frame srv cfg frame (Ghost.reveal log) (PE.EndpointNeedInput network_frame) **
+  calc_io_ready srv ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal log)
+returns nio:calc_network_io
+ensures
+  calc_network_io_continuation srv ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal log) nio **
+  PE.network_buffers
+    (calc_network_input nio)
+    (calc_network_input_len nio)
+    (calc_network_output nio)
+    (calc_network_output_len nio)
+    (Ghost.reveal (calc_network_input_contents nio))
+    (Ghost.reveal (calc_network_old_output nio)) **
+  CalcCP.calc_network_frame_pre
+    network_frame
+    (calc_network_input nio)
+    (calc_network_input_len nio)
+    (calc_network_output nio)
+    (calc_network_output_len nio)
+    (Ghost.reveal (calc_network_input_contents nio))
+    (Ghost.reveal (calc_network_old_output nio)) **
+  calc_network_continuation srv cfg frame (Ghost.reveal log) network_frame **
+  pure (
+    CPI.buffers_wf
+      (Ghost.reveal (calc_network_input_contents nio))
+      (calc_network_input_len nio)
+      (Ghost.reveal (calc_network_old_output nio))
+      (calc_network_output_len nio))
+{
+  let nio = calc_prepare_network_io srv ch frame received sent log;
+  calc_prepare_network_action
+    srv
+    cfg
+    frame
+    ch
+    nio
+    network_frame
+    received
+    sent
+    log;
+  nio
+}
+
 fn calc_finish_network_io
   (srv:CalcCP.canonical_server)
   (ch:TCP.channel)
@@ -702,6 +754,50 @@ ensures calc_frame_ready srv cfg frame (Ghost.reveal log1)
   fold (calc_frame_ready srv cfg frame (Ghost.reveal log1))
 }
 
+fn calc_prepare_local
+  (srv:CalcCP.canonical_server)
+  (cfg:calc_endpoint_config)
+  (frame:CalcCP.calc_network_frame)
+  (ch:TCP.channel)
+  (ev:CalcP.calc_frame_local_event)
+  (local_frame:CalcCP.calc_local_frame)
+  (received:Ghost.erased TCP.bytes)
+  (sent:Ghost.erased TCP.bytes)
+  (log:Ghost.erased calc_log)
+requires
+  calc_action_frame srv cfg frame (Ghost.reveal log) (PE.EndpointLocal ev local_frame) **
+  calc_io_ready srv ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal log)
+returns lio:calc_local_io
+ensures
+  calc_local_io_continuation srv ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal log) ev lio **
+  PE.local_output_buffer
+    (calc_local_output lio)
+    (calc_local_output_len lio)
+    (Ghost.reveal (calc_local_old_output lio)) **
+  CalcCP.calc_local_frame_pre
+    ev
+    local_frame
+    (Ghost.reveal log)
+    (calc_local_output lio)
+    (calc_local_output_len lio)
+    (Ghost.reveal (calc_local_old_output lio)) **
+  calc_local_continuation srv cfg frame (Ghost.reveal log) ev local_frame
+{
+  let lio = calc_prepare_local_io srv ch frame ev received sent log;
+  calc_prepare_local_action
+    srv
+    cfg
+    frame
+    ch
+    lio
+    ev
+    local_frame
+    received
+    sent
+    log;
+  lio
+}
+
 fn calc_finish_local_io
   (srv:CalcCP.canonical_server)
   (ch:TCP.channel)
@@ -827,16 +923,14 @@ let calc_protocol_endpoint
     PE.pe_network_output_len = calc_network_output_len;
     PE.pe_network_input_contents = calc_network_input_contents;
     PE.pe_network_old_output = calc_network_old_output;
-    PE.pe_prepare_network_io = calc_prepare_network_io;
-    PE.pe_prepare_network_action = calc_prepare_network_action;
+    PE.pe_prepare_network = calc_prepare_network;
     PE.pe_finish_network_io = calc_finish_network_io;
     PE.pe_local_io = calc_local_io;
     PE.pe_local_io_continuation = calc_local_io_continuation;
     PE.pe_local_output = calc_local_output;
     PE.pe_local_output_len = calc_local_output_len;
     PE.pe_local_old_output = calc_local_old_output;
-    PE.pe_prepare_local_io = calc_prepare_local_io;
-    PE.pe_prepare_local_action = calc_prepare_local_action;
+    PE.pe_prepare_local = calc_prepare_local;
     PE.pe_finish_local_io = calc_finish_local_io;
   }
 

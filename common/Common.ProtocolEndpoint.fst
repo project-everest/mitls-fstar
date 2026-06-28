@@ -292,74 +292,48 @@ class protocol_endpoint
     pe_network_io ->
     Ghost.erased TCP.bytes;
 
-  pe_prepare_network_io:
-    i:impl ->
-    ch:pe_channel ->
-    frame:pe_frame ->
-    received:Ghost.erased TCP.bytes ->
-    sent:Ghost.erased TCP.bytes ->
-    st:Ghost.erased state ->
-      stt pe_network_io
-        (pe_io_ready
-          i
-          ch
-          frame
-          (Ghost.reveal received)
-          (Ghost.reveal sent)
-          (Ghost.reveal st))
-        (fun nio ->
-          pe_network_io_continuation
-            i
-            ch
-            frame
-            (Ghost.reveal received)
-            (Ghost.reveal sent)
-            (Ghost.reveal st)
-            nio **
-          network_buffers
-            (pe_network_input nio)
-            (pe_network_input_len nio)
-            (pe_network_output nio)
-            (pe_network_output_len nio)
-            (Ghost.reveal (pe_network_input_contents nio))
-            (Ghost.reveal (pe_network_old_output nio)));
-
-  pe_prepare_network_action:
+  pe_prepare_network:
     i:impl ->
     cfg:pe_config ->
     frame:pe_frame ->
     ch:pe_channel ->
-    nio:pe_network_io ->
     network_frame:protocol.CPI.pi_network_frame ->
     received:Ghost.erased TCP.bytes ->
     sent:Ghost.erased TCP.bytes ->
     st:Ghost.erased state ->
-      stt unit
+      stt pe_network_io
         (pe_action_frame
           i
           cfg
           frame
           (Ghost.reveal st)
           (EndpointNeedInput network_frame) **
+         pe_io_ready
+         i
+         ch
+         frame
+         (Ghost.reveal received)
+         (Ghost.reveal sent)
+         (Ghost.reveal st))
+        (fun nio ->
          pe_network_io_continuation
-          i
-          ch
-          frame
-          (Ghost.reveal received)
-          (Ghost.reveal sent)
-          (Ghost.reveal st)
-          nio **
+           i
+           ch
+           frame
+           (Ghost.reveal received)
+           (Ghost.reveal sent)
+           (Ghost.reveal st)
+           nio **
          network_buffers
-          (pe_network_input nio)
-          (pe_network_input_len nio)
-          (pe_network_output nio)
-          (pe_network_output_len nio)
-          (Ghost.reveal (pe_network_input_contents nio))
-          (Ghost.reveal (pe_network_old_output nio)))
-        (fun _ ->
-          protocol.CPI.pi_network_frame_pre
-            network_frame
-            (pe_network_input nio)
+           (pe_network_input nio)
+           (pe_network_input_len nio)
+           (pe_network_output nio)
+           (pe_network_output_len nio)
+           (Ghost.reveal (pe_network_input_contents nio))
+           (Ghost.reveal (pe_network_old_output nio)) **
+         protocol.CPI.pi_network_frame_pre
+           network_frame
+           (pe_network_input nio)
             (pe_network_input_len nio)
             (pe_network_output nio)
             (pe_network_output_len nio)
@@ -371,21 +345,6 @@ class protocol_endpoint
             frame
             (Ghost.reveal st)
             network_frame **
-          pe_network_io_continuation
-            i
-            ch
-            frame
-            (Ghost.reveal received)
-            (Ghost.reveal sent)
-            (Ghost.reveal st)
-            nio **
-          network_buffers
-            (pe_network_input nio)
-            (pe_network_input_len nio)
-            (pe_network_output nio)
-            (pe_network_output_len nio)
-            (Ghost.reveal (pe_network_input_contents nio))
-            (Ghost.reveal (pe_network_old_output nio)) **
           pure (
             CPI.buffers_wf
               (Ghost.reveal (pe_network_input_contents nio))
@@ -477,16 +436,24 @@ class protocol_endpoint
     pe_local_io ->
     Ghost.erased TCP.bytes;
 
-  pe_prepare_local_io:
+  pe_prepare_local:
     i:impl ->
-    ch:pe_channel ->
+    cfg:pe_config ->
     frame:pe_frame ->
+    ch:pe_channel ->
     ev:local_event ->
+    local_frame:protocol.CPI.pi_local_frame ->
     received:Ghost.erased TCP.bytes ->
     sent:Ghost.erased TCP.bytes ->
     st:Ghost.erased state ->
       stt pe_local_io
-        (pe_io_ready
+        (pe_action_frame
+          i
+          cfg
+          frame
+          (Ghost.reveal st)
+          (EndpointLocal ev local_frame) **
+         pe_io_ready
           i
           ch
           frame
@@ -506,40 +473,7 @@ class protocol_endpoint
           local_output_buffer
             (pe_local_output lio)
             (pe_local_output_len lio)
-            (Ghost.reveal (pe_local_old_output lio)));
-
-  pe_prepare_local_action:
-    i:impl ->
-    cfg:pe_config ->
-    frame:pe_frame ->
-    ch:pe_channel ->
-    lio:pe_local_io ->
-    ev:local_event ->
-    local_frame:protocol.CPI.pi_local_frame ->
-    received:Ghost.erased TCP.bytes ->
-    sent:Ghost.erased TCP.bytes ->
-    st:Ghost.erased state ->
-      stt unit
-        (pe_action_frame
-          i
-          cfg
-          frame
-          (Ghost.reveal st)
-          (EndpointLocal ev local_frame) **
-         pe_local_io_continuation
-          i
-          ch
-          frame
-          (Ghost.reveal received)
-          (Ghost.reveal sent)
-          (Ghost.reveal st)
-          ev
-          lio **
-         local_output_buffer
-          (pe_local_output lio)
-          (pe_local_output_len lio)
-          (Ghost.reveal (pe_local_old_output lio)))
-        (fun _ ->
+            (Ghost.reveal (pe_local_old_output lio)) **
           protocol.CPI.pi_local_frame_pre
             ev
             local_frame
@@ -553,20 +487,7 @@ class protocol_endpoint
             frame
             (Ghost.reveal st)
             ev
-            local_frame **
-          pe_local_io_continuation
-            i
-            ch
-            frame
-            (Ghost.reveal received)
-            (Ghost.reveal sent)
-            (Ghost.reveal st)
-            ev
-            lio **
-          local_output_buffer
-            (pe_local_output lio)
-            (pe_local_output_len lio)
-            (Ghost.reveal (pe_local_old_output lio)));
+            local_frame);
 
   pe_finish_local_io:
     i:impl ->
