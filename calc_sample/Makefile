@@ -4,8 +4,15 @@
 # Uses F* --dep full for proper incremental and parallel builds
 
 # ── Toolchain ──────────────────────────────────────────────────────
-FSTAR_EXE ?= fstar.exe
-KRML ?= krml
+# Use the same Pulse-capable EverParse/F*/KaRaMeL toolchain as the root build.
+# Override these variables to test with a different compatible toolchain.
+EVERPARSE_HOME ?= $(abspath ../tools/everparse)
+FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
+FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
+KRML_HOME ?= $(FSTAR_HOME)/karamel
+KRML ?= $(KRML_HOME)/out/bin/krml
+Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
+export PATH := $(Z3_DIR):$(PATH)
 
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR = _cache
@@ -23,8 +30,12 @@ INCLUDES = \
 FSTAR_FLAGS = \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
+  --odir $(OUTPUT_DIR) \
   --already_cached 'Prims,FStar,Pulse,PulseCore' \
   --warn_error -321-241-272-288 \
+  --report_assumes warn \
+  --ext optimize_let_vc \
+  --ext fly_deps \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
@@ -175,14 +186,14 @@ extract-c: extract-krml | $(EXTRACT_DIR)
 extract: extract-c
 
 # ── C Compilation and Testing ──────────────────────────────────────
-KRML_INCLUDE = /home/nswamy/.local/fstar/include
-KRML_RUNTIME = /home/nswamy/.local/fstar/lib/krml/dist/minimal
+KRML_INCLUDE = $(KRML_HOME)/include
+KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 
 test-c: extract-c
 	@echo "Compiling C test..."
-	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
+	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
 	  -c $(EXTRACT_DIR)/Calc_Server.c -o $(EXTRACT_DIR)/Calc_Server.o
-	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
+	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
 	  -o $(EXTRACT_DIR)/calc_test \
 	  $(EXTRACT_DIR)/Calc_Server.o \
 	  test_main.c
