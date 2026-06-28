@@ -5,14 +5,19 @@ module TLS13.Impl.Client.Endpoint
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
+module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module CQ = Common.ConnectionStateQuery
 module CPI = Common.ProtocolImplementation
 module CQueries = TLS13.Impl.Client.CanonicalQueries
+module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
 module CT = TLS13.Impl.Client.Types
+module L = TLS13.Impl.Messages
+module O = TLS13.OpenSSL
 module PE = Common.ProtocolEndpoint
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -27,6 +32,11 @@ type client_endpoint_frame = {
   client_ep_raw: V.vec U8.t;
   client_ep_network_out_len: SZ.t;
   client_ep_network_out: V.vec U8.t;
+  client_ep_auth: O.auth_context;
+  client_ep_auth_cv_input_len: SZ.t;
+  client_ep_auth_cv_input: V.vec U8.t;
+  client_ep_auth_signature_len: SZ.t;
+  client_ep_auth_signature: V.vec U8.t;
 }
 
 let client_endpoint_config_wf
@@ -34,6 +44,19 @@ let client_endpoint_config_wf
   (frame:client_endpoint_frame)
   : prop =
   frame.client_ep_network_out_len == cfg.CQueries.client_query_network_out_len
+
+let client_endpoint_auth_ready
+  (frame:client_endpoint_frame)
+  : slprop =
+  exists* cv_input_bytes signature_bytes.
+    O.is_auth_context frame.client_ep_auth **
+    V.pts_to frame.client_ep_auth_cv_input #1.0R cv_input_bytes **
+    V.pts_to frame.client_ep_auth_signature #1.0R signature_bytes **
+    pure (
+      B.length cv_input_bytes == SZ.v frame.client_ep_auth_cv_input_len /\
+      Bounds.max_certificate_verify_input_len <= SZ.v frame.client_ep_auth_cv_input_len /\
+      B.length signature_bytes == SZ.v frame.client_ep_auth_signature_len /\
+      L.max_signature_len <= SZ.v frame.client_ep_auth_signature_len)
 
 let client_endpoint_frame_ready
   (cc:CP.canonical_client)
@@ -46,6 +69,7 @@ let client_endpoint_frame_ready
     cfg
     frame.client_ep_query
     st **
+  client_endpoint_auth_ready frame **
   pure (client_endpoint_config_wf cfg frame)
 
 let client_endpoint_io_ready
@@ -92,6 +116,7 @@ let client_endpoint_action_frame
   | PE.EndpointDone
   | PE.EndpointFailed ->
     CQueries.client_next_local_action_frame_ready cc cfg frame.client_ep_query st) **
+  client_endpoint_auth_ready frame **
   pure (client_endpoint_config_wf cfg frame)
 
 let client_endpoint_network_continuation
@@ -107,6 +132,7 @@ let client_endpoint_network_continuation
     frame.client_ep_query
     st
     network_frame **
+  client_endpoint_auth_ready frame **
   pure (client_endpoint_config_wf cfg frame)
 
 let client_endpoint_local_continuation
@@ -124,6 +150,7 @@ let client_endpoint_local_continuation
     st
     ev
     local_frame **
+  client_endpoint_auth_ready frame **
   pure (client_endpoint_config_wf cfg frame)
 
 fn client_endpoint_next_action
@@ -173,14 +200,144 @@ ensures
       PE.EndpointLocal ev local_frame
     }
     CQ.NextExternal ext -> {
-      CQueries.cancel_client_next_action cc cfg frame.client_ep_query st (CQ.NextExternal ext);
-      fold (client_endpoint_action_frame
-        cc
-        cfg
-        frame
-        (Ghost.reveal st)
-        PE.EndpointFailed);
-      PE.EndpointFailed
+      match ext {
+        CQueries.ClientExternalValidateCertificate -> {
+          CQueries.cancel_client_next_action cc cfg frame.client_ep_query st (CQ.NextExternal ext);
+          fold (client_endpoint_action_frame
+            cc
+            cfg
+            frame
+            (Ghost.reveal st)
+            PE.EndpointFailed);
+          PE.EndpointFailed
+        }
+        CQueries.ClientExternalVerifyCertificateSignature -> {
+          unfold (CQueries.client_next_local_action_frame_post
+            cc
+            cfg
+            frame.client_ep_query
+            (Ghost.reveal st)
+            (CQ.NextExternal ext));
+          unfold (CQueries.client_next_local_action_frame_ready
+            cc
+            cfg
+            frame.client_ep_query
+            (Ghost.reveal st));
+          unfold (CQueries.client_network_persistent_resource frame.client_ep_query);
+          with network_current. _;
+          unfold (CQueries.client_local_persistent_resource frame.client_ep_query);
+          with local_current. _;
+          unfold (client_endpoint_auth_ready frame);
+          with cv_input_bytes signature_bytes. _;
+          unfold (CP.client_invariant
+            cc
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          rewrite
+            (C.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st))
+            as
+            (CR.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st));
+          V.to_array_pts_to frame.client_ep_auth_cv_input;
+          let input_len =
+            C.copy_certificate_verify_input
+              cc.CP.canonical_client_state
+              (V.vec_to_array frame.client_ep_auth_cv_input)
+              frame.client_ep_auth_cv_input_len;
+          V.to_array_pts_to frame.client_ep_auth_signature;
+          let signature_snapshot =
+            C.copy_certificate_verify_signature
+              cc.CP.canonical_client_state
+              (V.vec_to_array frame.client_ep_auth_signature)
+              frame.client_ep_auth_signature_len;
+          let ok =
+            O.verify_certificate_signature_for_local_event
+              frame.client_ep_auth
+              #st
+              (V.vec_to_array frame.client_ep_auth_cv_input)
+              frame.client_ep_auth_cv_input_len
+              input_len
+              signature_snapshot.CR.cv_signature_scheme
+              (V.vec_to_array frame.client_ep_auth_signature)
+              frame.client_ep_auth_signature_len
+              signature_snapshot.CR.cv_signature_len;
+          rewrite
+            (CR.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st))
+            as
+            (C.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st));
+          fold (CP.client_invariant
+            cc
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          if ok {
+            assert (pure (CT.local_input_wf
+              (Ghost.reveal st)
+              CT.LocalVerifyCertificateSignature
+              B.empty));
+            V.to_vec_pts_to frame.client_ep_auth_cv_input;
+            V.to_vec_pts_to frame.client_ep_auth_signature;
+            fold (client_endpoint_auth_ready frame);
+            let local_frame =
+              CQueries.client_local_frame_of_current
+                frame.client_ep_query
+                (Ghost.hide local_current);
+            let api = {
+              CTypes.client_local_kind = CT.LocalVerifyCertificateSignature;
+              CTypes.client_local_payload = B.empty;
+            };
+            rewrite
+              (pts_to frame.client_ep_query.CQueries.client_query_local_payload B.empty)
+              as
+              (pts_to local_frame.CP.tls_client_local_payload B.empty);
+            rewrite
+              (pts_to frame.client_ep_query.CQueries.client_query_local_app_out (Ghost.reveal local_current))
+              as
+              (pts_to
+                local_frame.CP.tls_client_local_app_out
+                (Ghost.reveal local_frame.CP.tls_client_local_old_app_out));
+            fold (CQueries.client_local_frame_resource local_frame);
+            with network_current.
+            fold (CQueries.client_network_persistent_resource frame.client_ep_query);
+            assert (pure (CQueries.client_local_event_ready
+              (Ghost.reveal st)
+              (CTypes.ClientAPI api)));
+            fold (CQueries.client_next_local_action_frame_post
+              cc
+              cfg
+              frame.client_ep_query
+              (Ghost.reveal st)
+              (CQ.NextLocal (CTypes.ClientAPI api) local_frame));
+            fold (client_endpoint_action_frame
+              cc
+              cfg
+              frame
+              (Ghost.reveal st)
+              (PE.EndpointLocal (CTypes.ClientAPI api) local_frame));
+            PE.EndpointLocal (CTypes.ClientAPI api) local_frame
+          } else {
+            V.to_vec_pts_to frame.client_ep_auth_cv_input;
+            V.to_vec_pts_to frame.client_ep_auth_signature;
+            fold (client_endpoint_auth_ready frame);
+            with local_current.
+            fold (CQueries.client_local_persistent_resource frame.client_ep_query);
+            with network_current.
+            fold (CQueries.client_network_persistent_resource frame.client_ep_query);
+            fold (CQueries.client_next_local_action_frame_ready
+              cc
+              cfg
+              frame.client_ep_query
+              (Ghost.reveal st));
+            fold (client_endpoint_action_frame
+              cc
+              cfg
+              frame
+              (Ghost.reveal st)
+              PE.EndpointFailed);
+            PE.EndpointFailed
+          }
+        }
+      }
     }
     CQ.NextDone -> {
       CQueries.cancel_client_next_action cc cfg frame.client_ep_query st CQ.NextDone;
