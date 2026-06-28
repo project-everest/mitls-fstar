@@ -156,8 +156,6 @@ let server_local_event_ready
       st
       api.CTypes.server_local_kind
       api.CTypes.server_local_payload
-  | CTypes.ServerGhostStep ->
-    False
 
 let server_external_action_witness
   (ext:server_external_action)
@@ -345,9 +343,7 @@ let server_next_local_action_frame_post
         server_local_event_ready st ev /\
         server_local_frame_matches frame local_frame /\
         SZ.v frame.server_query_local_payload_len == 0)
-    | CTypes.ServerGhostStep ->
-      server_next_local_action_frame_ready srv cfg frame st **
-      pure False)
+    )
   | CQ.NextExternal ext ->
     server_next_local_action_frame_ready srv cfg frame st **
     pure (server_external_action_ready st ext)
@@ -382,9 +378,6 @@ let server_next_local_action_local_continuation
       server_local_event_ready st ev /\
       server_local_frame_matches frame local_frame /\
       SZ.v frame.server_query_local_payload_len == 0)
-  | CTypes.ServerGhostStep ->
-    server_next_local_action_frame_ready srv cfg frame st **
-    pure False
 
 fn cancel_server_next_action
   (srv:SP.canonical_server)
@@ -464,13 +457,6 @@ ensures
             local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out;
           with old_local.
           fold (server_local_persistent_resource frame);
-          fold (server_next_local_action_frame_ready
-            srv
-            cfg
-            frame
-            (Ghost.reveal st))
-        }
-        CTypes.ServerGhostStep -> {
           fold (server_next_local_action_frame_ready
             srv
             cfg
@@ -802,59 +788,6 @@ ensures
         out_len
         (Ghost.reveal old_out))
     }
-    CTypes.ServerGhostStep -> {
-      assert (pure False);
-      fold (SP.server_local_bridge_frame_pre
-        CTypes.ServerGhostStep
-        local_frame
-        (Ghost.reveal st)
-        out
-        out_len
-        (Ghost.reveal old_out));
-      rewrite
-        (SP.server_local_bridge_frame_pre
-          CTypes.ServerGhostStep
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out))
-        as
-        (SP.server_local_bridge_frame_pre
-          ev
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out));
-      fold (server_next_local_action_local_continuation
-        srv
-        cfg
-        frame
-        (Ghost.reveal st)
-        CTypes.ServerGhostStep
-        local_frame);
-      rewrite
-        (server_next_local_action_local_continuation
-          srv
-          cfg
-          frame
-          (Ghost.reveal st)
-          CTypes.ServerGhostStep
-          local_frame)
-        as
-        (server_next_local_action_local_continuation
-          srv
-          cfg
-          frame
-          (Ghost.reveal st)
-          ev
-          local_frame);
-      fold (CQ.local_output_buffer
-        out
-        out_len
-        (Ghost.reveal old_out))
-    }
   }
 }
 
@@ -939,23 +872,6 @@ ensures
       fold (server_local_persistent_resource frame);
       with network_current.
       fold (server_network_persistent_resource frame);
-      fold (server_next_local_action_frame_ready
-        srv
-        cfg
-        frame
-        (Ghost.reveal st1))
-    }
-    CTypes.ServerGhostStep -> {
-      unfold (SP.server_local_bridge_frame_post
-        CTypes.ServerGhostStep
-        local_frame
-        result
-        (Ghost.reveal old_out)
-        (Ghost.reveal out_contents)
-        (Ghost.reveal st0)
-        (Ghost.reveal st1)
-        (Ghost.reveal wire_outputs)
-        (Ghost.reveal local_outputs));
       fold (server_next_local_action_frame_ready
         srv
         cfg

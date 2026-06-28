@@ -63,7 +63,6 @@ type client_api_event = {
 
 type client_local_event =
   | ClientAPI: event:client_api_event -> client_local_event
-  | ClientGhostStep: client_local_event
 
 type server_api_event = {
   server_local_kind: ST.local_event_kind;
@@ -72,7 +71,6 @@ type server_api_event = {
 
 type server_local_event =
   | ServerAPI: event:server_api_event -> server_local_event
-  | ServerGhostStep: server_local_event
 
 let endpoint_status_to_process_status
   (status:ET.endpoint_status)

@@ -135,8 +135,6 @@ let client_local_event_ready
       st
       api.CTypes.client_local_kind
       api.CTypes.client_local_payload
-  | CTypes.ClientGhostStep ->
-    False
 
 let client_external_action_ready
   (cfg:client_next_local_action_config)
@@ -320,9 +318,7 @@ let client_next_local_action_frame_post
         client_local_event_ready st ev /\
         client_local_frame_matches frame local_frame /\
         SZ.v frame.client_query_local_payload_len == 0)
-    | CTypes.ClientGhostStep ->
-      client_next_local_action_frame_ready cc cfg frame st **
-      pure False)
+    )
   | CQ.NextExternal ext ->
     client_next_local_action_frame_ready cc cfg frame st **
     pure (client_external_action_ready cfg st ext)
@@ -357,9 +353,6 @@ let client_next_local_action_local_continuation
       client_local_event_ready st ev /\
       client_local_frame_matches frame local_frame /\
       SZ.v frame.client_query_local_payload_len == 0)
-  | CTypes.ClientGhostStep ->
-    client_next_local_action_frame_ready cc cfg frame st **
-    pure False
 
 fn cancel_client_next_action
   (cc:CP.canonical_client)
@@ -441,13 +434,6 @@ ensures
             local_frame.CP.tls_client_local_old_app_out;
           with old_local.
           fold (client_local_persistent_resource frame);
-          fold (client_next_local_action_frame_ready
-            cc
-            cfg
-            frame
-            (Ghost.reveal st))
-        }
-        CTypes.ClientGhostStep -> {
           fold (client_next_local_action_frame_ready
             cc
             cfg
@@ -775,59 +761,6 @@ ensures
         out_len
         (Ghost.reveal old_out))
     }
-    CTypes.ClientGhostStep -> {
-      assert (pure False);
-      fold (CP.client_local_frame_pre
-        CTypes.ClientGhostStep
-        local_frame
-        (Ghost.reveal st)
-        out
-        out_len
-        (Ghost.reveal old_out));
-      rewrite
-        (CP.client_local_frame_pre
-          CTypes.ClientGhostStep
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out))
-        as
-        (CP.client_local_frame_pre
-          ev
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out));
-      fold (client_next_local_action_local_continuation
-        cc
-        cfg
-        frame
-        (Ghost.reveal st)
-        CTypes.ClientGhostStep
-        local_frame);
-      rewrite
-        (client_next_local_action_local_continuation
-          cc
-          cfg
-          frame
-          (Ghost.reveal st)
-          CTypes.ClientGhostStep
-          local_frame)
-        as
-        (client_next_local_action_local_continuation
-          cc
-          cfg
-          frame
-          (Ghost.reveal st)
-          ev
-          local_frame);
-      fold (CQ.local_output_buffer
-        out
-        out_len
-        (Ghost.reveal old_out))
-    }
   }
 }
 
@@ -910,23 +843,6 @@ ensures
       fold (client_local_persistent_resource frame);
       with network_current.
       fold (client_network_persistent_resource frame);
-      fold (client_next_local_action_frame_ready
-        cc
-        cfg
-        frame
-        (Ghost.reveal st1))
-    }
-    CTypes.ClientGhostStep -> {
-      unfold (CP.client_local_frame_post
-        CTypes.ClientGhostStep
-        local_frame
-        result
-        (Ghost.reveal old_out)
-        (Ghost.reveal out_contents)
-        (Ghost.reveal st0)
-        (Ghost.reveal st1)
-        (Ghost.reveal wire_outputs)
-        (Ghost.reveal local_outputs));
       fold (client_next_local_action_frame_ready
         cc
         cfg

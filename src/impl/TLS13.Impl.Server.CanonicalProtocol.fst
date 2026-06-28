@@ -100,10 +100,7 @@ let server_step
             CS.delta_raw_sent = raw_sent;
             CS.delta_raw_received = raw_received;
           }
-          st1
-    | CTypes.ServerGhostStep ->
-      exists delta.
-        CS.legal_connection_delta st0 delta st1)
+           st1)
 
 noextract
 let server_state_machine
@@ -133,9 +130,19 @@ let server_system
     WFSM.wfsm_wire_format = CW.tls_record_wire_format;
   }
 
+let server_canonical_step_rel
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : prop =
+  exists ev out. server_step st0 ev st1 out
+
+let server_progress_preorder =
+  RTC.closure server_canonical_step_rel
+
 noeq
 type canonical_server = {
   canonical_server_state: S.server;
+  canonical_server_progress: MR.mref server_progress_preorder;
   canonical_server_initial: Ghost.erased CS.connection_state;
   canonical_server_valid_trace:
     received:B.bytes ->
@@ -867,8 +874,6 @@ let server_local_frame_pre
         st0
         api.CTypes.server_local_kind
         api.CTypes.server_local_payload)
-  | CTypes.ServerGhostStep ->
-    pure False
 
 let server_local_frame_post
   (ev:CTypes.server_local_event)
@@ -900,17 +905,6 @@ let server_local_frame_post
           server_response_wire_outputs resp network_out /\
         local_outputs ==
           server_response_local_outputs resp app_out)
-  | CTypes.ServerGhostStep ->
-    pure (
-      result == CTypes.server_local_process_result {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.NeedMoreInput;
-      } /\
-      network_out == old_network_out /\
-      st1 == st0 /\
-      wire_outputs == [] /\
-      local_outputs == [])
 
 let server_state_ahead
   (initial:CS.connection_state)
@@ -919,38 +913,27 @@ let server_state_ahead
   : prop =
   CPI.state_ahead (server_system initial) st0 st1
 
-let server_ghost_transition
-  (st1:CS.connection_state)
-  : SM.transition
-      CS.connection_state
-      CW.wire_message
-      CTypes.server_local_event
-      CTypes.local_output
-  =
-  {
-    SM.tr_event = SM.LocalEvent CTypes.ServerGhostStep;
-    SM.tr_next_state = st1;
-    SM.tr_output = CPI.step_output [] [];
-  }
-
-let lemma_server_connection_step_state_ahead
+let lemma_server_canonical_step_rel_state_ahead
   (initial:CS.connection_state)
   (st0:CS.connection_state)
   (st1:CS.connection_state)
   : Lemma
-      (requires CS.connection_state_single_step st0 st1)
+      (requires server_canonical_step_rel st0 st1)
       (ensures server_state_ahead initial st0 st1)
 =
-  let delta =
+  let ev =
     ID.indefinite_description_ghost
-      CS.connection_delta
-      (fun delta -> CS.legal_connection_delta st0 delta st1) in
-  let tr = server_ghost_transition st1 in
-  assert (server_step
-    st0
-    (SM.LocalEvent CTypes.ServerGhostStep)
-    st1
-    tr.SM.tr_output);
+      (SM.event CW.wire_message CTypes.server_local_event)
+      (fun ev -> exists out. server_step st0 ev st1 out) in
+  let out =
+    ID.indefinite_description_ghost
+      (SM.step_output CW.wire_message CTypes.local_output)
+      (fun out -> server_step st0 ev st1 out) in
+  let tr = {
+    SM.tr_event = ev;
+    SM.tr_next_state = st1;
+    SM.tr_output = out;
+  } in
   assert (SM.trace_reaches
     (server_system initial).WFSM.wfsm_state_machine
     st0
@@ -963,23 +946,23 @@ let lemma_server_connection_step_state_ahead
       trace
       st1)
 
-let lemma_server_connection_state_evolves_state_ahead
+let lemma_server_progress_state_ahead
   (initial:CS.connection_state)
   (st0:CS.connection_state)
   (st1:CS.connection_state)
   : Lemma
-      (requires CS.connection_state_evolves st0 st1)
+      (requires server_progress_preorder st0 st1)
       (ensures server_state_ahead initial st0 st1)
 =
   RTC.induct
-    CS.connection_state_single_step
+    server_canonical_step_rel
     (fun x y -> server_state_ahead initial x y)
     (fun x ->
       SM.lemma_state_evolves_refl
         (server_system initial).WFSM.wfsm_state_machine
         x)
     (fun x y ->
-      lemma_server_connection_step_state_ahead initial x y)
+      lemma_server_canonical_step_rel_state_ahead initial x y)
     (fun x y z ->
       SM.lemma_state_evolves_trans
         (server_system initial).WFSM.wfsm_state_machine
@@ -1008,6 +991,7 @@ let server_invariant
   (st:CS.connection_state)
   : slprop =
   S.connection_exactly srv.canonical_server_state st **
+  MR.pts_to srv.canonical_server_progress #1.0R st **
   pure (server_invariant_pure
     (Ghost.reveal srv.canonical_server_initial)
     received
@@ -1021,7 +1005,7 @@ let server_snapshot
   (_sent:B.bytes)
   (st:CS.connection_state)
   : slprop =
-  MR.snapshot (S.server_state_ref srv.canonical_server_state) st
+  MR.snapshot srv.canonical_server_progress st
 
 fn server_invariant_valid
   (srv:canonical_server)
@@ -1099,15 +1083,9 @@ ensures server_invariant
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st));
-  unfold (S.connection_exactly
-    srv.canonical_server_state
-    (Ghost.reveal st));
   MR.take_snapshot
-    (S.server_state_ref srv.canonical_server_state)
+    srv.canonical_server_progress
     (Ghost.reveal st);
-  fold (S.connection_exactly
-    srv.canonical_server_state
-    (Ghost.reveal st));
   fold (server_invariant
     srv
     (Ghost.reveal received)
@@ -1164,12 +1142,9 @@ ensures server_snapshot
     (Ghost.reveal current_received)
     (Ghost.reveal current_sent)
     (Ghost.reveal current_state));
-  unfold (S.connection_exactly
-    srv.canonical_server_state
-    (Ghost.reveal current_state));
   MR.recall_snapshot
-    (S.server_state_ref srv.canonical_server_state);
-  lemma_server_connection_state_evolves_state_ahead
+    srv.canonical_server_progress;
+  lemma_server_progress_state_ahead
     (Ghost.reveal srv.canonical_server_initial)
     (Ghost.reveal snapshot_state)
     (Ghost.reveal current_state);
@@ -1177,9 +1152,6 @@ ensures server_snapshot
     (server_system (Ghost.reveal srv.canonical_server_initial))
     (Ghost.reveal snapshot_state)
     (Ghost.reveal current_state)));
-  fold (S.connection_exactly
-    srv.canonical_server_state
-    (Ghost.reveal current_state));
   fold (server_invariant
     srv
     (Ghost.reveal current_received)
@@ -1774,8 +1746,6 @@ let server_local_bridge_frame_post
       pure (
         B.length app_out ==
           SZ.v frame.tls_server_local_bridge_base.tls_server_local_app_out_len)
-  | CTypes.ServerGhostStep ->
-    emp
 
 let server_process_network_post
   (srv:canonical_server)
@@ -1835,6 +1805,327 @@ let server_process_network_post
         consumed
         wire_outputs
         local_outputs)
+
+// Prove server_canonical_step_rel st0 st1 in the non-StepOk, st1 <> st0 case for
+// the network handler.  Mirrors lemma_client_network_nonstep_canonical_step in
+// TLS13.Impl.Client.CanonicalProtocol.fst.
+let lemma_server_network_nonstep_canonical_step
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input_contents:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        buffer_resp.ST.response.ST.status <> ST.StepOk /\
+        st1 <> st0 /\
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp input_contents network_out app_out /\
+        ST.server_network_consumed_input_projection
+          st0 st1 buffer_resp input_contents network_out app_out)
+      (ensures server_canonical_step_rel st0 st1)
+  =
+  let resp = buffer_resp.ST.response in
+  // Inner helper: construct a LocalFail canonical step from a legal_connection_delta.
+  let lemma_localfail_step
+    (err:T.tls_error)
+    (conn_ev:CS.conn_event)
+    : Lemma
+        (requires
+          conn_ev == CS.ConnLocalEvent (CS.LocalFail err) /\
+          CS.legal_connection_delta st0 {
+            CS.delta_event = conn_ev;
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = B.empty;
+          } st1)
+        (ensures server_canonical_step_rel st0 st1)
+    =
+    CW.lemma_wire_outputs_of_empty ();
+    Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format []) B.empty;
+    let api : CTypes.server_api_event = {
+      CTypes.server_local_kind = ST.LocalFail;
+      CTypes.server_local_payload = B.empty;
+    } in
+    assert (server_api_event_matches api conn_ev);
+    assert (server_wire_outputs_match B.empty []);
+    assert (server_local_outputs_match conn_ev []);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
+      CS.delta_raw_received = B.empty;
+    } st1);
+    assert (server_step st0 (SM.LocalEvent (CTypes.ServerAPI api)) st1 (CPI.step_output [] []))
+  in
+  if resp.ST.status = ST.DecodeError then (
+    // DecodeError → LocalFail (tls_decode_error)
+    assert (ST.decode_error_response st0 st1 resp network_out app_out);
+    let decode_err : T.tls_error = T.AlertError T.DecodeError in
+    let conn_ev = CS.ConnLocalEvent (CS.LocalFail decode_err) in
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    } st1);
+    lemma_localfail_step decode_err conn_ev
+  ) else (
+    // NeedMoreInput and IllegalTransition give st1 == st0 → contradicts st1 <> st0.
+    // OutputBufferTooSmall gives False.
+    // So must be ConnectionFailed.
+    assert (resp.ST.status = ST.ConnectionFailed);
+    assert (ST.server_network_connection_failed_consumed_prefix
+      st0 st1 buffer_resp input_contents network_out app_out);
+    let alert =
+      ID.indefinite_description_ghost
+        T.alert_description
+        (fun alert -> exists raw_received.
+          Seq.equal raw_received (ST.server_network_consumed_prefix buffer_resp input_contents) /\
+          ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          Seq.equal raw_received (ST.server_network_consumed_prefix buffer_resp input_contents) /\
+          ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out) in
+    assert (ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out);
+    assert (ST.legal_response_for_event st0 st1 resp
+      (ST.received_message_event (M.TlsAlert alert))
+      B.empty
+      raw_received
+      network_out
+      app_out);
+    assert (CT.received_tls_raw_delta_legal st0 (M.TlsAlert alert) raw_received);
+    lemma_received_tls_raw_delta_legal_raw_record_parse_success st0 (M.TlsAlert alert) raw_received;
+    assert (CT.raw_record_parse_success raw_received);
+    let outer_ct =
+      ID.indefinite_description_ghost
+        T.content_type
+        (fun outer_ct -> exists outer_fragment.
+          WS.parse_record_wire raw_received ==
+            Some (outer_ct, outer_fragment, B.length raw_received)) in
+    let outer_fragment =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun outer_fragment ->
+          WS.parse_record_wire raw_received ==
+            Some (outer_ct, outer_fragment, B.length raw_received)) in
+    let wire : CW.wire_message = {
+      CW.wm_raw = raw_received;
+      CW.wm_content_type = outer_ct;
+      CW.wm_fragment = outer_fragment;
+      CW.wm_parse_ok = ();
+    } in
+    assert (CW.wire_serialize wire == raw_received);
+    assert (SZ.v resp.ST.network_out_len == 0);
+    Seq.lemma_len_slice network_out 0 0;
+    Seq.lemma_eq_intro (ST.response_network_out resp network_out) B.empty;
+    assert (Seq.equal (ST.response_network_out resp network_out) B.empty);
+    CW.lemma_wire_outputs_of_empty ();
+    Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format []) B.empty;
+    let conn_ev = ST.received_message_event (M.TlsAlert alert) in
+    let local_outputs = server_response_local_outputs resp app_out in
+    lemma_server_response_local_outputs_match resp conn_ev app_out;
+    assert (server_local_outputs_match conn_ev local_outputs);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
+      CS.delta_raw_received = CW.wire_serialize wire;
+    } st1);
+    assert (server_step st0 (SM.WireEvent wire) st1 (CPI.step_output [] local_outputs));
+    assert (server_canonical_step_rel st0 st1)
+  )
+
+// Prove server_progress_preorder st0 st1 from server_network_common_witness.
+// Mirrors lemma_client_network_common_witness_progress.
+let lemma_server_network_common_witness_progress
+  (initial:CS.connection_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_network_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (buffer_resp:ST.server_buffer_response)
+  (consumed:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        server_network_common_witness
+          initial received0 sent0 st0 input_contents input_len
+          old_network_out network_out out_len base st1 app_out buffer_resp
+          consumed wire_outputs local_outputs)
+      (ensures server_progress_preorder st0 st1)
+  =
+  let result = CTypes.server_process_result buffer_resp in
+  if result.CPI.process_status = CPI.StepOk then (
+    CPI.lemma_network_process_ok_refines_transition
+      (server_system initial)
+      input_contents
+      input_len
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      result
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      consumed
+      wire_outputs
+      local_outputs;
+    assert (exists msg residual produced.
+      CPI.consumed_by_parse
+        (server_system initial).WFSM.wfsm_wire_format
+        (CPI.input_bytes input_contents input_len)
+        msg
+        consumed
+        residual /\
+      SZ.v result.CPI.process_consumed_len == Seq.length consumed /\
+      (server_system initial).WFSM.wfsm_state_machine.SM.sm_step
+        st0
+        (SM.WireEvent msg)
+        st1
+        (CPI.step_output wire_outputs local_outputs) /\
+      Seq.equal
+        produced
+        (WF.serialize_all (server_system initial).WFSM.wfsm_wire_format wire_outputs) /\
+      CPI.output_written network_out result.CPI.process_produced_len produced /\
+      Seq.equal st1.CS.cs_wire_log.CL.raw_received (Seq.append received0 consumed) /\
+      Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced));
+    let msg =
+      ID.indefinite_description_ghost
+        CW.wire_message
+        (fun msg -> exists residual produced.
+          CPI.consumed_by_parse
+            (server_system initial).WFSM.wfsm_wire_format
+            (CPI.input_bytes input_contents input_len)
+            msg
+            consumed
+            residual /\
+          SZ.v result.CPI.process_consumed_len == Seq.length consumed /\
+          (server_system initial).WFSM.wfsm_state_machine.SM.sm_step
+            st0
+            (SM.WireEvent msg)
+            st1
+            (CPI.step_output wire_outputs local_outputs) /\
+          Seq.equal
+            produced
+            (WF.serialize_all (server_system initial).WFSM.wfsm_wire_format wire_outputs) /\
+          CPI.output_written network_out result.CPI.process_produced_len produced /\
+          Seq.equal st1.CS.cs_wire_log.CL.raw_received (Seq.append received0 consumed) /\
+          Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced)) in
+    assert (server_step
+      st0
+      (SM.WireEvent msg)
+      st1
+      (CPI.step_output wire_outputs local_outputs));
+    assert (server_canonical_step_rel st0 st1);
+    RTC.closure_step server_canonical_step_rel st0 st1
+  ) else (
+    if st1 = st0 then
+      assert (server_progress_preorder st0 st1)
+    else (
+      assert (buffer_resp.ST.response.ST.status <> ST.StepOk);
+      lemma_server_network_nonstep_canonical_step
+        st0 st1 buffer_resp input_contents network_out app_out;
+      RTC.closure_step server_canonical_step_rel st0 st1
+    )
+  )
+
+// Prove server_progress_preorder st0 st1 from server_local_common_witness.
+// Mirrors lemma_client_local_progress in TLS13.Impl.Client.CanonicalProtocol.fst.
+let lemma_server_local_progress
+  (initial:CS.connection_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (api:CTypes.server_api_event)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_local_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (resp:ST.server_response)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        server_local_common_witness
+          initial received0 sent0 st0 api old_network_out
+          network_out out_len base st1 app_out resp wire_outputs local_outputs)
+      (ensures server_progress_preorder st0 st1)
+  =
+  let result = CTypes.server_local_process_result resp in
+  let received1 = st1.CS.cs_wire_log.CL.raw_received in
+  let sent1 = st1.CS.cs_wire_log.CL.raw_sent in
+  if result.CPI.process_status = CPI.StepOk then (
+    CPI.lemma_local_process_ok_refines_transition
+      (server_system initial)
+      (CTypes.ServerAPI api)
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      result
+      received1
+      sent1
+      st1
+      wire_outputs
+      local_outputs;
+    assert (server_step
+      st0
+      (SM.LocalEvent (CTypes.ServerAPI api))
+      st1
+      (CPI.step_output wire_outputs local_outputs));
+    assert (server_canonical_step_rel st0 st1);
+    RTC.closure_step server_canonical_step_rel st0 st1
+  ) else (
+    // result.process_status != StepOk → resp.status != StepOk.
+    // From server_local_event_end_to_end_correct → legal_handled_local_response.
+    // legal_local_response requires resp.status == StepOk → contradiction.
+    // So unexpected_message_response holds.
+    assert (resp.ST.status <> ST.StepOk);
+    assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
+    let err : T.tls_error = T.AlertError T.UnexpectedMessage in
+    let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    } st1);
+    if st0 = st1 then
+      assert (server_progress_preorder st0 st1)
+    else (
+      CW.lemma_wire_outputs_of_empty ();
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format []) B.empty;
+      let api_fail : CTypes.server_api_event = {
+        CTypes.server_local_kind = ST.LocalFail;
+        CTypes.server_local_payload = B.empty;
+      } in
+      assert (server_api_event_matches api_fail conn_ev);
+      assert (server_wire_outputs_match B.empty []);
+      assert (server_local_outputs_match conn_ev []);
+      assert (CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
+        CS.delta_raw_received = B.empty;
+      } st1);
+      assert (server_step st0 (SM.LocalEvent (CTypes.ServerAPI api_fail)) st1 (CPI.step_output [] []));
+      assert (server_canonical_step_rel st0 st1);
+      RTC.closure_step server_canonical_step_rel st0 st1
+    )
+  )
 
 fn server_process_network
   (srv:canonical_server)
@@ -2149,6 +2440,25 @@ ensures server_process_network_post
     (Ghost.reveal st1e)));
   rewrite (S.connection_exactly srv.canonical_server_state st1) as
     (S.connection_exactly srv.canonical_server_state (Ghost.reveal st1e));
+  // Prove monotonicity of progress before folding the invariant.
+  lemma_server_network_common_witness_progress
+    (Ghost.reveal srv.canonical_server_initial)
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0)
+    (Ghost.reveal input_contents)
+    input_len
+    (Ghost.reveal old_out)
+    network_out_bytes
+    out_len
+    frame.tls_server_network_bridge_base
+    (Ghost.reveal st1e)
+    app_out_bytes
+    buffer_resp
+    (Ghost.reveal consumede)
+    (Ghost.reveal wire_outputse)
+    (Ghost.reveal local_outputse);
+  MR.update srv.canonical_server_progress (Ghost.reveal st1e);
   with app_out_bytes.
   fold (server_network_bridge_frame_post
     frame
@@ -2506,6 +2816,23 @@ ensures exists* (received1:Ghost.erased B.bytes)
         (Ghost.reveal st1e)));
       rewrite (S.connection_exactly srv.canonical_server_state st1) as
         (S.connection_exactly srv.canonical_server_state (Ghost.reveal st1e));
+      // Prove monotonicity of progress before folding the invariant.
+      lemma_server_local_progress
+        (Ghost.reveal srv.canonical_server_initial)
+        (Ghost.reveal received0)
+        (Ghost.reveal sent0)
+        (Ghost.reveal st0)
+        api
+        (Ghost.reveal old_out)
+        network_out_bytes
+        out_len
+        frame.tls_server_local_bridge_base
+        (Ghost.reveal st1e)
+        app_out_bytes
+        resp
+        (Ghost.reveal wire_outputse)
+        (Ghost.reveal local_outputse);
+      MR.update srv.canonical_server_progress (Ghost.reveal st1e);
       with app_out_bytes.
       fold (server_local_bridge_frame_post
         (CTypes.ServerAPI api)
@@ -2560,67 +2887,6 @@ ensures exists* (received1:Ghost.erased B.bytes)
         (Ghost.reveal wire_outputse)
         (Ghost.reveal local_outputse)));
       CTypes.server_local_process_result resp
-    }
-    CTypes.ServerGhostStep -> {
-      assert (pure False);
-      let dummy_result = CTypes.server_local_process_result {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.NeedMoreInput;
-      };
-      fold (server_invariant
-        srv
-        (Ghost.reveal received0)
-        (Ghost.reveal sent0)
-        (Ghost.reveal st0));
-      fold (server_local_bridge_frame_post
-        CTypes.ServerGhostStep
-        frame
-        dummy_result
-        (Ghost.reveal old_out)
-        (Ghost.reveal old_out)
-        (Ghost.reveal st0)
-        (Ghost.reveal st0)
-        []
-        []);
-      rewrite
-        (server_local_bridge_frame_post
-          CTypes.ServerGhostStep
-          frame
-          dummy_result
-          (Ghost.reveal old_out)
-          (Ghost.reveal old_out)
-          (Ghost.reveal st0)
-          (Ghost.reveal st0)
-          []
-          [])
-        as
-        (server_local_bridge_frame_post
-          ev
-          frame
-          dummy_result
-          (Ghost.reveal old_out)
-          (Ghost.reveal old_out)
-          (Ghost.reveal st0)
-          (Ghost.reveal st0)
-          []
-          []);
-      assert (pure (CPI.local_process_correct
-        (server_system (Ghost.reveal srv.canonical_server_initial))
-        ev
-        (Ghost.reveal old_out)
-        (Ghost.reveal old_out)
-        out_len
-        (Ghost.reveal received0)
-        (Ghost.reveal sent0)
-        (Ghost.reveal st0)
-        dummy_result
-        (Ghost.reveal received0)
-        (Ghost.reveal sent0)
-        (Ghost.reveal st0)
-        []
-        []));
-      dummy_result
     }
   }
 }
