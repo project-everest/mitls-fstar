@@ -39,7 +39,7 @@ let network_buffers
   pts_to input input_contents **
   pts_to out old_out **
   pure (
-    Seq.length input_contents == SZ.v input_len /\
+    SZ.v input_len <= Seq.length input_contents /\
     Seq.length old_out == SZ.v out_len)
 
 [@@pulse_unfold]
