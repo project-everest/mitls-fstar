@@ -5,42 +5,55 @@ module Common.ConnectionStateQuery
 open Pulse.Lib.Pervasives
 
 module CPI = Common.ProtocolImplementation
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module TCP = Common.TCP
 module U8 = FStar.UInt8
 
 type next_action
+  (network_frame:Type0)
   (local_event:Type0)
+  (local_frame:Type0)
   (external_action:Type0)
   =
-  | NextNeedInput
-  | NextLocal: ev:local_event -> next_action local_event external_action
-  | NextExternal: action:external_action -> next_action local_event external_action
-  | NextDone
-  | NextFailed
+  | NextNeedInput:
+      frame:network_frame ->
+        next_action network_frame local_event local_frame external_action
+  | NextLocal:
+      ev:local_event ->
+      frame:local_frame ->
+        next_action network_frame local_event local_frame external_action
+  | NextExternal:
+      action:external_action ->
+        next_action network_frame local_event local_frame external_action
+  | NextDone:
+        next_action network_frame local_event local_frame external_action
+  | NextFailed:
+        next_action network_frame local_event local_frame external_action
 
-let next_action_correct
-  (#impl:Type0)
-  (#state:Type0)
-  (#local_event:Type0)
-  (#external_action:Type0)
-  (#query:Type0)
-  (network_enabled:impl -> query -> state -> prop)
-  (local_enabled:impl -> query -> state -> local_event -> prop)
-  (external_enabled:impl -> query -> state -> external_action -> prop)
-  (done_enabled:impl -> query -> state -> prop)
-  (failed_enabled:impl -> query -> state -> prop)
-  (i:impl)
-  (q:query)
-  (st:state)
-  (action:next_action local_event external_action)
-  : prop =
-  match action with
-  | NextNeedInput -> network_enabled i q st
-  | NextLocal ev -> local_enabled i q st ev
-  | NextExternal ext -> external_enabled i q st ext
-  | NextDone -> done_enabled i q st
-  | NextFailed -> failed_enabled i q st
+[@@pulse_unfold]
+let network_buffers
+  (input:array U8.t)
+  (input_len:SZ.t)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (input_contents:TCP.bytes)
+  (old_out:TCP.bytes)
+  : slprop =
+  pts_to input input_contents **
+  pts_to out old_out **
+  pure (
+    Seq.length input_contents == SZ.v input_len /\
+    Seq.length old_out == SZ.v out_len)
+
+[@@pulse_unfold]
+let local_output_buffer
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (old_out:TCP.bytes)
+  : slprop =
+  pts_to out old_out **
+  pure (Seq.length old_out == SZ.v out_len)
 
 noextract
 class connection_state_query
@@ -49,7 +62,6 @@ class connection_state_query
   (wire_message:Type0)
   (local_event:Type0)
   (local_output:Type0)
-  (query:Type0)
   (external_action:Type0)
   (protocol:CPI.protocol_implementation
     impl
@@ -59,72 +71,112 @@ class connection_state_query
     local_output)
   =
 {
+  csq_config:
+    Type0;
+
   csq_frame:
     Type0;
 
-  csq_frame_pre:
+  csq_frame_ready:
     impl ->
-    query ->
+    csq_config ->
     csq_frame ->
     state ->
     slprop;
 
-  csq_frame_post:
+  csq_action_frame:
     impl ->
-    query ->
+    csq_config ->
     csq_frame ->
     state ->
-    next_action local_event external_action ->
+    next_action
+      protocol.CPI.pi_network_frame
+      local_event
+      protocol.CPI.pi_local_frame
+      external_action ->
     slprop;
 
-  csq_network_enabled:
+  csq_network_continuation:
     impl ->
-    query ->
+    csq_config ->
+    csq_frame ->
     state ->
-    prop;
+    protocol.CPI.pi_network_frame ->
+    slprop;
 
-  csq_local_enabled:
+  csq_local_continuation:
     impl ->
-    query ->
+    csq_config ->
+    csq_frame ->
     state ->
     local_event ->
-    prop;
-
-  csq_external_enabled:
-    impl ->
-    query ->
-    state ->
-    external_action ->
-    prop;
-
-  csq_done_enabled:
-    impl ->
-    query ->
-    state ->
-    prop;
-
-  csq_failed_enabled:
-    impl ->
-    query ->
-    state ->
-    prop;
-
-  csq_network_frame_pre:
-    impl ->
-    query ->
-    protocol.CPI.pi_network_frame ->
-    array U8.t ->
-    SZ.t ->
-    array U8.t ->
-    SZ.t ->
-    TCP.bytes ->
-    TCP.bytes ->
+    protocol.CPI.pi_local_frame ->
     slprop;
+
+  csq_next_action:
+    i:impl ->
+    cfg:csq_config ->
+    frame:csq_frame ->
+    received:Ghost.erased TCP.bytes ->
+    sent:Ghost.erased TCP.bytes ->
+    st:Ghost.erased state ->
+      stt (next_action
+        protocol.CPI.pi_network_frame
+        local_event
+        protocol.CPI.pi_local_frame
+        external_action)
+        (protocol.CPI.pi_invariant
+           i
+           (Ghost.reveal received)
+           (Ghost.reveal sent)
+           (Ghost.reveal st) **
+         csq_frame_ready
+           i
+           cfg
+           frame
+           (Ghost.reveal st))
+        (fun action ->
+          protocol.CPI.pi_invariant
+            i
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st) **
+          csq_action_frame
+            i
+            cfg
+            frame
+            (Ghost.reveal st)
+            action);
+
+  csq_cancel_action:
+    i:impl ->
+    cfg:csq_config ->
+    frame:csq_frame ->
+    st:Ghost.erased state ->
+    action:next_action
+      protocol.CPI.pi_network_frame
+      local_event
+      protocol.CPI.pi_local_frame
+      external_action ->
+      stt unit
+        (csq_action_frame
+          i
+          cfg
+          frame
+          (Ghost.reveal st)
+          action)
+        (fun _ ->
+          csq_frame_ready
+            i
+            cfg
+            frame
+            (Ghost.reveal st));
 
   csq_prepare_network:
     i:impl ->
-    q:query ->
-    frame:protocol.CPI.pi_network_frame ->
+    cfg:csq_config ->
+    frame:csq_frame ->
+    network_frame:protocol.CPI.pi_network_frame ->
     input:array U8.t ->
     input_len:SZ.t ->
     out:array U8.t ->
@@ -133,105 +185,165 @@ class connection_state_query
     input_contents:Ghost.erased TCP.bytes ->
     old_out:Ghost.erased TCP.bytes ->
       stt unit
-        (csq_network_frame_pre
+        (csq_action_frame
           i
-          q
+          cfg
           frame
+          (Ghost.reveal st)
+          (NextNeedInput network_frame) **
+         network_buffers
           input
           input_len
           out
           out_len
           (Ghost.reveal input_contents)
-          (Ghost.reveal old_out) **
-         pure (csq_network_enabled i q (Ghost.reveal st)))
+          (Ghost.reveal old_out))
         (fun _ ->
           protocol.CPI.pi_network_frame_pre
-            frame
+            network_frame
             input
             input_len
             out
             out_len
             (Ghost.reveal input_contents)
-            (Ghost.reveal old_out));
+            (Ghost.reveal old_out) **
+          csq_network_continuation
+            i
+            cfg
+            frame
+            (Ghost.reveal st)
+            network_frame **
+          network_buffers
+            input
+            input_len
+            out
+            out_len
+            (Ghost.reveal input_contents)
+            (Ghost.reveal old_out) **
+          pure (
+            CPI.buffers_wf
+              (Ghost.reveal input_contents)
+              input_len
+              (Ghost.reveal old_out)
+              out_len));
 
-  csq_local_frame_pre:
-    impl ->
-    query ->
-    local_event ->
-    protocol.CPI.pi_local_frame ->
-    state ->
-    array U8.t ->
-    SZ.t ->
-    TCP.bytes ->
-    slprop;
+  csq_finish_network:
+    i:impl ->
+    cfg:csq_config ->
+    frame:csq_frame ->
+    network_frame:protocol.CPI.pi_network_frame ->
+    result:CPI.process_result ->
+    input_contents:Ghost.erased TCP.bytes ->
+    input_len:SZ.t ->
+    old_out:Ghost.erased TCP.bytes ->
+    out_contents:Ghost.erased TCP.bytes ->
+    st0:Ghost.erased state ->
+    st1:Ghost.erased state ->
+    consumed:Ghost.erased TCP.bytes ->
+    wire_outputs:Ghost.erased (list wire_message) ->
+    local_outputs:Ghost.erased (list local_output) ->
+      stt unit
+        (csq_network_continuation
+          i
+          cfg
+          frame
+          (Ghost.reveal st0)
+          network_frame **
+         protocol.CPI.pi_network_frame_post
+          network_frame
+          result
+          (Ghost.reveal input_contents)
+          input_len
+          (Ghost.reveal old_out)
+          (Ghost.reveal out_contents)
+          (Ghost.reveal st0)
+          (Ghost.reveal st1)
+          (Ghost.reveal consumed)
+          (Ghost.reveal wire_outputs)
+          (Ghost.reveal local_outputs))
+        (fun _ ->
+          csq_frame_ready
+            i
+            cfg
+            frame
+            (Ghost.reveal st1));
 
   csq_prepare_local:
     i:impl ->
-    q:query ->
+    cfg:csq_config ->
+    frame:csq_frame ->
     ev:local_event ->
-    frame:protocol.CPI.pi_local_frame ->
+    local_frame:protocol.CPI.pi_local_frame ->
     out:array U8.t ->
     out_len:SZ.t ->
     st:Ghost.erased state ->
     old_out:Ghost.erased TCP.bytes ->
       stt unit
-        (csq_local_frame_pre
+        (csq_action_frame
           i
-          q
-          ev
+          cfg
           frame
           (Ghost.reveal st)
+          (NextLocal ev local_frame) **
+         local_output_buffer
           out
           out_len
-          (Ghost.reveal old_out) **
-         pure (csq_local_enabled i q (Ghost.reveal st) ev))
+          (Ghost.reveal old_out))
         (fun _ ->
           protocol.CPI.pi_local_frame_pre
             ev
+            local_frame
+            (Ghost.reveal st)
+            out
+            out_len
+            (Ghost.reveal old_out) **
+          csq_local_continuation
+            i
+            cfg
             frame
             (Ghost.reveal st)
+            ev
+            local_frame **
+          local_output_buffer
             out
             out_len
             (Ghost.reveal old_out));
 
-  csq_next_action:
+  csq_finish_local:
     i:impl ->
-    q:query ->
+    cfg:csq_config ->
     frame:csq_frame ->
-    received:Ghost.erased TCP.bytes ->
-    sent:Ghost.erased TCP.bytes ->
-    st:Ghost.erased state ->
-      stt (next_action local_event external_action)
-        (protocol.CPI.pi_invariant
+    ev:local_event ->
+    local_frame:protocol.CPI.pi_local_frame ->
+    result:CPI.process_result ->
+    old_out:Ghost.erased TCP.bytes ->
+    out_contents:Ghost.erased TCP.bytes ->
+    st0:Ghost.erased state ->
+    st1:Ghost.erased state ->
+    wire_outputs:Ghost.erased (list wire_message) ->
+    local_outputs:Ghost.erased (list local_output) ->
+      stt unit
+        (csq_local_continuation
           i
-          (Ghost.reveal received)
-          (Ghost.reveal sent)
-          (Ghost.reveal st) **
-         csq_frame_pre
-          i
-          q
+          cfg
           frame
-          (Ghost.reveal st))
-        (fun action ->
-          protocol.CPI.pi_invariant
+          (Ghost.reveal st0)
+          ev
+          local_frame **
+         protocol.CPI.pi_local_frame_post
+          ev
+          local_frame
+          result
+          (Ghost.reveal old_out)
+          (Ghost.reveal out_contents)
+          (Ghost.reveal st0)
+          (Ghost.reveal st1)
+          (Ghost.reveal wire_outputs)
+          (Ghost.reveal local_outputs))
+        (fun _ ->
+          csq_frame_ready
             i
-            (Ghost.reveal received)
-            (Ghost.reveal sent)
-            (Ghost.reveal st) **
-          csq_frame_post
-            i
-            q
+            cfg
             frame
-            (Ghost.reveal st)
-            action **
-          pure (next_action_correct
-            csq_network_enabled
-            csq_local_enabled
-            csq_external_enabled
-            csq_done_enabled
-            csq_failed_enabled
-            i
-            q
-            (Ghost.reveal st)
-            action));
+            (Ghost.reveal st1));
 }
