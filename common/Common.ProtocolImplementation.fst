@@ -29,18 +29,21 @@ type process_result = {
   process_app_len: SZ.t;
 }
 
+noextract
 let bounded_len
   (bytes:TCP.bytes)
   (len:SZ.t)
   : nat =
   if SZ.v len <= Seq.length bytes then SZ.v len else Seq.length bytes
 
+noextract
 let input_bytes
   (input:TCP.bytes)
   (input_len:SZ.t)
   : TCP.bytes =
   Seq.slice input 0 (bounded_len input input_len)
 
+noextract
 let output_prefix
   (out:TCP.bytes)
   (produced_len:SZ.t)
@@ -391,6 +394,198 @@ let lemma_local_process_ok_refines_transition
           Seq.equal sent1 (Seq.append sent0 produced))
 =
   ()
+
+let lemma_output_prefix_empty
+  (out_bytes:TCP.bytes)
+  : Lemma
+      (ensures Seq.equal (output_prefix out_bytes 0sz) Seq.empty)
+=
+  Seq.lemma_len_slice out_bytes 0 0;
+  Seq.lemma_eq_intro (output_prefix out_bytes 0sz) Seq.empty
+
+let lemma_network_process_sent_output_prefix
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (input:TCP.bytes)
+  (input_len:SZ.t)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:process_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (consumed:TCP.bytes)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+      (requires
+        network_process_correct
+          system
+          input
+          input_len
+          old_out
+          out_bytes
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          consumed
+          wire_outputs
+          local_outputs)
+      (ensures
+        SZ.v result.process_produced_len <= Seq.length out_bytes /\
+        Seq.equal
+          sent1
+          (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+=
+  match result.process_status with
+  | StepOk ->
+    let produced =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        TCP.bytes
+        (fun produced ->
+          exists msg residual.
+            consumed_by_parse
+              system.WFSM.wfsm_wire_format
+              (input_bytes input input_len)
+              msg
+              consumed
+              residual /\
+            SZ.v result.process_consumed_len == Seq.length consumed /\
+            system.WFSM.wfsm_state_machine.SM.sm_step
+              st0
+              (SM.WireEvent msg)
+              st1
+              (step_output wire_outputs local_outputs) /\
+            Seq.equal
+              produced
+              (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+            output_written out_bytes result.process_produced_len produced /\
+            Seq.equal received1 (Seq.append received0 consumed) /\
+            Seq.equal sent1 (Seq.append sent0 produced)) in
+    assert (output_written out_bytes result.process_produced_len (Ghost.reveal produced));
+    Seq.lemma_eq_elim (output_prefix out_bytes result.process_produced_len) (Ghost.reveal produced);
+    assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+  | NeedMoreInput
+  | ParseFailed ->
+    lemma_output_prefix_empty out_bytes;
+    Seq.append_empty_r sent0;
+    assert (Seq.equal sent1 sent0);
+    assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+  | OutputBufferTooSmall ->
+    lemma_output_prefix_empty out_bytes;
+    Seq.append_empty_r sent0;
+    assert (Seq.equal sent1 sent0);
+    assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+  | DecodeError
+  | IllegalTransition
+  | ConnectionFailed ->
+    let produced =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        TCP.bytes
+        (fun produced ->
+          SZ.v result.process_consumed_len == Seq.length consumed /\
+          Seq.equal
+            produced
+            (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+          output_written out_bytes result.process_produced_len produced /\
+          Seq.equal received1 (Seq.append received0 consumed) /\
+          Seq.equal sent1 (Seq.append sent0 produced)) in
+    assert (output_written out_bytes result.process_produced_len (Ghost.reveal produced));
+    Seq.lemma_eq_elim (output_prefix out_bytes result.process_produced_len) (Ghost.reveal produced);
+    assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+
+let lemma_local_process_sent_output_prefix
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (ev:local_event)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:process_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+      (requires
+        local_process_correct
+          system
+          ev
+          old_out
+          out_bytes
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          wire_outputs
+          local_outputs)
+      (ensures
+        SZ.v result.process_produced_len <= Seq.length out_bytes /\
+        Seq.equal
+          sent1
+          (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+=
+  match result.process_status with
+  | StepOk ->
+    let produced =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        TCP.bytes
+        (fun produced ->
+          system.WFSM.wfsm_state_machine.SM.sm_step
+            st0
+            (SM.LocalEvent ev)
+            st1
+            (step_output wire_outputs local_outputs) /\
+          Seq.equal
+            produced
+            (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+          output_written out_bytes result.process_produced_len produced /\
+          Seq.equal received1 received0 /\
+          Seq.equal sent1 (Seq.append sent0 produced)) in
+    assert (output_written out_bytes result.process_produced_len (Ghost.reveal produced));
+    Seq.lemma_eq_elim (output_prefix out_bytes result.process_produced_len) (Ghost.reveal produced);
+    assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+  | NeedMoreInput
+  | ParseFailed ->
+    assert False
+  | OutputBufferTooSmall ->
+    lemma_output_prefix_empty out_bytes;
+    Seq.append_empty_r sent0;
+    assert (Seq.equal sent1 sent0);
+    assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
+  | DecodeError
+  | IllegalTransition
+  | ConnectionFailed ->
+    let produced =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        TCP.bytes
+        (fun produced ->
+          Seq.equal
+            produced
+            (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+          output_written out_bytes result.process_produced_len produced /\
+          Seq.equal received1 received0 /\
+          Seq.equal sent1 (Seq.append sent0 produced)) in
+    assert (output_written out_bytes result.process_produced_len (Ghost.reveal produced));
+    Seq.lemma_eq_elim (output_prefix out_bytes result.process_produced_len) (Ghost.reveal produced);
+    assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
 
 noextract
 class protocol_implementation

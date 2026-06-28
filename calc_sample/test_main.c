@@ -134,7 +134,7 @@ static void *server_thread(void *arg) {
     return NULL;
   }
 
-  run_channel(ch, args->steps);
+  run_channel_endpoint(ch, args->steps);
   args->ok = true;
   return NULL;
 }

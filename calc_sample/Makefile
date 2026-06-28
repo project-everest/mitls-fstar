@@ -148,10 +148,15 @@ IMPL_MODULES = \
   Calc.Impl.Mul \
   Calc.Impl.Div \
   Calc.Server \
-  Calc.Server.Socket
+  Calc.Server.CanonicalProtocol \
+  Calc.Server.EndpointRunner
+
+COMMON_EXTRACT_MODULES = \
+  Common.ProtocolImplementation
 
 # Convert module names to .krml filenames
 KRML_FILES = \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(COMMON_EXTRACT_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES))) \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
@@ -162,6 +167,13 @@ $(EXTRACT_DIR):
 	@mkdir -p $@
 
 # ── Phase 1: F* → .krml ────────────────────────────────────────────
+$(OUTPUT_DIR)/Common_%.krml: verify | $(OUTPUT_DIR)
+	@echo "Extracting Common.$(subst _,.,$*) to .krml"
+	@$(FSTAR) --codegen krml \
+	  --extract_module Common.$(subst _,.,$*) \
+	  --odir $(OUTPUT_DIR) \
+	  ../common/Common.$(subst _,.,$*).fst
+
 # Pattern rule: _output/Calc_Server.krml from Calc.Server
 $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@echo "Extracting $(subst _,.,$*) to .krml"
@@ -188,9 +200,9 @@ extract-c: extract-krml | $(EXTRACT_DIR)
 	  -warn-error -2-9-17 \
 	  -add-include '"common_tcp_karamel.h"' \
 	  -library Common.TCP \
-	  -bundle 'Calc.Server.Socket=Calc.*[rename=Calc_Server]' \
+	  -bundle 'Calc.Server.EndpointRunner=Calc.*[rename=Calc_Server]' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
-	  -no-prefix Calc.Server.Socket \
+	  -no-prefix Calc.Server.EndpointRunner \
 	  $(KRML_FILES)
 	@echo "✅ C code generated in $(EXTRACT_DIR)/"
 	@ls -lh $(EXTRACT_DIR)/Calc_Server.c $(EXTRACT_DIR)/Calc_Server.h

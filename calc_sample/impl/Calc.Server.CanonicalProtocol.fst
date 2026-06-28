@@ -969,7 +969,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       input_contents
       [Ghost.reveal response_msge]
       calc_no_local_outputs));
-    calc_step_ok_result
+    calc_process_result CPI.StepOk 5sz 5sz
   } else {
     assert (pure (6 <= U8.v tag));
     assert (pure (tag == Seq.index input_contents 0));
@@ -1016,7 +1016,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       Seq.empty
       []
       []));
-    calc_parse_failed_result
+    calc_process_result CPI.ParseFailed 0sz 0sz
   }
 }
 
@@ -1097,7 +1097,11 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 fn new_canonical_server ()
 requires emp
 returns srv:canonical_server
-ensures canonical_server_exactly srv Seq.empty Seq.empty initial_log
+ensures
+  canonical_server_exactly srv Seq.empty Seq.empty initial_log **
+  pure (
+    Vec.is_full_vec srv.canonical_server_state.stack /\
+    Vec.is_full_vec srv.canonical_server_state.size)
 {
   let server_state = Calc.Server.new_server ();
   let progress = MR.alloc #_ #calc_server_state_ahead_preorder initial_log;
@@ -1112,6 +1116,8 @@ ensures canonical_server_exactly srv Seq.empty Seq.empty initial_log
   assert (pure (canonical_trace_witness Seq.empty Seq.empty initial_log empty_calc_trace));
   assert (pure (canonical_trace_ok Seq.empty Seq.empty initial_log));
   fold (canonical_server_exactly srv Seq.empty Seq.empty initial_log);
+  assert (pure (Vec.is_full_vec srv.canonical_server_state.stack));
+  assert (pure (Vec.is_full_vec srv.canonical_server_state.size));
   srv
 }
 
