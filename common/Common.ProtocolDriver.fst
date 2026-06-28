@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 
 module CPI = Common.ProtocolImplementation
 module PE = Common.ProtocolEndpoint
+module SZ = FStar.SizeT
 module TCP = Common.TCP
 
 type driver_status =
@@ -18,6 +19,17 @@ noeq
 type driver_result = {
   driver_status: driver_status;
   driver_process_result: option CPI.process_result;
+}
+
+type driver_run_status =
+  | DriverRunDone
+  | DriverRunFailed
+  | DriverRunFuelExhausted
+
+noeq
+type driver_run_result = {
+  driver_run_status: driver_run_status;
+  driver_run_last_step: option CPI.process_result;
 }
 
 fn drive_once
@@ -361,3 +373,141 @@ ensures
     }
   }
 }
+
+fn rec drive_steps
+    #impl #state #wire_message #local_event #local_output
+    (#protocol:CPI.protocol_implementation
+      impl
+      state
+      wire_message
+      local_event
+      local_output)
+    (#endpoint:PE.protocol_endpoint
+      impl
+      state
+      wire_message
+      local_event
+      local_output
+      protocol)
+    (i:impl)
+    (cfg:endpoint.PE.pe_config)
+    (frame:endpoint.PE.pe_frame)
+    (ch:endpoint.PE.pe_channel)
+    (fuel:SZ.t)
+    (received:Ghost.erased TCP.bytes)
+    (sent:Ghost.erased TCP.bytes)
+    (st:Ghost.erased state)
+  requires
+    protocol.CPI.pi_invariant
+      i
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal st) **
+    endpoint.PE.pe_frame_ready
+      i
+      cfg
+      frame
+      (Ghost.reveal st) **
+    endpoint.PE.pe_io_ready
+      i
+      ch
+      frame
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal st)
+  returns result:driver_run_result
+  ensures
+    exists* (received1:Ghost.erased TCP.bytes)
+            (sent1:Ghost.erased TCP.bytes)
+            (st1:Ghost.erased state).
+      protocol.CPI.pi_invariant
+        i
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1) **
+      endpoint.PE.pe_frame_ready
+        i
+        cfg
+        frame
+        (Ghost.reveal st1) **
+      endpoint.PE.pe_io_ready
+        i
+        ch
+        frame
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1)
+  decreases (SZ.v fuel)
+  {
+    if (fuel = 0sz) {
+      {
+        driver_run_status = DriverRunFuelExhausted;
+        driver_run_last_step = None;
+      }
+    } else {
+      assert (pure (0 < SZ.v fuel));
+      let step = drive_once i cfg frame ch received sent st;
+      match step.driver_status {
+        DriverNetworkStep -> {
+          with received1 sent1 st1.
+            assert (
+              protocol.CPI.pi_invariant
+                i
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1) **
+              endpoint.PE.pe_frame_ready
+                i
+                cfg
+                frame
+                (Ghost.reveal st1) **
+              endpoint.PE.pe_io_ready
+                i
+                ch
+                frame
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1));
+          let next_fuel = SZ.sub fuel 1sz;
+          assert (pure (SZ.v next_fuel < SZ.v fuel));
+          drive_steps i cfg frame ch next_fuel received1 sent1 st1
+        }
+        DriverLocalStep -> {
+          with received1 sent1 st1.
+            assert (
+              protocol.CPI.pi_invariant
+                i
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1) **
+              endpoint.PE.pe_frame_ready
+                i
+                cfg
+                frame
+                (Ghost.reveal st1) **
+              endpoint.PE.pe_io_ready
+                i
+                ch
+                frame
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1));
+          let next_fuel = SZ.sub fuel 1sz;
+          assert (pure (SZ.v next_fuel < SZ.v fuel));
+          drive_steps i cfg frame ch next_fuel received1 sent1 st1
+        }
+        DriverDone -> {
+          {
+            driver_run_status = DriverRunDone;
+            driver_run_last_step = step.driver_process_result;
+          }
+        }
+        DriverFailed -> {
+          {
+            driver_run_status = DriverRunFailed;
+            driver_run_last_step = step.driver_process_result;
+          }
+        }
+      }
+    }
+  }
