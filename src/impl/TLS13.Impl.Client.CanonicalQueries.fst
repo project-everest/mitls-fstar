@@ -11,6 +11,8 @@ module CQ = Common.ConnectionStateQuery
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
+module CTypes = TLS13.Impl.CanonicalTypes
+module CW = TLS13.Impl.CanonicalWire
 module SZ = FStar.SizeT
 
 noeq
@@ -21,6 +23,7 @@ type client_next_local_action_query = {
 }
 
 let client_next_local_action_sound
+  (_cc:CP.canonical_client)
   (q:client_next_local_action_query)
   (st:CS.connection_state)
   (action:CT.next_local_action)
@@ -36,6 +39,7 @@ type client_next_local_action_frame = unit
 
 [@@pulse_unfold]
 let client_next_local_action_frame_pre
+  (_cc:CP.canonical_client)
   (_q:client_next_local_action_query)
   (_frame:client_next_local_action_frame)
   (_st:CS.connection_state)
@@ -44,6 +48,7 @@ let client_next_local_action_frame_pre
 
 [@@pulse_unfold]
 let client_next_local_action_frame_post
+  (_cc:CP.canonical_client)
   (_q:client_next_local_action_query)
   (_frame:client_next_local_action_frame)
   (_st:CS.connection_state)
@@ -65,6 +70,7 @@ requires
     (Ghost.reveal sent)
     (Ghost.reveal st) **
   client_next_local_action_frame_pre
+    cc
     q
     frame
     (Ghost.reveal st)
@@ -76,11 +82,12 @@ ensures
     (Ghost.reveal sent)
     (Ghost.reveal st) **
   client_next_local_action_frame_post
+    cc
     q
     frame
     (Ghost.reveal st)
     action **
-  pure (client_next_local_action_sound q (Ghost.reveal st) action)
+  pure (client_next_local_action_sound cc q (Ghost.reveal st) action)
 {
   unfold (CP.client_invariant
     cc
@@ -88,6 +95,7 @@ ensures
     (Ghost.reveal sent)
     (Ghost.reveal st));
   unfold (client_next_local_action_frame_pre
+    cc
     q
     frame
     (Ghost.reveal st));
@@ -111,6 +119,7 @@ ensures
     (Ghost.reveal sent)
     (Ghost.reveal st));
   fold (client_next_local_action_frame_post
+    cc
     q
     frame
     (Ghost.reveal st)
@@ -123,14 +132,17 @@ let client_next_local_action_query_implementation
   : CQ.connection_state_query
       CP.canonical_client
       CS.connection_state
+      CW.wire_message
+      CTypes.client_local_event
+      CTypes.local_output
       client_next_local_action_query
       CT.next_local_action
+      CP.client_protocol_implementation
   =
   {
-    CQ.csq_invariant = CP.client_invariant;
     CQ.csq_frame = client_next_local_action_frame;
     CQ.csq_frame_pre = client_next_local_action_frame_pre;
     CQ.csq_frame_post = client_next_local_action_frame_post;
-    CQ.csq_sound = client_next_local_action_sound;
-    CQ.csq_run = run_client_next_local_action;
+    CQ.csq_action_sound = client_next_local_action_sound;
+    CQ.csq_next_action = run_client_next_local_action;
   }

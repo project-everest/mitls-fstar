@@ -7,6 +7,8 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CQ = Common.ConnectionStateQuery
 module CS = TLS13.Spec.ConnectionState
+module CTypes = TLS13.Impl.CanonicalTypes
+module CW = TLS13.Impl.CanonicalWire
 module S = TLS13.Impl.Server
 module SP = TLS13.Impl.Server.CanonicalProtocol
 module ST = TLS13.Impl.Server.Types
@@ -15,6 +17,7 @@ type server_next_local_action_query = unit
 type server_next_local_action_frame = unit
 
 let server_next_local_action_sound
+  (_srv:SP.canonical_server)
   (_q:server_next_local_action_query)
   (st:CS.connection_state)
   (action:ST.next_local_action)
@@ -23,6 +26,7 @@ let server_next_local_action_sound
 
 [@@pulse_unfold]
 let server_next_local_action_frame_pre
+  (_srv:SP.canonical_server)
   (_q:server_next_local_action_query)
   (_frame:server_next_local_action_frame)
   (_st:CS.connection_state)
@@ -31,6 +35,7 @@ let server_next_local_action_frame_pre
 
 [@@pulse_unfold]
 let server_next_local_action_frame_post
+  (_srv:SP.canonical_server)
   (_q:server_next_local_action_query)
   (_frame:server_next_local_action_frame)
   (_st:CS.connection_state)
@@ -52,6 +57,7 @@ requires
     (Ghost.reveal sent)
     (Ghost.reveal st) **
   server_next_local_action_frame_pre
+    srv
     q
     frame
     (Ghost.reveal st)
@@ -63,11 +69,12 @@ ensures
     (Ghost.reveal sent)
     (Ghost.reveal st) **
   server_next_local_action_frame_post
+    srv
     q
     frame
     (Ghost.reveal st)
     action **
-  pure (server_next_local_action_sound q (Ghost.reveal st) action)
+  pure (server_next_local_action_sound srv q (Ghost.reveal st) action)
 {
   unfold (SP.server_invariant
     srv
@@ -75,6 +82,7 @@ ensures
     (Ghost.reveal sent)
     (Ghost.reveal st));
   unfold (server_next_local_action_frame_pre
+    srv
     q
     frame
     (Ghost.reveal st));
@@ -93,6 +101,7 @@ ensures
     (Ghost.reveal sent)
     (Ghost.reveal st));
   fold (server_next_local_action_frame_post
+    srv
     q
     frame
     (Ghost.reveal st)
@@ -105,14 +114,17 @@ let server_next_local_action_query_implementation
   : CQ.connection_state_query
       SP.canonical_server
       CS.connection_state
+      CW.wire_message
+      CTypes.server_local_event
+      CTypes.local_output
       server_next_local_action_query
       ST.next_local_action
+      SP.server_protocol_implementation
   =
   {
-    CQ.csq_invariant = SP.server_invariant;
     CQ.csq_frame = server_next_local_action_frame;
     CQ.csq_frame_pre = server_next_local_action_frame_pre;
     CQ.csq_frame_post = server_next_local_action_frame_post;
-    CQ.csq_sound = server_next_local_action_sound;
-    CQ.csq_run = run_server_next_local_action;
+    CQ.csq_action_sound = server_next_local_action_sound;
+    CQ.csq_next_action = run_server_next_local_action;
   }
