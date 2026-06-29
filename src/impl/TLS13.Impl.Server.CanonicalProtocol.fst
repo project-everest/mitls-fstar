@@ -184,6 +184,24 @@ let server_supported_profile_selection
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
     T.RsaPssRsaeSha256 /\
+  (match st.CS.cs_model.CS.model_config.CS.config_server with
+   | Some cfg ->
+     CS.cipher_suite_offered
+       cfg.CS.server_supported_cipher_suites
+       T.TLS_CHACHA20_POLY1305_SHA256 /\
+     CS.named_group_offered
+       cfg.CS.server_supported_groups
+       T.X25519 /\
+     CS.signature_scheme_offered
+       cfg.CS.server_allowed_signature_schemes
+       T.RsaPssRsaeSha256 /\
+     (match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+      | Some ch ->
+        CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+      | None ->
+        True)
+   | None ->
+     False) /\
   server_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->

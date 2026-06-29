@@ -14,8 +14,10 @@ module ConnQ = TLS13.Impl.ConnectionState.Queries
 module CS = TLS13.Spec.ConnectionState
 module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
+module M = TLS13.Messages
 module PE = Common.ProtocolEndpoint
 module Seq = FStar.Seq
+module S = TLS13.Impl.Server
 module SQueries = TLS13.Impl.Server.CanonicalQueries
 module SP = TLS13.Impl.Server.CanonicalProtocol
 module ST = TLS13.Impl.Server.Types
@@ -34,8 +36,32 @@ type server_endpoint_frame = {
   server_ep_network_out: V.vec U8.t;
   server_ep_material_len: SZ.t;
   server_ep_material: V.vec U8.t;
+  server_ep_material_bridge_proof:
+    old:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SP.server_local_bridge_obligation {
+          SP.tls_server_local_payload = V.vec_to_array server_ep_material;
+          SP.tls_server_local_payload_len = server_ep_material_len;
+          SP.tls_server_local_app_out =
+            server_ep_query.SQueries.server_query_local_app_out;
+          SP.tls_server_local_app_out_len =
+            server_ep_query.SQueries.server_query_local_app_out_len;
+          SP.tls_server_local_old_app_out = old;
+        });
   server_ep_private_len: SZ.t;
   server_ep_private: V.vec U8.t;
+  server_ep_private_bridge_proof:
+    old:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SP.server_local_bridge_obligation {
+          SP.tls_server_local_payload = V.vec_to_array server_ep_private;
+          SP.tls_server_local_payload_len = server_ep_private_len;
+          SP.tls_server_local_app_out =
+            server_ep_query.SQueries.server_query_local_app_out;
+          SP.tls_server_local_app_out_len =
+            server_ep_query.SQueries.server_query_local_app_out_len;
+          SP.tls_server_local_old_app_out = old;
+        });
 }
 
 let server_endpoint_payloads_ready
@@ -49,6 +75,44 @@ let server_endpoint_payloads_ready
       SZ.v frame.server_ep_material_len == 64 /\
       B.length private_key == SZ.v frame.server_ep_private_len /\
       SZ.v frame.server_ep_private_len == 32)
+
+let server_endpoint_material_local_frame
+  (frame:server_endpoint_frame)
+  (old:Ghost.erased B.bytes)
+  : SP.tls_server_local_bridge_frame =
+  let base = {
+    SP.tls_server_local_payload = V.vec_to_array frame.server_ep_material;
+    SP.tls_server_local_payload_len = frame.server_ep_material_len;
+    SP.tls_server_local_app_out =
+      frame.server_ep_query.SQueries.server_query_local_app_out;
+    SP.tls_server_local_app_out_len =
+      frame.server_ep_query.SQueries.server_query_local_app_out_len;
+    SP.tls_server_local_old_app_out = old;
+  } in
+  {
+    SP.tls_server_local_bridge_base = base;
+    SP.tls_server_local_bridge_proof =
+      frame.server_ep_material_bridge_proof old;
+  }
+
+let server_endpoint_private_local_frame
+  (frame:server_endpoint_frame)
+  (old:Ghost.erased B.bytes)
+  : SP.tls_server_local_bridge_frame =
+  let base = {
+    SP.tls_server_local_payload = V.vec_to_array frame.server_ep_private;
+    SP.tls_server_local_payload_len = frame.server_ep_private_len;
+    SP.tls_server_local_app_out =
+      frame.server_ep_query.SQueries.server_query_local_app_out;
+    SP.tls_server_local_app_out_len =
+      frame.server_ep_query.SQueries.server_query_local_app_out_len;
+    SP.tls_server_local_old_app_out = old;
+  } in
+  {
+    SP.tls_server_local_bridge_base = base;
+    SP.tls_server_local_bridge_proof =
+      frame.server_ep_private_bridge_proof old;
+  }
 
 let server_endpoint_payload_remainder_ready
   (frame:server_endpoint_frame)
@@ -324,6 +388,185 @@ ensures
     }
     CQ.NextExternal ext -> {
       match ext {
+        SQueries.ServerExternalSelectServerParameters -> {
+          unfold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextExternal ext));
+          unfold (SQueries.server_next_local_action_frame_ready
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st));
+          unfold (SQueries.server_network_persistent_resource frame.server_ep_query);
+          with network_current. _;
+          unfold (SQueries.server_local_persistent_resource frame.server_ep_query);
+          with local_current. _;
+          unfold (server_endpoint_payloads_ready frame);
+          with material private_key. _;
+          assert (pure (B.length material == 64));
+          assert (pure (CL.raw_slice material 0 32 == Seq.slice material 0 32));
+          Seq.lemma_len_slice material 0 32;
+          assert (pure (B.length (CL.raw_slice material 0 32) == 32));
+          assert (pure (CL.raw_slice material 32 64 == Seq.slice material 32 64));
+          Seq.lemma_len_slice material 32 64;
+          assert (pure (B.length (CL.raw_slice material 32 64) == 32));
+          let server_random : Ghost.erased (b:B.bytes{B.length b == 32}) =
+            Ghost.hide (CL.raw_slice material 0 32);
+          let server_private_key : Ghost.erased (b:B.bytes{B.length b == 32}) =
+            Ghost.hide (CL.raw_slice material 32 64);
+          unfold (SP.server_invariant
+            srv
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          with certificate_chain credential_identity. _;
+          srv.SP.canonical_server_supported_profile
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st)
+            certificate_chain
+            credential_identity;
+          assert (pure (SP.server_supported_profile_selection
+            (Ghost.reveal st)
+            credential_identity));
+          assert (pure (SQueries.server_external_action_ready
+            (Ghost.reveal st)
+            SQueries.ServerExternalSelectServerParameters));
+          assert (pure (Some?
+            (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server));
+          assert (pure (Some?
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+          assert (pure (match
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+              (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server with
+            | Some ch, Some server_cfg ->
+              CS.cipher_suite_offered
+                server_cfg.CS.server_supported_cipher_suites
+                T.TLS_CHACHA20_POLY1305_SHA256 /\
+              CS.named_group_offered
+                server_cfg.CS.server_supported_groups
+                T.X25519 /\
+              CS.signature_scheme_offered
+                server_cfg.CS.server_allowed_signature_schemes
+                T.RsaPssRsaeSha256 /\
+              CS.sni_policy_accepts
+                server_cfg.CS.server_sni_policy
+                ch.M.server_name
+            | _, _ -> True));
+          rewrite
+            (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
+            as
+            (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
+          let ready =
+            ConnQ.can_select_supported_server_parameters_runtime
+              srv.SP.canonical_server_state
+              #server_random
+              #server_private_key;
+          rewrite
+            (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
+            as
+            (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
+          if ready {
+            assert (pure (ready));
+            assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived));
+            assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint));
+            assert (pure (CR.server_selection_absent
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake));
+            assert (pure (Some?
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+            assert (pure (Some?
+              (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server));
+            Seq.lemma_eq_elim
+              (Ghost.reveal server_random)
+              (CL.raw_slice material 0 32);
+            Seq.lemma_eq_elim
+              (Ghost.reveal server_private_key)
+              (CL.raw_slice material 32 64);
+            assert (pure (ST.server_local_event_input_ready
+              (Ghost.reveal st)
+              ST.LocalSelectServerParameters
+              material));
+            fold (SP.server_invariant
+              srv
+              (Ghost.reveal received)
+              (Ghost.reveal sent)
+              (Ghost.reveal st));
+            let old_local = Ghost.hide local_current;
+            let local_frame =
+              server_endpoint_material_local_frame frame old_local;
+            V.to_array_pts_to frame.server_ep_material;
+            rewrite
+              (pts_to (V.vec_to_array frame.server_ep_material) material)
+              as
+              (pts_to
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+                material);
+            rewrite
+              (pts_to frame.server_ep_query.SQueries.server_query_local_app_out (Ghost.reveal local_current))
+              as
+              (pts_to
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+                (Ghost.reveal
+                  local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out));
+            with network_current.
+            fold (SQueries.server_network_persistent_resource frame.server_ep_query);
+            with private_key.
+            fold (server_endpoint_payload_remainder_ready
+              frame
+              ST.LocalSelectServerParameters);
+            fold (server_endpoint_payload_local_action_frame
+              frame
+              (Ghost.reveal st)
+              ST.LocalSelectServerParameters
+              material
+              local_frame);
+            fold (server_endpoint_action_frame
+              srv
+              cfg
+              frame
+              (Ghost.reveal st)
+              (PE.EndpointLocal
+                (CTypes.ServerPayload
+                  ST.LocalSelectServerParameters
+                  (Ghost.hide material))
+                local_frame));
+            PE.EndpointLocal
+              (CTypes.ServerPayload
+                ST.LocalSelectServerParameters
+                (Ghost.hide material))
+              local_frame
+          } else {
+            fold (SP.server_invariant
+              srv
+              (Ghost.reveal received)
+              (Ghost.reveal sent)
+              (Ghost.reveal st));
+            with material private_key.
+            fold (server_endpoint_payloads_ready frame);
+            with network_current.
+            fold (SQueries.server_network_persistent_resource frame.server_ep_query);
+            with local_current.
+            fold (SQueries.server_local_persistent_resource frame.server_ep_query);
+            fold (SQueries.server_next_local_action_frame_ready
+              srv
+              cfg
+              frame.server_ep_query
+              (Ghost.reveal st));
+            fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st));
+            fold (server_endpoint_action_frame
+              srv
+              cfg
+              frame
+              (Ghost.reveal st)
+              PE.EndpointFailed);
+            PE.EndpointFailed
+          }
+        }
         SQueries.ServerExternalSignCertificateVerify -> {
           unfold (SQueries.server_next_local_action_frame_post
             srv
