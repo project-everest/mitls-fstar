@@ -25,6 +25,7 @@ module Tr = TLS13.Transcript
 module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 module Sem = TLS13.Wire.Semantics
+module W = TLS13.Wire.Spec
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
 module GCS = TLS13.Wire.Generated.CipherSuite
@@ -56,6 +57,21 @@ val mk_server_hello_witness
        (match Sem.serverHello_key_share_x25519 sh with
         | Some k -> Seq.equal k key_share
         | None -> False)) })
+
+(* The canonical ServerHello (key_share + supported_versions extensions) built by
+   [mk_server_hello_witness] serializes to exactly 90 bytes; discharges the
+   [|serialize_handshake (M.ServerHello sh)| == 90] send-path preconditions. *)
+val lemma_mk_server_hello_witness_bytesize
+  (random: B.bytes)
+  (key_share: B.bytes)
+  (cs: GCS.cipherSuite)
+  : Lemma
+    (requires Seq.length random == 32 /\
+              (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+              Seq.length key_share == 32)
+    (ensures
+      B.length (W.serialize_handshake
+        (M.ServerHello (mk_server_hello_witness random key_share cs))) == 90)
 
 type server = CR.connection_state
 

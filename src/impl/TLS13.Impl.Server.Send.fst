@@ -36,6 +36,7 @@ module W = TLS13.Wire.Spec
 module LP = LowParse.Spec.Base
 module Sem = TLS13.Wire.Semantics
 module GSH = TLS13.Wire.Generated.ServerHello
+module GHS = TLS13.Wire.Generated.Handshake
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
 module GSHB = TLS13.Wire.Generated.ServerHelloBody
 module GESH = TLS13.Wire.Generated.ExtensionServerHello
@@ -127,10 +128,20 @@ let mk_server_hello_witness
   assert (GKE.keyShareEntry_key_exchange_bytesize ke == 34);
   let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
   let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
+  // RFC 8446: a TLS 1.3 ServerHello MUST carry the supported_versions extension
+  // selecting TLS 1.3 (the byte-level serializer wrote it too). Listed AFTER
+  // key_share to match the original wire order.
+  let sv_ext : GESH.extensionServerHello =
+    GESH.Extension_data_supported_versions
+      (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
   GSHB.serverHelloBody_extensions_list_bytesize_nil;
-  assert (GSHB.serverHelloBody_extensions_list_bytesize [ks_ext] ==
-          GESH.extensionServerHello_bytesize ks_ext);
-  let exts : GSHB.serverHelloBody_extensions = [ks_ext] in
+  GSHB.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
+  GSHB.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
+  GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+  assert (GSHB.serverHelloBody_extensions_list_bytesize [ks_ext; sv_ext] ==
+          GESH.extensionServerHello_bytesize ks_ext +
+          GESH.extensionServerHello_bytesize sv_ext);
+  let exts : GSHB.serverHelloBody_extensions = [ks_ext; sv_ext] in
   let sid : GSHB.serverHelloBody_legacy_session_id_echo = B.empty in
   let body : GSHB.serverHelloBody = {
     GSHB.legacy_session_id_echo = sid;
@@ -146,12 +157,40 @@ let mk_server_hello_witness
         GSH.legacy_version = GPV.TLS_1p2;
         GSH.body = GSHbody.ServerHello_body_false bf;
       } in
-      assert (Sem.serverHello_key_share_x25519 sh == Sem.sh_find_key_share [ks_ext]);
+      assert (Sem.serverHello_key_share_x25519 sh == Sem.sh_find_key_share [ks_ext; sv_ext]);
       sh
     end else
       { GSH.legacy_version = GPV.TLS_1p2; GSH.body = GSHbody.HelloRetryRequest body }
   end else
     { GSH.legacy_version = GPV.TLS_1p2; GSH.body = GSHbody.HelloRetryRequest body }
+#pop-options
+
+(* The canonical ServerHello produced by [mk_server_hello_witness] (key_share +
+   supported_versions extensions) serializes to exactly 90 bytes on the wire.
+   This discharges the [|serialize_handshake (M.ServerHello sh)| == 90]
+   preconditions threaded through the server send path. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_mk_server_hello_witness_bytesize
+  (random: B.bytes)
+  (key_share: B.bytes)
+  (cs: GCS.cipherSuite)
+  : Lemma
+    (requires Seq.length random == 32 /\
+              (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+              Seq.length key_share == 32)
+    (ensures
+      B.length (W.serialize_handshake
+        (M.ServerHello (mk_server_hello_witness random key_share cs))) == 90)
+  = let sh = mk_server_hello_witness random key_share cs in
+    W.lemma_serialize_handshake_server_hello sh;
+    GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+    GCS.cipherSuite_bytesize_eq cs;
+    GNG.namedGroup_bytesize_eq GNG.X25519;
+    GKE.keyShareEntry_key_exchange_bytesize_eqn (key_share <: GKE.keyShareEntry_key_exchange);
+    GSHB.serverHelloBody_extensions_list_bytesize_nil;
+    ()
 #pop-options
 
 noextract
