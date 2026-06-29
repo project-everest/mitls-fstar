@@ -7,6 +7,7 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
+module CryptoSpec = TLS13.Crypto.Spec
 module CPI = Common.ProtocolImplementation
 module CQ = Common.ConnectionStateQuery
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -14,6 +15,7 @@ module ConnQ = TLS13.Impl.ConnectionState.Queries
 module CS = TLS13.Spec.ConnectionState
 module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
+module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
 module PE = Common.ProtocolEndpoint
 module Seq = FStar.Seq
@@ -27,6 +29,33 @@ module TCP = Common.TCP
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
+let server_endpoint_private_bytes_of_material
+  (material:B.bytes)
+  : GTot B.bytes =
+  CL.raw_slice material 32 64
+
+let server_endpoint_material_bytes_match_state
+  (material:B.bytes)
+  (st:CS.connection_state)
+  : GTot prop =
+  match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+  | Some selection ->
+    selection.CS.server_selected_cipher_suite ==
+      T.TLS_CHACHA20_POLY1305_SHA256 /\
+    selection.CS.server_selected_group == T.X25519 /\
+    Seq.equal
+      selection.CS.server_random
+      (CL.raw_slice material 0 32) /\
+    Some? selection.CS.server_key_share_private /\
+    Seq.equal
+      (Some?.v selection.CS.server_key_share_private)
+      (server_endpoint_private_bytes_of_material material) /\
+    selection.CS.server_key_share_public ==
+      CryptoSpec.x25519_public_from_private
+        (server_endpoint_private_bytes_of_material material)
+  | None ->
+    True
+
 noeq
 type server_endpoint_frame = {
   server_ep_query: SQueries.server_next_local_action_frame;
@@ -36,6 +65,7 @@ type server_endpoint_frame = {
   server_ep_network_out: V.vec U8.t;
   server_ep_material_len: SZ.t;
   server_ep_material: V.vec U8.t;
+  server_ep_material_spec: Ghost.erased (b:B.bytes{B.length b == 64});
   server_ep_material_bridge_proof:
     old:Ghost.erased B.bytes ->
       Ghost.erased
@@ -62,7 +92,34 @@ type server_endpoint_frame = {
             server_ep_query.SQueries.server_query_local_app_out_len;
           SP.tls_server_local_old_app_out = old;
         });
+  server_ep_material_external_ready:
+    st:Ghost.erased CS.connection_state ->
+    ext:SQueries.server_external_action ->
+      Ghost.erased
+        (SQueries.server_external_action_ready (Ghost.reveal st) ext ==>
+         server_endpoint_material_bytes_match_state
+           (Ghost.reveal server_ep_material_spec)
+           (Ghost.reveal st));
 }
+
+let server_endpoint_material_bytes
+  (frame:server_endpoint_frame)
+  : GTot B.bytes =
+  Ghost.reveal frame.server_ep_material_spec
+
+let server_endpoint_private_bytes
+  (frame:server_endpoint_frame)
+  : GTot B.bytes =
+  server_endpoint_private_bytes_of_material
+    (server_endpoint_material_bytes frame)
+
+let server_endpoint_material_matches_state
+  (frame:server_endpoint_frame)
+  (st:CS.connection_state)
+  : GTot prop =
+  server_endpoint_material_bytes_match_state
+    (server_endpoint_material_bytes frame)
+    st
 
 let server_endpoint_payloads_ready
   (frame:server_endpoint_frame)
@@ -74,7 +131,9 @@ let server_endpoint_payloads_ready
       B.length material == SZ.v frame.server_ep_material_len /\
       SZ.v frame.server_ep_material_len == 64 /\
       B.length private_key == SZ.v frame.server_ep_private_len /\
-      SZ.v frame.server_ep_private_len == 32)
+      SZ.v frame.server_ep_private_len == 32 /\
+      Seq.equal material (server_endpoint_material_bytes frame) /\
+      Seq.equal private_key (server_endpoint_private_bytes frame))
 
 let server_endpoint_material_local_frame
   (frame:server_endpoint_frame)
@@ -126,14 +185,16 @@ let server_endpoint_payload_remainder_ready
       pure (
         B.length private_key == SZ.v frame.server_ep_private_len /\
         SZ.v frame.server_ep_private_len == 32 /\
-        SZ.v frame.server_ep_material_len == 64)
+        SZ.v frame.server_ep_material_len == 64 /\
+        Seq.equal private_key (server_endpoint_private_bytes frame))
   | ST.LocalDeriveSharedSecret ->
     exists* material.
       V.pts_to frame.server_ep_material #1.0R material **
       pure (
         B.length material == SZ.v frame.server_ep_material_len /\
         SZ.v frame.server_ep_material_len == 64 /\
-        SZ.v frame.server_ep_private_len == 32)
+        SZ.v frame.server_ep_private_len == 32 /\
+        Seq.equal material (server_endpoint_material_bytes frame))
   | _ ->
     server_endpoint_payloads_ready frame
 
@@ -165,6 +226,20 @@ let server_endpoint_payload_frame_matches
   | _ ->
     False
 
+let server_endpoint_payload_bytes_match
+  (frame:server_endpoint_frame)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  : GTot prop =
+  match kind with
+  | ST.LocalSelectServerParameters
+  | ST.LocalSendServerHello ->
+    Seq.equal payload (server_endpoint_material_bytes frame)
+  | ST.LocalDeriveSharedSecret ->
+    Seq.equal payload (server_endpoint_private_bytes frame)
+  | _ ->
+    True
+
 let server_endpoint_payload_local_action_frame
   (frame:server_endpoint_frame)
   (st:CS.connection_state)
@@ -191,6 +266,8 @@ let server_endpoint_payload_local_action_frame
       SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len /\
     SZ.v frame.server_ep_query.SQueries.server_query_local_payload_len == 0 /\
     server_endpoint_payload_frame_matches frame kind local_frame /\
+    server_endpoint_payload_bytes_match frame kind payload /\
+    server_endpoint_material_matches_state frame st /\
     ST.server_local_event_input_ready st kind payload)
 
 let server_endpoint_payload_local_continuation
@@ -208,6 +285,8 @@ let server_endpoint_payload_local_continuation
       SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len /\
     SZ.v frame.server_ep_query.SQueries.server_query_local_payload_len == 0 /\
     server_endpoint_payload_frame_matches frame kind local_frame /\
+    server_endpoint_payload_bytes_match frame kind payload /\
+    server_endpoint_material_matches_state frame st /\
     ST.server_local_event_input_ready st kind payload)
 
 let server_endpoint_frame_ready
