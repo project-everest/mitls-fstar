@@ -19,7 +19,7 @@ type server_driver_local_status =
   | ServerDriverLocalProcessed
   | ServerDriverLocalStepFailed
   | ServerDriverLocalNotReady
-  | ServerDriverLocalExternalOrUnsupported
+  | ServerDriverLocalUnsupported
 
 type server_driver_local_drain_result = {
   server_driver_local_drain_last: server_driver_local_status;

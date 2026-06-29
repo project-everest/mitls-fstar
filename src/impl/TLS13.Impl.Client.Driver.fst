@@ -5944,10 +5944,6 @@ fn connect
           close_failed_connect d ch result.driver_workflow_rx_len;
           DriverWorkflowNeedMoreInput
         }
-        DriverWorkflowNeedExternalAction -> {
-          close_failed_connect d ch result.driver_workflow_rx_len;
-          DriverWorkflowNeedExternalAction
-        }
         DriverWorkflowStepFailed -> {
           close_failed_connect d ch result.driver_workflow_rx_len;
           DriverWorkflowStepFailed

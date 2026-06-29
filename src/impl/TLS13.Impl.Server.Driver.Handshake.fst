@@ -1123,7 +1123,7 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                pts_to payload 'payload_bytes
            | ServerDriverLocalStepFailed ->
                pure False
-           | ServerDriverLocalExternalOrUnsupported ->
+           | ServerDriverLocalUnsupported ->
                pure False)
 {
   assert (pure (B.length (Ghost.reveal 'payload_bytes) == 64));
@@ -2204,7 +2204,7 @@ fn select_and_derive_shared_secret_if_ready_once
                'sent
            | ServerDriverLocalStepFailed ->
              pure False
-           | ServerDriverLocalExternalOrUnsupported ->
+           | ServerDriverLocalUnsupported ->
              pure False)
 {
   unfold (server_driver_connected
@@ -2658,7 +2658,7 @@ fn accept_start_read_client_hello_select_derive_once
                 'st0.CS.cs_model.CS.model_config));
               ServerDriverAcceptSelectDeriveSelectionNotReady
             }
-            ServerDriverLocalExternalOrUnsupported -> {
+            ServerDriverLocalUnsupported -> {
               assert (pure False);
               ServerDriverAcceptSelectDeriveInternalUnsupported
             }

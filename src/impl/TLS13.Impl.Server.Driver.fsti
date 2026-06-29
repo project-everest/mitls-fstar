@@ -68,7 +68,6 @@ val server_driver_closed
 type server_workflow_status =
   | ServerWorkflowOk
   | ServerWorkflowNeedMoreInput
-  | ServerWorkflowNeedExternalAction
   | ServerWorkflowStepFailed
   | ServerWorkflowExhausted
   | ServerWorkflowClosed

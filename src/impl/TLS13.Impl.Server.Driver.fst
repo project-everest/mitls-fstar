@@ -483,8 +483,8 @@ fn accept
         ServerWorkflowExhausted
       } else {
         match drain.server_driver_local_drain_last {
-          ServerDriverLocalExternalOrUnsupported -> {
-            ServerWorkflowNeedExternalAction
+          ServerDriverLocalUnsupported -> {
+            ServerWorkflowStepFailed
           }
           ServerDriverLocalStepFailed -> {
             ServerWorkflowStepFailed
@@ -529,8 +529,8 @@ fn accept
                   ServerWorkflowExhausted
                 } else {
                   match drain_after_client_finished.DL.server_driver_local_drain_last {
-                    ServerDriverLocalExternalOrUnsupported -> {
-                      ServerWorkflowNeedExternalAction
+                    ServerDriverLocalUnsupported -> {
+                      ServerWorkflowStepFailed
                     }
                     ServerDriverLocalStepFailed -> {
                       ServerWorkflowStepFailed

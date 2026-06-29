@@ -360,7 +360,30 @@ TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
+COMMON_ENDPOINT_MODULES = \
+  Common.StateMachine \
+  Common.WireFormat \
+  Common.WireFormatStateMachine \
+  Common.ProtocolImplementation \
+  Common.ConnectionStateQuery \
+  Common.ProtocolEndpoint \
+  Common.ProtocolDriver
+TLS13_SHARED_ENDPOINT_MODULES = \
+  TLS13.Impl.CanonicalTypes \
+  TLS13.Impl.CanonicalWire
+TLS13_CLIENT_ENDPOINT_MODULES = \
+  $(TLS13_SHARED_ENDPOINT_MODULES) \
+  TLS13.Impl.Client.CanonicalProtocol \
+  TLS13.Impl.Client.CanonicalQueries \
+  TLS13.Impl.Client.Endpoint
+TLS13_SERVER_ENDPOINT_MODULES = \
+  $(TLS13_SHARED_ENDPOINT_MODULES) \
+  TLS13.Impl.Server.CanonicalProtocol \
+  TLS13.Impl.Server.CanonicalQueries \
+  TLS13.Impl.Server.Endpoint
 CLIENT_DRIVER_IMPL_MODULES = \
+  $(COMMON_ENDPOINT_MODULES) \
+  $(TLS13_CLIENT_ENDPOINT_MODULES) \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -405,6 +428,8 @@ SERVER_DRIVER_EXTRACT_SELECTOR = \
   -TLS13.X509,-TLS13.MachineTypes
 
 SERVER_DRIVER_MODULES = \
+  $(COMMON_ENDPOINT_MODULES) \
+  $(TLS13_SERVER_ENDPOINT_MODULES) \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.ConnectionState.Bounds \
   TLS13.Impl.ConnectionState.Model \

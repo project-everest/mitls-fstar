@@ -2124,7 +2124,7 @@ fn process_ready_empty_local_action_once
          }
        }
        _ -> {
-         ServerDriverLocalExternalOrUnsupported
+         ServerDriverLocalUnsupported
        }
     }
   } else {
@@ -2221,11 +2221,11 @@ fn rec drain_ready_empty_local_actions
          };
          result
        }
-       ServerDriverLocalExternalOrUnsupported -> {
+       ServerDriverLocalUnsupported -> {
          assert (pure ('st0.CS.cs_model.CS.model_config ==
            'st0.CS.cs_model.CS.model_config));
          let result:server_driver_local_drain_result = {
-           server_driver_local_drain_last = ServerDriverLocalExternalOrUnsupported;
+           server_driver_local_drain_last = ServerDriverLocalUnsupported;
            server_driver_local_drain_exhausted = false;
          };
          result

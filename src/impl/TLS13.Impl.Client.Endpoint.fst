@@ -337,15 +337,15 @@ ensures
         }
       }
     }
-    CQ.NextExternal ext -> {
+    CQ.NextDeferredLocal ext -> {
       match ext {
-        CQueries.ClientExternalValidateCertificate -> {
+        CQueries.ClientDeferredValidateCertificate -> {
           unfold (CQueries.client_next_local_action_frame_post
             cc
             cfg
             frame.client_ep_query
             (Ghost.reveal st)
-            (CQ.NextExternal ext));
+            (CQ.NextDeferredLocal ext));
           unfold (CQueries.client_next_local_action_frame_ready
             cc
             cfg
@@ -480,13 +480,13 @@ ensures
             PE.EndpointFailed
           }
         }
-        CQueries.ClientExternalVerifyCertificateSignature -> {
+        CQueries.ClientDeferredVerifyCertificateSignature -> {
           unfold (CQueries.client_next_local_action_frame_post
             cc
             cfg
             frame.client_ep_query
             (Ghost.reveal st)
-            (CQ.NextExternal ext));
+            (CQ.NextDeferredLocal ext));
           unfold (CQueries.client_next_local_action_frame_ready
             cc
             cfg

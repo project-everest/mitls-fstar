@@ -365,7 +365,7 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                  pts_to payload 'payload_bytes
            | DL.ServerDriverLocalStepFailed ->
                  pure False
-           | DL.ServerDriverLocalExternalOrUnsupported ->
+           | DL.ServerDriverLocalUnsupported ->
                  pure False)
 
 fn select_and_derive_shared_secret_from_payload_once
@@ -577,7 +577,7 @@ fn select_and_derive_shared_secret_if_ready_once
                'sent
            | DL.ServerDriverLocalStepFailed ->
              pure False
-           | DL.ServerDriverLocalExternalOrUnsupported ->
+           | DL.ServerDriverLocalUnsupported ->
              pure False)
 
 fn accept_start_read_client_hello_select_derive_once

@@ -19,11 +19,11 @@ module U8 = FStar.UInt8
 
 type server_next_local_action_config = unit
 
-type server_external_action =
-  | ServerExternalSelectServerParameters
-  | ServerExternalDeriveSharedSecret
-  | ServerExternalSendServerHello
-  | ServerExternalSignCertificateVerify
+type server_deferred_action =
+  | ServerDeferredSelectServerParameters
+  | ServerDeferredDeriveSharedSecret
+  | ServerDeferredSendServerHello
+  | ServerDeferredSignCertificateVerify
 
 noeq
 type server_next_local_action_frame = {
@@ -124,21 +124,21 @@ let server_next_action_of_tls
       SP.tls_server_network_bridge_frame
       CTypes.server_local_event
       SP.tls_server_local_bridge_frame
-      server_external_action =
+      server_deferred_action =
   if action.ST.next_local_ready then
     match action.ST.next_local_kind with
     | ST.LocalSelectServerParameters ->
-      CQ.NextExternal ServerExternalSelectServerParameters
+      CQ.NextDeferredLocal ServerDeferredSelectServerParameters
     | ST.LocalDeriveSharedSecret ->
-      CQ.NextExternal ServerExternalDeriveSharedSecret
+      CQ.NextDeferredLocal ServerDeferredDeriveSharedSecret
     | ST.LocalSendServerHello ->
-      CQ.NextExternal ServerExternalSendServerHello
+      CQ.NextDeferredLocal ServerDeferredSendServerHello
     | ST.LocalSendCertificate ->
       CQ.NextLocal
         (server_local_event_of_kind action.ST.next_local_kind)
         local_frame
     | ST.LocalSignCertificateVerify ->
-      CQ.NextExternal ServerExternalSignCertificateVerify
+      CQ.NextDeferredLocal ServerDeferredSignCertificateVerify
     | _ ->
       CQ.NextLocal
         (server_local_event_of_kind action.ST.next_local_kind)
@@ -198,40 +198,40 @@ let server_local_event_ready_input_wf
   | CTypes.ServerAPI _ -> ()
   | CTypes.ServerPayload _ _ -> ()
 
-let server_external_action_witness
-  (ext:server_external_action)
+let server_deferred_action_witness
+  (ext:server_deferred_action)
   : ST.next_local_action =
   match ext with
-  | ServerExternalSelectServerParameters ->
+  | ServerDeferredSelectServerParameters ->
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSelectServerParameters;
       ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
     }
-  | ServerExternalDeriveSharedSecret ->
+  | ServerDeferredDeriveSharedSecret ->
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalDeriveSharedSecret;
       ST.next_local_payload = ST.LocalPayloadServerPrivateKey;
     }
-  | ServerExternalSendServerHello ->
+  | ServerDeferredSendServerHello ->
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendServerHello;
       ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
     }
-  | ServerExternalSignCertificateVerify ->
+  | ServerDeferredSignCertificateVerify ->
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSignCertificateVerify;
       ST.next_local_payload = ST.LocalPayloadNone;
     }
 
-let server_external_action_ready
+let server_deferred_action_ready
   (st:CS.connection_state)
-  (ext:server_external_action)
+  (ext:server_deferred_action)
   : prop =
-  ST.next_local_action_sound st (server_external_action_witness ext)
+  ST.next_local_action_sound st (server_deferred_action_witness ext)
 
 let server_internal_ready_implies_kind_ready
   (st:CS.connection_state)
@@ -266,7 +266,7 @@ let server_next_action_correct
         (match server_next_action_of_tls network_frame local_frame tls_action with
         | CQ.NextNeedInput _ -> True
         | CQ.NextLocal ev _ -> server_local_event_ready st ev
-        | CQ.NextExternal ext -> server_external_action_ready st ext
+        | CQ.NextDeferredLocal ext -> server_deferred_action_ready st ext
         | CQ.NextDone -> True
         | CQ.NextFailed -> True))
 =
@@ -360,7 +360,7 @@ let server_next_local_action_frame_post
     SP.tls_server_network_bridge_frame
     CTypes.server_local_event
     SP.tls_server_local_bridge_frame
-    server_external_action)
+    server_deferred_action)
   : slprop =
   match action with
   | CQ.NextNeedInput network_frame ->
@@ -375,9 +375,9 @@ let server_next_local_action_frame_post
       server_local_frame_matches frame local_frame /\
       SZ.v frame.server_query_local_payload_len == 0 /\
       server_local_event_from_query ev)
-  | CQ.NextExternal ext ->
+  | CQ.NextDeferredLocal ext ->
     server_next_local_action_frame_ready srv cfg frame st **
-    pure (server_external_action_ready st ext)
+    pure (server_deferred_action_ready st ext)
   | CQ.NextDone
   | CQ.NextFailed ->
     server_next_local_action_frame_ready srv cfg frame st
@@ -417,7 +417,7 @@ fn cancel_server_next_action
     SP.tls_server_network_bridge_frame
     CTypes.server_local_event
     SP.tls_server_local_bridge_frame
-    server_external_action)
+    server_deferred_action)
 requires
   server_next_local_action_frame_post
     srv
@@ -493,7 +493,7 @@ ensures
         frame
         (Ghost.reveal st))
     }
-    CQ.NextExternal _ -> {
+    CQ.NextDeferredLocal _ -> {
       fold (server_next_local_action_frame_ready
         srv
         cfg
@@ -912,7 +912,7 @@ returns action:CQ.next_action
   SP.tls_server_network_bridge_frame
   CTypes.server_local_event
   SP.tls_server_local_bridge_frame
-  server_external_action
+  server_deferred_action
 ensures
   SP.server_invariant
     srv
@@ -980,7 +980,7 @@ returns action:CQ.next_action
   SP.tls_server_network_bridge_frame
   CTypes.server_local_event
   SP.tls_server_local_bridge_frame
-  server_external_action
+  server_deferred_action
 ensures
   SP.server_invariant
     srv
@@ -1048,16 +1048,16 @@ ensures
           cfg
           frame
           (Ghost.reveal st));
-        assert (pure (server_external_action_ready
+        assert (pure (server_deferred_action_ready
           (Ghost.reveal st)
-          ServerExternalSelectServerParameters));
+          ServerDeferredSelectServerParameters));
         fold (server_next_local_action_frame_post
           srv
           cfg
           frame
           (Ghost.reveal st)
-          (CQ.NextExternal ServerExternalSelectServerParameters));
-        CQ.NextExternal ServerExternalSelectServerParameters
+          (CQ.NextDeferredLocal ServerDeferredSelectServerParameters));
+        CQ.NextDeferredLocal ServerDeferredSelectServerParameters
       }
       ST.LocalDeriveSharedSecret -> {
         with network_current.
@@ -1069,16 +1069,16 @@ ensures
           cfg
           frame
           (Ghost.reveal st));
-        assert (pure (server_external_action_ready
+        assert (pure (server_deferred_action_ready
           (Ghost.reveal st)
-          ServerExternalDeriveSharedSecret));
+          ServerDeferredDeriveSharedSecret));
         fold (server_next_local_action_frame_post
           srv
           cfg
           frame
           (Ghost.reveal st)
-          (CQ.NextExternal ServerExternalDeriveSharedSecret));
-        CQ.NextExternal ServerExternalDeriveSharedSecret
+          (CQ.NextDeferredLocal ServerDeferredDeriveSharedSecret));
+        CQ.NextDeferredLocal ServerDeferredDeriveSharedSecret
       }
       ST.LocalInstallClientHandshakeTrafficKeys -> {
         server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
@@ -1106,16 +1106,16 @@ ensures
           cfg
           frame
           (Ghost.reveal st));
-        assert (pure (server_external_action_ready
+        assert (pure (server_deferred_action_ready
           (Ghost.reveal st)
-          ServerExternalSignCertificateVerify));
+          ServerDeferredSignCertificateVerify));
         fold (server_next_local_action_frame_post
           srv
           cfg
           frame
           (Ghost.reveal st)
-          (CQ.NextExternal ServerExternalSignCertificateVerify));
-        CQ.NextExternal ServerExternalSignCertificateVerify
+          (CQ.NextDeferredLocal ServerDeferredSignCertificateVerify));
+        CQ.NextDeferredLocal ServerDeferredSignCertificateVerify
       }
       ST.LocalVerifyClientFinished -> {
         server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
@@ -1135,16 +1135,16 @@ ensures
           cfg
           frame
           (Ghost.reveal st));
-        assert (pure (server_external_action_ready
+        assert (pure (server_deferred_action_ready
           (Ghost.reveal st)
-          ServerExternalSendServerHello));
+          ServerDeferredSendServerHello));
         fold (server_next_local_action_frame_post
           srv
           cfg
           frame
           (Ghost.reveal st)
-          (CQ.NextExternal ServerExternalSendServerHello));
-        CQ.NextExternal ServerExternalSendServerHello
+          (CQ.NextDeferredLocal ServerDeferredSendServerHello));
+        CQ.NextDeferredLocal ServerDeferredSendServerHello
       }
       ST.LocalSendEncryptedExtensions -> {
         server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
@@ -1208,7 +1208,7 @@ let server_next_local_action_query_implementation
       CW.wire_message
       CTypes.server_local_event
       CTypes.local_output
-      server_external_action
+      server_deferred_action
       SP.server_protocol_implementation
   =
   {

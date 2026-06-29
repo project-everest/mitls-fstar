@@ -26,9 +26,9 @@ type client_next_local_action_config = {
   client_query_server_finished_payload_len: SZ.t;
 }
 
-type client_external_action =
-  | ClientExternalValidateCertificate
-  | ClientExternalVerifyCertificateSignature
+type client_deferred_action =
+  | ClientDeferredValidateCertificate
+  | ClientDeferredVerifyCertificateSignature
 
 noeq
 type client_next_local_action_frame = {
@@ -110,13 +110,13 @@ let client_next_action_of_tls
       CP.tls_client_network_bridge_frame
       CTypes.client_local_event
       CP.tls_client_local_frame
-      client_external_action =
+      client_deferred_action =
   if action.CT.next_local_ready then
     match action.CT.next_local_kind with
     | CT.LocalValidateCertificate ->
-      CQ.NextExternal ClientExternalValidateCertificate
+      CQ.NextDeferredLocal ClientDeferredValidateCertificate
     | CT.LocalVerifyCertificateSignature ->
-      CQ.NextExternal ClientExternalVerifyCertificateSignature
+      CQ.NextDeferredLocal ClientDeferredVerifyCertificateSignature
     | _ ->
       CQ.NextLocal
         (client_local_event_of_kind action.CT.next_local_kind)
@@ -173,20 +173,20 @@ let client_local_event_ready_input_wf
   | CTypes.ClientAPI _ -> ()
   | CTypes.ClientValidateCertificate _ -> ()
 
-let client_external_action_ready
+let client_deferred_action_ready
   (cfg:client_next_local_action_config)
   (st:CS.connection_state)
-  (ext:client_external_action)
+  (ext:client_deferred_action)
   : prop =
   match ext with
-  | ClientExternalValidateCertificate ->
+  | ClientDeferredValidateCertificate ->
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsCertificateReceived /\
     st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
     Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate /\
     Some? st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der /\
     SZ.v cfg.client_query_certificate_public_key_len <= Bounds.max_public_key_len
-  | ClientExternalVerifyCertificateSignature ->
+  | ClientDeferredVerifyCertificateSignature ->
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
     Some? st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer /\
@@ -212,7 +212,7 @@ let client_next_action_correct
         (match client_next_action_of_tls network_frame local_frame tls_action with
         | CQ.NextNeedInput _ -> True
         | CQ.NextLocal ev _ -> client_local_event_ready st ev
-        | CQ.NextExternal ext -> client_external_action_ready cfg st ext
+        | CQ.NextDeferredLocal ext -> client_deferred_action_ready cfg st ext
         | CQ.NextDone -> True
         | CQ.NextFailed -> True))
 =
@@ -339,7 +339,7 @@ let client_next_local_action_frame_post
     CP.tls_client_network_bridge_frame
     CTypes.client_local_event
     CP.tls_client_local_frame
-    client_external_action)
+    client_deferred_action)
   : slprop =
   match action with
   | CQ.NextNeedInput network_frame ->
@@ -354,9 +354,9 @@ let client_next_local_action_frame_post
       client_local_frame_matches frame local_frame /\
       SZ.v frame.client_query_local_payload_len == 0 /\
       client_local_event_from_query ev)
-  | CQ.NextExternal ext ->
+  | CQ.NextDeferredLocal ext ->
     client_next_local_action_frame_ready cc cfg frame st **
-    pure (client_external_action_ready cfg st ext)
+    pure (client_deferred_action_ready cfg st ext)
   | CQ.NextDone
   | CQ.NextFailed ->
     client_next_local_action_frame_ready cc cfg frame st
@@ -396,7 +396,7 @@ fn cancel_client_next_action
     CP.tls_client_network_bridge_frame
     CTypes.client_local_event
     CP.tls_client_local_frame
-    client_external_action)
+    client_deferred_action)
 requires
   client_next_local_action_frame_post
     cc
@@ -470,7 +470,7 @@ ensures
         frame
         (Ghost.reveal st))
     }
-    CQ.NextExternal ext -> {
+    CQ.NextDeferredLocal ext -> {
       fold (client_next_local_action_frame_ready
         cc
         cfg
@@ -877,7 +877,7 @@ returns action:CQ.next_action
   CP.tls_client_network_bridge_frame
   CTypes.client_local_event
   CP.tls_client_local_frame
-  client_external_action
+  client_deferred_action
 ensures
   CP.client_invariant
     cc
@@ -942,7 +942,7 @@ returns action:CQ.next_action
   CP.tls_client_network_bridge_frame
   CTypes.client_local_event
   CP.tls_client_local_frame
-  client_external_action
+  client_deferred_action
 ensures
   CP.client_invariant
     cc
@@ -1012,8 +1012,8 @@ ensures
           cfg
           frame
           (Ghost.reveal st)
-          (CQ.NextExternal ClientExternalValidateCertificate));
-        CQ.NextExternal ClientExternalValidateCertificate
+          (CQ.NextDeferredLocal ClientDeferredValidateCertificate));
+        CQ.NextDeferredLocal ClientDeferredValidateCertificate
       }
       CT.LocalVerifyCertificateSignature -> {
         with network_current.
@@ -1030,8 +1030,8 @@ ensures
           cfg
           frame
           (Ghost.reveal st)
-          (CQ.NextExternal ClientExternalVerifyCertificateSignature));
-        CQ.NextExternal ClientExternalVerifyCertificateSignature
+          (CQ.NextDeferredLocal ClientDeferredVerifyCertificateSignature));
+        CQ.NextDeferredLocal ClientDeferredVerifyCertificateSignature
       }
       CT.LocalStartHandshake -> {
         client_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
@@ -1123,7 +1123,7 @@ let client_next_local_action_query_implementation
       CW.wire_message
       CTypes.client_local_event
       CTypes.local_output
-      client_external_action
+      client_deferred_action
       CP.client_protocol_implementation
   =
   {

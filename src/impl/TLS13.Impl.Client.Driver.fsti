@@ -151,7 +151,6 @@ let client_driver_local_write_correct
 type driver_workflow_status =
   | DriverWorkflowOk
   | DriverWorkflowNeedMoreInput
-  | DriverWorkflowNeedExternalAction
   | DriverWorkflowStepFailed
   | DriverWorkflowExhausted
   | DriverWorkflowClosed

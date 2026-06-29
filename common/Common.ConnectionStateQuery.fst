@@ -14,22 +14,22 @@ type next_action
   (network_frame:Type0)
   (local_event:Type0)
   (local_frame:Type0)
-  (external_action:Type0)
+  (deferred_action:Type0)
   =
   | NextNeedInput:
       frame:network_frame ->
-        next_action network_frame local_event local_frame external_action
+        next_action network_frame local_event local_frame deferred_action
   | NextLocal:
       ev:local_event ->
       frame:local_frame ->
-        next_action network_frame local_event local_frame external_action
-  | NextExternal:
-      action:external_action ->
-        next_action network_frame local_event local_frame external_action
+        next_action network_frame local_event local_frame deferred_action
+  | NextDeferredLocal:
+      action:deferred_action ->
+        next_action network_frame local_event local_frame deferred_action
   | NextDone:
-        next_action network_frame local_event local_frame external_action
+        next_action network_frame local_event local_frame deferred_action
   | NextFailed:
-        next_action network_frame local_event local_frame external_action
+        next_action network_frame local_event local_frame deferred_action
 
 [@@pulse_unfold]
 let network_buffers
@@ -62,7 +62,7 @@ class connection_state_query
   (wire_message:Type0)
   (local_event:Type0)
   (local_output:Type0)
-  (external_action:Type0)
+  (deferred_action:Type0)
   (protocol:CPI.protocol_implementation
     impl
     state
@@ -93,7 +93,7 @@ class connection_state_query
       protocol.CPI.pi_network_frame
       local_event
       protocol.CPI.pi_local_frame
-      external_action ->
+      deferred_action ->
     slprop;
 
   csq_network_continuation:
@@ -124,7 +124,7 @@ class connection_state_query
         protocol.CPI.pi_network_frame
         local_event
         protocol.CPI.pi_local_frame
-        external_action)
+        deferred_action)
         (protocol.CPI.pi_invariant
            i
            (Ghost.reveal received)
@@ -157,7 +157,7 @@ class connection_state_query
       protocol.CPI.pi_network_frame
       local_event
       protocol.CPI.pi_local_frame
-      external_action ->
+      deferred_action ->
       stt unit
         (csq_action_frame
           i

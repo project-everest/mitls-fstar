@@ -95,11 +95,11 @@ type server_endpoint_frame = {
             server_ep_query.SQueries.server_query_local_app_out_len;
           SP.tls_server_local_old_app_out = old;
         });
-  server_ep_material_external_ready:
+  server_ep_material_deferred_ready:
     st:Ghost.erased CS.connection_state ->
-    ext:SQueries.server_external_action ->
+    action:SQueries.server_deferred_action ->
       Ghost.erased
-        (SQueries.server_external_action_ready (Ghost.reveal st) ext ==>
+        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
          server_endpoint_material_bytes_match_state
            (Ghost.reveal server_ep_material_spec)
            (Ghost.reveal st));
@@ -468,15 +468,15 @@ ensures
         }
       }
     }
-    CQ.NextExternal ext -> {
+    CQ.NextDeferredLocal ext -> {
       match ext {
-        SQueries.ServerExternalSelectServerParameters -> {
+        SQueries.ServerDeferredSelectServerParameters -> {
           unfold (SQueries.server_next_local_action_frame_post
             srv
             cfg
             frame.server_ep_query
             (Ghost.reveal st)
-            (CQ.NextExternal ext));
+            (CQ.NextDeferredLocal ext));
           unfold (SQueries.server_next_local_action_frame_ready
             srv
             cfg
@@ -514,9 +514,9 @@ ensures
           assert (pure (SP.server_supported_profile_selection
             (Ghost.reveal st)
             credential_identity));
-          assert (pure (SQueries.server_external_action_ready
+          assert (pure (SQueries.server_deferred_action_ready
             (Ghost.reveal st)
-            SQueries.ServerExternalSelectServerParameters));
+            SQueries.ServerDeferredSelectServerParameters));
           assert (pure (Some?
             (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server));
           assert (pure (Some?
@@ -649,13 +649,13 @@ ensures
             PE.EndpointFailed
           }
         }
-        SQueries.ServerExternalDeriveSharedSecret -> {
+        SQueries.ServerDeferredDeriveSharedSecret -> {
           unfold (SQueries.server_next_local_action_frame_post
             srv
             cfg
             frame.server_ep_query
             (Ghost.reveal st)
-            (CQ.NextExternal ext));
+            (CQ.NextDeferredLocal ext));
           unfold (SQueries.server_next_local_action_frame_ready
             srv
             cfg
@@ -667,13 +667,13 @@ ensures
           with local_current. _;
           unfold (server_endpoint_payloads_ready frame);
           with material private_key. _;
-          assert (pure (SQueries.server_external_action_ready
+          assert (pure (SQueries.server_deferred_action_ready
             (Ghost.reveal st)
-            SQueries.ServerExternalDeriveSharedSecret));
+            SQueries.ServerDeferredDeriveSharedSecret));
           let material_ready =
-            Ghost.reveal (frame.server_ep_material_external_ready
+            Ghost.reveal (frame.server_ep_material_deferred_ready
               st
-              SQueries.ServerExternalDeriveSharedSecret);
+              SQueries.ServerDeferredDeriveSharedSecret);
           assert (pure (server_endpoint_material_matches_state
             frame
             (Ghost.reveal st)));
@@ -750,13 +750,13 @@ ensures
               (Ghost.hide private_key))
             local_frame
         }
-        SQueries.ServerExternalSendServerHello -> {
+        SQueries.ServerDeferredSendServerHello -> {
           unfold (SQueries.server_next_local_action_frame_post
             srv
             cfg
             frame.server_ep_query
             (Ghost.reveal st)
-            (CQ.NextExternal ext));
+            (CQ.NextDeferredLocal ext));
           unfold (SQueries.server_next_local_action_frame_ready
             srv
             cfg
@@ -768,13 +768,13 @@ ensures
           with local_current. _;
           unfold (server_endpoint_payloads_ready frame);
           with material private_key. _;
-          assert (pure (SQueries.server_external_action_ready
+          assert (pure (SQueries.server_deferred_action_ready
             (Ghost.reveal st)
-            SQueries.ServerExternalSendServerHello));
+            SQueries.ServerDeferredSendServerHello));
           let material_ready =
-            Ghost.reveal (frame.server_ep_material_external_ready
+            Ghost.reveal (frame.server_ep_material_deferred_ready
               st
-              SQueries.ServerExternalSendServerHello);
+              SQueries.ServerDeferredSendServerHello);
           assert (pure (server_endpoint_material_matches_state
             frame
             (Ghost.reveal st)));
@@ -941,13 +941,13 @@ ensures
             PE.EndpointFailed
           }
         }
-        SQueries.ServerExternalSignCertificateVerify -> {
+        SQueries.ServerDeferredSignCertificateVerify -> {
           unfold (SQueries.server_next_local_action_frame_post
             srv
             cfg
             frame.server_ep_query
             (Ghost.reveal st)
-            (CQ.NextExternal ext));
+            (CQ.NextDeferredLocal ext));
           unfold (SQueries.server_next_local_action_frame_ready
             srv
             cfg
@@ -972,9 +972,9 @@ ensures
           assert (pure (SP.server_supported_profile_selection
             (Ghost.reveal st)
             credential_identity));
-          assert (pure (SQueries.server_external_action_ready
+          assert (pure (SQueries.server_deferred_action_ready
             (Ghost.reveal st)
-            SQueries.ServerExternalSignCertificateVerify));
+            SQueries.ServerDeferredSignCertificateVerify));
           assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_control ==
             CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
           assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_role ==
