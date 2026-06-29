@@ -198,7 +198,7 @@ extract-c: extract-krml | $(EXTRACT_DIR)
 	  -tmpdir $(EXTRACT_DIR) \
 	  -skip-compilation \
 	  -warn-error -2-9-17 \
-	  -add-include '"common_tcp_karamel.h"' \
+	  -add-include '"common_tcp_karamel_compat.h"' \
 	  -library Common.TCP \
 	  -bundle 'Calc.Server.EndpointRunner=Calc.*[rename=Calc_Server]' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
