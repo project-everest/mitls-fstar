@@ -5,8 +5,12 @@ module TLS13.Impl.Server.Endpoint
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
+module Crypto = TLS13.Crypto
 module CPI = Common.ProtocolImplementation
 module CQ = Common.ConnectionStateQuery
+module CR = TLS13.Impl.ConnectionState.Repr
+module ConnQ = TLS13.Impl.ConnectionState.Queries
 module CS = TLS13.Spec.ConnectionState
 module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
@@ -28,7 +32,119 @@ type server_endpoint_frame = {
   server_ep_raw: V.vec U8.t;
   server_ep_network_out_len: SZ.t;
   server_ep_network_out: V.vec U8.t;
+  server_ep_material_len: SZ.t;
+  server_ep_material: V.vec U8.t;
+  server_ep_private_len: SZ.t;
+  server_ep_private: V.vec U8.t;
 }
+
+let server_endpoint_payloads_ready
+  (frame:server_endpoint_frame)
+  : slprop =
+  exists* material private_key.
+    V.pts_to frame.server_ep_material #1.0R material **
+    V.pts_to frame.server_ep_private #1.0R private_key **
+    pure (
+      B.length material == SZ.v frame.server_ep_material_len /\
+      SZ.v frame.server_ep_material_len == 64 /\
+      B.length private_key == SZ.v frame.server_ep_private_len /\
+      SZ.v frame.server_ep_private_len == 32)
+
+let server_endpoint_payload_remainder_ready
+  (frame:server_endpoint_frame)
+  (kind:ST.local_event_kind)
+  : slprop =
+  match kind with
+  | ST.LocalSelectServerParameters
+  | ST.LocalSendServerHello ->
+    exists* private_key.
+      V.pts_to frame.server_ep_private #1.0R private_key **
+      pure (
+        B.length private_key == SZ.v frame.server_ep_private_len /\
+        SZ.v frame.server_ep_private_len == 32 /\
+        SZ.v frame.server_ep_material_len == 64)
+  | ST.LocalDeriveSharedSecret ->
+    exists* material.
+      V.pts_to frame.server_ep_material #1.0R material **
+      pure (
+        B.length material == SZ.v frame.server_ep_material_len /\
+        SZ.v frame.server_ep_material_len == 64 /\
+        SZ.v frame.server_ep_private_len == 32)
+  | _ ->
+    server_endpoint_payloads_ready frame
+
+let server_endpoint_payload_frame_matches
+  (frame:server_endpoint_frame)
+  (kind:ST.local_event_kind)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  : prop =
+  match kind with
+  | ST.LocalSelectServerParameters
+  | ST.LocalSendServerHello ->
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload ==
+      V.vec_to_array frame.server_ep_material /\
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len ==
+      frame.server_ep_material_len /\
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out ==
+      frame.server_ep_query.SQueries.server_query_local_app_out /\
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len ==
+      frame.server_ep_query.SQueries.server_query_local_app_out_len
+  | ST.LocalDeriveSharedSecret ->
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload ==
+      V.vec_to_array frame.server_ep_private /\
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len ==
+      frame.server_ep_private_len /\
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out ==
+      frame.server_ep_query.SQueries.server_query_local_app_out /\
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len ==
+      frame.server_ep_query.SQueries.server_query_local_app_out_len
+  | _ ->
+    False
+
+let server_endpoint_payload_local_action_frame
+  (frame:server_endpoint_frame)
+  (st:CS.connection_state)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  : slprop =
+  SQueries.server_network_persistent_resource frame.server_ep_query **
+  server_endpoint_payload_remainder_ready frame kind **
+  pts_to
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+    payload **
+  pts_to frame.server_ep_query.SQueries.server_query_local_payload B.empty **
+  pts_to
+    local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+    (Ghost.reveal
+      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out) **
+  pure (
+    B.length payload ==
+      SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len /\
+    B.length
+      (Ghost.reveal
+        local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out) ==
+      SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len /\
+    SZ.v frame.server_ep_query.SQueries.server_query_local_payload_len == 0 /\
+    server_endpoint_payload_frame_matches frame kind local_frame /\
+    ST.server_local_event_input_ready st kind payload)
+
+let server_endpoint_payload_local_continuation
+  (frame:server_endpoint_frame)
+  (st:CS.connection_state)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  : slprop =
+  SQueries.server_network_persistent_resource frame.server_ep_query **
+  server_endpoint_payload_remainder_ready frame kind **
+  pts_to frame.server_ep_query.SQueries.server_query_local_payload B.empty **
+  pure (
+    B.length payload ==
+      SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len /\
+    SZ.v frame.server_ep_query.SQueries.server_query_local_payload_len == 0 /\
+    server_endpoint_payload_frame_matches frame kind local_frame /\
+    ST.server_local_event_input_ready st kind payload)
 
 let server_endpoint_frame_ready
   (srv:SP.canonical_server)
@@ -40,7 +156,8 @@ let server_endpoint_frame_ready
     srv
     cfg
     frame.server_ep_query
-    st
+    st **
+  server_endpoint_payloads_ready frame
 
 let server_endpoint_io_ready
   (_srv:SP.canonical_server)
@@ -75,14 +192,25 @@ let server_endpoint_action_frame
       cfg
       frame.server_ep_query
       st
-      (CQ.NextNeedInput network_frame)
+      (CQ.NextNeedInput network_frame) **
+    server_endpoint_payloads_ready frame
   | PE.EndpointLocal ev local_frame ->
-    SQueries.server_next_local_action_frame_post
-      srv
-      cfg
-      frame.server_ep_query
-      st
-      (CQ.NextLocal ev local_frame)
+    (match ev with
+     | CTypes.ServerPayload kind payload ->
+       server_endpoint_payload_local_action_frame
+         frame
+         st
+         kind
+         (Ghost.reveal payload)
+         local_frame
+     | CTypes.ServerAPI _ ->
+       SQueries.server_next_local_action_frame_post
+         srv
+         cfg
+         frame.server_ep_query
+         st
+         (CQ.NextLocal ev local_frame) **
+       server_endpoint_payloads_ready frame)
   | PE.EndpointDone
   | PE.EndpointFailed ->
     server_endpoint_frame_ready srv cfg frame st
@@ -99,7 +227,8 @@ let server_endpoint_network_continuation
     cfg
     frame.server_ep_query
     st
-    network_frame
+    network_frame **
+  server_endpoint_payloads_ready frame
 
 let server_endpoint_local_continuation
   (srv:SP.canonical_server)
@@ -109,13 +238,23 @@ let server_endpoint_local_continuation
   (ev:CTypes.server_local_event)
   (local_frame:SP.tls_server_local_bridge_frame)
   : slprop =
-  SQueries.server_next_local_action_local_continuation
-    srv
-    cfg
-    frame.server_ep_query
-    st
-    ev
-    local_frame
+  match ev with
+  | CTypes.ServerPayload kind payload ->
+    server_endpoint_payload_local_continuation
+      frame
+      st
+      kind
+      (Ghost.reveal payload)
+      local_frame
+  | CTypes.ServerAPI _ ->
+    SQueries.server_next_local_action_local_continuation
+      srv
+      cfg
+      frame.server_ep_query
+      st
+      ev
+      local_frame **
+    server_endpoint_payloads_ready frame
 
 fn server_endpoint_next_action
   (srv:SP.canonical_server)
@@ -155,13 +294,33 @@ ensures
       PE.EndpointNeedInput network_frame
     }
     CQ.NextLocal ev local_frame -> {
-      fold (server_endpoint_action_frame
+      unfold (SQueries.server_next_local_action_frame_post
         srv
         cfg
-        frame
+        frame.server_ep_query
         (Ghost.reveal st)
-        (PE.EndpointLocal ev local_frame));
-      PE.EndpointLocal ev local_frame
+        (CQ.NextLocal ev local_frame));
+      match ev {
+        CTypes.ServerAPI api -> {
+          fold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextLocal (CTypes.ServerAPI api) local_frame));
+          fold (server_endpoint_action_frame
+            srv
+            cfg
+            frame
+            (Ghost.reveal st)
+            (PE.EndpointLocal (CTypes.ServerAPI api) local_frame));
+          PE.EndpointLocal (CTypes.ServerAPI api) local_frame
+        }
+        CTypes.ServerPayload _ _ -> {
+          assert (pure False);
+          unreachable ()
+        }
+      }
     }
     CQ.NextExternal ext -> {
       match ext {
@@ -342,13 +501,113 @@ ensures server_endpoint_frame_ready srv cfg frame (Ghost.reveal st)
       fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st))
     }
     PE.EndpointLocal ev local_frame -> {
-      SQueries.cancel_server_next_action
-        srv
-        cfg
-        frame.server_ep_query
-        st
-        (CQ.NextLocal ev local_frame);
-      fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st))
+      match ev {
+        CTypes.ServerPayload kind payload -> {
+          unfold (server_endpoint_payload_local_action_frame
+            frame
+            (Ghost.reveal st)
+            kind
+            (Ghost.reveal payload)
+            local_frame);
+          assert (pure (server_endpoint_payload_frame_matches frame kind local_frame));
+          rewrite
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+              (Ghost.reveal
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out))
+            as
+            (pts_to
+              frame.server_ep_query.SQueries.server_query_local_app_out
+              (Ghost.reveal
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out));
+          let old_local: Ghost.erased B.bytes =
+            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out;
+          with old_local.
+          fold (SQueries.server_local_persistent_resource frame.server_ep_query);
+          fold (SQueries.server_next_local_action_frame_ready
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st));
+          match kind {
+            ST.LocalSelectServerParameters -> {
+              unfold (server_endpoint_payload_remainder_ready
+                frame
+                ST.LocalSelectServerParameters);
+              with private_key. _;
+              rewrite
+                (pts_to
+                  local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+                  (Ghost.reveal payload))
+                as
+                (pts_to
+                  (V.vec_to_array frame.server_ep_material)
+                  (Ghost.reveal payload));
+              V.to_vec_pts_to frame.server_ep_material;
+              fold (server_endpoint_payloads_ready frame);
+              fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st))
+            }
+            ST.LocalSendServerHello -> {
+              unfold (server_endpoint_payload_remainder_ready
+                frame
+                ST.LocalSendServerHello);
+              with private_key. _;
+              rewrite
+                (pts_to
+                  local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+                  (Ghost.reveal payload))
+                as
+                (pts_to
+                  (V.vec_to_array frame.server_ep_material)
+                  (Ghost.reveal payload));
+              V.to_vec_pts_to frame.server_ep_material;
+              fold (server_endpoint_payloads_ready frame);
+              fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st))
+            }
+            ST.LocalDeriveSharedSecret -> {
+              unfold (server_endpoint_payload_remainder_ready
+                frame
+                ST.LocalDeriveSharedSecret);
+              with material. _;
+              rewrite
+                (pts_to
+                  local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+                  (Ghost.reveal payload))
+                as
+                (pts_to
+                  (V.vec_to_array frame.server_ep_private)
+                  (Ghost.reveal payload));
+              V.to_vec_pts_to frame.server_ep_private;
+              fold (server_endpoint_payloads_ready frame);
+              fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st))
+            }
+            ST.LocalStartServer -> { assert (pure False); unreachable () }
+            ST.LocalInstallClientHandshakeTrafficKeys -> { assert (pure False); unreachable () }
+            ST.LocalInstallServerHandshakeTrafficKeys -> { assert (pure False); unreachable () }
+            ST.LocalInstallClientApplicationTrafficKeys -> { assert (pure False); unreachable () }
+            ST.LocalInstallServerApplicationTrafficKeys -> { assert (pure False); unreachable () }
+            ST.LocalSignCertificateVerify -> { assert (pure False); unreachable () }
+            ST.LocalVerifyClientFinished -> { assert (pure False); unreachable () }
+            ST.LocalDeliverApplicationData -> { assert (pure False); unreachable () }
+            ST.LocalSendEncryptedExtensions -> { assert (pure False); unreachable () }
+            ST.LocalSendCertificate -> { assert (pure False); unreachable () }
+            ST.LocalSendCertificateVerify -> { assert (pure False); unreachable () }
+            ST.LocalSendServerFinished -> { assert (pure False); unreachable () }
+            ST.LocalSendApplicationData -> { assert (pure False); unreachable () }
+            ST.LocalSendCloseNotify -> { assert (pure False); unreachable () }
+            ST.LocalFail -> { assert (pure False); unreachable () }
+          }
+        }
+        CTypes.ServerAPI _ -> {
+          SQueries.cancel_server_next_action
+            srv
+            cfg
+            frame.server_ep_query
+            st
+            (CQ.NextLocal ev local_frame);
+          fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st))
+        }
+      }
     }
     PE.EndpointDone -> {
       ()
@@ -764,26 +1023,145 @@ ensures
     (server_local_output lio)
     (server_local_output_len lio)
     (Ghost.reveal (server_local_old_output lio)));
-  SQueries.prepare_server_next_action_local
-    srv
-    cfg
-    frame.server_ep_query
-    ev
-    local_frame
-    (server_local_output lio)
-    (server_local_output_len lio)
-    st
-    (server_local_old_output lio);
-  unfold (CQ.local_output_buffer
-    (server_local_output lio)
-    (server_local_output_len lio)
-    (Ghost.reveal (server_local_old_output lio)));
-  fold (PE.local_output_buffer
-    (server_local_output lio)
-    (server_local_output_len lio)
-    (Ghost.reveal (server_local_old_output lio)));
-  fold (server_endpoint_local_continuation srv cfg frame (Ghost.reveal st) ev local_frame);
-  lio
+  match ev {
+    CTypes.ServerAPI api -> {
+      SQueries.prepare_server_next_action_local
+        srv
+        cfg
+        frame.server_ep_query
+        (CTypes.ServerAPI api)
+        local_frame
+        (server_local_output lio)
+        (server_local_output_len lio)
+        st
+        (server_local_old_output lio);
+      unfold (CQ.local_output_buffer
+        (server_local_output lio)
+        (server_local_output_len lio)
+        (Ghost.reveal (server_local_old_output lio)));
+      fold (PE.local_output_buffer
+        (server_local_output lio)
+        (server_local_output_len lio)
+        (Ghost.reveal (server_local_old_output lio)));
+      fold (server_endpoint_local_continuation
+        srv
+        cfg
+        frame
+        (Ghost.reveal st)
+        (CTypes.ServerAPI api)
+        local_frame);
+      rewrite
+        (server_local_io_continuation
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st)
+          (CTypes.ServerAPI api)
+          lio)
+        as
+        (server_local_io_continuation
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st)
+          ev
+          lio);
+      rewrite
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          (CTypes.ServerAPI api)
+          local_frame)
+        as
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          ev
+          local_frame);
+      lio
+    }
+    CTypes.ServerPayload kind payload -> {
+      unfold (CQ.local_output_buffer
+        (server_local_output lio)
+        (server_local_output_len lio)
+        (Ghost.reveal (server_local_old_output lio)));
+      fold (PE.local_output_buffer
+        (server_local_output lio)
+        (server_local_output_len lio)
+        (Ghost.reveal (server_local_old_output lio)));
+      unfold (server_endpoint_payload_local_action_frame
+        frame
+        (Ghost.reveal st)
+        kind
+        (Ghost.reveal payload)
+        local_frame);
+      fold (SP.server_local_bridge_frame_pre
+        (CTypes.ServerPayload kind payload)
+        local_frame
+        (Ghost.reveal st)
+        (server_local_output lio)
+        (server_local_output_len lio)
+        (Ghost.reveal (server_local_old_output lio)));
+      fold (server_endpoint_payload_local_continuation
+        frame
+        (Ghost.reveal st)
+        kind
+        (Ghost.reveal payload)
+        local_frame);
+      fold (server_endpoint_local_continuation
+        srv
+        cfg
+        frame
+        (Ghost.reveal st)
+        (CTypes.ServerPayload kind payload)
+        local_frame);
+      rewrite
+        (server_local_io_continuation
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st)
+          (CTypes.ServerPayload kind payload)
+          lio)
+        as
+        (server_local_io_continuation
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal st)
+          ev
+          lio);
+      rewrite
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          (CTypes.ServerPayload kind payload)
+          local_frame)
+        as
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          ev
+          local_frame);
+      lio
+    }
+  }
 }
 
 fn server_finish_local_action
@@ -814,20 +1192,125 @@ requires
 ensures server_endpoint_frame_ready srv cfg frame (Ghost.reveal st1)
 {
   unfold (server_endpoint_local_continuation srv cfg frame (Ghost.reveal st0) ev local_frame);
-  SQueries.finish_server_next_action_local
-    srv
-    cfg
-    frame.server_ep_query
-    ev
-    local_frame
-    result
-    old_out
-    out_contents
-    st0
-    st1
-    wire_outputs
-    local_outputs;
-  fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st1))
+  match ev {
+    CTypes.ServerAPI api -> {
+      SQueries.finish_server_next_action_local
+        srv
+        cfg
+        frame.server_ep_query
+        (CTypes.ServerAPI api)
+        local_frame
+        result
+        old_out
+        out_contents
+        st0
+        st1
+        wire_outputs
+        local_outputs;
+      fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st1))
+    }
+    CTypes.ServerPayload kind payload -> {
+      unfold (server_endpoint_payload_local_continuation
+        frame
+        (Ghost.reveal st0)
+        kind
+        (Ghost.reveal payload)
+        local_frame);
+      assert (pure (server_endpoint_payload_frame_matches frame kind local_frame));
+      unfold (SP.server_local_bridge_frame_post
+        (CTypes.ServerPayload kind payload)
+        local_frame
+        result
+        (Ghost.reveal old_out)
+        (Ghost.reveal out_contents)
+        (Ghost.reveal st0)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputs)
+        (Ghost.reveal local_outputs));
+      with app_out. _;
+      rewrite
+        (pts_to
+          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+          app_out)
+        as
+        (pts_to frame.server_ep_query.SQueries.server_query_local_app_out app_out);
+      with app_out.
+      fold (SQueries.server_local_persistent_resource frame.server_ep_query);
+      fold (SQueries.server_next_local_action_frame_ready
+        srv
+        cfg
+        frame.server_ep_query
+        (Ghost.reveal st1));
+      match kind {
+        ST.LocalSelectServerParameters -> {
+          unfold (server_endpoint_payload_remainder_ready
+            frame
+            ST.LocalSelectServerParameters);
+          with private_key. _;
+          rewrite
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+              (CTypes.server_local_event_api (CTypes.ServerPayload kind payload)).CTypes.server_local_payload)
+            as
+            (pts_to
+              (V.vec_to_array frame.server_ep_material)
+              (Ghost.reveal payload));
+          V.to_vec_pts_to frame.server_ep_material;
+          fold (server_endpoint_payloads_ready frame);
+          fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st1))
+        }
+        ST.LocalSendServerHello -> {
+          unfold (server_endpoint_payload_remainder_ready
+            frame
+            ST.LocalSendServerHello);
+          with private_key. _;
+          rewrite
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+              (CTypes.server_local_event_api (CTypes.ServerPayload kind payload)).CTypes.server_local_payload)
+            as
+            (pts_to
+              (V.vec_to_array frame.server_ep_material)
+              (Ghost.reveal payload));
+          V.to_vec_pts_to frame.server_ep_material;
+          fold (server_endpoint_payloads_ready frame);
+          fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st1))
+        }
+        ST.LocalDeriveSharedSecret -> {
+          unfold (server_endpoint_payload_remainder_ready
+            frame
+            ST.LocalDeriveSharedSecret);
+          with material. _;
+          rewrite
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+              (CTypes.server_local_event_api (CTypes.ServerPayload kind payload)).CTypes.server_local_payload)
+            as
+            (pts_to
+              (V.vec_to_array frame.server_ep_private)
+              (Ghost.reveal payload));
+          V.to_vec_pts_to frame.server_ep_private;
+          fold (server_endpoint_payloads_ready frame);
+          fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st1))
+        }
+        ST.LocalStartServer -> { assert (pure False); unreachable () }
+        ST.LocalInstallClientHandshakeTrafficKeys -> { assert (pure False); unreachable () }
+        ST.LocalInstallServerHandshakeTrafficKeys -> { assert (pure False); unreachable () }
+        ST.LocalInstallClientApplicationTrafficKeys -> { assert (pure False); unreachable () }
+        ST.LocalInstallServerApplicationTrafficKeys -> { assert (pure False); unreachable () }
+        ST.LocalSignCertificateVerify -> { assert (pure False); unreachable () }
+        ST.LocalVerifyClientFinished -> { assert (pure False); unreachable () }
+        ST.LocalDeliverApplicationData -> { assert (pure False); unreachable () }
+        ST.LocalSendEncryptedExtensions -> { assert (pure False); unreachable () }
+        ST.LocalSendCertificate -> { assert (pure False); unreachable () }
+        ST.LocalSendCertificateVerify -> { assert (pure False); unreachable () }
+        ST.LocalSendServerFinished -> { assert (pure False); unreachable () }
+        ST.LocalSendApplicationData -> { assert (pure False); unreachable () }
+        ST.LocalSendCloseNotify -> { assert (pure False); unreachable () }
+        ST.LocalFail -> { assert (pure False); unreachable () }
+      }
+    }
+  }
 }
 
 fn server_finish_local_io
