@@ -23,7 +23,6 @@ type server_external_action =
   | ServerExternalSelectServerParameters
   | ServerExternalDeriveSharedSecret
   | ServerExternalSendServerHello
-  | ServerExternalSignCertificateVerify
 
 noeq
 type server_next_local_action_frame = {
@@ -138,7 +137,9 @@ let server_next_action_of_tls
         (server_local_event_of_kind action.ST.next_local_kind)
         local_frame
     | ST.LocalSignCertificateVerify ->
-      CQ.NextExternal ServerExternalSignCertificateVerify
+      CQ.NextLocal
+        (server_local_event_of_kind action.ST.next_local_kind)
+        local_frame
     | _ ->
       CQ.NextLocal
         (server_local_event_of_kind action.ST.next_local_kind)
@@ -220,12 +221,6 @@ let server_external_action_witness
       ST.next_local_kind = ST.LocalSendServerHello;
       ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
     }
-  | ServerExternalSignCertificateVerify ->
-    {
-      ST.next_local_ready = true;
-      ST.next_local_kind = ST.LocalSignCertificateVerify;
-      ST.next_local_payload = ST.LocalPayloadNone;
-    }
 
 let server_external_action_ready
   (st:CS.connection_state)
@@ -244,9 +239,13 @@ let server_internal_ready_implies_kind_ready
         (match tls_action.ST.next_local_kind with
         | ST.LocalSelectServerParameters
         | ST.LocalDeriveSharedSecret
-        | ST.LocalSendServerHello
-        | ST.LocalSignCertificateVerify ->
+        | ST.LocalSendServerHello ->
           True
+        | ST.LocalSignCertificateVerify ->
+          ST.server_local_event_input_ready
+            st
+            tls_action.ST.next_local_kind
+            B.empty
         | _ ->
           ST.server_local_event_input_ready
             st
@@ -275,7 +274,13 @@ let server_next_action_correct
     | ST.LocalSelectServerParameters -> ()
     | ST.LocalDeriveSharedSecret -> ()
     | ST.LocalSendServerHello -> ()
-    | ST.LocalSignCertificateVerify -> ()
+    | ST.LocalSignCertificateVerify ->
+      server_internal_ready_implies_kind_ready st tls_action;
+      assert (ST.server_local_event_input_ready
+        st
+        tls_action.ST.next_local_kind
+        B.empty);
+      assert (Seq.equal B.empty B.empty)
     | _ ->
       server_internal_ready_implies_kind_ready st tls_action;
       assert (ST.server_local_event_input_ready
@@ -1097,25 +1102,8 @@ ensures
         return_server_payload_free_action srv cfg frame ST.LocalInstallServerApplicationTrafficKeys local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
       }
       ST.LocalSignCertificateVerify -> {
-        with network_current.
-        fold (server_network_persistent_resource frame);
-        with local_current.
-        fold (server_local_persistent_resource frame);
-        fold (server_next_local_action_frame_ready
-          srv
-          cfg
-          frame
-          (Ghost.reveal st));
-        assert (pure (server_external_action_ready
-          (Ghost.reveal st)
-          ServerExternalSignCertificateVerify));
-        fold (server_next_local_action_frame_post
-          srv
-          cfg
-          frame
-          (Ghost.reveal st)
-          (CQ.NextExternal ServerExternalSignCertificateVerify));
-        CQ.NextExternal ServerExternalSignCertificateVerify
+        server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
+        return_server_payload_free_action srv cfg frame ST.LocalSignCertificateVerify local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
       }
       ST.LocalVerifyClientFinished -> {
         server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
