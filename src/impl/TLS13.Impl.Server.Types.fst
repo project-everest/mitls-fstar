@@ -202,18 +202,7 @@ let next_local_action_sound
       st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
       st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
       st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
-      st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None /\
-      (match st.CS.cs_model.CS.model_config.CS.config_server,
-             st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
-       | Some cfg, Some selection ->
-         selection.CS.server_selected_signature_scheme ==
-           T.RsaPssRsaeSha256 /\
-         selection.CS.server_selected_credential ==
-           cfg.CS.server_credential_identity /\
-         CS.signature_scheme_offered
-           st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-           T.RsaPssRsaeSha256
-       | _, _ -> False)
+      st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None
     | LocalSendCertificateVerify ->
       action.next_local_payload == LocalPayloadNone /\
       st.CS.cs_model.CS.model_control ==
@@ -393,25 +382,6 @@ let server_local_event_input_ready
               (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
         })
      | None -> False)
-  | LocalSignCertificateVerify ->
-    Seq.equal payload B.empty /\
-    st.CS.cs_model.CS.model_control ==
-     CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
-    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-    st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-    st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
-    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None /\
-    (match st.CS.cs_model.CS.model_config.CS.config_server,
-        st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
-     | Some cfg, Some selection ->
-      selection.CS.server_selected_signature_scheme ==
-        T.RsaPssRsaeSha256 /\
-      selection.CS.server_selected_credential ==
-        cfg.CS.server_credential_identity /\
-      CS.signature_scheme_offered
-        st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-        T.RsaPssRsaeSha256
-     | _, _ -> False)
   | LocalSendEncryptedExtensions ->
     Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==
