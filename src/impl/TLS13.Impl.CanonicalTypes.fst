@@ -61,8 +61,28 @@ type client_api_event = {
   client_local_payload: B.bytes;
 }
 
+noeq
 type client_local_event =
   | ClientAPI: event:client_api_event -> client_local_event
+  | ClientValidateCertificate: payload:Ghost.erased B.bytes -> client_local_event
+
+let client_local_event_kind
+  (ev:client_local_event)
+  : CT.local_event_kind =
+  match ev with
+  | ClientAPI api -> api.client_local_kind
+  | ClientValidateCertificate _ -> CT.LocalValidateCertificate
+
+let client_local_event_api
+  (ev:client_local_event)
+  : GTot client_api_event =
+  match ev with
+  | ClientAPI api -> api
+  | ClientValidateCertificate payload ->
+    {
+      client_local_kind = CT.LocalValidateCertificate;
+      client_local_payload = Ghost.reveal payload;
+    }
 
 type server_api_event = {
   server_local_kind: ST.local_event_kind;

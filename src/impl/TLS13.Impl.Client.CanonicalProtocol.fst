@@ -90,8 +90,7 @@ let client_step
         st1 /\
       client_local_outputs_match conn_ev out.SM.so_local_outputs
   | SM.LocalEvent local ->
-    (match local with
-    | CTypes.ClientAPI api ->
+    let api = CTypes.client_local_event_api local in
       exists conn_ev raw_sent raw_received.
         client_api_event_matches st0 api conn_ev /\
         client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
@@ -103,7 +102,7 @@ let client_step
             CS.delta_raw_sent = raw_sent;
             CS.delta_raw_received = raw_received;
           }
-           st1)
+           st1
 
 noextract
 let client_state_machine
@@ -728,6 +727,7 @@ let lemma_client_local_step_ok_process_correct
   (initial:CS.connection_state)
   (st0:CS.connection_state)
   (st1:CS.connection_state)
+  (local_ev:CTypes.client_local_event)
   (api:CTypes.client_api_event)
   (resp:CT.client_response)
   (old_network_out:B.bytes)
@@ -746,6 +746,7 @@ let lemma_client_local_step_ok_process_correct
           api.CTypes.client_local_payload
           network_out
           app_out /\
+        api == CTypes.client_local_event_api local_ev /\
         resp.CT.status == CT.StepOk /\
         SZ.v out_len == B.length old_network_out /\
         B.length network_out == B.length old_network_out /\
@@ -754,7 +755,7 @@ let lemma_client_local_step_ok_process_correct
       (ensures
         CPI.local_process_correct
           (client_system initial)
-          (CTypes.ClientAPI api)
+          local_ev
           old_network_out
           network_out
           out_len
@@ -958,7 +959,7 @@ let lemma_client_local_step_ok_process_correct
         st1);
     assert (client_step
       st0
-      (SM.LocalEvent (CTypes.ClientAPI api))
+      (SM.LocalEvent local_ev)
       st1
       (CPI.step_output wire_outputs local_outputs));
     let produced =
@@ -981,7 +982,7 @@ let lemma_client_local_step_ok_process_correct
     assert (exists produced'.
       client_step
         st0
-        (SM.LocalEvent (CTypes.ClientAPI api))
+        (SM.LocalEvent local_ev)
         st1
         (CPI.step_output wire_outputs local_outputs) /\
       Seq.equal
@@ -995,7 +996,7 @@ let lemma_client_local_step_ok_process_correct
       Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced'));
     assert (CPI.local_process_correct
       (client_system initial)
-      (CTypes.ClientAPI api)
+      local_ev
       old_network_out
       network_out
       out_len
@@ -1023,6 +1024,7 @@ let lemma_client_local_rejected_process_correct
   (initial:CS.connection_state)
   (st0:CS.connection_state)
   (st1:CS.connection_state)
+  (local_ev:CTypes.client_local_event)
   (api:CTypes.client_api_event)
   (resp:CT.client_response)
   (old_network_out:B.bytes)
@@ -1041,6 +1043,7 @@ let lemma_client_local_rejected_process_correct
           api.CTypes.client_local_payload
           network_out
           app_out /\
+        api == CTypes.client_local_event_api local_ev /\
         (resp.CT.status == CT.IllegalTransition \/
          resp.CT.status == CT.ConnectionFailed) /\
         SZ.v out_len == B.length old_network_out /\
@@ -1050,7 +1053,7 @@ let lemma_client_local_rejected_process_correct
       (ensures
         CPI.local_process_correct
           (client_system initial)
-          (CTypes.ClientAPI api)
+          local_ev
           old_network_out
           network_out
           out_len
@@ -1170,7 +1173,7 @@ let lemma_client_local_rejected_process_correct
     Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced'));
   assert (CPI.local_process_correct
     (client_system initial)
-    (CTypes.ClientAPI api)
+    local_ev
     old_network_out
     network_out
     out_len
@@ -1249,22 +1252,21 @@ let client_local_frame_pre
   (out_len:SZ.t)
   (old_network_out:B.bytes)
   : slprop =
-  match ev with
-  | CTypes.ClientAPI api ->
-    pts_to frame.tls_client_local_payload api.CTypes.client_local_payload **
-    pts_to
-      frame.tls_client_local_app_out
-      (Ghost.reveal frame.tls_client_local_old_app_out) **
-    pure (
-      B.length api.CTypes.client_local_payload ==
-        SZ.v frame.tls_client_local_payload_len /\
-      B.length old_network_out == SZ.v out_len /\
-      B.length (Ghost.reveal frame.tls_client_local_old_app_out) ==
-        SZ.v frame.tls_client_local_app_out_len /\
-      CT.local_input_wf
-        st0
-        api.CTypes.client_local_kind
-        api.CTypes.client_local_payload)
+  let api = CTypes.client_local_event_api ev in
+  pts_to frame.tls_client_local_payload api.CTypes.client_local_payload **
+  pts_to
+    frame.tls_client_local_app_out
+    (Ghost.reveal frame.tls_client_local_old_app_out) **
+  pure (
+    B.length api.CTypes.client_local_payload ==
+      SZ.v frame.tls_client_local_payload_len /\
+    B.length old_network_out == SZ.v out_len /\
+    B.length (Ghost.reveal frame.tls_client_local_old_app_out) ==
+      SZ.v frame.tls_client_local_app_out_len /\
+    CT.local_input_wf
+      st0
+      api.CTypes.client_local_kind
+      api.CTypes.client_local_payload)
 
 let client_local_frame_post
   (ev:CTypes.client_local_event)
@@ -1277,13 +1279,12 @@ let client_local_frame_post
   (wire_outputs:list CW.wire_message)
   (local_outputs:list CTypes.local_output)
   : slprop =
-  match ev with
-  | CTypes.ClientAPI api ->
-    exists* (app_out:B.bytes).
-      pts_to frame.tls_client_local_payload api.CTypes.client_local_payload **
-      pts_to frame.tls_client_local_app_out app_out **
-      pure (
-        B.length app_out == SZ.v frame.tls_client_local_app_out_len)
+  let api = CTypes.client_local_event_api ev in
+  exists* (app_out:B.bytes).
+    pts_to frame.tls_client_local_payload api.CTypes.client_local_payload **
+    pts_to frame.tls_client_local_app_out app_out **
+    pure (
+      B.length app_out == SZ.v frame.tls_client_local_app_out_len)
 
 let client_state_ahead
   (initial:CS.connection_state)
@@ -2640,8 +2641,11 @@ ensures exists* (received1:Ghost.erased B.bytes)
     out
     out_len
     (Ghost.reveal old_out));
-  match ev {
-    CTypes.ClientAPI api -> {
+  let kind = CTypes.client_local_event_kind ev;
+  let api:Ghost.erased CTypes.client_api_event =
+    Ghost.hide (CTypes.client_local_event_api ev);
+  assert (pure ((Ghost.reveal api) == CTypes.client_local_event_api ev));
+  assert (pure (kind == (Ghost.reveal api).CTypes.client_local_kind));
     rewrite
       (C.connection_exactly cc.canonical_client_state (Ghost.reveal st0))
       as
@@ -2649,7 +2653,7 @@ ensures exists* (received1:Ghost.erased B.bytes)
     let resp =
       C.process_local_event
         cc.canonical_client_state
-        api.CTypes.client_local_kind
+        kind
         frame.tls_client_local_payload
         frame.tls_client_local_payload_len
         out
@@ -2669,24 +2673,24 @@ ensures exists* (received1:Ghost.erased B.bytes)
       (Ghost.reveal st0)
       st1
       resp
-      api.CTypes.client_local_kind
-      api.CTypes.client_local_payload
+      (Ghost.reveal api).CTypes.client_local_kind
+      (Ghost.reveal api).CTypes.client_local_payload
       network_out_bytes
       app_out_bytes));
     CT.lemma_local_event_end_to_end_correct_preserves_config
       (Ghost.reveal st0)
       st1
       resp
-      api.CTypes.client_local_kind
-      api.CTypes.client_local_payload
+      (Ghost.reveal api).CTypes.client_local_kind
+      (Ghost.reveal api).CTypes.client_local_payload
       network_out_bytes
       app_out_bytes;
     CT.lemma_local_event_end_to_end_correct_client_end_to_end_invariant
       (Ghost.reveal st0)
       st1
       resp
-      api.CTypes.client_local_kind
-      api.CTypes.client_local_payload
+      (Ghost.reveal api).CTypes.client_local_kind
+      (Ghost.reveal api).CTypes.client_local_payload
       network_out_bytes
       app_out_bytes;
     let wire_outputse : Ghost.erased (wire_outputs:list CW.wire_message{
@@ -2702,7 +2706,8 @@ ensures exists* (received1:Ghost.erased B.bytes)
         (Ghost.reveal cc.canonical_client_initial)
         (Ghost.reveal st0)
         st1
-        api
+        ev
+        (Ghost.reveal api)
         resp
         (Ghost.reveal old_out)
         network_out_bytes
@@ -2717,7 +2722,8 @@ ensures exists* (received1:Ghost.erased B.bytes)
         (Ghost.reveal cc.canonical_client_initial)
         (Ghost.reveal st0)
         st1
-        api
+        ev
+        (Ghost.reveal api)
         resp
         (Ghost.reveal old_out)
         network_out_bytes
@@ -2728,7 +2734,7 @@ ensures exists* (received1:Ghost.erased B.bytes)
     };
     assert (pure (CPI.local_process_correct
       (client_system (Ghost.reveal cc.canonical_client_initial))
-      (CTypes.ClientAPI api)
+      ev
       (Ghost.reveal old_out)
       network_out_bytes
       out_len
@@ -2769,14 +2775,14 @@ ensures exists* (received1:Ghost.erased B.bytes)
     lemma_client_local_progress
       (Ghost.reveal st0)
       (Ghost.reveal st1e)
-      api
+      (Ghost.reveal api)
       resp
       network_out_bytes
       app_out_bytes;
     MR.update cc.canonical_client_progress (Ghost.reveal st1e);
     with app_out_bytes.
     fold (client_local_frame_post
-      (CTypes.ClientAPI api)
+      ev
       frame
       (CTypes.client_local_process_result resp)
       (Ghost.reveal old_out)
@@ -2785,34 +2791,12 @@ ensures exists* (received1:Ghost.erased B.bytes)
       (Ghost.reveal st1e)
       (Ghost.reveal wire_outputse)
       (Ghost.reveal local_outputse));
-    rewrite (client_local_frame_post
-      (CTypes.ClientAPI api)
-      frame
-      (CTypes.client_local_process_result resp)
-      (Ghost.reveal old_out)
-      network_out_bytes
-      (Ghost.reveal st0)
-      (Ghost.reveal st1e)
-      (Ghost.reveal wire_outputse)
-      (Ghost.reveal local_outputse)) as
-      (client_local_frame_post
-        ev
-        frame
-        (CTypes.client_local_process_result resp)
-        (Ghost.reveal old_out)
-        network_out_bytes
-        (Ghost.reveal st0)
-        (Ghost.reveal st1e)
-        (Ghost.reveal wire_outputse)
-        (Ghost.reveal local_outputse));
     fold (client_invariant
       cc
       (Ghost.reveal received1e)
       (Ghost.reveal sent1e)
       (Ghost.reveal st1e));
     CTypes.client_local_process_result resp
-    }
-  }
 }
 
 noextract

@@ -135,6 +135,43 @@ let client_local_event_ready
       st
       api.CTypes.client_local_kind
       api.CTypes.client_local_payload
+  | CTypes.ClientValidateCertificate payload ->
+    Seq.equal (Ghost.reveal payload) B.empty /\
+    CT.local_input_wf st CT.LocalValidateCertificate (Ghost.reveal payload)
+
+let client_local_event_from_query
+  (ev:CTypes.client_local_event)
+  : prop =
+  match ev with
+  | CTypes.ClientAPI _ -> True
+  | CTypes.ClientValidateCertificate _ -> False
+
+let client_local_event_ready_payload_empty
+  (st:CS.connection_state)
+  (ev:CTypes.client_local_event)
+  : Lemma
+      (requires client_local_event_ready st ev)
+      (ensures Seq.equal
+        (CTypes.client_local_event_api ev).CTypes.client_local_payload
+        B.empty)
+=
+  match ev with
+  | CTypes.ClientAPI _ -> ()
+  | CTypes.ClientValidateCertificate _ -> ()
+
+let client_local_event_ready_input_wf
+  (st:CS.connection_state)
+  (ev:CTypes.client_local_event)
+  : Lemma
+      (requires client_local_event_ready st ev)
+      (ensures CT.local_input_wf
+        st
+        (CTypes.client_local_event_api ev).CTypes.client_local_kind
+        (CTypes.client_local_event_api ev).CTypes.client_local_payload)
+=
+  match ev with
+  | CTypes.ClientAPI _ -> ()
+  | CTypes.ClientValidateCertificate _ -> ()
 
 let client_external_action_ready
   (cfg:client_next_local_action_config)
@@ -310,15 +347,13 @@ let client_next_local_action_frame_post
     client_local_persistent_resource frame **
     pure (client_network_frame_matches frame network_frame)
   | CQ.NextLocal ev local_frame ->
-    (match ev with
-    | CTypes.ClientAPI _ ->
-      client_local_frame_resource local_frame **
-      client_network_persistent_resource frame **
-      pure (
-        client_local_event_ready st ev /\
-        client_local_frame_matches frame local_frame /\
-        SZ.v frame.client_query_local_payload_len == 0)
-    )
+    client_local_frame_resource local_frame **
+    client_network_persistent_resource frame **
+    pure (
+      client_local_event_ready st ev /\
+      client_local_frame_matches frame local_frame /\
+      SZ.v frame.client_query_local_payload_len == 0 /\
+      client_local_event_from_query ev)
   | CQ.NextExternal ext ->
     client_next_local_action_frame_ready cc cfg frame st **
     pure (client_external_action_ready cfg st ext)
@@ -346,13 +381,11 @@ let client_next_local_action_local_continuation
   (ev:CTypes.client_local_event)
   (local_frame:CP.tls_client_local_frame)
   : slprop =
-  match ev with
-  | CTypes.ClientAPI _ ->
-    client_network_persistent_resource frame **
-    pure (
-      client_local_event_ready st ev /\
-      client_local_frame_matches frame local_frame /\
-      SZ.v frame.client_query_local_payload_len == 0)
+  client_network_persistent_resource frame **
+  pure (
+    client_local_event_ready st ev /\
+    client_local_frame_matches frame local_frame /\
+    SZ.v frame.client_query_local_payload_len == 0)
 
 fn cancel_client_next_action
   (cc:CP.canonical_client)
@@ -414,35 +447,30 @@ ensures
         (Ghost.reveal st))
     }
     CQ.NextLocal ev local_frame -> {
-      match ev {
-        CTypes.ClientAPI api -> {
-          unfold (client_local_frame_resource local_frame);
-          Seq.lemma_eq_elim api.CTypes.client_local_payload B.empty;
-          rewrite
-            (pts_to local_frame.CP.tls_client_local_payload B.empty)
-            as
-            (pts_to frame.client_query_local_payload B.empty);
-          rewrite
-            (pts_to
-              local_frame.CP.tls_client_local_app_out
-              (Ghost.reveal local_frame.CP.tls_client_local_old_app_out))
-            as
-            (pts_to
-              frame.client_query_local_app_out
-              (Ghost.reveal local_frame.CP.tls_client_local_old_app_out));
-          let old_local: Ghost.erased B.bytes =
-            local_frame.CP.tls_client_local_old_app_out;
-          with old_local.
-          fold (client_local_persistent_resource frame);
-          fold (client_next_local_action_frame_ready
-            cc
-            cfg
-            frame
-            (Ghost.reveal st))
-        }
-      }
+      unfold (client_local_frame_resource local_frame);
+      rewrite
+        (pts_to local_frame.CP.tls_client_local_payload B.empty)
+        as
+        (pts_to frame.client_query_local_payload B.empty);
+      rewrite
+        (pts_to
+          local_frame.CP.tls_client_local_app_out
+          (Ghost.reveal local_frame.CP.tls_client_local_old_app_out))
+        as
+        (pts_to
+          frame.client_query_local_app_out
+          (Ghost.reveal local_frame.CP.tls_client_local_old_app_out));
+      let old_local: Ghost.erased B.bytes =
+        local_frame.CP.tls_client_local_old_app_out;
+      with old_local.
+      fold (client_local_persistent_resource frame);
+      fold (client_next_local_action_frame_ready
+        cc
+        cfg
+        frame
+        (Ghost.reveal st))
     }
-    CQ.NextExternal _ -> {
+    CQ.NextExternal ext -> {
       fold (client_next_local_action_frame_ready
         cc
         cfg
@@ -679,89 +707,52 @@ ensures
     out_len
     (Ghost.reveal old_out)
 {
-  unfold (client_next_local_action_frame_post
-    cc
-    cfg
-    frame
-    (Ghost.reveal st)
-    (CQ.NextLocal ev local_frame));
   unfold (CQ.local_output_buffer
     out
     out_len
     (Ghost.reveal old_out));
-  match ev {
-    CTypes.ClientAPI api -> {
-      unfold (client_local_frame_resource local_frame);
-      Seq.lemma_eq_elim api.CTypes.client_local_payload B.empty;
-      assert (pure (B.length api.CTypes.client_local_payload ==
-        SZ.v local_frame.CP.tls_client_local_payload_len));
-      assert (pure (B.length (Ghost.reveal old_out) == SZ.v out_len));
-      assert (pure (B.length (Ghost.reveal local_frame.CP.tls_client_local_old_app_out) ==
-        SZ.v local_frame.CP.tls_client_local_app_out_len));
-      assert (pure (CT.local_input_wf
-        (Ghost.reveal st)
-        api.CTypes.client_local_kind
-        api.CTypes.client_local_payload));
-      assert (pure (client_local_frame_matches frame local_frame));
-      assert (pure (SZ.v frame.client_query_local_payload_len == 0));
-      rewrite
-        (pts_to local_frame.CP.tls_client_local_payload B.empty)
-        as
-        (pts_to
-          local_frame.CP.tls_client_local_payload
-          api.CTypes.client_local_payload);
-      fold (CP.client_local_frame_pre
-        (CTypes.ClientAPI api)
-        local_frame
-        (Ghost.reveal st)
-        out
-        out_len
-        (Ghost.reveal old_out));
-      rewrite
-        (CP.client_local_frame_pre
-          (CTypes.ClientAPI api)
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out))
-        as
-        (CP.client_local_frame_pre
-          ev
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out));
-      fold (client_next_local_action_local_continuation
-        cc
-        cfg
-        frame
-        (Ghost.reveal st)
-        (CTypes.ClientAPI api)
-        local_frame);
-      rewrite
-        (client_next_local_action_local_continuation
-          cc
-          cfg
-          frame
-          (Ghost.reveal st)
-          (CTypes.ClientAPI api)
-          local_frame)
-        as
-        (client_next_local_action_local_continuation
-          cc
-          cfg
-          frame
-          (Ghost.reveal st)
-          ev
-          local_frame);
-      fold (CQ.local_output_buffer
-        out
-        out_len
-        (Ghost.reveal old_out))
-    }
-  }
+  unfold (client_local_frame_resource local_frame);
+  client_local_event_ready_payload_empty (Ghost.reveal st) ev;
+  client_local_event_ready_input_wf (Ghost.reveal st) ev;
+  Seq.lemma_eq_elim
+    (CTypes.client_local_event_api ev).CTypes.client_local_payload
+    B.empty;
+  assert (pure (B.length
+    (CTypes.client_local_event_api ev).CTypes.client_local_payload ==
+    SZ.v local_frame.CP.tls_client_local_payload_len));
+  assert (pure (B.length (Ghost.reveal old_out) == SZ.v out_len));
+  assert (pure (B.length (Ghost.reveal local_frame.CP.tls_client_local_old_app_out) ==
+    SZ.v local_frame.CP.tls_client_local_app_out_len));
+  assert (pure (CT.local_input_wf
+    (Ghost.reveal st)
+    (CTypes.client_local_event_api ev).CTypes.client_local_kind
+    (CTypes.client_local_event_api ev).CTypes.client_local_payload));
+  assert (pure (client_local_frame_matches frame local_frame));
+  assert (pure (SZ.v frame.client_query_local_payload_len == 0));
+  rewrite
+    (pts_to local_frame.CP.tls_client_local_payload B.empty)
+    as
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      (CTypes.client_local_event_api ev).CTypes.client_local_payload);
+  fold (CP.client_local_frame_pre
+    ev
+    local_frame
+    (Ghost.reveal st)
+    out
+    out_len
+    (Ghost.reveal old_out));
+  fold (client_next_local_action_local_continuation
+    cc
+    cfg
+    frame
+    (Ghost.reveal st)
+    ev
+    local_frame);
+  fold (CQ.local_output_buffer
+    out
+    out_len
+    (Ghost.reveal old_out))
 }
 
 fn finish_client_next_action_local
@@ -809,47 +800,46 @@ ensures
     (Ghost.reveal st0)
     ev
     local_frame);
-  match ev {
-    CTypes.ClientAPI api -> {
-      unfold (CP.client_local_frame_post
-        (CTypes.ClientAPI api)
-        local_frame
-        result
-        (Ghost.reveal old_out)
-        (Ghost.reveal out_contents)
-        (Ghost.reveal st0)
-        (Ghost.reveal st1)
-        (Ghost.reveal wire_outputs)
-        (Ghost.reveal local_outputs));
-      with app_out. _;
-      unfold (client_network_persistent_resource frame);
-      with network_current. _;
-      Seq.lemma_eq_elim api.CTypes.client_local_payload B.empty;
-      assert (pure (client_local_frame_matches frame local_frame));
-      assert (pure (SZ.v frame.client_query_local_payload_len == 0));
-      assert (pure (B.length (Ghost.reveal app_out) ==
-        SZ.v frame.client_query_local_app_out_len));
-      rewrite
-        (pts_to
-          local_frame.CP.tls_client_local_payload
-          api.CTypes.client_local_payload)
-        as
-        (pts_to frame.client_query_local_payload B.empty);
-      rewrite
-        (pts_to local_frame.CP.tls_client_local_app_out app_out)
-        as
-        (pts_to frame.client_query_local_app_out app_out);
-      with app_out.
-      fold (client_local_persistent_resource frame);
-      with network_current.
-      fold (client_network_persistent_resource frame);
-      fold (client_next_local_action_frame_ready
-        cc
-        cfg
-        frame
-        (Ghost.reveal st1))
-    }
-  }
+  unfold (CP.client_local_frame_post
+    ev
+    local_frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs));
+  with app_out. _;
+  unfold (client_network_persistent_resource frame);
+  with network_current. _;
+  client_local_event_ready_payload_empty (Ghost.reveal st0) ev;
+  Seq.lemma_eq_elim
+    (CTypes.client_local_event_api ev).CTypes.client_local_payload
+    B.empty;
+  assert (pure (client_local_frame_matches frame local_frame));
+  assert (pure (SZ.v frame.client_query_local_payload_len == 0));
+  assert (pure (B.length (Ghost.reveal app_out) ==
+    SZ.v frame.client_query_local_app_out_len));
+  rewrite
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      (CTypes.client_local_event_api ev).CTypes.client_local_payload)
+    as
+    (pts_to frame.client_query_local_payload B.empty);
+  rewrite
+    (pts_to local_frame.CP.tls_client_local_app_out app_out)
+    as
+    (pts_to frame.client_query_local_app_out app_out);
+  with app_out.
+  fold (client_local_persistent_resource frame);
+  with network_current.
+  fold (client_network_persistent_resource frame);
+  fold (client_next_local_action_frame_ready
+    cc
+    cfg
+    frame
+    (Ghost.reveal st1))
 }
 
 fn return_client_payload_free_action
