@@ -5,7 +5,9 @@ module TLS13.Impl.Server.Endpoint
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
+module CM = TLS13.Impl.ConnectionState.Model
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
 module CPI = Common.ProtocolImplementation
@@ -28,6 +30,7 @@ module T = TLS13.Types
 module TCP = Common.TCP
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module W = TLS13.Wire.Spec
 
 let server_endpoint_private_bytes_of_material
   (material:B.bytes)
@@ -746,6 +749,197 @@ ensures
               ST.LocalDeriveSharedSecret
               (Ghost.hide private_key))
             local_frame
+        }
+        SQueries.ServerExternalSendServerHello -> {
+          unfold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextExternal ext));
+          unfold (SQueries.server_next_local_action_frame_ready
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st));
+          unfold (SQueries.server_network_persistent_resource frame.server_ep_query);
+          with network_current. _;
+          unfold (SQueries.server_local_persistent_resource frame.server_ep_query);
+          with local_current. _;
+          unfold (server_endpoint_payloads_ready frame);
+          with material private_key. _;
+          assert (pure (SQueries.server_external_action_ready
+            (Ghost.reveal st)
+            SQueries.ServerExternalSendServerHello));
+          let material_ready =
+            Ghost.reveal (frame.server_ep_material_external_ready
+              st
+              SQueries.ServerExternalSendServerHello);
+          assert (pure (server_endpoint_material_matches_state
+            frame
+            (Ghost.reveal st)));
+          unfold (SP.server_invariant
+            srv
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          with certificate_chain credential_identity. _;
+          rewrite
+            (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
+            as
+            (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
+          let ready =
+            ConnQ.can_send_server_hello_runtime
+              srv.SP.canonical_server_state;
+          rewrite
+            (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
+            as
+            (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
+          if ready {
+            assert (pure (ready));
+            assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived));
+            assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint));
+            assert (pure (Some?
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+            assert (pure (
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
+            assert (pure (Some?
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+            assert (pure (
+              B.length (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                90 <= Bounds.max_transcript_len));
+            assert (pure (B.length (CL.raw_slice material 0 32) == 32));
+            assert (pure (B.length (CL.raw_slice material 32 64) == 32));
+            let sh : Ghost.erased M.server_hello =
+              Ghost.hide {
+                M.random = CL.raw_slice material 0 32;
+                M.key_share =
+                  CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64);
+                M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                M.body = B.empty;
+              };
+            let selection : Ghost.erased CS.server_handshake_selection =
+              Ghost.hide (Some?.v
+                (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+            Seq.lemma_eq_elim
+              material
+              (server_endpoint_material_bytes frame);
+            assert (pure (CS.server_hello_matches_selection
+              (Ghost.reveal selection)
+              (Ghost.reveal sh)));
+            W.lemma_serialize_server_hello_from_selection_len (Ghost.reveal sh);
+            W.lemma_fixed_server_handshake_serializers
+              (Ghost.reveal sh)
+              { M.chain = []; M.body = B.empty }
+              { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
+              { M.verify_data = Seq.create 32 0uy };
+            W.lemma_serialize_server_hello_len (Ghost.reveal sh);
+            assert (pure (B.length (W.serialize_handshake (M.ServerHello (Ghost.reveal sh))) == 90));
+            assert (pure (
+              B.length (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                B.length (W.serialize_handshake (M.ServerHello (Ghost.reveal sh))) <=
+                Bounds.max_transcript_len));
+            assert (pure (CS.legal_event
+              (Ghost.reveal st).CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.ServerHello (Ghost.reveal sh));
+              })));
+            assert (pure (CS.event_raw_delta_legal
+              (Ghost.reveal st).CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.ServerHello (Ghost.reveal sh));
+              })
+              (CS.serialized_cleartext_tls_message
+                (M.TlsHandshake (M.ServerHello (Ghost.reveal sh))))
+              B.empty));
+            assert (pure (CM.can_send_server_hello
+              (Ghost.reveal st)
+              (Ghost.reveal sh)
+              (CS.serialized_cleartext_tls_message
+                (M.TlsHandshake (M.ServerHello (Ghost.reveal sh))))));
+            assert (pure (ST.server_local_event_input_ready
+              (Ghost.reveal st)
+              ST.LocalSendServerHello
+              material));
+            fold (SP.server_invariant
+              srv
+              (Ghost.reveal received)
+              (Ghost.reveal sent)
+              (Ghost.reveal st));
+            let old_local = Ghost.hide local_current;
+            let local_frame =
+              server_endpoint_material_local_frame frame old_local;
+            V.to_array_pts_to frame.server_ep_material;
+            rewrite
+              (pts_to (V.vec_to_array frame.server_ep_material) material)
+              as
+              (pts_to
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+                material);
+            rewrite
+              (pts_to frame.server_ep_query.SQueries.server_query_local_app_out (Ghost.reveal local_current))
+              as
+              (pts_to
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+                (Ghost.reveal
+                  local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out));
+            with network_current.
+            fold (SQueries.server_network_persistent_resource frame.server_ep_query);
+            with private_key.
+            fold (server_endpoint_payload_remainder_ready
+              frame
+              ST.LocalSendServerHello);
+            fold (server_endpoint_payload_local_action_frame
+              frame
+              (Ghost.reveal st)
+              ST.LocalSendServerHello
+              material
+              local_frame);
+            fold (server_endpoint_action_frame
+              srv
+              cfg
+              frame
+              (Ghost.reveal st)
+              (PE.EndpointLocal
+                (CTypes.ServerPayload
+                  ST.LocalSendServerHello
+                  (Ghost.hide material))
+                local_frame));
+            PE.EndpointLocal
+              (CTypes.ServerPayload
+                ST.LocalSendServerHello
+                (Ghost.hide material))
+              local_frame
+          } else {
+            fold (SP.server_invariant
+              srv
+              (Ghost.reveal received)
+              (Ghost.reveal sent)
+              (Ghost.reveal st));
+            with material private_key.
+            fold (server_endpoint_payloads_ready frame);
+            with network_current.
+            fold (SQueries.server_network_persistent_resource frame.server_ep_query);
+            with local_current.
+            fold (SQueries.server_local_persistent_resource frame.server_ep_query);
+            fold (SQueries.server_next_local_action_frame_ready
+              srv
+              cfg
+              frame.server_ep_query
+              (Ghost.reveal st));
+            fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st));
+            fold (server_endpoint_action_frame
+              srv
+              cfg
+              frame
+              (Ghost.reveal st)
+              PE.EndpointFailed);
+            PE.EndpointFailed
+          }
         }
         SQueries.ServerExternalSignCertificateVerify -> {
           unfold (SQueries.server_next_local_action_frame_post
