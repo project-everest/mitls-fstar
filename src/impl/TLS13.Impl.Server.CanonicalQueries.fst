@@ -23,7 +23,6 @@ type server_external_action =
   | ServerExternalSelectServerParameters
   | ServerExternalDeriveSharedSecret
   | ServerExternalSendServerHello
-  | ServerExternalSendCertificate
   | ServerExternalSignCertificateVerify
 
 noeq
@@ -135,7 +134,9 @@ let server_next_action_of_tls
     | ST.LocalSendServerHello ->
       CQ.NextExternal ServerExternalSendServerHello
     | ST.LocalSendCertificate ->
-      CQ.NextExternal ServerExternalSendCertificate
+      CQ.NextLocal
+        (server_local_event_of_kind action.ST.next_local_kind)
+        local_frame
     | ST.LocalSignCertificateVerify ->
       CQ.NextExternal ServerExternalSignCertificateVerify
     | _ ->
@@ -219,12 +220,6 @@ let server_external_action_witness
       ST.next_local_kind = ST.LocalSendServerHello;
       ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
     }
-  | ServerExternalSendCertificate ->
-    {
-      ST.next_local_ready = true;
-      ST.next_local_kind = ST.LocalSendCertificate;
-      ST.next_local_payload = ST.LocalPayloadNone;
-    }
   | ServerExternalSignCertificateVerify ->
     {
       ST.next_local_ready = true;
@@ -250,7 +245,6 @@ let server_internal_ready_implies_kind_ready
         | ST.LocalSelectServerParameters
         | ST.LocalDeriveSharedSecret
         | ST.LocalSendServerHello
-        | ST.LocalSendCertificate
         | ST.LocalSignCertificateVerify ->
           True
         | _ ->
@@ -281,7 +275,6 @@ let server_next_action_correct
     | ST.LocalSelectServerParameters -> ()
     | ST.LocalDeriveSharedSecret -> ()
     | ST.LocalSendServerHello -> ()
-    | ST.LocalSendCertificate -> ()
     | ST.LocalSignCertificateVerify -> ()
     | _ ->
       server_internal_ready_implies_kind_ready st tls_action;
@@ -1158,25 +1151,8 @@ ensures
         return_server_payload_free_action srv cfg frame ST.LocalSendEncryptedExtensions local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
       }
       ST.LocalSendCertificate -> {
-        with network_current.
-        fold (server_network_persistent_resource frame);
-        with local_current.
-        fold (server_local_persistent_resource frame);
-        fold (server_next_local_action_frame_ready
-          srv
-          cfg
-          frame
-          (Ghost.reveal st));
-        assert (pure (server_external_action_ready
-          (Ghost.reveal st)
-          ServerExternalSendCertificate));
-        fold (server_next_local_action_frame_post
-          srv
-          cfg
-          frame
-          (Ghost.reveal st)
-          (CQ.NextExternal ServerExternalSendCertificate));
-        CQ.NextExternal ServerExternalSendCertificate
+        server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
+        return_server_payload_free_action srv cfg frame ST.LocalSendCertificate local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
       }
       ST.LocalSendCertificateVerify -> {
         server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;

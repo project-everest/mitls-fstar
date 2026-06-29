@@ -16,6 +16,7 @@ module CTypes = TLS13.Impl.CanonicalTypes
 module ID = FStar.IndefiniteDescription
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
+module O = TLS13.OpenSSL
 module RVD = TLS13.Wire.Spec.RevealDecode
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.Impl.Server
@@ -141,6 +142,7 @@ let server_progress_preorder =
 noeq
 type canonical_server = {
   canonical_server_state: S.server;
+  canonical_server_credentials: O.server_credentials;
   canonical_server_progress: MR.mref server_progress_preorder;
   canonical_server_initial: Ghost.erased CS.connection_state;
   canonical_server_valid_trace:
@@ -981,19 +983,40 @@ let server_invariant_pure
   Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
   Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
 
+let server_config_matches_credentials
+  (initial:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : prop =
+  match initial.CS.cs_model.CS.model_config.CS.config_server with
+  | Some cfg ->
+    cfg.CS.server_certificate_chain == certificate_chain /\
+    cfg.CS.server_credential_identity == credential_identity
+  | None -> False
+
 let server_invariant
   (srv:canonical_server)
   (received:B.bytes)
   (sent:B.bytes)
   (st:CS.connection_state)
   : slprop =
-  S.connection_exactly srv.canonical_server_state st **
-  MR.pts_to srv.canonical_server_progress #1.0R st **
-  pure (server_invariant_pure
-    (Ghost.reveal srv.canonical_server_initial)
-    received
-    sent
-    st)
+  exists* certificate_chain credential_identity.
+    S.connection_exactly srv.canonical_server_state st **
+    O.is_server_credentials
+      srv.canonical_server_credentials
+      certificate_chain
+      credential_identity **
+    MR.pts_to srv.canonical_server_progress #1.0R st **
+    pure (
+      server_invariant_pure
+        (Ghost.reveal srv.canonical_server_initial)
+        received
+        sent
+        st /\
+      server_config_matches_credentials
+        (Ghost.reveal srv.canonical_server_initial)
+        certificate_chain
+        credential_identity)
 
 [@@pulse_unfold]
 let server_snapshot
@@ -1032,6 +1055,7 @@ ensures server_invariant
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st));
+  with certificate_chain credential_identity. _;
   srv.canonical_server_valid_trace
     (Ghost.reveal received)
     (Ghost.reveal sent)
@@ -1047,6 +1071,7 @@ ensures server_invariant
     (Ghost.reveal st)
     (Ghost.reveal sent)
     Seq.empty));
+  with certificate_chain credential_identity.
   fold (server_invariant
     srv
     (Ghost.reveal received)
@@ -1080,9 +1105,11 @@ ensures server_invariant
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st));
+  with certificate_chain credential_identity. _;
   MR.take_snapshot
     srv.canonical_server_progress
     (Ghost.reveal st);
+  with certificate_chain credential_identity.
   fold (server_invariant
     srv
     (Ghost.reveal received)
@@ -1139,6 +1166,7 @@ ensures server_snapshot
     (Ghost.reveal current_received)
     (Ghost.reveal current_sent)
     (Ghost.reveal current_state));
+  with certificate_chain credential_identity. _;
   MR.recall_snapshot
     srv.canonical_server_progress;
   lemma_server_progress_state_ahead
@@ -1149,6 +1177,7 @@ ensures server_snapshot
     (server_system (Ghost.reveal srv.canonical_server_initial))
     (Ghost.reveal snapshot_state)
     (Ghost.reveal current_state)));
+  with certificate_chain credential_identity.
   fold (server_invariant
     srv
     (Ghost.reveal current_received)
@@ -2179,6 +2208,7 @@ ensures server_process_network_post
     (Ghost.reveal received0)
     (Ghost.reveal sent0)
     (Ghost.reveal st0));
+  with certificate_chain credential_identity. _;
   unfold (server_network_bridge_frame_pre
     frame
     input
@@ -2475,6 +2505,7 @@ ensures server_process_network_post
     (Ghost.reveal consumede)
     (Ghost.reveal wire_outputse)
     (Ghost.reveal local_outputse));
+  with certificate_chain credential_identity.
   fold (server_invariant
     srv
     (Ghost.reveal received1e)
@@ -2635,6 +2666,7 @@ ensures exists* (received1:Ghost.erased B.bytes)
     (Ghost.reveal received0)
     (Ghost.reveal sent0)
     (Ghost.reveal st0));
+  with certificate_chain credential_identity. _;
   unfold (server_local_bridge_frame_pre
     ev
     frame
@@ -2654,9 +2686,36 @@ ensures exists* (received1:Ghost.erased B.bytes)
     Ghost.hide (CTypes.server_local_event_api ev);
   assert (pure ((Ghost.reveal api) == CTypes.server_local_event_api ev));
   assert (pure (kind == (Ghost.reveal api).CTypes.server_local_kind));
+  assert (pure (server_config_matches_credentials
+    (Ghost.reveal srv.canonical_server_initial)
+    certificate_chain
+    credential_identity));
+  assert (pure (
+    (Ghost.reveal st0).CS.cs_model.CS.model_config ==
+      (Ghost.reveal srv.canonical_server_initial).CS.cs_model.CS.model_config));
+  assert (pure (Some?
+    (Ghost.reveal st0).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (
+    (Some?.v (Ghost.reveal st0).CS.cs_model.CS.model_config.CS.config_server)
+      .CS.server_certificate_chain == certificate_chain /\
+    (Some?.v (Ghost.reveal st0).CS.cs_model.CS.model_config.CS.config_server)
+      .CS.server_credential_identity == credential_identity));
+  ST.server_local_event_input_ready_with_state_credentials
+    (Ghost.reveal st0)
+    kind
+    (Ghost.reveal api).CTypes.server_local_payload
+    certificate_chain
+    credential_identity;
+  assert (pure (ST.server_local_event_input_ready_with_credentials
+    (Ghost.reveal st0)
+    kind
+    (Ghost.reveal api).CTypes.server_local_payload
+    certificate_chain
+    credential_identity));
   let resp =
-    S.process_local_event
+    S.process_local_event_with_credentials
       srv.canonical_server_state
+      srv.canonical_server_credentials
       kind
       frame.tls_server_local_bridge_base.tls_server_local_payload
       frame.tls_server_local_bridge_base.tls_server_local_payload_len
@@ -2880,6 +2939,7 @@ ensures exists* (received1:Ghost.erased B.bytes)
           (Ghost.reveal st1e)
           (Ghost.reveal wire_outputse)
           (Ghost.reveal local_outputse));
+      with certificate_chain credential_identity.
       fold (server_invariant
         srv
         (Ghost.reveal received1e)

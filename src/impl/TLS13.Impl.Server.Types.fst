@@ -352,6 +352,36 @@ let server_local_event_input_ready
        sh
        (CS.serialized_cleartext_tls_message
          (M.TlsHandshake (M.ServerHello sh))))
+  | LocalSendCertificate ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+     CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+    Some?
+     st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+    U64.fits
+     (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+    (match st.CS.cs_model.CS.model_config.CS.config_server with
+     | Some cfg ->
+      B.length cfg.CS.server_certificate_chain <=
+        Bounds.max_server_certificate_chain_len /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        B.length
+          (WS.serialize_certificate_from_credential
+            { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty }) <=
+          Bounds.max_transcript_len /\
+      CS.legal_event
+        st.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value =
+            M.TlsHandshake
+              (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
+        })
+     | None -> False)
   | LocalSendEncryptedExtensions ->
     Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==
@@ -457,9 +487,9 @@ let server_local_event_input_ready_with_credentials
     U64.fits
       (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
     13 + B.length certificate_chain + 17 <= 16640 /\
-    (match st.CS.cs_model.CS.model_config.CS.config_server with
-     | Some cfg -> cfg.CS.server_certificate_chain == certificate_chain
-     | None -> False) /\
+    Some? st.CS.cs_model.CS.model_config.CS.config_server /\
+    (Some?.v st.CS.cs_model.CS.model_config.CS.config_server)
+      .CS.server_certificate_chain == certificate_chain /\
     B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
       13 + B.length certificate_chain <= Bounds.max_transcript_len /\
     CS.legal_event
@@ -488,6 +518,61 @@ let server_local_event_input_ready_with_credentials
      | None -> False)
   | _ ->
     server_local_event_input_ready st kind payload
+
+let server_local_event_input_ready_with_state_credentials
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        server_local_event_input_ready st kind payload /\
+        Some? st.CS.cs_model.CS.model_config.CS.config_server /\
+        (let cfg = Some?.v st.CS.cs_model.CS.model_config.CS.config_server in
+         cfg.CS.server_certificate_chain == certificate_chain /\
+         cfg.CS.server_credential_identity == credential_identity))
+      (ensures
+        server_local_event_input_ready_with_credentials
+          st
+          kind
+          payload
+          certificate_chain
+          credential_identity)
+=
+  let cfg = Some?.v st.CS.cs_model.CS.model_config.CS.config_server in
+  assert (cfg.CS.server_certificate_chain == certificate_chain);
+  assert (cfg.CS.server_credential_identity == credential_identity);
+  match kind with
+  | LocalSendCertificate ->
+    assert (Seq.equal payload B.empty);
+    assert (st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+    assert (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+    assert (st.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None);
+    assert (st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None);
+    assert (st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None);
+    assert (Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    assert (U64.fits
+      (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1));
+    assert (B.length certificate_chain <= Bounds.max_server_certificate_chain_len);
+    assert (13 + B.length certificate_chain + 17 <= 16640);
+    WS.lemma_serialize_certificate_from_single_chain_len certificate_chain;
+    assert (B.length (WS.serialize_certificate_from_credential
+      { M.chain = [certificate_chain]; M.body = B.empty }) ==
+      13 + B.length certificate_chain);
+    assert (B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+      13 + B.length certificate_chain <= Bounds.max_transcript_len);
+    assert (CS.legal_event
+      st.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value =
+          M.TlsHandshake (M.Certificate { M.chain = [certificate_chain]; M.body = B.empty });
+      }))
+  | _ ->
+    ()
 
 let server_state_core_correct
   (st:CS.connection_state)
