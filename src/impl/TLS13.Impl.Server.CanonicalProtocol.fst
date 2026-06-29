@@ -139,6 +139,59 @@ let server_canonical_step_rel
 let server_progress_preorder =
   RTC.closure server_canonical_step_rel
 
+let server_invariant_pure
+  (initial:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (st:CS.connection_state)
+  : prop =
+  ST.server_end_to_end_invariant st /\
+  st.CS.cs_model.CS.model_config == initial.CS.cs_model.CS.model_config /\
+  Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
+
+let server_config_matches_credentials
+  (initial:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : prop =
+  match initial.CS.cs_model.CS.model_config.CS.config_server with
+  | Some cfg ->
+    cfg.CS.server_certificate_chain == certificate_chain /\
+    cfg.CS.server_credential_identity == credential_identity
+  | None -> False
+
+let server_selection_present_when_required
+  (st:CS.connection_state)
+  : prop =
+  let selection = st.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking CS.HsServerHelloSent
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
+  | CS.ControlHandshaking CS.HsServerFinishedSent
+  | CS.ControlHandshaking CS.HsClientFinishedReceived
+  | CS.ControlApplicationData
+  | CS.ControlClosing
+  | CS.ControlClosed ->
+    Some? selection
+  | _ ->
+    True
+
+let server_supported_profile_selection
+  (st:CS.connection_state)
+  (credential_identity:CS.server_credential_identity)
+  : prop =
+  CS.signature_scheme_offered
+    st.CS.cs_model.CS.model_config.CS.config_signature_schemes
+    T.RsaPssRsaeSha256 /\
+  server_selection_present_when_required st /\
+  (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+   | Some selection ->
+     selection.CS.server_selected_signature_scheme == T.RsaPssRsaeSha256 /\
+     selection.CS.server_selected_credential == credential_identity
+   | None ->
+     True)
+
 noeq
 type canonical_server = {
   canonical_server_state: S.server;
@@ -163,6 +216,25 @@ type canonical_server = {
             st
             sent
             Seq.empty);
+  canonical_server_supported_profile:
+    received:B.bytes ->
+    sent:B.bytes ->
+    st:CS.connection_state ->
+    certificate_chain:B.bytes ->
+    credential_identity:CS.server_credential_identity ->
+      Lemma
+        (requires
+          server_invariant_pure
+            (Ghost.reveal canonical_server_initial)
+            received
+            sent
+            st /\
+          server_config_matches_credentials
+            (Ghost.reveal canonical_server_initial)
+            certificate_chain
+            credential_identity)
+        (ensures
+          server_supported_profile_selection st credential_identity);
 }
 
 noeq
@@ -971,28 +1043,6 @@ let lemma_server_progress_state_ahead
     st0
     st1
     ()
-
-let server_invariant_pure
-  (initial:CS.connection_state)
-  (received:B.bytes)
-  (sent:B.bytes)
-  (st:CS.connection_state)
-  : prop =
-  ST.server_end_to_end_invariant st /\
-  st.CS.cs_model.CS.model_config == initial.CS.cs_model.CS.model_config /\
-  Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
-  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
-
-let server_config_matches_credentials
-  (initial:CS.connection_state)
-  (certificate_chain:B.bytes)
-  (credential_identity:CS.server_credential_identity)
-  : prop =
-  match initial.CS.cs_model.CS.model_config.CS.config_server with
-  | Some cfg ->
-    cfg.CS.server_certificate_chain == certificate_chain /\
-    cfg.CS.server_credential_identity == credential_identity
-  | None -> False
 
 let server_invariant
   (srv:canonical_server)

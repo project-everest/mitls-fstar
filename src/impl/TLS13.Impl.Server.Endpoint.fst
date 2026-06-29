@@ -14,7 +14,9 @@ module PE = Common.ProtocolEndpoint
 module Seq = FStar.Seq
 module SQueries = TLS13.Impl.Server.CanonicalQueries
 module SP = TLS13.Impl.Server.CanonicalProtocol
+module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module TCP = Common.TCP
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
@@ -162,15 +164,134 @@ ensures
       PE.EndpointLocal ev local_frame
     }
     CQ.NextExternal ext -> {
-      SQueries.cancel_server_next_action srv cfg frame.server_ep_query st (CQ.NextExternal ext);
-      fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st));
-      fold (server_endpoint_action_frame
-        srv
-        cfg
-        frame
-        (Ghost.reveal st)
-        PE.EndpointFailed);
-      PE.EndpointFailed
+      match ext {
+        SQueries.ServerExternalSignCertificateVerify -> {
+          unfold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextExternal ext));
+          unfold (SQueries.server_next_local_action_frame_ready
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st));
+          unfold (SQueries.server_network_persistent_resource frame.server_ep_query);
+          with network_current. _;
+          unfold (SQueries.server_local_persistent_resource frame.server_ep_query);
+          with local_current. _;
+          unfold (SP.server_invariant
+            srv
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          with certificate_chain credential_identity. _;
+          srv.SP.canonical_server_supported_profile
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st)
+            certificate_chain
+            credential_identity;
+          assert (pure (SP.server_supported_profile_selection
+            (Ghost.reveal st)
+            credential_identity));
+          assert (pure (SQueries.server_external_action_ready
+            (Ghost.reveal st)
+            SQueries.ServerExternalSignCertificateVerify));
+          assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+          assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_role ==
+            CS.ServerEndpoint));
+          assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_certificate <> None));
+          assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None));
+          assert (pure (
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None));
+          assert (pure (Some?
+            (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server));
+          assert (pure (SP.server_selection_present_when_required (Ghost.reveal st)));
+          assert (pure (Some?
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+          assert (pure (
+            (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+              .CS.server_selected_signature_scheme ==
+            T.RsaPssRsaeSha256));
+          assert (pure (
+            (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+              .CS.server_selected_credential == credential_identity));
+          assert (pure (
+            (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server)
+              .CS.server_credential_identity == credential_identity));
+          assert (pure (
+            (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+              .CS.server_selected_credential ==
+            (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server)
+              .CS.server_credential_identity));
+          assert (pure (CS.signature_scheme_offered
+            (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_signature_schemes
+            T.RsaPssRsaeSha256));
+          assert (pure (ST.server_local_event_input_ready
+            (Ghost.reveal st)
+            ST.LocalSignCertificateVerify
+            B.empty));
+          fold (SP.server_invariant
+            srv
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          let local_frame =
+            SQueries.server_local_frame_of_current
+              frame.server_ep_query
+              (Ghost.hide local_current);
+          let api = {
+            CTypes.server_local_kind = ST.LocalSignCertificateVerify;
+            CTypes.server_local_payload = B.empty;
+          };
+          rewrite
+            (pts_to frame.server_ep_query.SQueries.server_query_local_payload B.empty)
+            as
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+              B.empty);
+          rewrite
+            (pts_to frame.server_ep_query.SQueries.server_query_local_app_out (Ghost.reveal local_current))
+            as
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+              (Ghost.reveal
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out));
+          fold (SQueries.server_local_frame_resource local_frame);
+          with network_current.
+          fold (SQueries.server_network_persistent_resource frame.server_ep_query);
+          assert (pure (SQueries.server_local_event_ready
+            (Ghost.reveal st)
+            (CTypes.ServerAPI api)));
+          fold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextLocal (CTypes.ServerAPI api) local_frame));
+          fold (server_endpoint_action_frame
+            srv
+            cfg
+            frame
+            (Ghost.reveal st)
+            (PE.EndpointLocal (CTypes.ServerAPI api) local_frame));
+          PE.EndpointLocal (CTypes.ServerAPI api) local_frame
+        }
+        _ -> {
+          SQueries.cancel_server_next_action srv cfg frame.server_ep_query st (CQ.NextExternal ext);
+          fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st));
+          fold (server_endpoint_action_frame
+            srv
+            cfg
+            frame
+            (Ghost.reveal st)
+            PE.EndpointFailed);
+          PE.EndpointFailed
+        }
+      }
     }
     CQ.NextDone -> {
       SQueries.cancel_server_next_action srv cfg frame.server_ep_query st CQ.NextDone;

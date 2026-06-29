@@ -2604,12 +2604,15 @@ fn process_local_event
       resp
     }
     ST.LocalSignCertificateVerify -> {
-      assert (pure False);
-      {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.IllegalTransition;
-      }
+      process_local_unexpected_message
+        s
+        kind
+        payload
+        payload_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len
     }
     ST.LocalVerifyClientFinished -> {
       let resp =
@@ -2711,12 +2714,15 @@ fn process_local_event
       }
     }
     ST.LocalSendCertificate -> {
-      assert (pure False);
-      {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.IllegalTransition;
-      }
+      process_local_unexpected_message
+        s
+        kind
+        payload
+        payload_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len
     }
     ST.LocalSendCertificateVerify -> {
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
