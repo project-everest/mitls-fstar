@@ -1056,17 +1056,6 @@ ensures
             (PE.EndpointLocal (CTypes.ServerAPI api) local_frame));
           PE.EndpointLocal (CTypes.ServerAPI api) local_frame
         }
-        _ -> {
-          SQueries.cancel_server_next_action srv cfg frame.server_ep_query st (CQ.NextExternal ext);
-          fold (server_endpoint_frame_ready srv cfg frame (Ghost.reveal st));
-          fold (server_endpoint_action_frame
-            srv
-            cfg
-            frame
-            (Ghost.reveal st)
-            PE.EndpointFailed);
-          PE.EndpointFailed
-        }
       }
     }
     CQ.NextDone -> {
