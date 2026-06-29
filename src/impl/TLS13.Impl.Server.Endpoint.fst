@@ -646,6 +646,107 @@ ensures
             PE.EndpointFailed
           }
         }
+        SQueries.ServerExternalDeriveSharedSecret -> {
+          unfold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextExternal ext));
+          unfold (SQueries.server_next_local_action_frame_ready
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st));
+          unfold (SQueries.server_network_persistent_resource frame.server_ep_query);
+          with network_current. _;
+          unfold (SQueries.server_local_persistent_resource frame.server_ep_query);
+          with local_current. _;
+          unfold (server_endpoint_payloads_ready frame);
+          with material private_key. _;
+          assert (pure (SQueries.server_external_action_ready
+            (Ghost.reveal st)
+            SQueries.ServerExternalDeriveSharedSecret));
+          let material_ready =
+            Ghost.reveal (frame.server_ep_material_external_ready
+              st
+              SQueries.ServerExternalDeriveSharedSecret);
+          assert (pure (server_endpoint_material_matches_state
+            frame
+            (Ghost.reveal st)));
+          assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsClientHelloReceived));
+          assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_role ==
+            CS.ServerEndpoint));
+          assert (pure (Some?
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+          assert (pure (Some?
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+          let selection : Ghost.erased CS.server_handshake_selection =
+            Ghost.hide (Some?.v
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+          assert (pure (CS.server_selection_key_share_consistent (Ghost.reveal selection)));
+          assert (pure (
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+              Some (Ghost.reveal selection).CS.server_selected_client_hello));
+          assert (pure (Some? (Ghost.reveal selection).CS.server_key_share_private));
+          Seq.lemma_eq_elim
+            private_key
+            (server_endpoint_private_bytes frame);
+          Seq.lemma_eq_elim
+            (Some?.v (Ghost.reveal selection).CS.server_key_share_private)
+            (server_endpoint_private_bytes frame);
+          assert (pure (Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
+            private_key));
+          assert (pure (ST.server_local_event_input_ready
+            (Ghost.reveal st)
+            ST.LocalDeriveSharedSecret
+            private_key));
+          let old_local = Ghost.hide local_current;
+          let local_frame =
+            server_endpoint_private_local_frame frame old_local;
+          V.to_array_pts_to frame.server_ep_private;
+          rewrite
+            (pts_to (V.vec_to_array frame.server_ep_private) private_key)
+            as
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+              private_key);
+          rewrite
+            (pts_to frame.server_ep_query.SQueries.server_query_local_app_out (Ghost.reveal local_current))
+            as
+            (pts_to
+              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+              (Ghost.reveal
+                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out));
+          with network_current.
+          fold (SQueries.server_network_persistent_resource frame.server_ep_query);
+          with material.
+          fold (server_endpoint_payload_remainder_ready
+            frame
+            ST.LocalDeriveSharedSecret);
+          fold (server_endpoint_payload_local_action_frame
+            frame
+            (Ghost.reveal st)
+            ST.LocalDeriveSharedSecret
+            private_key
+            local_frame);
+          fold (server_endpoint_action_frame
+            srv
+            cfg
+            frame
+            (Ghost.reveal st)
+            (PE.EndpointLocal
+              (CTypes.ServerPayload
+                ST.LocalDeriveSharedSecret
+                (Ghost.hide private_key))
+              local_frame));
+          PE.EndpointLocal
+            (CTypes.ServerPayload
+              ST.LocalDeriveSharedSecret
+              (Ghost.hide private_key))
+            local_frame
+        }
         SQueries.ServerExternalSignCertificateVerify -> {
           unfold (SQueries.server_next_local_action_frame_post
             srv
