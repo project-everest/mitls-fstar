@@ -2023,7 +2023,6 @@ let server_protocol_endpoint
       SP.server_protocol_implementation
   =
   {
-    PE.pe_channel = TCP.channel;
     PE.pe_config = SQueries.server_next_local_action_config;
     PE.pe_frame = server_endpoint_frame;
     PE.pe_frame_ready = server_endpoint_frame_ready;

@@ -29,7 +29,7 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
     separate endpoint-state module.
   - Server credentials are supplied as in-memory PEM/DER buffers.
   - The top-level server `accept` mirrors the client driver's `connect` style
-    and uses typed `TLS13.IO.listen_tcp`/`accept_tcp`.
+    and uses the shared `Common.TCP.listen_tcp`/`accept_tcp` bridge.
 - [x] Phase 0 baseline verification: `make verify` passes after the
   role-vocabulary changes and the proof-guidance assertion in
   `TLS13.Impl.Client.Types`.
@@ -211,14 +211,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   - `LocalSignCertificateVerify` legality now requires the CertificateVerify
     signature to verify over the exact `certificate_verify_input` for the
     current transcript hash and selected credential identity.
-  - `TLS13.IO.fsti` now exposes typed `listener`, `listen_tcp`, `accept_tcp`,
+  - `Common.TCP.fsti` now exposes typed `listener`, `listen_tcp`, `accept_tcp`,
     and `close_listener` resources for the planned server `accept`.
   - `TLS13.OpenSSL.fsti` now exposes typed in-memory server credential
     allocation/free and `sign_certificate_verify`, with a postcondition that a
     successful signature verifies as `RsaPssRsaeSha256` against the credential
     identity.
 - [x] Added C shim support for the new Phase 4 TCB surface:
-  `tls13_io_listen_tcp`/`tls13_io_accept_tcp` and the KaRaMeL listener ABI,
+  `Common_TCP_listen_tcp`/`Common_TCP_accept_tcp` and the KaRaMeL listener ABI,
   plus OpenSSL-backed in-memory server credential allocation, RSA-PSS/SHA-256
   CertificateVerify signing, and credential free functions.
 - [x] Started Phase 5 serializer support:
@@ -968,7 +968,7 @@ val server_driver_closed :
 type server_workflow_status =
   | ServerWorkflowOk
   | ServerWorkflowNeedMoreInput
-  | ServerWorkflowNeedExternalAction
+  | ServerWorkflowNeedDeferredLocal
   | ServerWorkflowStepFailed
   | ServerWorkflowExhausted
   | ServerWorkflowClosed
@@ -2388,15 +2388,15 @@ Status:
       and network processing loops.
 - [x] Added the first verified server transport-attach slice:
       `TLS13.Impl.Server.Driver.accept_transport_once` listens on the driver
-      supplied bind host/port, accepts at most one TCP channel through the typed
-      `TLS13.IO.listen_tcp` / `accept_tcp` TCBs, closes the listener, and moves
+      supplied bind host/port, accepts at most one TCP channel through the shared
+      `Common.TCP.listen_tcp` / `accept_tcp` TCBs, closes the listener, and moves
       the driver from `server_driver_live` to `server_driver_connected` with
       empty transport histories. This is intentionally a transport-only step;
       the full public `accept` still needs to run the TLS handshake loop after
       attaching the channel.
 - [x] Added the matching verified transport-close slice:
       `TLS13.Impl.Server.Driver.close_transport_once` consumes a connected
-      `TLS13.IO.channel`, closes it through the IO TCB, resets the channel slot,
+      `Common.TCP.channel`, closes it through the IO TCB, resets the channel slot,
       and preserves the verified server state, credential context, and driver
       buffers in `server_driver_closed`.
 - [x] Strengthened the server-driver state predicates so `server_driver_live`,
@@ -2515,7 +2515,7 @@ Status:
       `TLS13.Impl.Server.Driver.send_server_hello_from_payload_once` takes the
       same 64-byte `server_random || server_private_key` payload, uses a local
       95-byte ServerHello output buffer required by the focused server wrapper,
-      writes the exact cleartext ServerHello response through `TLS13.IO.write`,
+      writes the exact cleartext ServerHello response through `Common.TCP.write`,
       and re-establishes the connected-driver IO-history invariant. This avoids
       the generic oversized network buffer path, which intentionally cannot
       satisfy the focused 95-byte ServerHello serializer precondition.
@@ -2533,12 +2533,12 @@ Status:
       The new accept slice generates a stack 64-byte
       `server_random || server_private_key` payload, checks supported-profile
       selection readiness, performs exact select+derive, emits the matching
-      cleartext ServerHello through `TLS13.IO.write`, and preserves the connected
+      cleartext ServerHello through `Common.TCP.write`, and preserves the connected
       driver IO-history invariant across listen/accept, read, select, derive, and
       ServerHello send outcomes.
 - [x] Added the first retained-receive IO slice:
       `TLS13.Impl.Server.Driver.read_transport_once` appends at most one
-      `TLS13.IO.read` result into the driver-owned raw buffer when no retained
+      `Common.TCP.read` result into the driver-owned raw buffer when no retained
       bytes are pending, updates the retained-buffer length, and preserves the
       protocol state, credential context, channel ownership, IO-history
       relation, and server invariant. If retained bytes are already present it
@@ -2549,7 +2549,7 @@ Status:
       processes the driver-owned retained prefix with the public server
       `process_network_bytes` API, writes exactly
       `ST.response_network_out resp.response network_out_bytes` through the
-      total-write `TLS13.IO.write` postcondition, shifts any unconsumed suffix
+      total-write `Common.TCP.write` postcondition, shifts any unconsumed suffix
       back to the start of the retained buffer, and re-establishes the exact
       connected-driver IO-history relation. The server network theorem surface
       now also records the status facts needed by this driver proof:
@@ -2618,7 +2618,7 @@ Status:
       credential-aware public server local-event API using driver-owned network
       and application output buffers, proves the local step's raw-sent delta is
       exactly the response network prefix, writes that prefix through
-      `TLS13.IO.write`, and re-establishes the connected driver IO-history
+      `Common.TCP.write`, and re-establishes the connected driver IO-history
       invariant. The public driver postcondition exposes a named
       `server_driver_local_write_correct` predicate rather than raw scratch
       buffers, keeping the interface stable for future scheduler-driven draining.
@@ -2708,7 +2708,7 @@ Checklist:
       IO-capable full-handshake `accept` loop remains to be added.
 - [ ] `accept` mirrors the client driver's `connect` style: it takes bind-host
       bytes, bind-host length, port, local-action fuel, and network fuel; it
-      calls typed `TLS13.IO.listen_tcp` and `TLS13.IO.accept_tcp` internally,
+      calls typed `Common.TCP.listen_tcp` and `Common.TCP.accept_tcp` internally,
       runs the TLS handshake to completion, closes the listener, and returns a
       connected server handle.
       Current status: the verified `accept_transport_once` slice performs the
@@ -2737,7 +2737,7 @@ Checklist:
       - server transport received bytes;
       - protocol raw sent/received wire logs;
       - retained buffered read-ahead.
-- [x] Driver uses total-write `TLS13.IO.write` postconditions in the verified
+- [x] Driver uses total-write `Common.TCP.write` postconditions in the verified
       local-output and retained-network processing slices.
 - [ ] Driver uses fueled loops for handshake/receive/close.
       Current status: the first network-only `NeedMoreInput` retry loop is
@@ -2761,8 +2761,8 @@ Checklist:
 - [x] Credential C shim accepts in-memory PEM/DER buffers; it does not load
       credential files by path in the first verified API.
 - [x] Use concrete C stub names
-      `c_stubs/tls13_openssl_karamel.c/.h`, `c_stubs/tls13_io_karamel.c/.h`,
-      and `c_stubs/tls13_io_stubs.c/.h`; generated bounds now use their
+      `c_stubs/tls13_openssl_karamel.c/.h`, `c_stubs/common_tcp_karamel.c/.h`,
+      and `c_stubs/common_tcp_stubs.c/.h`; generated bounds now use their
       extracted `_sz` constants directly.
 - [x] Add server-driver extraction targets:
       `extract-tls13-driver-krml` and `extract-tls13-bundle`.

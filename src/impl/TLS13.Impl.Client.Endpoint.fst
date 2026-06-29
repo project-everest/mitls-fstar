@@ -1501,7 +1501,6 @@ let client_protocol_endpoint
       CP.client_protocol_implementation
   =
   {
-    PE.pe_channel = TCP.channel;
     PE.pe_config = CQueries.client_next_local_action_config;
     PE.pe_frame = client_endpoint_frame;
     PE.pe_frame_ready = client_endpoint_frame_ready;

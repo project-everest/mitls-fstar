@@ -29,11 +29,10 @@ The current committed proof surface is centered on `TLS13.Impl.Client`, not the 
 - Both public step predicates directly preserve `CT.client_end_to_end_invariant`.
 - `CT.client_end_to_end_invariant` packages `CT.client_state_correct` with `CS.connection_state_raw_to_message_replay_consistent`.
 - `CT.driver_trace_end_to_end` folds those public step predicates over a ghost driver trace.
-- `runtime/tls13_client_driver.c` is now a thin C ABI wrapper over the extracted `TLS13.Impl.Client.Driver` top-level workflow: connect calls verified `new_client` and `connect` (including the TLS handshake), send calls verified `send`, receive calls verified `receive`, and close calls verified `close`.
-- `TLS13.Impl.Client.Driver.fsti` now exposes the intended narrow Pulse API: `client_driver`, its live/connected/closed predicates, `driver_workflow_status`, `client_receive_result`, and exactly `new_client`, `connect`, `send`, `receive`, and `close`. The implementation keeps the older `driver`/`top_driver`, auth copyout/completion, local-action drain, retained-buffer processing/read-append/compaction, and fueled workflow helpers private.
-- The top-level workflow owns the retained receive buffer and scratch buffers in Pulse, calls typed OpenSSL auth through `TLS13.OpenSSL.fsti`, performs the handshake inside `connect`, copies application plaintext to the caller buffer inside `receive`, and closes/frees IO/auth/buffer resources inside `close`. Certificate validation splits the auth payload to the exact validated peer-identity prefix before completing `LocalValidateCertificate`.
-- The workflow checks response write counts: if a local or network `StepOk` emits network bytes but `TLS13.IO.write` writes a short prefix, the workflow returns `DriverWorkflowStepFailed` instead of advancing to apparent success.
-- The Pulse driver has a separate extraction path, `make test-extracted-client-driver-slice`, with small C ABI bridges for extracted IO (`c_stubs/tls13_io_karamel.*`) and the typed OpenSSL TCB (`c_stubs/tls13_openssl_karamel.*`). `TLS13_IO.krml` is included in the driver bundle so the generated IO ABI is typechecked and no hand-written IO prototypes are injected into generated headers.
+- `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` are stable C ABI wrappers over the extracted endpoint/canonical protocol surface. They use `Common.TCP` channels, endpoint scheduling, local/API events, residual input buffering before fresh reads, and generated canonical network/local handlers.
+- `Common.ProtocolImplementation` is the core refinement contract; `Common.ProtocolEndpoint` adds endpoint frames, concrete buffer preparation, first-order scheduling actions, and TCP I/O resources; `Common.ProtocolDriver` provides the verified fuel-bounded endpoint loop used by the calc socket sample and as the proof contract for TLS monomorphic runtime wrappers.
+- TLS endpoint-local callback outcomes are represented as local/API events, not external actions. Certificate validation/signature verification, server parameter selection, shared-secret derivation, signing, application send, and close_notify all go through the canonical local handler path.
+- The shared TCP bridge is `Common.TCP` plus `c_stubs/common_tcp_karamel.*`/`common_tcp_stubs.*`. The C shim accepts both generated erased-argument shapes for bundles that erase ghost histories differently.
 
 The invariant now includes:
 
@@ -133,7 +132,7 @@ Remaining work:
 - add a public free/close path for an allocated-but-never-connected driver if that lifecycle becomes part of the public API; today failed connect is terminal, and successful connect must be followed by close;
 - decide whether to prove liveness/progress beyond the current fueled workflow status API;
 - keep the typed OpenSSL interface (`TLS13.OpenSSL.fsti`) as the explicit auth TCB, or replace it with verified validation/signature code later;
-- keep TCP connect/read/write in the unverified C bridge, with stronger `TLS13.IO` specs over raw byte logs when we want transport-honesty proofs;
+- keep TCP connect/read/write in the unverified `Common.TCP` bridge, with stronger raw byte-log specs when we want transport-honesty proofs;
 - preserve the concrete C driver API as the runtime contract while reducing the C wrapper further when practical.
 
 ### 3. Make the supported-profile boundary explicit in the final theorem
@@ -186,10 +185,10 @@ Start with these files:
 
 - `src/impl/TLS13.Impl.Client.fsti`: public API and theorem-returning postconditions.
 - `src/impl/TLS13.Impl.Client.Types.fst`: definitions of `client_state_correct`, `client_end_to_end_invariant`, `network_bytes_end_to_end_correct`, `local_event_end_to_end_correct`, and the `driver_trace_end_to_end` theorem surface.
-- `runtime/tls13_client_driver.c` and `.h`: stable concrete C API and thin wrapper around the extracted top-level Pulse workflow.
-- `src/impl/TLS13.Impl.Client.Driver.fsti` and `.fst`: narrowed verified/extracted Pulse driver API, top-level workflow, private helper slices, and the current transport/auth TCB boundary.
+- `runtime/tls13_client_driver.c`, `runtime/tls13_server_driver.c`, and their headers: stable concrete C APIs over the extracted endpoint/canonical protocol runtime path.
+- `common/Common.ProtocolImplementation.fst`, `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, and `common/Common.TCP.fsti`: shared protocol refinement, endpoint scheduling, generic fuel-bounded driver, and TCP-history interface.
 - `src/impl/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*`: typed OpenSSL auth TCB used by the verified workflow.
-- `c_stubs/tls13_io_karamel.*` and `test/unit/test_extracted_client_openssl_echo.c`: C ABI bridge and OpenSSL echo smoke test for the extracted narrow Pulse driver API.
+- `c_stubs/common_tcp_karamel.*`, `c_stubs/common_tcp_stubs.*`, and the OpenSSL interop tests in `test/unit/`: C ABI bridge and smoke tests for the endpoint-driven runtime path.
 - `src/spec/TLS13.Spec.ConnectionState.fst`: audit-facing core connection-state model, legal deltas, cumulative replay predicates, and the accepted-versus-rejected raw-byte distinction. Proof-only preservation/projection lemmas are isolated in `src/spec/TLS13.ConnectionState.Lemmas.fst`; `src/spec/TLS13.StateMachine.fst` is the small client-only trace automaton used by log/projection proofs.
 - `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*`: verified parser/serializer facades and their `TLS13.Wire.Spec` postconditions.
 - `TLS_DESIGN_AND_IMPL.md`: high-level description of the current proof architecture and remaining gaps.

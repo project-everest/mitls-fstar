@@ -158,7 +158,8 @@ size_t Common_TCP_read(
 size_t Common_TCP_read_full(
     Common_TCP_channel ch,
     uint8_t *out,
-    size_t len) {
+    size_t len,
+    ...) {
   if (ch == NULL) {
     return 0;
   }
@@ -176,7 +177,8 @@ size_t Common_TCP_read_full(
 size_t Common_TCP_write(
     Common_TCP_channel ch,
     uint8_t *buf,
-    size_t len) {
+    size_t len,
+    ...) {
   if (ch == NULL) {
     return 0;
   }
@@ -191,7 +193,7 @@ size_t Common_TCP_write(
   return off;
 }
 
-void Common_TCP_close(Common_TCP_channel ch) {
+void Common_TCP_close(Common_TCP_channel ch, ...) {
   if (ch == NULL) {
     return;
   }

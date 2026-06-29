@@ -74,3 +74,30 @@ make verify
 make check-admits
 make test-c
 ```
+
+## Shared protocol endpoint architecture
+
+The calc sample and TLS runtime now share the same proof architecture in
+`common/`:
+
+- `Common.ProtocolImplementation` is the core refinement contract connecting
+  Pulse network/local handlers, TCP byte histories, wire-format messages, and a
+  state-machine step relation.
+- `Common.ProtocolEndpoint` bundles that core implementation with a concrete
+  `Common.TCP.channel`, persistent endpoint frames, network/local action
+  resources, buffer preparation, and finish hooks. Driver-visible actions are
+  first-order (`NeedInput`, `Local`, `Done`, `Failed`); callback outcomes are
+  modeled as local/API events rather than external actions.
+- `Common.ProtocolDriver` is a verified fuel-bounded endpoint loop. For C
+  extraction, endpoint loops are specialized monomorphically: `calc_sample`
+  extracts and runs a socket server through this structure, while the TLS C
+  runtime wrappers call the generated endpoint/canonical functions directly for
+  residual-buffered TLS I/O.
+
+The main executable confidence gates are:
+
+```sh
+cd calc_sample && make test-c
+make extract-tls13-bundle
+make test-openssl-echo test-openssl-sclient
+```

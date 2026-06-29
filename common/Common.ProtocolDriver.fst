@@ -9,6 +9,14 @@ module PE = Common.ProtocolEndpoint
 module SZ = FStar.SizeT
 module TCP = Common.TCP
 
+// Generic fuel-bounded driver over a ProtocolEndpoint and a Common.TCP channel.
+//
+// The endpoint owns the concrete frame and I/O buffer discipline, while this
+// module owns the scheduling structure: ask for the next action, run the
+// corresponding network/local handler, finish endpoint action resources, finish
+// TCP/output resources, and iterate until done, failure, or fuel exhaustion.
+// Extraction-facing code can specialize this proof-generic loop monomorphically
+// for a concrete endpoint, as the calc sample does.
 type driver_status =
   | DriverNetworkStep
   | DriverLocalStep
@@ -74,7 +82,7 @@ fn drive_once
   (i:impl)
   (cfg:endpoint.PE.pe_config)
   (frame:endpoint.PE.pe_frame)
-  (ch:endpoint.PE.pe_channel)
+  (ch:TCP.channel)
   (received:Ghost.erased TCP.bytes)
   (sent:Ghost.erased TCP.bytes)
   (st:Ghost.erased state)
@@ -459,7 +467,7 @@ fn rec drive_steps
     (i:impl)
     (cfg:endpoint.PE.pe_config)
     (frame:endpoint.PE.pe_frame)
-    (ch:endpoint.PE.pe_channel)
+    (ch:TCP.channel)
     (fuel:SZ.t)
     (received:Ghost.erased TCP.bytes)
     (sent:Ghost.erased TCP.bytes)

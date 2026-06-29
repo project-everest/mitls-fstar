@@ -903,7 +903,6 @@ let calc_protocol_endpoint
       CalcCP.calc_server_protocol_implementation
   =
   {
-    PE.pe_channel = TCP.channel;
     PE.pe_config = calc_endpoint_config;
     PE.pe_frame = CalcCP.calc_network_frame;
     PE.pe_frame_ready = calc_frame_ready;

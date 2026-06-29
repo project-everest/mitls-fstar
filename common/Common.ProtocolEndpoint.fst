@@ -10,6 +10,15 @@ module SZ = FStar.SizeT
 module TCP = Common.TCP
 module U8 = FStar.UInt8
 
+// Driver-facing endpoint contract for first-order protocol implementations.
+//
+// The core protocol implementation proves that network/local handlers refine a
+// wire-format state machine. This endpoint layer adds the executable scheduling
+// and resource story needed by a TCP driver: persistent endpoint frames,
+// branch-specific network/local frames, concrete I/O buffers, and finish hooks
+// that reassemble the invariant after a handler runs. There is deliberately no
+// external-action branch; endpoint instances turn callback results into ordinary
+// local/API events before the driver sees them.
 type endpoint_action
   (network_frame:Type0)
   (local_event:Type0)
@@ -66,9 +75,6 @@ class protocol_endpoint
     local_output)
   =
 {
-  pe_channel:
-    Type0;
-
   pe_config:
     Type0;
 
@@ -84,7 +90,7 @@ class protocol_endpoint
 
   pe_io_ready:
     impl ->
-    pe_channel ->
+    TCP.channel ->
     pe_frame ->
     TCP.bytes ->
     TCP.bytes ->
@@ -260,7 +266,7 @@ class protocol_endpoint
 
   pe_network_io_continuation:
     impl ->
-    pe_channel ->
+    TCP.channel ->
     pe_frame ->
     TCP.bytes ->
     TCP.bytes ->
@@ -296,7 +302,7 @@ class protocol_endpoint
     i:impl ->
     cfg:pe_config ->
     frame:pe_frame ->
-    ch:pe_channel ->
+    ch:TCP.channel ->
     network_frame:protocol.CPI.pi_network_frame ->
     received:Ghost.erased TCP.bytes ->
     sent:Ghost.erased TCP.bytes ->
@@ -354,7 +360,7 @@ class protocol_endpoint
 
   pe_finish_network_io:
     i:impl ->
-    ch:pe_channel ->
+    ch:TCP.channel ->
     frame:pe_frame ->
     nio:pe_network_io ->
     result:CPI.process_result ->
@@ -415,7 +421,7 @@ class protocol_endpoint
 
   pe_local_io_continuation:
     impl ->
-    pe_channel ->
+    TCP.channel ->
     pe_frame ->
     TCP.bytes ->
     TCP.bytes ->
@@ -440,7 +446,7 @@ class protocol_endpoint
     i:impl ->
     cfg:pe_config ->
     frame:pe_frame ->
-    ch:pe_channel ->
+    ch:TCP.channel ->
     ev:local_event ->
     local_frame:protocol.CPI.pi_local_frame ->
     received:Ghost.erased TCP.bytes ->
@@ -491,7 +497,7 @@ class protocol_endpoint
 
   pe_finish_local_io:
     i:impl ->
-    ch:pe_channel ->
+    ch:TCP.channel ->
     frame:pe_frame ->
     lio:pe_local_io ->
     ev:local_event ->
