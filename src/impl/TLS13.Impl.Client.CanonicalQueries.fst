@@ -1114,29 +1114,3 @@ ensures
     CQ.NextNeedInput network_frame
   }
 }
-
-noextract
-let client_next_local_action_query_implementation
-  : CQ.connection_state_query
-      CP.canonical_client
-      CS.connection_state
-      CW.wire_message
-      CTypes.client_local_event
-      CTypes.local_output
-      client_deferred_action
-      CP.client_protocol_implementation
-  =
-  {
-    CQ.csq_config = client_next_local_action_config;
-    CQ.csq_frame = client_next_local_action_frame;
-    CQ.csq_frame_ready = client_next_local_action_frame_ready;
-    CQ.csq_action_frame = client_next_local_action_frame_post;
-    CQ.csq_network_continuation = client_next_local_action_network_continuation;
-    CQ.csq_local_continuation = client_next_local_action_local_continuation;
-    CQ.csq_next_action = run_client_next_local_action;
-    CQ.csq_cancel_action = cancel_client_next_action;
-    CQ.csq_prepare_network = prepare_client_next_action_network;
-    CQ.csq_finish_network = finish_client_next_action_network;
-    CQ.csq_prepare_local = prepare_client_next_action_local;
-    CQ.csq_finish_local = finish_client_next_action_local;
-  }
