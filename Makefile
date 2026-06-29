@@ -554,6 +554,7 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '<stdbool.h>' \
 	  -add-include '"krml/internal/compat.h"' \
 	  -add-include '"../../c_stubs/common_tcp_karamel.h"' \
+	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
 	  -library TLS13.Crypto -library TLS13.X509 -library Common.TCP \
@@ -609,6 +610,7 @@ ECHO_STUB_SOURCES = \
 ECHO_STUB_HEADERS = \
   c_stubs/common_tcp_karamel.h \
   c_stubs/common_tcp_stubs.h \
+  c_stubs/tls13_bytes_karamel.h \
   c_stubs/tls13_crypto_external.h \
   c_stubs/tls13_hacl_stubs.h \
   c_stubs/tls13_openssl_karamel.h \

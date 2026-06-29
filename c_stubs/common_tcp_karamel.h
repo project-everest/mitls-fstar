@@ -12,19 +12,13 @@ Common_TCP_channel Common_TCP_channel_of_fd(int fd);
 size_t Common_TCP_read_full(
     Common_TCP_channel ch,
     uint8_t *out,
-    size_t len,
-    void *erased0,
-    void *erased1,
-    void *erased2);
+    size_t len);
 
 size_t Common_TCP_write(
     Common_TCP_channel ch,
     uint8_t *buf,
-    size_t len,
-    void *erased0,
-    void *erased1,
-    void *erased2);
+    size_t len);
 
-void Common_TCP_close(Common_TCP_channel ch, void *erased0, void *erased1);
+void Common_TCP_close(Common_TCP_channel ch);
 
 #endif
