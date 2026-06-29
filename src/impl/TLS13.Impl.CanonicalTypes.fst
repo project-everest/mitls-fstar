@@ -89,8 +89,31 @@ type server_api_event = {
   server_local_payload: B.bytes;
 }
 
+noeq
 type server_local_event =
   | ServerAPI: event:server_api_event -> server_local_event
+  | ServerPayload:
+      kind:ST.local_event_kind ->
+      payload:Ghost.erased B.bytes ->
+        server_local_event
+
+let server_local_event_kind
+  (ev:server_local_event)
+  : ST.local_event_kind =
+  match ev with
+  | ServerAPI api -> api.server_local_kind
+  | ServerPayload kind _ -> kind
+
+let server_local_event_api
+  (ev:server_local_event)
+  : GTot server_api_event =
+  match ev with
+  | ServerAPI api -> api
+  | ServerPayload kind payload ->
+    {
+      server_local_kind = kind;
+      server_local_payload = Ghost.reveal payload;
+    }
 
 let endpoint_status_to_process_status
   (status:ET.endpoint_status)

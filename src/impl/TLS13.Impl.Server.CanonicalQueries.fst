@@ -156,6 +156,46 @@ let server_local_event_ready
       st
       api.CTypes.server_local_kind
       api.CTypes.server_local_payload
+  | CTypes.ServerPayload kind payload ->
+    Seq.equal (Ghost.reveal payload) B.empty /\
+    ST.server_local_event_input_ready
+      st
+      kind
+      (Ghost.reveal payload)
+
+let server_local_event_from_query
+  (ev:CTypes.server_local_event)
+  : prop =
+  match ev with
+  | CTypes.ServerAPI _ -> True
+  | CTypes.ServerPayload _ _ -> False
+
+let server_local_event_ready_payload_empty
+  (st:CS.connection_state)
+  (ev:CTypes.server_local_event)
+  : Lemma
+      (requires server_local_event_ready st ev)
+      (ensures Seq.equal
+        (CTypes.server_local_event_api ev).CTypes.server_local_payload
+        B.empty)
+=
+  match ev with
+  | CTypes.ServerAPI _ -> ()
+  | CTypes.ServerPayload _ _ -> ()
+
+let server_local_event_ready_input_wf
+  (st:CS.connection_state)
+  (ev:CTypes.server_local_event)
+  : Lemma
+      (requires server_local_event_ready st ev)
+      (ensures ST.server_local_event_input_ready
+        st
+        (CTypes.server_local_event_api ev).CTypes.server_local_kind
+        (CTypes.server_local_event_api ev).CTypes.server_local_payload)
+=
+  match ev with
+  | CTypes.ServerAPI _ -> ()
+  | CTypes.ServerPayload _ _ -> ()
 
 let server_external_action_witness
   (ext:server_external_action)
@@ -335,15 +375,13 @@ let server_next_local_action_frame_post
     server_local_persistent_resource frame **
     pure (server_network_frame_matches frame network_frame)
   | CQ.NextLocal ev local_frame ->
-    (match ev with
-    | CTypes.ServerAPI _ ->
-      server_local_frame_resource local_frame **
-      server_network_persistent_resource frame **
-      pure (
-        server_local_event_ready st ev /\
-        server_local_frame_matches frame local_frame /\
-        SZ.v frame.server_query_local_payload_len == 0)
-    )
+    server_local_frame_resource local_frame **
+    server_network_persistent_resource frame **
+    pure (
+      server_local_event_ready st ev /\
+      server_local_frame_matches frame local_frame /\
+      SZ.v frame.server_query_local_payload_len == 0 /\
+      server_local_event_from_query ev)
   | CQ.NextExternal ext ->
     server_next_local_action_frame_ready srv cfg frame st **
     pure (server_external_action_ready st ext)
@@ -371,13 +409,11 @@ let server_next_local_action_local_continuation
   (ev:CTypes.server_local_event)
   (local_frame:SP.tls_server_local_bridge_frame)
   : slprop =
-  match ev with
-  | CTypes.ServerAPI _ ->
-    server_network_persistent_resource frame **
-    pure (
-      server_local_event_ready st ev /\
-      server_local_frame_matches frame local_frame /\
-      SZ.v frame.server_query_local_payload_len == 0)
+  server_network_persistent_resource frame **
+  pure (
+    server_local_event_ready st ev /\
+    server_local_frame_matches frame local_frame /\
+    SZ.v frame.server_query_local_payload_len == 0)
 
 fn cancel_server_next_action
   (srv:SP.canonical_server)
@@ -433,37 +469,36 @@ ensures
         (Ghost.reveal st))
     }
     CQ.NextLocal ev local_frame -> {
-      match ev {
-        CTypes.ServerAPI api -> {
-          unfold (server_local_frame_resource local_frame);
-          Seq.lemma_eq_elim api.CTypes.server_local_payload B.empty;
-          rewrite
-            (pts_to
-              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-              B.empty)
-            as
-            (pts_to frame.server_query_local_payload B.empty);
-          rewrite
-            (pts_to
-              local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
-              (Ghost.reveal
-                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out))
-            as
-            (pts_to
-              frame.server_query_local_app_out
-              (Ghost.reveal
-                local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out));
-          let old_local: Ghost.erased B.bytes =
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out;
-          with old_local.
-          fold (server_local_persistent_resource frame);
-          fold (server_next_local_action_frame_ready
-            srv
-            cfg
-            frame
-            (Ghost.reveal st))
-        }
-      }
+      unfold (server_local_frame_resource local_frame);
+      server_local_event_ready_payload_empty (Ghost.reveal st) ev;
+      Seq.lemma_eq_elim
+        (CTypes.server_local_event_api ev).CTypes.server_local_payload
+        B.empty;
+      rewrite
+        (pts_to
+          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+          B.empty)
+        as
+        (pts_to frame.server_query_local_payload B.empty);
+      rewrite
+        (pts_to
+          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+          (Ghost.reveal
+            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out))
+        as
+        (pts_to
+          frame.server_query_local_app_out
+          (Ghost.reveal
+            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out));
+      let old_local: Ghost.erased B.bytes =
+        local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out;
+      with old_local.
+      fold (server_local_persistent_resource frame);
+      fold (server_next_local_action_frame_ready
+        srv
+        cfg
+        frame
+        (Ghost.reveal st))
     }
     CQ.NextExternal _ -> {
       fold (server_next_local_action_frame_ready
@@ -712,83 +747,52 @@ ensures
     out
     out_len
     (Ghost.reveal old_out));
-  match ev {
-    CTypes.ServerAPI api -> {
-      unfold (server_local_frame_resource local_frame);
-      Seq.lemma_eq_elim api.CTypes.server_local_payload B.empty;
-      assert (pure (B.length api.CTypes.server_local_payload ==
-        SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len));
-      assert (pure (B.length (Ghost.reveal old_out) == SZ.v out_len));
-      assert (pure (B.length
-        (Ghost.reveal
-          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out) ==
-        SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len));
-      assert (pure (ST.server_local_event_input_ready
-        (Ghost.reveal st)
-        api.CTypes.server_local_kind
-        api.CTypes.server_local_payload));
-      assert (pure (server_local_frame_matches frame local_frame));
-      assert (pure (SZ.v frame.server_query_local_payload_len == 0));
-      rewrite
-        (pts_to
-          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-          B.empty)
-        as
-        (pts_to
-          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-          api.CTypes.server_local_payload);
-      fold (SP.server_local_bridge_frame_pre
-        (CTypes.ServerAPI api)
-        local_frame
-        (Ghost.reveal st)
-        out
-        out_len
-        (Ghost.reveal old_out));
-      rewrite
-        (SP.server_local_bridge_frame_pre
-          (CTypes.ServerAPI api)
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out))
-        as
-        (SP.server_local_bridge_frame_pre
-          ev
-          local_frame
-          (Ghost.reveal st)
-          out
-          out_len
-          (Ghost.reveal old_out));
-      fold (server_next_local_action_local_continuation
-        srv
-        cfg
-        frame
-        (Ghost.reveal st)
-        (CTypes.ServerAPI api)
-        local_frame);
-      rewrite
-        (server_next_local_action_local_continuation
-          srv
-          cfg
-          frame
-          (Ghost.reveal st)
-          (CTypes.ServerAPI api)
-          local_frame)
-        as
-        (server_next_local_action_local_continuation
-          srv
-          cfg
-          frame
-          (Ghost.reveal st)
-          ev
-          local_frame);
-      fold (CQ.local_output_buffer
-        out
-        out_len
-        (Ghost.reveal old_out))
-    }
-  }
+  unfold (server_local_frame_resource local_frame);
+  server_local_event_ready_payload_empty (Ghost.reveal st) ev;
+  server_local_event_ready_input_wf (Ghost.reveal st) ev;
+  Seq.lemma_eq_elim
+    (CTypes.server_local_event_api ev).CTypes.server_local_payload
+    B.empty;
+  assert (pure (B.length
+    (CTypes.server_local_event_api ev).CTypes.server_local_payload ==
+    SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len));
+  assert (pure (B.length (Ghost.reveal old_out) == SZ.v out_len));
+  assert (pure (B.length
+    (Ghost.reveal
+      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_old_app_out) ==
+    SZ.v local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len));
+  assert (pure (ST.server_local_event_input_ready
+    (Ghost.reveal st)
+    (CTypes.server_local_event_api ev).CTypes.server_local_kind
+    (CTypes.server_local_event_api ev).CTypes.server_local_payload));
+  assert (pure (server_local_frame_matches frame local_frame));
+  assert (pure (SZ.v frame.server_query_local_payload_len == 0));
+  rewrite
+    (pts_to
+      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+      B.empty)
+    as
+    (pts_to
+      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+      (CTypes.server_local_event_api ev).CTypes.server_local_payload);
+  fold (SP.server_local_bridge_frame_pre
+    ev
+    local_frame
+    (Ghost.reveal st)
+    out
+    out_len
+    (Ghost.reveal old_out));
+  fold (server_next_local_action_local_continuation
+    srv
+    cfg
+    frame
+    (Ghost.reveal st)
+    ev
+    local_frame);
+  fold (CQ.local_output_buffer
+    out
+    out_len
+    (Ghost.reveal old_out))
 }
 
 fn finish_server_next_action_local
@@ -836,49 +840,48 @@ ensures
     (Ghost.reveal st0)
     ev
     local_frame);
-  match ev {
-    CTypes.ServerAPI api -> {
-      unfold (SP.server_local_bridge_frame_post
-        (CTypes.ServerAPI api)
-        local_frame
-        result
-        (Ghost.reveal old_out)
-        (Ghost.reveal out_contents)
-        (Ghost.reveal st0)
-        (Ghost.reveal st1)
-        (Ghost.reveal wire_outputs)
-        (Ghost.reveal local_outputs));
-      with app_out. _;
-      unfold (server_network_persistent_resource frame);
-      with network_current. _;
-      Seq.lemma_eq_elim api.CTypes.server_local_payload B.empty;
-      assert (pure (server_local_frame_matches frame local_frame));
-      assert (pure (SZ.v frame.server_query_local_payload_len == 0));
-      assert (pure (B.length (Ghost.reveal app_out) ==
-        SZ.v frame.server_query_local_app_out_len));
-      rewrite
-        (pts_to
-          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-          api.CTypes.server_local_payload)
-        as
-        (pts_to frame.server_query_local_payload B.empty);
-      rewrite
-        (pts_to
-          local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
-          app_out)
-        as
-        (pts_to frame.server_query_local_app_out app_out);
-      with app_out.
-      fold (server_local_persistent_resource frame);
-      with network_current.
-      fold (server_network_persistent_resource frame);
-      fold (server_next_local_action_frame_ready
-        srv
-        cfg
-        frame
-        (Ghost.reveal st1))
-    }
-  }
+  unfold (SP.server_local_bridge_frame_post
+    ev
+    local_frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs));
+  with app_out. _;
+  unfold (server_network_persistent_resource frame);
+  with network_current. _;
+  server_local_event_ready_payload_empty (Ghost.reveal st0) ev;
+  Seq.lemma_eq_elim
+    (CTypes.server_local_event_api ev).CTypes.server_local_payload
+    B.empty;
+  assert (pure (server_local_frame_matches frame local_frame));
+  assert (pure (SZ.v frame.server_query_local_payload_len == 0));
+  assert (pure (B.length (Ghost.reveal app_out) ==
+    SZ.v frame.server_query_local_app_out_len));
+  rewrite
+    (pts_to
+      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
+      (CTypes.server_local_event_api ev).CTypes.server_local_payload)
+    as
+    (pts_to frame.server_query_local_payload B.empty);
+  rewrite
+    (pts_to
+      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
+      app_out)
+    as
+    (pts_to frame.server_query_local_app_out app_out);
+  with app_out.
+  fold (server_local_persistent_resource frame);
+  with network_current.
+  fold (server_network_persistent_resource frame);
+  fold (server_next_local_action_frame_ready
+    srv
+    cfg
+    frame
+    (Ghost.reveal st1))
 }
 
 fn return_server_payload_free_action
