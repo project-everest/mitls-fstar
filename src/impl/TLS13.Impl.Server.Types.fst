@@ -96,8 +96,7 @@ let next_local_action_sound
        | Some selection ->
          CS.server_selection_key_share_consistent selection /\
          st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
-           Some selection.CS.server_selected_client_hello /\
-         Some? selection.CS.server_key_share_private
+           Some selection.CS.server_selected_client_hello
        | None -> False)
     | LocalSendServerHello ->
       action.next_local_payload == LocalPayloadServerRandomAndPrivateKey /\

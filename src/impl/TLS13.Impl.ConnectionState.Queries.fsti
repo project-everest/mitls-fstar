@@ -320,6 +320,42 @@ fn can_select_supported_server_parameters_runtime
                 can_select_server_parameters st0 selection
               | _, _ -> False))
 
+fn can_schedule_select_server_parameters_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server)
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint /\
+            server_selection_absent st0.CS.cs_model.CS.model_handshake /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+            Some? st0.CS.cs_model.CS.model_config.CS.config_server)
+
+fn can_schedule_derive_shared_secret_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None /\
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+             | Some selection ->
+               CS.server_selection_key_share_consistent selection /\
+               st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+                 Some selection.CS.server_selected_client_hello
+             | None -> False))
+
 fn can_send_server_hello_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -335,6 +371,11 @@ fn can_send_server_hello_runtime
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+             | Some selection ->
+               CS.server_selection_key_share_consistent selection /\
+               Some? selection.CS.server_key_share_private
+             | None -> False) /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
               max_transcript_len)
 

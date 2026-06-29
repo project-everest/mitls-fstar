@@ -20,6 +20,7 @@
 #define TLS13_SERVER_MATERIAL_CAP 64u
 #define TLS13_SERVER_PRIVATE_KEY_CAP 32u
 
+#define TLS13_CONTROL_HANDSHAKING 1u
 #define TLS13_CONTROL_APPLICATION_DATA 2u
 #define TLS13_CONTROL_CLOSED 4u
 #define TLS13_CONTROL_FAILED 5u
@@ -123,12 +124,30 @@ static bool server_failed(const TLS13_Impl_Server_Driver_server_driver *d) {
   return server_control_is(d, TLS13_CONTROL_FAILED);
 }
 
-static bool server_handshake_stage_is(
-    const TLS13_Impl_Server_Driver_server_driver *d,
-    uint8_t tag) {
+static bool server_needs_handshake_material(
+    const TLS13_Impl_Server_Driver_server_driver *d) {
   return d != NULL &&
+         d->server_driver_server.control.control_tag != NULL &&
+         *d->server_driver_server.control.control_tag ==
+             TLS13_CONTROL_HANDSHAKING &&
          d->server_driver_server.control.handshake_stage_tag != NULL &&
-         *d->server_driver_server.control.handshake_stage_tag == tag;
+         *d->server_driver_server.control.handshake_stage_tag ==
+             TLS13_HANDSHAKE_CLIENT_HELLO_RECEIVED &&
+         d->server_driver_server.handshake.server_selection_present != NULL &&
+         !*d->server_driver_server.handshake.server_selection_present;
+}
+
+static int server_prepare_endpoint_material(tls13_server_driver *driver) {
+  if (!server_needs_handshake_material(&driver->verified_driver)) {
+    return 0;
+  }
+  if (driver->verified_driver.server_driver_material_payload == NULL ||
+      !TLS13_Crypto_random_bytes(
+          driver->verified_driver.server_driver_material_payload,
+          TLS13_SERVER_MATERIAL_CAP)) {
+    return driver_fail(driver, "server endpoint failed to generate handshake material");
+  }
+  return 0;
 }
 
 static void server_set_channel(
@@ -218,6 +237,9 @@ static int server_endpoint_do_local(
   }
   TLS13_Impl_Server_CanonicalProtocol_canonical_server srv =
       server_endpoint_state(driver->verified_driver);
+  if (server_prepare_endpoint_material(driver) != 0) {
+    return 1;
+  }
   TLS13_Impl_Server_Endpoint_server_endpoint_frame frame =
       server_endpoint_frame(
           driver->verified_driver,
@@ -274,72 +296,6 @@ static int server_endpoint_do_local(
         (unsigned)result.process_status);
   }
   return 0;
-}
-
-static TLS13_Impl_CanonicalTypes_server_local_event server_payload_event(
-    TLS13_Impl_Server_Types_local_event_kind kind) {
-  return (TLS13_Impl_CanonicalTypes_server_local_event){
-      .tag = TLS13_Impl_CanonicalTypes_ServerPayload,
-      .case_ServerPayload = kind,
-  };
-}
-
-static int server_endpoint_do_payload_local(
-    tls13_server_driver *driver,
-    TLS13_Impl_Server_Types_local_event_kind kind,
-    uint8_t *payload,
-    size_t payload_len,
-    uint8_t *app_out,
-    size_t app_out_len) {
-  TLS13_Impl_Server_CanonicalProtocol_tls_server_local_frame local_frame = {
-      .tls_server_local_payload = payload,
-      .tls_server_local_payload_len = payload_len,
-      .tls_server_local_app_out = app_out,
-      .tls_server_local_app_out_len = app_out_len,
-  };
-  return server_endpoint_do_local(
-      driver,
-      server_payload_event(kind),
-      local_frame,
-      app_out,
-      app_out_len);
-}
-
-static int server_endpoint_drive_client_hello_locals(
-    tls13_server_driver *driver,
-    uint8_t *app_out,
-    size_t app_out_len) {
-  if (!TLS13_Crypto_random_bytes(
-          driver->verified_driver.server_driver_material_payload,
-          TLS13_SERVER_MATERIAL_CAP)) {
-    return driver_fail(driver, "server endpoint failed to generate handshake material");
-  }
-  if (server_endpoint_do_payload_local(
-          driver,
-          TLS13_Impl_Server_Types_LocalSelectServerParameters,
-          driver->verified_driver.server_driver_material_payload,
-          TLS13_SERVER_MATERIAL_CAP,
-          app_out,
-          app_out_len) != 0) {
-    return 1;
-  }
-  if (server_endpoint_do_payload_local(
-          driver,
-          TLS13_Impl_Server_Types_LocalDeriveSharedSecret,
-          driver->verified_driver.server_driver_material_payload +
-              TLS13_SERVER_PRIVATE_KEY_CAP,
-          TLS13_SERVER_PRIVATE_KEY_CAP,
-          app_out,
-          app_out_len) != 0) {
-    return 1;
-  }
-  return server_endpoint_do_payload_local(
-      driver,
-      TLS13_Impl_Server_Types_LocalSendServerHello,
-      driver->verified_driver.server_driver_material_payload,
-      TLS13_SERVER_MATERIAL_CAP,
-      app_out,
-      app_out_len);
 }
 
 static int server_endpoint_run(
@@ -503,19 +459,6 @@ static int server_endpoint_run(
           return 1;
         }
         if (result.process_status == Common_ProtocolImplementation_StepOk) {
-          if (server_control_is(
-                  &driver->verified_driver,
-                  1u) &&
-              server_handshake_stage_is(
-                  &driver->verified_driver,
-                  TLS13_HANDSHAKE_CLIENT_HELLO_RECEIVED)) {
-            if (server_endpoint_drive_client_hello_locals(
-                    driver,
-                    app_out,
-                    app_out_len) != 0) {
-              return 1;
-            }
-          }
           if (result.process_app_len != 0u) {
             if (produced_app_len != NULL) {
               *produced_app_len = result.process_app_len;

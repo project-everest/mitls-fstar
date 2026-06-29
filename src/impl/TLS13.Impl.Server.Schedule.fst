@@ -114,12 +114,15 @@ fn next_local_action
   let control = CQ.get_control_snapshot s;
   let keys = CQ.get_key_schedule_snapshot s;
   let start_ready = CQ.can_start_server_runtime s;
-  let send_encrypted_extensions_ready = CQ.can_send_encrypted_extensions_runtime s;
   assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
     | Some cfg ->
       B.length cfg.CS.server_certificate_chain <=
         Bounds.max_server_certificate_chain_len
     | None -> False));
+  let select_server_parameters_ready = CQ.can_schedule_select_server_parameters_runtime s;
+  let derive_shared_secret_ready = CQ.can_schedule_derive_shared_secret_runtime s;
+  let send_server_hello_ready = CQ.can_send_server_hello_runtime s;
+  let send_encrypted_extensions_ready = CQ.can_send_encrypted_extensions_runtime s;
   let send_certificate_ready = CQ.can_send_certificate_runtime s;
   let sign_certificate_verify_ready = CQ.can_sign_certificate_verify_runtime s;
   let send_certificate_verify_ready = CQ.can_send_certificate_verify_runtime s;
@@ -163,6 +166,58 @@ fn next_local_action
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalStartServer;
       ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else if select_server_parameters_ready {
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (CR.server_selection_absent
+      'st0.CS.cs_model.CS.model_handshake));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_config.CS.config_server));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalSelectServerParameters;
+      ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
+    }
+  } else if derive_shared_secret_ready {
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+    assert (pure (
+      match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+      | Some selection ->
+        CS.server_selection_key_share_consistent selection /\
+        'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+          Some selection.CS.server_selected_client_hello
+      | None -> False));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalDeriveSharedSecret;
+      ST.next_local_payload = ST.LocalPayloadServerPrivateKey;
+    }
+  } else if send_server_hello_ready {
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+    assert (pure (
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
+    assert (pure (
+      match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+      | Some selection ->
+        CS.server_selection_key_share_consistent selection /\
+        Some? selection.CS.server_key_share_private
+      | None -> False));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalSendServerHello;
+      ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
     }
   } else if server_handshake_write_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));

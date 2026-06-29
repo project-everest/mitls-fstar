@@ -101,6 +101,38 @@ val lemma_connection_application_keys_supported_profile_key_schedule_lineage
         application_record_keys_installed_for_role role st.cs_model)
       (ensures connection_supported_profile_key_schedule_lineage st)
 
+val lemma_connection_state_consistent_server_selection_private_shape
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsClientHelloReceived /\
+        st.cs_model.model_handshake.hs_keys.ks_shared_secret == None /\
+        Some? st.cs_model.model_handshake.hs_server_selection)
+      (ensures
+        (match st.cs_model.model_handshake.hs_server_selection with
+         | Some selection ->
+           server_selection_key_share_consistent selection /\
+           st.cs_model.model_handshake.hs_client_hello ==
+             Some selection.server_selected_client_hello
+         | None -> False))
+
+val lemma_connection_state_consistent_server_pre_server_hello_shape
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsClientHelloReceived /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        (match st.cs_model.model_handshake.hs_server_selection with
+         | Some selection ->
+           server_selection_key_share_consistent selection /\
+           Some? selection.server_key_share_private
+         | None -> False))
+
 val lemma_server_handshake_write_record_has_keys
   (st:connection_state)
   : Lemma

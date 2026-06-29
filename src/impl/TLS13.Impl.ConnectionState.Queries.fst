@@ -1706,6 +1706,247 @@ fn can_select_supported_server_parameters_runtime
   }
 }
 
+fn can_schedule_select_server_parameters_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server)
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint /\
+            server_selection_absent st0.CS.cs_model.CS.model_handshake /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+            Some? st0.CS.cs_model.CS.model_config.CS.config_server)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_server c.config;
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  with selection_present. _;
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with ch_present ch_random ch_server_name ch_key_share
+       ch_cipher_suites ch_signature_schemes. _;
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let has_selection = !c.handshake.server_selection_present;
+  let has_client_hello = !c.handshake.messages.client_hello_present;
+  let ok =
+    tag = 1uy &&
+    stage = 13uy &&
+    role_ok &&
+    not has_selection &&
+    has_client_hello;
+
+  assert_norm (Tags.handshake_stage_tag_matches
+    13uy
+    CS.HsClientHelloReceived);
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> U8.v stage == 13));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+  assert (pure (has_selection == selection_present));
+  assert (pure (ok ==> selection_present == false));
+  assert (pure (ok ==>
+    server_selection_absent st0.CS.cs_model.CS.model_handshake));
+  assert (pure (has_client_hello == ch_present));
+  assert (pure (ok ==> ch_present));
+  assert (pure (ok ==>
+    Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+
+  fold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  fold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
+fn can_schedule_derive_shared_secret_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None /\
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+             | Some selection ->
+               CS.server_selection_key_share_consistent selection /\
+               st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+                 Some selection.CS.server_selected_client_hello
+             | None -> False))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_server c.config;
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  with selection_present. _;
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with ch_present ch_random ch_server_name ch_key_share
+       ch_cipher_suites ch_signature_schemes. _;
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (optional_secret_exactly
+    c.handshake.keys.shared_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+  with shared_present shared_secret_bytes. _;
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let has_selection = !c.handshake.server_selection_present;
+  let has_client_hello = !c.handshake.messages.client_hello_present;
+  let shared_secret_present = !c.handshake.keys.shared_secret.present;
+  let ok =
+    tag = 1uy &&
+    stage = 13uy &&
+    role_ok &&
+    has_selection &&
+    has_client_hello &&
+    not shared_secret_present;
+
+  assert_norm (Tags.handshake_stage_tag_matches
+    13uy
+    CS.HsClientHelloReceived);
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> U8.v stage == 13));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+  assert (pure (has_selection == selection_present));
+  assert (pure (ok ==> selection_present));
+  assert (pure (ok ==>
+    Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+  assert (pure (has_client_hello == ch_present));
+  assert (pure (ok ==> ch_present));
+  assert (pure (ok ==>
+    Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure (shared_secret_present == shared_present));
+  lemma_optional_fixed_bytes_match_present_iff
+    shared_present
+    shared_secret_bytes
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret;
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None));
+  if ok {
+    assert (pure (Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+    CSL.lemma_connection_state_consistent_server_selection_private_shape st0;
+    assert (pure (
+      match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+      | Some selection ->
+        CS.server_selection_key_share_consistent selection /\
+        st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+          Some selection.CS.server_selected_client_hello
+      | None -> False));
+    fold (optional_secret_exactly
+      c.handshake.keys.shared_secret
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    true
+  } else {
+    fold (optional_secret_exactly
+      c.handshake.keys.shared_secret
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
+
 fn can_send_server_hello_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -1721,6 +1962,11 @@ fn can_send_server_hello_runtime
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+             | Some selection ->
+               CS.server_selection_key_share_consistent selection /\
+               Some? selection.CS.server_key_share_private
+             | None -> False) /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
               max_transcript_len)
 {
@@ -1808,34 +2054,70 @@ fn can_send_server_hello_runtime
   assert (pure (ok ==>
     B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
       max_transcript_len));
-
-  fold (optional_secret_exactly
-    c.handshake.keys.shared_secret
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
-  fold (key_schedule_exactly
-    c.handshake.keys
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
-  fold (sized_bytes_exactly
-    c.handshake.transcript
-    max_transcript_len
-    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
-  fold (server_hello_slot_exactly
-    c.handshake.messages.server_hello
-    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
-  fold (handshake_messages_exactly
-    c.handshake.messages
-    st0.CS.cs_model.CS.model_handshake);
-  fold (server_selection_presence_exactly
-    c.handshake.server_selection_present
-    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
-  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
-  fold (control_exactly
-    c.control
-    st0.CS.cs_model.CS.model_control
-    st0.CS.cs_model.CS.model_failure);
-  fold (connection_model_exactly c st0.CS.cs_model);
-  fold (connection_exactly c st0);
-  ok
+  if ok {
+    CSL.lemma_connection_state_consistent_server_pre_server_hello_shape st0;
+    assert (pure (
+      match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+      | Some selection ->
+        CS.server_selection_key_share_consistent selection /\
+        Some? selection.CS.server_key_share_private
+      | None -> False));
+    fold (optional_secret_exactly
+      c.handshake.keys.shared_secret
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (server_hello_slot_exactly
+      c.handshake.messages.server_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    true
+  } else {
+    fold (optional_secret_exactly
+      c.handshake.keys.shared_secret
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (server_hello_slot_exactly
+      c.handshake.messages.server_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
 }
 
 fn can_receive_application_data

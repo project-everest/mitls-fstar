@@ -1887,6 +1887,66 @@ let lemma_connection_state_consistent_server_x25519_reachable_shape
   assert (connection_state_evolves (initial st.cs_model.model_config) st);
   assert (p st)
 
+let lemma_connection_state_consistent_server_selection_private_shape
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsClientHelloReceived /\
+        st.cs_model.model_handshake.hs_keys.ks_shared_secret == None /\
+        Some? st.cs_model.model_handshake.hs_server_selection)
+      (ensures
+        (match st.cs_model.model_handshake.hs_server_selection with
+         | Some selection ->
+           server_selection_key_share_consistent selection /\
+           st.cs_model.model_handshake.hs_client_hello ==
+             Some selection.server_selected_client_hello
+         | None -> False))
+=
+  lemma_connection_state_consistent_server_x25519_reachable_shape st;
+  assert (server_x25519_reachable_shape st);
+  assert (st.cs_model.model_config.config_role == ServerEndpoint);
+  assert (st.cs_model.model_handshake.hs_keys.ks_shared_secret == None);
+  assert (server_selected_client_hello_reachable_shape st);
+  match st.cs_model.model_handshake.hs_server_selection with
+  | Some selection ->
+    assert (st.cs_model.model_handshake.hs_client_hello ==
+      Some selection.server_selected_client_hello);
+    (match selection.server_key_share_private with
+     | Some server_sk ->
+       assert (C.x25519_public_from_private server_sk ==
+         selection.server_key_share_public)
+     | None -> ())
+  | None -> assert False
+
+let lemma_connection_state_consistent_server_pre_server_hello_shape
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsClientHelloReceived /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        (match st.cs_model.model_handshake.hs_server_selection with
+         | Some selection ->
+           server_selection_key_share_consistent selection /\
+           Some? selection.server_key_share_private
+         | None -> False))
+=
+  lemma_connection_state_consistent_server_x25519_reachable_shape st;
+  assert (server_x25519_reachable_shape st);
+  assert (server_x25519_pre_server_hello_projection st);
+  match st.cs_model.model_handshake.hs_server_selection with
+  | Some selection ->
+    (match selection.server_key_share_private with
+     | Some server_sk ->
+       assert (C.x25519_public_from_private server_sk ==
+         selection.server_key_share_public)
+     | None -> assert False)
+  | None -> assert False
+
 let server_handshake_write_key_shape_control
   (control:connection_control_state)
   : bool =
