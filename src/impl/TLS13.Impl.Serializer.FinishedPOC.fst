@@ -436,8 +436,14 @@ let poc_canonical_sh (rnd ks: B.bytes) (cs: GCS.cipherSuite)
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
     let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
+    let sv_ext : GESH.extensionServerHello =
+      GESH.Extension_data_supported_versions
+        (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
     GSHBody.serverHelloBody_extensions_list_bytesize_nil;
-    let exts : GSHBody.serverHelloBody_extensions = [ks_ext] in
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+    let exts : GSHBody.serverHelloBody_extensions = [ks_ext; sv_ext] in
     let sid : GSHBody.serverHelloBody_legacy_session_id_echo = B.empty in
     let body : GSHBody.serverHelloBody = {
       GSHBody.legacy_session_id_echo = sid;
@@ -456,7 +462,8 @@ let poc_sh_mid (rnd ks: B.bytes) (cs: GCS.cipherSuite)
     (ensures fun _ -> True)
   = let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share (kse <: GESH.extensionServerHello_extension_data_key_share) in
-    let exts : list GESH.extensionServerHello = [ks_ext] in
+    let sv_ext : GESH.extensionServerHello = GESH.Extension_data_supported_versions (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
+    let exts : list GESH.extensionServerHello = [ks_ext; sv_ext] in
     let shbody_mid : GSHBody.serverHelloBody_mid = (((B.empty <: Seq.seq U8.t), cs), (0uy, exts)) in
     let body_mid : GSHB.serverHello_body_mid = ((rnd <: Seq.seq U8.t), (| false, shbody_mid |)) in
     (GPV.TLS_1p2, body_mid)
@@ -473,6 +480,10 @@ let lemma_sh_conv_fwd (rnd ks: B.bytes) (cs: GCS.cipherSuite)
     let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
     let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
+    let sv_ext : GESH.extensionServerHello = GESH.Extension_data_supported_versions (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     (* (a) key_exchange vlbytes conv *)
     assert (GKSE.keyShareEntry_key_exchange_conv (ks <: GKSE.keyShareEntry_key_exchange_mid)
               == Some (ks <: GKSE.keyShareEntry_key_exchange));
@@ -481,26 +492,35 @@ let lemma_sh_conv_fwd (rnd ks: B.bytes) (cs: GCS.cipherSuite)
     (* (c) key_share extension vldata conv *)
     assert (GESHKS.extensionServerHello_extension_data_key_share_conv ((GNG.X25519, ks) <: GESHKS.extensionServerHello_extension_data_key_share_mid)
               == Some ksesh);
-    (* (d) extensionServerHello sum conv *)
+    (* (d) extensionServerHello sum conv (key_share) *)
     assert (GESH.extensionServerHello_conv (GESH.Extension_data_key_share_mid ((GNG.X25519, ks) <: GESHKS.extensionServerHello_extension_data_key_share_mid))
               == Some ks_ext);
+    (* (d') extensionServerHello sum conv (supported_versions) *)
+    assert (GESH.extensionServerHello_conv (GESH.Extension_data_supported_versions_mid (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions_mid))
+              == Some sv_ext);
     (* (e) extensions list vldata conv *)
-    assert (GSHBody.serverHelloBody_extensions_conv ([ks_ext] <: GSHBody.serverHelloBody_extensions_mid)
-              == Some ([ks_ext] <: GSHBody.serverHelloBody_extensions));
+    assert (GSHBody.serverHelloBody_extensions_conv ([ks_ext; sv_ext] <: GSHBody.serverHelloBody_extensions_mid)
+              == Some ([ks_ext; sv_ext] <: GSHBody.serverHelloBody_extensions));
     ()
 #pop-options
 
-(* ---- size lemma: the canonical ServerHello handshake message is 84 bytes ---- *)
+(* ---- size lemma: the canonical ServerHello handshake message is 90 bytes ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_sh_size (rnd ks: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks cs)) == 84)
+          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks cs)) == 90)
   = let sh = poc_canonical_sh rnd ks cs in
+    let sv_ext : GESH.extensionServerHello = GESH.Extension_data_supported_versions (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
+    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
+    let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share (kse <: GESH.extensionServerHello_extension_data_key_share) in
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     GCS.cipherSuite_bytesize_eq cs;
     GNG.namedGroup_bytesize_eq GNG.X25519;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn (ks <: GKSE.keyShareEntry_key_exchange);
     GSHBody.serverHelloBody_extensions_list_bytesize_nil;
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
     ()
 #pop-options
 
@@ -548,6 +568,32 @@ fn intro_vmatch_extSH_key_share
     GESH.extensionServerHello_conv
     (GESH.Extension_data_key_share_low v0)
     (GESH.Extension_data_key_share_mid cm) h;
+}
+
+(* Intro the supported_versions element vmatch_conv (a protocolVersion LEAF;
+   mirror of intro_vmatch_extSH_key_share but with eq_as_slprop in place of the
+   keyShareEntry pair vmatch). *)
+ghost
+fn intro_vmatch_extSH_supported_versions
+  (v0: GESH.extensionServerHello_extension_data_supported_versions_lowtype)
+  (cm: GESH.extensionServerHello_extension_data_supported_versions_mid)
+  (#h: GESH.extensionServerHello)
+  requires LPS.eq_as_slprop GPV.protocolVersion v0 cm **
+           pure (GESH.extensionServerHello_conv
+                   (GESH.Extension_data_supported_versions_mid cm) == Some h)
+  ensures PPB.vmatch_conv GESH.extensionServerHello_vmatch
+            GESH.extensionServerHello_conv
+            (GESH.Extension_data_supported_versions_low v0) h
+{
+  rewrite (LPS.eq_as_slprop GPV.protocolVersion v0 cm)
+      as (GESH.extensionServerHello_extension_data_supported_versions_vmatch v0 cm);
+  fold (GESH.extensionServerHello_vmatch
+          (GESH.Extension_data_supported_versions_low v0)
+          (GESH.Extension_data_supported_versions_mid cm));
+  PPB.intro_vmatch_conv GESH.extensionServerHello_vmatch
+    GESH.extensionServerHello_conv
+    (GESH.Extension_data_supported_versions_low v0)
+    (GESH.Extension_data_supported_versions_mid cm) h;
 }
 
 (* Re-pack the session-id-echo lvec and extensions vclist into the serverHelloBody. *)
@@ -678,6 +724,13 @@ let lemma_ks_ext_conv (ks: B.bytes)
     GKSE.keyShareEntry_key_exchange_bytesize_eqn (ks <: GKSE.keyShareEntry_key_exchange);
     ()
 
+let lemma_sv_ext_conv ()
+  : Lemma (ensures GESH.extensionServerHello_conv
+                     (GESH.Extension_data_supported_versions_mid (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions_mid))
+                   == Some (GESH.Extension_data_supported_versions
+                             (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions)))
+  = ()
+
 let lemma_sh_handshake_conv_fwd (rnd ks: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
           (ensures GHS.handshake_conv (GHS.Body_server_hello_mid (poc_sh_mid rnd ks cs))
@@ -686,7 +739,7 @@ let lemma_sh_handshake_conv_fwd (rnd ks: B.bytes) (cs: GCS.cipherSuite)
 #pop-options
 
 (* ===================================================================== *)
-(* Main: serialize a canonical ServerHello handshake message (84 bytes)  *)
+(* Main: serialize a canonical ServerHello handshake message (90 bytes)  *)
 (* ===================================================================== *)
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 fn serialize_server_hello_handshake_poc
@@ -699,7 +752,7 @@ fn serialize_server_hello_handshake_poc
   (out_len: SZ.t)
   (#old: erased B.bytes)
   requires L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out (reveal old) **
-           pure (B.length (reveal old) == SZ.v out_len /\ SZ.v out_len == 84 /\
+           pure (B.length (reveal old) == SZ.v out_len /\ SZ.v out_len == 90 /\
                  Seq.length (reveal rnd) == 32 /\
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
@@ -708,7 +761,7 @@ fn serialize_server_hello_handshake_poc
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **
-          pure (B.length out_bytes == 84 /\ SZ.v written == 84 /\
+          pure (B.length out_bytes == 90 /\ SZ.v written == 90 /\
                 Seq.equal out_bytes (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 {
   unfold (L.is_valid_server_hello lsh (reveal sh));
@@ -746,24 +799,46 @@ fn serialize_server_hello_handshake_poc
        <: GESH.extensionServerHello_extension_data_key_share));
   lemma_ks_ext_conv (reveal ks);
   intro_vmatch_extSH_key_share kse_low ((GNG.X25519, reveal ks) <: GESHKS.extensionServerHello_extension_data_key_share_mid) #(Ghost.reveal ks_ext);
-  let ext_low : GESH.extensionServerHello_lowtype = GESH.Extension_data_key_share_low kse_low;
+  let ks_low : GESH.extensionServerHello_lowtype = GESH.Extension_data_key_share_low kse_low;
   rewrite (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
              (GESH.Extension_data_key_share_low kse_low) (Ghost.reveal ks_ext))
       as (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
-             ext_low (Ghost.reveal ks_ext));
+             ks_low (Ghost.reveal ks_ext));
 
-  (* ---- singleton extensions vclist ---- *)
-  let ext_vec = V.alloc ext_low 1sz;
+  (* ---- supported_versions extension element vmatch_conv (protocolVersion leaf) ---- *)
+  let sv_ext : Ghost.erased GESH.extensionServerHello =
+    Ghost.hide (GESH.Extension_data_supported_versions
+      (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions));
+  fold (LPS.eq_as_slprop GPV.protocolVersion GPV.TLS_1p3 GPV.TLS_1p3);
+  lemma_sv_ext_conv ();
+  intro_vmatch_extSH_supported_versions
+    (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions_lowtype)
+    (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions_mid)
+    #(Ghost.reveal sv_ext);
+  let sv_low : GESH.extensionServerHello_lowtype =
+    GESH.Extension_data_supported_versions_low (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions_lowtype);
+  rewrite (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+             (GESH.Extension_data_supported_versions_low (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions_lowtype)) (Ghost.reveal sv_ext))
+      as (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+             sv_low (Ghost.reveal sv_ext));
+
+  (* ---- two-element extensions vclist [ks_ext; sv_ext] ---- *)
+  let ext_vec = V.alloc ks_low 2sz;
+  V.op_Array_Assignment ext_vec 1sz sv_low;
+  with vc. assert (V.pts_to ext_vec vc);
+  rewrite (V.pts_to ext_vec vc) as (V.pts_to ext_vec (Seq.upd (Seq.create 2 ks_low) 1 sv_low));
   SM.seq_list_match_nil_intro (Seq.empty #GESH.extensionServerHello_lowtype) ([] <: list GESH.extensionServerHello)
     (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv);
-  SM.seq_list_match_cons_intro ext_low (Ghost.reveal ks_ext) (Seq.empty #GESH.extensionServerHello_lowtype) ([] <: list GESH.extensionServerHello)
+  SM.seq_list_match_cons_intro sv_low (Ghost.reveal sv_ext) (Seq.empty #GESH.extensionServerHello_lowtype) ([] <: list GESH.extensionServerHello)
     (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv);
-  Seq.lemma_eq_elim (Seq.create 1 ext_low) (Seq.cons ext_low (Seq.empty #GESH.extensionServerHello_lowtype));
-  rewrite (SM.seq_list_match (Seq.cons ext_low (Seq.empty #GESH.extensionServerHello_lowtype)) [Ghost.reveal ks_ext]
+  SM.seq_list_match_cons_intro ks_low (Ghost.reveal ks_ext) (Seq.cons sv_low (Seq.empty #GESH.extensionServerHello_lowtype)) ([Ghost.reveal sv_ext] <: list GESH.extensionServerHello)
+    (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv);
+  Seq.lemma_eq_elim (Seq.upd (Seq.create 2 ks_low) 1 sv_low) (Seq.cons ks_low (Seq.cons sv_low (Seq.empty #GESH.extensionServerHello_lowtype)));
+  rewrite (SM.seq_list_match (Seq.cons ks_low (Seq.cons sv_low (Seq.empty #GESH.extensionServerHello_lowtype))) [Ghost.reveal ks_ext; Ghost.reveal sv_ext]
             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv))
-       as (SM.seq_list_match (Seq.create 1 ext_low) [Ghost.reveal ks_ext]
+       as (SM.seq_list_match (Seq.upd (Seq.create 2 ks_low) 1 sv_low) [Ghost.reveal ks_ext; Ghost.reveal sv_ext]
             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
-  let exts_low = PPVCL.vmatch_vclist_some_intro 1sz ext_vec #(Seq.create 1 ext_low) #[Ghost.reveal ks_ext] [Ghost.reveal ks_ext];
+  let exts_low = PPVCL.vmatch_vclist_some_intro 2sz ext_vec #(Seq.upd (Seq.create 2 ks_low) 1 sv_low) #[Ghost.reveal ks_ext; Ghost.reveal sv_ext] [Ghost.reveal ks_ext; Ghost.reveal sv_ext];
 
   (* ---- empty session-id-echo lvec ---- *)
   let sid_vec = V.alloc 0uy 0sz;
@@ -779,12 +854,12 @@ fn serialize_server_hello_handshake_poc
   let shbody_low : GSHBody.serverHelloBody_lowtype =
     ((sid_lvec, GCS.TLS_CHACHA20_POLY1305_SHA256), (0uy, exts_low));
   let shm : Ghost.erased GSHBody.serverHelloBody_mid =
-    Ghost.hide (((B.empty <: Seq.seq U8.t), reveal cs), (0uy, ([Ghost.reveal ks_ext] <: list GESH.extensionServerHello)));
+    Ghost.hide (((B.empty <: Seq.seq U8.t), reveal cs), (0uy, ([Ghost.reveal ks_ext; Ghost.reveal sv_ext] <: list GESH.extensionServerHello)));
   rewrite (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch sid_lvec (B.empty <: Seq.seq U8.t))
       as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch (fst (fst shbody_low)) (fst (fst (Ghost.reveal shm))));
   rewrite (PPVCL.vmatch_vclist
              (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
-             exts_low [Ghost.reveal ks_ext])
+             exts_low [Ghost.reveal ks_ext; Ghost.reveal sv_ext])
       as (PPVCL.vmatch_vclist
              (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
              (snd (snd shbody_low)) (snd (snd (Ghost.reveal shm))));
@@ -1250,7 +1325,7 @@ fn serialize_certificate_handshake_poc
    //   serverHello.legacy_version) -- none constrained by is_valid.
    //   Counterexample: sh1, sh2 identical except
    //   legacy_compression_method = 0uy vs 1uy.  Both satisfy
-   //   is_valid_server_hello lsh _ and are 84 bytes, but their wire
+   //   is_valid_server_hello lsh _ and are 90 bytes, but their wire
    //   serializations differ in that one byte.  The POC precondition pins
    //   these free fields, removing the ambiguity.
 
