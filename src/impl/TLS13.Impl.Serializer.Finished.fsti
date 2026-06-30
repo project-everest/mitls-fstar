@@ -14,9 +14,10 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
+module GFin = TLS13.Wire.Generated.Finished
 
 fn serialize_server_finished
-  (#fin: erased M.finished)
+  (#fin: erased GFin.finished)
   (lfin: L.finished)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -32,6 +33,6 @@ fn serialize_server_finished
           pure (B.length out_bytes == 36 /\
                 SZ.v written == 36 /\
                 Seq.equal out_bytes
-                  (WS.serialize_server_finished (Ghost.reveal fin)) /\
+                  (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
                 WS.parse_tls_message T.Handshake out_bytes ==
                   Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
