@@ -721,21 +721,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         cfg.CS.server_allowed_signature_schemes
                         T.Rsa_pss_rsae_sha256 /\
                       cfg.CS.server_sni_policy == None
-                    | None -> False) /\
-                   // TODO-A1: cst-guard and serialize-length for any 64-byte
-                   // payload (deleted lemma_serialize_server_hello_len). Always
-                   // true for the fixed-size ServerHello wire format; threaded as
-                   // an explicit caller obligation until a replacement lemma lands.
-                   (forall (material:B.bytes{B.length material == 64}).
-                     (Seq.length (CL.raw_slice material 0 32) == 32 ==>
-                      (CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <>
-                        GSHbody.serverHello_body_cst) /\
-                     (let sh = SS.mk_server_hello_witness
-                                (CL.raw_slice material 0 32)
-                                (CryptoSpec.x25519_public_from_private
-                                  (CL.raw_slice material 32 64))
-                                T.TLS_CHACHA20_POLY1305_SHA256 in
-                      B.length (W.serialize_handshake (M.ServerHello sh)) == 90)))
+                    | None -> False))
   returns result:server_driver_accept_server_hello_result
   ensures pts_to bind_host 'bind_host_bytes **
           (match result with
@@ -807,18 +793,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                         cfg.CS.server_allowed_signature_schemes
                         T.Rsa_pss_rsae_sha256 /\
                       cfg.CS.server_sni_policy == None
-                    | None -> False) /\
-                   // TODO-A1: cst-guard and serialize-length (see above)
-                   (forall (material:B.bytes{B.length material == 64}).
-                     (Seq.length (CL.raw_slice material 0 32) == 32 ==>
-                      (CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <>
-                        GSHbody.serverHello_body_cst) /\
-                     (let sh = SS.mk_server_hello_witness
-                                (CL.raw_slice material 0 32)
-                                (CryptoSpec.x25519_public_from_private
-                                  (CL.raw_slice material 32 64))
-                                T.TLS_CHACHA20_POLY1305_SHA256 in
-                      B.length (W.serialize_handshake (M.ServerHello sh)) == 90)))
+                    | None -> False))
   returns result:server_driver_accept_server_hello_drain_result
   ensures pts_to bind_host 'bind_host_bytes **
           (match result with

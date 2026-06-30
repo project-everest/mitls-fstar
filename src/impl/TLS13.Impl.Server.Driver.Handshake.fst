@@ -2793,21 +2793,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                                 cfg.CS.server_allowed_signature_schemes
                                 T.Rsa_pss_rsae_sha256 /\
                               cfg.CS.server_sni_policy == None
-                            | None -> False) /\
-                           // TODO-A1: cst-guard and serialize-length for any 64-byte
-                           // payload (deleted lemma_serialize_server_hello_len). Always
-                           // true for the fixed-size ServerHello wire format; threaded as
-                           // an explicit caller obligation until a replacement lemma lands.
-                           (forall (material:B.bytes{B.length material == 64}).
-                             (Seq.length (CL.raw_slice material 0 32) == 32 ==>
-                              (CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <>
-                                GSHbody.serverHello_body_cst) /\
-                             (let sh = SS.mk_server_hello_witness
-                                        (CL.raw_slice material 0 32)
-                                        (CryptoSpec.x25519_public_from_private
-                                          (CL.raw_slice material 32 64))
-                                        T.TLS_CHACHA20_POLY1305_SHA256 in
-                              B.length (W.serialize_handshake (M.ServerHello sh)) == 90)))
+                            | None -> False))
             returns result:server_driver_accept_server_hello_result
             ensures pts_to bind_host 'bind_host_bytes **
                     (match result with
@@ -3024,32 +3010,60 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         st_ch
                         ST.LocalSelectServerParameters
                         material_bytes));
-                      // Instantiate the forall precondition with material_bytes
+                      // TODO-A1 cst-guard: discharge via a RUNTIME comparison of the
+                      // freshly-generated random against the HRR sentinel, instead of
+                      // the (unsatisfiable) universal caller precondition.
                       assert (pure (B.length material_bytes == 64));
-                      assert (pure (
-                        (Seq.length (CL.raw_slice material_bytes 0 32) == 32 ==>
-                         (CL.raw_slice material_bytes 0 32 <: Seq.lseq U8.t 32) <>
-                           GSHbody.serverHello_body_cst) /\
-                        (let sh = SS.mk_server_hello_witness
-                                   (CL.raw_slice material_bytes 0 32)
-                                   (CryptoSpec.x25519_public_from_private
-                                     (CL.raw_slice material_bytes 32 64))
-                                   T.TLS_CHACHA20_POLY1305_SHA256 in
-                         B.length (W.serialize_handshake (M.ServerHello sh)) == 90)));
-                      let server_hello_result =
-                        select_derive_send_server_hello_from_payload_once
+                      let differs =
+                        SS.server_random_differs_from_cst material_payload;
+                      if not differs {
+                        // Runtime sentinel collision (cryptographically impossible):
+                        // bail out, re-establishing the connected predicate.
+                        assert (server_driver_connected
                           d
-                          material_payload
-                          64sz;
-                      match server_hello_result {
-                        ServerDriverSelectDeriveServerHelloOk -> {
-                          ServerDriverAcceptServerHelloOk
-                        }
-                        ServerDriverSelectDeriveServerHelloDeriveFailed -> {
-                          ServerDriverAcceptServerHelloDeriveFailed
-                        }
-                        ServerDriverSelectDeriveServerHelloSendNotReady -> {
-                          ServerDriverAcceptServerHelloSendNotReady
+                          st_ch
+                          'certificate_chain
+                          'credential_identity
+                          received
+                          sent);
+                        assert (pure (st_ch.CS.cs_model.CS.model_control ==
+                          CS.ControlHandshaking CS.HsClientHelloReceived));
+                        assert (pure (st_ch.CS.cs_model.CS.model_config ==
+                          'st0.CS.cs_model.CS.model_config));
+                        ServerDriverAcceptServerHelloMaterialFailed
+                      } else {
+                        // [differs] establishes the cst-guard for material_bytes; the
+                        // ==90 serialized-length follows from the existing lemma.
+                        SS.lemma_mk_server_hello_witness_bytesize
+                          (CL.raw_slice material_bytes 0 32)
+                          (CryptoSpec.x25519_public_from_private
+                            (CL.raw_slice material_bytes 32 64))
+                          T.TLS_CHACHA20_POLY1305_SHA256;
+                        assert (pure (
+                          (Seq.length (CL.raw_slice material_bytes 0 32) == 32 ==>
+                           (CL.raw_slice material_bytes 0 32 <: Seq.lseq U8.t 32) <>
+                             GSHbody.serverHello_body_cst) /\
+                          (let sh = SS.mk_server_hello_witness
+                                     (CL.raw_slice material_bytes 0 32)
+                                     (CryptoSpec.x25519_public_from_private
+                                       (CL.raw_slice material_bytes 32 64))
+                                     T.TLS_CHACHA20_POLY1305_SHA256 in
+                           B.length (W.serialize_handshake (M.ServerHello sh)) == 90)));
+                        let server_hello_result =
+                          select_derive_send_server_hello_from_payload_once
+                            d
+                            material_payload
+                            64sz;
+                        match server_hello_result {
+                          ServerDriverSelectDeriveServerHelloOk -> {
+                            ServerDriverAcceptServerHelloOk
+                          }
+                          ServerDriverSelectDeriveServerHelloDeriveFailed -> {
+                            ServerDriverAcceptServerHelloDeriveFailed
+                          }
+                          ServerDriverSelectDeriveServerHelloSendNotReady -> {
+                            ServerDriverAcceptServerHelloSendNotReady
+                          }
                         }
                       }
                     } else {
@@ -3114,18 +3128,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                       cfg.CS.server_allowed_signature_schemes
                       T.Rsa_pss_rsae_sha256 /\
                     cfg.CS.server_sni_policy == None
-                  | None -> False) /\
-                 // TODO-A1: cst-guard and serialize-length (see above)
-                 (forall (material:B.bytes{B.length material == 64}).
-                   (Seq.length (CL.raw_slice material 0 32) == 32 ==>
-                    (CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <>
-                      GSHbody.serverHello_body_cst) /\
-                   (let sh = SS.mk_server_hello_witness
-                              (CL.raw_slice material 0 32)
-                              (CryptoSpec.x25519_public_from_private
-                                (CL.raw_slice material 32 64))
-                              T.TLS_CHACHA20_POLY1305_SHA256 in
-                    B.length (W.serialize_handshake (M.ServerHello sh)) == 90)))
+                  | None -> False))
   returns result:server_driver_accept_server_hello_drain_result
   ensures pts_to bind_host 'bind_host_bytes **
           (match result with

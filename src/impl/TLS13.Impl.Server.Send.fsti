@@ -73,6 +73,24 @@ val lemma_mk_server_hello_witness_bytesize
       B.length (W.serialize_handshake
         (M.ServerHello (mk_server_hello_witness random key_share cs))) == 90)
 
+(* Runtime accessor for the [j]-th byte of the HelloRetryRequest sentinel
+   [GSHbody.serverHello_body_cst].  (The generated [serverHello_body_get_byte]
+   is private to its implementation module, so we re-expose a copy here.) *)
+inline_for_extraction
+val hrr_sentinel_byte (j: SZ.t { SZ.v j < 32 })
+  : (b: U8.t { b == Seq.index GSHbody.serverHello_body_cst (SZ.v j) })
+
+(* Runtime 32-byte comparison of a freshly-generated server random against the
+   HelloRetryRequest sentinel.  Returns [true] iff the first 32 bytes of
+   [material] differ from the sentinel; this discharges the cst-guard that
+   [mk_server_hello_witness] / [lemma_mk_server_hello_witness_bytesize] require.
+   Security-critical: the iff postcondition must NOT be weakened. *)
+fn server_random_differs_from_cst (material: array U8.t) (#p: perm) (#mb: erased (b:B.bytes{B.length b >= 32}))
+  requires pts_to material #p mb
+  returns b: bool
+  ensures pts_to material #p mb **
+          pure (b <==> (CL.raw_slice mb 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst)
+
 type server = CR.connection_state
 
 let connection_exactly (s:server) (st:CS.connection_state) : slprop =
