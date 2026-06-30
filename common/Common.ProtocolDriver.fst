@@ -64,6 +64,7 @@ let local_driver_status
   | CPI.OutputBufferTooSmall
   | CPI.ConnectionFailed -> DriverFailed
 
+noextract
 fn drive_once
   #impl #state #wire_message #local_event #local_output
   (#protocol:CPI.protocol_implementation
@@ -449,6 +450,7 @@ ensures
   }
 }
 
+noextract
 fn rec drive_steps
     #impl #state #wire_message #local_event #local_output
     (#protocol:CPI.protocol_implementation

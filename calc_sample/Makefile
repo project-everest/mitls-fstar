@@ -148,11 +148,11 @@ IMPL_MODULES = \
   Calc.Impl.Mul \
   Calc.Impl.Div \
   Calc.Server \
-  Calc.Server.CanonicalProtocol \
+  Calc.Server.Socket \
   Calc.Server.EndpointRunner
 
 COMMON_EXTRACT_MODULES = \
-  Common.ProtocolImplementation
+  Common.TCP
 
 # Convert module names to .krml filenames
 KRML_FILES = \
@@ -167,6 +167,13 @@ $(EXTRACT_DIR):
 	@mkdir -p $@
 
 # ── Phase 1: F* → .krml ────────────────────────────────────────────
+$(OUTPUT_DIR)/Common_TCP.krml: verify | $(OUTPUT_DIR)
+	@echo "Extracting Common.TCP to .krml"
+	@$(FSTAR) --codegen krml \
+	  --extract_module Common.TCP \
+	  --odir $(OUTPUT_DIR) \
+	  ../common/Common.TCP.fsti --krmloutput $@
+
 $(OUTPUT_DIR)/Common_%.krml: verify | $(OUTPUT_DIR)
 	@echo "Extracting Common.$(subst _,.,$*) to .krml"
 	@$(FSTAR) --codegen krml \

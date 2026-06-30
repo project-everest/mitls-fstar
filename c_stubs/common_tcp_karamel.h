@@ -6,6 +6,7 @@
 
 typedef struct Common_TCP_channel_s *Common_TCP_channel;
 typedef struct Common_TCP_listener_s *Common_TCP_listener;
+typedef struct Common_TCP_history_s { uint8_t unused; } Common_TCP_history;
 
 Common_TCP_channel Common_TCP_channel_of_fd(int fd);
 

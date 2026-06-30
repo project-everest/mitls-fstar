@@ -7,6 +7,7 @@ open Pulse.Lib.Pervasives
 module CPI = Common.ProtocolImplementation
 module PD = Common.ProtocolDriver
 module PE = Common.ProtocolEndpoint
+module R = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module TCP = Common.TCP
@@ -24,6 +25,28 @@ open Calc.Impl.Types
 type calc_endpoint_config = unit
 
 let calc_empty_bytes : TCP.bytes = Seq.empty
+
+type calc_driver_status =
+  | CalcDriverNetworkStep
+  | CalcDriverFailed
+
+noeq
+type calc_driver_result = {
+  calc_driver_status: calc_driver_status;
+}
+
+inline_for_extraction
+let calc_network_driver_status
+  (result:CPI.process_result)
+  : Tot (status:calc_driver_status) =
+  match result.CPI.process_status with
+  | CPI.StepOk
+  | CPI.NeedMoreInput -> CalcDriverNetworkStep
+  | CPI.ParseFailed
+  | CPI.DecodeError
+  | CPI.IllegalTransition
+  | CPI.OutputBufferTooSmall
+  | CPI.ConnectionFailed -> CalcDriverFailed
 
 [@@pulse_unfold]
 let calc_frame_ready
@@ -101,6 +124,7 @@ let calc_local_continuation
 noeq
 type calc_network_io = {
   calc_nio_input: array U8.t;
+  calc_nio_input_len: SZ.t;
   calc_nio_output: array U8.t;
   calc_nio_input_contents: Ghost.erased TCP.bytes;
   calc_nio_old_output: Ghost.erased TCP.bytes;
@@ -120,6 +144,7 @@ let calc_network_io_continuation
   pure (
     nio.calc_nio_input == Vec.vec_to_array _frame.CalcCP.calc_network_req /\
     nio.calc_nio_output == Vec.vec_to_array _frame.CalcCP.calc_network_resp /\
+    nio.calc_nio_input_len == 5sz /\
     Seq.length (Ghost.reveal nio.calc_nio_input_contents) == 5 /\
     Seq.length (Ghost.reveal nio.calc_nio_old_output) == 5 /\
     Vec.length _frame.CalcCP.calc_network_req == 5 /\
@@ -127,15 +152,19 @@ let calc_network_io_continuation
     Vec.is_full_vec _frame.CalcCP.calc_network_req /\
     Vec.is_full_vec _frame.CalcCP.calc_network_resp)
 
+inline_for_extraction
 let calc_network_input (nio:calc_network_io) : array U8.t =
   nio.calc_nio_input
 
-let calc_network_input_len (_nio:calc_network_io) : SZ.t =
-  5sz
+inline_for_extraction
+let calc_network_input_len (nio:calc_network_io) : SZ.t =
+  nio.calc_nio_input_len
 
+inline_for_extraction
 let calc_network_output (nio:calc_network_io) : array U8.t =
   nio.calc_nio_output
 
+inline_for_extraction
 let calc_network_output_len (_nio:calc_network_io) : SZ.t =
   5sz
 
@@ -145,6 +174,7 @@ let calc_network_input_contents (nio:calc_network_io) : Ghost.erased TCP.bytes =
 let calc_network_old_output (nio:calc_network_io) : Ghost.erased TCP.bytes =
   nio.calc_nio_old_output
 
+noextract
 fn calc_next_action
   (srv:CalcCP.canonical_server)
   (cfg:calc_endpoint_config)
@@ -168,6 +198,7 @@ ensures
   PE.EndpointNeedInput frame
 }
 
+noextract
 fn calc_cancel_action
   (srv:CalcCP.canonical_server)
   (cfg:calc_endpoint_config)
@@ -199,6 +230,7 @@ ensures calc_frame_ready srv cfg frame (Ghost.reveal log)
   }
 }
 
+inline_for_extraction
 fn calc_prepare_network_io
   (srv:CalcCP.canonical_server)
   (ch:TCP.channel)
@@ -232,6 +264,7 @@ ensures
   let raw_aftere = Ghost.hide (Seq.append raw_received chunk);
   let nio = {
     calc_nio_input = Vec.vec_to_array frame.CalcCP.calc_network_req;
+    calc_nio_input_len = nread;
     calc_nio_output = Vec.vec_to_array frame.CalcCP.calc_network_resp;
     calc_nio_input_contents = inpute;
     calc_nio_old_output = old_oute;
@@ -259,6 +292,7 @@ ensures
     nio);
   assert (pure (calc_network_input nio == Vec.vec_to_array frame.CalcCP.calc_network_req));
   assert (pure (calc_network_output nio == Vec.vec_to_array frame.CalcCP.calc_network_resp));
+  assert (pure (calc_network_input_len nio == 5sz));
   assert (pure (calc_network_input_contents nio == inpute));
   assert (pure (calc_network_old_output nio == old_oute));
   rewrite
@@ -279,6 +313,7 @@ ensures
   nio
 }
 
+inline_for_extraction
 fn calc_prepare_network_action
   (srv:CalcCP.canonical_server)
   (cfg:calc_endpoint_config)
@@ -369,6 +404,7 @@ ensures
     (Ghost.reveal (calc_network_old_output nio)))
 }
 
+inline_for_extraction
 fn calc_finish_network_action
   (srv:CalcCP.canonical_server)
   (cfg:calc_endpoint_config)
@@ -416,6 +452,7 @@ ensures calc_frame_ready srv cfg frame (Ghost.reveal log1)
   fold (calc_frame_ready srv cfg frame (Ghost.reveal log1))
 }
 
+inline_for_extraction
 fn calc_prepare_network
   (srv:CalcCP.canonical_server)
   (cfg:calc_endpoint_config)
@@ -468,7 +505,8 @@ ensures
   nio
 }
 
-fn calc_finish_network_io
+inline_for_extraction
+fn calc_finish_network_io_observed
   (srv:CalcCP.canonical_server)
   (ch:TCP.channel)
   (frame:CalcCP.calc_network_frame)
@@ -506,7 +544,10 @@ requires
       (Ghost.reveal consumed)
       (Ghost.reveal wire_outputs)
       (Ghost.reveal local_outputs))
-ensures calc_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal log1)
+returns written:SZ.t
+ensures
+  calc_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal log1) **
+  pure (written == result.CPI.process_produced_len)
 {
   unfold (calc_network_io_continuation srv ch frame (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal log0) nio);
   CPI.lemma_network_process_sent_output_prefix
@@ -574,7 +615,69 @@ ensures calc_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1)
     (pts_to (Vec.vec_to_array frame.CalcCP.calc_network_resp) (Ghost.reveal out_contents));
   Vec.to_vec_pts_to frame.CalcCP.calc_network_req;
   Vec.to_vec_pts_to frame.CalcCP.calc_network_resp;
-  fold (calc_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal log1))
+  fold (calc_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal log1));
+  nwritten
+}
+
+noextract
+fn calc_finish_network_io
+  (srv:CalcCP.canonical_server)
+  (ch:TCP.channel)
+  (frame:CalcCP.calc_network_frame)
+  (nio:calc_network_io)
+  (result:CPI.process_result)
+  (received0:Ghost.erased TCP.bytes)
+  (sent0:Ghost.erased TCP.bytes)
+  (log0:Ghost.erased calc_log)
+  (received1:Ghost.erased TCP.bytes)
+  (sent1:Ghost.erased TCP.bytes)
+  (log1:Ghost.erased calc_log)
+  (out_contents:Ghost.erased TCP.bytes)
+  (consumed:Ghost.erased TCP.bytes)
+  (wire_outputs:Ghost.erased (list CalcP.calc_frame))
+  (local_outputs:Ghost.erased (list unit))
+requires
+  calc_network_io_continuation srv ch frame (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal log0) nio **
+  pts_to (calc_network_input nio) (Ghost.reveal (calc_network_input_contents nio)) **
+  pts_to (calc_network_output nio) (Ghost.reveal out_contents) **
+  pure (
+    CPI.network_process_correct
+      (CalcCP.calc_server_protocol_implementation.CPI.pi_system srv)
+      (Ghost.reveal (calc_network_input_contents nio))
+      (calc_network_input_len nio)
+      (Ghost.reveal (calc_network_old_output nio))
+      (Ghost.reveal out_contents)
+      (calc_network_output_len nio)
+      (Ghost.reveal received0)
+      (Ghost.reveal sent0)
+      (Ghost.reveal log0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1)
+      (Ghost.reveal consumed)
+      (Ghost.reveal wire_outputs)
+      (Ghost.reveal local_outputs))
+ensures calc_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal log1)
+{
+  let _written =
+    calc_finish_network_io_observed
+      srv
+      ch
+      frame
+      nio
+      result
+      received0
+      sent0
+      log0
+      received1
+      sent1
+      log1
+      out_contents
+      consumed
+      wire_outputs
+      local_outputs;
+  ()
 }
 
 noeq
@@ -955,6 +1058,826 @@ ensures emp
 }
 
 noextract
+fn calc_drive_once
+  (srv:CalcCP.canonical_server)
+  (frame:CalcCP.calc_network_frame)
+  (ch:TCP.channel)
+  (received:Ghost.erased TCP.bytes)
+  (sent:Ghost.erased TCP.bytes)
+  (log:Ghost.erased calc_log)
+requires
+  CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal log) **
+  calc_protocol_endpoint.PE.pe_frame_ready
+    srv
+    ()
+    frame
+    (Ghost.reveal log) **
+  calc_protocol_endpoint.PE.pe_io_ready
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal log)
+returns result:PD.driver_result
+ensures
+  (match result.PD.driver_status with
+  | PD.DriverNetworkStep
+  | PD.DriverLocalStep
+  | PD.DriverFailed ->
+    exists* (received1:Ghost.erased TCP.bytes)
+            (sent1:Ghost.erased TCP.bytes)
+            (log1:Ghost.erased calc_log).
+      CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+        srv
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal log1) **
+      calc_protocol_endpoint.PE.pe_frame_ready
+        srv
+        ()
+        frame
+        (Ghost.reveal log1) **
+      calc_protocol_endpoint.PE.pe_io_ready
+        srv
+        ch
+        frame
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal log1)
+  | PD.DriverDone ->
+      CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+        srv
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal log) **
+      calc_protocol_endpoint.PE.pe_frame_ready
+        srv
+        ()
+        frame
+        (Ghost.reveal log) **
+      calc_protocol_endpoint.PE.pe_io_ready
+        srv
+        ch
+        frame
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal log))
+{
+  rewrite
+    (CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+      srv
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log))
+    as
+    (CalcCP.canonical_server_exactly
+      srv
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log));
+  rewrite
+    (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log))
+    as
+    (calc_frame_ready srv () frame (Ghost.reveal log));
+  rewrite
+    (calc_protocol_endpoint.PE.pe_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log))
+    as
+    (calc_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log));
+  let action = calc_next_action srv () frame received sent log;
+  match action {
+    PE.EndpointNeedInput network_frame -> {
+      let nio =
+        calc_prepare_network
+          srv
+          ()
+          frame
+          ch
+          network_frame
+          received
+          sent
+          log;
+      let process_result =
+        CalcCP.calc_process_network
+          srv
+          network_frame
+          (calc_network_input nio)
+          (calc_network_input_len nio)
+          (calc_network_output nio)
+          (calc_network_output_len nio)
+          received
+          sent
+          log
+          (calc_network_input_contents nio)
+          (calc_network_old_output nio);
+      with received1 sent1 log1 out_contents consumed wire_outputs local_outputs.
+        assert (
+          CalcCP.canonical_server_exactly
+            srv
+            (Ghost.reveal received1)
+            (Ghost.reveal sent1)
+            (Ghost.reveal log1) **
+          CalcCP.calc_network_frame_post
+            network_frame
+            process_result
+            (Ghost.reveal (calc_network_input_contents nio))
+            (calc_network_input_len nio)
+            (Ghost.reveal (calc_network_old_output nio))
+            out_contents
+            (Ghost.reveal log)
+            (Ghost.reveal log1)
+            consumed
+            wire_outputs
+            local_outputs **
+          pts_to (calc_network_input nio) (Ghost.reveal (calc_network_input_contents nio)) **
+          pts_to (calc_network_output nio) out_contents **
+          pure (
+            CPI.network_process_correct
+              (CalcCP.calc_server_protocol_implementation.CPI.pi_system srv)
+              (Ghost.reveal (calc_network_input_contents nio))
+              (calc_network_input_len nio)
+              (Ghost.reveal (calc_network_old_output nio))
+              out_contents
+              (calc_network_output_len nio)
+              (Ghost.reveal received)
+              (Ghost.reveal sent)
+              (Ghost.reveal log)
+              process_result
+              (Ghost.reveal received1)
+              (Ghost.reveal sent1)
+              (Ghost.reveal log1)
+              consumed
+              wire_outputs
+              local_outputs));
+      let out_contentse = Ghost.hide out_contents;
+      let consumede = Ghost.hide consumed;
+      let wire_outputse = Ghost.hide wire_outputs;
+      let local_outputse = Ghost.hide local_outputs;
+      assert (pure (Ghost.reveal out_contentse == out_contents));
+      assert (pure (Ghost.reveal consumede == consumed));
+      assert (pure (Ghost.reveal wire_outputse == wire_outputs));
+      assert (pure (Ghost.reveal local_outputse == local_outputs));
+      rewrite
+        (CalcCP.calc_network_frame_post
+          network_frame
+          process_result
+          (Ghost.reveal (calc_network_input_contents nio))
+          (calc_network_input_len nio)
+          (Ghost.reveal (calc_network_old_output nio))
+          out_contents
+          (Ghost.reveal log)
+          (Ghost.reveal log1)
+          consumed
+          wire_outputs
+          local_outputs)
+        as
+        (CalcCP.calc_network_frame_post
+          network_frame
+          process_result
+          (Ghost.reveal (calc_network_input_contents nio))
+          (calc_network_input_len nio)
+          (Ghost.reveal (calc_network_old_output nio))
+          (Ghost.reveal out_contentse)
+          (Ghost.reveal log)
+          (Ghost.reveal log1)
+          (Ghost.reveal consumede)
+          (Ghost.reveal wire_outputse)
+          (Ghost.reveal local_outputse));
+      calc_finish_network_action
+        srv
+        ()
+        frame
+        network_frame
+        process_result
+        (calc_network_input_contents nio)
+        (calc_network_input_len nio)
+        (calc_network_old_output nio)
+        out_contentse
+        log
+        log1
+        consumede
+        wire_outputse
+        local_outputse;
+      let nwritten =
+        calc_finish_network_io_observed
+          srv
+          ch
+          frame
+          nio
+          process_result
+          received
+          sent
+          log
+          received1
+          sent1
+          log1
+          out_contentse
+          consumede
+          wire_outputse
+          local_outputse;
+      rewrite
+        (CalcCP.canonical_server_exactly
+          srv
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal log1))
+        as
+        (CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+          srv
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal log1));
+      rewrite
+        (calc_frame_ready srv () frame (Ghost.reveal log1))
+        as
+        (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log1));
+      rewrite
+        (calc_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal log1))
+        as
+        (calc_protocol_endpoint.PE.pe_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal log1));
+      let status = PD.network_driver_status process_result;
+      assert (pure (status == PD.DriverNetworkStep \/ status == PD.DriverFailed));
+      match status {
+        PD.DriverNetworkStep -> {
+          {
+            PD.driver_status = PD.DriverNetworkStep;
+            PD.driver_process_result = Some process_result;
+          }
+        }
+        PD.DriverFailed -> {
+          {
+            PD.driver_status = PD.DriverFailed;
+            PD.driver_process_result = Some process_result;
+          }
+        }
+        PD.DriverLocalStep -> {
+          {
+            PD.driver_status = PD.DriverFailed;
+            PD.driver_process_result = Some process_result;
+          }
+        }
+        PD.DriverDone -> {
+          {
+            PD.driver_status = PD.DriverFailed;
+            PD.driver_process_result = Some process_result;
+          }
+        }
+      }
+    }
+    PE.EndpointLocal ev local_frame -> {
+      calc_cancel_action srv () frame log (PE.EndpointLocal ev local_frame);
+      rewrite
+        (CalcCP.canonical_server_exactly
+          srv
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log))
+        as
+        (CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+          srv
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log));
+      rewrite
+        (calc_frame_ready srv () frame (Ghost.reveal log))
+        as
+        (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log));
+      rewrite
+        (calc_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log))
+        as
+        (calc_protocol_endpoint.PE.pe_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log));
+      {
+        PD.driver_status = PD.DriverFailed;
+        PD.driver_process_result = None;
+      }
+    }
+    PE.EndpointDone -> {
+      calc_cancel_action srv () frame log PE.EndpointDone;
+      rewrite
+        (CalcCP.canonical_server_exactly
+          srv
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log))
+        as
+        (CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+          srv
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log));
+      rewrite
+        (calc_frame_ready srv () frame (Ghost.reveal log))
+        as
+        (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log));
+      rewrite
+        (calc_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log))
+        as
+        (calc_protocol_endpoint.PE.pe_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log));
+      {
+        PD.driver_status = PD.DriverDone;
+        PD.driver_process_result = None;
+      }
+    }
+    PE.EndpointFailed -> {
+      calc_cancel_action srv () frame log PE.EndpointFailed;
+      rewrite
+        (CalcCP.canonical_server_exactly
+          srv
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log))
+        as
+        (CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+          srv
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log));
+      rewrite
+        (calc_frame_ready srv () frame (Ghost.reveal log))
+        as
+        (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log));
+      rewrite
+        (calc_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log))
+        as
+        (calc_protocol_endpoint.PE.pe_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log));
+      {
+        PD.driver_status = PD.DriverFailed;
+        PD.driver_process_result = None;
+      }
+    }
+  }
+}
+
+inline_for_extraction
+fn calc_drive_once_network
+  (srv:CalcCP.canonical_server)
+  (frame:CalcCP.calc_network_frame)
+  (ch:TCP.channel)
+  (received:Ghost.erased TCP.bytes)
+  (sent:Ghost.erased TCP.bytes)
+  (log:Ghost.erased calc_log)
+requires
+  CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal log) **
+  calc_protocol_endpoint.PE.pe_frame_ready
+    srv
+    ()
+    frame
+    (Ghost.reveal log) **
+  calc_protocol_endpoint.PE.pe_io_ready
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal log)
+returns result:calc_driver_result
+ensures
+  exists* (received1:Ghost.erased TCP.bytes)
+          (sent1:Ghost.erased TCP.bytes)
+          (log1:Ghost.erased calc_log).
+    CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1) **
+    calc_protocol_endpoint.PE.pe_frame_ready
+      srv
+      ()
+      frame
+      (Ghost.reveal log1) **
+    calc_protocol_endpoint.PE.pe_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1)
+{
+  rewrite
+    (CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+      srv
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log))
+    as
+    (CalcCP.canonical_server_exactly
+      srv
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log));
+  rewrite
+    (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log))
+    as
+    (calc_frame_ready srv () frame (Ghost.reveal log));
+  rewrite
+    (calc_protocol_endpoint.PE.pe_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log))
+    as
+    (calc_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal log));
+  unfold (calc_frame_ready srv () frame (Ghost.reveal log));
+  fold (calc_action_frame srv () frame (Ghost.reveal log) (PE.EndpointNeedInput frame));
+  let nio =
+    calc_prepare_network
+      srv
+      ()
+      frame
+      ch
+      frame
+      received
+      sent
+      log;
+  let process_result =
+    CalcCP.calc_process_network
+      srv
+      frame
+      (calc_network_input nio)
+      (calc_network_input_len nio)
+      (calc_network_output nio)
+      (calc_network_output_len nio)
+      received
+      sent
+      log
+      (calc_network_input_contents nio)
+      (calc_network_old_output nio);
+  with received1 sent1 log1 out_contents consumed wire_outputs local_outputs.
+    assert (
+      CalcCP.canonical_server_exactly
+        srv
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal log1) **
+      CalcCP.calc_network_frame_post
+        frame
+        process_result
+        (Ghost.reveal (calc_network_input_contents nio))
+        (calc_network_input_len nio)
+        (Ghost.reveal (calc_network_old_output nio))
+        out_contents
+        (Ghost.reveal log)
+        (Ghost.reveal log1)
+        consumed
+        wire_outputs
+        local_outputs **
+      pts_to (calc_network_input nio) (Ghost.reveal (calc_network_input_contents nio)) **
+      pts_to (calc_network_output nio) out_contents **
+      pure (
+        CPI.network_process_correct
+          (CalcCP.calc_server_protocol_implementation.CPI.pi_system srv)
+          (Ghost.reveal (calc_network_input_contents nio))
+          (calc_network_input_len nio)
+          (Ghost.reveal (calc_network_old_output nio))
+          out_contents
+          (calc_network_output_len nio)
+          (Ghost.reveal received)
+          (Ghost.reveal sent)
+          (Ghost.reveal log)
+          process_result
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal log1)
+          consumed
+          wire_outputs
+          local_outputs));
+  let out_contentse = Ghost.hide out_contents;
+  let consumede = Ghost.hide consumed;
+  let wire_outputse = Ghost.hide wire_outputs;
+  let local_outputse = Ghost.hide local_outputs;
+  assert (pure (Ghost.reveal out_contentse == out_contents));
+  assert (pure (Ghost.reveal consumede == consumed));
+  assert (pure (Ghost.reveal wire_outputse == wire_outputs));
+  assert (pure (Ghost.reveal local_outputse == local_outputs));
+  rewrite
+    (CalcCP.calc_network_frame_post
+      frame
+      process_result
+      (Ghost.reveal (calc_network_input_contents nio))
+      (calc_network_input_len nio)
+      (Ghost.reveal (calc_network_old_output nio))
+      out_contents
+      (Ghost.reveal log)
+      (Ghost.reveal log1)
+      consumed
+      wire_outputs
+      local_outputs)
+    as
+    (CalcCP.calc_network_frame_post
+      frame
+      process_result
+      (Ghost.reveal (calc_network_input_contents nio))
+      (calc_network_input_len nio)
+      (Ghost.reveal (calc_network_old_output nio))
+      (Ghost.reveal out_contentse)
+      (Ghost.reveal log)
+      (Ghost.reveal log1)
+      (Ghost.reveal consumede)
+      (Ghost.reveal wire_outputse)
+      (Ghost.reveal local_outputse));
+  calc_finish_network_action
+    srv
+    ()
+    frame
+    frame
+    process_result
+    (calc_network_input_contents nio)
+    (calc_network_input_len nio)
+    (calc_network_old_output nio)
+    out_contentse
+    log
+    log1
+    consumede
+    wire_outputse
+    local_outputse;
+  let nwritten =
+    calc_finish_network_io_observed
+      srv
+      ch
+      frame
+      nio
+      process_result
+      received
+      sent
+      log
+      received1
+      sent1
+      log1
+      out_contentse
+      consumede
+      wire_outputse
+      local_outputse;
+  rewrite
+    (CalcCP.canonical_server_exactly
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1))
+    as
+    (CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1));
+  rewrite
+    (calc_frame_ready srv () frame (Ghost.reveal log1))
+    as
+    (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log1));
+  rewrite
+    (calc_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1))
+    as
+    (calc_protocol_endpoint.PE.pe_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1));
+  let status = calc_network_driver_status process_result;
+  if (nwritten = process_result.CPI.process_produced_len) {
+    match status {
+      CalcDriverNetworkStep -> {
+        {
+          calc_driver_status = CalcDriverNetworkStep;
+        }
+      }
+      CalcDriverFailed -> {
+        {
+          calc_driver_status = CalcDriverFailed;
+        }
+      }
+    }
+  } else {
+    {
+      calc_driver_status = CalcDriverFailed;
+    }
+  }
+}
+
+fn calc_drive_steps_while
+  (srv:CalcCP.canonical_server)
+  (frame:CalcCP.calc_network_frame)
+  (ch:TCP.channel)
+  (fuel:SZ.t)
+  (received:Ghost.erased TCP.bytes)
+  (sent:Ghost.erased TCP.bytes)
+  (log:Ghost.erased calc_log)
+requires
+  CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal log) **
+  calc_protocol_endpoint.PE.pe_frame_ready
+    srv
+    ()
+    frame
+    (Ghost.reveal log) **
+  calc_protocol_endpoint.PE.pe_io_ready
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal log)
+ensures
+  exists* (received1:Ghost.erased TCP.bytes)
+          (sent1:Ghost.erased TCP.bytes)
+          (log1:Ghost.erased calc_log).
+    CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1) **
+    calc_protocol_endpoint.PE.pe_frame_ready
+      srv
+      ()
+      frame
+      (Ghost.reveal log1) **
+    calc_protocol_endpoint.PE.pe_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal log1)
+{
+  let mut remaining = fuel;
+  let mut running = true;
+  while (
+    let keep = R.read running;
+    let rem = R.read remaining;
+    keep && not (rem = 0sz)
+  )
+    invariant live remaining
+    invariant live running
+    invariant exists* received_loop sent_loop log_loop.
+      CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+        srv
+        (Ghost.reveal received_loop)
+        (Ghost.reveal sent_loop)
+        (Ghost.reveal log_loop) **
+      calc_protocol_endpoint.PE.pe_frame_ready
+        srv
+        ()
+        frame
+        (Ghost.reveal log_loop) **
+      calc_protocol_endpoint.PE.pe_io_ready
+        srv
+        ch
+        frame
+        (Ghost.reveal received_loop)
+        (Ghost.reveal sent_loop)
+        (Ghost.reveal log_loop) **
+      pure (SZ.v (R.read remaining) <= SZ.v fuel)
+  {
+    with rem_live keep_live received_loop sent_loop log_loop.
+      assert (
+        R.pts_to remaining rem_live **
+        R.pts_to running keep_live **
+        CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+          srv
+          (Ghost.reveal received_loop)
+          (Ghost.reveal sent_loop)
+          (Ghost.reveal log_loop) **
+        calc_protocol_endpoint.PE.pe_frame_ready
+          srv
+          ()
+          frame
+          (Ghost.reveal log_loop) **
+        calc_protocol_endpoint.PE.pe_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received_loop)
+          (Ghost.reveal sent_loop)
+          (Ghost.reveal log_loop) **
+        pure (SZ.v rem_live <= SZ.v fuel));
+    let step =
+      calc_drive_once_network
+        srv
+        frame
+        ch
+        received_loop
+        sent_loop
+        log_loop;
+    with received1 sent1 log1.
+      assert (
+        CalcCP.calc_server_protocol_implementation.CPI.pi_invariant
+          srv
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal log1) **
+        calc_protocol_endpoint.PE.pe_frame_ready
+          srv
+          ()
+          frame
+          (Ghost.reveal log1) **
+        calc_protocol_endpoint.PE.pe_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal log1));
+    match step.calc_driver_status {
+      CalcDriverNetworkStep -> {
+        let rem_now = R.read remaining;
+        assert (pure (not (rem_now = 0sz)));
+        assert (pure (0 < SZ.v rem_now));
+        let next = SZ.sub rem_now 1sz;
+        assert (pure (SZ.v next <= SZ.v fuel));
+        remaining := next
+      }
+      CalcDriverFailed -> {
+        running := false
+      }
+    }
+  }
+}
+
 fn run_channel_endpoint
   (ch:TCP.channel)
   (fuel:SZ.t)
@@ -998,23 +1921,14 @@ ensures emp
       calc_empty_bytes
       calc_empty_bytes
       initial_log);
-  let _ =
-    PD.drive_steps
-      #CalcCP.canonical_server
-      #calc_log
-      #CalcP.calc_frame
-      #CalcP.calc_frame_local_event
-      #unit
-      #CalcCP.calc_server_protocol_implementation
-      #calc_protocol_endpoint
-      srv
-      ()
-      frame
-      ch
-      fuel
-      (Ghost.hide calc_empty_bytes)
-      (Ghost.hide calc_empty_bytes)
-      (Ghost.hide initial_log);
+  calc_drive_steps_while
+    srv
+    frame
+    ch
+    fuel
+    (Ghost.hide calc_empty_bytes)
+    (Ghost.hide calc_empty_bytes)
+    (Ghost.hide initial_log);
   with received1 sent1 log1. _;
   rewrite
     (calc_protocol_endpoint.PE.pe_frame_ready srv () frame (Ghost.reveal log1))
