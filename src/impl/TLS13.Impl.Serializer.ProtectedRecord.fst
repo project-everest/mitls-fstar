@@ -20,7 +20,6 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
 module WSR = TLS13.Wire.Spec.Reveal
-module WSRD = TLS13.Wire.Spec.RevealDecode
 
 let application_data_header_bytes (n:nat) : GTot (b:B.bytes{B.length b == 5}) =
   B.of_list [0x17uy; 0x03uy; 0x03uy; C.byte (n / 256); C.byte n]
@@ -147,7 +146,7 @@ fn encode_handshake_inner_plaintext
   Seq.lemma_eq_elim
     (Ghost.reveal handshake_bytes)
     (WS.serialize_handshake (Ghost.reveal msg));
-  WSRD.lemma_serialize_tls_message_handshake (Ghost.reveal msg);
+  WS.lemma_serialize_tls_message_handshake (Ghost.reveal msg);
   assert (pure (Seq.equal
     (Ghost.reveal out_bytes)
     (CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)))));
