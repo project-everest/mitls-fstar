@@ -17,6 +17,7 @@ module ConnQ = TLS13.Impl.ConnectionState.Queries
 module CS = TLS13.Spec.ConnectionState
 module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
+module IM = TLS13.Impl.Messages
 module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
 module PE = Common.ProtocolEndpoint
@@ -69,6 +70,16 @@ type server_endpoint_frame = {
   server_ep_raw: V.vec U8.t;
   server_ep_network_out_len: SZ.t;
   server_ep_network_out: V.vec U8.t;
+  server_ep_certificate_chain_len: SZ.t;
+  server_ep_certificate_chain_len_proof:
+    certificate_chain:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SZ.v server_ep_certificate_chain_len ==
+         B.length (Ghost.reveal certificate_chain));
+  server_ep_certificate_chain_len_bound:
+    Ghost.erased
+      (SZ.v server_ep_certificate_chain_len <=
+       Bounds.max_server_certificate_chain_len);
   server_ep_material_len: SZ.t;
   server_ep_material: V.vec U8.t;
   server_ep_material_spec: Ghost.erased (b:B.bytes{B.length b == 64});
@@ -2080,6 +2091,135 @@ ensures
   }
 }
 
+fn server_prepare_local_with_output
+  (srv:SP.canonical_server)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:server_endpoint_frame)
+  (ev:CTypes.server_local_event)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (old_out:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+requires
+  server_endpoint_action_frame srv cfg frame (Ghost.reveal st) (PE.EndpointLocal ev local_frame) **
+  pts_to out (Ghost.reveal old_out) **
+  pure (B.length (Ghost.reveal old_out) == SZ.v out_len)
+ensures
+  PE.local_output_buffer out out_len (Ghost.reveal old_out) **
+  SP.server_local_bridge_frame_pre
+    ev
+    local_frame
+    (Ghost.reveal st)
+    out
+    out_len
+    (Ghost.reveal old_out) **
+  server_endpoint_local_continuation srv cfg frame (Ghost.reveal st) ev local_frame
+{
+  unfold (server_endpoint_action_frame srv cfg frame (Ghost.reveal st) (PE.EndpointLocal ev local_frame));
+  fold (CQ.local_output_buffer
+    out
+    out_len
+    (Ghost.reveal old_out));
+  match ev {
+    CTypes.ServerAPI api -> {
+      SQueries.prepare_server_next_action_local
+        srv
+        cfg
+        frame.server_ep_query
+        (CTypes.ServerAPI api)
+        local_frame
+        out
+        out_len
+        st
+        old_out;
+      unfold (CQ.local_output_buffer
+        out
+        out_len
+        (Ghost.reveal old_out));
+      fold (PE.local_output_buffer
+        out
+        out_len
+        (Ghost.reveal old_out));
+      fold (server_endpoint_local_continuation
+        srv
+        cfg
+        frame
+        (Ghost.reveal st)
+        (CTypes.ServerAPI api)
+        local_frame);
+      rewrite
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          (CTypes.ServerAPI api)
+          local_frame)
+        as
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          ev
+          local_frame)
+    }
+    CTypes.ServerPayload kind payload -> {
+      unfold (CQ.local_output_buffer
+        out
+        out_len
+        (Ghost.reveal old_out));
+      fold (PE.local_output_buffer
+        out
+        out_len
+        (Ghost.reveal old_out));
+      unfold (server_endpoint_payload_local_action_frame
+        frame
+        (Ghost.reveal st)
+        kind
+        (Ghost.reveal payload)
+        local_frame);
+      fold (SP.server_local_bridge_frame_pre
+        (CTypes.ServerPayload kind payload)
+        local_frame
+        (Ghost.reveal st)
+        out
+        out_len
+        (Ghost.reveal old_out));
+      fold (server_endpoint_payload_local_continuation
+        frame
+        (Ghost.reveal st)
+        kind
+        (Ghost.reveal payload)
+        local_frame);
+      fold (server_endpoint_local_continuation
+        srv
+        cfg
+        frame
+        (Ghost.reveal st)
+        (CTypes.ServerPayload kind payload)
+        local_frame);
+      rewrite
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          (CTypes.ServerPayload kind payload)
+          local_frame)
+        as
+        (server_endpoint_local_continuation
+          srv
+          cfg
+          frame
+          (Ghost.reveal st)
+          ev
+          local_frame)
+    }
+  }
+}
+
 fn server_finish_local_action
   (srv:SP.canonical_server)
   (cfg:SQueries.server_next_local_action_config)
@@ -2966,7 +3106,370 @@ ensures
   result
 }
 
-type server_endpoint_run_status =
+fn server_scheduled_local_output_len
+  (srv:SP.canonical_server)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:server_endpoint_frame)
+  (ev:CTypes.server_local_event)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+requires
+  SP.server_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st) **
+  server_endpoint_action_frame
+    srv
+    cfg
+    frame
+    (Ghost.reveal st)
+    (PE.EndpointLocal ev local_frame)
+returns out_len:SZ.t
+ensures
+  SP.server_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st) **
+  server_endpoint_action_frame
+    srv
+    cfg
+    frame
+    (Ghost.reveal st)
+    (PE.EndpointLocal ev local_frame)
+{
+  let kind = CTypes.server_local_event_kind ev;
+  match kind {
+    ST.LocalSendServerHello -> {
+      95sz
+    }
+    ST.LocalSendEncryptedExtensions -> {
+      28sz
+    }
+    ST.LocalSendCertificate -> {
+      let _bound = Ghost.reveal frame.server_ep_certificate_chain_len_bound;
+      assert_norm (Bounds.max_server_certificate_chain_len == 16610);
+      assert (pure (SZ.v frame.server_ep_certificate_chain_len + 35 <= 20000));
+      SZ.fits_lte (SZ.v frame.server_ep_certificate_chain_len + 35) 20000;
+      frame.server_ep_certificate_chain_len `SZ.add` 35sz
+    }
+    ST.LocalSendCertificateVerify -> {
+      unfold (server_endpoint_action_frame
+        srv
+        cfg
+        frame
+        (Ghost.reveal st)
+        (PE.EndpointLocal ev local_frame));
+      match ev {
+        CTypes.ServerAPI api -> {
+          unfold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextLocal (CTypes.ServerAPI api) local_frame));
+          assert (pure (SQueries.server_local_event_ready
+            (Ghost.reveal st)
+            (CTypes.ServerAPI api)));
+          SQueries.server_local_event_ready_input_wf
+            (Ghost.reveal st)
+            (CTypes.ServerAPI api);
+          assert (pure (api.CTypes.server_local_kind ==
+            ST.LocalSendCertificateVerify));
+          assert (pure (ST.server_local_event_input_ready
+            (Ghost.reveal st)
+            ST.LocalSendCertificateVerify
+            api.CTypes.server_local_payload));
+          assert (pure (Some?
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+          fold (SQueries.server_next_local_action_frame_post
+            srv
+            cfg
+            frame.server_ep_query
+            (Ghost.reveal st)
+            (CQ.NextLocal (CTypes.ServerAPI api) local_frame));
+          fold (server_endpoint_action_frame
+            srv
+            cfg
+            frame
+            (Ghost.reveal st)
+            (PE.EndpointLocal (CTypes.ServerAPI api) local_frame));
+          rewrite
+            (server_endpoint_action_frame
+              srv
+              cfg
+              frame
+              (Ghost.reveal st)
+              (PE.EndpointLocal (CTypes.ServerAPI api) local_frame))
+            as
+            (server_endpoint_action_frame
+              srv
+              cfg
+              frame
+              (Ghost.reveal st)
+              (PE.EndpointLocal ev local_frame));
+          unfold (SP.server_invariant
+            srv
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          with certificate_chain credential_identity. _;
+          rewrite
+            (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
+            as
+            (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
+          let snapshot =
+            ConnQ.get_certificate_verify_signature_snapshot
+              srv.SP.canonical_server_state;
+          rewrite
+            (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
+            as
+            (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
+          fold (SP.server_invariant
+            srv
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st));
+          assert (pure (SZ.v snapshot.CR.cv_signature_len <= IM.max_signature_len));
+          assert_norm (IM.max_signature_len == 4096);
+          assert (pure (SZ.v snapshot.CR.cv_signature_len + 30 <= 20000));
+          SZ.fits_lte (SZ.v snapshot.CR.cv_signature_len + 30) 20000;
+          snapshot.CR.cv_signature_len `SZ.add` 30sz
+        }
+        CTypes.ServerPayload payload_kind payload -> {
+          unfold (server_endpoint_payload_local_action_frame
+            frame
+            (Ghost.reveal st)
+            payload_kind
+            (Ghost.reveal payload)
+            local_frame);
+          assert (pure (server_endpoint_payload_frame_matches
+            frame
+            payload_kind
+            local_frame));
+          assert (pure (payload_kind == ST.LocalSendCertificateVerify));
+          assert (pure False);
+          unreachable ()
+        }
+      }
+    }
+    ST.LocalSendServerFinished -> {
+      58sz
+    }
+    _ -> {
+      frame.server_ep_network_out_len
+    }
+  }
+}
+
+fn server_run_scheduled_local_action_with_endpoint_output
+      (srv:SP.canonical_server)
+      (cfg:SQueries.server_next_local_action_config)
+      (frame:server_endpoint_frame)
+      (ch:TCP.channel)
+      (ev:CTypes.server_local_event)
+      (local_frame:SP.tls_server_local_bridge_frame)
+      (received:Ghost.erased B.bytes)
+      (sent:Ghost.erased B.bytes)
+      (st:Ghost.erased CS.connection_state)
+    requires
+      SP.server_invariant
+        srv
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal st) **
+      server_endpoint_action_frame
+        srv
+        cfg
+        frame
+        (Ghost.reveal st)
+        (PE.EndpointLocal ev local_frame) **
+      server_endpoint_io_ready
+        srv
+        ch
+        frame
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal st)
+    returns result:CPI.process_result
+    ensures
+      exists* (received1:Ghost.erased B.bytes)
+              (sent1:Ghost.erased B.bytes)
+              (st1:Ghost.erased CS.connection_state).
+        SP.server_invariant
+          srv
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal st1) **
+        server_endpoint_frame_ready
+          srv
+          cfg
+          frame
+          (Ghost.reveal st1) **
+        server_endpoint_io_ready
+          srv
+          ch
+          frame
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal st1)
+    {
+      let output_len =
+        server_scheduled_local_output_len
+          srv
+          cfg
+          frame
+          ev
+          local_frame
+          received
+          sent
+          st;
+      unfold (server_endpoint_io_ready srv ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+      with raw_received raw_bytes network_out_bytes. _;
+      let tmp = V.alloc 0uy output_len;
+      V.to_array_pts_to tmp;
+      let old_oute = Ghost.hide (Seq.create (SZ.v output_len) 0uy);
+      rewrite
+        (pts_to (V.vec_to_array tmp) (Seq.create (SZ.v output_len) 0uy))
+        as
+        (pts_to (V.vec_to_array tmp) (Ghost.reveal old_oute));
+      server_prepare_local_with_output
+        srv
+        cfg
+        frame
+        ev
+        local_frame
+        (V.vec_to_array tmp)
+        output_len
+        old_oute
+        st;
+      let result =
+        SP.server_process_local
+          srv
+          ev
+          local_frame
+          (V.vec_to_array tmp)
+          output_len
+          received
+          sent
+          st
+          old_oute;
+      with received1 sent1 st1 out_contents wire_outputs local_outputs.
+      assert (
+        SP.server_invariant
+          srv
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal st1) **
+        SP.server_local_bridge_frame_post
+          ev
+          local_frame
+          result
+          (Ghost.reveal old_oute)
+          out_contents
+          (Ghost.reveal st)
+          (Ghost.reveal st1)
+          wire_outputs
+          local_outputs **
+        pts_to (V.vec_to_array tmp) out_contents);
+      let out_contentse = Ghost.hide out_contents;
+      let wire_outputse = Ghost.hide wire_outputs;
+      let local_outputse = Ghost.hide local_outputs;
+      rewrite
+        (SP.server_local_bridge_frame_post
+          ev
+          local_frame
+          result
+          (Ghost.reveal old_oute)
+          out_contents
+          (Ghost.reveal st)
+          (Ghost.reveal st1)
+          wire_outputs
+          local_outputs)
+        as
+        (SP.server_local_bridge_frame_post
+          ev
+          local_frame
+          result
+          (Ghost.reveal old_oute)
+          (Ghost.reveal out_contentse)
+          (Ghost.reveal st)
+          (Ghost.reveal st1)
+          (Ghost.reveal wire_outputse)
+          (Ghost.reveal local_outputse));
+      server_finish_local_action
+        srv
+        cfg
+        frame
+        ev
+        local_frame
+        result
+        old_oute
+        out_contentse
+        st
+        st1
+        wire_outputse
+        local_outputse;
+      rewrite
+        (pts_to (V.vec_to_array tmp) out_contents)
+        as
+        (pts_to (V.vec_to_array tmp) (Ghost.reveal out_contentse));
+      CPI.lemma_local_process_sent_output_prefix
+        (SP.server_protocol_implementation.CPI.pi_system srv)
+        ev
+        (Ghost.reveal old_oute)
+        (Ghost.reveal out_contentse)
+        output_len
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal st)
+        result
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputse)
+        (Ghost.reveal local_outputse);
+      let nwritten = TCP.write ch (V.vec_to_array tmp) result.CPI.process_produced_len;
+      assert (pure (nwritten == result.CPI.process_produced_len));
+      rewrite
+        (TCP.is_channel
+          ch
+          raw_received
+          (Seq.append
+            (Ghost.reveal sent)
+            (if SZ.v nwritten <= Seq.length (Ghost.reveal out_contentse)
+             then Seq.slice (Ghost.reveal out_contentse) 0 (SZ.v nwritten)
+             else Seq.create 0 0uy)))
+        as
+        (TCP.is_channel
+          ch
+          raw_received
+          (Seq.append
+            (Ghost.reveal sent)
+            (if SZ.v result.CPI.process_produced_len <= Seq.length (Ghost.reveal out_contentse)
+             then Seq.slice (Ghost.reveal out_contentse) 0 (SZ.v result.CPI.process_produced_len)
+             else Seq.create 0 0uy)));
+      rewrite
+        (TCP.is_channel
+          ch
+          raw_received
+          (Seq.append
+            (Ghost.reveal sent)
+            (if SZ.v result.CPI.process_produced_len <= Seq.length (Ghost.reveal out_contentse)
+             then Seq.slice (Ghost.reveal out_contentse) 0 (SZ.v result.CPI.process_produced_len)
+             else Seq.create 0 0uy)))
+        as
+        (TCP.is_channel ch raw_received (Ghost.reveal sent1));
+      V.to_vec_pts_to tmp;
+      V.free tmp;
+      fold (server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1));
+      result
+    }
+
+    type server_endpoint_run_status =
   | ServerEndpointRunOk
   | ServerEndpointRunFailed
   | ServerEndpointRunFuelExhausted
@@ -3306,7 +3809,7 @@ fn server_endpoint_run_workflow
       match action {
         PE.EndpointLocal ev local_frame -> {
           let result =
-            server_run_scheduled_local_action
+            server_run_scheduled_local_action_with_endpoint_output
               srv
               cfg
               frame

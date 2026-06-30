@@ -186,6 +186,19 @@ fn new_server
            | None ->
              emp)
 {
+  let material_payload = V.alloc 0uy driver_material_capacity;
+  V.to_array_pts_to material_payload;
+  let material_ok =
+    Crypto.random_bytes
+      (V.vec_to_array material_payload)
+      driver_material_capacity;
+  with material_seed.
+    assert (pts_to (V.vec_to_array material_payload) material_seed);
+  V.to_vec_pts_to material_payload;
+  if not material_ok {
+    V.free material_payload;
+    None
+  } else {
   let creds_opt =
     O.server_credentials_new
       certificate_chain
@@ -194,6 +207,7 @@ fn new_server
       private_key_len;
   match creds_opt {
     None -> {
+      V.free material_payload;
       None
     }
     Some creds -> {
@@ -227,7 +241,6 @@ fn new_server
       let empty_payload = V.alloc 0uy 0sz;
       let raw = V.alloc 0uy driver_rx_capacity;
       let network_out = V.alloc 0uy driver_network_out_capacity;
-      let material_payload = V.alloc 0uy driver_material_capacity;
       let cv_input = V.alloc 0uy driver_certificate_verify_input_capacity;
       let signature = V.alloc 0uy driver_signature_capacity;
       let app_out = V.alloc 0uy driver_app_out_capacity;
@@ -263,9 +276,9 @@ fn new_server
         as
         (V.pts_to d.server_driver_network_out #1.0R (Seq.create (SZ.v driver_network_out_capacity) 0uy));
       rewrite
-        (V.pts_to material_payload #1.0R (Seq.create (SZ.v driver_material_capacity) 0uy))
+        (V.pts_to material_payload #1.0R material_seed)
         as
-        (V.pts_to d.server_driver_material_payload #1.0R (Seq.create (SZ.v driver_material_capacity) 0uy));
+        (V.pts_to d.server_driver_material_payload #1.0R material_seed);
       rewrite
         (V.pts_to cv_input #1.0R (Seq.create (SZ.v driver_certificate_verify_input_capacity) 0uy))
         as
@@ -313,6 +326,7 @@ fn new_server
         credential_identity);
       Some d
     }
+  }
   }
 }
 
