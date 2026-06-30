@@ -571,6 +571,8 @@ fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
   (#sh:erased GSH.serverHello)
+  (#server_random_bytes: erased B.bytes)
+  (#server_key_share_bytes: erased B.bytes)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -583,6 +585,14 @@ fn process_send_server_hello_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Seq.length (Ghost.reveal server_random_bytes) == 32 /\
+                 (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+                 Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
+                 Ghost.reveal sh ==
+                   SS.mk_server_hello_witness
+                     (Ghost.reveal server_random_bytes)
+                     (Ghost.reveal server_key_share_bytes)
+                     (T.TLS_CHACHA20_POLY1305_SHA256) /\
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -792,6 +802,7 @@ fn process_send_certificate_serialized
   (s:server)
   (lcert:IM.certificate_msg)
   (#cert:erased GCert.certificate)
+  (#chain:erased B.bytes)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -803,6 +814,9 @@ fn process_send_certificate_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
+                 1 <= Seq.length (Ghost.reveal chain) /\
+                 Seq.length (Ghost.reveal chain) <= 32768 /\
+                 Ghost.reveal cert == SS.mk_cert_witness (Ghost.reveal chain) /\
                  SZ.v fragment_len ==
                    B.length
                      (TLS13.Wire.Spec.serialize_handshake (M.Certificate (Ghost.reveal cert))) /\

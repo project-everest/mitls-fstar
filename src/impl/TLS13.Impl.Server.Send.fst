@@ -52,6 +52,7 @@ module GCL = TLS13.Wire.Generated.Certificate_certificate_list
 module GEX = TLS13.Wire.Generated.CertificateEntry_extensions
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module SerH = TLS13.Impl.Serializer.FinishedPOC
 
 (* ----------------------------------------------------------------------- *)
 (* Build-direction witness builders for generated wire records.            *)
@@ -103,6 +104,20 @@ let mk_cert_witness_chain_matches_lemma
       IM.certificate_chain_matches storage storage_len offsets lens 1
         (Sem.certificate_entries (mk_cert_witness chain)))
   = mk_cert_witness_entries_unconditional chain
+#pop-options
+
+(* Bridging lemma: the abstract certificate witness [mk_cert_witness] coincides,
+   under the non-empty/bounded chain guard, with the build-direction serializer's
+   canonical pin [SerH.poc_canonical_cert].  Both build the identical generated
+   record (empty request_context; single certificateEntry { cert_data = chain;
+   extensions = [] }).  Lets callers discharge the serializer's
+   [cert == SerH.poc_canonical_cert chain] precondition. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
+let lemma_mk_cert_witness_eq_poc (chain: B.bytes)
+  : Lemma
+    (requires 1 <= Seq.length chain /\ Seq.length chain <= 32768)
+    (ensures mk_cert_witness chain == SerH.poc_canonical_cert chain)
+  = ()
 #pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
@@ -192,6 +207,30 @@ let lemma_mk_server_hello_witness_bytesize
     GKE.keyShareEntry_key_exchange_bytesize_eqn (key_share <: GKE.keyShareEntry_key_exchange);
     GSHB.serverHelloBody_extensions_list_bytesize_nil;
     ()
+#pop-options
+
+(* Bridging lemma: the abstract canonical witness [mk_server_hello_witness]
+   built by the server send path coincides, under the (runtime-checked) HRR
+   sentinel guard, with the build-direction serializer's canonical pin
+   [SerH.poc_canonical_sh].  Both construct the identical generated record
+   (legacy_version = TLS_1p2; ServerHello_body_false { tag = rnd; value = body }
+   with sid = empty, cipher_suite = cs, compression = 0, extensions =
+   [key_share(X25519, ks); supported_versions(TLS_1p3)]); only the local module
+   aliases differ.  Establishing this lets callers discharge the serializer's
+   [sh == SerH.poc_canonical_sh rnd ks cs] precondition. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_mk_server_hello_witness_eq_poc
+  (random: B.bytes)
+  (key_share: B.bytes)
+  (cs: GCS.cipherSuite)
+  : Lemma
+    (requires Seq.length random == 32 /\
+              (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+              Seq.length key_share == 32)
+    (ensures
+      mk_server_hello_witness random key_share cs ==
+      SerH.poc_canonical_sh random key_share cs)
+  = ()
 #pop-options
 
 (* ----------------------------------------------------------------------- *)
@@ -540,6 +579,8 @@ fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
   (#sh:erased GSH.serverHello)
+  (#server_random_bytes: erased B.bytes)
+  (#server_key_share_bytes: erased B.bytes)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -552,6 +593,14 @@ fn process_send_server_hello_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Seq.length (Ghost.reveal server_random_bytes) == 32 /\
+                 (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+                 Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
+                 Ghost.reveal sh ==
+                   mk_server_hello_witness
+                     (Ghost.reveal server_random_bytes)
+                     (Ghost.reveal server_key_share_bytes)
+                     (T.TLS_CHACHA20_POLY1305_SHA256) /\
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -582,9 +631,16 @@ fn process_send_server_hello_serialized
                   network_out_bytes
                   app_out_bytes)
 {
+  lemma_mk_server_hello_witness_eq_poc
+    (Ghost.reveal server_random_bytes)
+    (Ghost.reveal server_key_share_bytes)
+    (T.TLS_CHACHA20_POLY1305_SHA256);
   let written_raw =
     Ser.serialize_server_hello_record_from_selection
       #sh
+      #server_random_bytes
+      #server_key_share_bytes
+      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
       lsh
       network_out
       network_out_len;
@@ -604,6 +660,9 @@ fn process_send_server_hello_serialized
   let written_fragment =
     Ser.serialize_server_hello_from_selection
       #sh
+      #server_random_bytes
+      #server_key_share_bytes
+      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
       lsh
       fragment
       90sz;
@@ -857,6 +916,8 @@ fn process_send_server_hello_from_arrays
     s
     lsh
     #sh
+    #('server_random_bytes)
+    #('server_key_share_bytes)
     network_out
     network_out_len
     app_out
@@ -1369,6 +1430,7 @@ fn process_send_certificate_serialized
   (s:server)
   (lcert:IM.certificate_msg)
   (#cert:erased GCert.certificate)
+  (#chain:erased B.bytes)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -1380,6 +1442,9 @@ fn process_send_certificate_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
+                 1 <= Seq.length (Ghost.reveal chain) /\
+                 Seq.length (Ghost.reveal chain) <= 32768 /\
+                 Ghost.reveal cert == mk_cert_witness (Ghost.reveal chain) /\
                  SZ.v fragment_len ==
                    B.length
                      (W.serialize_handshake (M.Certificate (Ghost.reveal cert))) /\
@@ -1439,9 +1504,11 @@ fn process_send_certificate_serialized
   V.pts_to_len fragment;
   assert (pure (B.length old_fragment_bytes == SZ.v fragment_len));
   V.to_array_pts_to fragment;
+  lemma_mk_cert_witness_eq_poc (Ghost.reveal chain);
   let written_fragment =
     Ser.serialize_certificate_from_credential
       #cert
+      #chain
       lcert
       (V.vec_to_array fragment)
       fragment_len;
@@ -1777,6 +1844,7 @@ fn process_send_certificate_from_credentials
         s
         lcert
         #cert
+        #('certificate_chain)
         fragment_len
         network_out
         network_out_len
