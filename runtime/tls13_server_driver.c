@@ -21,9 +21,6 @@
 #define TLS13_SERVER_PRIVATE_KEY_CAP 32u
 
 #define TLS13_CONTROL_HANDSHAKING 1u
-#define TLS13_CONTROL_APPLICATION_DATA 2u
-#define TLS13_CONTROL_CLOSED 4u
-#define TLS13_CONTROL_FAILED 5u
 #define TLS13_HANDSHAKE_CLIENT_HELLO_RECEIVED 13u
 
 typedef Common_ProtocolEndpoint_endpoint_action__TLS13_Impl_Server_CanonicalProtocol_tls_server_network_bridge_frame_TLS13_Impl_CanonicalTypes_server_local_event_TLS13_Impl_Server_CanonicalProtocol_tls_server_local_bridge_frame
@@ -113,17 +110,6 @@ static TLS13_Impl_Server_Endpoint_server_endpoint_frame server_endpoint_frame(
   };
 }
 
-static bool server_control_is(
-    const TLS13_Impl_Server_Driver_server_driver *d,
-    uint8_t tag) {
-  return d != NULL && d->server_driver_server.control.control_tag != NULL &&
-         *d->server_driver_server.control.control_tag == tag;
-}
-
-static bool server_failed(const TLS13_Impl_Server_Driver_server_driver *d) {
-  return server_control_is(d, TLS13_CONTROL_FAILED);
-}
-
 static bool server_needs_handshake_material(
     const TLS13_Impl_Server_Driver_server_driver *d) {
   return d != NULL &&
@@ -150,6 +136,49 @@ static int server_prepare_endpoint_material(tls13_server_driver *driver) {
   return 0;
 }
 
+static int server_endpoint_local_output_len(
+    tls13_server_driver *driver,
+    TLS13_Impl_CanonicalTypes_server_local_event ev,
+    size_t *local_output_len) {
+  if (local_output_len == NULL) {
+    return 1;
+  }
+  TLS13_Impl_Server_Types_local_event_kind kind =
+      TLS13_Impl_CanonicalTypes_server_local_event_kind(ev);
+  *local_output_len = TLS13_SERVER_NETWORK_OUT_CAP;
+  switch (kind) {
+    case TLS13_Impl_Server_Types_LocalSendServerHello:
+      *local_output_len = 95u;
+      break;
+    case TLS13_Impl_Server_Types_LocalSendEncryptedExtensions:
+      *local_output_len = 28u;
+      break;
+    case TLS13_Impl_Server_Types_LocalSendCertificate:
+      *local_output_len = driver->certificate_chain_len + 35u;
+      break;
+    case TLS13_Impl_Server_Types_LocalSendCertificateVerify: {
+      TLS13_Impl_ConnectionState_Repr_certificate_verify_signature_snapshot snap =
+          TLS13_Impl_ConnectionState_Queries_get_certificate_verify_signature_snapshot(
+              driver->verified_driver.server_driver_server);
+      *local_output_len = snap.cv_signature_len + 30u;
+      break;
+    }
+    case TLS13_Impl_Server_Types_LocalSendServerFinished:
+      *local_output_len = 58u;
+      break;
+    default:
+      break;
+  }
+  if (*local_output_len > TLS13_SERVER_NETWORK_OUT_CAP) {
+    return driver_fail(
+        driver,
+        "endpoint local action %u needs %zu bytes of network output",
+        (unsigned)kind,
+        *local_output_len);
+  }
+  return 0;
+}
+
 static void server_set_channel(
     TLS13_Impl_Server_Driver_server_driver *d,
     Common_TCP_channel ch) {
@@ -172,29 +201,6 @@ static void server_clear_channel(TLS13_Impl_Server_Driver_server_driver *d) {
   }
 }
 
-static int server_compact_input(
-    tls13_server_driver *driver,
-    Common_ProtocolImplementation_process_result result,
-    size_t total_len) {
-  if (result.process_consumed_len > total_len) {
-    return driver_fail(
-        driver,
-        "endpoint consumed %zu bytes from %zu buffered bytes",
-        result.process_consumed_len,
-        total_len);
-  }
-  if (driver->verified_driver.server_driver_buffered_len == NULL) {
-    return driver_fail(driver, "endpoint buffered-length cell is missing");
-  }
-  (void)TLS13_Impl_Server_Endpoint_server_compact_buffered_input(
-      driver->verified_driver.server_driver_raw,
-      TLS13_SERVER_RX_CAP,
-      driver->verified_driver.server_driver_buffered_len,
-      total_len,
-      result.process_consumed_len);
-  return 0;
-}
-
 static int server_endpoint_do_local(
     tls13_server_driver *driver,
     TLS13_Impl_CanonicalTypes_server_local_event ev,
@@ -202,38 +208,9 @@ static int server_endpoint_do_local(
     uint8_t *app_out,
     size_t app_out_len,
     bool scheduled) {
-  TLS13_Impl_Server_Types_local_event_kind kind =
-      TLS13_Impl_CanonicalTypes_server_local_event_kind(ev);
   size_t local_output_len = TLS13_SERVER_NETWORK_OUT_CAP;
-  switch (kind) {
-    case TLS13_Impl_Server_Types_LocalSendServerHello:
-      local_output_len = 95u;
-      break;
-    case TLS13_Impl_Server_Types_LocalSendEncryptedExtensions:
-      local_output_len = 28u;
-      break;
-    case TLS13_Impl_Server_Types_LocalSendCertificate:
-      local_output_len = driver->certificate_chain_len + 35u;
-      break;
-    case TLS13_Impl_Server_Types_LocalSendCertificateVerify: {
-      TLS13_Impl_ConnectionState_Repr_certificate_verify_signature_snapshot snap =
-          TLS13_Impl_ConnectionState_Queries_get_certificate_verify_signature_snapshot(
-              driver->verified_driver.server_driver_server);
-      local_output_len = snap.cv_signature_len + 30u;
-      break;
-    }
-    case TLS13_Impl_Server_Types_LocalSendServerFinished:
-      local_output_len = 58u;
-      break;
-    default:
-      break;
-  }
-  if (local_output_len > TLS13_SERVER_NETWORK_OUT_CAP) {
-    return driver_fail(
-        driver,
-        "endpoint local action %u needs %zu bytes of network output",
-        (unsigned)kind,
-        local_output_len);
+  if (server_endpoint_local_output_len(driver, ev, &local_output_len) != 0) {
+    return 1;
   }
   TLS13_Impl_Server_CanonicalProtocol_canonical_server srv =
       server_endpoint_state(driver->verified_driver);
@@ -301,175 +278,64 @@ static int server_endpoint_run(
   if (produced_app_len != NULL) {
     *produced_app_len = 0u;
   }
+  if (driver->verified_driver.server_driver_buffered_len == NULL) {
+    return driver_fail(driver, "endpoint buffered-length cell is missing");
+  }
+  TLS13_Impl_Server_CanonicalProtocol_canonical_server srv =
+      server_endpoint_state(driver->verified_driver);
+  TLS13_Impl_Server_Endpoint_server_endpoint_frame frame =
+      server_endpoint_frame(
+          driver->verified_driver,
+          app_out,
+          app_out_len,
+          driver->verified_driver.server_driver_empty_payload,
+          0u);
   while (fuel-- != 0u) {
-    if (server_failed(&driver->verified_driver)) {
-      return driver_fail(driver, "endpoint entered failed control state");
+    if (server_prepare_endpoint_material(driver) != 0) {
+      return 1;
     }
-    if (stop_on_application_ready &&
-        server_control_is(&driver->verified_driver, TLS13_CONTROL_APPLICATION_DATA)) {
-      return 0;
-    }
-    if (stop_on_closed &&
-        server_control_is(&driver->verified_driver, TLS13_CONTROL_CLOSED)) {
-      return 0;
-    }
-
-    TLS13_Impl_Server_CanonicalProtocol_canonical_server srv =
-        server_endpoint_state(driver->verified_driver);
-    TLS13_Impl_Server_Endpoint_server_endpoint_frame frame =
-        server_endpoint_frame(
-            driver->verified_driver,
-            app_out,
-            app_out_len,
-            driver->verified_driver.server_driver_empty_payload,
-            0u);
+    srv = server_endpoint_state(driver->verified_driver);
+    size_t workflow_output_len = TLS13_SERVER_NETWORK_OUT_CAP;
     server_endpoint_action action =
         TLS13_Impl_Server_Endpoint_server_endpoint_next_action(srv, frame);
-    server_trace(
-        "server action tag=%u control=%u stage=%u buffered=%zu",
-        (unsigned)action.tag,
-        (unsigned)(driver->verified_driver.server_driver_server.control.control_tag != NULL
-                       ? *driver->verified_driver.server_driver_server.control.control_tag
-                       : 255u),
-        (unsigned)(driver->verified_driver.server_driver_server.control.handshake_stage_tag != NULL
-                       ? *driver->verified_driver.server_driver_server.control.handshake_stage_tag
-                       : 255u),
-        driver->verified_driver.server_driver_buffered_len == NULL
-            ? 0u
-            : *driver->verified_driver.server_driver_buffered_len);
-
-    switch (action.tag) {
-      case Common_ProtocolEndpoint_EndpointLocal: {
-        if (server_endpoint_do_local(
-                driver,
-                action.case_EndpointLocal.ev,
-                action.case_EndpointLocal.frame,
-                app_out,
-                app_out_len,
-                true) != 0) {
-          return 1;
-        }
-        break;
-      }
-      case Common_ProtocolEndpoint_EndpointNeedInput: {
-        size_t buffered_len =
-            driver->verified_driver.server_driver_buffered_len == NULL
-                ? 0u
-                : *driver->verified_driver.server_driver_buffered_len;
-        if (buffered_len >= TLS13_SERVER_RX_CAP) {
-          return driver_fail(driver, "endpoint receive buffer is full");
-        }
-        size_t read_len = 0u;
-        if (buffered_len == 0u) {
-          read_len = Common_TCP_read(
-              driver->channel,
-              driver->verified_driver.server_driver_raw,
-              TLS13_SERVER_RX_CAP);
-          server_trace("server read fresh=%zu", read_len);
-        }
-        size_t total_len = buffered_len + read_len;
-        if (total_len == 0u) {
-          return driver_fail(driver, "endpoint TCP read returned no data");
-        }
-
-        srv = server_endpoint_state(driver->verified_driver);
-        Common_ProtocolImplementation_process_result result =
-            TLS13_Impl_Server_Endpoint_server_run_buffered_network_action(
-                srv,
-                frame,
-                driver->channel,
-                action.case_EndpointNeedInput,
-                total_len);
-        server_trace(
-            "server network status=%u consumed=%zu app=%zu net=%zu total=%zu control=%u stage=%u",
-            (unsigned)result.process_status,
-            result.process_consumed_len,
-            result.process_app_len,
-            result.process_produced_len,
-            total_len,
-            (unsigned)(driver->verified_driver.server_driver_server.control.control_tag != NULL
-                           ? *driver->verified_driver.server_driver_server.control.control_tag
-                           : 255u),
-            (unsigned)(driver->verified_driver.server_driver_server.control.handshake_stage_tag != NULL
-                           ? *driver->verified_driver.server_driver_server.control.handshake_stage_tag
-                           : 255u));
-        if (result.process_status ==
-                Common_ProtocolImplementation_NeedMoreInput &&
-            read_len == 0u && total_len < TLS13_SERVER_RX_CAP) {
-          read_len = Common_TCP_read(
-              driver->channel,
-              driver->verified_driver.server_driver_raw + total_len,
-              TLS13_SERVER_RX_CAP - total_len);
-          total_len += read_len;
-          server_trace("server read appended=%zu total=%zu", read_len, total_len);
-          if (read_len == 0u) {
-            return driver_fail(driver, "endpoint TCP read returned no data");
-          }
-          server_endpoint_action retry_action =
-              TLS13_Impl_Server_Endpoint_server_endpoint_next_action(srv, frame);
-          if (retry_action.tag != Common_ProtocolEndpoint_EndpointNeedInput) {
-            TLS13_Impl_Server_Endpoint_server_endpoint_cancel_action(
-                srv,
-                frame,
-                retry_action);
-            return driver_fail(driver, "endpoint no longer needs input after read retry");
-          }
-          result = TLS13_Impl_Server_Endpoint_server_run_buffered_network_action(
-              srv,
-              frame,
-              driver->channel,
-              retry_action.case_EndpointNeedInput,
-              total_len);
-          server_trace(
-              "server network retry status=%u consumed=%zu app=%zu net=%zu total=%zu control=%u stage=%u",
-              (unsigned)result.process_status,
-              result.process_consumed_len,
-              result.process_app_len,
-              result.process_produced_len,
-              total_len,
-              (unsigned)(driver->verified_driver.server_driver_server.control.control_tag != NULL
-                             ? *driver->verified_driver.server_driver_server.control.control_tag
-                             : 255u),
-              (unsigned)(driver->verified_driver.server_driver_server.control.handshake_stage_tag != NULL
-                             ? *driver->verified_driver.server_driver_server.control.handshake_stage_tag
-                             : 255u));
-        }
-        if (server_compact_input(driver, result, total_len) != 0) {
-          return 1;
-        }
-        if (result.process_status == Common_ProtocolImplementation_StepOk) {
-          if (result.process_app_len != 0u) {
-            if (produced_app_len != NULL) {
-              *produced_app_len = result.process_app_len;
-            }
-            if (stop_on_application_data) {
-              return 0;
-            }
-          }
-        } else if (result.process_status !=
-                   Common_ProtocolImplementation_NeedMoreInput) {
-          return driver_fail(
+    if (action.tag == Common_ProtocolEndpoint_EndpointLocal) {
+      if (server_endpoint_local_output_len(
               driver,
-              "endpoint network action returned process status %u",
-              (unsigned)result.process_status);
-        } else if (read_len == 0u) {
-          return driver_fail(driver, "endpoint needs more input after empty read");
-        }
-        break;
+              action.case_EndpointLocal.ev,
+              &workflow_output_len) != 0) {
+        TLS13_Impl_Server_Endpoint_server_endpoint_cancel_action(
+            srv,
+            frame,
+            action);
+        return 1;
       }
-      case Common_ProtocolEndpoint_EndpointDone:
-        TLS13_Impl_Server_Endpoint_server_endpoint_cancel_action(
+    }
+    TLS13_Impl_Server_Endpoint_server_endpoint_cancel_action(srv, frame, action);
+    frame.server_ep_network_out_len = workflow_output_len;
+    TLS13_Impl_Server_Endpoint_server_endpoint_run_result result =
+        TLS13_Impl_Server_Endpoint_server_endpoint_run_workflow(
             srv,
             frame,
-            action);
+            driver->channel,
+            driver->verified_driver.server_driver_buffered_len,
+            stop_on_application_data,
+            stop_on_application_ready,
+            stop_on_closed,
+            1u);
+    if (produced_app_len != NULL) {
+      *produced_app_len = result.server_endpoint_run_app_len;
+    }
+    switch (result.server_endpoint_run_status) {
+      case TLS13_Impl_Server_Endpoint_ServerEndpointRunOk:
         return 0;
-      case Common_ProtocolEndpoint_EndpointFailed:
+      case TLS13_Impl_Server_Endpoint_ServerEndpointRunFuelExhausted:
+        break;
+      case TLS13_Impl_Server_Endpoint_ServerEndpointRunFailed:
       default:
-        TLS13_Impl_Server_Endpoint_server_endpoint_cancel_action(
-            srv,
-            frame,
-            action);
-        return driver_fail(driver, "endpoint next action failed");
+        return driver_fail(
+            driver,
+            "endpoint workflow failed with process status %u",
+            (unsigned)result.server_endpoint_run_last_status);
     }
   }
   return driver_fail(driver, "endpoint workflow exhausted fuel");

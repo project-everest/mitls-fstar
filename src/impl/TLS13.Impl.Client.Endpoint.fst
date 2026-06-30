@@ -1659,6 +1659,148 @@ fn client_compact_buffered_input
   new_len
 }
 
+fn client_compact_endpoint_input
+  (cc:CP.canonical_client)
+  (ch:TCP.channel)
+  (frame:client_endpoint_frame)
+  (buffered_len_ref:Box.box SZ.t)
+  (buffered_len:SZ.t)
+  (consumed_len:SZ.t)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires client_endpoint_io_ready
+             cc
+             ch
+             frame
+             (Ghost.reveal received)
+             (Ghost.reveal sent)
+             (Ghost.reveal st) **
+           Box.pts_to buffered_len_ref 'old_buffered_len **
+           pure (SZ.v consumed_len <= SZ.v buffered_len /\
+                 SZ.v buffered_len <= SZ.v frame.client_ep_raw_len)
+  returns new_len:SZ.t
+  ensures client_endpoint_io_ready
+            cc
+            ch
+            frame
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st) **
+          Box.pts_to buffered_len_ref new_len **
+          pure (new_len == client_pending_after_consumed buffered_len consumed_len /\
+                SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
+                SZ.v new_len <= SZ.v frame.client_ep_raw_len)
+{
+  unfold (client_endpoint_io_ready cc ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+  with raw_received raw_bytes network_out_bytes. _;
+  let new_len =
+    client_compact_buffered_input
+      frame.client_ep_raw
+      frame.client_ep_raw_len
+      buffered_len_ref
+      buffered_len
+      consumed_len;
+  with raw_after.
+    assert (V.pts_to frame.client_ep_raw #1.0R raw_after **
+            Box.pts_to buffered_len_ref new_len);
+  fold (client_endpoint_io_ready cc ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+  assert (pure (SZ.v new_len <= SZ.v buffered_len));
+  assert (pure (SZ.v buffered_len <= SZ.v frame.client_ep_raw_len));
+  new_len
+}
+
+fn client_read_into_raw_suffix
+  (ch:TCP.channel)
+  (raw:V.vec U8.t)
+  (raw_capacity:SZ.t)
+  (offset:SZ.t)
+  requires TCP.is_channel ch 'received 'sent **
+           V.pts_to raw #1.0R 'raw_bytes **
+           pure (B.length 'raw_bytes == SZ.v raw_capacity /\
+                 SZ.v offset <= SZ.v raw_capacity)
+  returns read_len:SZ.t
+  ensures exists* received_after raw_after.
+            TCP.is_channel ch received_after (Ghost.reveal 'sent) **
+            V.pts_to raw #1.0R raw_after **
+            pure (B.length raw_after == SZ.v raw_capacity /\
+                  SZ.v read_len <= SZ.v raw_capacity - SZ.v offset)
+{
+  let available = SZ.sub raw_capacity offset;
+  assert (pure (SZ.v available == SZ.v raw_capacity - SZ.v offset));
+  V.to_array_pts_to raw;
+  let tmp = V.alloc 0uy available;
+  V.to_array_pts_to tmp;
+  let read_len = TCP.read ch (V.vec_to_array tmp) available;
+  with tmp_after chunk.
+    assert (TCP.is_channel ch (Seq.append (Ghost.reveal 'received) chunk) (Ghost.reveal 'sent) **
+            pts_to (V.vec_to_array tmp) tmp_after);
+  assert (pure (B.length tmp_after == SZ.v available));
+  assert (pure (SZ.v read_len <= SZ.v available));
+  assert (pure (SZ.v offset + SZ.v read_len <= SZ.v raw_capacity));
+  SC.copy_array_slice_to_array
+    (V.vec_to_array tmp)
+    available
+    0sz
+    read_len
+    (V.vec_to_array raw)
+    raw_capacity
+    offset;
+  with raw_after.
+    assert (pts_to (V.vec_to_array raw) raw_after);
+  assert (pure (B.length raw_after == SZ.v raw_capacity));
+  let received_after = Ghost.hide (Seq.append (Ghost.reveal 'received) chunk);
+  rewrite
+    (TCP.is_channel ch (Seq.append (Ghost.reveal 'received) chunk) (Ghost.reveal 'sent))
+    as
+    (TCP.is_channel ch (Ghost.reveal received_after) (Ghost.reveal 'sent));
+  V.to_vec_pts_to tmp;
+  V.free tmp;
+  V.to_vec_pts_to raw;
+  read_len
+}
+
+fn client_read_more_endpoint_input
+  (cc:CP.canonical_client)
+  (ch:TCP.channel)
+  (frame:client_endpoint_frame)
+  (offset:SZ.t)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires client_endpoint_io_ready
+             cc
+             ch
+             frame
+             (Ghost.reveal received)
+             (Ghost.reveal sent)
+             (Ghost.reveal st) **
+           pure (SZ.v offset <= SZ.v frame.client_ep_raw_len)
+  returns read_len:SZ.t
+  ensures client_endpoint_io_ready
+            cc
+            ch
+            frame
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st) **
+          pure (SZ.v read_len <= SZ.v frame.client_ep_raw_len - SZ.v offset)
+{
+  unfold (client_endpoint_io_ready cc ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+  with raw_received raw_bytes network_out_bytes. _;
+  let read_len =
+    client_read_into_raw_suffix
+      ch
+      frame.client_ep_raw
+      frame.client_ep_raw_len
+      offset;
+  with raw_received_after raw_after.
+    assert (TCP.is_channel ch raw_received_after (Ghost.reveal sent) **
+            V.pts_to frame.client_ep_raw #1.0R raw_after);
+  fold (client_endpoint_io_ready cc ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+  read_len
+}
+
 let client_api_local_action_ready
   (_cc:CP.canonical_client)
   (ch:TCP.channel)
@@ -2290,7 +2432,635 @@ ensures
   result
 }
 
-noextract
+type client_endpoint_run_status =
+  | ClientEndpointRunOk
+  | ClientEndpointRunFailed
+  | ClientEndpointRunFuelExhausted
+
+noeq
+type client_endpoint_run_result = {
+  client_endpoint_run_status: client_endpoint_run_status;
+  client_endpoint_run_app_len: SZ.t;
+  client_endpoint_run_last_status: CPI.process_status;
+}
+
+fn client_decrement_endpoint_fuel
+  (remaining:ref SZ.t)
+  (fuel:SZ.t)
+  requires R.pts_to remaining 'rem **
+           pure (not (Ghost.reveal 'rem = 0sz) /\
+                 SZ.v (Ghost.reveal 'rem) <= SZ.v fuel)
+  ensures exists* rem1.
+            R.pts_to remaining rem1 **
+            pure (SZ.v rem1 <= SZ.v fuel)
+{
+  let rem_now = R.read remaining;
+  assert (pure (not (rem_now = 0sz)));
+  assert (pure (0 < SZ.v rem_now));
+  let next = SZ.sub rem_now 1sz;
+  assert (pure (SZ.v next < SZ.v rem_now));
+  assert (pure (SZ.v next <= SZ.v fuel));
+  remaining := next
+}
+
+fn client_update_refs_after_network_result
+  (result:CPI.process_result)
+  (stop_on_application_data:bool)
+  (fail_need_more_without_input:bool)
+  (running:ref bool)
+  (failed:ref bool)
+  (app_len:ref SZ.t)
+  requires R.pts_to running 'running0 **
+           R.pts_to failed 'failed0 **
+           R.pts_to app_len 'app_len0
+  ensures exists* running1 failed1 app_len1.
+            R.pts_to running running1 **
+            R.pts_to failed failed1 **
+            R.pts_to app_len app_len1
+{
+  if (result.CPI.process_status = CPI.StepOk) {
+    if not (result.CPI.process_app_len = 0sz) {
+      app_len := result.CPI.process_app_len;
+      if stop_on_application_data {
+        running := false
+      }
+    }
+  } else if (result.CPI.process_status = CPI.NeedMoreInput) {
+    if fail_need_more_without_input {
+      failed := true;
+      running := false
+    }
+  } else {
+    failed := true;
+    running := false
+  }
+}
+
+fn client_finish_network_result_iteration
+  (cc:CP.canonical_client)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:client_endpoint_frame)
+  (ch:TCP.channel)
+  (buffered_len_ref:Box.box SZ.t)
+  (result:CPI.process_result)
+  (total_len:SZ.t)
+  (fail_need_more_without_input:bool)
+  (stop_on_application_data:bool)
+  (running:ref bool)
+  (failed:ref bool)
+  (app_len:ref SZ.t)
+  (last_status:ref CPI.process_status)
+  (remaining:ref SZ.t)
+  (fuel:SZ.t)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires CP.client_invariant
+             cc
+             (Ghost.reveal received)
+             (Ghost.reveal sent)
+             (Ghost.reveal st) **
+           client_endpoint_frame_ready
+             cc
+             cfg
+             frame
+             (Ghost.reveal st) **
+           client_endpoint_io_ready
+             cc
+             ch
+             frame
+             (Ghost.reveal received)
+             (Ghost.reveal sent)
+             (Ghost.reveal st) **
+           Box.pts_to buffered_len_ref 'buffered_len **
+           R.pts_to running 'running0 **
+           R.pts_to failed 'failed0 **
+           R.pts_to app_len 'app_len0 **
+           R.pts_to last_status 'last_status0 **
+           R.pts_to remaining 'rem **
+           pure (SZ.v 'buffered_len <= SZ.v frame.client_ep_raw_len /\
+                 SZ.v total_len <= SZ.v frame.client_ep_raw_len /\
+                 not (Ghost.reveal 'rem = 0sz) /\
+                 SZ.v (Ghost.reveal 'rem) <= SZ.v fuel)
+  ensures exists* buffered_len1 running1 failed1 app_len1 last_status1 rem1.
+            CP.client_invariant
+              cc
+              (Ghost.reveal received)
+              (Ghost.reveal sent)
+              (Ghost.reveal st) **
+            client_endpoint_frame_ready
+              cc
+              cfg
+              frame
+              (Ghost.reveal st) **
+            client_endpoint_io_ready
+              cc
+              ch
+              frame
+              (Ghost.reveal received)
+              (Ghost.reveal sent)
+              (Ghost.reveal st) **
+            Box.pts_to buffered_len_ref buffered_len1 **
+            R.pts_to running running1 **
+            R.pts_to failed failed1 **
+            R.pts_to app_len app_len1 **
+            R.pts_to last_status last_status1 **
+            R.pts_to remaining rem1 **
+            pure (SZ.v buffered_len1 <= SZ.v frame.client_ep_raw_len /\
+                  SZ.v rem1 <= SZ.v fuel)
+{
+  last_status := result.CPI.process_status;
+  if SZ.lte result.CPI.process_consumed_len total_len {
+    let _ =
+      client_compact_endpoint_input
+        cc
+        ch
+        frame
+        buffered_len_ref
+        total_len
+        result.CPI.process_consumed_len
+        received
+        sent
+        st;
+    client_update_refs_after_network_result
+      result
+      stop_on_application_data
+      fail_need_more_without_input
+      running
+      failed
+      app_len;
+    client_decrement_endpoint_fuel remaining fuel
+  } else {
+    failed := true;
+    running := false;
+    client_decrement_endpoint_fuel remaining fuel
+  }
+}
+
+fn client_endpoint_control_tag
+  (cc:CP.canonical_client)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires CP.client_invariant
+             cc
+             (Ghost.reveal received)
+             (Ghost.reveal sent)
+             (Ghost.reveal st)
+  returns tag:U8.t
+  ensures CP.client_invariant
+            cc
+            (Ghost.reveal received)
+            (Ghost.reveal sent)
+            (Ghost.reveal st)
+{
+  unfold (CP.client_invariant cc (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+  rewrite
+    (C.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st))
+    as
+    (CR.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st));
+  let snapshot = C.control_snapshot cc.CP.canonical_client_state;
+  let tag = snapshot.CR.snapshot_control_tag;
+  rewrite
+    (CR.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st))
+    as
+    (C.connection_exactly cc.CP.canonical_client_state (Ghost.reveal st));
+  fold (CP.client_invariant cc (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+  tag
+}
+
+fn client_endpoint_run_workflow
+  (cc:CP.canonical_client)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:client_endpoint_frame)
+  (ch:TCP.channel)
+  (buffered_len_ref:Box.box SZ.t)
+  (stop_on_application_data:bool)
+  (stop_on_application_ready:bool)
+  (stop_on_closed:bool)
+  (fuel:SZ.t)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires CP.client_invariant
+             cc
+             (Ghost.reveal received)
+             (Ghost.reveal sent)
+             (Ghost.reveal st) **
+           client_endpoint_frame_ready
+             cc
+             cfg
+             frame
+             (Ghost.reveal st) **
+           client_endpoint_io_ready
+             cc
+             ch
+             frame
+             (Ghost.reveal received)
+             (Ghost.reveal sent)
+             (Ghost.reveal st) **
+           Box.pts_to buffered_len_ref 'buffered_len **
+           pure (SZ.v 'buffered_len <= SZ.v frame.client_ep_raw_len)
+  returns run_result:client_endpoint_run_result
+  ensures exists* (received1:Ghost.erased B.bytes)
+                  (sent1:Ghost.erased B.bytes)
+                  (st1:Ghost.erased CS.connection_state)
+                  (buffered_len1:SZ.t).
+            CP.client_invariant
+              cc
+              (Ghost.reveal received1)
+              (Ghost.reveal sent1)
+              (Ghost.reveal st1) **
+            client_endpoint_frame_ready
+              cc
+              cfg
+              frame
+              (Ghost.reveal st1) **
+            client_endpoint_io_ready
+              cc
+              ch
+              frame
+              (Ghost.reveal received1)
+              (Ghost.reveal sent1)
+              (Ghost.reveal st1) **
+            Box.pts_to buffered_len_ref buffered_len1 **
+            pure (SZ.v buffered_len1 <= SZ.v frame.client_ep_raw_len)
+{
+  let mut remaining = fuel;
+  let mut running = true;
+  let mut failed = false;
+  let mut app_len = 0sz;
+  let mut last_status = CPI.StepOk;
+  while (
+    let keep = R.read running;
+    let rem = R.read remaining;
+    keep && not (rem = 0sz)
+  )
+    invariant live remaining
+    invariant live running
+    invariant live failed
+    invariant live app_len
+    invariant live last_status
+    invariant exists* (received_loop:Ghost.erased B.bytes)
+                      (sent_loop:Ghost.erased B.bytes)
+                      (st_loop:Ghost.erased CS.connection_state)
+                      (buffered_len_loop:SZ.t).
+      CP.client_invariant
+        cc
+        (Ghost.reveal received_loop)
+        (Ghost.reveal sent_loop)
+        (Ghost.reveal st_loop) **
+      client_endpoint_frame_ready
+        cc
+        cfg
+        frame
+        (Ghost.reveal st_loop) **
+      client_endpoint_io_ready
+        cc
+        ch
+        frame
+        (Ghost.reveal received_loop)
+        (Ghost.reveal sent_loop)
+        (Ghost.reveal st_loop) **
+      Box.pts_to buffered_len_ref buffered_len_loop **
+      pure (SZ.v buffered_len_loop <= SZ.v frame.client_ep_raw_len /\
+            SZ.v (R.read remaining) <= SZ.v fuel)
+  {
+    with received_loop sent_loop st_loop buffered_len_loop.
+      assert (
+        CP.client_invariant
+          cc
+          (Ghost.reveal received_loop)
+          (Ghost.reveal sent_loop)
+          (Ghost.reveal st_loop) **
+        client_endpoint_frame_ready
+          cc
+          cfg
+          frame
+          (Ghost.reveal st_loop) **
+        client_endpoint_io_ready
+          cc
+          ch
+          frame
+          (Ghost.reveal received_loop)
+          (Ghost.reveal sent_loop)
+          (Ghost.reveal st_loop) **
+        Box.pts_to buffered_len_ref buffered_len_loop **
+        pure (SZ.v buffered_len_loop <= SZ.v frame.client_ep_raw_len /\
+              SZ.v (R.read remaining) <= SZ.v fuel));
+    let tag = client_endpoint_control_tag cc received_loop sent_loop st_loop;
+    let is_failed = tag = 5uy;
+    let is_app_ready = tag = 2uy;
+    let is_closed = tag = 4uy;
+    if is_failed {
+      failed := true;
+      running := false
+    } else if (stop_on_application_ready && is_app_ready) {
+      running := false
+    } else if (stop_on_closed && is_closed) {
+      running := false
+    } else {
+      let action =
+        client_endpoint_next_action
+          cc
+          cfg
+          frame
+          received_loop
+          sent_loop
+          st_loop;
+      match action {
+        PE.EndpointLocal ev local_frame -> {
+          let result =
+            client_run_scheduled_local_action
+              cc
+              cfg
+              frame
+              ch
+              ev
+              local_frame
+              received_loop
+              sent_loop
+              st_loop;
+          with received1 sent1 st1.
+            assert (
+              CP.client_invariant
+                cc
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1) **
+              client_endpoint_frame_ready
+                cc
+                cfg
+                frame
+                (Ghost.reveal st1) **
+              client_endpoint_io_ready
+                cc
+                ch
+                frame
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1));
+          last_status := result.CPI.process_status;
+          if not (result.CPI.process_status = CPI.StepOk) {
+            failed := true;
+            running := false
+          };
+          let rem_now = R.read remaining;
+          assert (pure (not (rem_now = 0sz)));
+          assert (pure (0 < SZ.v rem_now));
+          let next = SZ.sub rem_now 1sz;
+          assert (pure (SZ.v next < SZ.v rem_now));
+          assert (pure (SZ.v next <= SZ.v fuel));
+          remaining := next
+        }
+        PE.EndpointNeedInput network_frame -> {
+          let buffered_len = Box.(!buffered_len_ref);
+          if SZ.lte frame.client_ep_raw_len buffered_len {
+            client_endpoint_cancel_action
+              cc
+              cfg
+              frame
+              st_loop
+              (PE.EndpointNeedInput network_frame);
+            failed := true;
+            running := false
+          } else {
+            let read_len =
+              if (buffered_len = 0sz) {
+                client_read_more_endpoint_input
+                  cc
+                  ch
+                  frame
+                  buffered_len
+                  received_loop
+                  sent_loop
+                  st_loop
+              } else {
+                0sz
+              };
+            assert (pure (SZ.v read_len <= SZ.v frame.client_ep_raw_len - SZ.v buffered_len));
+            assert (pure (SZ.v buffered_len + SZ.v read_len <= SZ.v frame.client_ep_raw_len));
+            SZ.fits_lte (SZ.v buffered_len + SZ.v read_len) (SZ.v frame.client_ep_raw_len);
+            let total_len = buffered_len `SZ.add` read_len;
+              let result =
+                client_run_buffered_network_action
+                  cc
+                  cfg
+                  frame
+                  ch
+                  network_frame
+                  total_len
+                  received_loop
+                  sent_loop
+                  st_loop;
+              with received1 sent1 st1.
+                assert (
+                  CP.client_invariant
+                    cc
+                    (Ghost.reveal received1)
+                    (Ghost.reveal sent1)
+                    (Ghost.reveal st1) **
+                  client_endpoint_frame_ready
+                    cc
+                    cfg
+                    frame
+                    (Ghost.reveal st1) **
+                  client_endpoint_io_ready
+                    cc
+                    ch
+                    frame
+                    (Ghost.reveal received1)
+                    (Ghost.reveal sent1)
+                    (Ghost.reveal st1));
+              let need_retry =
+                result.CPI.process_status = CPI.NeedMoreInput &&
+                read_len = 0sz &&
+                SZ.lt total_len frame.client_ep_raw_len;
+              if need_retry {
+                let read_more =
+                  client_read_more_endpoint_input
+                    cc
+                    ch
+                    frame
+                    total_len
+                    received1
+                    sent1
+                    st1;
+                assert (pure (SZ.v read_more <= SZ.v frame.client_ep_raw_len - SZ.v total_len));
+                assert (pure (SZ.v total_len + SZ.v read_more <= SZ.v frame.client_ep_raw_len));
+                SZ.fits_lte (SZ.v total_len + SZ.v read_more) (SZ.v frame.client_ep_raw_len);
+                let retry_total_len = total_len `SZ.add` read_more;
+                if (read_more = 0sz) {
+                  failed := true;
+                  running := false;
+                  client_decrement_endpoint_fuel remaining fuel
+                } else {
+                  let retry_action =
+                    client_endpoint_next_action
+                      cc
+                      cfg
+                      frame
+                      received1
+                      sent1
+                      st1;
+                  match retry_action {
+                    PE.EndpointNeedInput retry_network_frame -> {
+                      let retry_result =
+                        client_run_buffered_network_action
+                          cc
+                          cfg
+                          frame
+                          ch
+                          retry_network_frame
+                          retry_total_len
+                          received1
+                          sent1
+                          st1;
+                      with received2 sent2 st2.
+                        assert (
+                          CP.client_invariant
+                            cc
+                            (Ghost.reveal received2)
+                            (Ghost.reveal sent2)
+                            (Ghost.reveal st2) **
+                          client_endpoint_frame_ready
+                            cc
+                            cfg
+                            frame
+                            (Ghost.reveal st2) **
+                          client_endpoint_io_ready
+                            cc
+                            ch
+                            frame
+                            (Ghost.reveal received2)
+                            (Ghost.reveal sent2)
+                            (Ghost.reveal st2));
+                      client_finish_network_result_iteration
+                        cc
+                        cfg
+                        frame
+                        ch
+                        buffered_len_ref
+                        retry_result
+                        retry_total_len
+                        false
+                        stop_on_application_data
+                        running
+                        failed
+                        app_len
+                        last_status
+                        remaining
+                        fuel
+                        received2
+                        sent2
+                        st2
+                    }
+                    PE.EndpointLocal retry_ev retry_local_frame -> {
+                      client_endpoint_cancel_action
+                        cc
+                        cfg
+                        frame
+                        st1
+                        (PE.EndpointLocal retry_ev retry_local_frame);
+                      failed := true;
+                      running := false;
+                      client_decrement_endpoint_fuel remaining fuel
+                    }
+                    PE.EndpointDone -> {
+                      client_endpoint_cancel_action
+                        cc
+                        cfg
+                        frame
+                        st1
+                        PE.EndpointDone;
+                      failed := true;
+                      running := false;
+                      client_decrement_endpoint_fuel remaining fuel
+                    }
+                    PE.EndpointFailed -> {
+                      client_endpoint_cancel_action
+                        cc
+                        cfg
+                        frame
+                        st1
+                        PE.EndpointFailed;
+                      failed := true;
+                      running := false;
+                      client_decrement_endpoint_fuel remaining fuel
+                    }
+                  }
+                }
+              } else {
+                let fail_need_more_without_input = read_len = 0sz;
+                client_finish_network_result_iteration
+                  cc
+                  cfg
+                  frame
+                  ch
+                  buffered_len_ref
+                  result
+                  total_len
+                  fail_need_more_without_input
+                  stop_on_application_data
+                  running
+                  failed
+                  app_len
+                  last_status
+                  remaining
+                  fuel
+                  received1
+                  sent1
+                  st1
+              }
+          }
+        }
+        PE.EndpointDone -> {
+          client_endpoint_cancel_action
+            cc
+            cfg
+            frame
+            st_loop
+            PE.EndpointDone;
+          running := false
+        }
+        PE.EndpointFailed -> {
+          client_endpoint_cancel_action
+            cc
+            cfg
+            frame
+            st_loop
+            PE.EndpointFailed;
+          failed := true;
+          running := false
+        }
+      }
+    }
+  };
+  let still_running = R.read running;
+  let did_fail = R.read failed;
+  let produced = R.read app_len;
+  let last = R.read last_status;
+  if still_running {
+    {
+      client_endpoint_run_status = ClientEndpointRunFuelExhausted;
+      client_endpoint_run_app_len = produced;
+      client_endpoint_run_last_status = last;
+    }
+  } else if did_fail {
+    {
+      client_endpoint_run_status = ClientEndpointRunFailed;
+      client_endpoint_run_app_len = produced;
+      client_endpoint_run_last_status = last;
+    }
+  } else {
+    {
+      client_endpoint_run_status = ClientEndpointRunOk;
+      client_endpoint_run_app_len = produced;
+      client_endpoint_run_last_status = last;
+    }
+  }
+}
+
 let client_protocol_endpoint
   : PE.protocol_endpoint
       CP.canonical_client
