@@ -182,7 +182,8 @@ static int client_endpoint_do_local(
     TLS13_Impl_CanonicalTypes_client_local_event ev,
     TLS13_Impl_Client_CanonicalProtocol_tls_client_local_frame local_frame,
     uint8_t *app_out,
-    size_t app_out_len) {
+    size_t app_out_len,
+    bool scheduled) {
   TLS13_Impl_Client_CanonicalQueries_client_next_local_action_config cfg =
       client_endpoint_config();
   TLS13_Impl_Client_Endpoint_client_endpoint_frame frame =
@@ -192,35 +193,25 @@ static int client_endpoint_do_local(
           app_out_len,
           local_frame.tls_client_local_payload,
           local_frame.tls_client_local_payload_len);
-  TLS13_Impl_Client_Endpoint_client_local_io lio =
-      TLS13_Impl_Client_Endpoint_client_prepare_local(
-          driver->verified_driver.client_driver_client,
-          cfg,
-          frame,
-          driver->channel,
-          ev,
-          local_frame);
-  Common_ProtocolImplementation_process_result result =
-      TLS13_Impl_Client_CanonicalProtocol_client_process_local(
-          driver->verified_driver.client_driver_client,
-          ev,
-          local_frame,
-          TLS13_Impl_Client_Endpoint_client_local_output(lio),
-          TLS13_Impl_Client_Endpoint_client_local_output_len(lio));
-  TLS13_Impl_Client_Endpoint_client_finish_local_action(
-      driver->verified_driver.client_driver_client,
-      cfg,
-      frame,
-      ev,
-      local_frame,
-      result);
-  TLS13_Impl_Client_Endpoint_client_finish_local_io(
-      driver->verified_driver.client_driver_client,
-      driver->channel,
-      frame,
-      lio,
-      ev,
-      result);
+  Common_ProtocolImplementation_process_result result;
+  if (scheduled) {
+    result =
+        TLS13_Impl_Client_Endpoint_client_run_scheduled_local_action(
+            driver->verified_driver.client_driver_client,
+            cfg,
+            frame,
+            driver->channel,
+            ev,
+            local_frame);
+  } else {
+    result =
+        TLS13_Impl_Client_Endpoint_client_run_api_local_action(
+            driver->verified_driver.client_driver_client,
+            frame,
+            driver->channel,
+            ev,
+            local_frame);
+  }
   if (result.process_status != Common_ProtocolImplementation_StepOk) {
     return driver_fail(
         driver,
@@ -293,7 +284,8 @@ static int client_endpoint_run(
                 action.case_EndpointLocal.ev,
                 action.case_EndpointLocal.frame,
                 app_out,
-                app_out_len) != 0) {
+                app_out_len,
+                true) != 0) {
           return 1;
         }
         break;
@@ -324,13 +316,13 @@ static int client_endpoint_run(
         }
 
         Common_ProtocolImplementation_process_result result =
-            TLS13_Impl_Client_CanonicalProtocol_client_process_network(
+            TLS13_Impl_Client_Endpoint_client_run_buffered_network_action(
                 driver->verified_driver.client_driver_client,
+                cfg,
+                frame,
+                driver->channel,
                 action.case_EndpointNeedInput,
-                driver->verified_driver.client_driver_raw,
-                total_len,
-                driver->verified_driver.client_driver_network_out,
-                TLS13_CLIENT_NETWORK_OUT_CAP);
+                total_len);
         if (result.process_status ==
                 Common_ProtocolImplementation_NeedMoreInput &&
             read_len == 0u && total_len < TLS13_CLIENT_RX_CAP) {
@@ -346,35 +338,27 @@ static int client_endpoint_run(
           if (read_len == 0u) {
             return driver_fail(driver, "endpoint TCP read returned no data");
           }
-          result = TLS13_Impl_Client_CanonicalProtocol_client_process_network(
+          client_endpoint_action retry_action =
+              TLS13_Impl_Client_Endpoint_client_endpoint_next_action(
+                  driver->verified_driver.client_driver_client,
+                  cfg,
+                  frame);
+          if (retry_action.tag != Common_ProtocolEndpoint_EndpointNeedInput) {
+            TLS13_Impl_Client_Endpoint_client_endpoint_cancel_action(
+                driver->verified_driver.client_driver_client,
+                cfg,
+                frame,
+                retry_action);
+            return driver_fail(driver, "endpoint no longer needs input after read retry");
+          }
+          result = TLS13_Impl_Client_Endpoint_client_run_buffered_network_action(
               driver->verified_driver.client_driver_client,
-              action.case_EndpointNeedInput,
-              driver->verified_driver.client_driver_raw,
-              total_len,
-              driver->verified_driver.client_driver_network_out,
-              TLS13_CLIENT_NETWORK_OUT_CAP);
+              cfg,
+              frame,
+              driver->channel,
+              retry_action.case_EndpointNeedInput,
+              total_len);
         }
-        TLS13_Impl_Client_Endpoint_client_network_io nio =
-            (TLS13_Impl_Client_Endpoint_client_network_io){
-                .client_nio_input = driver->verified_driver.client_driver_raw,
-                .client_nio_input_len = total_len,
-                .client_nio_output =
-                    driver->verified_driver.client_driver_network_out,
-                .client_nio_output_len = TLS13_CLIENT_NETWORK_OUT_CAP,
-            };
-        TLS13_Impl_Client_Endpoint_client_finish_network_action(
-            driver->verified_driver.client_driver_client,
-            cfg,
-            frame,
-            action.case_EndpointNeedInput,
-            result,
-            total_len);
-        TLS13_Impl_Client_Endpoint_client_finish_network_io(
-            driver->verified_driver.client_driver_client,
-            driver->channel,
-            frame,
-            nio,
-            result);
         driver_trace(
             "client network status=%u consumed=%zu produced=%zu app=%zu",
             (unsigned)result.process_status,
@@ -525,7 +509,8 @@ int tls13_client_driver_send_application_data(
       ev,
       local_frame,
       driver->verified_driver.client_driver_app_out,
-      TLS13_CLIENT_APP_OUT_CAP);
+      TLS13_CLIENT_APP_OUT_CAP,
+      false);
 }
 
 int tls13_client_driver_receive_application_data(
@@ -578,7 +563,8 @@ int tls13_client_driver_close(tls13_client_driver *driver, bool wait_for_peer) {
       ev,
       local_frame,
       driver->verified_driver.client_driver_app_out,
-      TLS13_CLIENT_APP_OUT_CAP);
+      TLS13_CLIENT_APP_OUT_CAP,
+      false);
   if (rc == 0 && wait_for_peer) {
     rc = client_endpoint_run(
         driver,

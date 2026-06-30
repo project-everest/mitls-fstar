@@ -20,6 +20,7 @@ module CW = TLS13.Impl.CanonicalWire
 module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
 module PE = Common.ProtocolEndpoint
+module SC = TLS13.Impl.Serializer.Common
 module Seq = FStar.Seq
 module S = TLS13.Impl.Server
 module SQueries = TLS13.Impl.Server.CanonicalQueries
@@ -1539,6 +1540,313 @@ ensures server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.re
   fold (server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1))
 }
 
+fn server_run_buffered_network_action
+  (srv:SP.canonical_server)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:server_endpoint_frame)
+  (ch:TCP.channel)
+  (network_frame:SP.tls_server_network_bridge_frame)
+  (input_len:SZ.t)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+requires
+  SP.server_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st) **
+  server_endpoint_action_frame
+    srv
+    cfg
+    frame
+    (Ghost.reveal st)
+    (PE.EndpointNeedInput network_frame) **
+  server_endpoint_io_ready
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st) **
+  pure (SZ.v input_len <= SZ.v frame.server_ep_raw_len)
+returns result:CPI.process_result
+ensures
+  exists* (received1:Ghost.erased B.bytes)
+          (sent1:Ghost.erased B.bytes)
+          (st1:Ghost.erased CS.connection_state).
+    SP.server_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1) **
+    server_endpoint_frame_ready
+      srv
+      cfg
+      frame
+      (Ghost.reveal st1) **
+    server_endpoint_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+{
+  unfold (server_endpoint_io_ready srv ch frame (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
+  with raw_received raw_bytes network_out_bytes. _;
+  V.to_array_pts_to frame.server_ep_raw;
+  V.to_array_pts_to frame.server_ep_network_out;
+  let input_vec = V.alloc 0uy input_len;
+  V.to_array_pts_to input_vec;
+  SC.copy_array_slice_to_array
+    (V.vec_to_array frame.server_ep_raw)
+    frame.server_ep_raw_len
+    0sz
+    input_len
+    (V.vec_to_array input_vec)
+    input_len
+    0sz;
+  let inpute = Ghost.hide (
+    Seq.append
+      (CL.raw_slice (Seq.create (SZ.v input_len) 0uy) (SZ.v 0sz) (SZ.v 0sz))
+      (Seq.append
+        (CL.raw_slice raw_bytes (SZ.v 0sz) (SZ.v 0sz + SZ.v input_len))
+        (CL.raw_slice
+          (Seq.create (SZ.v input_len) 0uy)
+          (SZ.v 0sz + SZ.v input_len)
+          (SZ.v input_len))));
+  assert (pure (B.length (Ghost.reveal inpute) == SZ.v input_len));
+  let old_oute = Ghost.hide network_out_bytes;
+  let raw_receivede = Ghost.hide raw_received;
+  let nio = {
+    server_nio_input = V.vec_to_array input_vec;
+    server_nio_input_len = input_len;
+    server_nio_output = V.vec_to_array frame.server_ep_network_out;
+    server_nio_output_len = frame.server_ep_network_out_len;
+    server_nio_input_contents = inpute;
+    server_nio_old_output = old_oute;
+    server_nio_raw_received = raw_receivede;
+  };
+  rewrite
+    (TCP.is_channel ch raw_received (Ghost.reveal sent))
+    as
+    (TCP.is_channel ch (Ghost.reveal nio.server_nio_raw_received) (Ghost.reveal sent));
+  unfold (server_endpoint_action_frame srv cfg frame (Ghost.reveal st) (PE.EndpointNeedInput network_frame));
+  rewrite
+    (pts_to
+      (V.vec_to_array input_vec)
+      (Seq.append
+        (CL.raw_slice (Seq.create (SZ.v input_len) 0uy) (SZ.v 0sz) (SZ.v 0sz))
+        (Seq.append
+          (CL.raw_slice raw_bytes (SZ.v 0sz) (SZ.v 0sz + SZ.v input_len))
+          (CL.raw_slice
+            (Seq.create (SZ.v input_len) 0uy)
+            (SZ.v 0sz + SZ.v input_len)
+            (SZ.v input_len)))))
+    as
+    (pts_to (server_network_input nio) (Ghost.reveal (server_network_input_contents nio)));
+  rewrite
+    (pts_to (V.vec_to_array frame.server_ep_network_out) network_out_bytes)
+    as
+    (pts_to (server_network_output nio) (Ghost.reveal (server_network_old_output nio)));
+  fold (CQ.network_buffers
+    (server_network_input nio)
+    (server_network_input_len nio)
+    (server_network_output nio)
+    (server_network_output_len nio)
+    (Ghost.reveal (server_network_input_contents nio))
+    (Ghost.reveal (server_network_old_output nio)));
+  SQueries.prepare_server_next_action_network
+    srv
+    cfg
+    frame.server_ep_query
+    network_frame
+    (server_network_input nio)
+    (server_network_input_len nio)
+    (server_network_output nio)
+    (server_network_output_len nio)
+    st
+    (server_network_input_contents nio)
+    (server_network_old_output nio);
+  unfold (CQ.network_buffers
+    (server_network_input nio)
+    (server_network_input_len nio)
+    (server_network_output nio)
+    (server_network_output_len nio)
+    (Ghost.reveal (server_network_input_contents nio))
+    (Ghost.reveal (server_network_old_output nio)));
+  fold (PE.network_buffers
+    (server_network_input nio)
+    (server_network_input_len nio)
+    (server_network_output nio)
+    (server_network_output_len nio)
+    (Ghost.reveal (server_network_input_contents nio))
+    (Ghost.reveal (server_network_old_output nio)));
+  fold (server_endpoint_network_continuation srv cfg frame (Ghost.reveal st) network_frame);
+  let result =
+    SP.server_process_network
+      srv
+      network_frame
+      (server_network_input nio)
+      (server_network_input_len nio)
+      (server_network_output nio)
+      (server_network_output_len nio)
+      received
+      sent
+      st
+      (server_network_input_contents nio)
+      (server_network_old_output nio);
+  unfold (SP.server_process_network_post
+    srv
+    network_frame
+    (server_network_input nio)
+    (server_network_input_len nio)
+    (server_network_output nio)
+    (server_network_output_len nio)
+    received
+    sent
+    st
+    (server_network_input_contents nio)
+    (server_network_old_output nio)
+    result);
+  with received1 sent1 st1 out_contents consumed wire_outputs local_outputs.
+  assert (
+    SP.server_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1) **
+    SP.server_network_bridge_frame_post
+      network_frame
+      result
+      (Ghost.reveal (server_network_input_contents nio))
+      (server_network_input_len nio)
+      (Ghost.reveal (server_network_old_output nio))
+      out_contents
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      consumed
+      wire_outputs
+      local_outputs);
+  let out_contentse = Ghost.hide out_contents;
+  let consumede = Ghost.hide consumed;
+  let wire_outputse = Ghost.hide wire_outputs;
+  let local_outputse = Ghost.hide local_outputs;
+  rewrite
+    (SP.server_network_bridge_frame_post
+      network_frame
+      result
+      (Ghost.reveal (server_network_input_contents nio))
+      (server_network_input_len nio)
+      (Ghost.reveal (server_network_old_output nio))
+      out_contents
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      consumed
+      wire_outputs
+      local_outputs)
+    as
+    (SP.server_network_bridge_frame_post
+      network_frame
+      result
+      (Ghost.reveal (server_network_input_contents nio))
+      (server_network_input_len nio)
+      (Ghost.reveal (server_network_old_output nio))
+      (Ghost.reveal out_contentse)
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      (Ghost.reveal consumede)
+      (Ghost.reveal wire_outputse)
+      (Ghost.reveal local_outputse));
+  server_finish_network_action
+    srv
+    cfg
+    frame
+    network_frame
+    result
+    (server_network_input_contents nio)
+    (server_network_input_len nio)
+    (server_network_old_output nio)
+    out_contentse
+    st
+    st1
+    consumede
+    wire_outputse
+    local_outputse;
+  rewrite
+    (pts_to (server_network_output nio) out_contents)
+    as
+    (pts_to (server_network_output nio) (Ghost.reveal out_contentse));
+  CPI.lemma_network_process_sent_output_prefix
+    (SP.server_protocol_implementation.CPI.pi_system srv)
+    (Ghost.reveal (server_network_input_contents nio))
+    (server_network_input_len nio)
+    (Ghost.reveal (server_network_old_output nio))
+    (Ghost.reveal out_contentse)
+    (server_network_output_len nio)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)
+    result
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1)
+    (Ghost.reveal consumede)
+    (Ghost.reveal wire_outputse)
+    (Ghost.reveal local_outputse);
+  let nwritten = TCP.write ch (server_network_output nio) result.CPI.process_produced_len;
+  assert (pure (nwritten == result.CPI.process_produced_len));
+  rewrite
+    (TCP.is_channel
+      ch
+      (Ghost.reveal nio.server_nio_raw_received)
+      (Seq.append
+        (Ghost.reveal sent)
+        (if SZ.v nwritten <= Seq.length (Ghost.reveal out_contentse)
+         then Seq.slice (Ghost.reveal out_contentse) 0 (SZ.v nwritten)
+         else Seq.create 0 0uy)))
+    as
+    (TCP.is_channel
+      ch
+      (Ghost.reveal nio.server_nio_raw_received)
+      (Seq.append
+        (Ghost.reveal sent)
+        (if SZ.v result.CPI.process_produced_len <= Seq.length (Ghost.reveal out_contentse)
+         then Seq.slice (Ghost.reveal out_contentse) 0 (SZ.v result.CPI.process_produced_len)
+         else Seq.create 0 0uy)));
+  assert (pure (Seq.equal
+    (Ghost.reveal sent1)
+    (Seq.append
+      (Ghost.reveal sent)
+      (CPI.output_prefix (Ghost.reveal out_contentse) result.CPI.process_produced_len))));
+  rewrite
+    (TCP.is_channel
+      ch
+      (Ghost.reveal nio.server_nio_raw_received)
+      (Seq.append
+        (Ghost.reveal sent)
+        (if SZ.v result.CPI.process_produced_len <= Seq.length (Ghost.reveal out_contentse)
+         then Seq.slice (Ghost.reveal out_contentse) 0 (SZ.v result.CPI.process_produced_len)
+         else Seq.create 0 0uy)))
+    as
+    (TCP.is_channel ch (Ghost.reveal nio.server_nio_raw_received) (Ghost.reveal sent1));
+  rewrite
+    (pts_to (server_network_output nio) (Ghost.reveal out_contentse))
+    as
+    (pts_to (V.vec_to_array frame.server_ep_network_out) (Ghost.reveal out_contentse));
+  rewrite
+    (pts_to (server_network_input nio) (Ghost.reveal (server_network_input_contents nio)))
+    as
+    (pts_to (V.vec_to_array input_vec) (Ghost.reveal (server_network_input_contents nio)));
+  V.to_vec_pts_to input_vec;
+  V.free input_vec;
+  V.to_vec_pts_to frame.server_ep_raw;
+  V.to_vec_pts_to frame.server_ep_network_out;
+  fold (server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1));
+  result
+}
+
 noeq
 type server_local_io = {
   server_lio_output: array U8.t;
@@ -2010,6 +2318,343 @@ ensures server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.re
     (pts_to (V.vec_to_array frame.server_ep_network_out) (Ghost.reveal out_contents));
   V.to_vec_pts_to frame.server_ep_network_out;
   fold (server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1))
+}
+
+let server_api_local_action_ready
+  (_srv:SP.canonical_server)
+  (ch:TCP.channel)
+  (frame:server_endpoint_frame)
+  (_received:B.bytes)
+  (sent:B.bytes)
+  (st:CS.connection_state)
+  (ev:CTypes.server_local_event)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  : slprop =
+  exists* raw_received raw_bytes network_out_bytes.
+    TCP.is_channel ch raw_received sent **
+    V.pts_to frame.server_ep_raw #1.0R raw_bytes **
+    V.pts_to frame.server_ep_network_out #1.0R network_out_bytes **
+    SP.server_local_bridge_frame_pre
+      ev
+      local_frame
+      st
+      (V.vec_to_array frame.server_ep_network_out)
+      frame.server_ep_network_out_len
+      network_out_bytes **
+    pure (
+      B.length raw_bytes == SZ.v frame.server_ep_raw_len /\
+      B.length network_out_bytes == SZ.v frame.server_ep_network_out_len)
+
+fn server_run_api_local_action
+  (srv:SP.canonical_server)
+  (frame:server_endpoint_frame)
+  (ch:TCP.channel)
+  (ev:CTypes.server_local_event)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+requires
+  SP.server_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st) **
+  server_api_local_action_ready
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)
+    ev
+    local_frame
+returns result:CPI.process_result
+ensures
+  exists* (received1:Ghost.erased B.bytes)
+          (sent1:Ghost.erased B.bytes)
+          (st1:Ghost.erased CS.connection_state)
+          (old_out:Ghost.erased B.bytes)
+          (out_contents:Ghost.erased B.bytes)
+          (wire_outputs:Ghost.erased (list CW.wire_message))
+          (local_outputs:Ghost.erased (list CTypes.local_output)).
+    SP.server_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1) **
+    server_endpoint_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1) **
+    SP.server_local_bridge_frame_post
+      ev
+      local_frame
+      result
+      (Ghost.reveal old_out)
+      (Ghost.reveal out_contents)
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      (Ghost.reveal wire_outputs)
+      (Ghost.reveal local_outputs)
+{
+  unfold (server_api_local_action_ready
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)
+    ev
+    local_frame);
+  with raw_received raw_bytes network_out_bytes. _;
+  let rawe = Ghost.hide raw_received;
+  let old_oute = Ghost.hide network_out_bytes;
+  V.to_array_pts_to frame.server_ep_network_out;
+  let lio = {
+    server_lio_output = V.vec_to_array frame.server_ep_network_out;
+    server_lio_output_len = frame.server_ep_network_out_len;
+    server_lio_old_output = old_oute;
+    server_lio_raw_received = rawe;
+  };
+  rewrite
+    (TCP.is_channel ch raw_received (Ghost.reveal sent))
+    as
+    (TCP.is_channel ch (Ghost.reveal lio.server_lio_raw_received) (Ghost.reveal sent));
+  fold (server_local_io_continuation
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)
+    ev
+    lio);
+  rewrite
+    (pts_to (V.vec_to_array frame.server_ep_network_out) network_out_bytes)
+    as
+    (pts_to (server_local_output lio) (Ghost.reveal (server_local_old_output lio)));
+  let result =
+    SP.server_process_local
+      srv
+      ev
+      local_frame
+      (server_local_output lio)
+      (server_local_output_len lio)
+      received
+      sent
+      st
+      (server_local_old_output lio);
+  with received1 sent1 st1 out_contents wire_outputs local_outputs.
+  assert (
+    SP.server_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1) **
+    SP.server_local_bridge_frame_post
+      ev
+      local_frame
+      result
+      (Ghost.reveal (server_local_old_output lio))
+      out_contents
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs);
+  let out_contentse = Ghost.hide out_contents;
+  let wire_outputse = Ghost.hide wire_outputs;
+  let local_outputse = Ghost.hide local_outputs;
+  rewrite
+    (SP.server_local_bridge_frame_post
+      ev
+      local_frame
+      result
+      (Ghost.reveal (server_local_old_output lio))
+      out_contents
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs)
+    as
+    (SP.server_local_bridge_frame_post
+      ev
+      local_frame
+      result
+      (Ghost.reveal (server_local_old_output lio))
+      (Ghost.reveal out_contentse)
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      (Ghost.reveal wire_outputse)
+      (Ghost.reveal local_outputse));
+  server_finish_local_io
+    srv
+    ch
+    frame
+    lio
+    ev
+    result
+    received
+    sent
+    st
+    received1
+    sent1
+    st1
+    out_contentse
+    wire_outputse
+    local_outputse;
+  result
+}
+
+fn server_run_scheduled_local_action
+  (srv:SP.canonical_server)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:server_endpoint_frame)
+  (ch:TCP.channel)
+  (ev:CTypes.server_local_event)
+  (local_frame:SP.tls_server_local_bridge_frame)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+requires
+  SP.server_invariant
+    srv
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st) **
+  server_endpoint_action_frame
+    srv
+    cfg
+    frame
+    (Ghost.reveal st)
+    (PE.EndpointLocal ev local_frame) **
+  server_endpoint_io_ready
+    srv
+    ch
+    frame
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)
+returns result:CPI.process_result
+ensures
+  exists* (received1:Ghost.erased B.bytes)
+          (sent1:Ghost.erased B.bytes)
+          (st1:Ghost.erased CS.connection_state).
+    SP.server_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1) **
+    server_endpoint_frame_ready
+      srv
+      cfg
+      frame
+      (Ghost.reveal st1) **
+    server_endpoint_io_ready
+      srv
+      ch
+      frame
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+{
+  let lio =
+    server_prepare_local
+      srv
+      cfg
+      frame
+      ch
+      ev
+      local_frame
+      received
+      sent
+      st;
+  let result =
+    SP.server_process_local
+      srv
+      ev
+      local_frame
+      (server_local_output lio)
+      (server_local_output_len lio)
+      received
+      sent
+      st
+      (server_local_old_output lio);
+  with received1 sent1 st1 out_contents wire_outputs local_outputs.
+  assert (
+    SP.server_invariant
+      srv
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1) **
+    SP.server_local_bridge_frame_post
+      ev
+      local_frame
+      result
+      (Ghost.reveal (server_local_old_output lio))
+      out_contents
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs);
+  let out_contentse = Ghost.hide out_contents;
+  let wire_outputse = Ghost.hide wire_outputs;
+  let local_outputse = Ghost.hide local_outputs;
+  rewrite
+    (SP.server_local_bridge_frame_post
+      ev
+      local_frame
+      result
+      (Ghost.reveal (server_local_old_output lio))
+      out_contents
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs)
+    as
+    (SP.server_local_bridge_frame_post
+      ev
+      local_frame
+      result
+      (Ghost.reveal (server_local_old_output lio))
+      (Ghost.reveal out_contentse)
+      (Ghost.reveal st)
+      (Ghost.reveal st1)
+      (Ghost.reveal wire_outputse)
+      (Ghost.reveal local_outputse));
+  server_finish_local_action
+    srv
+    cfg
+    frame
+    ev
+    local_frame
+    result
+    (server_local_old_output lio)
+    out_contentse
+    st
+    st1
+    wire_outputse
+    local_outputse;
+  server_finish_local_io
+    srv
+    ch
+    frame
+    lio
+    ev
+    result
+    received
+    sent
+    st
+    received1
+    sent1
+    st1
+    out_contentse
+    wire_outputse
+    local_outputse;
+  result
 }
 
 noextract
