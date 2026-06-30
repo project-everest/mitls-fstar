@@ -183,16 +183,15 @@ static int server_compact_input(
         result.process_consumed_len,
         total_len);
   }
-  size_t remaining = total_len - result.process_consumed_len;
-  if (remaining != 0u && result.process_consumed_len != 0u) {
-    memmove(
-        driver->verified_driver.server_driver_raw,
-        driver->verified_driver.server_driver_raw + result.process_consumed_len,
-        remaining);
+  if (driver->verified_driver.server_driver_buffered_len == NULL) {
+    return driver_fail(driver, "endpoint buffered-length cell is missing");
   }
-  if (driver->verified_driver.server_driver_buffered_len != NULL) {
-    *driver->verified_driver.server_driver_buffered_len = remaining;
-  }
+  (void)TLS13_Impl_Server_Endpoint_server_compact_buffered_input(
+      driver->verified_driver.server_driver_raw,
+      TLS13_SERVER_RX_CAP,
+      driver->verified_driver.server_driver_buffered_len,
+      total_len,
+      result.process_consumed_len);
   return 0;
 }
 

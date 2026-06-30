@@ -20,6 +20,8 @@ module CW = TLS13.Impl.CanonicalWire
 module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
 module PE = Common.ProtocolEndpoint
+module Box = Pulse.Lib.Box
+module R = Pulse.Lib.Reference
 module SC = TLS13.Impl.Serializer.Common
 module Seq = FStar.Seq
 module S = TLS13.Impl.Server
@@ -2318,6 +2320,171 @@ ensures server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.re
     (pts_to (V.vec_to_array frame.server_ep_network_out) (Ghost.reveal out_contents));
   V.to_vec_pts_to frame.server_ep_network_out;
   fold (server_endpoint_io_ready srv ch frame (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1))
+}
+
+let server_pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
+  if SZ.lte consumed_len buffered_len
+  then SZ.sub buffered_len consumed_len
+  else 0sz
+
+fn server_compact_buffer_suffix
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (consumed_len:SZ.t)
+  requires pts_to raw 'raw_bytes **
+           pure (B.length 'raw_bytes == SZ.v raw_capacity /\
+                 SZ.v consumed_len <= SZ.v buffered_len /\
+                 SZ.v buffered_len <= SZ.v raw_capacity)
+  returns new_len:SZ.t
+  ensures exists* raw_after.
+           pts_to raw raw_after **
+           pure (B.length raw_after == SZ.v raw_capacity /\
+                 B.length (Ghost.reveal 'raw_bytes) == SZ.v raw_capacity /\
+                 SZ.v consumed_len <= SZ.v buffered_len /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 new_len == server_pending_after_consumed buffered_len consumed_len /\
+                 SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
+                 SZ.v new_len <= SZ.v buffered_len /\
+                 Seq.equal
+                   (Seq.slice raw_after 0 (SZ.v new_len))
+                   (Seq.slice (Ghost.reveal 'raw_bytes)
+                     (SZ.v consumed_len)
+                     (SZ.v buffered_len)))
+{
+  let new_len = SZ.sub buffered_len consumed_len;
+  assert (pure (new_len == server_pending_after_consumed buffered_len consumed_len));
+  assert (pure (SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len));
+  assert (pure (SZ.v new_len <= SZ.v buffered_len));
+  let no_shift = consumed_len = 0sz;
+  if no_shift {
+    assert (pure (new_len == buffered_len));
+    assert (pure (Seq.equal
+      (Seq.slice (Ghost.reveal 'raw_bytes) 0 (SZ.v new_len))
+      (Seq.slice (Ghost.reveal 'raw_bytes)
+        (SZ.v consumed_len)
+        (SZ.v buffered_len))));
+    new_len
+  } else {
+    let mut i = 0sz;
+    while ((R.read i) `SZ.lt` new_len)
+      invariant live i
+      invariant exists* raw_loop.
+        pts_to raw raw_loop **
+        pure (B.length raw_loop == SZ.v raw_capacity /\
+              SZ.v (R.read i) <= SZ.v new_len /\
+              SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len /\
+              SZ.v new_len <= SZ.v buffered_len /\
+              SZ.v consumed_len <= SZ.v buffered_len /\
+              SZ.v buffered_len <= SZ.v raw_capacity /\
+              (forall (k:nat). k < SZ.v (R.read i) ==>
+                Seq.index raw_loop k ==
+                Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)) /\
+              (forall (k:nat). SZ.v (R.read i) <= k /\ k < SZ.v buffered_len ==>
+                Seq.index raw_loop k ==
+                Seq.index (Ghost.reveal 'raw_bytes) k))
+    {
+      let vi = R.read i;
+      assert (pure (SZ.v vi < SZ.v new_len));
+      assert (pure (SZ.v vi + SZ.v consumed_len < SZ.v buffered_len));
+      assert (pure (SZ.v vi + SZ.v consumed_len < SZ.v raw_capacity));
+      SZ.fits_lte (SZ.v vi + SZ.v consumed_len) (SZ.v raw_capacity);
+      let src_idx = vi `SZ.add` consumed_len;
+      assert (pure (SZ.v src_idx < SZ.v raw_capacity));
+      with raw_before_read.
+        assert (pts_to raw raw_before_read);
+      assert (pure (B.length raw_before_read == SZ.v raw_capacity));
+      let b = raw.(src_idx);
+      assert (pure (b == Seq.index (Ghost.reveal 'raw_bytes)
+        (SZ.v vi + SZ.v consumed_len)));
+      assert (pure (SZ.v vi < SZ.v raw_capacity));
+      raw.(vi) <- b;
+      with raw_after_write.
+        assert (pts_to raw raw_after_write);
+      assert (pure (B.length raw_after_write == SZ.v raw_capacity));
+      assert (pure (Seq.index raw_after_write (SZ.v vi) == b));
+      assert (pure (forall (k:nat). k < SZ.v vi ==>
+        Seq.index raw_after_write k == Seq.index raw_before_read k));
+      assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
+        Seq.index raw_after_write k == Seq.index raw_before_read k));
+      assert (pure (forall (k:nat). k < SZ.v vi ==>
+        Seq.index raw_after_write k ==
+        Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
+      assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
+        Seq.index raw_after_write k ==
+        Seq.index (Ghost.reveal 'raw_bytes) k));
+      let next = vi `SZ.add` 1sz;
+      R.write i next
+    };
+    with raw_final.
+      assert (pts_to raw raw_final);
+    assert (pure (SZ.v (R.read i) == SZ.v new_len));
+    assert (pure (forall (k:nat). k < SZ.v new_len ==>
+      Seq.index raw_final k ==
+      Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
+    assert (pure (Seq.length (Seq.slice raw_final 0 (SZ.v new_len)) == SZ.v new_len));
+    Seq.lemma_len_slice
+      (Ghost.reveal 'raw_bytes)
+      (SZ.v consumed_len)
+      (SZ.v buffered_len);
+    assert (pure (Seq.length
+      (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len))
+      == SZ.v new_len));
+    assert (pure (forall (k:nat). k < SZ.v new_len ==>
+      Seq.index (Seq.slice raw_final 0 (SZ.v new_len)) k ==
+      Seq.index raw_final k));
+    assert (pure (forall (k:nat). k < SZ.v new_len ==>
+      Seq.index
+        (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len))
+        k ==
+      Seq.index (Ghost.reveal 'raw_bytes) (SZ.v consumed_len + k)));
+    assert (pure (forall (k:nat). k < SZ.v new_len ==>
+      Seq.index (Seq.slice raw_final 0 (SZ.v new_len)) k ==
+      Seq.index
+        (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len))
+        k));
+    Seq.lemma_eq_intro
+      (Seq.slice raw_final 0 (SZ.v new_len))
+      (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len));
+    new_len
+  }
+}
+
+fn server_compact_buffered_input
+  (raw:V.vec U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len_ref:Box.box SZ.t)
+  (buffered_len:SZ.t)
+  (consumed_len:SZ.t)
+  requires V.pts_to raw #1.0R 'raw_bytes **
+           Box.pts_to buffered_len_ref 'old_buffered_len **
+           pure (B.length 'raw_bytes == SZ.v raw_capacity /\
+                 SZ.v consumed_len <= SZ.v buffered_len /\
+                 SZ.v buffered_len <= SZ.v raw_capacity)
+  returns new_len:SZ.t
+  ensures exists* raw_after.
+           V.pts_to raw #1.0R raw_after **
+           Box.pts_to buffered_len_ref new_len **
+           pure (B.length raw_after == SZ.v raw_capacity /\
+                 new_len == server_pending_after_consumed buffered_len consumed_len /\
+                 SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
+                 SZ.v new_len <= SZ.v buffered_len)
+{
+  V.to_array_pts_to raw;
+  let new_len =
+    server_compact_buffer_suffix
+      (V.vec_to_array raw)
+      raw_capacity
+      buffered_len
+      consumed_len;
+  with raw_after.
+    assert (pts_to (V.vec_to_array raw) raw_after);
+  assert (pure (B.length raw_after == SZ.v raw_capacity));
+  assert (pure (SZ.v new_len <= B.length raw_after));
+  assert (pure (SZ.v buffered_len <= B.length (Ghost.reveal 'raw_bytes)));
+  Box.(buffered_len_ref := new_len);
+  V.to_vec_pts_to raw;
+  new_len
 }
 
 let server_api_local_action_ready
