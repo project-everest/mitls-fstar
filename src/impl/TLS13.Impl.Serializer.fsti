@@ -27,6 +27,7 @@ module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GCS = TLS13.Wire.Generated.CipherSuite
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
@@ -69,6 +70,8 @@ fn serialize_client_hello_from_start
   (#rnd: erased B.bytes)
   (#sni: erased B.bytes)
   (#ks: erased B.bytes)
+  (#cs: erased GCH.clientHello_cipher_suites)
+  (#sa: erased GECH.extensionClientHello_extension_data_signature_algorithms)
   (start_random: V.vec U8.t)
   (start_server_name: V.vec U8.t)
   (start_server_name_len: box SZ.t)
@@ -161,9 +164,12 @@ fn serialize_client_hello_from_start
                 Seq.length (Ghost.reveal rnd) == 32 /\
                 Seq.length (Ghost.reveal ks) == 32 /\
                 1 <= Seq.length (Ghost.reveal sni) /\
-                Seq.length (Ghost.reveal sni) <= 65461 /\
+                Seq.length (Ghost.reveal sni) <= 255 /\
+                FStar.List.Tot.length (Ghost.reveal cs) <= 16 /\
+                FStar.List.Tot.length (Ghost.reveal sa) <= 16 /\
                 Ghost.reveal ch ==
-                  SerH.poc_canonical_ch (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks))
+                  SerH.poc_canonical_ch (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks)
+                    (Ghost.reveal cs) (Ghost.reveal sa))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* random server_name server_name_len key_share
                  cipher_suites cipher_suites_len
