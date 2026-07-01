@@ -11,7 +11,6 @@ module CS = TLS13.Spec.ConnectionState
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
-module WFL = TLS13.Spec.WireFormatLemmas
 
 noextract
 let endpoint_transport_logs_exact
