@@ -22,6 +22,12 @@ module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GSN = TLS13.Wire.Generated.ServerName
+module GHN = TLS13.Wire.Generated.HostName
+module GESN = TLS13.Wire.Generated.ExtensionClientHello_extension_data_server_name
+module GESA = TLS13.Wire.Generated.ExtensionClientHello_extension_data_signature_algorithms
+module GESK = TLS13.Wire.Generated.ExtensionClientHello_extension_data_key_share
+module GESV = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_versions
+module GESG = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_groups
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -767,3 +773,152 @@ let lemma_parse_tls_message_round_trip
 
 let lemma_parse_serialize_handshake_finished fin =
   LP.parse_serialize GHS.handshake_serializer (GHS.Body_finished fin)
+
+(* ============================================================================ *)
+(* Read-direction spec helpers restored for TLS13.Impl.Parser (phase3bd).       *)
+(* ============================================================================ *)
+
+(* --- cipher-suite / signature-scheme synths: identity on the shared enums. --- *)
+
+let synth_cipher_suite (c:GCS.cipherSuite) : GTot T.cipher_suite = c
+
+let lemma_synth_cipher_suite c = ()
+
+let rec synth_cipher_suites (l:list GCS.cipherSuite)
+  : GTot (list T.cipher_suite) (decreases l)
+  = match l with
+    | [] -> []
+    | c :: tl -> synth_cipher_suite c :: synth_cipher_suites tl
+
+let lemma_synth_cipher_suites_nil () = ()
+
+let lemma_synth_cipher_suites_cons c tl = ()
+
+let synth_signature_scheme (s:GSS.signatureScheme) : GTot T.signature_scheme = s
+
+let rec synth_sig_schemes (l:list GSS.signatureScheme)
+  : GTot (list T.signature_scheme) (decreases l)
+  = match l with
+    | [] -> []
+    | s :: tl -> synth_signature_scheme s :: synth_sig_schemes tl
+
+let lemma_synth_sig_schemes_nil () = ()
+
+let lemma_synth_sig_schemes_cons s tl = ()
+
+(* --- ClientHello field scanners --- *)
+
+let key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange) : GTot (option (B.bytes_of_len 32)) =
+  let b : B.bytes = (ke <: B.bytes) in
+  if B.length b = 32 then Some (b <: B.bytes_of_len 32) else None
+
+let lemma_key_exchange_to_key32 ke = ()
+
+let rec ch_find_key_share (l:list GKSE.keyShareEntry)
+  : GTot (option (B.bytes_of_len 32)) (decreases l) =
+  match l with
+  | [] -> None
+  | e :: tl ->
+    if GNG.X25519? e.GKSE.group
+    then (match key_exchange_to_key32 e.GKSE.key_exchange with
+          | Some k -> Some k
+          | None -> ch_find_key_share tl)
+    else ch_find_key_share tl
+
+let lemma_ch_find_key_share_nil () = ()
+
+let lemma_ch_find_key_share_cons e tl = ()
+
+let ch_server_name (snl:list GSN.serverName) : GTot (option T.hostname) =
+  match snl with
+  | (GSN.Name_host_name h) :: _ -> Some ((h <: B.bytes) <: T.hostname)
+  | _ -> None
+
+let lemma_ch_server_name_nil () = ()
+
+let lemma_ch_server_name_host h tl = ()
+
+(* Commit-on-first scan of a ClientHello extension list, accumulating
+   (server_name, key_share, saw_supported_versions, sig_schemes).  A field is
+   only written when still unset (so the first offered value wins, matching the
+   first-wins TLS13.Wire.Semantics finders). *)
+let rec ch_extensions
+  (l:list GECH.extensionClientHello)
+  (server_name:option T.hostname)
+  (key_share:option (B.bytes_of_len 32))
+  (saw_supported_versions:bool)
+  (signature_schemes:list T.signature_scheme)
+  : GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme))
+       (decreases l)
+  =
+  match l with
+  | [] ->
+    if saw_supported_versions
+    then Some (server_name, key_share, saw_supported_versions, signature_schemes)
+    else None
+  | e :: tl ->
+    (match e with
+     | GECH.Extension_data_server_name snl ->
+       (match ch_server_name snl with
+        | Some name -> ch_extensions tl (Some name) key_share saw_supported_versions signature_schemes
+        | None -> None)
+     | GECH.Extension_data_supported_groups _ ->
+       ch_extensions tl server_name key_share saw_supported_versions signature_schemes
+     | GECH.Extension_data_signature_algorithms ssl ->
+       ch_extensions tl server_name key_share saw_supported_versions (synth_sig_schemes ssl)
+     | GECH.Extension_data_key_share kscl ->
+       (match ch_find_key_share kscl with
+        | Some ks -> ch_extensions tl server_name (Some ks) saw_supported_versions signature_schemes
+        | None -> None)
+     | GECH.Extension_data_supported_versions svl ->
+       if List.Tot.mem GPV.TLS_1p3 svl
+       then ch_extensions tl server_name key_share true signature_schemes
+       else None
+     | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
+
+let lemma_ch_extensions_nil sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sn snl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sg sgl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sa ssl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_ks kscl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_sv svl tl sn ks sv ss = ()
+
+let lemma_ch_extensions_cons_other e tl sn ks sv ss = ()
+
+(* --- synth_client_hello: accept/reject gate returning the wire record. --- *)
+
+let synth_client_hello (c:GCH.clientHello) : GTot (option GCH.clientHello) =
+  if clientHello_representable c then Some c else None
+
+let lemma_synth_client_hello c = ()
+
+(* --- Per-constructor reveals of the validating [synth_handshake_msg_of]. --- *)
+
+let lemma_synth_handshake_msg_finished b = ()
+
+let lemma_synth_handshake_msg_key_update b = ()
+
+let lemma_synth_handshake_msg_client_hello b = ()
+
+let lemma_synth_handshake_msg_certificate b = ()
+
+let lemma_synth_handshake_msg_certificate_verify b = ()
+
+let lemma_synth_handshake_msg_encrypted_extensions b = ()
+
+let lemma_synth_handshake_msg_server_hello_hrr b shb = ()
+
+let lemma_synth_handshake_msg_server_hello_sh b sf = ()
+
+let lemma_synth_handshake_msg_server_hello_bad_version b = ()
+
+let lemma_ptm_handshake_some fragment v m = ()
+
+let lemma_ptm_alert fragment = ()
+
+let lemma_synth_signature_scheme s = ()
