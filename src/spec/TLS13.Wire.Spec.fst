@@ -29,6 +29,8 @@ module SP = FStar.Seq.Properties
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
+module Sem = TLS13.Wire.Semantics
+module L = FStar.List.Tot
 
 let byte (n:nat) : B.byte = U8.uint_to_t (n % 256)
 
@@ -163,23 +165,94 @@ let lemma_parse_key_update_def input =
   if B.length input = 5 then lemma_read_u24_one input else ()
 
 // Structural dispatch from a parsed QuackyDucky [handshake] record onto the high
-// [M.handshake_msg], which now carries the generated wire records directly.  No
-// field-level validation or body capture is performed: profile-relevant fields
-// are read via the TLS13.Wire.Semantics accessors and transcript exactness is the
-// generated parse/serialize round-trip (see lemma_parse_tls_message_round_trip).
+// [M.handshake_msg], which now carries the generated wire records directly.
+//
+// Phase 3b read-direction FIX: the dispatch is VALIDATING.  A parsed body maps to
+// [Some m] iff [m] is representable in the fixed-size impl-layer storage, i.e. it
+// satisfies EXACTLY the field-support conditions the TLS13.Impl.Messages
+// [is_valid_*] predicates enforce (stated over the TLS13.Wire.Semantics accessors
+// [Sem.*]).  A parseable-but-unsupported message (no X25519 key share, no/oversized
+// signature_algorithms, oversized certificate chain, ...) maps to [None] so that
+// the Parser's [.fsti] contract ([Some l -> is_valid l m /\ parse == Some m];
+// [None -> parse == None]) is satisfiable.  Profile-relevant fields are read via
+// the [Sem.*] accessors and transcript exactness is the generated parse/serialize
+// round-trip (see lemma_parse_tls_message_round_trip).
+//
 // A magic-random HelloRetryRequest is mapped to the dedicated M.HelloRetryRequest
 // arm (it is not a normal ServerHello); key_update / new_session_ticket are not
 // handshake messages in this profile and are rejected.
+//
+// NOTE the [max_alpn_len] bound (255) coincides numerically with
+// [M.client_hello_server_name_max_len]; both mirror the impl-layer storage maxima.
+
+// The total byte size of a certificate chain (sum of the raw DER blob lengths),
+// mirroring the contiguous layout the impl-layer certificate storage uses.
+let rec cert_chain_total_bytes (l:list (Seq.seq U8.t)) : GTot nat (decreases l) =
+  match l with
+  | [] -> 0
+  | c :: tl -> B.length c + cert_chain_total_bytes tl
+
+// A ClientHello is representable iff it offers an X25519 key share (32 bytes), a
+// signature_algorithms extension with <= 16 schemes, <= 16 cipher suites, and a
+// server_name (if any) of <= 255 bytes.  Matches is_valid_client_hello.
+let clientHello_representable (b:GCH.clientHello) : GTot bool =
+  (match Sem.clientHello_key_share_x25519 b with
+   | Some k -> B.length k = 32
+   | None -> false) &&
+  (match Sem.clientHello_sig_algs b with
+   | Some sas -> L.length sas <= M.client_hello_max_signature_schemes
+   | None -> false) &&
+  L.length (Sem.clientHello_cipher_suites b) <= M.client_hello_max_cipher_suites &&
+  (match Sem.clientHello_server_name b with
+   | Some sn -> B.length sn <= M.client_hello_server_name_max_len
+   | None -> true)
+
+// A (non-HRR) ServerHello is representable iff it selects an X25519 key share (32
+// bytes) and the CHACHA20_POLY1305_SHA256 cipher suite.  Matches
+// is_valid_server_hello (Sem.serverHello_random is always Some on this arm).
+let serverHello_representable (b:GSH.serverHello) : GTot bool =
+  (match Sem.serverHello_key_share_x25519 b with
+   | Some k -> B.length k = 32
+   | None -> false) &&
+  (match Sem.serverHello_cipher_suite b with
+   | Some cs -> cs = T.TLS_CHACHA20_POLY1305_SHA256
+   | None -> false)
+
+// EncryptedExtensions is representable iff its ALPN protocol name (if any) is <=
+// 255 bytes.  Matches is_valid_encrypted_extensions.
+let encryptedExtensions_representable (b:GEE.encryptedExtensions) : GTot bool =
+  (match Sem.encryptedExtensions_alpn b with
+   | Some a -> B.length a <= M.client_hello_server_name_max_len
+   | None -> true)
+
+// A Certificate is representable iff it carries <= 8 entries whose raw DER blobs
+// fit contiguously in the 32768-byte chain storage.  Matches
+// is_valid_certificate_msg (which lays the blobs out at contiguous offsets).
+let certificate_representable (b:GCert.certificate) : GTot bool =
+  L.length (Sem.certificate_entries b) <= M.certificate_chain_max_entries &&
+  cert_chain_total_bytes (Sem.certificate_entries b) <= M.certificate_chain_max_bytes
+
+// A CertificateVerify is representable iff its signature is <= 4096 bytes.
+// Matches is_valid_certificate_verify.
+let certificateVerify_representable (b:GCV.certificateVerify) : GTot bool =
+  B.length (Sem.certificateVerify_signature_bytes b) <= M.signature_max_len
+
 let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
   match h with
-  | GHS.Body_client_hello b -> Some (M.ClientHello b)
+  | GHS.Body_client_hello b ->
+    if clientHello_representable b then Some (M.ClientHello b) else None
   | GHS.Body_server_hello b ->
     (match b.GSH.body with
      | GSHB.HelloRetryRequest _ -> Some M.HelloRetryRequest
-     | _ -> Some (M.ServerHello b))
-  | GHS.Body_encrypted_extensions b -> Some (M.EncryptedExtensions b)
-  | GHS.Body_certificate b -> Some (M.Certificate (b <: GCert.certificate))
-  | GHS.Body_certificate_verify b -> Some (M.CertificateVerify b)
+     | GSHB.ServerHello_body_false _ ->
+       if serverHello_representable b then Some (M.ServerHello b) else None)
+  | GHS.Body_encrypted_extensions b ->
+    if encryptedExtensions_representable b then Some (M.EncryptedExtensions b) else None
+  | GHS.Body_certificate b ->
+    if certificate_representable (b <: GCert.certificate)
+    then Some (M.Certificate (b <: GCert.certificate)) else None
+  | GHS.Body_certificate_verify b ->
+    if certificateVerify_representable b then Some (M.CertificateVerify b) else None
   | GHS.Body_finished b -> Some (M.Finished b)
   | GHS.Body_key_update _ -> None
   | GHS.Body_new_session_ticket _ -> None
