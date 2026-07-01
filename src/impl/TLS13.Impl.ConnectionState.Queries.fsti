@@ -233,6 +233,7 @@ fn can_send_client_hello_runtime
 
 fn can_receive_server_hello
   (c:connection_state)
+  (fragment_len:SZ.t)
   (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
@@ -243,13 +244,20 @@ fn can_receive_server_hello
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloSent /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
-            // TODO-A1: Phase 4 deleted W.lemma_serialize_server_hello_len (and the
-            // per-message server_hello serializer/length lemmas).  For general
-            // generated serverHello records that carry arbitrary extensions, the
-            // bound `B.length (serialize_handshake (M.ServerHello sh)) <=
-            // max_server_hello_len` is no longer a theorem, so the transcript-length
-            // conjunct is dropped here.  The legal_event / control-state conjuncts
-            // below remain faithful.
+            // Phase 4 deleted W.lemma_serialize_server_hello_len, so
+            // `B.length (serialize_handshake (M.ServerHello sh)) <=
+            // max_server_hello_len` is no longer a static theorem for general
+            // generated serverHello records that carry arbitrary extensions.
+            // The gate therefore takes the concrete [fragment_len] (the length of
+            // the serialized record on the wire) and checks at runtime that it
+            // fits the ServerHello buffer and the remaining transcript budget,
+            // exactly as [can_receive_client_hello] does.  The caller connects
+            // [SZ.v fragment_len] to [B.length (serialize_handshake ...)] via the
+            // parse-success equation before calling [mark_received_server_hello].
+            SZ.v fragment_len <= Bounds.max_server_hello_len /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              SZ.v fragment_len <=
+              max_transcript_len /\
             CS.legal_event
               st0.CS.cs_model
               (CS.ConnNetworkEvent {

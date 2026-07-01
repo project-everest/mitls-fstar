@@ -15,7 +15,6 @@ module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module ST = TLS13.Impl.Server.Types
-module WFL = TLS13.Spec.WireFormatLemmas
 
 let lemma_paired_protocol_received_logs_accounted
   (client:CS.connection_state)
@@ -333,20 +332,20 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
        assert (client_ch == server_ch);
        assert (client_sh == server_sh);
        assert (CS.client_hello_key_share client_ch ==
-         start.CS.start_client_key_share_public);
+         Some start.CS.start_client_key_share_public);
        assert (CS.client_hello_key_share server_ch ==
-         start.CS.start_client_key_share_public);
+         Some start.CS.start_client_key_share_public);
        assert (CS.server_hello_key_share server_sh ==
-         selection.CS.server_key_share_public);
+         Some selection.CS.server_key_share_public);
        assert (CS.server_hello_key_share client_sh ==
-         selection.CS.server_key_share_public);
+         Some selection.CS.server_key_share_public);
        assert (C.x25519_public_from_private client_sk ==
          start.CS.start_client_key_share_public);
        assert (C.x25519_public_from_private server_sk ==
          selection.CS.server_key_share_public);
-       assert (C.x25519_shared client_sk (CS.server_hello_key_share client_sh) ==
+       assert (C.x25519_shared client_sk selection.CS.server_key_share_public ==
          Some client_shared);
-       assert (C.x25519_shared server_sk (CS.client_hello_key_share server_ch) ==
+       assert (C.x25519_shared server_sk start.CS.start_client_key_share_public ==
          Some server_shared)
      | _, _ ->
        assert False)

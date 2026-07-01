@@ -953,6 +953,7 @@ fn can_send_client_hello_runtime
 }
 fn can_receive_server_hello
   (c:connection_state)
+  (fragment_len:SZ.t)
   (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
@@ -963,13 +964,20 @@ fn can_receive_server_hello
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloSent /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
-            // TODO-A1: Phase 4 deleted W.lemma_serialize_server_hello_len (and the
-            // per-message server_hello serializer/length lemmas).  For general
-            // generated serverHello records that carry arbitrary extensions, the
-            // bound `B.length (serialize_handshake (M.ServerHello sh)) <=
-            // max_server_hello_len` is no longer a theorem, so the transcript-length
-            // conjunct is dropped here.  The legal_event / control-state conjuncts
-            // below remain faithful.
+            // Phase 4 deleted W.lemma_serialize_server_hello_len, so
+            // `B.length (serialize_handshake (M.ServerHello sh)) <=
+            // max_server_hello_len` is no longer a static theorem for general
+            // generated serverHello records that carry arbitrary extensions.
+            // The gate therefore takes the concrete [fragment_len] (the length of
+            // the serialized record on the wire) and checks at runtime that it
+            // fits the ServerHello buffer and the remaining transcript budget,
+            // exactly as [can_receive_client_hello] does.  The caller connects
+            // [SZ.v fragment_len] to [B.length (serialize_handshake ...)] via the
+            // parse-success equation before calling [mark_received_server_hello].
+            SZ.v fragment_len <= Bounds.max_server_hello_len /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              SZ.v fragment_len <=
+              max_transcript_len /\
             CS.legal_event
               st0.CS.cs_model
               (CS.ConnNetworkEvent {
@@ -1019,12 +1027,17 @@ fn can_receive_server_hello
   with transcript_storage transcript_len. assert (pure True);
   let current_transcript_len = !c.handshake.transcript.len;
   assert (pure (current_transcript_len == transcript_len));
+  assert (pure (SZ.v current_transcript_len ==
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
 
-  // TODO-A1: W.lemma_serialize_server_hello_len was deleted in Phase 4; the
-  // server_hello transcript-length bound is no longer provable for general
-  // generated records and has been dropped from this postcondition.
+  // The ServerHello serializer-length lemma was deleted in Phase 4, so we can no
+  // longer statically bound `B.length (serialize_handshake (M.ServerHello sh))`.
+  // Instead, gate on the concrete [fragment_len]: check that it fits the
+  // ServerHello buffer capacity and the remaining transcript budget at runtime
+  // (mirrors [can_receive_client_hello]).
   assert (pure (SZ.v max_transcript_len_sz == max_transcript_len /\
                 SZ.v max_server_hello_len_sz == max_server_hello_len));
+  let fragment_fits_sh = SZ.lte fragment_len max_server_hello_len_sz;
   let max_start = SZ.sub max_transcript_len_sz max_server_hello_len_sz;
   let transcript_room = SZ.lte current_transcript_len max_start;
 
@@ -1073,15 +1086,23 @@ fn can_receive_server_hello
           assert (pure (H.is_supported_cipher_suite T.TLS_CHACHA20_POLY1305_SHA256));
 
           let control_ok = tag_ok && stage_ok && role_ok;
-          let ok = control_ok && no_server_hello && transcript_room;
+          let ok = control_ok && no_server_hello && transcript_room && fragment_fits_sh;
           assert (pure (ok ==> U8.v tag == 1));
           assert (pure (ok ==> U8.v stage == 2));
           assert (pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloSent));
           assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
-          // TODO-A1: transcript-length-bound asserts removed (deleted serializer
-          // length lemma; bound no longer holds for general generated records).
+          // fragment_fits_sh gives `fragment_len <= max_server_hello_len`, and
+          // transcript_room gives `current_transcript_len <= max_transcript_len -
+          // max_server_hello_len`; together they bound the resulting transcript.
+          assert (pure (ok ==> SZ.v fragment_len <= max_server_hello_len));
+          assert (pure (ok ==>
+            SZ.v current_transcript_len + SZ.v fragment_len <= max_transcript_len));
+          assert (pure (ok ==>
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              SZ.v fragment_len <=
+              max_transcript_len));
           assert (pure (ok ==> CS.legal_event
             st0.CS.cs_model
             (CS.ConnNetworkEvent {

@@ -297,8 +297,18 @@ fn handle_handshake_message
             (M.TlsHandshake (M.ServerHello sh))
             (Ghost.reveal 'raw_bytes)));
 
-          let ready = CQ.can_receive_server_hello c #sh;
+          let ready = CQ.can_receive_server_hello c fragment_len #sh;
           if ready {
+            // can_receive_server_hello (with ready==true) established
+            //   SZ.v fragment_len <= max_server_hello_len  and
+            //   B.length hs_transcript + SZ.v fragment_len <= max_transcript_len.
+            // The parse-success equation above gives
+            //   'fragment_bytes == serialize_handshake (M.ServerHello sh),
+            // and the caller's precondition gives
+            //   B.length 'fragment_bytes == SZ.v fragment_len, hence the
+            // serialized-length form required by mark_received_server_hello.
+            assert (pure (B.length (WS.serialize_handshake (M.ServerHello sh)) ==
+              SZ.v fragment_len));
             CN.mark_received_server_hello c raw fragment fragment_len lsh #sh;
             let resp = {
               CT.network_out_len = 0sz;
