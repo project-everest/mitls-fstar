@@ -52,6 +52,7 @@ module GCL = TLS13.Wire.Generated.Certificate_certificate_list
 module GEX = TLS13.Wire.Generated.CertificateEntry_extensions
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module GSS = TLS13.Wire.Generated.SignatureScheme
 module SerH = TLS13.Impl.Serializer.FinishedPOC
 
 (* ----------------------------------------------------------------------- *)
@@ -118,6 +119,60 @@ let lemma_mk_cert_witness_eq_poc (chain: B.bytes)
     (requires 1 <= Seq.length chain /\ Seq.length chain <= 32768)
     (ensures mk_cert_witness chain == SerH.poc_canonical_cert chain)
   = ()
+#pop-options
+
+(* The canonical single-entry Certificate produced by [mk_cert_witness] from a
+   non-empty, bounded certificate chain serializes to exactly [13 + |chain|]
+   bytes on the wire: handshake msg_type 1 + handshake length 3 +
+   certificate_request_context length 1 + certificate_list length 3 +
+   [ single entry: cert_data length 3 + |chain| + extensions length 2 ]
+   = 13 + |chain|.  Discharges the serializer-length precondition of
+   [process_send_certificate_exact_and_write_once]. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_mk_cert_witness_bytesize (chain: B.bytes)
+  : Lemma
+    (requires 1 <= B.length chain /\
+              B.length chain <= Bounds.max_server_certificate_chain_len)
+    (ensures
+      B.length (W.serialize_handshake (M.Certificate (mk_cert_witness chain))) ==
+        13 + B.length chain)
+  = assert_norm (Bounds.max_server_certificate_chain_len == 16610);
+    let c = mk_cert_witness chain in
+    GCL.certificate_certificate_list_list_bytesize_nil;
+    GEX.certificateEntry_extensions_list_bytesize_nil;
+    W.lemma_serialize_handshake_certificate c;
+    GHS.handshake_bytesize_eq (GHS.Body_certificate (c <: GHS.handshake_body_certificate));
+    ()
+#pop-options
+
+(* The wire serialization of a CertificateVerify handshake message is exactly
+   [8 + |signature|] bytes: handshake msg_type 1 + handshake length 3 +
+   signature_scheme 2 + signature length-prefix 2 + |signature|.  Discharges the
+   serializer-length precondition of
+   [process_send_certificate_verify_exact_and_write_once]. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_serialize_handshake_certificate_verify_len (cv: GCV.certificateVerify)
+  : Lemma
+    (ensures
+      B.length (W.serialize_handshake (M.CertificateVerify cv)) ==
+        8 + B.length (Sem.certificateVerify_signature_bytes cv))
+  = W.lemma_serialize_handshake_certificate_verify cv;
+    GHS.handshake_bytesize_eq (GHS.Body_certificate_verify cv);
+    GSS.signatureScheme_bytesize_eq cv.GCV.algorithm;
+    ()
+#pop-options
+
+(* A TLS 1.3 Finished handshake message carrying a 32-byte verify_data
+   serializes to exactly 36 bytes: handshake msg_type 1 + handshake length 3 +
+   32 verify_data bytes.  Discharges the serializer-length precondition of the
+   client-Finished verification path. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_serialize_handshake_finished_len (fin: GFin.finished)
+  : Lemma
+    (ensures B.length (W.serialize_handshake (M.Finished fin)) == 36)
+  = W.lemma_serialize_handshake_finished fin;
+    GHS.handshake_bytesize_eq (GHS.Body_finished fin);
+    ()
 #pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 80"

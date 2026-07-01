@@ -253,10 +253,15 @@ fn next_local_action
     assert (pure (
       B.length (Ghost.reveal server_cfg).CS.server_certificate_chain <=
         Bounds.max_server_certificate_chain_len));
-    // TODO-A1: the transcript-length bound and `legal_event (M.Certificate cert)` for the
-    // server Certificate send were weakened to True in ST.next_local_action_sound (Phase 4
-    // deleted W.serialize_certificate_from_credential and the single-chain projection record),
-    // so these asserts are dropped here; restore once build-direction GCert.certificate lands.
+    // Transcript-length bound restored: can_send_certificate_runtime exposes
+    // send_certificate_ready ==> |transcript| + 13 + |chain| <= max_transcript_len,
+    // and we are on the send_certificate_ready branch.  (The legal_event
+    // (M.Certificate cert) obligation stays a caller obligation, discharged at
+    // the send site with the build-direction witness.)
+    assert (pure (
+      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 13 +
+        B.length (Ghost.reveal server_cfg).CS.server_certificate_chain <=
+          Bounds.max_transcript_len));
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendCertificate;
@@ -289,8 +294,13 @@ fn next_local_action
       ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
     let cv = Ghost.hide (Some?.v
       'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
-    // TODO-A1: transcript-length bound for the server CertificateVerify send weakened to True
-    // in ST.next_local_action_sound (W.serialize_certificate_verify_from_signature deleted).
+    // Transcript-length bound restored: can_send_certificate_verify_runtime exposes
+    // send_certificate_verify_ready ==> |transcript| + 8 + |signature| <= max_transcript_len,
+    // and we are on the send_certificate_verify_ready branch.
+    assert (pure (
+      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
+        B.length (Sem.certificateVerify_signature_bytes (Ghost.reveal cv)) <=
+          Bounds.max_transcript_len));
     assert (pure (CS.legal_event
       'st0.CS.cs_model
       (CS.ConnNetworkEvent {
@@ -396,16 +406,18 @@ fn next_local_action
     if verify_ready {
       assert (pure (Some?
         'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
-      // TODO-A1: the full CM.can_verify_client_finished (with the transcript /
-      // serialized-finished length bound) is no longer assertable here -- the runtime
-      // check CQ.can_verify_client_finished_runtime exposes only the provable conjuncts
-      // (deleted WS.lemma_serialize_finished_len; WS.serialize_handshake abstract).
-      // ST.next_local_action_sound / ST.server_local_event_input_ready were correspondingly
-      // weakened (see TLS13.Impl.Server.Types), so the assert below now succeeds.
+      // Restated (provable) conjuncts of CM.can_verify_client_finished plus the
+      // transcript-length bound restored via can_verify_client_finished_runtime
+      // (verify_ready ==> |transcript| + 36 <= max_transcript_len; we are on the
+      // verify_ready branch).  Together these discharge ST.next_local_action_sound
+      // for LocalVerifyClientFinished.
       assert (pure (ST.server_local_event_input_ready
         'st0
         ST.LocalVerifyClientFinished
         B.empty));
+      assert (pure (
+        B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+          Bounds.max_transcript_len));
       {
         ST.next_local_ready = true;
         ST.next_local_kind = ST.LocalVerifyClientFinished;

@@ -44,6 +44,34 @@ val mk_cert_witness (chain: B.bytes)
       (1 <= Seq.length chain /\ Seq.length chain <= 32768) ==>
       Sem.certificate_entries c == [ (chain <: Seq.seq U8.t) ] })
 
+(* The canonical single-entry Certificate built by [mk_cert_witness] from a
+   non-empty, bounded certificate chain serializes to exactly [13 + |chain|]
+   bytes.  Discharges the serializer-length preconditions threaded through the
+   server certificate send path. *)
+val lemma_mk_cert_witness_bytesize (chain: B.bytes)
+  : Lemma
+    (requires 1 <= B.length chain /\
+              B.length chain <= Bounds.max_server_certificate_chain_len)
+    (ensures
+      B.length (W.serialize_handshake (M.Certificate (mk_cert_witness chain))) ==
+        13 + B.length chain)
+
+(* The wire serialization of a CertificateVerify handshake message is exactly
+   [8 + |signature|] bytes.  Discharges the serializer-length preconditions of
+   the server CertificateVerify send path. *)
+val lemma_serialize_handshake_certificate_verify_len (cv: GCV.certificateVerify)
+  : Lemma
+    (ensures
+      B.length (W.serialize_handshake (M.CertificateVerify cv)) ==
+        8 + B.length (Sem.certificateVerify_signature_bytes cv))
+
+(* A TLS 1.3 Finished handshake message carrying a 32-byte verify_data
+   serializes to exactly 36 bytes.  Discharges the serializer-length
+   preconditions of the client-Finished verification path. *)
+val lemma_serialize_handshake_finished_len (fin: GFin.finished)
+  : Lemma
+    (ensures B.length (W.serialize_handshake (M.Finished fin)) == 36)
+
 val mk_server_hello_witness
   (random: B.bytes)
   (key_share: B.bytes)

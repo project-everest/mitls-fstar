@@ -1861,6 +1861,76 @@ fn process_send_certificate_verify_exact_and_write_once
     expected_network_out_len
 }
 
+// Runtime non-emptiness check for the configured certificate chain.  The
+// send helper process_send_certificate_exact_and_write_once (through
+// SS.build_certificate_from_credentials / SS.mk_cert_witness) requires
+// 1 <= |chain|, but no state invariant guarantees a non-empty chain, so we
+// establish it at runtime here.  We copy the chain into a scratch buffer using
+// O.copy_server_certificate_chain, which returns the exact chain length; a
+// positive length yields 1 <= |chain|.  The None (buffer-too-small) case is
+// impossible for a well-configured server (|chain| <= max_server_certificate_
+// chain_len == 16610 < 32768) but is handled soundly by reporting ok = false.
+fn check_certificate_chain_nonempty
+  (d:server_driver)
+  requires server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent
+  returns ok:bool
+  ensures server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent **
+          pure (ok ==> 1 <= B.length (Ghost.reveal 'certificate_chain))
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert_norm (IM.max_certificate_chain_bytes == 32768);
+  let chain_bytes = V.alloc 0uy 32768sz;
+  with old_chain_bytes. assert (V.pts_to chain_bytes old_chain_bytes);
+  assert (pure (V.is_full_vec chain_bytes));
+  assert (pure (B.length old_chain_bytes == 32768));
+  V.to_array_pts_to chain_bytes;
+  let copy_result =
+    O.copy_server_certificate_chain
+      d.server_driver_credentials
+      (V.vec_to_array chain_bytes)
+      32768sz;
+  V.to_vec_pts_to chain_bytes;
+  V.free chain_bytes;
+  fold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  match copy_result {
+    None -> {
+      false
+    }
+    Some written -> {
+      let ok = SZ.gt written 0sz;
+      ok
+    }
+  }
+}
+
 fn process_ready_empty_local_action_once
   (d:server_driver)
   requires server_driver_connected
@@ -2037,14 +2107,36 @@ fn process_ready_empty_local_action_once
          }
        }
        ST.LocalSendCertificate -> {
-         // TODO-A1: deferred build-direction send action.  Emitting the server
-         // Certificate requires the deleted serializer-length lemma
-         // |W.serialize_handshake (M.Certificate (SS.mk_cert_witness chain))| == 13 + |chain|
-         // plus a state-dependent transcript bound that cannot be re-established across
-         // the recursive drain (transcripts only grow; no global bound).  The automatic
-         // drain therefore reports this action as external; callers drive it explicitly
-         // via send_certificate_once, which carries the explicit precondition.
-         ServerDriverLocalExternalOrUnsupported
+         // Establish the input-ready facts for the Certificate send from
+         // next_local_action_sound (asserted above) plus the credential-matching
+         // facts threaded through server_driver_connected / supported_profile_selection.
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         assert (pure (B.length (Ghost.reveal 'certificate_chain) <=
+           Bounds.max_server_certificate_chain_len));
+         // 1 <= |chain| is not carried by any invariant: check it at runtime.
+         let nonempty = check_certificate_chain_nonempty d;
+         if nonempty {
+           assert (pure (1 <= B.length (Ghost.reveal 'certificate_chain)));
+           // Serializer-length equation |serialize_handshake (Certificate
+           // (mk_cert_witness chain))| == 13 + |chain|.
+           SS.lemma_mk_cert_witness_bytesize (Ghost.reveal 'certificate_chain);
+           assert (pure (B.length (W.serialize_handshake
+             (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+             13 + B.length (Ghost.reveal 'certificate_chain)));
+           let resp = process_send_certificate_exact_and_write_once d;
+           if (resp.ST.status = ST.StepOk) {
+             ServerDriverLocalProcessed
+           } else {
+             ServerDriverLocalStepFailed
+           }
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalSignCertificateVerify -> {
          assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
@@ -2077,12 +2169,36 @@ fn process_ready_empty_local_action_once
          }
        }
        ST.LocalSendCertificateVerify -> {
-         // TODO-A1: deferred build-direction send action.  Emitting the server
-         // CertificateVerify requires the deleted serializer-length lemma
-         // |W.serialize_handshake (M.CertificateVerify cv)| == 8 + |sig(cv)| plus a
-         // state-dependent transcript bound that cannot be re-established across the
-         // recursive drain.  Callers drive it explicitly via sign_certificate_verify_once.
-         ServerDriverLocalExternalOrUnsupported
+         // input_ready facts for CertificateVerify come from next_local_action_sound
+         // (asserted above); for LSCV input_ready_with_credentials == input_ready.
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         assert (pure (Some?
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+         // Serializer-length equation |serialize_handshake (CertificateVerify cv)|
+         // == 8 + |signature(cv)|; combined with the transcript bound restored in
+         // next_local_action_sound this discharges the send helper's precondition.
+         SS.lemma_serialize_handshake_certificate_verify_len
+           (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+         assert (pure (
+           B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+             B.length (W.serialize_handshake (M.CertificateVerify
+               (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) <=
+             Bounds.max_transcript_len));
+         let resp = process_send_certificate_verify_exact_and_write_once d;
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalSendServerFinished -> {
          assert (pure (ST.server_local_event_input_ready
@@ -2107,13 +2223,36 @@ fn process_ready_empty_local_action_once
          }
        }
        ST.LocalVerifyClientFinished -> {
-         // TODO-A1: deferred.  Verifying the client Finished requires
-         // CM.can_verify_client_finished, whose transcript/serialized-length conjunct
-         // (|W.serialize_handshake (M.Finished fin)| == 36 combined with transcript + 36
-         // <= max_transcript_len) depends on the deleted lemma_serialize_finished_len and
-         // a state-dependent transcript bound that cannot be re-established across the
-         // recursive drain.  Callers drive it explicitly via verify_client_finished_once.
-         ServerDriverLocalExternalOrUnsupported
+         // input_ready facts for VerifyClientFinished come from next_local_action_sound
+         // (asserted above); for LVCF input_ready_with_credentials == input_ready.
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         assert (pure (Some?
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+         // Bridge |transcript| + 36 <= max (restored in next_local_action_sound) to
+         // the CM.can_verify_client_finished bound via |serialize_handshake
+         // (Finished fin)| == 36.
+         SS.lemma_serialize_handshake_finished_len
+           (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished);
+         assert (pure (CM.can_verify_client_finished 'st0
+           (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)));
+         let resp =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        _ -> {
          ServerDriverLocalExternalOrUnsupported

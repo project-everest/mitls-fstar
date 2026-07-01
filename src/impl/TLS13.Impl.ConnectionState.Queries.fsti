@@ -517,17 +517,14 @@ fn can_send_certificate_runtime
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             (match st0.CS.cs_model.CS.model_config.CS.config_server with
              | Some cfg ->
-               // TODO-A1: Phase 4 deleted W.serialize_certificate_from_credential
-               // and W.lemma_serialize_certificate_from_single_chain_len, and the
-               // generated GCert.certificate is no longer the bounded single-chain
-               // projection record.  Faithfully restating the transcript-length
-               // bound and the `legal_event (M.Certificate cert)` obligation now
-               // requires a build-direction constructor producing a GCert.certificate
-               // witness with `Sem.certificate_entries cert == [cfg.server_certificate_chain]`
-               // (plus a serializer length lemma).  Until that build-direction support
-               // lands these two conjuncts are weakened to True.  (This function is
-               // only called from the out-of-scope TLS13.Impl.Server.Schedule.)
-               True
+               // Transcript-length bound for the Certificate flight.  The
+               // handshake message serializes to exactly 13 + |chain| bytes
+               // (TLS13.Impl.Server.Send.lemma_mk_cert_witness_bytesize) and the
+               // runtime transcript-room check below guarantees it fits.  (The
+               // legal_event (M.Certificate cert) obligation stays a caller
+               // obligation, discharged with the build-direction witness.)
+               B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 13 +
+                 B.length cfg.CS.server_certificate_chain <= max_transcript_len
              | None -> False))
 
 fn can_sign_certificate_verify_runtime
@@ -563,11 +560,12 @@ fn can_send_certificate_verify_runtime
             (let cv =
               Some?.v
                 st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
-             // TODO-A1: Phase 4 deleted W.serialize_certificate_verify_from_signature
-             // and its length lemma.  For general generated certificateVerify records
-             // `B.length (serialize_handshake (M.CertificateVerify cv)) <= ...` is no
-             // longer a theorem, so the transcript-length conjunct is dropped.  The
-             // legal_event conjunct (over the real stored cv) remains faithful.
+             // Transcript-length bound for the CertificateVerify flight.  The
+             // handshake message serializes to exactly 8 + |signature| bytes
+             // (TLS13.Impl.Server.Send.lemma_serialize_handshake_certificate_verify_len)
+             // and the runtime transcript-room check below guarantees it fits.
+             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
+               B.length (Sem.certificateVerify_signature_bytes cv) <= max_transcript_len /\
              CS.legal_event
                st0.CS.cs_model
                (CS.ConnNetworkEvent {
@@ -790,7 +788,13 @@ fn can_verify_client_finished_runtime
               | _, _ -> False) /\
              CS.legal_event
                st0.CS.cs_model
-               (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin))))
+               (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)) /\
+             // Transcript-length bound of CM.can_verify_client_finished: a
+             // Finished handshake message serializes to exactly 36 bytes
+             // (TLS13.Impl.Server.Send.lemma_serialize_handshake_finished_len);
+             // the runtime transcript-room check below guarantees it fits.
+             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+               max_transcript_len))
 
 fn server_application_record_keys_installed_runtime
   (c:connection_state)

@@ -190,12 +190,13 @@ let next_local_action_sound
        | Some cfg ->
          B.length cfg.CS.server_certificate_chain <=
            Bounds.max_server_certificate_chain_len /\
-         // TODO-A1: Phase 4 deleted WS.serialize_certificate_from_credential and the
-         // M.certificate_msg single-chain projection record.  Faithfully restating the
-         // transcript-length bound and the `legal_event (M.Certificate cert)` obligation
-         // now needs a build-direction GCert.certificate witness with
-         // `Sem.certificate_entries cert == [cfg.server_certificate_chain]`; weakened to True.
-         True
+         // Transcript-length bound for the Certificate flight: the handshake
+         // message serializes to exactly 13 + |chain| bytes
+         // (TLS13.Impl.Server.Send.lemma_mk_cert_witness_bytesize).  The
+         // legal_event (M.Certificate cert) obligation stays a caller obligation
+         // discharged with the build-direction witness at the send site.
+         B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 13 +
+           B.length cfg.CS.server_certificate_chain <= Bounds.max_transcript_len
        | None -> False)
     | LocalSignCertificateVerify ->
       action.next_local_payload == LocalPayloadNone /\
@@ -219,10 +220,11 @@ let next_local_action_sound
         (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
       (let cv = Some?.v
          st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
-       // TODO-A1: Phase 4 deleted WS.serialize_certificate_verify_from_signature and the
-       // M.certificate_verify `body` projection; the transcript-length bound is weakened to
-       // True (recoverable from the serializer postcondition once build-direction lands).
-       True /\
+       // Transcript-length bound for the CertificateVerify flight: the handshake
+       // message serializes to exactly 8 + |signature| bytes
+       // (TLS13.Impl.Server.Send.lemma_serialize_handshake_certificate_verify_len).
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
+         B.length (Sem.certificateVerify_signature_bytes cv) <= Bounds.max_transcript_len /\
        CS.legal_event
          st.CS.cs_model
          (CS.ConnNetworkEvent {
@@ -268,7 +270,12 @@ let next_local_action_sound
         | _, _ -> False) /\
        CS.legal_event
          st.CS.cs_model
-         (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)))
+         (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)) /\
+       // Transcript-length bound of CM.can_verify_client_finished: a Finished
+       // handshake message serializes to exactly 36 bytes
+       // (TLS13.Impl.Server.Send.lemma_serialize_handshake_finished_len).
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+         Bounds.max_transcript_len)
     | _ ->
       False
   else
