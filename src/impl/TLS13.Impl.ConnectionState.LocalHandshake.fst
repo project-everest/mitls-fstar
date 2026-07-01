@@ -47,6 +47,10 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module SerH = TLS13.Impl.Serializer.FinishedPOC
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GSS = TLS13.Wire.Generated.SignatureScheme
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -2282,6 +2286,168 @@ let lemma_client_hello_len_for_from_serializer
      lemma_bounded_u16_sizet_of_sizet (length sas) signature_schemes_len
    | None -> ())
 
+(* Bridging lemma: under a valid start, the Model's canonical client_hello_of_start
+   is *definitionally* the verified serializer reference poc_canonical_ch applied to
+   start's actual random/server_name/key_share and the (refined) cipher/sig lists.
+   Both build the identical 5-extension generated record; under valid_start the
+   clamps in client_hello_of_start are identities, so this is `()` by unfolding. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_client_hello_of_start_eq_poc
+  (start:CS.handshake_start)
+  (cs: GCH.clientHello_cipher_suites)
+  (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
+  : Lemma
+    (requires valid_start start /\
+              (cs <: list GCS.cipherSuite) == start.CS.start_cipher_suites /\
+              (sa <: list GSS.signatureScheme) == start.CS.start_signature_schemes)
+    (ensures
+      client_hello_of_start start ==
+        SerH.poc_canonical_ch
+          start.CS.start_client_random
+          start.CS.start_server_name
+          start.CS.start_client_key_share_public
+          cs sa)
+  = ()
+#pop-options
+
+(* Runtime sentinel: the spec config (hence handshake_start) is unconstrained, so
+   can_start_handshake / can_send_client_hello_runtime do NOT guarantee that the
+   start's server_name / cipher_suites / signature_schemes are non-empty -- but the
+   generated wire ClientHello refinements (and client_hello_matches_start) require
+   it.  This helper reads the three runtime start lengths and reports whether they
+   are all >= 1.  The runtime predicates already pin each length <= its cap
+   (255/16/16), so `ok` establishes the full Model.valid_start.  It preserves
+   connection_exactly c st0 (symmetric unfold/refold). *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 60"
+fn client_hello_start_nonempty_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_start with
+             | Some start -> valid_start start
+             | None -> True))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  with old_control_tag old_stage_tag old_failure_present
+       old_failure_code old_failure_alert. _;
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+  with start_present. _;
+  let has_start = !c.handshake.start.present;
+  assert (pure (has_start == start_present));
+  if has_start {
+    rewrite (handshake_start_payload_exactly
+      c.handshake.start
+      start_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start)
+      as (handshake_start_payload_exactly
+        c.handshake.start
+        true
+        st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    unfold (handshake_start_payload_exactly
+      c.handshake.start
+      true
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    with start_spec. _;
+    unfold (handshake_start_fields_exactly c.handshake.start start_spec);
+    unfold (sized_bytes_exactly
+      c.handshake.start.server_name
+      max_hostname_len
+      start_spec.CS.start_server_name);
+    with sn_storage sn_len. _;
+    unfold (cipher_suite_list_exactly
+      c.handshake.start.cipher_suites
+      max_cipher_suites
+      start_spec.CS.start_cipher_suites);
+    with cs_items cs_len. _;
+    unfold (signature_scheme_list_exactly
+      c.handshake.start.signature_schemes
+      max_signature_schemes
+      start_spec.CS.start_signature_schemes);
+    with sa_items sa_len. _;
+
+    let snl = !c.handshake.start.server_name.len;
+    let csl = !c.handshake.start.cipher_suites.len;
+    let sal = !c.handshake.start.signature_schemes.len;
+    let sn_ok = sizet_lte_plain 1sz snl;
+    lemma_sizet_lte_plain 1sz snl;
+    let cs_ok = sizet_lte_plain 1sz csl;
+    lemma_sizet_lte_plain 1sz csl;
+    let sa_ok = sizet_lte_plain 1sz sal;
+    lemma_sizet_lte_plain 1sz sal;
+    let nonempty = sn_ok && cs_ok && sa_ok;
+    Model.lemma_cipher_suites_match_length cs_items (SZ.v cs_len)
+      start_spec.CS.start_cipher_suites;
+    Model.lemma_signature_schemes_match_length sa_items (SZ.v sa_len)
+      start_spec.CS.start_signature_schemes;
+    // byte_prefix_matches gives B.length == SZ.v sn_len; bridge B.length/Seq.length
+    // so the server-name conjunct of valid_start (stated with Seq.length) fires.
+    assert (pure (B.length start_spec.CS.start_server_name ==
+                  Seq.length start_spec.CS.start_server_name));
+
+    fold (sized_bytes_exactly
+      c.handshake.start.server_name
+      max_hostname_len
+      start_spec.CS.start_server_name);
+    fold (cipher_suite_list_exactly
+      c.handshake.start.cipher_suites
+      max_cipher_suites
+      start_spec.CS.start_cipher_suites);
+    fold (signature_scheme_list_exactly
+      c.handshake.start.signature_schemes
+      max_signature_schemes
+      start_spec.CS.start_signature_schemes);
+    fold (handshake_start_fields_exactly c.handshake.start start_spec);
+    fold (handshake_start_payload_exactly
+      c.handshake.start
+      true
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    rewrite (handshake_start_payload_exactly
+      c.handshake.start
+      true
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start)
+      as (handshake_start_payload_exactly
+        c.handshake.start
+        start_present
+        st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    fold (handshake_start_exactly
+      c.handshake.start
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    nonempty
+  } else {
+    fold (handshake_start_exactly
+      c.handshake.start
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
+#pop-options
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)
@@ -2320,6 +2486,8 @@ fn try_send_client_hello
       <= max_transcript_len - max_client_hello_len));
     assert (pure (517 <= SZ.v network_out_len));
 
+    let valid_nonempty = client_hello_start_nonempty_runtime c;
+    if valid_nonempty {
     unfold (connection_exactly c st0);
     unfold (connection_model_exactly c st0.CS.cs_model);
     unfold (control_exactly
@@ -2417,28 +2585,32 @@ fn try_send_client_hello
     let ch = Ghost.hide (client_hello_of_start (Ghost.reveal start));
     assert (pure (Ghost.reveal ch == client_hello_of_start start_spec));
     lemma_client_hello_of_start_matches (Ghost.reveal start);
-    // TODO-A1: BLOCKED on upstream Model faithful `client_hello_of_start`.
-    // The serializer `Ser.serialize_client_hello_from_start` (and the assert
-    // below) require its precondition
-    //   CS.client_hello_matches_start start_spec (client_hello_of_start start_spec)
-    // i.e. the built clientHello's Sem.* accessors return start's actual
-    // random/server_name/key_share/cipher_suites/sig_algs.  But Model's
-    // `client_hello_of_start` is a fixed placeholder (Model.fst:167: faithful
-    // random only; fixed cipher [TLS_CHACHA20_POLY1305_SHA256], single
-    // [Ed25519] sig ext, NO server_name/key_share extensions), so the property
-    // is genuinely false for it and `lemma_client_hello_of_start_matches`
-    // (Model.fst:188) is weakened to `Lemma (True)`.  Establishing this needs a
-    // faithful builder constructing the server_name/key_share/sig_algs generated
-    // extension records (with their wire bytesize refinements) + the 5 accessor
-    // round-trips — an upstream Model TODO-A1, not read-direction retargeting.
-    // Diagnostic (`assume_` of the line below) confirms this is the ONLY blocker:
-    // the whole module otherwise verifies.
+    // client_hello_start_nonempty_runtime (== valid_nonempty, true on this branch)
+    // together with hs_start == Some start_spec give Model.valid_start start_spec.
+    assert (pure (valid_start start_spec));
+    // Coerce start's actual cipher/sig lists into the refined generated types
+    // (discharged by valid_start), pin ch to the serializer's canonical form via
+    // the bridging lemma, and thread the coercions as the serializer implicits.
+    let rnd_g : Ghost.erased B.bytes = Ghost.hide start_spec.CS.start_client_random;
+    let sni_g : Ghost.erased B.bytes = Ghost.hide start_spec.CS.start_server_name;
+    let ks_g : Ghost.erased B.bytes = Ghost.hide start_spec.CS.start_client_key_share_public;
+    let cs_g : Ghost.erased GCH.clientHello_cipher_suites =
+      Ghost.hide (start_spec.CS.start_cipher_suites <: GCH.clientHello_cipher_suites);
+    let sa_g : Ghost.erased GECH.extensionClientHello_extension_data_signature_algorithms =
+      Ghost.hide (cho_sa_data start_spec.CS.start_signature_schemes);
+    lemma_client_hello_of_start_eq_poc start_spec (Ghost.reveal cs_g) (Ghost.reveal sa_g);
+    // matches now holds: faithful client_hello_of_start + lemma_..._matches.
     assert (pure (CS.client_hello_matches_start start_spec (Ghost.reveal ch)));
 
     let written =
       Ser.serialize_client_hello_from_start
         #start
         #ch
+        #rnd_g
+        #sni_g
+        #ks_g
+        #cs_g
+        #sa_g
         c.handshake.start.client_random
         c.handshake.start.server_name.bytes
         c.handshake.start.server_name.len
@@ -2730,6 +2902,9 @@ fn try_send_client_hello
         st0.CS.cs_model.CS.model_failure);
       fold (connection_model_exactly c st0.CS.cs_model);
       fold (connection_exactly c st0);
+      None
+    }
+    } else {
       None
     }
   } else {

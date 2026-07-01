@@ -34,6 +34,19 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module U8 = FStar.UInt8
+module LL = FStar.List.Tot
+module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GHN = TLS13.Wire.Generated.HostName
+module GSN = TLS13.Wire.Generated.ServerName
+module GSNL = TLS13.Wire.Generated.ServerNameList
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GKSE = TLS13.Wire.Generated.KeyShareEntry
+module GKSCH = TLS13.Wire.Generated.KeyShareClientHello
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GSS = TLS13.Wire.Generated.SignatureScheme
+module GSSL = TLS13.Wire.Generated.SignatureSchemeList
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
 
 open TLS13.Impl.ConnectionState.Bounds
 
@@ -140,16 +153,114 @@ let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_
   }
 
 // Phase 5: the handshake-message payload is now the generated GCH.clientHello
-// wire record rather than the deleted GCH.clientHello projection record.  A
-// faithful builder of a full wire ClientHello from an (unbounded)
-// handshake_start would have to discharge the nested EverParse
-// serializer-bytesize refinements of the generated record (and needs
-// length bounds the unbounded start lists do not carry); its only consumer,
-// LocalHandshake, threads the result to the not-yet-migrated
-// TLS13.Impl.Serializer, so client_hello_of_start returns a fixed valid wire
-// record and the *_of_start lemmas below are correspondingly weakened (TODO-A1).
+// wire record.  client_hello_of_start builds the faithful canonical 5-extension
+// ClientHello from a handshake_start, structurally identical to the verified
+// reference TLS13.Impl.Serializer.FinishedPOC.poc_canonical_ch.  It is TOTAL,
+// so the (unbounded) start blob/lists are CLAMPED to the generated bounds; the
+// clamps are identities under `valid_start start` (see
+// lemma_client_hello_of_start_matches and the LocalHandshake bridge lemma).
+
+// valid-start predicate: the unbounded start blob/lists fit the generated bounds
+let valid_start (start:CS.handshake_start) : prop =
+  1 <= Seq.length start.CS.start_server_name /\
+  Seq.length start.CS.start_server_name <= 255 /\
+  1 <= LL.length start.CS.start_cipher_suites /\
+  LL.length start.CS.start_cipher_suites <= 16 /\
+  1 <= LL.length start.CS.start_signature_schemes /\
+  LL.length start.CS.start_signature_schemes <= 16
+
+// ---- clamps (identity under valid_start) ----
 noextract
-val client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
+let cho_sni (start:CS.handshake_start)
+  : (r:B.bytes { 1 <= Seq.length r /\ Seq.length r <= 255 })
+  = if 1 <= Seq.length start.CS.start_server_name && Seq.length start.CS.start_server_name <= 255
+    then start.CS.start_server_name
+    else Seq.create 1 0uy
+
+noextract
+let cho_cs (start:CS.handshake_start)
+  : (cs:GCH.clientHello_cipher_suites { LL.length cs <= 16 })
+  = if 1 <= LL.length start.CS.start_cipher_suites && LL.length start.CS.start_cipher_suites <= 16
+    then start.CS.start_cipher_suites
+    else [GCS.TLS_CHACHA20_POLY1305_SHA256]
+
+noextract
+let cho_sa_list (start:CS.handshake_start)
+  : (l:list GSS.signatureScheme { 1 <= LL.length l /\ LL.length l <= 16 })
+  = if 1 <= LL.length start.CS.start_signature_schemes && LL.length start.CS.start_signature_schemes <= 16
+    then start.CS.start_signature_schemes
+    else [GSS.Rsa_pss_rsae_sha256]
+
+// ---- canonical extension builders (each discharges its EverParse refinement) ----
+noextract
+let cho_sn_ext (sni: B.bytes { 1 <= Seq.length sni /\ Seq.length sni <= 255 })
+  : GECH.extensionClientHello
+  = let hn : GHN.hostName = sni in
+    let sn : GSN.serverName = GSN.Name_host_name hn in
+    GSNL.serverNameList_list_bytesize_nil;
+    GSNL.serverNameList_list_bytesize_cons sn [];
+    GSN.serverName_bytesize_eqn_host_name hn;
+    GHN.hostName_bytesize_eqn hn;
+    GECH.Extension_data_server_name ([sn] <: GECH.extensionClientHello_extension_data_server_name)
+
+noextract
+let cho_sg_ext : GECH.extensionClientHello
+  = GECH.Extension_data_supported_groups ([GNG.X25519] <: GECH.extensionClientHello_extension_data_supported_groups)
+
+noextract
+let cho_sa_data (l: list GSS.signatureScheme { 1 <= LL.length l /\ LL.length l <= 16 })
+  : GECH.extensionClientHello_extension_data_signature_algorithms
+  = GSSL.signatureSchemeList_bytesize_eqn (l <: GSSL.signatureSchemeList);
+    (l <: GECH.extensionClientHello_extension_data_signature_algorithms)
+
+noextract
+let cho_sa_ext (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
+  : GECH.extensionClientHello
+  = GECH.Extension_data_signature_algorithms sa
+
+noextract
+let cho_ks_ext (ks: B.bytes { Seq.length ks == 32 })
+  : GECH.extensionClientHello
+  = let ke : GKSE.keyShareEntry_key_exchange = ks in
+    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
+    GKSCH.keyShareClientHello_list_bytesize_nil;
+    GKSCH.keyShareClientHello_list_bytesize_cons kse [];
+    GKSE.keyShareEntry_bytesize_eqn kse;
+    GNG.namedGroup_bytesize_eq GNG.X25519;
+    GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
+    GECH.Extension_data_key_share ([kse] <: GECH.extensionClientHello_extension_data_key_share)
+
+noextract
+let cho_sv_ext : GECH.extensionClientHello
+  = GECH.Extension_data_supported_versions ([GPV.TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
+
+noextract
+let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
+  = let sni = cho_sni start in
+    let cs = cho_cs start in
+    let sa = cho_sa_data (cho_sa_list start) in
+    let r32 : Seq.lseq U8.t 32 = start.CS.start_client_random in
+    let ks = start.CS.start_client_key_share_public in
+    let sn_ext = cho_sn_ext sni in
+    let sg_ext = cho_sg_ext in
+    let sa_ext = cho_sa_ext sa in
+    let ks_ext = cho_ks_ext ks in
+    let sv_ext = cho_sv_ext in
+    GCH.clientHello_extensions_list_bytesize_nil;
+    GCH.clientHello_extensions_list_bytesize_cons sv_ext [];
+    GCH.clientHello_extensions_list_bytesize_cons ks_ext [sv_ext];
+    GCH.clientHello_extensions_list_bytesize_cons sa_ext [ks_ext; sv_ext];
+    GCH.clientHello_extensions_list_bytesize_cons sg_ext [sa_ext; ks_ext; sv_ext];
+    GCH.clientHello_extensions_list_bytesize_cons sn_ext [sg_ext; sa_ext; ks_ext; sv_ext];
+    let exts : GCH.clientHello_extensions = [sn_ext; sg_ext; sa_ext; ks_ext; sv_ext] in
+    let comp : GCH.clientHello_legacy_compression_methods = Seq.create 1 0uy in
+    let sid : GCH.clientHello_legacy_session_id = B.empty in
+    { GCH.legacy_version = GPV.TLS_1p2;
+      GCH.random = r32;
+      GCH.legacy_session_id = sid;
+      GCH.cipher_suites = cs;
+      GCH.legacy_compression_methods = comp;
+      GCH.extensions = exts; }
 
 noextract
 let started_handshake_state
@@ -311,19 +422,21 @@ let can_send_client_hello
     raw_sent
     B.empty
 
-// TODO-A1: weakened during the Phase 5 generated-record retarget.  Faithful
-// ensures: CS.client_hello_matches_start start (client_hello_of_start start).
-// Requires building a wire ClientHello matching every TLS13.Wire.Semantics
-// accessor of `start`; see the note on client_hello_of_start above.
+// Under valid_start, the canonical client_hello_of_start satisfies the spec's
+// client_hello_matches_start: every TLS13.Wire.Semantics accessor returns the
+// corresponding `start` field (the clamps in client_hello_of_start are
+// identities under valid_start).
 val lemma_client_hello_of_start_matches
   (start:CS.handshake_start)
-  : Lemma (True)
+  : Lemma (requires valid_start start)
+          (ensures CS.client_hello_matches_start start (client_hello_of_start start))
 
-// TODO-A1: weakened during the Phase 5 generated-record retarget.  Faithful
-// ensures: client_hello_server_name_len_for ch == server_name_len /\
-//          client_hello_cipher_suites_len_for ch == cipher_suites_len /\
-//          client_hello_signature_schemes_len_for ch == signature_schemes_len.
-// Depends on a faithful client_hello_of_start (see note above).
+// Faithful len-helper bridge: under valid_start the canonical
+// client_hello_of_start's TLS13.Wire.Semantics accessor lengths agree with the
+// runtime *_len values implied by the structure-match predicates.  (Not on the
+// LocalHandshake hot path -- that derives the same equalities directly from the
+// serializer postcondition via lemma_client_hello_len_for_from_serializer --
+// but proved here for faithfulness of the Model interface.)
 val lemma_client_hello_len_helpers_from_start
   (start:CS.handshake_start)
   (ch:GCH.clientHello)
@@ -334,7 +447,8 @@ val lemma_client_hello_len_helpers_from_start
   (signature_schemes:Seq.seq U16.t)
   (signature_schemes_len:SZ.t)
   : Lemma
-      (requires ch == client_hello_of_start start /\
+      (requires valid_start start /\
+                ch == client_hello_of_start start /\
                 B.length server_name_storage == max_hostname_len /\
                 B.length start.CS.start_server_name == SZ.v server_name_len /\
                 SZ.v server_name_len <= B.length server_name_storage /\
@@ -350,7 +464,10 @@ val lemma_client_hello_len_helpers_from_start
                   signature_schemes
                   (SZ.v signature_schemes_len)
                   start.CS.start_signature_schemes)
-      (ensures True)
+      (ensures
+        client_hello_server_name_len_for ch == server_name_len /\
+        client_hello_cipher_suites_len_for ch == cipher_suites_len /\
+        client_hello_signature_schemes_len_for ch == signature_schemes_len)
 
 noextract
 let derived_shared_secret_state

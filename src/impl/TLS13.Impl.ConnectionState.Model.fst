@@ -158,41 +158,25 @@ let lemma_cipher_suites_match_first_chacha_offer
     lemma_cipher_suites_match_length wire len suites;
     assert False
 
-// Phase 5: client_hello_of_start returns a fixed valid generated wire
-// ClientHello.  (Faithful builder + the corresponding *_of_start postconditions
-// are TODO-A1; see TLS13.Impl.ConnectionState.Model.fsti.)  The body below just
-// exhibits a well-typed inhabitant of GCH.clientHello: a ClientHello carrying a
-// single signature_algorithms extension ([Ed25519]), whose wire bytesize is
-// exactly 8 (the minimum the clientHello_extensions refinement requires).
-let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello =
-  // clientHello_extensions_list_bytesize_nil is a (non-SMTPat) squash; bringing
-  // it into scope lets the cons SMTPat + the bytesize eqns compute the list
-  // bytesize of [sig_ext] to 8.
-  let _ = GCHE.clientHello_extensions_list_bytesize_nil in
-  let sig_data : GECH.extensionClientHello_extension_data_signature_algorithms =
-    [GSS.Ed25519] in
-  let sig_ext : GECH.extensionClientHello =
-    GECH.Extension_data_signature_algorithms sig_data in
-  let exts : GCH.clientHello_extensions = [sig_ext] in
-  {
-    GCH.legacy_version = GPV.TLS_1p3;
-    GCH.random = start.CS.start_client_random;
-    GCH.legacy_session_id = (Seq.empty #FStar.UInt8.t <: GCH.clientHello_legacy_session_id);
-    GCH.cipher_suites = ([GCS.TLS_CHACHA20_POLY1305_SHA256] <: GCH.clientHello_cipher_suites);
-    GCH.legacy_compression_methods = (Seq.create 1 0uy <: GCH.clientHello_legacy_compression_methods);
-    GCH.extensions = exts;
-  }
+// Phase 5: client_hello_of_start is now a faithful, total transparent `let` in
+// TLS13.Impl.ConnectionState.Model.fsti (it builds the canonical 5-extension
+// ClientHello, clamping invalid/unbounded start fields).  Nothing to define here.
 
-// TODO-A1: faithful ensures CS.client_hello_matches_start start
-// (client_hello_of_start start) -- needs a faithful client_hello_of_start.
+// Under valid_start the clamps in client_hello_of_start are identities, so every
+// TLS13.Wire.Semantics accessor returns the matching `start` field.  Discharged
+// by unfolding client_hello_of_start and the accessors (fuel for the extension
+// list walks).
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_client_hello_of_start_matches
   (start:CS.handshake_start)
-  : Lemma (True)
+  : Lemma (requires valid_start start)
+          (ensures CS.client_hello_matches_start start (client_hello_of_start start))
 =
   ()
+#pop-options
 
-// TODO-A1: faithful ensures relate client_hello_*_len_for (client_hello_of_start
-// start) to the start lengths -- needs a faithful client_hello_of_start.
+// Faithful len-helper bridge (see .fsti).  Off the LocalHandshake hot path.
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_client_hello_len_helpers_from_start
   (start:CS.handshake_start)
   (ch:GCH.clientHello)
@@ -203,7 +187,8 @@ let lemma_client_hello_len_helpers_from_start
   (signature_schemes:Seq.seq U16.t)
   (signature_schemes_len:SZ.t)
   : Lemma
-      (requires ch == client_hello_of_start start /\
+      (requires valid_start start /\
+                ch == client_hello_of_start start /\
                 B.length server_name_storage == max_hostname_len /\
                 B.length start.CS.start_server_name == SZ.v server_name_len /\
                 SZ.v server_name_len <= B.length server_name_storage /\
@@ -219,9 +204,18 @@ let lemma_client_hello_len_helpers_from_start
                   signature_schemes
                   (SZ.v signature_schemes_len)
                   start.CS.start_signature_schemes)
-      (ensures True)
+      (ensures
+        client_hello_server_name_len_for ch == server_name_len /\
+        client_hello_cipher_suites_len_for ch == cipher_suites_len /\
+        client_hello_signature_schemes_len_for ch == signature_schemes_len)
 =
-  ()
+  lemma_client_hello_of_start_matches start;
+  lemma_cipher_suites_match_length cipher_suites (SZ.v cipher_suites_len) start.CS.start_cipher_suites;
+  lemma_signature_schemes_match_length signature_schemes (SZ.v signature_schemes_len) start.CS.start_signature_schemes;
+  lemma_bounded_u16_sizet_of_sizet (B.length start.CS.start_server_name) server_name_len;
+  lemma_bounded_u16_sizet_of_sizet (length start.CS.start_cipher_suites) cipher_suites_len;
+  lemma_bounded_u16_sizet_of_sizet (length start.CS.start_signature_schemes) signature_schemes_len
+#pop-options
 
 let lemma_application_data_record_count_small
   (bytes:B.bytes)
