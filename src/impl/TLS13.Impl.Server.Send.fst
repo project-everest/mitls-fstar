@@ -53,7 +53,7 @@ module GEX = TLS13.Wire.Generated.CertificateEntry_extensions
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
 module GSS = TLS13.Wire.Generated.SignatureScheme
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 
 (* ----------------------------------------------------------------------- *)
 (* Build-direction witness builders for generated wire records.            *)

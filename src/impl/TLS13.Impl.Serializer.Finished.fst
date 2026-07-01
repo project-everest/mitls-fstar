@@ -14,7 +14,7 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 module GFin = TLS13.Wire.Generated.Finished
 
 fn serialize_server_finished

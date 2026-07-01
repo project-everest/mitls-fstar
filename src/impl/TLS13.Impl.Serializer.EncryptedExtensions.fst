@@ -13,7 +13,7 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 
 fn serialize_empty_encrypted_extensions
   (out: array U8.t)

@@ -17,7 +17,7 @@ module WS = TLS13.Wire.Spec
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GCS = TLS13.Wire.Generated.CipherSuite
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 
 (* Build-direction ServerHello serializer, retargeted onto the verified copyful
    POC writer [SerH.serialize_server_hello_handshake_poc].  The ServerHello

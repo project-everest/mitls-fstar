@@ -155,7 +155,7 @@ let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_
 // Phase 5: the handshake-message payload is now the generated GCH.clientHello
 // wire record.  client_hello_of_start builds the faithful canonical 5-extension
 // ClientHello from a handshake_start, structurally identical to the verified
-// reference TLS13.Impl.Serializer.FinishedPOC.poc_canonical_ch.  It is TOTAL,
+// reference TLS13.Impl.Serializer.Handshake.poc_canonical_ch.  It is TOTAL,
 // so the (unbounded) start blob/lists are CLAMPED to the generated bounds; the
 // clamps are identities under `valid_start start` (see
 // lemma_client_hello_of_start_matches and the LocalHandshake bridge lemma).

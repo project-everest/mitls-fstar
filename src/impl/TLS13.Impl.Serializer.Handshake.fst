@@ -1,4 +1,4 @@
-module TLS13.Impl.Serializer.FinishedPOC
+module TLS13.Impl.Serializer.Handshake
 
 #lang-pulse
 

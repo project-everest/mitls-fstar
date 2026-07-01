@@ -21,7 +21,7 @@ module WSR = TLS13.Wire.Spec.Reveal
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GCS = TLS13.Wire.Generated.CipherSuite
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 
 let wsr_byte_literal (n:nat) (b:U8.t)
   : Lemma

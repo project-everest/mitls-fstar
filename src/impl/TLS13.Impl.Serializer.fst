@@ -45,7 +45,7 @@ module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
 module GHS = TLS13.Wire.Generated.Handshake
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 
 noextract
 let byte (n:nat) : B.byte =

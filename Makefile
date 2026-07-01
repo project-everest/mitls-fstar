@@ -263,7 +263,7 @@ BUNDLE_API_MODULE = TLS13.Impl.Client
 
 SERIALIZER_MODULES = \
   TLS13.Impl.Serializer.Common \
-  TLS13.Impl.Serializer.FinishedPOC \
+  TLS13.Impl.Serializer.Handshake \
   TLS13.Impl.Serializer.Finished \
   TLS13.Impl.Serializer.EncryptedExtensions \
   TLS13.Impl.Serializer.CertificateVerify \
@@ -273,7 +273,7 @@ SERIALIZER_MODULES = \
   TLS13.Impl.Serializer
 
 SERIALIZER_INTERNAL_MODULES = \
-  TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.FinishedPOC,\
+  TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Handshake,\
   TLS13.Impl.Serializer.Finished,\
   TLS13.Impl.Serializer.EncryptedExtensions,\
   TLS13.Impl.Serializer.CertificateVerify,TLS13.Impl.Serializer.ServerHello,\

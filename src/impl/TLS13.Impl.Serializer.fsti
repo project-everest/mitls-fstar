@@ -32,7 +32,7 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 
 (**
   Serializer interface at the M/L boundary.

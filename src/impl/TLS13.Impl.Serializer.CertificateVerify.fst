@@ -13,7 +13,7 @@ module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 module GCV = TLS13.Wire.Generated.CertificateVerify
-module SerH = TLS13.Impl.Serializer.FinishedPOC
+module SerH = TLS13.Impl.Serializer.Handshake
 
 fn serialize_certificate_verify_from_signature
   (#cv: erased GCV.certificateVerify)
