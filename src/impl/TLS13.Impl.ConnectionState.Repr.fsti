@@ -994,6 +994,16 @@ let server_key_share_exactly
      | Some sh -> CS.server_hello_key_share sh
      | None -> None)
 
+// [noextract]: pure spec-level projection over the *ghost* connection model
+// state (`CS.handshake_state`) returning spec `B.bytes`.  It is used only in
+// specifications/slprops (it currently has no caller at all) and must never be
+// runtime C.  It was the sole extracted referencer of `CS.handshake_state` /
+// `CS.server_handshake_selection`, which transitively embed the `noextract`
+// generated high records (GCH.clientHello, ...).  Removing it from extraction
+// lets KaRaMeL's dead-code elimination drop those ghost model record types
+// (exactly as it already drops `connection_model`, `connection_state`, ...),
+// so their non-Low* fields never surface as undefined C struct members.
+noextract
 let server_key_share_private_option
   (hs:CS.handshake_state)
   : option (b:B.bytes{B.length b == 32}) =
