@@ -438,6 +438,7 @@ fn serialize_empty_encrypted_extensions_poc
 (* ---- canonical record (transparent copy of the non-HRR branch of
    TLS13.Impl.Server.Send.mk_server_hello_witness) ---- *)
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
+noextract
 let poc_canonical_sh (rnd ks: B.bytes) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello
     (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
@@ -468,6 +469,7 @@ let poc_canonical_sh (rnd ks: B.bytes) (cs: GCS.cipherSuite)
     { GSH.legacy_version = GPV.TLS_1p2; GSH.body = GSHB.ServerHello_body_false bf }
 
 (* ---- canonical mid ---- *)
+noextract
 let poc_sh_mid (rnd ks: B.bytes) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello_mid
     (requires Seq.length rnd == 32 /\ Seq.length ks == 32)
@@ -923,6 +925,7 @@ fn serialize_server_hello_handshake_poc
    ===================================================================== *)
 (* ---- canonical entry + record (transparent copy of mk_cert_witness) ---- *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
+noextract
 let poc_cert_entry (chain: B.bytes)
   : Pure GCertE.certificateEntry
     (requires 1 <= Seq.length chain /\ Seq.length chain <= 32768)
@@ -930,6 +933,7 @@ let poc_cert_entry (chain: B.bytes)
   = { GCertE.cert_data = (chain <: GCertE.certificateEntry_cert_data);
       GCertE.extensions = ([] <: GCertE.certificateEntry_extensions) }
 
+noextract
 let poc_canonical_cert (chain: B.bytes)
   : Pure GCert.certificate
     (requires 1 <= Seq.length chain /\ Seq.length chain <= 32768)
@@ -948,6 +952,7 @@ let poc_canonical_cert (chain: B.bytes)
 #pop-options
 
 (* ---- canonical mid ---- *)
+noextract
 let poc_cert_mid (chain: B.bytes)
   : Pure GCert.certificate_mid
     (requires 1 <= Seq.length chain /\ Seq.length chain <= 32768)
@@ -1258,6 +1263,7 @@ fn serialize_certificate_handshake_poc
 (* Shared canonical extension high values (each discharges its refinement)*)
 (* ===================================================================== *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
+noextract
 let ch_sn_high (sni: B.bytes { 1 <= Seq.length sni /\ Seq.length sni <= 65461 })
   : GECH.extensionClientHello
   = let hn : GHN.hostName = sni in
@@ -1268,13 +1274,16 @@ let ch_sn_high (sni: B.bytes { 1 <= Seq.length sni /\ Seq.length sni <= 65461 })
     GHN.hostName_bytesize_eqn hn;
     GECH.Extension_data_server_name ([sn] <: GECH.extensionClientHello_extension_data_server_name)
 
+noextract
 let ch_sg_high : GECH.extensionClientHello
   = GECH.Extension_data_supported_groups ([GNG.X25519] <: GECH.extensionClientHello_extension_data_supported_groups)
 
+noextract
 let ch_sa_high (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
   : GECH.extensionClientHello
   = GECH.Extension_data_signature_algorithms sa
 
+noextract
 let ch_ks_high (ks: B.bytes { Seq.length ks == 32 })
   : GECH.extensionClientHello
   = let ke : GKSE.keyShareEntry_key_exchange = ks in
@@ -1286,9 +1295,11 @@ let ch_ks_high (ks: B.bytes { Seq.length ks == 32 })
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
     GECH.Extension_data_key_share ([kse] <: GECH.extensionClientHello_extension_data_key_share)
 
+noextract
 let ch_sv_high : GECH.extensionClientHello
   = GECH.Extension_data_supported_versions ([GPV.TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
 
+noextract
 let ch_exts (sni ks: B.bytes) (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
   : Pure (list GECH.extensionClientHello)
     (requires 1 <= Seq.length sni /\ Seq.length sni <= 65461 /\ Seq.length ks == 32)
@@ -1298,6 +1309,7 @@ let ch_exts (sni ks: B.bytes) (sa: GECH.extensionClientHello_extension_data_sign
 
 (* ---- canonical ClientHello record ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+noextract
 let poc_canonical_ch (rnd sni ks: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
@@ -1379,6 +1391,7 @@ let lemma_ch_sig_algs (rnd sni ks: B.bytes)
 
 (* ---- canonical mid (same data, untyped tuple form) ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
+noextract
 let poc_ch_mid (rnd sni ks: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
