@@ -43,6 +43,24 @@ let lemma_reveal_synth_sig_schemes_nil () = WS.lemma_synth_sig_schemes_nil ()
 
 let lemma_reveal_synth_sig_schemes_cons s tl = WS.lemma_synth_sig_schemes_cons s tl
 
+let rec lemma_reveal_synth_cipher_suites_id (l:list GCS.cipherSuite)
+  : Lemma (ensures reveal_synth_cipher_suites l == l) (decreases l)
+  = match l with
+    | [] -> lemma_reveal_synth_cipher_suites_nil ()
+    | c :: tl ->
+      lemma_reveal_synth_cipher_suites_cons c tl;
+      WS.lemma_synth_cipher_suite c;
+      lemma_reveal_synth_cipher_suites_id tl
+
+let rec lemma_reveal_synth_sig_schemes_id (l:list GSS.signatureScheme)
+  : Lemma (ensures reveal_synth_sig_schemes l == l) (decreases l)
+  = match l with
+    | [] -> lemma_reveal_synth_sig_schemes_nil ()
+    | s :: tl ->
+      lemma_reveal_synth_sig_schemes_cons s tl;
+      WS.lemma_synth_signature_scheme s;
+      lemma_reveal_synth_sig_schemes_id tl
+
 let lemma_reveal_ch_server_name_nil () = WS.lemma_ch_server_name_nil ()
 
 let lemma_reveal_ch_server_name_host h tl = WS.lemma_ch_server_name_host h tl
@@ -52,6 +70,10 @@ let lemma_reveal_key_exchange_to_key32 ke = WS.lemma_key_exchange_to_key32 ke
 let lemma_reveal_ch_find_key_share_nil () = WS.lemma_ch_find_key_share_nil ()
 
 let lemma_reveal_ch_find_key_share_cons e tl = WS.lemma_ch_find_key_share_cons e tl
+
+let lemma_reveal_kse_list_find_x25519_nil () = ()
+
+let lemma_reveal_kse_list_find_x25519_cons e tl = ()
 
 let lemma_reveal_ch_extensions_nil sn ks sv ss = WS.lemma_ch_extensions_nil sn ks sv ss
 
@@ -76,6 +98,22 @@ let lemma_reveal_ch_extensions_cons_other e tl sn ks sv ss =
 let lemma_synth_signature_scheme s = WS.lemma_synth_signature_scheme s
 
 let lemma_synth_client_hello_reveal c = WS.lemma_synth_client_hello c
+
+let lemma_reveal_clientHello_representable_scan c =
+  WS.lemma_clientHello_representable_scan c
+
+let lemma_reveal_ch_extensions_connect c =
+  WS.lemma_ch_extensions_connect c
+
+let lemma_reveal_ch_extensions_connect_valid c =
+  lemma_reveal_ch_extensions_connect c;
+  match reveal_ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                             None None false [] with
+  | Some (sn, Some k, _, ss) ->
+    (match TLS13.Wire.Semantics.clientHello_sig_algs c with
+     | Some sas -> lemma_reveal_synth_sig_schemes_id sas
+     | None -> ())
+  | _ -> ()
 
 (* ---- per-constructor reveals of [handshake_synth] (delegated to WS) ------- *)
 
@@ -147,26 +185,40 @@ let rec lemma_list_drop_length (#a:Type) (l:list a)
 
 let rec reveal_sh_key_share
   (l:list GESH.extensionServerHello)
-  (saw_supported_versions:bool)
+  (decided:bool)
   (key_share:option (B.bytes_of_len 32))
   : GTot (option (B.bytes_of_len 32)) (decreases l)
-  = match l with
-    | [] -> if saw_supported_versions then key_share else None
-    | e :: tl ->
-      (match e with
-       | GESH.Extension_data_supported_versions sv ->
-         if GPV.TLS_1p3? sv then reveal_sh_key_share tl true key_share else None
-       | GESH.Extension_data_key_share kse ->
-         if GNG.X25519? kse.GKSE.group
-         then (match reveal_key_exchange_to_key32 kse.GKSE.key_exchange with
-               | Some k -> reveal_sh_key_share tl saw_supported_versions (Some k)
-               | None -> None)
-         else None
-       | _ -> reveal_sh_key_share tl saw_supported_versions key_share)
+  = if decided then key_share
+    else match l with
+      | [] -> None
+      | e :: tl ->
+        (match e with
+         | GESH.Extension_data_key_share kse ->
+           reveal_sh_key_share tl true
+             (if GNG.X25519? kse.GKSE.group
+              then reveal_key_exchange_to_key32 kse.GKSE.key_exchange
+              else None)
+         | _ -> reveal_sh_key_share tl false None)
 
-let lemma_sh_key_share_nil saw_supported_versions key_share = ()
+let lemma_sh_key_share_nil decided key_share = ()
 
-let lemma_sh_key_share_cons e tl saw_supported_versions key_share = ()
+let lemma_sh_key_share_cons e tl decided key_share = ()
+
+let lemma_sh_key_share_decided l key_share = ()
+
+let rec lemma_reveal_sh_key_share_connect l =
+  match l with
+  | [] -> ()
+  | GESH.Extension_data_key_share kse :: tl ->
+      lemma_sh_key_share_cons (GESH.Extension_data_key_share kse) tl false None;
+      lemma_sh_key_share_decided tl
+        (if GNG.X25519? kse.GKSE.group
+         then reveal_key_exchange_to_key32 kse.GKSE.key_exchange
+         else None);
+      lemma_reveal_key_exchange_to_key32 kse.GKSE.key_exchange
+  | e :: tl ->
+      lemma_sh_key_share_cons e tl false None;
+      lemma_reveal_sh_key_share_connect tl
 
 (* ---- certificate chain helpers ------------------------------------------ *)
 
@@ -203,6 +255,40 @@ let rec lemma_cert_chain_total_bytes_prefix_le prefix x rest =
   | [] -> ()
   | _ :: tl -> lemma_cert_chain_total_bytes_prefix_le tl x rest
 
+(* ---- Certificate representability connect (scan <-> synth) --------------- *)
+
+(* [reveal_synth_cert_chain] and [Sem.cert_entries_data] are the same fold over
+   the same field ([cert_data]); they differ only by which module names the
+   [CertificateEntry] type.  Prove them equal by induction. *)
+let rec lemma_reveal_cert_chain_eq_entries (l:list GCE.certificateEntry)
+  : Lemma (ensures reveal_synth_cert_chain l == TLS13.Wire.Semantics.cert_entries_data l)
+          (decreases l)
+  = match l with
+    | [] -> ()
+    | _ :: tl -> lemma_reveal_cert_chain_eq_entries tl
+
+(* [reveal_cert_chain_total_bytes] and [WS.cert_chain_total_bytes] are the same
+   fold; the latter is abstract, so unfold it via its revealed recursion. *)
+let rec lemma_reveal_total_bytes_eq (ch:list B.bytes)
+  : Lemma (ensures reveal_cert_chain_total_bytes ch == WS.cert_chain_total_bytes ch)
+          (decreases ch)
+  = match ch with
+    | [] -> WS.lemma_cert_chain_total_bytes_nil ()
+    | x :: tl -> WS.lemma_cert_chain_total_bytes_cons x tl;
+                 lemma_reveal_total_bytes_eq tl
+
+let lemma_handshake_synth_certificate_none b =
+  lemma_handshake_synth_certificate b;
+  WS.lemma_certificate_representable (b <: GCert.certificate);
+  lemma_reveal_cert_chain_eq_entries (b.GCert.certificate_list);
+  lemma_reveal_total_bytes_eq (reveal_synth_cert_chain (b.GCert.certificate_list))
+
+let lemma_handshake_synth_certificate_some b =
+  lemma_handshake_synth_certificate b;
+  WS.lemma_certificate_representable (b <: GCert.certificate);
+  lemma_reveal_cert_chain_eq_entries (b.GCert.certificate_list);
+  lemma_reveal_total_bytes_eq (reveal_synth_cert_chain (b.GCert.certificate_list))
+
 (* ---- EncryptedExtensions ALPN scan -------------------------------------- *)
 
 let reveal_alpn_first_name pnl =
@@ -229,6 +315,37 @@ let lemma_synth_ee_cons_non_alpn e tl = ()
 let lemma_synth_ee_cons_alpn pnl tl = ()
 
 let lemma_alpn_first_name_index0 pnl = ()
+
+let lemma_alpn_first_name_nil pnl = ()
+
+(* Bridge: when the EE ALPN scan succeeds ([Some?]), its payload equals the
+   first-wins [Sem.encryptedExtensions_alpn], and the ALPN name (if any) is
+   <= 255 bytes (wire-bounded [protocolName]) — i.e. the EE is representable. *)
+let rec lemma_reveal_ee_connect_list (l:list GEEE.extensionEncryptedExtensions)
+  : Lemma
+    (requires Some? (reveal_synth_encrypted_extensions l))
+    (ensures
+      Some?.v (reveal_synth_encrypted_extensions l)
+        == TLS13.Wire.Semantics.ee_find_alpn l /\
+      (match TLS13.Wire.Semantics.ee_find_alpn l with
+       | Some a -> B.length a <= M.client_hello_server_name_max_len
+       | None -> true))
+    (decreases l)
+  = match l with
+    | [] -> lemma_synth_ee_nil ()
+    | e :: tl ->
+      (match e with
+       | GEEE.Extension_data_application_layer_protocol_negotiation pnl ->
+         lemma_synth_ee_cons_alpn pnl tl;
+         (match (pnl <: list GPN.protocolName) with
+          | [] -> lemma_alpn_first_name_nil pnl
+          | p :: _ -> lemma_alpn_first_name_index0 pnl)
+       | _ ->
+         lemma_synth_ee_cons_non_alpn e tl;
+         lemma_reveal_ee_connect_list tl)
+
+let lemma_reveal_ee_connect b =
+  lemma_reveal_ee_connect_list (b <: list GEEE.extensionEncryptedExtensions)
 
 (* ---- byte-level [parse_tls_message] arm reveals (delegated to WS) -------- *)
 

@@ -96,6 +96,16 @@ val lemma_reveal_synth_sig_schemes_cons (s:GSS.signatureScheme) (tl:list GSS.sig
   : Lemma (reveal_synth_sig_schemes (s :: tl) ==
            WS.synth_signature_scheme s :: reveal_synth_sig_schemes tl)
 
+(* [synth_cipher_suite]/[synth_signature_scheme] are the identity, so mapping
+   them over a list is the identity.  Needed to bridge the ClientHello scan
+   (whose facts are stated over [reveal_synth_*]) with [is_valid_client_hello]
+   (whose facts are stated over the raw [Sem.*] lists). *)
+val lemma_reveal_synth_cipher_suites_id (l:list GCS.cipherSuite)
+  : Lemma (ensures reveal_synth_cipher_suites l == l)
+
+val lemma_reveal_synth_sig_schemes_id (l:list GSS.signatureScheme)
+  : Lemma (ensures reveal_synth_sig_schemes l == l)
+
 val lemma_reveal_ch_server_name_nil (_:unit)
   : Lemma (reveal_ch_server_name [] == None)
 
@@ -120,6 +130,18 @@ val lemma_reveal_ch_find_key_share_cons (e:GKSE.keyShareEntry) (tl:list GKSE.key
                   | None -> reveal_ch_find_key_share tl)
             else reveal_ch_find_key_share tl))
 
+(* Reveal lemmas for the Semantics first-X25519 (any length) finder, used by the
+   commit-first key_share scan.  [kse_list_find_x25519] stops at the first X25519
+   entry regardless of its length. *)
+val lemma_reveal_kse_list_find_x25519_nil (_:unit)
+  : Lemma (TLS13.Wire.Semantics.kse_list_find_x25519 [] == None)
+
+val lemma_reveal_kse_list_find_x25519_cons (e:GKSE.keyShareEntry) (tl:list GKSE.keyShareEntry)
+  : Lemma (TLS13.Wire.Semantics.kse_list_find_x25519 (e :: tl) ==
+           (if GNG.X25519? e.GKSE.group
+            then Some (e.GKSE.key_exchange <: Seq.seq U8.t)
+            else TLS13.Wire.Semantics.kse_list_find_x25519 tl))
+
 val lemma_reveal_ch_extensions_nil
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions [] sn ks sv ss == (if sv then Some (sn, ks, sv, ss) else None))
@@ -129,9 +151,10 @@ val lemma_reveal_ch_extensions_cons_sn
   (tl:list GECH.extensionClientHello)
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_server_name snl :: tl) sn ks sv ss ==
-           (match reveal_ch_server_name snl with
-            | Some name -> reveal_ch_extensions tl (Some name) ks sv ss
-            | None -> None))
+           (if Some? sn then reveal_ch_extensions tl sn ks sv ss
+            else (match reveal_ch_server_name snl with
+                  | Some name -> reveal_ch_extensions tl (Some name) ks sv ss
+                  | None -> None)))
 
 val lemma_reveal_ch_extensions_cons_sg
   (sgl:GESG.extensionClientHello_extension_data_supported_groups)
@@ -145,16 +168,17 @@ val lemma_reveal_ch_extensions_cons_sa
   (tl:list GECH.extensionClientHello)
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_signature_algorithms ssl :: tl) sn ks sv ss ==
-           reveal_ch_extensions tl sn ks sv (reveal_synth_sig_schemes ssl))
+           reveal_ch_extensions tl sn ks sv (if Nil? ss then reveal_synth_sig_schemes ssl else ss))
 
 val lemma_reveal_ch_extensions_cons_ks
   (kscl:GESK.extensionClientHello_extension_data_key_share)
   (tl:list GECH.extensionClientHello)
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
-           (match reveal_ch_find_key_share kscl with
-            | Some k -> reveal_ch_extensions tl sn (Some k) sv ss
-            | None -> None))
+           (if Some? ks then reveal_ch_extensions tl sn ks sv ss
+            else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
+                  | Some raw -> if B.length raw = 32 then reveal_ch_extensions tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else None
+                  | None -> None)))
 
 val lemma_reveal_ch_extensions_cons_sv
   (svl:GESV.extensionClientHello_extension_data_supported_versions)
@@ -192,6 +216,55 @@ val lemma_synth_signature_scheme (s:GSS.signatureScheme)
 val lemma_synth_client_hello_reveal (c:GCH.clientHello)
   : Lemma (WS.synth_client_hello c ==
            (if WS.clientHello_representable c then Some c else None))
+
+(* Reveal [clientHello_representable] as the [ch_extensions] scan outcome plus the
+   cipher-suite bound, re-stated over [reveal_ch_extensions] for the Parser. *)
+val lemma_reveal_clientHello_representable_scan (c:GCH.clientHello)
+  : Lemma (WS.clientHello_representable c ==
+    ((match reveal_ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                                 None None false [] with
+      | Some (server_name, Some key_share, _, sig_schemes) ->
+        Cons? sig_schemes &&
+        FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes &&
+        (match server_name with
+         | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
+         | None -> true)
+      | _ -> false) &&
+     FStar.List.Tot.length (TLS13.Wire.Semantics.clientHello_cipher_suites c)
+       <= M.client_hello_max_cipher_suites))
+
+(* Parser bridge: re-export [WS.lemma_ch_extensions_connect] over
+   [reveal_ch_extensions] — the accepted ClientHello's stored fields equal the
+   first-wins [Sem] accessors that [is_valid_client_hello] compares against. *)
+val lemma_reveal_ch_extensions_connect (c:GCH.clientHello)
+  : Lemma (ensures (
+    match reveal_ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                               None None false [] with
+    | Some (sn, ks, _, ss) ->
+      sn == TLS13.Wire.Semantics.clientHello_server_name c /\
+      (match ks with
+       | Some k -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c
+                   == Some ((k <: B.bytes) <: Seq.seq U8.t)
+       | None -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None) /\
+      (match TLS13.Wire.Semantics.clientHello_sig_algs c with
+       | Some sas -> ss == reveal_synth_sig_schemes sas
+       | None -> ss == [])
+    | None -> True))
+
+(* Parser bridge, [is_valid]-shaped: when the accepted ClientHello has a
+   key_share and a *non-empty* sig_algs list, the stored scan fields equal the
+   raw first-wins [Sem] accessors (the sig_algs identity is folded in here so
+   the Parser needn't case-split to invoke it). *)
+val lemma_reveal_ch_extensions_connect_valid (c:GCH.clientHello)
+  : Lemma (ensures (
+    match reveal_ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                               None None false [] with
+    | Some (sn, Some k, _, ss) ->
+      TLS13.Wire.Semantics.clientHello_server_name c == sn /\
+      TLS13.Wire.Semantics.clientHello_key_share_x25519 c
+        == Some ((k <: B.bytes) <: Seq.seq U8.t) /\
+      (Cons? ss ==> TLS13.Wire.Semantics.clientHello_sig_algs c == Some ss)
+    | _ -> True))
 
 (* ============================================================================ *)
 (* Per-constructor reveals of [handshake_synth] (re-stated over the generated   *)
@@ -264,32 +337,44 @@ val lemma_list_drop_length (#a:Type) (l:list a)
 
 val reveal_sh_key_share
   (l:list GESH.extensionServerHello)
-  (saw_supported_versions:bool)
+  (decided:bool)
   (key_share:option (B.bytes_of_len 32))
   : GTot (option (B.bytes_of_len 32))
 
 val lemma_sh_key_share_nil
-  (saw_supported_versions:bool)
+  (decided:bool)
   (key_share:option (B.bytes_of_len 32))
-  : Lemma (ensures reveal_sh_key_share [] saw_supported_versions key_share ==
-                   (if saw_supported_versions then key_share else None))
+  : Lemma (ensures reveal_sh_key_share [] decided key_share ==
+                   (if decided then key_share else None))
 
 val lemma_sh_key_share_cons
   (e:GESH.extensionServerHello)
   (tl:list GESH.extensionServerHello)
-  (saw_supported_versions:bool)
+  (decided:bool)
   (key_share:option (B.bytes_of_len 32))
-  : Lemma (ensures reveal_sh_key_share (e :: tl) saw_supported_versions key_share ==
-      (match e with
-       | GESH.Extension_data_supported_versions sv ->
-         if GPV.TLS_1p3? sv then reveal_sh_key_share tl true key_share else None
-       | GESH.Extension_data_key_share kse ->
-         if GNG.X25519? kse.GKSE.group
-         then (match reveal_key_exchange_to_key32 kse.GKSE.key_exchange with
-               | Some k -> reveal_sh_key_share tl saw_supported_versions (Some k)
-               | None -> None)
-         else None
-       | _ -> reveal_sh_key_share tl saw_supported_versions key_share))
+  : Lemma (ensures reveal_sh_key_share (e :: tl) decided key_share ==
+      (if decided then key_share
+       else (match e with
+             | GESH.Extension_data_key_share kse ->
+               reveal_sh_key_share tl true
+                 (if GNG.X25519? kse.GKSE.group
+                  then reveal_key_exchange_to_key32 kse.GKSE.key_exchange
+                  else None)
+             | _ -> reveal_sh_key_share tl false None)))
+
+(* Once [decided], the scan short-circuits to the committed [key_share]. *)
+val lemma_sh_key_share_decided
+  (l:list GESH.extensionServerHello)
+  (key_share:option (B.bytes_of_len 32))
+  : Lemma (ensures reveal_sh_key_share l true key_share == key_share)
+
+(* Bridge: the first-wins [reveal_sh_key_share] agrees with the first-wins
+   [Sem.sh_find_key_share] (with a 32-byte length gate on the X25519 key). *)
+val lemma_reveal_sh_key_share_connect (l:list GESH.extensionServerHello)
+  : Lemma (reveal_sh_key_share l false None ==
+           (match TLS13.Wire.Semantics.sh_find_key_share l with
+            | Some k -> if B.length k = 32 then Some (k <: B.bytes_of_len 32) else None
+            | None -> None))
 
 (* ============================================================================ *)
 (* Certificate chain helpers.                                                   *)
@@ -322,6 +407,36 @@ val lemma_cert_chain_total_bytes_prefix_le
   : Lemma (ensures reveal_cert_chain_total_bytes prefix + B.length x <=
                    reveal_cert_chain_total_bytes
                      (FStar.List.Tot.append prefix (x :: rest)))
+
+(* ---- Certificate representability connect (scan <-> synth) --------------- *)
+
+(* When the Parser's chain scan reports the chain over-long (> 8 entries) or
+   over-size (> 32768 bytes), the Certificate message is not representable, so
+   the validating [handshake_synth] rejects it. *)
+val lemma_handshake_synth_certificate_none (b:GHS.handshake_body_certificate)
+  : Lemma
+    (requires
+      FStar.List.Tot.length (reveal_synth_cert_chain (b.GCert.certificate_list))
+        > M.certificate_chain_max_entries \/
+      reveal_cert_chain_total_bytes (reveal_synth_cert_chain (b.GCert.certificate_list))
+        > M.certificate_chain_max_bytes)
+    (ensures handshake_synth (GHS.Body_certificate b) == None)
+
+(* When the scan reports the chain within bounds, the message is representable:
+   [handshake_synth] accepts it, and the scanned chain equals the [Sem] entries
+   list (so [is_valid_certificate_msg] can be discharged over it). *)
+val lemma_handshake_synth_certificate_some (b:GHS.handshake_body_certificate)
+  : Lemma
+    (requires
+      FStar.List.Tot.length (reveal_synth_cert_chain (b.GCert.certificate_list))
+        <= M.certificate_chain_max_entries /\
+      reveal_cert_chain_total_bytes (reveal_synth_cert_chain (b.GCert.certificate_list))
+        <= M.certificate_chain_max_bytes)
+    (ensures
+      handshake_synth (GHS.Body_certificate b) ==
+        Some (M.Certificate (b <: GCert.certificate)) /\
+      reveal_synth_cert_chain (b.GCert.certificate_list) ==
+        TLS13.Wire.Semantics.certificate_entries (b <: GCert.certificate))
 
 (* ============================================================================ *)
 (* EncryptedExtensions ALPN scan.                                               *)
@@ -366,6 +481,26 @@ val lemma_alpn_first_name_index0
     (requires FStar.List.Tot.length (pnl <: list GPN.protocolName) > 0)
     (ensures reveal_alpn_first_name pnl ==
              Some (FStar.List.Tot.index (pnl <: list GPN.protocolName) 0 <: B.bytes))
+
+val lemma_alpn_first_name_nil
+  (pnl:GEEE.extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation)
+  : Lemma (requires (pnl <: list GPN.protocolName) == [])
+          (ensures reveal_alpn_first_name pnl == None)
+
+(* Bridge: when the EE ALPN scan succeeds ([Some?]), its payload equals the
+   first-wins [Sem.encryptedExtensions_alpn] and the ALPN name (if any) is
+   <= 255 bytes — i.e. the EE is representable. *)
+val lemma_reveal_ee_connect (b:GEE.encryptedExtensions)
+  : Lemma
+    (requires Some? (reveal_synth_encrypted_extensions
+                      (b <: list GEEE.extensionEncryptedExtensions)))
+    (ensures
+      Some?.v (reveal_synth_encrypted_extensions
+                (b <: list GEEE.extensionEncryptedExtensions))
+        == TLS13.Wire.Semantics.encryptedExtensions_alpn b /\
+      (match TLS13.Wire.Semantics.encryptedExtensions_alpn b with
+       | Some a -> B.length a <= M.client_hello_server_name_max_len
+       | None -> true))
 
 (* ============================================================================ *)
 (* Byte-level [parse_tls_message] arm reveals (thin re-exports of WS).          *)

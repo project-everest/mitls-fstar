@@ -108,11 +108,285 @@ val lemma_parse_key_update_def:
            | _ -> None)
      else None))
 
+
+(* ============================================================================ *)
+(* Read-direction spec helpers restored for TLS13.Impl.Parser (phase3bd).       *)
+(*                                                                              *)
+(* These are the field scanners and per-constructor [synth_handshake_msg_of]    *)
+(* reveals that the byte-level parser needs.  The representability predicates    *)
+(* (the accept/reject gate of the validating [synth_handshake_msg_of]) are      *)
+(* exposed opaquely above so the reveal lemmas can name the gate; their bodies   *)
+(* are unchanged in the .fst.                                                    *)
+(* ============================================================================ *)
+
+(* --- cipher-suite / signature-scheme synths (identity on the shared enums,
+       since [T.cipher_suite == GCS.cipherSuite] and
+       [T.signature_scheme == GSS.signatureScheme]). --- *)
+
+val synth_cipher_suite:
+  c:GCS.cipherSuite ->
+  GTot T.cipher_suite
+
+val lemma_synth_cipher_suite:
+  c:GCS.cipherSuite ->
+  Lemma (synth_cipher_suite c == c)
+
+val synth_cipher_suites:
+  l:list GCS.cipherSuite ->
+  GTot (list T.cipher_suite)
+
+val lemma_synth_cipher_suites_nil:
+  unit ->
+  Lemma (synth_cipher_suites [] == [])
+
+val lemma_synth_cipher_suites_cons:
+  c:GCS.cipherSuite ->
+  tl:list GCS.cipherSuite ->
+  Lemma (synth_cipher_suites (c :: tl) ==
+         synth_cipher_suite c :: synth_cipher_suites tl)
+
+val synth_signature_scheme:
+  s:GSS.signatureScheme ->
+  GTot T.signature_scheme
+
+val synth_sig_schemes:
+  l:list GSS.signatureScheme ->
+  GTot (list T.signature_scheme)
+
+val lemma_synth_sig_schemes_nil:
+  unit ->
+  Lemma (synth_sig_schemes [] == [])
+
+val lemma_synth_sig_schemes_cons:
+  s:GSS.signatureScheme ->
+  tl:list GSS.signatureScheme ->
+  Lemma (synth_sig_schemes (s :: tl) ==
+         synth_signature_scheme s :: synth_sig_schemes tl)
+
+(* --- ClientHello field scanners --- *)
+
+val key_exchange_to_key32:
+  ke:GKSE.keyShareEntry_key_exchange ->
+  GTot (option (B.bytes_of_len 32))
+
+val lemma_key_exchange_to_key32:
+  ke:GKSE.keyShareEntry_key_exchange ->
+  Lemma (key_exchange_to_key32 ke ==
+    (let b : B.bytes = (ke <: B.bytes) in
+     if B.length b = 32 then Some (b <: B.bytes_of_len 32) else None))
+
+val ch_find_key_share:
+  l:list GKSE.keyShareEntry ->
+  GTot (option (B.bytes_of_len 32))
+
+val lemma_ch_find_key_share_nil:
+  unit ->
+  Lemma (ch_find_key_share [] == None)
+
+val lemma_ch_find_key_share_cons:
+  e:GKSE.keyShareEntry ->
+  tl:list GKSE.keyShareEntry ->
+  Lemma (ch_find_key_share (e :: tl) ==
+         (if GNG.X25519? e.GKSE.group
+          then (match key_exchange_to_key32 e.GKSE.key_exchange with
+                | Some k -> Some k
+                | None -> ch_find_key_share tl)
+          else ch_find_key_share tl))
+
+val ch_server_name:
+  snl:list GSN.serverName ->
+  GTot (option T.hostname)
+
+val lemma_ch_server_name_nil:
+  unit ->
+  Lemma (ch_server_name [] == None)
+
+val lemma_ch_server_name_host:
+  h:GHN.hostName ->
+  tl:list GSN.serverName ->
+  Lemma (ch_server_name (GSN.Name_host_name h :: tl) ==
+         Some ((h <: B.bytes) <: T.hostname))
+
+val ch_extensions:
+  l:list GECH.extensionClientHello ->
+  server_name:option T.hostname ->
+  key_share:option (B.bytes_of_len 32) ->
+  saw_supported_versions:bool ->
+  signature_schemes:list T.signature_scheme ->
+  GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme))
+
+val lemma_ch_extensions_nil:
+  sn:option T.hostname ->
+  ks:option (B.bytes_of_len 32) ->
+  sv:bool ->
+  ss:list T.signature_scheme ->
+  Lemma (ch_extensions [] sn ks sv ss == (if sv then Some (sn, ks, sv, ss) else None))
+
+val lemma_ch_extensions_cons_sn:
+  snl:GESN.extensionClientHello_extension_data_server_name ->
+  tl:list GECH.extensionClientHello ->
+  sn:option T.hostname ->
+  ks:option (B.bytes_of_len 32) ->
+  sv:bool ->
+  ss:list T.signature_scheme ->
+  Lemma (ch_extensions (GECH.Extension_data_server_name snl :: tl) sn ks sv ss ==
+         (if Some? sn then ch_extensions tl sn ks sv ss
+          else (match ch_server_name snl with
+                | Some name -> ch_extensions tl (Some name) ks sv ss
+                | None -> None)))
+
+val lemma_ch_extensions_cons_sg:
+  sgl:GESG.extensionClientHello_extension_data_supported_groups ->
+  tl:list GECH.extensionClientHello ->
+  sn:option T.hostname ->
+  ks:option (B.bytes_of_len 32) ->
+  sv:bool ->
+  ss:list T.signature_scheme ->
+  Lemma (ch_extensions (GECH.Extension_data_supported_groups sgl :: tl) sn ks sv ss ==
+         ch_extensions tl sn ks sv ss)
+
+val lemma_ch_extensions_cons_sa:
+  ssl:GESA.extensionClientHello_extension_data_signature_algorithms ->
+  tl:list GECH.extensionClientHello ->
+  sn:option T.hostname ->
+  ks:option (B.bytes_of_len 32) ->
+  sv:bool ->
+  ss:list T.signature_scheme ->
+  Lemma (ch_extensions (GECH.Extension_data_signature_algorithms ssl :: tl) sn ks sv ss ==
+         ch_extensions tl sn ks sv (if Nil? ss then synth_sig_schemes ssl else ss))
+
+val lemma_ch_extensions_cons_ks:
+  kscl:GESK.extensionClientHello_extension_data_key_share ->
+  tl:list GECH.extensionClientHello ->
+  sn:option T.hostname ->
+  ks:option (B.bytes_of_len 32) ->
+  sv:bool ->
+  ss:list T.signature_scheme ->
+  Lemma (ch_extensions (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
+         (if Some? ks then ch_extensions tl sn ks sv ss
+          else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
+                | Some raw -> if B.length raw = 32 then ch_extensions tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else None
+                | None -> None)))
+
+val lemma_ch_extensions_cons_sv:
+  svl:GESV.extensionClientHello_extension_data_supported_versions ->
+  tl:list GECH.extensionClientHello ->
+  sn:option T.hostname ->
+  ks:option (B.bytes_of_len 32) ->
+  sv:bool ->
+  ss:list T.signature_scheme ->
+  Lemma (ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
+         (if FStar.List.Tot.mem GPV.TLS_1p3 svl
+          then ch_extensions tl sn ks true ss
+          else None))
+
+val lemma_ch_extensions_cons_other:
+  e:GECH.extensionClientHello ->
+  tl:list GECH.extensionClientHello ->
+  sn:option T.hostname ->
+  ks:option (B.bytes_of_len 32) ->
+  sv:bool ->
+  ss:list T.signature_scheme ->
+  Lemma
+    (requires
+      not (GECH.Extension_data_server_name? e) /\
+      not (GECH.Extension_data_supported_groups? e) /\
+      not (GECH.Extension_data_signature_algorithms? e) /\
+      not (GECH.Extension_data_key_share? e) /\
+      not (GECH.Extension_data_supported_versions? e))
+    (ensures ch_extensions (e :: tl) sn ks sv ss ==
+             ch_extensions tl sn ks sv ss)
+(* The total byte size of a certificate chain (sum of raw DER blob lengths),
+   exposed so the Reveal layer can bridge it to [reveal_cert_chain_total_bytes].
+   Declared here (ahead of the representability predicates) to match the order
+   of the realizing definitions in the implementation module. *)
+val cert_chain_total_bytes (l:list (Seq.seq U8.t)) : GTot nat
+
 val clientHello_representable (b:GCH.clientHello) : GTot bool
+
+(* --- Reveal [clientHello_representable] as the [ch_extensions] scan outcome
+       (X25519 key share present, <=16 sig schemes, server_name <=255 bytes)
+       plus the <=16 cipher-suite bound.  Definitional; lets the byte-level
+       Parser tie its scan result to representability. --- *)
+
+val lemma_clientHello_representable_scan:
+  c:GCH.clientHello ->
+  Lemma (clientHello_representable c ==
+    ((match ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                          None None false [] with
+      | Some (server_name, Some key_share, _, sig_schemes) ->
+        Cons? sig_schemes &&
+        FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes &&
+        (match server_name with
+         | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
+         | None -> true)
+      | _ -> false) &&
+     FStar.List.Tot.length (TLS13.Wire.Semantics.clientHello_cipher_suites c)
+       <= M.client_hello_max_cipher_suites))
+
+(* --- The Parser bridge: an accepted (commit-first) ClientHello's stored
+       (server_name, key_share, sig_schemes) equal the first-wins [Sem]
+       accessors used by [is_valid_client_hello].  Under representability the
+       key share is present (Some) and sig schemes non-empty (Cons?), so the
+       Some/Cons? branches below pin the Sem accessors exactly. --- *)
+val lemma_ch_extensions_connect:
+  c:GCH.clientHello ->
+  Lemma (ensures (
+    match ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                        None None false [] with
+    | Some (sn, ks, _, ss) ->
+      sn == TLS13.Wire.Semantics.clientHello_server_name c /\
+      (match ks with
+       | Some k -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c
+                   == Some ((k <: B.bytes) <: Seq.seq U8.t)
+       | None -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None) /\
+      (match TLS13.Wire.Semantics.clientHello_sig_algs c with
+       | Some sas -> ss == synth_sig_schemes sas
+       | None -> ss == [])
+    | None -> True))
+
 val serverHello_representable (b:GSH.serverHello) : GTot bool
 val encryptedExtensions_representable (b:GEE.encryptedExtensions) : GTot bool
 val certificate_representable (b:GCert.certificate) : GTot bool
 val certificateVerify_representable (b:GCV.certificateVerify) : GTot bool
+
+(* Reveal the opaque per-message representability predicates as their [Sem]-level
+   accept conditions (the Parser's accept/reject branches compute these). *)
+val lemma_certificateVerify_representable (b:GCV.certificateVerify)
+  : Lemma (certificateVerify_representable b ==
+           (B.length (TLS13.Wire.Semantics.certificateVerify_signature_bytes b)
+            <= M.signature_max_len))
+
+val lemma_serverHello_representable (b:GSH.serverHello)
+  : Lemma (serverHello_representable b ==
+           ((match TLS13.Wire.Semantics.serverHello_key_share_x25519 b with
+             | Some k -> B.length k = 32
+             | None -> false) &&
+            (match TLS13.Wire.Semantics.serverHello_cipher_suite b with
+             | Some cs -> cs = T.TLS_CHACHA20_POLY1305_SHA256
+             | None -> false)))
+
+val lemma_encryptedExtensions_representable (b:GEE.encryptedExtensions)
+  : Lemma (encryptedExtensions_representable b ==
+           (match TLS13.Wire.Semantics.encryptedExtensions_alpn b with
+            | Some a -> B.length a <= M.client_hello_server_name_max_len
+            | None -> true))
+
+(* Reveal [certificate_representable] as its [Sem]-level accept condition, then
+   the recursion equations for [cert_chain_total_bytes] (order matches the
+   realizing definitions in the implementation module). *)
+val lemma_certificate_representable (b:GCert.certificate)
+  : Lemma (certificate_representable b ==
+           (FStar.List.Tot.length (TLS13.Wire.Semantics.certificate_entries b)
+              <= M.certificate_chain_max_entries &&
+            cert_chain_total_bytes (TLS13.Wire.Semantics.certificate_entries b)
+              <= M.certificate_chain_max_bytes))
+
+val lemma_cert_chain_total_bytes_nil (_:unit)
+  : Lemma (cert_chain_total_bytes [] == 0)
+
+val lemma_cert_chain_total_bytes_cons (c:Seq.seq U8.t) (tl:list (Seq.seq U8.t))
+  : Lemma (cert_chain_total_bytes (c :: tl) == B.length c + cert_chain_total_bytes tl)
 
 val synth_handshake_msg_of:
   h:GHS.handshake ->
@@ -372,193 +646,6 @@ val lemma_parse_tls_message_round_trip:
 val lemma_parse_serialize_handshake_finished (fin:GFin.finished) :
   Lemma (parse_tls_message T.Handshake (serialize_handshake (M.Finished fin))
            == Some (M.TlsHandshake (M.Finished fin)))
-
-(* ============================================================================ *)
-(* Read-direction spec helpers restored for TLS13.Impl.Parser (phase3bd).       *)
-(*                                                                              *)
-(* These are the field scanners and per-constructor [synth_handshake_msg_of]    *)
-(* reveals that the byte-level parser needs.  The representability predicates    *)
-(* (the accept/reject gate of the validating [synth_handshake_msg_of]) are      *)
-(* exposed opaquely above so the reveal lemmas can name the gate; their bodies   *)
-(* are unchanged in the .fst.                                                    *)
-(* ============================================================================ *)
-
-(* --- cipher-suite / signature-scheme synths (identity on the shared enums,
-       since [T.cipher_suite == GCS.cipherSuite] and
-       [T.signature_scheme == GSS.signatureScheme]). --- *)
-
-val synth_cipher_suite:
-  c:GCS.cipherSuite ->
-  GTot T.cipher_suite
-
-val lemma_synth_cipher_suite:
-  c:GCS.cipherSuite ->
-  Lemma (synth_cipher_suite c == c)
-
-val synth_cipher_suites:
-  l:list GCS.cipherSuite ->
-  GTot (list T.cipher_suite)
-
-val lemma_synth_cipher_suites_nil:
-  unit ->
-  Lemma (synth_cipher_suites [] == [])
-
-val lemma_synth_cipher_suites_cons:
-  c:GCS.cipherSuite ->
-  tl:list GCS.cipherSuite ->
-  Lemma (synth_cipher_suites (c :: tl) ==
-         synth_cipher_suite c :: synth_cipher_suites tl)
-
-val synth_signature_scheme:
-  s:GSS.signatureScheme ->
-  GTot T.signature_scheme
-
-val synth_sig_schemes:
-  l:list GSS.signatureScheme ->
-  GTot (list T.signature_scheme)
-
-val lemma_synth_sig_schemes_nil:
-  unit ->
-  Lemma (synth_sig_schemes [] == [])
-
-val lemma_synth_sig_schemes_cons:
-  s:GSS.signatureScheme ->
-  tl:list GSS.signatureScheme ->
-  Lemma (synth_sig_schemes (s :: tl) ==
-         synth_signature_scheme s :: synth_sig_schemes tl)
-
-(* --- ClientHello field scanners --- *)
-
-val key_exchange_to_key32:
-  ke:GKSE.keyShareEntry_key_exchange ->
-  GTot (option (B.bytes_of_len 32))
-
-val lemma_key_exchange_to_key32:
-  ke:GKSE.keyShareEntry_key_exchange ->
-  Lemma (key_exchange_to_key32 ke ==
-    (let b : B.bytes = (ke <: B.bytes) in
-     if B.length b = 32 then Some (b <: B.bytes_of_len 32) else None))
-
-val ch_find_key_share:
-  l:list GKSE.keyShareEntry ->
-  GTot (option (B.bytes_of_len 32))
-
-val lemma_ch_find_key_share_nil:
-  unit ->
-  Lemma (ch_find_key_share [] == None)
-
-val lemma_ch_find_key_share_cons:
-  e:GKSE.keyShareEntry ->
-  tl:list GKSE.keyShareEntry ->
-  Lemma (ch_find_key_share (e :: tl) ==
-         (if GNG.X25519? e.GKSE.group
-          then (match key_exchange_to_key32 e.GKSE.key_exchange with
-                | Some k -> Some k
-                | None -> ch_find_key_share tl)
-          else ch_find_key_share tl))
-
-val ch_server_name:
-  snl:list GSN.serverName ->
-  GTot (option T.hostname)
-
-val lemma_ch_server_name_nil:
-  unit ->
-  Lemma (ch_server_name [] == None)
-
-val lemma_ch_server_name_host:
-  h:GHN.hostName ->
-  tl:list GSN.serverName ->
-  Lemma (ch_server_name (GSN.Name_host_name h :: tl) ==
-         Some ((h <: B.bytes) <: T.hostname))
-
-val ch_extensions:
-  l:list GECH.extensionClientHello ->
-  server_name:option T.hostname ->
-  key_share:option (B.bytes_of_len 32) ->
-  saw_supported_versions:bool ->
-  signature_schemes:list T.signature_scheme ->
-  GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme))
-
-val lemma_ch_extensions_nil:
-  sn:option T.hostname ->
-  ks:option (B.bytes_of_len 32) ->
-  sv:bool ->
-  ss:list T.signature_scheme ->
-  Lemma (ch_extensions [] sn ks sv ss == (if sv then Some (sn, ks, sv, ss) else None))
-
-val lemma_ch_extensions_cons_sn:
-  snl:GESN.extensionClientHello_extension_data_server_name ->
-  tl:list GECH.extensionClientHello ->
-  sn:option T.hostname ->
-  ks:option (B.bytes_of_len 32) ->
-  sv:bool ->
-  ss:list T.signature_scheme ->
-  Lemma (ch_extensions (GECH.Extension_data_server_name snl :: tl) sn ks sv ss ==
-         (match ch_server_name snl with
-          | Some name -> ch_extensions tl (Some name) ks sv ss
-          | None -> None))
-
-val lemma_ch_extensions_cons_sg:
-  sgl:GESG.extensionClientHello_extension_data_supported_groups ->
-  tl:list GECH.extensionClientHello ->
-  sn:option T.hostname ->
-  ks:option (B.bytes_of_len 32) ->
-  sv:bool ->
-  ss:list T.signature_scheme ->
-  Lemma (ch_extensions (GECH.Extension_data_supported_groups sgl :: tl) sn ks sv ss ==
-         ch_extensions tl sn ks sv ss)
-
-val lemma_ch_extensions_cons_sa:
-  ssl:GESA.extensionClientHello_extension_data_signature_algorithms ->
-  tl:list GECH.extensionClientHello ->
-  sn:option T.hostname ->
-  ks:option (B.bytes_of_len 32) ->
-  sv:bool ->
-  ss:list T.signature_scheme ->
-  Lemma (ch_extensions (GECH.Extension_data_signature_algorithms ssl :: tl) sn ks sv ss ==
-         ch_extensions tl sn ks sv (synth_sig_schemes ssl))
-
-val lemma_ch_extensions_cons_ks:
-  kscl:GESK.extensionClientHello_extension_data_key_share ->
-  tl:list GECH.extensionClientHello ->
-  sn:option T.hostname ->
-  ks:option (B.bytes_of_len 32) ->
-  sv:bool ->
-  ss:list T.signature_scheme ->
-  Lemma (ch_extensions (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
-         (match ch_find_key_share kscl with
-          | Some k -> ch_extensions tl sn (Some k) sv ss
-          | None -> None))
-
-val lemma_ch_extensions_cons_sv:
-  svl:GESV.extensionClientHello_extension_data_supported_versions ->
-  tl:list GECH.extensionClientHello ->
-  sn:option T.hostname ->
-  ks:option (B.bytes_of_len 32) ->
-  sv:bool ->
-  ss:list T.signature_scheme ->
-  Lemma (ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
-         (if FStar.List.Tot.mem GPV.TLS_1p3 svl
-          then ch_extensions tl sn ks true ss
-          else None))
-
-val lemma_ch_extensions_cons_other:
-  e:GECH.extensionClientHello ->
-  tl:list GECH.extensionClientHello ->
-  sn:option T.hostname ->
-  ks:option (B.bytes_of_len 32) ->
-  sv:bool ->
-  ss:list T.signature_scheme ->
-  Lemma
-    (requires
-      not (GECH.Extension_data_server_name? e) /\
-      not (GECH.Extension_data_supported_groups? e) /\
-      not (GECH.Extension_data_signature_algorithms? e) /\
-      not (GECH.Extension_data_key_share? e) /\
-      not (GECH.Extension_data_supported_versions? e))
-    (ensures ch_extensions (e :: tl) sn ks sv ss ==
-             ch_extensions tl sn ks sv ss)
-
 (* --- synth_client_hello: the ClientHello accept/reject gate.  Re-targeted to
        return the generated wire record itself ([Some b] iff representable),
        matching how [synth_handshake_msg_of] wraps [M.ClientHello b]. --- *)
