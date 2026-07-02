@@ -127,6 +127,60 @@ let state_ahead
   exists trace.
     SM.trace_reaches system.WFSM.wfsm_state_machine st0 trace st1
 
+let histories_ahead
+  (snapshot_received:TCP.bytes)
+  (snapshot_sent:TCP.bytes)
+  (current_received:TCP.bytes)
+  (current_sent:TCP.bytes)
+  : prop =
+  TCP.bytes_extends snapshot_received current_received /\
+  TCP.bytes_extends snapshot_sent current_sent
+
+let lemma_bytes_extends_refl (bytes:TCP.bytes)
+  : Lemma (TCP.bytes_extends bytes bytes)
+=
+  Seq.lemma_len_slice bytes 0 (Seq.length bytes);
+  assert (forall (i:nat{i < Seq.length bytes}).
+            Seq.index bytes i == Seq.index (Seq.slice bytes 0 (Seq.length bytes)) i);
+  Seq.lemma_eq_intro bytes (Seq.slice bytes 0 (Seq.length bytes))
+
+let lemma_bytes_extends_append (old:TCP.bytes) (delta:TCP.bytes)
+  : Lemma (TCP.bytes_extends old (Seq.append old delta))
+=
+  Seq.lemma_len_append old delta;
+  Seq.lemma_len_slice (Seq.append old delta) 0 (Seq.length old);
+  assert (forall (i:nat{i < Seq.length old}).
+            Seq.index old i ==
+            Seq.index (Seq.slice (Seq.append old delta) 0 (Seq.length old)) i);
+  Seq.lemma_eq_intro old (Seq.slice (Seq.append old delta) 0 (Seq.length old))
+
+let lemma_bytes_extends_append_equal
+  (old:TCP.bytes)
+  (next:TCP.bytes)
+  (delta:TCP.bytes)
+  : Lemma
+      (requires Seq.equal next (Seq.append old delta))
+      (ensures TCP.bytes_extends old next)
+=
+  lemma_bytes_extends_append old delta;
+  Seq.lemma_eq_elim next (Seq.append old delta);
+  assert (TCP.bytes_extends old next)
+
+let lemma_bytes_extends_trans
+  (old:TCP.bytes)
+  (mid:TCP.bytes)
+  (next:TCP.bytes)
+  : Lemma
+      (requires TCP.bytes_extends old mid /\ TCP.bytes_extends mid next)
+      (ensures TCP.bytes_extends old next)
+=
+  Seq.lemma_len_slice next 0 (Seq.length old);
+  Seq.lemma_eq_elim old (Seq.slice mid 0 (Seq.length old));
+  Seq.lemma_eq_elim mid (Seq.slice next 0 (Seq.length mid));
+  assert (forall (i:nat{i < Seq.length old}).
+            Seq.index old i == Seq.index (Seq.slice next 0 (Seq.length old)) i);
+  Seq.lemma_eq_intro old (Seq.slice next 0 (Seq.length old))
+
 let network_error_refines_state_machine
   (#state:Type0)
   (#wire_message:Type0)
@@ -897,7 +951,7 @@ class protocol_implementation
     received:Ghost.erased TCP.bytes ->
     sent:Ghost.erased TCP.bytes ->
     st:Ghost.erased state ->
-      stt unit
+      stt_ghost unit emp_inames
         (pi_invariant
           i
           (Ghost.reveal received)
@@ -922,7 +976,7 @@ class protocol_implementation
     received:Ghost.erased TCP.bytes ->
     sent:Ghost.erased TCP.bytes ->
     st:Ghost.erased state ->
-      stt unit
+      stt_ghost unit emp_inames
         (pi_invariant
           i
           (Ghost.reveal received)
@@ -948,7 +1002,7 @@ class protocol_implementation
     current_received:Ghost.erased TCP.bytes ->
     current_sent:Ghost.erased TCP.bytes ->
     current_state:Ghost.erased state ->
-      stt unit
+      stt_ghost unit emp_inames
         (pi_snapshot
           i
           (Ghost.reveal snapshot_received)
@@ -974,7 +1028,12 @@ class protocol_implementation
             state_ahead
               (pi_system i)
               (Ghost.reveal snapshot_state)
-              (Ghost.reveal current_state)));
+              (Ghost.reveal current_state) /\
+            histories_ahead
+              (Ghost.reveal snapshot_received)
+              (Ghost.reveal snapshot_sent)
+              (Ghost.reveal current_received)
+              (Ghost.reveal current_sent)));
 
   pi_process_network:
     i:impl ->

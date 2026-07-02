@@ -22,6 +22,7 @@ module RTC = FStar.ReflexiveTransitiveClosure
 module Seq = FStar.Seq
 module SM = Common.StateMachine
 module SZ = FStar.SizeT
+module TCP = Common.TCP
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module WF = Common.WireFormat
@@ -2218,6 +2219,204 @@ let lemma_client_progress_state_ahead
     st1
     ()
 
+let lemma_client_legal_delta_histories_ahead
+  (st0:CS.connection_state)
+  (delta:CS.connection_delta)
+  (st1:CS.connection_state)
+  : Lemma
+      (requires CS.legal_connection_delta st0 delta st1)
+      (ensures
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_received /\
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_sent
+          st1.CS.cs_wire_log.CL.raw_sent)
+=
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    (B.append st0.CS.cs_wire_log.CL.raw_received delta.CS.delta_raw_received));
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (B.append st0.CS.cs_wire_log.CL.raw_sent delta.CS.delta_raw_sent));
+  CPI.lemma_bytes_extends_append_equal
+    st0.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_received
+    delta.CS.delta_raw_received;
+  CPI.lemma_bytes_extends_append_equal
+    st0.CS.cs_wire_log.CL.raw_sent
+    st1.CS.cs_wire_log.CL.raw_sent
+    delta.CS.delta_raw_sent
+
+let lemma_client_step_histories_ahead
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTypes.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTypes.local_output)
+  : Lemma
+      (requires client_step st0 ev st1 out)
+      (ensures
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_received /\
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_sent
+          st1.CS.cs_wire_log.CL.raw_sent)
+=
+  match ev with
+  | SM.WireEvent wire ->
+    let msg =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        M.tls_message
+        (fun msg ->
+          let conn_ev =
+            CS.ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = msg;
+            } in
+          CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event = conn_ev;
+              CS.delta_raw_sent =
+                WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+              CS.delta_raw_received = CW.wire_serialize wire;
+            }
+            st1 /\
+          client_local_outputs_match conn_ev out.SM.so_local_outputs) in
+    let conn_ev =
+      CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = msg;
+      } in
+    let delta = {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent =
+        WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+      CS.delta_raw_received = CW.wire_serialize wire;
+    } in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_client_legal_delta_histories_ahead st0 delta st1
+  | SM.LocalEvent local ->
+    let api = CTypes.client_local_event_api local in
+    let conn_ev =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        CS.conn_event
+        (fun conn_ev ->
+          exists raw_sent raw_received.
+            client_api_event_matches st0 api conn_ev /\
+            client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+            client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+            CS.legal_connection_delta
+              st0
+              {
+                CS.delta_event = conn_ev;
+                CS.delta_raw_sent = raw_sent;
+                CS.delta_raw_received = raw_received;
+              }
+              st1) in
+    let raw_sent =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent ->
+          exists raw_received.
+            client_api_event_matches st0 api conn_ev /\
+            client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+            client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+            CS.legal_connection_delta
+              st0
+              {
+                CS.delta_event = conn_ev;
+                CS.delta_raw_sent = raw_sent;
+                CS.delta_raw_received = raw_received;
+              }
+              st1) in
+    let raw_received =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          client_api_event_matches st0 api conn_ev /\
+          client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+          client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+          CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event = conn_ev;
+              CS.delta_raw_sent = raw_sent;
+              CS.delta_raw_received = raw_received;
+            }
+            st1) in
+    let delta = {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    } in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_client_legal_delta_histories_ahead st0 delta st1
+
+let lemma_client_canonical_step_rel_histories_ahead
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : Lemma
+      (requires client_canonical_step_rel st0 st1)
+      (ensures
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_received /\
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_sent
+          st1.CS.cs_wire_log.CL.raw_sent)
+=
+  let ev =
+    FStar.IndefiniteDescription.indefinite_description_ghost
+      (SM.event CW.wire_message CTypes.client_local_event)
+      (fun ev -> exists out. client_step st0 ev st1 out) in
+  let out =
+    FStar.IndefiniteDescription.indefinite_description_ghost
+      (SM.step_output CW.wire_message CTypes.local_output)
+      (fun out -> client_step st0 ev st1 out) in
+  lemma_client_step_histories_ahead st0 ev st1 out
+
+let lemma_client_progress_histories_ahead
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : Lemma
+      (requires client_progress_preorder st0 st1)
+      (ensures
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_received /\
+        TCP.bytes_extends
+          st0.CS.cs_wire_log.CL.raw_sent
+          st1.CS.cs_wire_log.CL.raw_sent)
+=
+  RTC.induct
+    client_canonical_step_rel
+    (fun x y ->
+      TCP.bytes_extends
+        x.CS.cs_wire_log.CL.raw_received
+        y.CS.cs_wire_log.CL.raw_received /\
+      TCP.bytes_extends
+        x.CS.cs_wire_log.CL.raw_sent
+        y.CS.cs_wire_log.CL.raw_sent)
+    (fun x ->
+      CPI.lemma_bytes_extends_refl x.CS.cs_wire_log.CL.raw_received;
+      CPI.lemma_bytes_extends_refl x.CS.cs_wire_log.CL.raw_sent)
+    (fun x y ->
+      lemma_client_canonical_step_rel_histories_ahead x y)
+    (fun x y z ->
+      CPI.lemma_bytes_extends_trans
+        x.CS.cs_wire_log.CL.raw_received
+        y.CS.cs_wire_log.CL.raw_received
+        z.CS.cs_wire_log.CL.raw_received;
+      CPI.lemma_bytes_extends_trans
+        x.CS.cs_wire_log.CL.raw_sent
+        y.CS.cs_wire_log.CL.raw_sent
+        z.CS.cs_wire_log.CL.raw_sent)
+    st0
+    st1
+    ()
+
 let client_invariant
   (cc:canonical_client)
   (received:B.bytes)
@@ -2235,13 +2434,18 @@ let client_invariant
 [@@pulse_unfold]
 let client_snapshot
   (cc:canonical_client)
-  (_received:B.bytes)
-  (_sent:B.bytes)
+ (received:B.bytes)
+ (sent:B.bytes)
   (st:CS.connection_state)
   : slprop =
-  MR.snapshot cc.canonical_client_progress st
+ MR.snapshot cc.canonical_client_progress st **
+ pure (client_invariant_pure
+   (Ghost.reveal cc.canonical_client_initial)
+   received
+   sent
+   st)
 
-fn client_invariant_valid
+ghost fn client_invariant_valid
   (cc:canonical_client)
   (received:Ghost.erased B.bytes)
   (sent:Ghost.erased B.bytes)
@@ -2291,7 +2495,7 @@ ensures client_invariant
     (Ghost.reveal st))
 }
 
-fn take_client_snapshot
+ghost fn take_client_snapshot
   (cc:canonical_client)
   (received:Ghost.erased B.bytes)
   (sent:Ghost.erased B.bytes)
@@ -2320,6 +2524,11 @@ ensures client_invariant
   MR.take_snapshot
     cc.canonical_client_progress
     (Ghost.reveal st);
+  assert (pure (client_invariant_pure
+    (Ghost.reveal cc.canonical_client_initial)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)));
   fold (client_invariant
     cc
     (Ghost.reveal received)
@@ -2332,7 +2541,7 @@ ensures client_invariant
     (Ghost.reveal st))
 }
 
-fn recall_client_snapshot
+ghost fn recall_client_snapshot
   (cc:canonical_client)
   (snapshot_received:Ghost.erased B.bytes)
   (snapshot_sent:Ghost.erased B.bytes)
@@ -2364,7 +2573,12 @@ ensures client_snapshot
     CPI.state_ahead
       (client_system (Ghost.reveal cc.canonical_client_initial))
       (Ghost.reveal snapshot_state)
-      (Ghost.reveal current_state))
+      (Ghost.reveal current_state) /\
+    CPI.histories_ahead
+      (Ghost.reveal snapshot_received)
+      (Ghost.reveal snapshot_sent)
+      (Ghost.reveal current_received)
+      (Ghost.reveal current_sent))
 {
   unfold (client_snapshot
     cc
@@ -2382,10 +2596,28 @@ ensures client_snapshot
     (Ghost.reveal cc.canonical_client_initial)
     (Ghost.reveal snapshot_state)
     (Ghost.reveal current_state);
+  lemma_client_progress_histories_ahead
+    (Ghost.reveal snapshot_state)
+    (Ghost.reveal current_state);
   assert (pure (CPI.state_ahead
     (client_system (Ghost.reveal cc.canonical_client_initial))
     (Ghost.reveal snapshot_state)
     (Ghost.reveal current_state)));
+  assert (pure (client_invariant_pure
+    (Ghost.reveal cc.canonical_client_initial)
+    (Ghost.reveal snapshot_received)
+    (Ghost.reveal snapshot_sent)
+    (Ghost.reveal snapshot_state)));
+  assert (pure (client_invariant_pure
+    (Ghost.reveal cc.canonical_client_initial)
+    (Ghost.reveal current_received)
+    (Ghost.reveal current_sent)
+    (Ghost.reveal current_state)));
+  assert (pure (CPI.histories_ahead
+    (Ghost.reveal snapshot_received)
+    (Ghost.reveal snapshot_sent)
+    (Ghost.reveal current_received)
+    (Ghost.reveal current_sent)));
   fold (client_invariant
     cc
     (Ghost.reveal current_received)

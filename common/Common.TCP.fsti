@@ -19,19 +19,33 @@ type history = {
   tcp_sent: bytes;
 }
 
-noextract val empty_history : history
+noextract let empty_history : history =
+  {
+    tcp_received = Seq.empty;
+    tcp_sent = Seq.empty;
+  }
 
-noextract val append_received : history -> bytes -> history
+noextract let append_received (h:history) (chunk:bytes) : history =
+  { h with tcp_received = Seq.append h.tcp_received chunk }
 
-noextract val append_sent : history -> bytes -> history
+noextract let append_sent (h:history) (chunk:bytes) : history =
+  { h with tcp_sent = Seq.append h.tcp_sent chunk }
 
-noextract val history_equal : history -> history -> prop
+noextract let history_equal (h0 h1:history) : prop =
+  Seq.equal h0.tcp_received h1.tcp_received /\
+  Seq.equal h0.tcp_sent h1.tcp_sent
 
-noextract val bytes_extends : bytes -> bytes -> prop
+noextract let bytes_extends (old:bytes) (next:bytes) : prop =
+  Seq.length old <= Seq.length next /\
+  Seq.equal old (Seq.slice next 0 (Seq.length old))
 
-noextract val history_extends : history -> history -> prop
+noextract let history_extends (old next:history) : prop =
+  bytes_extends old.tcp_received next.tcp_received /\
+  bytes_extends old.tcp_sent next.tcp_sent
 
-noextract val bytes_exact_prefix : bytes -> bytes -> prop
+noextract let bytes_exact_prefix (prefix full:bytes) : prop =
+  Seq.length prefix <= Seq.length full /\
+  Seq.equal prefix (Seq.slice full 0 (Seq.length prefix))
 
 val channel : Type0
 val listener : Type0

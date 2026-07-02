@@ -124,6 +124,65 @@ let lemma_calc_server_closure_state_ahead
     log1
     ()
 
+let lemma_calc_server_step_rel_histories_ahead
+  (log0:calc_log)
+  (log1:calc_log)
+  : Lemma
+      (requires calc_server_step_rel log0 log1)
+      (ensures
+        TCP.bytes_extends log0.input_bytes log1.input_bytes /\
+        TCP.bytes_extends log0.output_bytes log1.output_bytes)
+=
+  let msg =
+    FStar.IndefiniteDescription.indefinite_description_ghost
+      CalcP.calc_frame
+      (fun msg ->
+        CalcP.calc_frame_network_step_ok
+          log0
+          msg
+          log1
+          (CalcP.calc_frame_response_for log0 msg)) in
+  assert (CalcP.calc_frame_network_step_ok
+    log0
+    msg
+    log1
+    (CalcP.calc_frame_response_for log0 msg));
+  assert (Seq.equal log1.input_bytes (Seq.append log0.input_bytes msg));
+  assert (Seq.equal
+    log1.output_bytes
+    (Seq.append log0.output_bytes (CalcP.calc_frame_response_for log0 msg)));
+  CPI.lemma_bytes_extends_append_equal log0.input_bytes log1.input_bytes msg;
+  CPI.lemma_bytes_extends_append_equal
+    log0.output_bytes
+    log1.output_bytes
+    (CalcP.calc_frame_response_for log0 msg)
+
+let lemma_calc_server_closure_histories_ahead
+  (log0:calc_log)
+  (log1:calc_log)
+  : Lemma
+      (requires calc_server_state_ahead_preorder log0 log1)
+      (ensures
+        TCP.bytes_extends log0.input_bytes log1.input_bytes /\
+        TCP.bytes_extends log0.output_bytes log1.output_bytes)
+=
+  RTC.induct
+    calc_server_step_rel
+    (fun x y ->
+      TCP.bytes_extends x.input_bytes y.input_bytes /\
+      TCP.bytes_extends x.output_bytes y.output_bytes)
+    (fun x ->
+      CPI.lemma_bytes_extends_refl x.input_bytes;
+      CPI.lemma_bytes_extends_refl x.output_bytes)
+    (fun x y ->
+      lemma_calc_server_step_rel_histories_ahead x y)
+    (fun x y z ->
+      CPI.lemma_bytes_extends_trans x.input_bytes y.input_bytes z.input_bytes;
+      CPI.lemma_bytes_extends_trans x.output_bytes y.output_bytes z.output_bytes)
+    log0
+    log1
+    ()
+
 let lemma_calc_valid_initial ()
   : Lemma
       (ensures
@@ -621,11 +680,14 @@ let canonical_server_exactly
 
 let canonical_server_snapshot
   (srv:canonical_server)
-  (_received:TCP.bytes)
-  (_sent:TCP.bytes)
+  (received:TCP.bytes)
+  (sent:TCP.bytes)
   (log:calc_log)
   : slprop =
-  MR.snapshot srv.canonical_server_progress log
+  MR.snapshot srv.canonical_server_progress log **
+  pure (
+    Seq.equal received log.input_bytes /\
+    Seq.equal sent log.output_bytes)
 
 [@@pulse_unfold]
 let calc_network_frame_pre
@@ -708,7 +770,7 @@ let calc_local_frame_post
     wire_outputs == [] /\
     local_outputs == [])
 
-fn calc_invariant_valid
+ghost fn calc_invariant_valid
   (srv:canonical_server)
   (received:erased TCP.bytes)
   (sent:erased TCP.bytes)
@@ -735,7 +797,7 @@ ensures
   fold (canonical_server_exactly srv received sent log)
 }
 
-fn calc_take_snapshot
+ghost fn calc_take_snapshot
   (srv:canonical_server)
   (received:erased TCP.bytes)
   (sent:erased TCP.bytes)
@@ -747,11 +809,14 @@ ensures
 {
   unfold (canonical_server_exactly srv received sent log);
   MR.take_snapshot srv.canonical_server_progress log;
+  assert (pure (canonical_trace_ok received sent log));
+  assert (pure (Seq.equal received log.input_bytes));
+  assert (pure (Seq.equal sent log.output_bytes));
   fold (canonical_server_snapshot srv received sent log);
   fold (canonical_server_exactly srv received sent log)
 }
 
-fn calc_recall_snapshot
+ghost fn calc_recall_snapshot
   (srv:canonical_server)
   (snapshot_received:erased TCP.bytes)
   (snapshot_sent:erased TCP.bytes)
@@ -769,12 +834,28 @@ ensures
     CPI.state_ahead
       CalcP.calc_frame_wire_format_state_machine
       snapshot_log
-      current_log)
+      current_log /\
+    CPI.histories_ahead
+      snapshot_received
+      snapshot_sent
+      current_received
+      current_sent)
 {
   unfold (canonical_server_snapshot srv snapshot_received snapshot_sent snapshot_log);
   unfold (canonical_server_exactly srv current_received current_sent current_log);
   MR.recall_snapshot srv.canonical_server_progress;
   lemma_calc_server_closure_state_ahead snapshot_log current_log;
+  lemma_calc_server_closure_histories_ahead snapshot_log current_log;
+  assert (pure (canonical_trace_ok current_received current_sent current_log));
+  assert (pure (Seq.equal snapshot_received snapshot_log.input_bytes));
+  assert (pure (Seq.equal snapshot_sent snapshot_log.output_bytes));
+  assert (pure (Seq.equal current_received current_log.input_bytes));
+  assert (pure (Seq.equal current_sent current_log.output_bytes));
+  assert (pure (CPI.histories_ahead
+    snapshot_received
+    snapshot_sent
+    current_received
+    current_sent));
   fold (canonical_server_snapshot srv snapshot_received snapshot_sent snapshot_log);
   fold (canonical_server_exactly srv current_received current_sent current_log)
 }
