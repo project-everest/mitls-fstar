@@ -210,8 +210,10 @@ lemmas that derive:
 - `TLS13.ConnectionState.ProtectedWireLemmas.lemma_protected_handshake_wire_equal_from_sent_seal_peer`,
   which proves a single protected handshake message's serialized-byte equality
   from sender seal replay, receiver decode replay, peer key/IV agreement, and
-  aligned record sequence numbers.  Finished needed an extra reveal-layer
-  parseback lemma,
+  aligned record sequence numbers.  The follow-up
+  `lemma_protected_handshake_wire_equal_from_event_projections_peer` lifts this
+  to the event-projection predicates used by the replay invariants.  Finished
+  needed an extra reveal-layer parseback lemma,
   `TLS13.Wire.Spec.Reveal.FinishedRoundTrip.lemma_parse_finished_handshake_round_trip`,
   because the generic `Wire.Spec` parser round-trip lemma intentionally covers
   only wire-body-carrying handshake messages.

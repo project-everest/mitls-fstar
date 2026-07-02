@@ -1,6 +1,7 @@
 module TLS13.ConnectionState.ProtectedWireLemmas
 
 module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
@@ -131,4 +132,90 @@ let lemma_protected_handshake_wire_equal_from_sent_seal_peer
               fin
           | _ ->
             assert False ) ) ) )
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_protected_handshake_wire_equal_from_event_projections_peer
+  (sender:connection_model)
+  (receiver:connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        Seq.equal raw_sent raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        sent_event_seal_projection
+          sender
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          })
+          raw_sent /\
+        received_event_decode_projection
+          receiver
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          })
+          raw_received)
+      (ensures
+        Seq.equal
+          (W.serialize_handshake sent_msg)
+          (W.serialize_handshake received_msg))
+=
+  match sent_msg, received_msg with
+  | M.EncryptedExtensions _, M.EncryptedExtensions _
+  | M.EncryptedExtensions _, M.Certificate _
+  | M.EncryptedExtensions _, M.CertificateVerify _
+  | M.EncryptedExtensions _, M.Finished _
+  | M.Certificate _, M.EncryptedExtensions _
+  | M.Certificate _, M.Certificate _
+  | M.Certificate _, M.CertificateVerify _
+  | M.Certificate _, M.Finished _
+  | M.CertificateVerify _, M.EncryptedExtensions _
+  | M.CertificateVerify _, M.Certificate _
+  | M.CertificateVerify _, M.CertificateVerify _
+  | M.CertificateVerify _, M.Finished _
+  | M.Finished _, M.EncryptedExtensions _
+  | M.Finished _, M.Certificate _
+  | M.Finished _, M.CertificateVerify _
+  | M.Finished _, M.Finished _ ->
+    assert (network_message_is_cleartext CL.Sent (M.TlsHandshake sent_msg) == false);
+    assert (network_message_is_cleartext CL.Received (M.TlsHandshake received_msg) == false);
+    assert (protected_record_count CL.Sent (M.TlsHandshake sent_msg) == 1);
+    assert (protected_record_count CL.Received (M.TlsHandshake received_msg) == 1);
+    assert (sent_single_protected_message_seal
+      sender
+      (M.TlsHandshake sent_msg)
+      raw_sent);
+    assert (received_single_protected_message_decode
+      receiver
+      (M.TlsHandshake received_msg)
+      raw_received);
+    Seq.lemma_eq_elim raw_sent raw_received;
+    assert (received_single_protected_message_decode
+      receiver
+      (M.TlsHandshake received_msg)
+      raw_sent);
+    lemma_protected_handshake_wire_equal_from_sent_seal_peer
+      sender
+      receiver
+      sent_msg
+      received_msg
+      raw_sent
+  | _, _ ->
+    assert False
 #pop-options
