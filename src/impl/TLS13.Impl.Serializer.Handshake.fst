@@ -435,39 +435,10 @@ fn serialize_empty_encrypted_extensions_poc
 (* pinning the erased high record to its canonical (key_share-only) form.  *)
 (* See the POC contract precondition + notes on serialize_server_hello_*.  *)
 (* ===================================================================== *)
-(* ---- canonical record (transparent copy of the non-HRR branch of
-   TLS13.Impl.Server.Send.mk_server_hello_witness) ---- *)
+(* [poc_canonical_sh] is now declared transparently in the interface
+   (TLS13.Impl.Serializer.Handshake.fsti) so downstream bridging lemmas can
+   unfold it definitionally.  The canonical mid below stays private. *)
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
-noextract
-let poc_canonical_sh (rnd ks: B.bytes) (cs: GCS.cipherSuite)
-  : Pure GSH.serverHello
-    (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-    (ensures fun _ -> True)
-  = let ke : GKSE.keyShareEntry_key_exchange = ks in
-    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
-    GNG.namedGroup_bytesize_eq GNG.X25519;
-    GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
-    let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
-    let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
-    let sv_ext : GESH.extensionServerHello =
-      GESH.Extension_data_supported_versions
-        (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
-    GSHBody.serverHelloBody_extensions_list_bytesize_nil;
-    GSHBody.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
-    GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
-    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
-    let exts : GSHBody.serverHelloBody_extensions = [ks_ext; sv_ext] in
-    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = B.empty in
-    let body : GSHBody.serverHelloBody = {
-      GSHBody.legacy_session_id_echo = sid;
-      GSHBody.cipher_suite = cs;
-      GSHBody.legacy_compression_method = 0uy;
-      GSHBody.extensions = exts;
-    } in
-    let r32 : Seq.lseq U8.t 32 = rnd in
-    let bf : GSHB.serverHello_body_false = { GSHB.tag = r32; GSHB.value = body } in
-    { GSH.legacy_version = GPV.TLS_1p2; GSH.body = GSHB.ServerHello_body_false bf }
-
 (* ---- canonical mid ---- *)
 noextract
 let poc_sh_mid (rnd ks: B.bytes) (cs: GCS.cipherSuite)
@@ -933,22 +904,10 @@ let poc_cert_entry (chain: B.bytes)
   = { GCertE.cert_data = (chain <: GCertE.certificateEntry_cert_data);
       GCertE.extensions = ([] <: GCertE.certificateEntry_extensions) }
 
-noextract
-let poc_canonical_cert (chain: B.bytes)
-  : Pure GCert.certificate
-    (requires 1 <= Seq.length chain /\ Seq.length chain <= 32768)
-    (ensures fun c -> Sem.certificate_entries c == [ (chain <: Seq.seq U8.t) ] /\
-                   GCert.certificate_bytesize c <= 16777215)
-  = let cd : GCertE.certificateEntry_cert_data = chain in
-    let ex : GCertE.certificateEntry_extensions = [] in
-    let entry : GCertE.certificateEntry = { GCertE.cert_data = cd; GCertE.extensions = ex } in
-    GEX.certificateEntry_extensions_list_bytesize_nil;
-    GCL.certificate_certificate_list_list_bytesize_nil;
-    assert (GCL.certificate_certificate_list_list_bytesize [entry] ==
-            GCertE.certificateEntry_bytesize entry);
-    let cl : GCert.certificate_certificate_list = [entry] in
-    let rc : GCert.certificate_certificate_request_context = B.empty in
-    { GCert.certificate_request_context = rc; GCert.certificate_list = cl }
+(* [poc_canonical_cert] is now declared transparently in the interface
+   (TLS13.Impl.Serializer.Handshake.fsti) so downstream bridging lemmas can
+   unfold it definitionally.  The canonical entry above / mid below stay
+   private. *)
 #pop-options
 
 (* ---- canonical mid ---- *)
@@ -1263,41 +1222,9 @@ fn serialize_certificate_handshake_poc
 (* Shared canonical extension high values (each discharges its refinement)*)
 (* ===================================================================== *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-noextract
-let ch_sn_high (sni: B.bytes { 1 <= Seq.length sni /\ Seq.length sni <= 65461 })
-  : GECH.extensionClientHello
-  = let hn : GHN.hostName = sni in
-    let sn : GSN.serverName = GSN.Name_host_name hn in
-    GSNL.serverNameList_list_bytesize_nil;
-    GSNL.serverNameList_list_bytesize_cons sn [];
-    GSN.serverName_bytesize_eqn_host_name hn;
-    GHN.hostName_bytesize_eqn hn;
-    GECH.Extension_data_server_name ([sn] <: GECH.extensionClientHello_extension_data_server_name)
-
-noextract
-let ch_sg_high : GECH.extensionClientHello
-  = GECH.Extension_data_supported_groups ([GNG.X25519] <: GECH.extensionClientHello_extension_data_supported_groups)
-
-noextract
-let ch_sa_high (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : GECH.extensionClientHello
-  = GECH.Extension_data_signature_algorithms sa
-
-noextract
-let ch_ks_high (ks: B.bytes { Seq.length ks == 32 })
-  : GECH.extensionClientHello
-  = let ke : GKSE.keyShareEntry_key_exchange = ks in
-    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
-    GKSCH.keyShareClientHello_list_bytesize_nil;
-    GKSCH.keyShareClientHello_list_bytesize_cons kse [];
-    GKSE.keyShareEntry_bytesize_eqn kse;
-    GNG.namedGroup_bytesize_eq GNG.X25519;
-    GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
-    GECH.Extension_data_key_share ([kse] <: GECH.extensionClientHello_extension_data_key_share)
-
-noextract
-let ch_sv_high : GECH.extensionClientHello
-  = GECH.Extension_data_supported_versions ([GPV.TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
+(* [ch_sn_high], [ch_sg_high], [ch_sa_high], [ch_ks_high], [ch_sv_high] are now
+   declared transparently in the interface (TLS13.Impl.Serializer.Handshake.fsti)
+   so downstream bridging lemmas can unfold them; [ch_exts] below stays private. *)
 
 noextract
 let ch_exts (sni ks: B.bytes) (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
@@ -1307,39 +1234,9 @@ let ch_exts (sni ks: B.bytes) (sa: GECH.extensionClientHello_extension_data_sign
   = [ ch_sn_high sni; ch_sg_high; ch_sa_high sa; ch_ks_high ks; ch_sv_high ]
 #pop-options
 
-(* ---- canonical ClientHello record ---- *)
-#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
-noextract
-let poc_canonical_ch (rnd sni ks: B.bytes)
-  (cs: GCH.clientHello_cipher_suites)
-  (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Pure GCH.clientHello
-    (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
-              1 <= Seq.length sni /\ Seq.length sni <= 255 /\
-              LL.length cs <= 16 /\ LL.length sa <= 16)
-    (ensures fun _ -> True)
-  = let r32 : Seq.lseq U8.t 32 = rnd in
-    let sn_ext = ch_sn_high sni in
-    let sg_ext = ch_sg_high in
-    let sa_ext = ch_sa_high sa in
-    let ks_ext = ch_ks_high ks in
-    let sv_ext = ch_sv_high in
-    GCH.clientHello_extensions_list_bytesize_nil;
-    GCH.clientHello_extensions_list_bytesize_cons sv_ext [];
-    GCH.clientHello_extensions_list_bytesize_cons ks_ext [sv_ext];
-    GCH.clientHello_extensions_list_bytesize_cons sa_ext [ks_ext; sv_ext];
-    GCH.clientHello_extensions_list_bytesize_cons sg_ext [sa_ext; ks_ext; sv_ext];
-    GCH.clientHello_extensions_list_bytesize_cons sn_ext [sg_ext; sa_ext; ks_ext; sv_ext];
-    let exts : GCH.clientHello_extensions = [sn_ext; sg_ext; sa_ext; ks_ext; sv_ext] in
-    let comp : GCH.clientHello_legacy_compression_methods = Seq.create 1 0uy in
-    let sid : GCH.clientHello_legacy_session_id = B.empty in
-    { GCH.legacy_version = GPV.TLS_1p2;
-      GCH.random = r32;
-      GCH.legacy_session_id = sid;
-      GCH.cipher_suites = cs;
-      GCH.legacy_compression_methods = comp;
-      GCH.extensions = exts; }
-#pop-options
+(* [poc_canonical_ch] is now declared transparently in the interface
+   (TLS13.Impl.Serializer.Handshake.fsti) so downstream bridging lemmas can
+   unfold it definitionally. *)
 
 (* ---- Sem accessor lemmas (canonical pins random/server_name/key_share) ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
