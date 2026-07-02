@@ -445,6 +445,15 @@ let client_server_driver_x25519_projection_inputs
   paired_cleartext_hello_messages client server
 
 noextract
+let client_server_driver_x25519_key_share_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  WFL.paired_cleartext_hello_key_shares client server
+
+noextract
 let client_server_driver_application_derivation_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -485,6 +494,14 @@ val lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
   : Lemma
       (requires
         client_server_driver_x25519_projection_inputs client server)
+      (ensures CS.paired_x25519_key_shares client server)
+
+val lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        client_server_driver_x25519_key_share_projection_inputs client server)
       (ensures CS.paired_x25519_key_shares client server)
 
 val lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection_inputs

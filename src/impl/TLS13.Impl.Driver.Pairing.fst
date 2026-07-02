@@ -456,6 +456,63 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
   | _, _, _, _, _, _, _, _ ->
     assert False
 
+let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+     (requires
+       client_server_driver_x25519_key_share_projection_inputs client server)
+     (ensures CS.paired_x25519_key_shares client server)
+=
+  assert (CS.stable_client_x25519_key_share_projection client);
+  assert (CS.client_x25519_key_share_projection client);
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
+  let client_hs = client.CS.cs_model.CS.model_handshake in
+  let server_hs = server.CS.cs_model.CS.model_handshake in
+  match
+    client_hs.CS.hs_start,
+    client_hs.CS.hs_client_hello,
+    client_hs.CS.hs_server_hello,
+    client_hs.CS.hs_keys.CS.ks_shared_secret,
+    server_hs.CS.hs_server_selection,
+    server_hs.CS.hs_client_hello,
+    server_hs.CS.hs_server_hello,
+    server_hs.CS.hs_keys.CS.ks_shared_secret
+  with
+  | Some start, Some client_ch, Some client_sh, Some client_shared,
+    Some selection, Some server_ch, Some server_sh, Some server_shared ->
+    (match
+     start.CS.start_client_key_share_private,
+     selection.CS.server_key_share_private
+     with
+     | Some client_sk, Some server_sk ->
+      assert (WFL.paired_cleartext_hello_key_shares client server);
+      assert (CS.client_hello_key_share client_ch ==
+        CS.client_hello_key_share server_ch);
+      assert (CS.server_hello_key_share client_sh ==
+        CS.server_hello_key_share server_sh);
+      assert (CS.client_hello_key_share client_ch ==
+        start.CS.start_client_key_share_public);
+      assert (CS.client_hello_key_share server_ch ==
+        start.CS.start_client_key_share_public);
+      assert (CS.server_hello_key_share server_sh ==
+        selection.CS.server_key_share_public);
+      assert (CS.server_hello_key_share client_sh ==
+        selection.CS.server_key_share_public);
+      assert (C.x25519_public_from_private client_sk ==
+        start.CS.start_client_key_share_public);
+      assert (C.x25519_public_from_private server_sk ==
+        selection.CS.server_key_share_public);
+      assert (C.x25519_shared client_sk (CS.server_hello_key_share client_sh) ==
+        Some client_shared);
+      assert (C.x25519_shared server_sk (CS.client_hello_key_share server_ch) ==
+        Some server_shared)
+     | _, _ ->
+      assert False)
+  | _, _, _, _, _, _, _, _ ->
+    assert False
+
 let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
