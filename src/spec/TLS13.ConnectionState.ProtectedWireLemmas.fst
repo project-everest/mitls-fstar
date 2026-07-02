@@ -10,8 +10,49 @@ module T = TLS13.Types
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 module WRT = TLS13.Wire.Spec.Reveal.FinishedRoundTrip
+module WU = TLS13.Wire.Spec.Reveal.Util
 
 open TLS13.Spec.ConnectionState
+
+let lemma_append_heads_equal_same_len
+  #a
+  (left:Seq.seq a)
+  (left_tail:Seq.seq a)
+  (right:Seq.seq a)
+  (right_tail:Seq.seq a)
+  : Lemma
+    (requires
+      Seq.equal (Seq.append left left_tail) (Seq.append right right_tail) /\
+      Seq.length left == Seq.length right)
+    (ensures Seq.equal left right)
+=
+  let left_full = Seq.append left left_tail in
+  let right_full = Seq.append right right_tail in
+  WU.lemma_slice_append_left left left_tail;
+  WU.lemma_slice_append_left right right_tail;
+  Seq.lemma_eq_elim left_full right_full;
+  assert (Seq.equal (Seq.slice right_full 0 (Seq.length left)) right);
+  assert (Seq.equal (Seq.slice left_full 0 (Seq.length left)) right);
+  Seq.lemma_eq_elim (Seq.slice left_full 0 (Seq.length left)) left
+
+let lemma_raw_delta_heads_equal_same_len
+  (sender_delta:B.bytes)
+  (sender_tail:B.bytes)
+  (receiver_delta:B.bytes)
+  (receiver_tail:B.bytes)
+  : Lemma
+    (requires
+      Seq.equal
+        (B.append sender_delta sender_tail)
+        (B.append receiver_delta receiver_tail) /\
+      B.length sender_delta == B.length receiver_delta)
+    (ensures Seq.equal sender_delta receiver_delta)
+=
+  lemma_append_heads_equal_same_len
+    sender_delta
+    sender_tail
+    receiver_delta
+    receiver_tail
 
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_protected_handshake_wire_equal_from_sent_seal_peer
@@ -468,3 +509,71 @@ let lemma_conn_events_received_decode_replay_head
         final_model
     with model1 delta_sent delta_received tail_sent tail_received
     and () )
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_protected_handshake_event_projection_pair_from_aligned_heads
+  (sender:connection_model)
+  (receiver:connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (sender_stream:B.bytes)
+  (receiver_stream:B.bytes)
+  (sender_delta:B.bytes)
+  (sender_tail:B.bytes)
+  (receiver_delta:B.bytes)
+  (receiver_tail:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        Seq.equal sender_stream receiver_stream /\
+        Seq.equal sender_stream (B.append sender_delta sender_tail) /\
+        Seq.equal receiver_stream (B.append receiver_delta receiver_tail) /\
+        B.length sender_delta == B.length receiver_delta /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        sent_event_seal_projection
+          sender
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          })
+          sender_delta /\
+        received_event_decode_projection
+          receiver
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          })
+          receiver_delta)
+      (ensures
+        protected_handshake_event_projection_pair
+          {
+            pm_sender = sender;
+            pm_receiver = receiver;
+            pm_raw_sent = sender_delta;
+            pm_raw_received = receiver_delta;
+          }
+          sent_msg
+          received_msg)
+=
+  Seq.lemma_eq_elim sender_stream receiver_stream;
+  Seq.lemma_eq_elim sender_stream (B.append sender_delta sender_tail);
+  assert (Seq.equal
+    (B.append sender_delta sender_tail)
+    (B.append receiver_delta receiver_tail));
+  lemma_raw_delta_heads_equal_same_len
+    sender_delta
+    sender_tail
+    receiver_delta
+    receiver_tail;
+  assert (Seq.equal sender_delta receiver_delta)
+#pop-options

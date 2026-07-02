@@ -755,9 +755,15 @@ The helper module also exposes replay-head destructors,
 `lemma_conn_events_sent_seal_replay_head` and
 `lemma_conn_events_received_decode_replay_head`, which make the first event's
 raw deltas and seal/decode projections available from the recursive replay
-predicates.  The remaining proof obligation is to use these destructors
-inductively at the right event positions and prove that the sender's delta and
-receiver's delta are the same protected record slice.
+predicates.  It now also includes `lemma_append_heads_equal_same_len`,
+`lemma_raw_delta_heads_equal_same_len`, and
+`lemma_protected_handshake_event_projection_pair_from_aligned_heads`: once two
+paired raw streams are known equal and the sender/receiver protected head deltas
+are known to have the same length, these lemmas prove the deltas are equal and
+construct the `protected_handshake_event_projection_pair` witness for that
+message.  The remaining proof obligation is to use the replay-head destructors
+inductively at the right event positions and prove the equal-length premise for
+each sender/receiver protected delta.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
