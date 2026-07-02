@@ -206,7 +206,15 @@ lemmas that derive:
   with
   `lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire`, which
   proves all `CS.paired_handshake_events` checkpoints from cleartext raw replay
-  plus protected-handshake serialized-byte equality.
+  plus protected-handshake serialized-byte equality;
+- `TLS13.ConnectionState.ProtectedWireLemmas.lemma_protected_handshake_wire_equal_from_sent_seal_peer`,
+  which proves a single protected handshake message's serialized-byte equality
+  from sender seal replay, receiver decode replay, peer key/IV agreement, and
+  aligned record sequence numbers.  Finished needed an extra reveal-layer
+  parseback lemma,
+  `TLS13.Wire.Spec.Reveal.FinishedRoundTrip.lemma_parse_finished_handshake_round_trip`,
+  because the generic `Wire.Spec` parser round-trip lemma intentionally covers
+  only wire-body-carrying handshake messages.
 
 `TLS13.Impl.Driver.Pairing` then uses these facts in
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events`:
@@ -726,8 +734,10 @@ The intended proof shape, after the verified cleartext-byte progress, is:
 
 The remaining hard part is now step 4's replay threading: identify the matching
 protected record slices and prove the sender/receiver record sequence numbers are
-aligned at each slice. The AEAD open(seal(...)) step is available, but it remains
-an explicit trust assumption in the crypto spec.
+aligned at each slice. Once a slice and its pre-event record states are
+identified, the one-record bridge gives the needed serialized handshake equality.
+The AEAD open(seal(...)) step is available, but it remains an explicit trust
+assumption in the crypto spec.
 
 ### Phase 5: optional existential/server-run theorem
 
