@@ -803,9 +803,14 @@ opposite-direction network events, the module now exposes preservation lemmas
 showing that a sender-side received network event preserves the sender write
 record state, a receiver-side sent network event preserves the receiver read
 record state, and therefore write/read sequence-and-key/IV alignment is
-preserved through one or both such skips.  Local traffic-key installation remains
-outside those preservation lemmas because it can legitimately change record
-material.
+preserved through one or both such skips.  The network-specific wrappers
+`lemma_protected_handshake_event_projection_pair_after_sender_received_network_head`,
+`lemma_protected_handshake_event_projection_pair_after_receiver_sent_network_head`,
+and `lemma_protected_handshake_event_projection_pair_after_opposite_network_heads`
+combine these preservation facts with stream skipping and head extraction, so
+their callers only need the initial write/read alignment rather than an explicit
+post-skip alignment witness.  Local traffic-key installation remains outside
+those preservation lemmas because it can legitimately change record material.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
