@@ -810,7 +810,13 @@ and `lemma_protected_handshake_event_projection_pair_after_opposite_network_head
 combine these preservation facts with stream skipping and head extraction, so
 their callers only need the initial write/read alignment rather than an explicit
 post-skip alignment witness.  Local traffic-key installation remains outside
-those preservation lemmas because it can legitimately change record material.
+those preservation lemmas because it can legitimately change record material;
+for the initial handshake keys, the module now has concrete install-alignment
+lemmas for server-write/client-read and client-write/server-read installs when
+both sides install the same `traffic_key_material`.  These facts expose the
+remaining proof shape: derive equality of the installed handshake traffic
+materials from the transcript/key-schedule pairing, then use these install
+lemmas to seed the protected-record head extractors.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
