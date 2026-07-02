@@ -1043,6 +1043,141 @@ let lemma_client_server_driver_key_material_agrees
     server_sent;
   CSL.lemma_supported_profile_client_server_key_material_agrees client server
 
+let lemma_client_server_application_record_material_client_to_server_agrees
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.supported_profile_client_server_key_material_agrees client server)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server)
+=
+  assert (CS.supported_profile_application_record_material_agrees client server);
+  assert (CS.peer_record_material_agrees
+    (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    client
+    server)
+
+let lemma_client_server_application_record_material_server_to_client_agrees
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.supported_profile_client_server_key_material_agrees client server)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  assert (CS.supported_profile_application_record_material_agrees client server);
+  assert (CS.peer_record_material_agrees
+    (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    client
+    server)
+
+let lemma_client_server_application_record_material_agrees_from_paired_handshake_message_states
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        paired_handshake_message_states client server /\
+        client_server_driver_first_epoch_no_key_update_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_state_inputs client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
+    client
+    server;
+  lemma_client_server_driver_remaining_semantic_projection_inputs_from_paired_handshake_message_states
+    client
+    server;
+  lemma_client_server_driver_supported_profile_state_inputs_from_projection_inputs
+    client
+    server;
+  lemma_client_server_driver_supported_profile_key_material_inputs_agree
+    client
+    server;
+  CSL.lemma_supported_profile_client_server_key_material_agrees
+    client
+    server;
+  lemma_client_server_application_record_material_client_to_server_agrees
+    client
+    server;
+  lemma_client_server_application_record_material_server_to_client_agrees
+    client
+    server
+
+let lemma_client_server_application_record_material_agrees_from_cleartext_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        paired_cleartext_hello_messages client server /\
+        paired_handshake_events client server /\
+        client_server_driver_first_epoch_no_key_update_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_state_inputs client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
+    client
+    server;
+  lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_handshake_events
+    client
+    server;
+  lemma_client_server_driver_supported_profile_state_inputs_from_projection_inputs
+    client
+    server;
+  lemma_client_server_driver_supported_profile_key_material_inputs_agree
+    client
+    server;
+  CSL.lemma_supported_profile_client_server_key_material_agrees
+    client
+    server;
+  lemma_client_server_application_record_material_client_to_server_agrees
+    client
+    server;
+  lemma_client_server_application_record_material_server_to_client_agrees
+    client
+    server
+
 let lemma_client_server_driver_end_to_end_key_material_agrees
   (client:CS.connection_state)
   (server:CS.connection_state)
