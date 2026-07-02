@@ -1,4 +1,4 @@
-module Common.ConnectionStateQuery
+module TLS13.Impl.ConnectionStateQuery
 
 #lang-pulse
 
@@ -9,9 +9,9 @@ module SZ = FStar.SizeT
 module TCP = Common.TCP
 module U8 = FStar.UInt8
 
-// Compatibility shim used by endpoint adapters that still split scheduling
-// into immediate local actions and endpoint-material-backed deferred locals.
-// The executable driver-facing class lives in Common.ProtocolEndpoint.
+// TLS-internal compatibility shim used by endpoint adapters that still split
+// scheduling into immediate local actions and endpoint-material-backed deferred
+// locals.  The executable driver-facing class lives in Common.ProtocolEndpoint.
 
 type next_action
   (network_frame:Type0)

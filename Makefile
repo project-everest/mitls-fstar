@@ -365,10 +365,10 @@ COMMON_ENDPOINT_MODULES = \
   Common.WireFormat \
   Common.WireFormatStateMachine \
   Common.ProtocolImplementation \
-  Common.ConnectionStateQuery \
   Common.ProtocolEndpoint \
   Common.ProtocolDriver
 TLS13_SHARED_ENDPOINT_MODULES = \
+  TLS13.Impl.ConnectionStateQuery \
   TLS13.Impl.CanonicalTypes \
   TLS13.Impl.CanonicalWire
 TLS13_CLIENT_ENDPOINT_MODULES = \
