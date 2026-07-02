@@ -286,6 +286,46 @@ val lemma_paired_cleartext_hello_wire_equivalent_from_cleartext_raw
           client_sh_raw)
       (ensures paired_cleartext_hello_wire_equivalent client server)
 
+val lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+        supported_client_hello_wire_profile client_ch /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh)
+      (ensures
+        paired_cleartext_hello_wire_equivalent client server /\
+        paired_cleartext_hello_key_shares client server)
+
 val lemma_state_supported_client_hello_wire_profile_from_config
   (st:CS.connection_state)
   : Lemma

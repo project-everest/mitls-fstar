@@ -407,6 +407,72 @@ let lemma_paired_cleartext_hello_wire_equivalent_from_cleartext_raw
     client_sh_raw
 #pop-options
 
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+        supported_client_hello_wire_profile client_ch /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh)
+      (ensures
+        paired_cleartext_hello_wire_equivalent client server /\
+        paired_cleartext_hello_key_shares client server)
+=
+  lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
+    client_ch
+    server_ch
+    client_ch_raw
+    server_ch_raw;
+  assert (Seq.equal client_ch.M.key_share server_ch.M.key_share);
+  Seq.lemma_eq_elim client_ch.M.key_share server_ch.M.key_share;
+  lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
+    server_sh
+    client_sh
+    server_sh_raw
+    client_sh_raw;
+  lemma_parse_supported_server_hello_same_fragment
+    server_sh
+    client_sh
+    (W.serialize_handshake (M.ServerHello server_sh))
+    (W.serialize_handshake (M.ServerHello client_sh));
+  assert (CS.client_hello_key_share client_ch ==
+          CS.client_hello_key_share server_ch);
+  assert (CS.server_hello_key_share client_sh ==
+          CS.server_hello_key_share server_sh);
+  assert (paired_cleartext_hello_wire_equivalent client server);
+  assert (paired_cleartext_hello_key_shares client server)
+#pop-options
+
 (* ------------------------------------------------------------------------- *)
 (* Step-level characterisation of how the handshake fields hs_start,         *)
 (* hs_server_selection and hs_client_hello may evolve under a single legal   *)
