@@ -212,7 +212,12 @@ lemmas that derive:
   from sender seal replay, receiver decode replay, peer key/IV agreement, and
   aligned record sequence numbers.  The follow-up
   `lemma_protected_handshake_wire_equal_from_event_projections_peer` lifts this
-  to the event-projection predicates used by the replay invariants.  Finished
+  to the event-projection predicates used by the replay invariants.  The
+  packaged theorem
+  `lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs`
+  applies that bridge to the five encrypted handshake records and derives the
+  `paired_protected_handshake_wire_equivalent` predicate consumed by the
+  transcript-checkpoint theorem.  Finished
   needed an extra reveal-layer parseback lemma,
   `TLS13.Wire.Spec.Reveal.FinishedRoundTrip.lemma_parse_finished_handshake_round_trip`,
   because the generic `Wire.Spec` parser round-trip lemma intentionally covers
@@ -737,7 +742,9 @@ The intended proof shape, after the verified cleartext-byte progress, is:
 The remaining hard part is now step 4's replay threading: identify the matching
 protected record slices and prove the sender/receiver record sequence numbers are
 aligned at each slice. Once a slice and its pre-event record states are
-identified, the one-record bridge gives the needed serialized handshake equality.
+identified, the event-projection bridge gives the needed serialized handshake
+equality, and the five-record wrapper assembles those facts into
+`paired_protected_handshake_wire_equivalent`.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 

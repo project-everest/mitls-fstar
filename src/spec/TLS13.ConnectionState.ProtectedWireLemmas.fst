@@ -8,6 +8,7 @@ module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module T = TLS13.Types
 module W = TLS13.Wire.Spec
+module WFL = TLS13.Spec.WireFormatLemmas
 module WRT = TLS13.Wire.Spec.Reveal.FinishedRoundTrip
 
 open TLS13.Spec.ConnectionState
@@ -217,5 +218,85 @@ let lemma_protected_handshake_wire_equal_from_event_projections_peer
       received_msg
       raw_sent
   | _, _ ->
+    assert False
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
+  (client:connection_state)
+  (server:connection_state)
+  (server_ee:protected_message_replay)
+  (server_cert:protected_message_replay)
+  (server_cv:protected_message_replay)
+  (server_finished:protected_message_replay)
+  (client_finished:protected_message_replay)
+  : Lemma
+      (requires
+        paired_protected_handshake_event_projection_pairs
+          client
+          server
+          server_ee
+          server_cert
+          server_cv
+          server_finished
+          client_finished)
+      (ensures WFL.paired_protected_handshake_wire_equivalent client server)
+=
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_encrypted_extensions,
+    server_hs.hs_encrypted_extensions,
+    client_hs.hs_certificate,
+    server_hs.hs_certificate,
+    client_hs.hs_certificate_verify,
+    server_hs.hs_certificate_verify,
+    client_hs.hs_server_finished,
+    server_hs.hs_server_finished,
+    client_hs.hs_client_finished,
+    server_hs.hs_client_finished
+  with
+  | Some client_ee, Some server_ee_msg,
+    Some client_cert, Some server_cert_msg,
+    Some client_cv, Some server_cv_msg,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    lemma_protected_handshake_wire_equal_from_event_projections_peer
+      server_ee.pm_sender
+      server_ee.pm_receiver
+      (M.EncryptedExtensions server_ee_msg)
+      (M.EncryptedExtensions client_ee)
+      server_ee.pm_raw_sent
+      server_ee.pm_raw_received;
+    lemma_protected_handshake_wire_equal_from_event_projections_peer
+      server_cert.pm_sender
+      server_cert.pm_receiver
+      (M.Certificate server_cert_msg)
+      (M.Certificate client_cert)
+      server_cert.pm_raw_sent
+      server_cert.pm_raw_received;
+    lemma_protected_handshake_wire_equal_from_event_projections_peer
+      server_cv.pm_sender
+      server_cv.pm_receiver
+      (M.CertificateVerify server_cv_msg)
+      (M.CertificateVerify client_cv)
+      server_cv.pm_raw_sent
+      server_cv.pm_raw_received;
+    lemma_protected_handshake_wire_equal_from_event_projections_peer
+      server_finished.pm_sender
+      server_finished.pm_receiver
+      (M.Finished server_sf)
+      (M.Finished client_sf)
+      server_finished.pm_raw_sent
+      server_finished.pm_raw_received;
+    lemma_protected_handshake_wire_equal_from_event_projections_peer
+      client_finished.pm_sender
+      client_finished.pm_receiver
+      (M.Finished client_cf)
+      (M.Finished server_cf)
+      client_finished.pm_raw_sent
+      client_finished.pm_raw_received;
+    assert (WFL.paired_protected_handshake_wire_equivalent client server)
+  | _, _, _, _, _, _, _, _, _, _ ->
     assert False
 #pop-options
