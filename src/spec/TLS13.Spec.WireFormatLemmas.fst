@@ -339,6 +339,28 @@ let lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartex
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"
+let lemma_parse_supported_server_hello_same_fragment
+  (sent_sh:M.server_hello)
+  (received_sh:M.server_hello)
+  (sent_fragment:B.bytes)
+  (received_fragment:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal sent_fragment received_fragment /\
+        W.parse_supported_server_hello sent_fragment == Some sent_sh /\
+        W.parse_supported_server_hello received_fragment == Some received_sh)
+      (ensures
+        sent_sh == received_sh /\
+        CS.server_hello_key_share sent_sh ==
+          CS.server_hello_key_share received_sh)
+=
+  Seq.lemma_eq_elim sent_fragment received_fragment;
+  assert (W.parse_supported_server_hello sent_fragment ==
+          W.parse_supported_server_hello received_fragment);
+  assert (Some sent_sh == Some received_sh)
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_paired_cleartext_hello_wire_equivalent_from_cleartext_raw
   (client:CS.connection_state)
   (server:CS.connection_state)
