@@ -816,7 +816,13 @@ lemmas for server-write/client-read and client-write/server-read installs when
 both sides install the same `traffic_key_material`.  These facts expose the
 remaining proof shape: derive equality of the installed handshake traffic
 materials from the transcript/key-schedule pairing, then use these install
-lemmas to seed the protected-record head extractors.
+lemmas to seed the protected-record head extractors.  A related projection from
+`peer_record_material_agrees` to the extractor's model-level alignment is only
+valid with an explicit sequence-number premise: `peer_record_material_agrees`
+talks about epoch/key/IV agreement, not current record sequence counters.  This
+is an important boundary in the state-machine spec, since the protected AEAD
+bridge needs nonce equality and therefore sequence equality in addition to
+key/IV agreement.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 

@@ -15,6 +15,62 @@ module WU = TLS13.Wire.Spec.Reveal.Util
 
 open TLS13.Spec.ConnectionState
 
+let lemma_client_traffic_peer_record_material_agrees_and_seq_write_read_aligned
+  (epoch:traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        client.cs_model.model_record.record_write.R.seq ==
+          server.cs_model.model_record.record_read.R.seq /\
+        peer_record_material_agrees
+          (traffic_id epoch ClientTraffic)
+          client
+          server)
+      (ensures
+        write_read_record_material_aligned
+          client.cs_model
+          server.cs_model)
+=
+  match
+    record_direction_material client.cs_model.model_record.record_write,
+    record_direction_material server.cs_model.model_record.record_read
+  with
+  | Some client_write, Some server_read ->
+    assert (client.cs_model.model_record.record_write.R.seq ==
+      server.cs_model.model_record.record_read.R.seq);
+    assert (record_key_iv_material_agrees client_write server_read)
+  | _, _ ->
+    assert False
+
+let lemma_server_traffic_peer_record_material_agrees_and_seq_write_read_aligned
+  (epoch:traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        server.cs_model.model_record.record_write.R.seq ==
+          client.cs_model.model_record.record_read.R.seq /\
+        peer_record_material_agrees
+          (traffic_id epoch ServerTraffic)
+          client
+          server)
+      (ensures
+        write_read_record_material_aligned
+          server.cs_model
+          client.cs_model)
+=
+  match
+    record_direction_material server.cs_model.model_record.record_write,
+    record_direction_material client.cs_model.model_record.record_read
+  with
+  | Some server_write, Some client_read ->
+    assert (server.cs_model.model_record.record_write.R.seq ==
+      client.cs_model.model_record.record_read.R.seq);
+    assert (record_key_iv_material_agrees server_write client_read)
+  | _, _ ->
+    assert False
+
 let lemma_append_heads_equal_same_len
   #a
   (left:Seq.seq a)

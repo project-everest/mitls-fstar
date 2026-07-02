@@ -33,6 +33,40 @@ let write_read_record_material_aligned
   | _, _ ->
     False)
 
+val lemma_client_traffic_peer_record_material_agrees_and_seq_write_read_aligned
+  (epoch:CS.traffic_epoch)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        client.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+          server.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id epoch CS.ClientTraffic)
+          client
+          server)
+      (ensures
+        write_read_record_material_aligned
+          client.CS.cs_model
+          server.CS.cs_model)
+
+val lemma_server_traffic_peer_record_material_agrees_and_seq_write_read_aligned
+  (epoch:CS.traffic_epoch)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        server.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+          client.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id epoch CS.ServerTraffic)
+          client
+          server)
+      (ensures
+        write_read_record_material_aligned
+          server.CS.cs_model
+          client.CS.cs_model)
+
 val lemma_append_heads_equal_same_len:
   #a:eqtype ->
   left:Seq.seq a ->
