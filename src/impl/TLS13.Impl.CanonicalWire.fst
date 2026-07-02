@@ -29,9 +29,6 @@ type wire_message = {
         Some (wm_content_type, wm_fragment, B.length wm_raw));
 }
 
-let wire_equal (x y:wire_message) : GTot prop =
-  Seq.equal x.wm_raw y.wm_raw
-
 let wire_serialize (msg:wire_message) : GTot B.bytes =
   msg.wm_raw
 
@@ -79,7 +76,7 @@ let lemma_wire_parse_serialize_exact
       (ensures
         exists parsed.
           wire_parse (wire_serialize msg) == Some (parsed, Seq.empty) /\
-          wire_equal parsed msg)
+          parsed == msg)
 =
   assert (WS.parse_record_wire msg.wm_raw ==
     Some (msg.wm_content_type, msg.wm_fragment, B.length msg.wm_raw));
@@ -97,15 +94,14 @@ let lemma_wire_parse_serialize_exact
   assert (Seq.equal (Seq.slice msg.wm_raw 0 (B.length msg.wm_raw)) msg.wm_raw);
   assert (exists parsed.
     wire_parse (wire_serialize msg) == Some (parsed, Seq.empty) /\
-    wire_equal parsed msg)
+    parsed == msg)
 
 noextract
 let tls_record_wire_format : WF.wire_format wire_message =
-  {
-    WF.wf_equal = wire_equal;
-    WF.wf_serialize = wire_serialize;
-    WF.wf_parse = wire_parse;
-    WF.wf_parse_serialize_exact = lemma_wire_parse_serialize_exact;
+{
+  WF.wf_serialize = wire_serialize;
+  WF.wf_parse = wire_parse;
+  WF.wf_parse_serialize_exact = lemma_wire_parse_serialize_exact;
   }
 
 let lemma_wire_outputs_of_empty ()

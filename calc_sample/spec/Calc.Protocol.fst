@@ -21,11 +21,6 @@ type calc_frame = b:bytes {
 type calc_frame_local_event =
   | CalcFrameLocalNoop
 
-let calc_frame_equal
-  (m0 m1:calc_frame)
-  : GTot prop =
-  Seq.equal m0 m1
-
 let calc_serialize_frame
   (msg:calc_frame)
   : GTot TCP.bytes =
@@ -93,7 +88,7 @@ let lemma_calc_parse_serialize_exact
         exists parsed.
           calc_parse_frame (calc_serialize_frame msg) ==
             Some (parsed, Seq.empty) /\
-          calc_frame_equal parsed msg)
+          parsed == msg)
 =
   lemma_slice_full_5 msg;
   assert (Seq.equal (Seq.slice msg 0 5) msg);
@@ -112,7 +107,7 @@ let lemma_calc_parse_serialize_prefix
           calc_parse_frame
             (Seq.append (calc_serialize_frame msg) rest) ==
               Some (parsed, rest) /\
-          calc_frame_equal parsed msg)
+          parsed == msg)
 =
   lemma_calc_frame_parse_prefix_shape msg rest;
   assert (Seq.equal (Seq.slice (Seq.append msg rest) 0 5) msg);
@@ -124,11 +119,10 @@ let lemma_calc_parse_serialize_prefix
 
 noextract
 let calc_frame_wire_format : WF.wire_format calc_frame =
-  {
-    WF.wf_equal = calc_frame_equal;
-    WF.wf_serialize = calc_serialize_frame;
-    WF.wf_parse = calc_parse_frame;
-    WF.wf_parse_serialize_exact = lemma_calc_parse_serialize_exact;
+{
+  WF.wf_serialize = calc_serialize_frame;
+  WF.wf_parse = calc_parse_frame;
+  WF.wf_parse_serialize_exact = lemma_calc_parse_serialize_exact;
   }
 
 noextract

@@ -7,6 +7,12 @@
 typedef struct Common_TCP_channel_s *Common_TCP_channel;
 typedef struct Common_TCP_listener_s *Common_TCP_listener;
 
+typedef struct Common_TCP_history_s {
+  uint8_t dummy;
+} Common_TCP_history;
+
+extern Common_TCP_history Common_TCP_empty_history;
+
 Common_TCP_channel Common_TCP_channel_of_fd(int fd);
 
 #ifdef COMMON_TCP_KARAMEL_FULL_DECLS

@@ -69,7 +69,7 @@ let consumed_by_parse
   : prop =
   exists parsed_msg.
     fmt.WF.wf_parse available == Some (parsed_msg, residual) /\
-    fmt.WF.wf_equal parsed_msg msg /\
+    parsed_msg == msg /\
   Seq.equal available (Seq.append consumed residual)
 
 let output_written

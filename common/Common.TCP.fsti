@@ -12,25 +12,26 @@ module U8 = FStar.UInt8
 
 type bytes = Seq.seq U8.t
 
+noextract
 noeq
 type history = {
   tcp_received: bytes;
   tcp_sent: bytes;
 }
 
-val empty_history : history
+noextract val empty_history : history
 
-val append_received : history -> bytes -> history
+noextract val append_received : history -> bytes -> history
 
-val append_sent : history -> bytes -> history
+noextract val append_sent : history -> bytes -> history
 
-val history_equal : history -> history -> prop
+noextract val history_equal : history -> history -> prop
 
-val bytes_extends : bytes -> bytes -> prop
+noextract val bytes_extends : bytes -> bytes -> prop
 
-val history_extends : history -> history -> prop
+noextract val history_extends : history -> history -> prop
 
-val bytes_exact_prefix : bytes -> bytes -> prop
+noextract val bytes_exact_prefix : bytes -> bytes -> prop
 
 val channel : Type0
 val listener : Type0

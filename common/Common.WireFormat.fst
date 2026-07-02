@@ -9,9 +9,6 @@ type parse_result (wire_message:Type0) =
 noextract
 class wire_format (wire_message:Type0) =
 {
-  wf_equal:
-    wire_message -> wire_message -> GTot prop;
-
   wf_serialize:
     wire_message -> GTot TCP.bytes;
 
@@ -24,7 +21,7 @@ class wire_format (wire_message:Type0) =
         (ensures
           exists parsed.
             wf_parse (wf_serialize msg) == Some (parsed, Seq.empty) /\
-            wf_equal parsed msg);
+            parsed == msg);
 }
 
 noextract
@@ -41,7 +38,7 @@ class wire_format_stream_laws
           exists parsed.
             fmt.wf_parse (Seq.append (fmt.wf_serialize msg) rest) ==
               Some (parsed, rest) /\
-            fmt.wf_equal parsed msg);
+            parsed == msg);
 }
 
 let rec serialize_with_tail
@@ -79,7 +76,7 @@ let rec parses_as
   | msg :: rest ->
     exists parsed_msg bytes_after_msg.
       fmt.wf_parse bytes == Some (parsed_msg, bytes_after_msg) /\
-      fmt.wf_equal parsed_msg msg /\
+      parsed_msg == msg /\
       parses_as fmt bytes_after_msg rest residual
 
 let rec lemma_parse_serialize_with_tail_inverse
@@ -102,7 +99,7 @@ let rec lemma_parse_serialize_with_tail_inverse
     assert (exists parsed_msg bytes_after_msg.
       fmt.wf_parse (serialize_with_tail fmt (msg :: rest) tail) ==
         Some (parsed_msg, bytes_after_msg) /\
-      fmt.wf_equal parsed_msg msg /\
+      parsed_msg == msg /\
       parses_as fmt bytes_after_msg rest tail)
 
 let lemma_parse_serialize_all_inverse

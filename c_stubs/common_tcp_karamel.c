@@ -21,6 +21,8 @@ struct Common_TCP_listener_s {
   int fd;
 };
 
+Common_TCP_history Common_TCP_empty_history = {0};
+
 typedef struct FStar_Pervasives_Native_option__Common_TCP_channel_s {
   uint8_t tag;
   Common_TCP_channel v;

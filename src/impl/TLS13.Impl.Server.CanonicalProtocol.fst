@@ -349,7 +349,7 @@ let lemma_server_consumed_prefix_parse
   match CW.wire_parse input with
   | Some (msg, parsed_residual) ->
     assert (Seq.equal parsed_residual residual);
-    assert (CW.wire_equal msg msg);
+    assert (msg == msg);
     assert (Seq.equal input (Seq.append consumed residual));
     assert (CPI.consumed_by_parse
       CW.tls_record_wire_format
