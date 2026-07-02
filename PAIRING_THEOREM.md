@@ -231,9 +231,15 @@ first-epoch/no-key-update state invariant, it proves both application record
 material directions.  The encrypted-handshake side no longer needs exact
 `M.encrypted_extensions`, `M.certificate_msg`, or `M.certificate_verify` record
 equality; serialized handshake equality is enough for the transcript.  The
-remaining byte-trace lift is therefore focused on deriving those protected
-serialized-message equalities from protected record bytes and sequence-aligned
-seal/open replay.
+new
+`lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections`
+goes one step further: it replaces the assumed `paired_handshake_events` premise
+with the five protected event-projection pairs, derives
+`paired_protected_handshake_wire_equivalent`, derives `paired_handshake_events`,
+and then proves both application record-material directions.  The remaining
+byte-trace lift is therefore focused on extracting those five protected
+event-projection-pair witnesses from the recursive raw/seal/decode replay
+invariants.
 
 The most ambitious client-only existential statement:
 
@@ -735,9 +741,9 @@ The intended proof shape, after the verified cleartext-byte progress, is:
 5. Apply
    `TLS13.Spec.WireFormatLemmas.lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire`
    to obtain `paired_handshake_events`, then apply
-   `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events`
-   (or apply the Phase 3 event-trace theorem if a full paired event trace is
-   obtained).
+   `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections`,
+   which packages this route to application record-material agreement (or apply
+   the Phase 3 event-trace theorem if a full paired event trace is obtained).
 
 The remaining hard part is now step 4's replay threading: identify the matching
 protected record slices and prove the sender/receiver record sequence numbers are
