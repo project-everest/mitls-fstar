@@ -55,6 +55,49 @@ let lemma_raw_delta_heads_equal_same_len
     receiver_delta
     receiver_tail
 
+let lemma_equal_streams_skip_empty_left
+  (left_stream:B.bytes)
+  (right_stream:B.bytes)
+  (left_tail:B.bytes)
+  : Lemma
+    (requires
+      Seq.equal left_stream right_stream /\
+      Seq.equal left_stream (B.append B.empty left_tail))
+    (ensures Seq.equal left_tail right_stream)
+=
+  Seq.append_empty_l left_tail;
+  Seq.lemma_eq_elim left_stream right_stream;
+  Seq.lemma_eq_elim left_stream (B.append B.empty left_tail)
+
+let lemma_equal_streams_skip_empty_right
+  (left_stream:B.bytes)
+  (right_stream:B.bytes)
+  (right_tail:B.bytes)
+  : Lemma
+    (requires
+      Seq.equal left_stream right_stream /\
+      Seq.equal right_stream (B.append B.empty right_tail))
+    (ensures Seq.equal left_stream right_tail)
+=
+  Seq.append_empty_l right_tail;
+  Seq.lemma_eq_elim left_stream right_stream;
+  Seq.lemma_eq_elim right_stream (B.append B.empty right_tail)
+
+let lemma_equal_streams_skip_empty_both
+  (left_stream:B.bytes)
+  (right_stream:B.bytes)
+  (left_tail:B.bytes)
+  (right_tail:B.bytes)
+  : Lemma
+    (requires
+      Seq.equal left_stream right_stream /\
+      Seq.equal left_stream (B.append B.empty left_tail) /\
+      Seq.equal right_stream (B.append B.empty right_tail))
+    (ensures Seq.equal left_tail right_tail)
+=
+  lemma_equal_streams_skip_empty_left left_stream right_stream left_tail;
+  lemma_equal_streams_skip_empty_right left_tail right_stream right_tail
+
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_equal_stream_record_head_lengths
   (left_stream:B.bytes)

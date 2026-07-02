@@ -42,6 +42,38 @@ val lemma_raw_delta_heads_equal_same_len:
       B.length sender_delta == B.length receiver_delta)
     (ensures Seq.equal sender_delta receiver_delta)
 
+val lemma_equal_streams_skip_empty_left:
+  left_stream:B.bytes ->
+  right_stream:B.bytes ->
+  left_tail:B.bytes ->
+  Lemma
+    (requires
+      Seq.equal left_stream right_stream /\
+      Seq.equal left_stream (B.append B.empty left_tail))
+    (ensures Seq.equal left_tail right_stream)
+
+val lemma_equal_streams_skip_empty_right:
+  left_stream:B.bytes ->
+  right_stream:B.bytes ->
+  right_tail:B.bytes ->
+  Lemma
+    (requires
+      Seq.equal left_stream right_stream /\
+      Seq.equal right_stream (B.append B.empty right_tail))
+    (ensures Seq.equal left_stream right_tail)
+
+val lemma_equal_streams_skip_empty_both:
+  left_stream:B.bytes ->
+  right_stream:B.bytes ->
+  left_tail:B.bytes ->
+  right_tail:B.bytes ->
+  Lemma
+    (requires
+      Seq.equal left_stream right_stream /\
+      Seq.equal left_stream (B.append B.empty left_tail) /\
+      Seq.equal right_stream (B.append B.empty right_tail))
+    (ensures Seq.equal left_tail right_tail)
+
 val lemma_equal_stream_record_head_lengths:
   left_stream:B.bytes ->
   right_stream:B.bytes ->
