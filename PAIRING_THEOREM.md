@@ -779,7 +779,15 @@ The remaining proof obligation is to use that head-replay extractor
 inductively at the five protected handshake event positions: after consuming the
 cleartext prefix and any local/zero-byte events, bring each matching protected
 send/receive event pair to the head of the sender/receiver replay predicates and
-show the remaining raw streams are equal.
+show the remaining raw streams are equal.  The first synchronization step is now
+available in the helper module: `lemma_equal_streams_skip_empty_left/right/both`
+handle the byte-stream algebra, while
+`lemma_sent_replay_skip_empty_head_preserves_peer_stream` and
+`lemma_received_replay_skip_empty_head_preserves_peer_stream` destruct the
+recursive replay predicate, advance through a local or opposite-direction
+zero-byte head, and preserve equality with the peer stream.  These lemmas do not
+yet find the five protected handshake events by themselves; they are the
+verified one-step machinery needed for that induction/search.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 

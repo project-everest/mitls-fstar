@@ -344,6 +344,70 @@ val lemma_conn_events_received_decode_replay_head
             tail_received
             final_model)
 
+val lemma_sent_replay_skip_empty_head_preserves_peer_stream
+  (sender:CS.connection_model)
+  (ev:CS.conn_event)
+  (sender_rest:list CS.conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:CS.connection_model)
+  : Lemma
+      (requires
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        CS.conn_events_sent_seal_replay
+          sender
+          (ev :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        (match ev with
+         | CS.ConnLocalEvent _ -> True
+         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+      (ensures
+        exists sender1 sender_tail_sent sender_tail_received.
+          CS.legal_event sender ev /\
+          CS.step_model sender ev == Some sender1 /\
+          Seq.equal sender_tail_sent receiver_raw_received /\
+          CS.conn_events_sent_seal_replay
+            sender1
+            sender_rest
+            sender_tail_sent
+            sender_tail_received
+            sender_final)
+
+val lemma_received_replay_skip_empty_head_preserves_peer_stream
+  (sender_raw_sent:B.bytes)
+  (receiver:CS.connection_model)
+  (ev:CS.conn_event)
+  (receiver_rest:list CS.conn_event)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (receiver_final:CS.connection_model)
+  : Lemma
+      (requires
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        CS.conn_events_received_decode_replay
+          receiver
+          (ev :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final /\
+        (match ev with
+         | CS.ConnLocalEvent _ -> True
+         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+      (ensures
+        exists receiver1 receiver_tail_sent receiver_tail_received.
+          CS.legal_event receiver ev /\
+          CS.step_model receiver ev == Some receiver1 /\
+          Seq.equal sender_raw_sent receiver_tail_received /\
+          CS.conn_events_received_decode_replay
+            receiver1
+            receiver_rest
+            receiver_tail_sent
+            receiver_tail_received
+            receiver_final)
+
 val lemma_sent_event_nonempty_seal_projection_protected
   (model:CS.connection_model)
   (msg:M.tls_message)
