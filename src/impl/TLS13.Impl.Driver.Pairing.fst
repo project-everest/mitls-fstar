@@ -11,6 +11,7 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
+module M = TLS13.Messages
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
@@ -238,6 +239,108 @@ let lemma_paired_handshake_message_states_paired_cleartext_hello_messages
     assert (client_sh == server_sh)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
+
+let lemma_paired_handshake_message_states_paired_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_message_states client server)
+      (ensures paired_handshake_events client server)
+=
+  match
+    client.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+    server.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+    client.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
+    server.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
+    client.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
+    server.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
+    client.CS.cs_model.CS.model_handshake.CS.hs_certificate,
+    server.CS.cs_model.CS.model_handshake.CS.hs_certificate,
+    client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
+    server.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
+    client.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
+    server.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
+    client.CS.cs_model.CS.model_handshake.CS.hs_client_finished,
+    server.CS.cs_model.CS.model_handshake.CS.hs_client_finished
+  with
+  | Some client_ch, Some server_ch,
+    Some client_sh, Some server_sh,
+    Some client_ee, Some server_ee,
+    Some client_cert, Some server_cert,
+    Some client_cv, Some server_cv,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    assert (client_ch == server_ch);
+    assert (client_sh == server_sh);
+    assert (client_ee == server_ee);
+    assert (client_cert == server_cert);
+    assert (client_cv == server_cv);
+    assert (client_sf == server_sf);
+    assert (client_cf == server_cf);
+    assert (CS.same_transcript_checkpoint CS.TH_CH client server);
+    assert (CS.same_transcript_checkpoint CS.TH_SH client server);
+    assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
+    assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
+    assert (CS.same_transcript_checkpoint CS.TH_SF client server);
+    assert (CS.same_transcript_checkpoint CS.TH_CF client server)
+  | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
+    assert False
+
+let lemma_paired_handshake_event_trace_paired_handshake_message_states
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_event_trace client server)
+      (ensures paired_handshake_message_states client server)
+=
+  match
+    client.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+    server.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+    client.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
+    server.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
+    client.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
+    server.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
+    client.CS.cs_model.CS.model_handshake.CS.hs_certificate,
+    server.CS.cs_model.CS.model_handshake.CS.hs_certificate,
+    client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
+    server.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
+    client.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
+    server.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
+    client.CS.cs_model.CS.model_handshake.CS.hs_client_finished,
+    server.CS.cs_model.CS.model_handshake.CS.hs_client_finished
+  with
+  | Some client_ch, Some server_ch,
+    Some client_sh, Some server_sh,
+    Some client_ee, Some server_ee,
+    Some client_cert, Some server_cert,
+    Some client_cv, Some server_cv,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    assert (client_ch == server_ch);
+    assert (client_sh == server_sh);
+    assert (client_ee == server_ee);
+    assert (client_cert == server_cert);
+    assert (client_cv == server_cv);
+    assert (client_sf == server_sf);
+    assert (client_cf == server_cf)
+  | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
+    assert False
+
+let lemma_paired_handshake_event_trace_paired_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_event_trace client server)
+      (ensures
+        paired_handshake_message_states client server /\
+        paired_handshake_events client server)
+=
+  lemma_paired_handshake_event_trace_paired_handshake_message_states
+    client
+    server;
+  lemma_paired_handshake_message_states_paired_handshake_events
+    client
+    server
 
 let lemma_paired_handshake_message_states_application_derivation_projection_inputs
   (client:CS.connection_state)
@@ -1175,6 +1278,42 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_and_ha
     client
     server;
   lemma_client_server_application_record_material_server_to_client_agrees
+    client
+    server
+
+let lemma_client_server_application_record_material_agrees_from_paired_handshake_event_trace
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        paired_handshake_event_trace client server /\
+        client_server_driver_first_epoch_no_key_update_state_inputs
+          client
+          server)
+      (ensures
+        paired_handshake_message_states client server /\
+        paired_handshake_events client server /\
+        client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_state_inputs client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  lemma_paired_handshake_event_trace_paired_handshake_events
+    client
+    server;
+  lemma_client_server_application_record_material_agrees_from_paired_handshake_message_states
     client
     server
 
