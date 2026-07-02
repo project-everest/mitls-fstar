@@ -191,16 +191,25 @@ then the event-trace theorem applies and gives application record key/IV
 agreement.
 ```
 
-This byte-trace theorem should be reachable, but it has a specific current proof
-obligation: the exported wire-format lemmas prove ClientHello key-share agreement
-from supported-profile parseback, while ServerHello raw replay currently exposes
-only `server_hello_wire_equivalent`, not structured ServerHello key-share equality
-(`TLS13.Spec.WireFormatLemmas.fsti:81-100`, `124-130`, `167-174`,
-`217-239`). If the lower-level parseback lemmas already prove that a received
-ServerHello's structured fields agree with its carried wire body, the next step is
-to expose exactly that fact at the `TLS13.Spec.WireFormatLemmas` boundary and use
-it to derive `paired_cleartext_hello_key_shares` or
-`CS.paired_cleartext_hello_messages`.
+The current verified byte-level progress is a cleartext-handshake theorem rather
+than a full byte-trace theorem.  `TLS13.Spec.WireFormatLemmas` now exposes
+lemmas that derive:
+
+- ClientHello serialized-handshake equality from raw cleartext replay and
+  supported-profile ClientHello parsing;
+- ServerHello key-share equality when both equal ServerHello fragments are
+  accepted by `W.parse_supported_server_hello`;
+- `TH_CH`, `TH_SH`, and `DeriveHandshakeTraffic` checkpoint agreement from
+  cleartext raw replay.
+
+`TLS13.Impl.Driver.Pairing` then uses these facts in
+`lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events`:
+from cleartext ClientHello/ServerHello raw replay, explicit supported
+ServerHello parse assumptions, paired encrypted-handshake events, and the usual
+first-epoch/no-key-update state invariant, it proves both application record
+material directions.  The remaining byte-trace lift is therefore focused on
+deriving the paired encrypted-handshake events or the later transcript
+checkpoint from protected record bytes.
 
 The most ambitious client-only existential statement:
 
@@ -319,6 +328,24 @@ x25519_shared server_sk client_pub
 See `TLS13.Crypto.Spec.fsti:40-51`. The proof uses it in
 `lemma_paired_x25519_key_shares_shared_secret_agree`
 (`ConnectionState.Lemmas.fst:3084-3121`).
+
+For a full protected-byte trace theorem, an additional crypto-interface fact is
+important but currently not exposed in `TLS13.Crypto.Spec.fsti`: AEAD
+decrypt-after-encrypt correctness, roughly
+
+```fstar
+chacha20_poly1305_open key nonce aad
+  (chacha20_poly1305_seal key nonce aad plaintext)
+== Some plaintext
+```
+
+The record spec defines sealing and opening in terms of these abstract crypto
+functions (`TLS13.Record.Spec.fst:35-59`). Without such a lemma, a proof can
+state that the sender sealed a protected record and that the receiver decoded a
+matching raw record, but it cannot derive the receiver's parsed handshake message
+from the sender's plaintext solely by computation over the crypto spec. This is
+a real TCB/proof-boundary issue for any theorem that claims to lift encrypted
+handshake byte equality to paired encrypted-handshake events.
 
 The theorem proves equality of specified byte strings. It does not prove
 computational secrecy, resistance to active attacks, AEAD authenticity, signature
@@ -663,29 +690,29 @@ client/server end-to-end predicates:
 - received-decode replay;
 - layered/full log consistency.
 
-The intended proof shape is:
+The intended proof shape, after the verified cleartext-byte progress, is:
 
 1. Start from `CS.paired_wire_logs client server` or from exact external
    `paired_driver_transport_logs_exact`.
 2. Use replay consistency to identify the raw TLS record slices corresponding to
    the cleartext handshake messages.
-3. Use supported-profile parseback/injectivity lemmas for ClientHello to prove
-   ClientHello key-share equality.
-4. Use or expose a ServerHello parseback/field-consistency lemma strong enough to
-   prove ServerHello key-share equality. The current exported boundary only gives
-   `server_hello_wire_equivalent`, so this is the main known gap in the byte
-   layer (`TLS13.Spec.WireFormatLemmas.fsti:81-100`, `217-239`).
-5. Use protected-record decode/open replay for encrypted handshake messages to
+3. Use the new cleartext raw replay lemmas to prove ClientHello serialized
+   equality, ServerHello wire equivalence, ServerHello key-share equality under
+   explicit supported parse assumptions, and the `DeriveHandshakeTraffic`
+   checkpoint.
+4. Use protected-record decode/open replay for encrypted handshake messages to
    obtain paired structured EncryptedExtensions, Certificate, CertificateVerify,
    and Finished events, or prove the required transcript checkpoints directly.
-6. Apply the Phase 3 event-trace theorem, then Phase 2 and Phase 1.
+5. Apply
+   `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events`
+   if `paired_handshake_events` is obtained, or apply the Phase 3 event-trace
+   theorem if a full paired event trace is obtained.
 
-If parseback lemmas truly exist for all TLS message types below the current
-interface, the work here should mostly be exposing the right ServerHello
-field-consistency theorem and threading it through `TLS13.Spec.WireFormatLemmas`.
-The caution is that the present interface intentionally documents ServerHello as
-weaker than exact parseback because received ServerHello values can serialize
-from their `body` field rather than from structured fields.
+The remaining hard part is step 4. The state-machine replay predicates record
+both sent-seal and received-decode facts, but the crypto spec does not currently
+expose AEAD open(seal(...)) correctness. Without that fact, the proof cannot
+derive a receiver's protected handshake plaintext from the sender's sealed
+plaintext solely from matched ciphertext bytes and record-key agreement.
 
 ### Phase 5: optional existential/server-run theorem
 
@@ -769,12 +796,14 @@ F* spec boundary (`TLS13.Crypto.Spec.fsti:18-77`).
 
 ### Wire-format caveats are deliberately outside the theorem
 
-Because the theorem assumes semantic pairing facts, it avoids hard wire-format
-questions. `TLS13.Spec.WireFormatLemmas` documents that ClientHello parseback has
-supported-profile and empty-SNI caveats and that ServerHello raw replay does not
-automatically imply structured field equality (`WireFormatLemmas.fsti:13-20`,
-`63-100`). If a future theorem claims to derive the semantic pairing facts from
-wire logs alone, those caveats become central.
+Because the original theorem assumes semantic pairing facts, it avoids hard
+wire-format questions. The newer cleartext-byte lemmas make part of that bridge
+explicit, but only with supported-profile restrictions: ClientHello parseback has
+supported-profile and empty-SNI caveats, and ServerHello key-share equality is
+proved only when both fragments are accepted by the supported ServerHello parser.
+Raw ServerHello replay alone still implies only wire/body equivalence, not
+unconditional structured record equality. A future theorem that derives all
+semantic pairing facts from wire logs alone must keep those caveats explicit.
 
 ### Transport/environment reliability is assumed
 
