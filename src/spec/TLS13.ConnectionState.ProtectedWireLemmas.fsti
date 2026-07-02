@@ -6,6 +6,7 @@ module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
+module T = TLS13.Types
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 
@@ -40,6 +41,28 @@ val lemma_raw_delta_heads_equal_same_len:
         (B.append receiver_delta receiver_tail) /\
       B.length sender_delta == B.length receiver_delta)
     (ensures Seq.equal sender_delta receiver_delta)
+
+val lemma_equal_stream_record_head_lengths:
+  left_stream:B.bytes ->
+  right_stream:B.bytes ->
+  left_head:B.bytes ->
+  left_tail:B.bytes ->
+  right_head:B.bytes ->
+  right_tail:B.bytes ->
+  left_ct:T.content_type ->
+  left_fragment:M.sealed_record ->
+  right_ct:T.content_type ->
+  right_fragment:M.sealed_record ->
+  Lemma
+    (requires
+      Seq.equal left_stream right_stream /\
+      Seq.equal left_stream (B.append left_head left_tail) /\
+      Seq.equal right_stream (B.append right_head right_tail) /\
+      W.parse_record_wire left_head ==
+        Some (left_ct, left_fragment, B.length left_head) /\
+      W.parse_record_wire right_head ==
+        Some (right_ct, right_fragment, B.length right_head))
+    (ensures B.length left_head == B.length right_head)
 
 noextract
 let protected_handshake_wire_round_trip_message (msg:M.handshake_msg) : prop =
@@ -316,6 +339,59 @@ val lemma_protected_handshake_event_projection_pair_from_aligned_heads
         Seq.equal sender_stream (B.append sender_delta sender_tail) /\
         Seq.equal receiver_stream (B.append receiver_delta receiver_tail) /\
         B.length sender_delta == B.length receiver_delta /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        CS.sent_event_seal_projection
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          })
+          sender_delta /\
+        CS.received_event_decode_projection
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          })
+          receiver_delta)
+      (ensures
+        protected_handshake_event_projection_pair
+          {
+            pm_sender = sender;
+            pm_receiver = receiver;
+            pm_raw_sent = sender_delta;
+            pm_raw_received = receiver_delta;
+          }
+          sent_msg
+          received_msg)
+
+val lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (sender_stream:B.bytes)
+  (receiver_stream:B.bytes)
+  (sender_delta:B.bytes)
+  (sender_tail:B.bytes)
+  (receiver_delta:B.bytes)
+  (receiver_tail:B.bytes)
+  : Lemma
+      (requires
+        sender.CS.model_record.CS.record_write.R.seq ==
+          receiver.CS.model_record.CS.record_read.R.seq /\
+        (match
+          CS.record_direction_material sender.CS.model_record.CS.record_write,
+          CS.record_direction_material receiver.CS.model_record.CS.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          CS.record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        Seq.equal sender_stream receiver_stream /\
+        Seq.equal sender_stream (B.append sender_delta sender_tail) /\
+        Seq.equal receiver_stream (B.append receiver_delta receiver_tail) /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
         CS.sent_event_seal_projection
