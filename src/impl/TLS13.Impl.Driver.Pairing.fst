@@ -12,6 +12,7 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
+module R = TLS13.Record.Spec
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
@@ -1272,6 +1273,84 @@ let lemma_client_server_application_record_material_server_to_client_agrees
     (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
     client
     server)
+
+let lemma_client_to_server_protected_message_decode_from_peer_record_material
+  (epoch:CS.traffic_epoch)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.peer_record_material_agrees
+          (CS.traffic_id epoch CS.ClientTraffic)
+          client
+          server /\
+        client.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+          server.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
+        CS.sent_single_protected_message_seal client.CS.cs_model msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures
+        CS.received_single_protected_message_decode
+          server.CS.cs_model
+          msg
+          raw)
+=
+  assert (match
+    CS.record_direction_material
+      client.CS.cs_model.CS.model_record.CS.record_write,
+    CS.record_direction_material
+      server.CS.cs_model.CS.model_record.CS.record_read
+  with
+  | Some sender_write, Some receiver_read ->
+    CS.record_key_iv_material_agrees sender_write receiver_read
+  | _, _ ->
+    False);
+  CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+    client.CS.cs_model
+    server.CS.cs_model
+    msg
+    raw
+
+let lemma_server_to_client_protected_message_decode_from_peer_record_material
+  (epoch:CS.traffic_epoch)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.peer_record_material_agrees
+          (CS.traffic_id epoch CS.ServerTraffic)
+          client
+          server /\
+        server.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+          client.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
+        CS.sent_single_protected_message_seal server.CS.cs_model msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures
+        CS.received_single_protected_message_decode
+          client.CS.cs_model
+          msg
+          raw)
+=
+  assert (match
+    CS.record_direction_material
+      server.CS.cs_model.CS.model_record.CS.record_write,
+    CS.record_direction_material
+      client.CS.cs_model.CS.model_record.CS.record_read
+  with
+  | Some sender_write, Some receiver_read ->
+    CS.record_key_iv_material_agrees sender_write receiver_read
+  | _, _ ->
+    False);
+  CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+    server.CS.cs_model
+    client.CS.cs_model
+    msg
+    raw
 
 let lemma_client_server_application_record_material_agrees_from_paired_handshake_message_states
   (client:CS.connection_state)

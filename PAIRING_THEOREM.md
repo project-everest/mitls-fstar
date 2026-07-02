@@ -329,9 +329,8 @@ See `TLS13.Crypto.Spec.fsti:40-51`. The proof uses it in
 `lemma_paired_x25519_key_shares_shared_secret_agree`
 (`ConnectionState.Lemmas.fst:3084-3121`).
 
-For a full protected-byte trace theorem, an additional crypto-interface fact is
-important but currently not exposed in `TLS13.Crypto.Spec.fsti`: AEAD
-decrypt-after-encrypt correctness, roughly
+For protected-byte trace lifting, `TLS13.Crypto.Spec.fsti` now explicitly adds
+the following trusted AEAD decrypt-after-encrypt correctness assumption:
 
 ```fstar
 chacha20_poly1305_open key nonce aad
@@ -340,12 +339,15 @@ chacha20_poly1305_open key nonce aad
 ```
 
 The record spec defines sealing and opening in terms of these abstract crypto
-functions (`TLS13.Record.Spec.fst:35-59`). Without such a lemma, a proof can
-state that the sender sealed a protected record and that the receiver decoded a
-matching raw record, but it cannot derive the receiver's parsed handshake message
-from the sender's plaintext solely by computation over the crypto spec. This is
-a real TCB/proof-boundary issue for any theorem that claims to lift encrypted
-handshake byte equality to paired encrypted-handshake events.
+functions (`TLS13.Record.Spec.fst:35-59`). This assumption is intentionally part
+of the cryptographic TCB: it is not a theorem about the implementation. With it,
+`TLS13.Record.Spec.lemma_open_record_after_seal` and
+`lemma_open_record_after_seal_peer` prove that a receiver with matching key/IV
+material and sequence number opens the sender's sealed record to the sender's
+plaintext. `TLS13.ConnectionState.Lemmas` exposes the corresponding
+`received_single_protected_message_decode_from_sent_single_protected_message_seal`
+bridge, and `TLS13.Impl.Driver.Pairing` exposes client-to-server and
+server-to-client wrappers from `CS.peer_record_material_agrees`.
 
 The theorem proves equality of specified byte strings. It does not prove
 computational secrecy, resistance to active attacks, AEAD authenticity, signature
@@ -708,11 +710,10 @@ The intended proof shape, after the verified cleartext-byte progress, is:
    if `paired_handshake_events` is obtained, or apply the Phase 3 event-trace
    theorem if a full paired event trace is obtained.
 
-The remaining hard part is step 4. The state-machine replay predicates record
-both sent-seal and received-decode facts, but the crypto spec does not currently
-expose AEAD open(seal(...)) correctness. Without that fact, the proof cannot
-derive a receiver's protected handshake plaintext from the sender's sealed
-plaintext solely from matched ciphertext bytes and record-key agreement.
+The remaining hard part is now step 4's replay threading: identify the matching
+protected record slices and prove the sender/receiver record sequence numbers are
+aligned at each slice. The AEAD open(seal(...)) step is available, but it remains
+an explicit trust assumption in the crypto spec.
 
 ### Phase 5: optional existential/server-run theorem
 

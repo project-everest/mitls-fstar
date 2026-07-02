@@ -461,6 +461,88 @@ val lemma_sent_event_seal_projection_intro
         })
         raw)
 
+val lemma_received_record_opened_from_sent_single_protected_message_seal
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write == receiver.model_record.record_read /\
+        sent_single_protected_message_seal sender msg raw)
+      (ensures
+        exists outer_fragment.
+          W.parse_record raw ==
+            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+          received_record_opened
+            receiver
+            raw
+            outer_fragment
+            (sent_tls_inner_plaintext_fragment msg))
+
+val lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write == receiver.model_record.record_read /\
+        sent_single_protected_message_seal sender msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures received_single_protected_message_decode receiver msg raw)
+
+val lemma_received_record_opened_from_sent_single_protected_message_seal_peer
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        sent_single_protected_message_seal sender msg raw)
+      (ensures
+        exists outer_fragment.
+          W.parse_record raw ==
+            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+          received_record_opened
+            receiver
+            raw
+            outer_fragment
+            (sent_tls_inner_plaintext_fragment msg))
+
+val lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        sent_single_protected_message_seal sender msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures received_single_protected_message_decode receiver msg raw)
+
 val lemma_event_raw_delta_legal_protected_segmented
   (model:connection_model)
   (ev:conn_event)

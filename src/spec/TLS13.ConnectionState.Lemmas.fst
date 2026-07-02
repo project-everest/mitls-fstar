@@ -5686,6 +5686,286 @@ let lemma_sent_event_seal_projection_intro
   Seq.lemma_eq_elim plaintext (sent_tls_inner_plaintext_fragment msg);
   lemma_sent_single_protected_message_seal_intro model msg raw aad ciphertext
 
+let lemma_received_record_opened_from_sent_single_protected_message_seal
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write == receiver.model_record.record_read /\
+        sent_single_protected_message_seal sender msg raw)
+      (ensures
+        exists outer_fragment.
+          W.parse_record raw ==
+            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+          received_record_opened
+            receiver
+            raw
+            outer_fragment
+            (sent_tls_inner_plaintext_fragment msg))
+=
+  eliminate exists (ciphertext:B.bytes).
+    W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+    R.seal
+      sender.model_record.record_write
+      (record_header_aad raw)
+      {
+        R.content_type = T.ApplicationData;
+        R.fragment = sent_tls_inner_plaintext_fragment msg;
+      } ==
+      Some (ciphertext, R.next_seq sender.model_record.record_write)
+  returns
+    exists outer_fragment.
+      W.parse_record raw ==
+        Some (T.ApplicationData, outer_fragment, B.length raw) /\
+      received_record_opened
+        receiver
+        raw
+        outer_fragment
+        (sent_tls_inner_plaintext_fragment msg)
+  with _.
+  ( let st = sender.model_record.record_write in
+    let aad = record_header_aad raw in
+    let pt = {
+      R.content_type = T.ApplicationData;
+      R.fragment = sent_tls_inner_plaintext_fragment msg;
+    } in
+    match st.R.key, st.R.static_iv with
+    | Some _, Some _ ->
+      R.lemma_open_record_after_seal st aad pt;
+      assert (R.open_record st aad ciphertext ==
+        Some (sent_tls_inner_plaintext_fragment msg, R.next_seq st));
+      assert (st == receiver.model_record.record_read);
+      assert (R.open_record
+        receiver.model_record.record_read
+        (record_header_aad raw)
+        ciphertext ==
+        Some (sent_tls_inner_plaintext_fragment msg, R.next_seq st));
+      assert (received_record_opened
+        receiver
+        raw
+        ciphertext
+        (sent_tls_inner_plaintext_fragment msg));
+      assert (exists outer_fragment.
+        W.parse_record raw ==
+          Some (T.ApplicationData, outer_fragment, B.length raw) /\
+        received_record_opened
+          receiver
+          raw
+          outer_fragment
+          (sent_tls_inner_plaintext_fragment msg))
+    | _, _ ->
+      assert False )
+
+let lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write == receiver.model_record.record_read /\
+        sent_single_protected_message_seal sender msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures received_single_protected_message_decode receiver msg raw)
+=
+  lemma_received_record_opened_from_sent_single_protected_message_seal
+    sender
+    receiver
+    msg
+    raw;
+  eliminate exists (outer_fragment:B.bytes).
+    W.parse_record raw ==
+      Some (T.ApplicationData, outer_fragment, B.length raw) /\
+    received_record_opened
+      receiver
+      raw
+      outer_fragment
+      (sent_tls_inner_plaintext_fragment msg)
+  returns
+    received_single_protected_message_decode receiver msg raw
+  with _.
+  ( let (content_type, fragment) = W.serialize_tls_message msg in
+    let plaintext = { M.content_type = content_type; M.fragment = fragment } in
+    assert (sent_tls_inner_plaintext_fragment msg ==
+            W.serialize_plaintext plaintext);
+    W.lemma_parse_plaintext_serialize_plaintext plaintext;
+    assert (W.parse_plaintext (sent_tls_inner_plaintext_fragment msg) ==
+            Some plaintext);
+    W.lemma_parse_record_implies_parse_record_wire raw;
+    assert (W.parse_record_wire raw ==
+      Some (T.ApplicationData, outer_fragment, B.length raw));
+    assert (received_record_opened
+      receiver
+      raw
+      outer_fragment
+      (sent_tls_inner_plaintext_fragment msg));
+    assert (W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
+      Some msg);
+    introduce exists (outer_fragment':B.bytes) (opened:B.bytes) (plaintext':M.plaintext).
+      W.parse_record_wire raw ==
+        Some (T.ApplicationData, outer_fragment', B.length raw) /\
+      received_record_opened receiver raw outer_fragment' opened /\
+      W.parse_plaintext opened == Some plaintext' /\
+      W.parse_tls_message plaintext'.M.content_type plaintext'.M.fragment ==
+        Some msg
+    with outer_fragment (sent_tls_inner_plaintext_fragment msg) plaintext
+    and () )
+
+let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        sent_single_protected_message_seal sender msg raw)
+      (ensures
+        exists outer_fragment.
+          W.parse_record raw ==
+            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+          received_record_opened
+            receiver
+            raw
+            outer_fragment
+            (sent_tls_inner_plaintext_fragment msg))
+=
+  eliminate exists (ciphertext:B.bytes).
+    W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+    R.seal
+      sender.model_record.record_write
+      (record_header_aad raw)
+      {
+        R.content_type = T.ApplicationData;
+        R.fragment = sent_tls_inner_plaintext_fragment msg;
+      } ==
+      Some (ciphertext, R.next_seq sender.model_record.record_write)
+  returns
+    exists outer_fragment.
+      W.parse_record raw ==
+        Some (T.ApplicationData, outer_fragment, B.length raw) /\
+      received_record_opened
+        receiver
+        raw
+        outer_fragment
+        (sent_tls_inner_plaintext_fragment msg)
+  with _.
+  ( let write_st = sender.model_record.record_write in
+    let read_st = receiver.model_record.record_read in
+    let aad = record_header_aad raw in
+    let pt = {
+      R.content_type = T.ApplicationData;
+      R.fragment = sent_tls_inner_plaintext_fragment msg;
+    } in
+    match
+      write_st.R.key,
+      write_st.R.static_iv,
+      read_st.R.key,
+      read_st.R.static_iv
+    with
+    | Some write_key, Some write_iv, Some read_key, Some read_iv ->
+      assert (record_direction_material write_st ==
+        Some { record_material_key = write_key; record_material_iv = write_iv });
+      assert (record_direction_material read_st ==
+        Some { record_material_key = read_key; record_material_iv = read_iv });
+      assert (Seq.equal write_key read_key);
+      assert (Seq.equal write_iv read_iv);
+      R.lemma_open_record_after_seal_peer write_st read_st aad pt;
+      assert (R.open_record read_st aad ciphertext ==
+        Some (sent_tls_inner_plaintext_fragment msg, R.next_seq read_st));
+      assert (received_record_opened
+        receiver
+        raw
+        ciphertext
+        (sent_tls_inner_plaintext_fragment msg));
+      assert (exists outer_fragment.
+        W.parse_record raw ==
+          Some (T.ApplicationData, outer_fragment, B.length raw) /\
+        received_record_opened
+          receiver
+          raw
+          outer_fragment
+          (sent_tls_inner_plaintext_fragment msg))
+    | _, _, _, _ ->
+      assert False )
+
+let lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+  (sender:connection_model)
+  (receiver:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        sent_single_protected_message_seal sender msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures received_single_protected_message_decode receiver msg raw)
+=
+  lemma_received_record_opened_from_sent_single_protected_message_seal_peer
+    sender
+    receiver
+    msg
+    raw;
+  eliminate exists (outer_fragment:B.bytes).
+    W.parse_record raw ==
+      Some (T.ApplicationData, outer_fragment, B.length raw) /\
+    received_record_opened
+      receiver
+      raw
+      outer_fragment
+      (sent_tls_inner_plaintext_fragment msg)
+  returns
+    received_single_protected_message_decode receiver msg raw
+  with _.
+  ( let (content_type, fragment) = W.serialize_tls_message msg in
+    let plaintext = { M.content_type = content_type; M.fragment = fragment } in
+    assert (sent_tls_inner_plaintext_fragment msg ==
+            W.serialize_plaintext plaintext);
+    W.lemma_parse_plaintext_serialize_plaintext plaintext;
+    assert (W.parse_plaintext (sent_tls_inner_plaintext_fragment msg) ==
+            Some plaintext);
+    W.lemma_parse_record_implies_parse_record_wire raw;
+    assert (W.parse_record_wire raw ==
+      Some (T.ApplicationData, outer_fragment, B.length raw));
+    assert (received_record_opened
+      receiver
+      raw
+      outer_fragment
+      (sent_tls_inner_plaintext_fragment msg));
+    assert (W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
+      Some msg);
+    introduce exists (outer_fragment':B.bytes) (opened:B.bytes) (plaintext':M.plaintext).
+      W.parse_record_wire raw ==
+        Some (T.ApplicationData, outer_fragment', B.length raw) /\
+      received_record_opened receiver raw outer_fragment' opened /\
+      W.parse_plaintext opened == Some plaintext' /\
+      W.parse_tls_message plaintext'.M.content_type plaintext'.M.fragment ==
+        Some msg
+    with outer_fragment (sent_tls_inner_plaintext_fragment msg) plaintext
+    and () )
+
 let lemma_network_message_raw_delta_legal_protected_single_parse_record
   (model:connection_model)
   (msg:directed_message M.tls_message)

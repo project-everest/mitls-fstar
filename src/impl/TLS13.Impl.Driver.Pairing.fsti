@@ -9,6 +9,7 @@ module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module R = TLS13.Record.Spec
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
@@ -1191,6 +1192,52 @@ val lemma_client_server_application_record_material_server_to_client_agrees
           (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
+
+val lemma_client_to_server_protected_message_decode_from_peer_record_material
+  (epoch:CS.traffic_epoch)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.peer_record_material_agrees
+          (CS.traffic_id epoch CS.ClientTraffic)
+          client
+          server /\
+        client.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+          server.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
+        CS.sent_single_protected_message_seal client.CS.cs_model msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures
+        CS.received_single_protected_message_decode
+          server.CS.cs_model
+          msg
+          raw)
+
+val lemma_server_to_client_protected_message_decode_from_peer_record_material
+  (epoch:CS.traffic_epoch)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.peer_record_material_agrees
+          (CS.traffic_id epoch CS.ServerTraffic)
+          client
+          server /\
+        server.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+          client.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
+        CS.sent_single_protected_message_seal server.CS.cs_model msg raw /\
+        (let (content_type, fragment) = W.serialize_tls_message msg in
+         W.parse_tls_message content_type fragment == Some msg))
+      (ensures
+        CS.received_single_protected_message_decode
+          client.CS.cs_model
+          msg
+          raw)
 
 val lemma_client_server_application_record_material_agrees_from_paired_handshake_message_states
   (client:CS.connection_state)

@@ -1347,6 +1347,20 @@ let parse_plaintext (input:B.bytes) : GTot (option M.plaintext) =
 let serialize_plaintext (pt:M.plaintext) : GTot B.bytes =
   B.append pt.M.fragment (u8 (content_type_to_byte pt.M.content_type))
 
+let lemma_parse_plaintext_serialize_plaintext (pt:M.plaintext)
+  : Lemma (parse_plaintext (serialize_plaintext pt) == Some pt)
+=
+  let input = serialize_plaintext pt in
+  assert (B.length input == B.length pt.M.fragment + 1);
+  assert (B.length input > 0);
+  let content_type_pos = B.length input - 1 in
+  assert (content_type_pos == B.length pt.M.fragment);
+  lemma_byte_v (content_type_to_byte pt.M.content_type);
+  assert (content_type_of_byte (Seq.index input content_type_pos) ==
+    Some pt.M.content_type);
+  assert (Seq.equal (Seq.slice input 0 content_type_pos) pt.M.fragment);
+  Seq.lemma_eq_intro (Seq.slice input 0 content_type_pos) pt.M.fragment
+
 let parse_sealed_record (input:B.bytes) : GTot (option M.sealed_record) =
   Some input
 

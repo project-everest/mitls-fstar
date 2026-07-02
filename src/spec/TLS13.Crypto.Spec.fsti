@@ -69,6 +69,25 @@ val chacha20_poly1305_open:
   ciphertext:B.bytes ->
   Tot (option (plaintext:B.bytes{B.length plaintext + 16 == B.length ciphertext}))
 
+(**
+  Trust assumption: AEAD correctness for honest encryption/decryption with the
+  same key, nonce, and additional authenticated data.  This is not proved in the
+  model; it is part of the cryptographic TCB used to lift protected byte replay
+  to decrypted TLS messages.
+**)
+val lemma_chacha20_poly1305_open_seal:
+  key:B.bytes ->
+  nonce:B.bytes ->
+  aad:B.bytes ->
+  plaintext:B.bytes ->
+  Lemma
+    (chacha20_poly1305_open
+      key
+      nonce
+      aad
+      (chacha20_poly1305_seal key nonce aad plaintext) ==
+      Some plaintext)
+
 val verify_signature:
   scheme:T.signature_scheme ->
   public_key:public_key ->

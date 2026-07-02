@@ -751,6 +751,10 @@ val serialize_plaintext:
   pt:M.plaintext ->
   GTot B.bytes
 
+val lemma_parse_plaintext_serialize_plaintext:
+  pt:M.plaintext ->
+  Lemma (parse_plaintext (serialize_plaintext pt) == Some pt)
+
 val parse_sealed_record:
   input:B.bytes ->
   GTot (option M.sealed_record)
