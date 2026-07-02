@@ -17,6 +17,22 @@ type protected_message_replay = {
   pm_raw_received: B.bytes;
 }
 
+noextract
+let write_read_record_material_aligned
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  : prop =
+  sender.CS.model_record.CS.record_write.R.seq ==
+    receiver.CS.model_record.CS.record_read.R.seq /\
+  (match
+    CS.record_direction_material sender.CS.model_record.CS.record_write,
+    CS.record_direction_material receiver.CS.model_record.CS.record_read
+  with
+  | Some sender_write, Some receiver_read ->
+    CS.record_key_iv_material_agrees sender_write receiver_read
+  | _, _ ->
+    False)
+
 val lemma_append_heads_equal_same_len:
   #a:eqtype ->
   left:Seq.seq a ->
@@ -343,6 +359,94 @@ val lemma_conn_events_received_decode_replay_head
             tail_sent
             tail_received
             final_model)
+
+val lemma_step_received_network_event_preserves_record_write
+  (model:CS.connection_model)
+  (msg:M.tls_message)
+  (model_after:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          }) == Some model_after)
+      (ensures
+        model_after.CS.model_record.CS.record_write ==
+          model.CS.model_record.CS.record_write)
+
+val lemma_step_sent_network_event_preserves_record_read
+  (model:CS.connection_model)
+  (msg:M.tls_message)
+  (model_after:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          }) == Some model_after)
+      (ensures
+        model_after.CS.model_record.CS.record_read ==
+          model.CS.model_record.CS.record_read)
+
+val lemma_step_received_network_event_preserves_write_read_record_material_alignment
+  (sender:CS.connection_model)
+  (msg:M.tls_message)
+  (sender_after:CS.connection_model)
+  (receiver:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          }) == Some sender_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender_after receiver)
+
+val lemma_step_sent_network_event_preserves_write_read_record_material_alignment
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (msg:M.tls_message)
+  (receiver_after:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          }) == Some receiver_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender receiver_after)
+
+val lemma_step_opposite_network_events_preserve_write_read_record_material_alignment
+  (sender:CS.connection_model)
+  (sender_msg:M.tls_message)
+  (sender_after:CS.connection_model)
+  (receiver:CS.connection_model)
+  (receiver_msg:M.tls_message)
+  (receiver_after:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = sender_msg;
+          }) == Some sender_after /\
+        CS.step_model
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = receiver_msg;
+          }) == Some receiver_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender_after receiver_after)
 
 val lemma_sent_replay_skip_empty_head_preserves_peer_stream
   (sender:CS.connection_model)

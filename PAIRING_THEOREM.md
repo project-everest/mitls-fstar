@@ -798,7 +798,14 @@ that synchronization and record-state alignment are separate obligations.  The
 module also includes the symmetric two-sided wrapper
 `lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads`,
 which advances one empty/local head on each endpoint before applying the
-head-replay extractor.
+head-replay extractor.  For the narrower but common case of skipping only
+opposite-direction network events, the module now exposes preservation lemmas
+showing that a sender-side received network event preserves the sender write
+record state, a receiver-side sent network event preserves the receiver read
+record state, and therefore write/read sequence-and-key/IV alignment is
+preserved through one or both such skips.  Local traffic-key installation remains
+outside those preservation lemmas because it can legitimately change record
+material.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
