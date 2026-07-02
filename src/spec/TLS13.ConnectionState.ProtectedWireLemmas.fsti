@@ -312,6 +312,72 @@ val lemma_conn_events_received_decode_replay_head
             tail_received
             final_model)
 
+val lemma_sent_event_nonempty_seal_projection_protected
+  (model:CS.connection_model)
+  (msg:M.tls_message)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  : Lemma
+      (requires
+        CS.network_message_is_cleartext CL.Sent msg == false /\
+        CS.protected_record_count CL.Sent msg == 1 /\
+        CS.event_raw_delta_legal
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          })
+          delta_sent
+          delta_received /\
+        CS.sent_event_nonempty_seal_projection
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          })
+          delta_sent)
+      (ensures
+        CS.sent_event_seal_projection
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          })
+          delta_sent)
+
+val lemma_received_event_nonempty_decode_projection_protected
+  (model:CS.connection_model)
+  (msg:M.tls_message)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  : Lemma
+      (requires
+        CS.network_message_is_cleartext CL.Received msg == false /\
+        CS.protected_record_count CL.Received msg == 1 /\
+        CS.event_raw_delta_legal
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          })
+          delta_sent
+          delta_received /\
+        CS.received_event_nonempty_decode_projection
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          })
+          delta_received)
+      (ensures
+        CS.received_event_decode_projection
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          })
+          delta_received)
+
 val lemma_protected_handshake_event_projection_pair_from_aligned_heads
   (sender:CS.connection_model)
   (receiver:CS.connection_model)
@@ -418,3 +484,58 @@ val lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
           }
           sent_msg
           received_msg)
+
+val lemma_protected_handshake_event_projection_pair_from_head_replays
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (sender_rest:list CS.conn_event)
+  (receiver_rest:list CS.conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:CS.connection_model)
+  (receiver_final:CS.connection_model)
+  : Lemma
+      (requires
+        sender.CS.model_record.CS.record_write.R.seq ==
+          receiver.CS.model_record.CS.record_read.R.seq /\
+        (match
+          CS.record_direction_material sender.CS.model_record.CS.record_write,
+          CS.record_direction_material receiver.CS.model_record.CS.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          CS.record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        CS.conn_events_sent_seal_replay
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          } :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        CS.conn_events_received_decode_replay
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          } :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
+      (ensures
+        exists pair.
+          pair.pm_sender == sender /\
+          pair.pm_receiver == receiver /\
+          protected_handshake_event_projection_pair
+            pair
+            sent_msg
+            received_msg)

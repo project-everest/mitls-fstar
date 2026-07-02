@@ -765,9 +765,21 @@ streams are equal, the sender head delta is a full parsed protected record, and
 the receiver head delta is a full parsed protected record, then the parser-prefix
 facts imply the two head lengths are equal, the head bytes are equal, and the
 `protected_handshake_event_projection_pair` witness follows.  The remaining
-proof obligation is to use the replay-head destructors inductively at the right
-event positions so that each protected handshake send/receive pair is brought to
-this equal-stream-head shape.
+`lemma_sent_event_nonempty_seal_projection_protected` and
+`lemma_received_event_nonempty_decode_projection_protected` turn the replay
+predicates' "empty-or-projection" facts into real projections for protected
+single-record network events.  Finally,
+`lemma_protected_handshake_event_projection_pair_from_head_replays` combines the
+head destructors, nonempty-projection lemmas, parser-prefix length equality, and
+equal-stream-head constructor to extract one `protected_message_replay` witness
+when the matching sender and receiver protected events are both at the head of
+their remaining event logs and their remaining raw streams are equal.
+
+The remaining proof obligation is to use that head-replay extractor
+inductively at the five protected handshake event positions: after consuming the
+cleartext prefix and any local/zero-byte events, bring each matching protected
+send/receive event pair to the head of the sender/receiver replay predicates and
+show the remaining raw streams are equal.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
