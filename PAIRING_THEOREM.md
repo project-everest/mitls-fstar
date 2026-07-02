@@ -751,6 +751,13 @@ aligned at each slice. Once a slice and its pre-event record states are
 identified, the event-projection bridge gives the needed serialized handshake
 equality, and the five-record wrapper assembles those facts into
 `paired_protected_handshake_wire_equivalent`.
+The helper module also exposes replay-head destructors,
+`lemma_conn_events_sent_seal_replay_head` and
+`lemma_conn_events_received_decode_replay_head`, which make the first event's
+raw deltas and seal/decode projections available from the recursive replay
+predicates.  The remaining proof obligation is to use these destructors
+inductively at the right event positions and prove that the sender's delta and
+receiver's delta are the same protected record slice.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 

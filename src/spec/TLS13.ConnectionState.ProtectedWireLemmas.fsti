@@ -203,3 +203,63 @@ val lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
           server_finished
           client_finished)
       (ensures WFL.paired_protected_handshake_wire_equivalent client server)
+
+val lemma_conn_events_sent_seal_replay_head
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_sent_seal_replay
+          model
+          (ev :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists model1 delta_sent delta_received tail_sent tail_received.
+          CS.legal_event model ev /\
+          CS.step_model model ev == Some model1 /\
+          CS.event_raw_delta_legal model ev delta_sent delta_received /\
+          CS.sent_event_nonempty_seal_projection model ev delta_sent /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          CS.conn_events_sent_seal_replay
+            model1
+            rest
+            tail_sent
+            tail_received
+            final_model)
+
+val lemma_conn_events_received_decode_replay_head
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_received_decode_replay
+          model
+          (ev :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists model1 delta_sent delta_received tail_sent tail_received.
+          CS.legal_event model ev /\
+          CS.step_model model ev == Some model1 /\
+          CS.event_raw_delta_legal model ev delta_sent delta_received /\
+          CS.received_event_nonempty_decode_projection model ev delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          CS.conn_events_received_decode_replay
+            model1
+            rest
+            tail_sent
+            tail_received
+            final_model)
