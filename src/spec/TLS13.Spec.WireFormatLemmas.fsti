@@ -214,6 +214,26 @@ val lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
           received_raw)
       (ensures client_hello_wire_equivalent sent_ch received_ch)
 
+val lemma_client_hello_serialize_handshake_from_sent_cleartext_and_received_parse
+  (sent_ch:M.client_hello)
+  (received_ch:M.client_hello)
+  (sent_raw:B.bytes)
+  (received_raw:B.bytes)
+  : Lemma
+      (requires
+        supported_client_hello_wire_profile sent_ch /\
+        Seq.equal sent_raw received_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello sent_ch))
+          sent_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello received_ch))
+          received_raw)
+      (ensures
+        Seq.equal
+          (W.serialize_handshake (M.ClientHello sent_ch))
+          (W.serialize_handshake (M.ClientHello received_ch)))
+
 val lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
   (sent_sh:M.server_hello)
   (received_sh:M.server_hello)
@@ -285,6 +305,44 @@ val lemma_paired_cleartext_hello_wire_equivalent_from_cleartext_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw)
       (ensures paired_cleartext_hello_wire_equivalent client server)
+
+val lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+        supported_client_hello_wire_profile client_ch /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw)
+      (ensures
+        paired_cleartext_hello_wire_equivalent client server /\
+        CS.same_transcript_checkpoint CS.TH_CH client server /\
+        CS.same_transcript_checkpoint CS.TH_SH client server /\
+        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server)
 
 val lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
   (client:CS.connection_state)
