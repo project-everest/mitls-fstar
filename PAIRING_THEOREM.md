@@ -787,7 +787,14 @@ handle the byte-stream algebra, while
 recursive replay predicate, advance through a local or opposite-direction
 zero-byte head, and preserve equality with the peer stream.  These lemmas do not
 yet find the five protected handshake events by themselves; they are the
-verified one-step machinery needed for that induction/search.
+verified one-step machinery needed for that induction/search.  A second wrapper
+layer,
+`lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head`
+and
+`lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_head`,
+composes one such skip with the existing head extractor, provided the caller
+supplies the post-skip record sequence/material alignment.  This makes explicit
+that synchronization and record-state alignment are separate obligations.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
