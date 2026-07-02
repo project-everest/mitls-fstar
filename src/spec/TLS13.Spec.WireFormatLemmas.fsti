@@ -147,6 +147,54 @@ let paired_cleartext_hello_key_shares
   | _, _, _, _ ->
     False
 
+(**
+  The protected handshake records are parsed into structured messages, but the
+  transcript depends only on their serialized handshake bytes.  For messages
+  whose received representation carries verbatim wire bodies, byte replay should
+  establish this weaker predicate rather than exact [M] record equality.
+**)
+noextract
+let paired_protected_handshake_wire_equivalent
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  let client_hs = client.CS.cs_model.CS.model_handshake in
+  let server_hs = server.CS.cs_model.CS.model_handshake in
+  match
+    client_hs.CS.hs_encrypted_extensions,
+    server_hs.CS.hs_encrypted_extensions,
+    client_hs.CS.hs_certificate,
+    server_hs.CS.hs_certificate,
+    client_hs.CS.hs_certificate_verify,
+    server_hs.CS.hs_certificate_verify,
+    client_hs.CS.hs_server_finished,
+    server_hs.CS.hs_server_finished,
+    client_hs.CS.hs_client_finished,
+    server_hs.CS.hs_client_finished
+  with
+  | Some client_ee, Some server_ee,
+    Some client_cert, Some server_cert,
+    Some client_cv, Some server_cv,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    Seq.equal
+      (W.serialize_handshake (M.EncryptedExtensions server_ee))
+      (W.serialize_handshake (M.EncryptedExtensions client_ee)) /\
+    Seq.equal
+      (W.serialize_handshake (M.Certificate server_cert))
+      (W.serialize_handshake (M.Certificate client_cert)) /\
+    Seq.equal
+      (W.serialize_handshake (M.CertificateVerify server_cv))
+      (W.serialize_handshake (M.CertificateVerify client_cv)) /\
+    Seq.equal
+      (W.serialize_handshake (M.Finished server_sf))
+      (W.serialize_handshake (M.Finished client_sf)) /\
+    Seq.equal
+      (W.serialize_handshake (M.Finished client_cf))
+      (W.serialize_handshake (M.Finished server_cf))
+  | _, _, _, _, _, _, _, _, _, _ ->
+    False
+
 val lemma_parse_record_wire_serialize_record
   (content_type:T.content_type)
   (fragment:B.bytes{B.length fragment <= 16640})
@@ -343,6 +391,48 @@ val lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
         CS.same_transcript_checkpoint CS.TH_CH client server /\
         CS.same_transcript_checkpoint CS.TH_SH client server /\
         CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server)
+
+val lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+        supported_client_hello_wire_profile client_ch /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        paired_protected_handshake_wire_equivalent client server)
+      (ensures
+        paired_cleartext_hello_wire_equivalent client server /\
+        paired_protected_handshake_wire_equivalent client server /\
+        CS.paired_handshake_events client server /\
+        CS.same_key_derivation_checkpoint
+          CS.DeriveApplicationTraffic
+          client
+          server)
 
 val lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
   (client:CS.connection_state)

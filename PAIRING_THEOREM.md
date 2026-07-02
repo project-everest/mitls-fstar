@@ -200,16 +200,25 @@ lemmas that derive:
 - ServerHello key-share equality when both equal ServerHello fragments are
   accepted by `W.parse_supported_server_hello`;
 - `TH_CH`, `TH_SH`, and `DeriveHandshakeTraffic` checkpoint agreement from
-  cleartext raw replay.
+  cleartext raw replay;
+- `paired_protected_handshake_wire_equivalent`, a deliberately weaker predicate
+  than exact structured equality for the encrypted handshake flight, together
+  with
+  `lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire`, which
+  proves all `CS.paired_handshake_events` checkpoints from cleartext raw replay
+  plus protected-handshake serialized-byte equality.
 
 `TLS13.Impl.Driver.Pairing` then uses these facts in
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events`:
 from cleartext ClientHello/ServerHello raw replay, explicit supported
 ServerHello parse assumptions, paired encrypted-handshake events, and the usual
 first-epoch/no-key-update state invariant, it proves both application record
-material directions.  The remaining byte-trace lift is therefore focused on
-deriving the paired encrypted-handshake events or the later transcript
-checkpoint from protected record bytes.
+material directions.  The encrypted-handshake side no longer needs exact
+`M.encrypted_extensions`, `M.certificate_msg`, or `M.certificate_verify` record
+equality; serialized handshake equality is enough for the transcript.  The
+remaining byte-trace lift is therefore focused on deriving those protected
+serialized-message equalities from protected record bytes and sequence-aligned
+seal/open replay.
 
 The most ambitious client-only existential statement:
 
@@ -703,12 +712,17 @@ The intended proof shape, after the verified cleartext-byte progress, is:
    explicit supported parse assumptions, and the `DeriveHandshakeTraffic`
    checkpoint.
 4. Use protected-record decode/open replay for encrypted handshake messages to
-   obtain paired structured EncryptedExtensions, Certificate, CertificateVerify,
-   and Finished events, or prove the required transcript checkpoints directly.
+   prove `paired_protected_handshake_wire_equivalent`, i.e., equality of the
+   serialized EncryptedExtensions, Certificate, CertificateVerify, server
+   Finished, and client Finished handshake bytes.  This is intentionally weaker
+   than exact `M` record equality, but it is exactly what the transcript
+   checkpoints use.
 5. Apply
+   `TLS13.Spec.WireFormatLemmas.lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire`
+   to obtain `paired_handshake_events`, then apply
    `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events`
-   if `paired_handshake_events` is obtained, or apply the Phase 3 event-trace
-   theorem if a full paired event trace is obtained.
+   (or apply the Phase 3 event-trace theorem if a full paired event trace is
+   obtained).
 
 The remaining hard part is now step 4's replay threading: identify the matching
 protected record slices and prove the sender/receiver record sequence numbers are
