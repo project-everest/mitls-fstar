@@ -1578,4 +1578,169 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
       receiver_tail_received
       sender_final
       receiver_final )
+
+let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads
+  (sender:connection_model)
+  (sender_after:connection_model)
+  (receiver:connection_model)
+  (receiver_after:connection_model)
+  (sender_skip_ev:conn_event)
+  (receiver_skip_ev:conn_event)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (sender_rest:list conn_event)
+  (receiver_rest:list conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:connection_model)
+  (receiver_final:connection_model)
+  : Lemma
+      (requires
+        step_model sender sender_skip_ev == Some sender_after /\
+        step_model receiver receiver_skip_ev == Some receiver_after /\
+        (match sender_skip_ev with
+         | ConnLocalEvent _ -> True
+         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
+        (match receiver_skip_ev with
+         | ConnLocalEvent _ -> True
+         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
+        sender_after.model_record.record_write.R.seq ==
+          receiver_after.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender_after.model_record.record_write,
+          record_direction_material receiver_after.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        conn_events_sent_seal_replay
+          sender
+          (sender_skip_ev :: ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          } :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        conn_events_received_decode_replay
+          receiver
+          (receiver_skip_ev :: ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          } :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
+      (ensures
+        exists pair.
+          pair.pm_sender == sender_after /\
+          pair.pm_receiver == receiver_after /\
+          protected_handshake_event_projection_pair
+            pair
+            sent_msg
+            received_msg)
+=
+  let sent_ev = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg;
+  } in
+  let received_ev = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg;
+  } in
+  lemma_sent_replay_skip_empty_head_preserves_peer_stream
+    sender
+    sender_skip_ev
+    (sent_ev :: sender_rest)
+    sender_raw_sent
+    sender_raw_received
+    receiver_raw_received
+    sender_final;
+  eliminate exists
+    (sender1:connection_model)
+    (sender_tail_sent:B.bytes)
+    (sender_tail_received:B.bytes).
+    legal_event sender sender_skip_ev /\
+    step_model sender sender_skip_ev == Some sender1 /\
+    Seq.equal sender_tail_sent receiver_raw_received /\
+    conn_events_sent_seal_replay
+      sender1
+      (sent_ev :: sender_rest)
+      sender_tail_sent
+      sender_tail_received
+      sender_final
+  returns
+    exists pair.
+      pair.pm_sender == sender_after /\
+      pair.pm_receiver == receiver_after /\
+      protected_handshake_event_projection_pair
+        pair
+        sent_msg
+        received_msg
+  with _.
+  ( assert (sender1 == sender_after);
+    lemma_received_replay_skip_empty_head_preserves_peer_stream
+      sender_tail_sent
+      receiver
+      receiver_skip_ev
+      (received_ev :: receiver_rest)
+      receiver_raw_sent
+      receiver_raw_received
+      receiver_final;
+    eliminate exists
+      (receiver1:connection_model)
+      (receiver_tail_sent:B.bytes)
+      (receiver_tail_received:B.bytes).
+      legal_event receiver receiver_skip_ev /\
+      step_model receiver receiver_skip_ev == Some receiver1 /\
+      Seq.equal sender_tail_sent receiver_tail_received /\
+      conn_events_received_decode_replay
+        receiver1
+        (received_ev :: receiver_rest)
+        receiver_tail_sent
+        receiver_tail_received
+        receiver_final
+    returns
+      exists pair.
+        pair.pm_sender == sender_after /\
+        pair.pm_receiver == receiver_after /\
+        protected_handshake_event_projection_pair
+          pair
+          sent_msg
+          received_msg
+    with _.
+    ( assert (receiver1 == receiver_after);
+      assert (
+        conn_events_sent_seal_replay
+          sender_after
+          (sent_ev :: sender_rest)
+          sender_tail_sent
+          sender_tail_received
+          sender_final);
+      assert (
+        conn_events_received_decode_replay
+          receiver_after
+          (received_ev :: receiver_rest)
+          receiver_tail_sent
+          receiver_tail_received
+          receiver_final);
+      lemma_protected_handshake_event_projection_pair_from_head_replays
+        sender_after
+        receiver_after
+        sent_msg
+        received_msg
+        sender_rest
+        receiver_rest
+        sender_tail_sent
+        sender_tail_received
+        receiver_tail_sent
+        receiver_tail_received
+        sender_final
+        receiver_final ) )
 #pop-options

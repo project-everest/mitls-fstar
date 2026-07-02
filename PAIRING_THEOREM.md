@@ -794,7 +794,11 @@ and
 `lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_head`,
 composes one such skip with the existing head extractor, provided the caller
 supplies the post-skip record sequence/material alignment.  This makes explicit
-that synchronization and record-state alignment are separate obligations.
+that synchronization and record-state alignment are separate obligations.  The
+module also includes the symmetric two-sided wrapper
+`lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads`,
+which advances one empty/local head on each endpoint before applying the
+head-replay extractor.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
