@@ -104,6 +104,17 @@ let non_step_status (status:process_status) : bool =
   | ConnectionFailed -> true
   | _ -> false
 
+let step_output
+  (#wire_message:Type0)
+  (#local_output:Type0)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : SM.step_output wire_message local_output =
+  {
+    SM.so_wire_outputs = wire_outputs;
+    SM.so_local_outputs = local_outputs;
+  }
+
 let state_ahead
   (#state:Type0)
   (#wire_message:Type0)
@@ -116,16 +127,102 @@ let state_ahead
   exists trace.
     SM.trace_reaches system.WFSM.wfsm_state_machine st0 trace st1
 
-let step_output
+let network_error_refines_state_machine
+  (#state:Type0)
   (#wire_message:Type0)
+  (#local_event:Type0)
   (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (available:TCP.bytes)
+  (st0:state)
+  (st1:state)
+  (consumed:TCP.bytes)
   (wire_outputs:list wire_message)
   (local_outputs:list local_output)
-  : SM.step_output wire_message local_output =
-  {
-    SM.so_wire_outputs = wire_outputs;
-    SM.so_local_outputs = local_outputs;
-  }
+  : prop =
+  (exists msg residual.
+    consumed_by_parse
+      system.WFSM.wfsm_wire_format
+      available
+      msg
+      consumed
+      residual /\
+    system.WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.WireEvent msg)
+      st1
+      (step_output wire_outputs local_outputs)) \/
+  (exists ev.
+    Seq.equal consumed Seq.empty /\
+    system.WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.LocalEvent ev)
+      st1
+      (step_output wire_outputs local_outputs)) \/
+  (Seq.equal consumed Seq.empty /\
+   wire_outputs == [] /\
+   local_outputs == [] /\
+   st1 == st0)
+
+let local_error_refines_state_machine
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (st0:state)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : prop =
+  (exists ev.
+    system.WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.LocalEvent ev)
+      st1
+      (step_output wire_outputs local_outputs)) \/
+  (wire_outputs == [] /\
+   local_outputs == [] /\
+   st1 == st0)
+
+let lemma_local_error_refines_from_step
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (st0:state)
+  (ev:local_event)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+      (requires
+        system.WFSM.wfsm_state_machine.SM.sm_step
+          st0
+          (SM.LocalEvent ev)
+          st1
+          (step_output wire_outputs local_outputs))
+      (ensures
+        local_error_refines_state_machine
+          system
+          st0
+          st1
+          wire_outputs
+          local_outputs)
+=
+  assert (exists ev'.
+    system.WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.LocalEvent ev')
+      st1
+      (step_output wire_outputs local_outputs));
+  assert (local_error_refines_state_machine
+    system
+    st0
+    st1
+    wire_outputs
+    local_outputs)
 
 let network_process_correct
   (#state:Type0)
@@ -214,6 +311,14 @@ let network_process_correct
   | ConnectionFailed ->
     exists produced.
       SZ.v result.process_consumed_len == Seq.length consumed /\
+      network_error_refines_state_machine
+        system
+        (input_bytes input input_len)
+        st0
+        st1
+        consumed
+        wire_outputs
+        local_outputs /\
       Seq.equal
         produced
         (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
@@ -277,12 +382,120 @@ let local_process_correct
   | IllegalTransition
   | ConnectionFailed ->
     exists produced.
+      local_error_refines_state_machine
+        system
+        st0
+        st1
+        wire_outputs
+        local_outputs /\
       Seq.equal
         produced
         (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
       output_written out_bytes result.process_produced_len produced /\
       Seq.equal received1 received0 /\
       Seq.equal sent1 (Seq.append sent0 produced))
+
+let lemma_local_process_error_refines_step
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (ev:local_event)
+  (step_ev:local_event)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:process_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  (produced:TCP.bytes)
+  : Lemma
+      (requires
+        SZ.v out_len == Seq.length old_out /\
+        Seq.length out_bytes == Seq.length old_out /\
+        result.process_consumed_len == 0sz /\
+        (result.process_status == DecodeError \/
+         result.process_status == IllegalTransition \/
+         result.process_status == ConnectionFailed) /\
+        system.WFSM.wfsm_state_machine.SM.sm_step
+          st0
+          (SM.LocalEvent step_ev)
+          st1
+          (step_output wire_outputs local_outputs) /\
+        Seq.equal
+          produced
+          (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+        output_written out_bytes result.process_produced_len produced /\
+        Seq.equal received1 received0 /\
+        Seq.equal sent1 (Seq.append sent0 produced))
+      (ensures
+        local_process_correct
+          system
+          ev
+          old_out
+          out_bytes
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          wire_outputs
+          local_outputs)
+=
+  lemma_local_error_refines_from_step
+    system
+    st0
+    step_ev
+    st1
+    wire_outputs
+    local_outputs;
+  assert (local_error_refines_state_machine
+    system
+    st0
+    st1
+    wire_outputs
+    local_outputs);
+  assert (exists produced'.
+    local_error_refines_state_machine
+      system
+      st0
+      st1
+      wire_outputs
+      local_outputs /\
+    Seq.equal
+      produced'
+      (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
+    output_written out_bytes result.process_produced_len produced' /\
+    Seq.equal received1 received0 /\
+    Seq.equal sent1 (Seq.append sent0 produced'));
+  match result.process_status with
+  | DecodeError
+  | IllegalTransition
+  | ConnectionFailed ->
+    assert (local_process_correct
+      system
+      ev
+      old_out
+      out_bytes
+      out_len
+      received0
+      sent0
+      st0
+      result
+      received1
+      sent1
+      st1
+      wire_outputs
+      local_outputs)
+  | _ ->
+    assert False
 
 let lemma_network_process_ok_refines_transition
   (#state:Type0)
@@ -493,6 +706,14 @@ let lemma_network_process_sent_output_prefix
         TCP.bytes
         (fun produced ->
           SZ.v result.process_consumed_len == Seq.length consumed /\
+          network_error_refines_state_machine
+            system
+            (input_bytes input input_len)
+            st0
+            st1
+            consumed
+            wire_outputs
+            local_outputs /\
           Seq.equal
             produced
             (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\
@@ -577,6 +798,12 @@ let lemma_local_process_sent_output_prefix
       FStar.IndefiniteDescription.indefinite_description_ghost
         TCP.bytes
         (fun produced ->
+          local_error_refines_state_machine
+            system
+            st0
+            st1
+            wire_outputs
+            local_outputs /\
           Seq.equal
             produced
             (WF.serialize_all system.WFSM.wfsm_wire_format wire_outputs) /\

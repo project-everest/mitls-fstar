@@ -723,6 +723,65 @@ let lemma_client_local_progress
     RTC.closure_step client_canonical_step_rel st0 st1
   )
 
+let lemma_client_step_from_local_witness
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (local_ev:CTypes.client_local_event)
+  (conn_ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        client_api_event_matches
+          st0
+          (CTypes.client_local_event_api local_ev)
+          conn_ev /\
+        client_wire_outputs_match raw_sent wire_outputs /\
+        client_local_outputs_match conn_ev local_outputs /\
+        CS.legal_connection_delta st0 {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = raw_received;
+        } st1)
+      (ensures
+        client_step
+          st0
+          (SM.LocalEvent local_ev)
+          st1
+          (CPI.step_output wire_outputs local_outputs))
+=
+  assert ((CPI.step_output wire_outputs local_outputs).SM.so_wire_outputs ==
+    wire_outputs);
+  assert ((CPI.step_output wire_outputs local_outputs).SM.so_local_outputs ==
+    local_outputs);
+  assert (client_api_event_matches
+    st0
+    (CTypes.client_local_event_api local_ev)
+    conn_ev);
+  assert (exists conn_ev' raw_sent' raw_received'.
+    client_api_event_matches
+      st0
+      (CTypes.client_local_event_api local_ev)
+      conn_ev' /\
+    client_wire_outputs_match
+      raw_sent'
+      (CPI.step_output wire_outputs local_outputs).SM.so_wire_outputs /\
+    client_local_outputs_match
+      conn_ev'
+      (CPI.step_output wire_outputs local_outputs).SM.so_local_outputs /\
+    CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev';
+      CS.delta_raw_sent = raw_sent';
+      CS.delta_raw_received = raw_received';
+    } st1);
+  assert (client_step
+    st0
+    (SM.LocalEvent local_ev)
+    st1
+    (CPI.step_output wire_outputs local_outputs))
+
 let lemma_client_local_step_ok_process_correct
   (initial:CS.connection_state)
   (st0:CS.connection_state)
@@ -1161,16 +1220,413 @@ let lemma_client_local_rejected_process_correct
     st1.CS.cs_wire_log.CL.raw_sent
     (Seq.append sent0 produced));
   assert ((CTypes.client_local_process_result resp).CPI.process_consumed_len == 0sz);
-  assert (exists produced'.
-    Seq.equal
-      produced'
-      (WF.serialize_all CW.tls_record_wire_format wire_outputs) /\
-    CPI.output_written
+  assert ((CTypes.client_local_process_result resp).CPI.process_produced_len ==
+    resp.CT.network_out_len);
+  assert (
+    (resp.CT.status == CT.IllegalTransition /\
+     (CTypes.client_local_process_result resp).CPI.process_status == CPI.IllegalTransition) \/
+    (resp.CT.status == CT.ConnectionFailed /\
+     (CTypes.client_local_process_result resp).CPI.process_status == CPI.ConnectionFailed));
+  assert (
+    (CTypes.client_local_process_result resp).CPI.process_status == CPI.IllegalTransition \/
+    (CTypes.client_local_process_result resp).CPI.process_status == CPI.ConnectionFailed);
+  assert (
+    (CTypes.client_local_process_result resp).CPI.process_status == CPI.DecodeError \/
+    (CTypes.client_local_process_result resp).CPI.process_status == CPI.IllegalTransition \/
+    (CTypes.client_local_process_result resp).CPI.process_status == CPI.ConnectionFailed);
+  assert (CPI.output_written
+    network_out
+    (CTypes.client_local_process_result resp).CPI.process_produced_len
+    produced);
+  if (exists ev' raw_sent' raw_received'.
+      CT.legal_local_response
+        st0
+        st1
+        resp
+        api.CTypes.client_local_kind
+        api.CTypes.client_local_payload
+        ev'
+        raw_sent'
+        raw_received'
+        network_out
+        app_out)
+  then (
+    let ev' =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        CS.conn_event
+        (fun ev' -> exists raw_sent' raw_received'.
+          CT.legal_local_response
+            st0
+            st1
+            resp
+            api.CTypes.client_local_kind
+            api.CTypes.client_local_payload
+            ev'
+            raw_sent'
+            raw_received'
+            network_out
+            app_out) in
+    let raw_sent' =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent' -> exists raw_received'.
+          CT.legal_local_response
+            st0
+            st1
+            resp
+            api.CTypes.client_local_kind
+            api.CTypes.client_local_payload
+            ev'
+            raw_sent'
+            raw_received'
+            network_out
+            app_out) in
+    let raw_received' =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        B.bytes
+        (fun raw_received' ->
+          CT.legal_local_response
+            st0
+            st1
+            resp
+            api.CTypes.client_local_kind
+            api.CTypes.client_local_payload
+            ev'
+            raw_sent'
+            raw_received'
+            network_out
+            app_out) in
+    assert (CT.legal_local_response
+      st0
+      st1
+      resp
+      api.CTypes.client_local_kind
+      api.CTypes.client_local_payload
+      ev'
+      raw_sent'
+      raw_received'
       network_out
-      (CTypes.client_local_process_result resp).CPI.process_produced_len
-      produced' /\
-    Seq.equal st1.CS.cs_wire_log.CL.raw_received received0 /\
-    Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced'));
+      app_out);
+    assert (CT.local_event_kind_matches
+      st0
+      api.CTypes.client_local_kind
+      api.CTypes.client_local_payload
+      ev');
+    assert (client_api_event_matches st0 api ev');
+    assert (CT.legal_response_for_event st0 st1 resp ev' raw_sent' raw_received' network_out app_out);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = ev';
+      CS.delta_raw_sent = raw_sent';
+      CS.delta_raw_received = raw_received';
+    } st1);
+    lemma_client_api_event_raw_received_empty st0 st1 api resp ev' raw_sent' raw_received' network_out app_out;
+    Seq.lemma_eq_elim raw_received' B.empty;
+    assert (Seq.equal raw_sent' (CT.response_network_out resp network_out));
+    Seq.lemma_eq_elim raw_sent' (CT.response_network_out resp network_out);
+    Seq.lemma_eq_elim produced raw_sent';
+    assert (client_wire_outputs_match raw_sent' wire_outputs);
+    assert (CT.response_app_out_matches_event resp ev' app_out);
+    lemma_client_response_local_outputs_match resp ev' app_out;
+    assert (client_local_outputs_match ev' local_outputs);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = ev';
+      CS.delta_raw_sent = raw_sent';
+      CS.delta_raw_received = B.empty;
+    } st1);
+    assert ((CPI.step_output wire_outputs local_outputs).SM.so_wire_outputs ==
+      wire_outputs);
+    assert ((CPI.step_output wire_outputs local_outputs).SM.so_local_outputs ==
+      local_outputs);
+    assert (
+      client_api_event_matches st0 api ev' /\
+      client_wire_outputs_match raw_sent' wire_outputs /\
+      client_local_outputs_match ev' local_outputs /\
+      CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = ev';
+          CS.delta_raw_sent = raw_sent';
+          CS.delta_raw_received = B.empty;
+        }
+        st1);
+    assert (exists conn_ev raw_sent raw_received.
+      client_api_event_matches st0 api conn_ev /\
+      client_wire_outputs_match raw_sent wire_outputs /\
+      client_local_outputs_match conn_ev local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = raw_received;
+      } st1);
+    assert (CTypes.client_local_event_api local_ev == api);
+    assert (exists conn_ev raw_sent raw_received.
+      client_api_event_matches st0 (CTypes.client_local_event_api local_ev) conn_ev /\
+      client_wire_outputs_match raw_sent wire_outputs /\
+      client_local_outputs_match conn_ev local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = raw_received;
+      } st1);
+    assert (api == CTypes.client_local_event_api local_ev);
+    assert (client_api_event_matches
+      st0
+      (CTypes.client_local_event_api local_ev)
+      ev');
+    assert (
+      api == CTypes.client_local_event_api local_ev /\
+      client_api_event_matches st0 api ev' /\
+      client_wire_outputs_match raw_sent' wire_outputs /\
+      client_local_outputs_match ev' local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = ev';
+        CS.delta_raw_sent = raw_sent';
+        CS.delta_raw_received = raw_received';
+      }       st1);
+    assert (
+      client_api_event_matches
+        st0
+        (CTypes.client_local_event_api local_ev)
+        ev' /\
+      client_wire_outputs_match raw_sent' wire_outputs /\
+      client_local_outputs_match ev' local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = ev';
+        CS.delta_raw_sent = raw_sent';
+        CS.delta_raw_received = raw_received';
+      } st1);
+    lemma_client_step_from_local_witness
+      st0
+      st1
+      local_ev
+      ev'
+      raw_sent'
+      raw_received'
+      wire_outputs
+      local_outputs;
+    assert (client_step
+      st0
+      (SM.LocalEvent local_ev)
+      st1
+      (CPI.step_output wire_outputs local_outputs));
+    assert ((client_system initial).WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.LocalEvent local_ev)
+      st1
+      (CPI.step_output wire_outputs local_outputs))
+    by (
+      FStar.Tactics.norm
+        [delta_only [`%client_system; `%client_state_machine];
+         iota; zeta; primops];
+      FStar.Tactics.smt ());
+    CPI.lemma_local_process_error_refines_step
+      (client_system initial)
+      local_ev
+      local_ev
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      (CTypes.client_local_process_result resp)
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      wire_outputs
+      local_outputs
+      produced;
+    ()
+  ) else if CT.unexpected_message_response st0 st1 resp network_out app_out then (
+    let err = CT.tls_unexpected_message_error in
+    let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
+    let api_fail : CTypes.client_api_event = {
+      CTypes.client_local_kind = CT.LocalFail;
+      CTypes.client_local_payload = B.empty;
+    } in
+    assert (CT.legal_response_for_event st0 st1 resp conn_ev B.empty B.empty network_out app_out);
+    assert (api_fail.CTypes.client_local_kind == CT.LocalFail);
+    assert (api_fail.CTypes.client_local_payload == B.empty);
+    assert_norm (CT.local_event_kind_matches
+      st0
+      CT.LocalFail
+      B.empty
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_unexpected_message_error)));
+    assert (client_api_event_matches st0 api_fail conn_ev);
+    assert (Seq.equal (CT.response_network_out resp network_out) B.empty);
+    Seq.lemma_eq_elim produced (CT.response_network_out resp network_out);
+    assert (client_wire_outputs_match B.empty wire_outputs);
+    assert (CT.response_app_out_matches_event resp conn_ev app_out);
+    lemma_client_response_local_outputs_match resp conn_ev app_out;
+    assert (client_local_outputs_match conn_ev local_outputs);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    } st1);
+    assert_norm (CTypes.client_local_event_api (CTypes.ClientAPI api_fail) == api_fail);
+    assert (client_api_event_matches
+      st0
+      (CTypes.client_local_event_api (CTypes.ClientAPI api_fail))
+      conn_ev);
+    assert (
+      client_api_event_matches
+        st0
+        (CTypes.client_local_event_api (CTypes.ClientAPI api_fail))
+        conn_ev /\
+      client_wire_outputs_match B.empty wire_outputs /\
+      client_local_outputs_match conn_ev local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = B.empty;
+        CS.delta_raw_received = B.empty;
+      } st1);
+    assert (exists conn_ev' raw_sent raw_received.
+      client_api_event_matches st0 api_fail conn_ev' /\
+      client_wire_outputs_match raw_sent wire_outputs /\
+      client_local_outputs_match conn_ev' local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev';
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = raw_received;
+      } st1);
+    lemma_client_step_from_local_witness
+      st0
+      st1
+      (CTypes.ClientAPI api_fail)
+      conn_ev
+      B.empty
+      B.empty
+      wire_outputs
+      local_outputs;
+    assert (client_step
+      st0
+      (SM.LocalEvent (CTypes.ClientAPI api_fail))
+      st1
+      (CPI.step_output wire_outputs local_outputs));
+    assert ((client_system initial).WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.LocalEvent (CTypes.ClientAPI api_fail))
+      st1
+      (CPI.step_output wire_outputs local_outputs))
+    by (
+      FStar.Tactics.norm
+        [delta_only [`%client_system; `%client_state_machine];
+         iota; zeta; primops];
+      FStar.Tactics.smt ());
+    CPI.lemma_local_process_error_refines_step
+      (client_system initial)
+      local_ev
+      (CTypes.ClientAPI api_fail)
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      (CTypes.client_local_process_result resp)
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      wire_outputs
+      local_outputs
+      produced
+  ) else (
+    assert (CT.bad_finished_response st0 st1 resp network_out app_out);
+    let err = CT.tls_bad_finished_error in
+    let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
+    let api_fail : CTypes.client_api_event = {
+      CTypes.client_local_kind = CT.LocalFail;
+      CTypes.client_local_payload = B.empty;
+    } in
+    assert (CT.legal_response_for_event st0 st1 resp conn_ev B.empty B.empty network_out app_out);
+    assert (api_fail.CTypes.client_local_kind == CT.LocalFail);
+    assert (api_fail.CTypes.client_local_payload == B.empty);
+    assert_norm (CT.local_event_kind_matches
+      st0
+      CT.LocalFail
+      B.empty
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_bad_finished_error)));
+    assert (client_api_event_matches st0 api_fail conn_ev);
+    assert (Seq.equal (CT.response_network_out resp network_out) B.empty);
+    Seq.lemma_eq_elim produced (CT.response_network_out resp network_out);
+    assert (client_wire_outputs_match B.empty wire_outputs);
+    assert (CT.response_app_out_matches_event resp conn_ev app_out);
+    lemma_client_response_local_outputs_match resp conn_ev app_out;
+    assert (client_local_outputs_match conn_ev local_outputs);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    } st1);
+    assert_norm (CTypes.client_local_event_api (CTypes.ClientAPI api_fail) == api_fail);
+    assert (client_api_event_matches
+      st0
+      (CTypes.client_local_event_api (CTypes.ClientAPI api_fail))
+      conn_ev);
+    assert (
+      client_api_event_matches
+        st0
+        (CTypes.client_local_event_api (CTypes.ClientAPI api_fail))
+        conn_ev /\
+      client_wire_outputs_match B.empty wire_outputs /\
+      client_local_outputs_match conn_ev local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = B.empty;
+        CS.delta_raw_received = B.empty;
+      } st1);
+    assert (exists conn_ev' raw_sent raw_received.
+      client_api_event_matches st0 api_fail conn_ev' /\
+      client_wire_outputs_match raw_sent wire_outputs /\
+      client_local_outputs_match conn_ev' local_outputs /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev';
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = raw_received;
+      } st1);
+    lemma_client_step_from_local_witness
+      st0
+      st1
+      (CTypes.ClientAPI api_fail)
+      conn_ev
+      B.empty
+      B.empty
+      wire_outputs
+      local_outputs;
+    assert (client_step
+      st0
+      (SM.LocalEvent (CTypes.ClientAPI api_fail))
+      st1
+      (CPI.step_output wire_outputs local_outputs));
+    assert ((client_system initial).WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.LocalEvent (CTypes.ClientAPI api_fail))
+      st1
+      (CPI.step_output wire_outputs local_outputs))
+    by (
+      FStar.Tactics.norm
+        [delta_only [`%client_system; `%client_state_machine];
+         iota; zeta; primops];
+      FStar.Tactics.smt ());
+    CPI.lemma_local_process_error_refines_step
+      (client_system initial)
+      local_ev
+      (CTypes.ClientAPI api_fail)
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      (CTypes.client_local_process_result resp)
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      wire_outputs
+      local_outputs
+      produced
+  );
   assert (CPI.local_process_correct
     (client_system initial)
     local_ev
