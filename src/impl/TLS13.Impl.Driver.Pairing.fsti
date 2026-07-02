@@ -12,6 +12,7 @@ module M = TLS13.Messages
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 
 noextract
@@ -1232,6 +1233,72 @@ val lemma_client_server_application_record_material_agrees_from_cleartext_and_ha
           server)
       (ensures
         client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_state_inputs client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+
+val lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+        WFL.supported_client_hello_wire_profile client_ch /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
+        paired_handshake_events client server /\
+        client_server_driver_first_epoch_no_key_update_state_inputs
+          client
+          server)
+      (ensures
+        WFL.paired_cleartext_hello_wire_equivalent client server /\
+        WFL.paired_cleartext_hello_key_shares client server /\
+        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
+        client_server_driver_supported_profile_derived_key_share_projection_inputs
+          client
+          server /\
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
         client_server_driver_supported_profile_state_inputs client server /\
         CS.supported_profile_client_server_key_material_inputs_agree
           client
