@@ -3,12 +3,14 @@ module TLS13.ConnectionState.ProtectedWireLemmas
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
+module K = TLS13.Keys
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module RD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
 module SeqProps = FStar.Seq.Properties
 module T = TLS13.Types
+module Tr = TLS13.Transcript
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 module WRT = TLS13.Wire.Spec.Reveal.FinishedRoundTrip
@@ -974,6 +976,64 @@ let lemma_server_handshake_write_client_handshake_read_install_materials_aligned
       client_material.traffic_key
       client_material.traffic_iv)
 
+let lemma_server_handshake_install_materials_agree_from_key_schedule
+  (server_hs:handshake_state)
+  (client_hs:handshake_state)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  : Lemma
+      (requires
+        (match
+          server_hs.hs_keys.ks_handshake_secret,
+          client_hs.hs_keys.ks_handshake_secret
+        with
+        | Some server_secret, Some client_secret ->
+          Seq.equal server_secret client_secret
+        | _, _ ->
+          False) /\
+        Seq.equal server_hs.hs_transcript client_hs.hs_transcript /\
+        traffic_install_matches_key_schedule_for_role
+          ServerEndpoint
+          server_hs
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficWrite;
+            install_material = server_material;
+          } /\
+        traffic_install_matches_key_schedule
+          client_hs
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficRead;
+            install_material = client_material;
+          })
+      (ensures
+        record_key_iv_material_agrees
+          (record_material_of_traffic_material server_material)
+          (record_material_of_traffic_material client_material))
+=
+  match
+    server_hs.hs_keys.ks_handshake_secret,
+    client_hs.hs_keys.ks_handshake_secret
+  with
+  | Some server_secret, Some client_secret ->
+    Seq.lemma_eq_elim server_secret client_secret;
+    Seq.lemma_eq_elim server_hs.hs_transcript client_hs.hs_transcript;
+    assert (server_material ==
+      traffic_key_material_for_secret
+        (K.server_handshake_traffic_secret
+          server_secret
+          (Tr.hash server_hs.hs_transcript)));
+    assert (client_material ==
+      traffic_key_material_for_secret
+        (K.server_handshake_traffic_secret
+          client_secret
+          (Tr.hash client_hs.hs_transcript)));
+    Seq.lemma_eq_elim server_material.traffic_key client_material.traffic_key;
+    Seq.lemma_eq_elim server_material.traffic_iv client_material.traffic_iv
+  | _, _ ->
+    assert False
+
 let lemma_client_handshake_write_server_handshake_read_install_aligned
   (client:connection_model)
   (server:connection_model)
@@ -1061,6 +1121,64 @@ let lemma_client_handshake_write_server_handshake_read_install_materials_aligned
       R.Handshake
       server_material.traffic_key
       server_material.traffic_iv)
+
+let lemma_client_handshake_install_materials_agree_from_key_schedule
+  (client_hs:handshake_state)
+  (server_hs:handshake_state)
+  (client_material:traffic_key_material)
+  (server_material:traffic_key_material)
+  : Lemma
+      (requires
+        (match
+          client_hs.hs_keys.ks_handshake_secret,
+          server_hs.hs_keys.ks_handshake_secret
+        with
+        | Some client_secret, Some server_secret ->
+          Seq.equal client_secret server_secret
+        | _, _ ->
+          False) /\
+        Seq.equal client_hs.hs_transcript server_hs.hs_transcript /\
+        traffic_install_matches_key_schedule
+          client_hs
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficWrite;
+            install_material = client_material;
+          } /\
+        traffic_install_matches_key_schedule_for_role
+          ServerEndpoint
+          server_hs
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficRead;
+            install_material = server_material;
+          })
+      (ensures
+        record_key_iv_material_agrees
+          (record_material_of_traffic_material client_material)
+          (record_material_of_traffic_material server_material))
+=
+  match
+    client_hs.hs_keys.ks_handshake_secret,
+    server_hs.hs_keys.ks_handshake_secret
+  with
+  | Some client_secret, Some server_secret ->
+    Seq.lemma_eq_elim client_secret server_secret;
+    Seq.lemma_eq_elim client_hs.hs_transcript server_hs.hs_transcript;
+    assert (client_material ==
+      traffic_key_material_for_secret
+        (K.client_handshake_traffic_secret
+          client_secret
+          (Tr.hash client_hs.hs_transcript)));
+    assert (server_material ==
+      traffic_key_material_for_secret
+        (K.client_handshake_traffic_secret
+          server_secret
+          (Tr.hash server_hs.hs_transcript)));
+    Seq.lemma_eq_elim client_material.traffic_key server_material.traffic_key;
+    Seq.lemma_eq_elim client_material.traffic_iv server_material.traffic_iv
+  | _, _ ->
+    assert False
 #pop-options
 
 let lemma_sent_replay_skip_empty_head_preserves_peer_stream

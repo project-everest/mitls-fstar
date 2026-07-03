@@ -645,6 +645,42 @@ val lemma_server_handshake_write_client_handshake_read_install_materials_aligned
             })) == Some client_after)
       (ensures write_read_record_material_aligned server_after client_after)
 
+val lemma_server_handshake_install_materials_agree_from_key_schedule
+  (server_hs:CS.handshake_state)
+  (client_hs:CS.handshake_state)
+  (server_material:CS.traffic_key_material)
+  (client_material:CS.traffic_key_material)
+  : Lemma
+      (requires
+        (match
+          server_hs.CS.hs_keys.CS.ks_handshake_secret,
+          client_hs.CS.hs_keys.CS.ks_handshake_secret
+        with
+        | Some server_secret, Some client_secret ->
+          Seq.equal server_secret client_secret
+        | _, _ ->
+          False) /\
+        Seq.equal server_hs.CS.hs_transcript client_hs.CS.hs_transcript /\
+        CS.traffic_install_matches_key_schedule_for_role
+          CS.ServerEndpoint
+          server_hs
+          {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = server_material;
+          } /\
+        CS.traffic_install_matches_key_schedule
+          client_hs
+          {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = client_material;
+          })
+      (ensures
+        CS.record_key_iv_material_agrees
+          (CS.record_material_of_traffic_material server_material)
+          (CS.record_material_of_traffic_material client_material))
+
 val lemma_client_handshake_write_server_handshake_read_install_aligned
   (client:CS.connection_model)
   (server:CS.connection_model)
@@ -706,6 +742,42 @@ val lemma_client_handshake_write_server_handshake_read_install_materials_aligned
               };
             })) == Some server_after)
       (ensures write_read_record_material_aligned client_after server_after)
+
+val lemma_client_handshake_install_materials_agree_from_key_schedule
+  (client_hs:CS.handshake_state)
+  (server_hs:CS.handshake_state)
+  (client_material:CS.traffic_key_material)
+  (server_material:CS.traffic_key_material)
+  : Lemma
+      (requires
+        (match
+          client_hs.CS.hs_keys.CS.ks_handshake_secret,
+          server_hs.CS.hs_keys.CS.ks_handshake_secret
+        with
+        | Some client_secret, Some server_secret ->
+          Seq.equal client_secret server_secret
+        | _, _ ->
+          False) /\
+        Seq.equal client_hs.CS.hs_transcript server_hs.CS.hs_transcript /\
+        CS.traffic_install_matches_key_schedule
+          client_hs
+          {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = client_material;
+          } /\
+        CS.traffic_install_matches_key_schedule_for_role
+          CS.ServerEndpoint
+          server_hs
+          {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = server_material;
+          })
+      (ensures
+        CS.record_key_iv_material_agrees
+          (CS.record_material_of_traffic_material client_material)
+          (CS.record_material_of_traffic_material server_material))
 
 val lemma_sent_replay_skip_empty_head_preserves_peer_stream
   (sender:CS.connection_model)
