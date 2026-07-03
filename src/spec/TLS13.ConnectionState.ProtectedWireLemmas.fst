@@ -2915,6 +2915,319 @@ let lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes
       receiver_suffix_received
     and () )
 
+let lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
+  (model:connection_model)
+  (prefix:list conn_event)
+  (suffix:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  (prefixes_equal:
+    (sent_mid:connection_model) ->
+    (received_mid:connection_model) ->
+    (sent_prefix_sent:B.bytes) ->
+    (sent_prefix_received:B.bytes) ->
+    (sent_suffix_sent:B.bytes) ->
+    (sent_suffix_received:B.bytes) ->
+    (received_prefix_sent:B.bytes) ->
+    (received_prefix_received:B.bytes) ->
+    (received_suffix_sent:B.bytes) ->
+    (received_suffix_received:B.bytes) ->
+    Lemma
+      (requires
+        Seq.equal raw_sent (B.append sent_prefix_sent sent_suffix_sent) /\
+        Seq.equal raw_received
+          (B.append sent_prefix_received sent_suffix_received) /\
+        Seq.equal raw_sent
+          (B.append received_prefix_sent received_suffix_sent) /\
+        Seq.equal raw_received
+          (B.append received_prefix_received received_suffix_received) /\
+        conn_events_sent_seal_replay
+          model
+          prefix
+          sent_prefix_sent
+          sent_prefix_received
+          sent_mid /\
+        conn_events_sent_seal_replay
+          sent_mid
+          suffix
+          sent_suffix_sent
+          sent_suffix_received
+          final_model /\
+        conn_events_received_decode_replay
+          model
+          prefix
+          received_prefix_sent
+          received_prefix_received
+          received_mid /\
+        conn_events_received_decode_replay
+          received_mid
+          suffix
+          received_suffix_sent
+          received_suffix_received
+          final_model)
+      (ensures
+        Seq.equal sent_prefix_sent received_prefix_sent /\
+        Seq.equal sent_prefix_received received_prefix_received))
+  : Lemma
+      (requires
+        conn_events_sent_seal_replay
+          model
+          (FStar.List.Tot.append prefix suffix)
+          raw_sent
+          raw_received
+          final_model /\
+        conn_events_received_decode_replay
+          model
+          (FStar.List.Tot.append prefix suffix)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists mid prefix_sent prefix_received suffix_sent suffix_received.
+          Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+          Seq.equal raw_received (B.append prefix_received suffix_received) /\
+          conn_events_sent_seal_replay
+            model
+            prefix
+            prefix_sent
+            prefix_received
+            mid /\
+          conn_events_sent_seal_replay
+            mid
+            suffix
+            suffix_sent
+            suffix_received
+            final_model /\
+          conn_events_received_decode_replay
+            model
+            prefix
+            prefix_sent
+            prefix_received
+            mid /\
+          conn_events_received_decode_replay
+            mid
+            suffix
+            suffix_sent
+            suffix_received
+            final_model)
+=
+  lemma_conn_events_sent_seal_replay_append_split
+    model
+    prefix
+    suffix
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists
+    (sent_mid:connection_model)
+    (sent_prefix_sent:B.bytes)
+    (sent_prefix_received:B.bytes)
+    (sent_suffix_sent:B.bytes)
+    (sent_suffix_received:B.bytes).
+    Seq.equal raw_sent (B.append sent_prefix_sent sent_suffix_sent) /\
+    Seq.equal raw_received
+      (B.append sent_prefix_received sent_suffix_received) /\
+    conn_events_sent_seal_replay
+      model
+      prefix
+      sent_prefix_sent
+      sent_prefix_received
+      sent_mid /\
+    conn_events_sent_seal_replay
+      sent_mid
+      suffix
+      sent_suffix_sent
+      sent_suffix_received
+      final_model
+  returns
+    exists mid prefix_sent prefix_received suffix_sent suffix_received.
+      Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+      Seq.equal raw_received (B.append prefix_received suffix_received) /\
+      conn_events_sent_seal_replay
+        model
+        prefix
+        prefix_sent
+        prefix_received
+        mid /\
+      conn_events_sent_seal_replay
+        mid
+        suffix
+        suffix_sent
+        suffix_received
+        final_model /\
+      conn_events_received_decode_replay
+        model
+        prefix
+        prefix_sent
+        prefix_received
+        mid /\
+      conn_events_received_decode_replay
+        mid
+        suffix
+        suffix_sent
+        suffix_received
+        final_model
+  with _.
+  ( lemma_conn_events_received_decode_replay_append_split
+      model
+      prefix
+      suffix
+      raw_sent
+      raw_received
+      final_model;
+    eliminate exists
+      (received_mid:connection_model)
+      (received_prefix_sent:B.bytes)
+      (received_prefix_received:B.bytes)
+      (received_suffix_sent:B.bytes)
+      (received_suffix_received:B.bytes).
+      Seq.equal raw_sent
+        (B.append received_prefix_sent received_suffix_sent) /\
+      Seq.equal raw_received
+        (B.append received_prefix_received received_suffix_received) /\
+      conn_events_received_decode_replay
+        model
+        prefix
+        received_prefix_sent
+        received_prefix_received
+        received_mid /\
+      conn_events_received_decode_replay
+        received_mid
+        suffix
+        received_suffix_sent
+        received_suffix_received
+        final_model
+    returns
+      exists mid prefix_sent prefix_received suffix_sent suffix_received.
+        Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+        Seq.equal raw_received (B.append prefix_received suffix_received) /\
+        conn_events_sent_seal_replay
+          model
+          prefix
+          prefix_sent
+          prefix_received
+          mid /\
+        conn_events_sent_seal_replay
+          mid
+          suffix
+          suffix_sent
+          suffix_received
+          final_model /\
+        conn_events_received_decode_replay
+          model
+          prefix
+          prefix_sent
+          prefix_received
+          mid /\
+        conn_events_received_decode_replay
+          mid
+          suffix
+          suffix_sent
+          suffix_received
+          final_model
+    with _.
+    ( prefixes_equal
+        sent_mid
+        received_mid
+        sent_prefix_sent
+        sent_prefix_received
+        sent_suffix_sent
+        sent_suffix_received
+        received_prefix_sent
+        received_prefix_received
+        received_suffix_sent
+        received_suffix_received;
+      assert (Seq.equal sent_prefix_sent received_prefix_sent);
+      assert (Seq.equal sent_prefix_received received_prefix_received);
+      assert (
+        Seq.equal
+          (B.append sent_prefix_sent sent_suffix_sent)
+          (B.append received_prefix_sent received_suffix_sent));
+      assert (
+        Seq.equal
+          (B.append sent_prefix_received sent_suffix_received)
+          (B.append received_prefix_received received_suffix_received));
+      lemma_append_tails_equal_from_equal_heads
+        sent_prefix_sent
+        sent_suffix_sent
+        received_prefix_sent
+        received_suffix_sent;
+      lemma_append_tails_equal_from_equal_heads
+        sent_prefix_received
+        sent_suffix_received
+        received_prefix_received
+        received_suffix_received;
+      assert (Seq.equal sent_suffix_sent received_suffix_sent);
+      assert (Seq.equal sent_suffix_received received_suffix_received);
+      lemma_conn_events_sent_received_replays_same_events_final_model_equal
+        model
+        prefix
+        sent_prefix_sent
+        sent_prefix_received
+        sent_mid
+        received_prefix_sent
+        received_prefix_received
+        received_mid;
+      assert (sent_mid == received_mid);
+      Seq.lemma_eq_elim received_prefix_sent sent_prefix_sent;
+      Seq.lemma_eq_elim received_prefix_received sent_prefix_received;
+      Seq.lemma_eq_elim received_suffix_sent sent_suffix_sent;
+      Seq.lemma_eq_elim received_suffix_received sent_suffix_received;
+      assert (
+        conn_events_received_decode_replay
+          model
+          prefix
+          sent_prefix_sent
+          sent_prefix_received
+          sent_mid);
+      assert (
+        conn_events_received_decode_replay
+          sent_mid
+          suffix
+          sent_suffix_sent
+          sent_suffix_received
+          final_model);
+      introduce exists
+        (mid:connection_model)
+        (prefix_sent:B.bytes)
+        (prefix_received:B.bytes)
+        (suffix_sent:B.bytes)
+        (suffix_received:B.bytes).
+        Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+        Seq.equal raw_received (B.append prefix_received suffix_received) /\
+        conn_events_sent_seal_replay
+          model
+          prefix
+          prefix_sent
+          prefix_received
+          mid /\
+        conn_events_sent_seal_replay
+          mid
+          suffix
+          suffix_sent
+          suffix_received
+          final_model /\
+        conn_events_received_decode_replay
+          model
+          prefix
+          prefix_sent
+          prefix_received
+          mid /\
+        conn_events_received_decode_replay
+          mid
+          suffix
+          suffix_sent
+          suffix_received
+          final_model
+      with
+        sent_mid
+        sent_prefix_sent
+        sent_prefix_received
+        sent_suffix_sent
+        sent_suffix_received
+      and () ) )
+
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_step_received_network_event_preserves_record_write
   (model:connection_model)

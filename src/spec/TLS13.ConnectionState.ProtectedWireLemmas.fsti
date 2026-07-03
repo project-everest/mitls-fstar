@@ -1495,6 +1495,103 @@ val lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes
             receiver_final /\
           Seq.equal sender_suffix_sent receiver_suffix_received)
 
+val lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
+  (model:CS.connection_model)
+  (prefix:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  (prefixes_equal:
+    (sent_mid:CS.connection_model) ->
+    (received_mid:CS.connection_model) ->
+    (sent_prefix_sent:B.bytes) ->
+    (sent_prefix_received:B.bytes) ->
+    (sent_suffix_sent:B.bytes) ->
+    (sent_suffix_received:B.bytes) ->
+    (received_prefix_sent:B.bytes) ->
+    (received_prefix_received:B.bytes) ->
+    (received_suffix_sent:B.bytes) ->
+    (received_suffix_received:B.bytes) ->
+    Lemma
+      (requires
+        Seq.equal raw_sent (B.append sent_prefix_sent sent_suffix_sent) /\
+        Seq.equal raw_received
+            (B.append sent_prefix_received sent_suffix_received) /\
+        Seq.equal raw_sent
+            (B.append received_prefix_sent received_suffix_sent) /\
+        Seq.equal raw_received
+            (B.append received_prefix_received received_suffix_received) /\
+        CS.conn_events_sent_seal_replay
+            model
+            prefix
+            sent_prefix_sent
+            sent_prefix_received
+            sent_mid /\
+        CS.conn_events_sent_seal_replay
+            sent_mid
+            suffix
+            sent_suffix_sent
+            sent_suffix_received
+            final_model /\
+        CS.conn_events_received_decode_replay
+            model
+            prefix
+            received_prefix_sent
+            received_prefix_received
+            received_mid /\
+        CS.conn_events_received_decode_replay
+            received_mid
+            suffix
+            received_suffix_sent
+            received_suffix_received
+            final_model)
+      (ensures
+        Seq.equal sent_prefix_sent received_prefix_sent /\
+        Seq.equal sent_prefix_received received_prefix_received))
+  : Lemma
+      (requires
+        CS.conn_events_sent_seal_replay
+            model
+            (FStar.List.Tot.append prefix suffix)
+            raw_sent
+            raw_received
+            final_model /\
+        CS.conn_events_received_decode_replay
+            model
+            (FStar.List.Tot.append prefix suffix)
+            raw_sent
+            raw_received
+            final_model)
+      (ensures
+        exists mid prefix_sent prefix_received suffix_sent suffix_received.
+            Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+            Seq.equal raw_received (B.append prefix_received suffix_received) /\
+            CS.conn_events_sent_seal_replay
+              model
+              prefix
+              prefix_sent
+              prefix_received
+              mid /\
+            CS.conn_events_sent_seal_replay
+              mid
+              suffix
+              suffix_sent
+              suffix_received
+              final_model /\
+            CS.conn_events_received_decode_replay
+              model
+              prefix
+              prefix_sent
+              prefix_received
+              mid /\
+            CS.conn_events_received_decode_replay
+              mid
+              suffix
+              suffix_sent
+              suffix_received
+              final_model)
+
 val lemma_step_received_network_event_preserves_record_write
   (model:CS.connection_model)
   (msg:M.tls_message)
