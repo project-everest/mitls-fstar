@@ -1036,8 +1036,15 @@ also now has
 `lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext`, which
 discharges one deterministic sent cleartext network event (the pattern needed
 for client-sent ClientHello and server-sent ServerHello on the endpoint's own
-sent log).  The harder cross-endpoint and received-cleartext cases still require
-parseback/injectivity facts.  The remaining skeptical point is still byte
+sent log).  It also has
+`lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello`
+and `lemma_paired_replay_split_prefixes_equal_single_server_hello`, covering the
+deterministic ServerHello received side and the paired server-sent/client-received
+ServerHello prefix when both sides already name the same structured
+`M.server_hello`.  The harder ClientHello receive/cross-endpoint case still
+requires parseback/injectivity facts because received ClientHello raw bytes are
+specified by successful parsing, not by syntactic serializer equality.  The
+remaining skeptical point is still byte
 determinacy for protected records: raw replay alone is too weak, so these prefix
 equalities must come from the stronger seal/decode projections and cleartext
 parseback facts, not from `event_raw_delta_legal` alone.

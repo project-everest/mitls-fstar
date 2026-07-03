@@ -199,6 +199,25 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
           raw_received
           final_model)
 
+val lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
+  (model:CS.connection_model)
+  (sh:M.server_hello)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (same_endpoint_replay_split_prefixes_equal
+        model
+        [CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.ServerHello sh);
+        }]
+        suffix
+        raw_sent
+        raw_received
+        final_model)
+
 val lemma_paired_replay_split_prefixes_equal_empty
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
@@ -245,6 +264,39 @@ val lemma_paired_replay_split_prefixes_equal_single_local
         [CS.ConnLocalEvent server_ev]
         server_suffix
         [CS.ConnLocalEvent client_ev]
+        client_suffix
+        server_full_sent
+        server_full_received
+        client_full_sent
+        client_full_received
+        server_final
+        client_final)
+
+val lemma_paired_replay_split_prefixes_equal_single_server_hello
+  (server_model:CS.connection_model)
+  (client_model:CS.connection_model)
+  (sh:M.server_hello)
+  (server_suffix:list CS.conn_event)
+  (client_suffix:list CS.conn_event)
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_final:CS.connection_model)
+  (client_final:CS.connection_model)
+  : Lemma
+      (paired_replay_split_prefixes_equal
+        server_model
+        client_model
+        [CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.ServerHello sh);
+        }]
+        server_suffix
+        [CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.ServerHello sh);
+        }]
         client_suffix
         server_full_sent
         server_full_received
