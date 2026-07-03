@@ -901,6 +901,9 @@ The five-record packaging boundary is also explicit:
   five protected-message pairs for explicit `sent_msg`/`received_msg` variables
   and packages them after proving those variables are exactly the messages stored
   in the final client/server handshake states.
+- `lemma_paired_protected_handshake_event_projection_pair_witnesses_intro_from_messages`
+  additionally exposes that package existentially, matching the protected
+  premise of the Pairing-level wrapper.
 
 The remaining protected replay work is to compose the concrete staged replay
 extractors into one theorem that supplies this intro lemma from the actual
