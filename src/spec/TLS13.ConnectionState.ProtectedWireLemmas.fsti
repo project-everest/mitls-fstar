@@ -1438,6 +1438,120 @@ val lemma_protected_handshake_event_projection_pair_from_head_replays_with_next_
             receiver_tail_received
             receiver_final)
 
+val lemma_protected_handshake_event_projection_pairs_from_two_head_replays_with_next_alignment_and_tails
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sender_after0:CS.connection_model)
+  (receiver_after0:CS.connection_model)
+  (sender_after1:CS.connection_model)
+  (receiver_after1:CS.connection_model)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sender_rest:list CS.conn_event)
+  (receiver_rest:list CS.conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:CS.connection_model)
+  (receiver_final:CS.connection_model)
+  : Lemma
+      (requires
+        write_read_record_material_aligned sender receiver /\
+        CS.step_model
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg0;
+          }) == Some sender_after0 /\
+        CS.step_model
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg0;
+          }) == Some receiver_after0 /\
+        sender_after0.CS.model_record.CS.record_write ==
+          R.next_seq sender.CS.model_record.CS.record_write /\
+        receiver_after0.CS.model_record.CS.record_read ==
+          R.next_seq receiver.CS.model_record.CS.record_read /\
+        CS.step_model
+          sender_after0
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg1;
+          }) == Some sender_after1 /\
+        CS.step_model
+          receiver_after0
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg1;
+          }) == Some receiver_after1 /\
+        sender_after1.CS.model_record.CS.record_write ==
+          R.next_seq sender_after0.CS.model_record.CS.record_write /\
+        receiver_after1.CS.model_record.CS.record_read ==
+          R.next_seq receiver_after0.CS.model_record.CS.record_read /\
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg0 /\
+        protected_handshake_wire_round_trip_message received_msg0 /\
+        protected_handshake_wire_round_trip_message sent_msg1 /\
+        protected_handshake_wire_round_trip_message received_msg1 /\
+        CS.conn_events_sent_seal_replay
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg0;
+          } :: CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg1;
+          } :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        CS.conn_events_received_decode_replay
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg0;
+          } :: CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg1;
+          } :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
+      (ensures
+        exists pair0 pair1 sender_tail_sent sender_tail_received
+          receiver_tail_sent receiver_tail_received.
+          pair0.pm_sender == sender /\
+          pair0.pm_receiver == receiver /\
+          protected_handshake_event_projection_pair
+            pair0
+            sent_msg0
+            received_msg0 /\
+          pair1.pm_sender == sender_after0 /\
+          pair1.pm_receiver == receiver_after0 /\
+          protected_handshake_event_projection_pair
+            pair1
+            sent_msg1
+            received_msg1 /\
+          write_read_record_material_aligned sender_after0 receiver_after0 /\
+          write_read_record_material_aligned sender_after1 receiver_after1 /\
+          Seq.equal sender_tail_sent receiver_tail_received /\
+          CS.conn_events_sent_seal_replay
+            sender_after1
+            sender_rest
+            sender_tail_sent
+            sender_tail_received
+            sender_final /\
+          CS.conn_events_received_decode_replay
+            receiver_after1
+            receiver_rest
+            receiver_tail_sent
+            receiver_tail_received
+            receiver_final)
+
 val lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
   (sender:CS.connection_model)
   (sender_after:CS.connection_model)
