@@ -4963,6 +4963,409 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
       receiver_tail_received
     and () )
 
+let lemma_protected_handshake_event_projection_pairs_from_two_heads_then_both_non_install_local_heads_with_next_alignment_and_tails
+  (sender:connection_model)
+  (receiver:connection_model)
+  (sender_after0:connection_model)
+  (receiver_after0:connection_model)
+  (sender_after1:connection_model)
+  (receiver_after1:connection_model)
+  (sender_after_skip:connection_model)
+  (receiver_after_skip:connection_model)
+  (sender_after2:connection_model)
+  (receiver_after2:connection_model)
+  (sender_skip:local_event)
+  (receiver_skip:local_event)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (sender_rest:list conn_event)
+  (receiver_rest:list conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:connection_model)
+  (receiver_final:connection_model)
+  : Lemma
+      (requires
+        write_read_record_material_aligned sender receiver /\
+        local_event_does_not_install_record_keys sender_skip /\
+        local_event_does_not_install_record_keys receiver_skip /\
+        step_model
+          sender
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg0;
+          }) == Some sender_after0 /\
+        step_model
+          receiver
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg0;
+          }) == Some receiver_after0 /\
+        sender_after0.model_record.record_write ==
+          R.next_seq sender.model_record.record_write /\
+        receiver_after0.model_record.record_read ==
+          R.next_seq receiver.model_record.record_read /\
+        step_model
+          sender_after0
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg1;
+          }) == Some sender_after1 /\
+        step_model
+          receiver_after0
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg1;
+          }) == Some receiver_after1 /\
+        sender_after1.model_record.record_write ==
+          R.next_seq sender_after0.model_record.record_write /\
+        receiver_after1.model_record.record_read ==
+          R.next_seq receiver_after0.model_record.record_read /\
+        step_model
+          sender_after1
+          (ConnLocalEvent sender_skip) == Some sender_after_skip /\
+        step_model
+          receiver_after1
+          (ConnLocalEvent receiver_skip) == Some receiver_after_skip /\
+        step_model
+          sender_after_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg2;
+          }) == Some sender_after2 /\
+        step_model
+          receiver_after_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg2;
+          }) == Some receiver_after2 /\
+        sender_after2.model_record.record_write ==
+          R.next_seq sender_after_skip.model_record.record_write /\
+        receiver_after2.model_record.record_read ==
+          R.next_seq receiver_after_skip.model_record.record_read /\
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg0 /\
+        protected_handshake_wire_round_trip_message received_msg0 /\
+        protected_handshake_wire_round_trip_message sent_msg1 /\
+        protected_handshake_wire_round_trip_message received_msg1 /\
+        protected_handshake_wire_round_trip_message sent_msg2 /\
+        protected_handshake_wire_round_trip_message received_msg2 /\
+        conn_events_sent_seal_replay
+          sender
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg0;
+          } :: ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg1;
+          } :: ConnLocalEvent sender_skip :: ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg2;
+          } :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        conn_events_received_decode_replay
+          receiver
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg0;
+          } :: ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg1;
+          } :: ConnLocalEvent receiver_skip :: ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg2;
+          } :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
+      (ensures
+        exists pair0 pair1 pair2 sender_tail_sent sender_tail_received
+          receiver_tail_sent receiver_tail_received.
+          pair0.pm_sender == sender /\
+          pair0.pm_receiver == receiver /\
+          protected_handshake_event_projection_pair
+            pair0
+            sent_msg0
+            received_msg0 /\
+          pair1.pm_sender == sender_after0 /\
+          pair1.pm_receiver == receiver_after0 /\
+          protected_handshake_event_projection_pair
+            pair1
+            sent_msg1
+            received_msg1 /\
+          pair2.pm_sender == sender_after_skip /\
+          pair2.pm_receiver == receiver_after_skip /\
+          protected_handshake_event_projection_pair
+            pair2
+            sent_msg2
+            received_msg2 /\
+          write_read_record_material_aligned sender_after1 receiver_after1 /\
+          write_read_record_material_aligned sender_after2 receiver_after2 /\
+          Seq.equal sender_tail_sent receiver_tail_received /\
+          conn_events_sent_seal_replay
+            sender_after2
+            sender_rest
+            sender_tail_sent
+            sender_tail_received
+            sender_final /\
+          conn_events_received_decode_replay
+            receiver_after2
+            receiver_rest
+            receiver_tail_sent
+            receiver_tail_received
+            receiver_final)
+=
+  let sender_skip_ev = ConnLocalEvent sender_skip in
+  let receiver_skip_ev = ConnLocalEvent receiver_skip in
+  let sent_ev2 = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg2;
+  } in
+  let received_ev2 = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg2;
+  } in
+  lemma_protected_handshake_event_projection_pairs_from_two_head_replays_with_next_alignment_and_tails
+    sender
+    receiver
+    sender_after0
+    receiver_after0
+    sender_after1
+    receiver_after1
+    sent_msg0
+    received_msg0
+    sent_msg1
+    received_msg1
+    (sender_skip_ev :: sent_ev2 :: sender_rest)
+    (receiver_skip_ev :: received_ev2 :: receiver_rest)
+    sender_raw_sent
+    sender_raw_received
+    receiver_raw_sent
+    receiver_raw_received
+    sender_final
+    receiver_final;
+  eliminate exists
+    (pair0:protected_message_replay)
+    (pair1:protected_message_replay)
+    (sender_tail_sent0:B.bytes)
+    (sender_tail_received0:B.bytes)
+    (receiver_tail_sent0:B.bytes)
+    (receiver_tail_received0:B.bytes).
+    pair0.pm_sender == sender /\
+    pair0.pm_receiver == receiver /\
+    protected_handshake_event_projection_pair
+      pair0
+      sent_msg0
+      received_msg0 /\
+    pair1.pm_sender == sender_after0 /\
+    pair1.pm_receiver == receiver_after0 /\
+    protected_handshake_event_projection_pair
+      pair1
+      sent_msg1
+      received_msg1 /\
+    write_read_record_material_aligned sender_after0 receiver_after0 /\
+    write_read_record_material_aligned sender_after1 receiver_after1 /\
+    Seq.equal sender_tail_sent0 receiver_tail_received0 /\
+    conn_events_sent_seal_replay
+      sender_after1
+      (sender_skip_ev :: sent_ev2 :: sender_rest)
+      sender_tail_sent0
+      sender_tail_received0
+      sender_final /\
+    conn_events_received_decode_replay
+      receiver_after1
+      (receiver_skip_ev :: received_ev2 :: receiver_rest)
+      receiver_tail_sent0
+      receiver_tail_received0
+      receiver_final
+  returns
+    exists pair0' pair1' pair2 sender_tail_sent sender_tail_received
+      receiver_tail_sent receiver_tail_received.
+      pair0'.pm_sender == sender /\
+      pair0'.pm_receiver == receiver /\
+      protected_handshake_event_projection_pair
+        pair0'
+        sent_msg0
+        received_msg0 /\
+      pair1'.pm_sender == sender_after0 /\
+      pair1'.pm_receiver == receiver_after0 /\
+      protected_handshake_event_projection_pair
+        pair1'
+        sent_msg1
+        received_msg1 /\
+      pair2.pm_sender == sender_after_skip /\
+      pair2.pm_receiver == receiver_after_skip /\
+      protected_handshake_event_projection_pair
+        pair2
+        sent_msg2
+        received_msg2 /\
+      write_read_record_material_aligned sender_after1 receiver_after1 /\
+      write_read_record_material_aligned sender_after2 receiver_after2 /\
+      Seq.equal sender_tail_sent receiver_tail_received /\
+      conn_events_sent_seal_replay
+        sender_after2
+        sender_rest
+        sender_tail_sent
+        sender_tail_received
+        sender_final /\
+      conn_events_received_decode_replay
+        receiver_after2
+        receiver_rest
+        receiver_tail_sent
+        receiver_tail_received
+        receiver_final
+  with _.
+  ( lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
+      sender_after1
+      sender_skip
+      sender_after_skip
+      receiver_after1;
+    lemma_step_receiver_non_install_local_event_preserves_write_read_record_material_alignment
+      sender_after_skip
+      receiver_after1
+      receiver_skip
+      receiver_after_skip;
+    lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_with_next_alignment_and_tails
+      sender_after1
+      sender_after_skip
+      receiver_after1
+      receiver_after_skip
+      sender_after2
+      receiver_after2
+      sender_skip_ev
+      receiver_skip_ev
+      sent_msg2
+      received_msg2
+      sender_rest
+      receiver_rest
+      sender_tail_sent0
+      sender_tail_received0
+      receiver_tail_sent0
+      receiver_tail_received0
+      sender_final
+      receiver_final;
+    eliminate exists
+      (pair2:protected_message_replay)
+      (sender_tail_sent2:B.bytes)
+      (sender_tail_received2:B.bytes)
+      (receiver_tail_sent2:B.bytes)
+      (receiver_tail_received2:B.bytes).
+      pair2.pm_sender == sender_after_skip /\
+      pair2.pm_receiver == receiver_after_skip /\
+      protected_handshake_event_projection_pair
+        pair2
+        sent_msg2
+        received_msg2 /\
+      write_read_record_material_aligned sender_after2 receiver_after2 /\
+      Seq.equal sender_tail_sent2 receiver_tail_received2 /\
+      conn_events_sent_seal_replay
+        sender_after2
+        sender_rest
+        sender_tail_sent2
+        sender_tail_received2
+        sender_final /\
+      conn_events_received_decode_replay
+        receiver_after2
+        receiver_rest
+        receiver_tail_sent2
+        receiver_tail_received2
+        receiver_final
+    returns
+      exists pair0' pair1' pair2' sender_tail_sent sender_tail_received
+        receiver_tail_sent receiver_tail_received.
+        pair0'.pm_sender == sender /\
+        pair0'.pm_receiver == receiver /\
+        protected_handshake_event_projection_pair
+          pair0'
+          sent_msg0
+          received_msg0 /\
+        pair1'.pm_sender == sender_after0 /\
+        pair1'.pm_receiver == receiver_after0 /\
+        protected_handshake_event_projection_pair
+          pair1'
+          sent_msg1
+          received_msg1 /\
+        pair2'.pm_sender == sender_after_skip /\
+        pair2'.pm_receiver == receiver_after_skip /\
+        protected_handshake_event_projection_pair
+          pair2'
+          sent_msg2
+          received_msg2 /\
+        write_read_record_material_aligned sender_after1 receiver_after1 /\
+        write_read_record_material_aligned sender_after2 receiver_after2 /\
+        Seq.equal sender_tail_sent receiver_tail_received /\
+        conn_events_sent_seal_replay
+          sender_after2
+          sender_rest
+          sender_tail_sent
+          sender_tail_received
+          sender_final /\
+        conn_events_received_decode_replay
+          receiver_after2
+          receiver_rest
+          receiver_tail_sent
+          receiver_tail_received
+          receiver_final
+    with _.
+    ( introduce exists
+        (pair0':protected_message_replay)
+        (pair1':protected_message_replay)
+        (pair2':protected_message_replay)
+        (sender_tail_sent:B.bytes)
+        (sender_tail_received:B.bytes)
+        (receiver_tail_sent:B.bytes)
+        (receiver_tail_received:B.bytes).
+        pair0'.pm_sender == sender /\
+        pair0'.pm_receiver == receiver /\
+        protected_handshake_event_projection_pair
+          pair0'
+          sent_msg0
+          received_msg0 /\
+        pair1'.pm_sender == sender_after0 /\
+        pair1'.pm_receiver == receiver_after0 /\
+        protected_handshake_event_projection_pair
+          pair1'
+          sent_msg1
+          received_msg1 /\
+        pair2'.pm_sender == sender_after_skip /\
+        pair2'.pm_receiver == receiver_after_skip /\
+        protected_handshake_event_projection_pair
+          pair2'
+          sent_msg2
+          received_msg2 /\
+        write_read_record_material_aligned sender_after1 receiver_after1 /\
+        write_read_record_material_aligned sender_after2 receiver_after2 /\
+        Seq.equal sender_tail_sent receiver_tail_received /\
+        conn_events_sent_seal_replay
+          sender_after2
+          sender_rest
+          sender_tail_sent
+          sender_tail_received
+          sender_final /\
+        conn_events_received_decode_replay
+          receiver_after2
+          receiver_rest
+          receiver_tail_sent
+          receiver_tail_received
+          receiver_final
+      with
+        pair0
+        pair1
+        pair2
+        sender_tail_sent2
+        sender_tail_received2
+        receiver_tail_sent2
+        receiver_tail_received2
+      and () ) )
+
 let lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_tails
   (server:connection_model)
   (client:connection_model)
