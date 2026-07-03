@@ -824,6 +824,150 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_intro_from_
   with server_ee server_cert server_cv server_finished client_finished
   and ()
 
+let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_pair_outputs
+  (client:connection_state)
+  (server:connection_state)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  (sent_msg4:M.handshake_msg)
+  (received_msg4:M.handshake_msg)
+  : Lemma
+      (requires
+        (match
+          client.cs_model.model_handshake.hs_encrypted_extensions,
+          server.cs_model.model_handshake.hs_encrypted_extensions,
+          client.cs_model.model_handshake.hs_certificate,
+          server.cs_model.model_handshake.hs_certificate,
+          client.cs_model.model_handshake.hs_certificate_verify,
+          server.cs_model.model_handshake.hs_certificate_verify,
+          client.cs_model.model_handshake.hs_server_finished,
+          server.cs_model.model_handshake.hs_server_finished,
+          client.cs_model.model_handshake.hs_client_finished,
+          server.cs_model.model_handshake.hs_client_finished
+        with
+        | Some client_ee, Some server_ee_msg,
+          Some client_cert, Some server_cert_msg,
+          Some client_cv, Some server_cv_msg,
+          Some client_sf, Some server_sf,
+          Some client_cf, Some server_cf ->
+          sent_msg0 == M.EncryptedExtensions server_ee_msg /\
+          received_msg0 == M.EncryptedExtensions client_ee /\
+          sent_msg1 == M.Certificate server_cert_msg /\
+          received_msg1 == M.Certificate client_cert /\
+          sent_msg2 == M.CertificateVerify server_cv_msg /\
+          received_msg2 == M.CertificateVerify client_cv /\
+          sent_msg3 == M.Finished server_sf /\
+          received_msg3 == M.Finished client_sf /\
+          sent_msg4 == M.Finished client_cf /\
+          received_msg4 == M.Finished server_cf
+        | _, _, _, _, _, _, _, _, _, _ ->
+          False) /\
+        (exists server_ee server_cert server_cv server_finished.
+          protected_handshake_event_projection_pair
+            server_ee
+            sent_msg0
+            received_msg0 /\
+          protected_handshake_event_projection_pair
+            server_cert
+            sent_msg1
+            received_msg1 /\
+          protected_handshake_event_projection_pair
+            server_cv
+            sent_msg2
+            received_msg2 /\
+          protected_handshake_event_projection_pair
+            server_finished
+            sent_msg3
+            received_msg3) /\
+        (exists client_finished.
+          protected_handshake_event_projection_pair
+            client_finished
+            sent_msg4
+            received_msg4))
+      (ensures
+        exists server_ee server_cert server_cv server_finished client_finished.
+          paired_protected_handshake_event_projection_pairs
+            client
+            server
+            server_ee
+            server_cert
+            server_cv
+            server_finished
+            client_finished)
+=
+  eliminate exists
+    (server_ee:protected_message_replay)
+    (server_cert:protected_message_replay)
+    (server_cv:protected_message_replay)
+    (server_finished:protected_message_replay).
+    protected_handshake_event_projection_pair
+      server_ee
+      sent_msg0
+      received_msg0 /\
+    protected_handshake_event_projection_pair
+      server_cert
+      sent_msg1
+      received_msg1 /\
+    protected_handshake_event_projection_pair
+      server_cv
+      sent_msg2
+      received_msg2 /\
+    protected_handshake_event_projection_pair
+      server_finished
+      sent_msg3
+      received_msg3
+  returns
+    exists server_ee' server_cert' server_cv' server_finished' client_finished'.
+      paired_protected_handshake_event_projection_pairs
+        client
+        server
+        server_ee'
+        server_cert'
+        server_cv'
+        server_finished'
+        client_finished'
+  with _.
+  ( eliminate exists (client_finished:protected_message_replay).
+      protected_handshake_event_projection_pair
+        client_finished
+        sent_msg4
+        received_msg4
+    returns
+      exists server_ee' server_cert' server_cv' server_finished' client_finished'.
+        paired_protected_handshake_event_projection_pairs
+          client
+          server
+          server_ee'
+          server_cert'
+          server_cv'
+          server_finished'
+          client_finished'
+    with _.
+    ( lemma_paired_protected_handshake_event_projection_pair_witnesses_intro_from_messages
+        client
+        server
+        server_ee
+        server_cert
+        server_cv
+        server_finished
+        client_finished
+        sent_msg0
+        received_msg0
+        sent_msg1
+        received_msg1
+        sent_msg2
+        received_msg2
+        sent_msg3
+        received_msg3
+        sent_msg4
+        received_msg4 ) )
+
 let lemma_conn_events_sent_seal_replay_head
   (model:connection_model)
   (ev:conn_event)

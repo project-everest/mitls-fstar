@@ -904,6 +904,10 @@ The five-record packaging boundary is also explicit:
 - `lemma_paired_protected_handshake_event_projection_pair_witnesses_intro_from_messages`
   additionally exposes that package existentially, matching the protected
   premise of the Pairing-level wrapper.
+- `lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_pair_outputs`
+  composes the staged extractor outputs in the shape they naturally produce: an
+  existential package of the four server-flight pairs plus an existential client
+  Finished pair, yielding the single five-witness existential package.
 
 The remaining protected replay work is to compose the concrete staged replay
 extractors into one theorem that supplies this intro lemma from the actual
