@@ -2,6 +2,7 @@ module TLS13.ConnectionState.ProtectedWireSegmentation
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
+module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
 module PWL = TLS13.ConnectionState.ProtectedWireLemmas
@@ -2949,6 +2950,190 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
               client_tail_sent
               server_tail_received;
             assert (Seq.equal client_prefix_sent server_prefix_received) ) ) )
+
+let lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
+  (server_model0:connection_model)
+  (client_model0:connection_model)
+  (start:handshake_start)
+  (ch:M.client_hello)
+  (selection:server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (client_shared:C.x25519_shared_secret)
+  (sh:M.server_hello)
+  (server_suffix:list conn_event)
+  (client_suffix:list conn_event)
+  (server_model1:connection_model)
+  (server_model2:connection_model)
+  (server_model3:connection_model)
+  (server_model4:connection_model)
+  (server_model5:connection_model)
+  (client_model1:connection_model)
+  (client_model2:connection_model)
+  (client_model3:connection_model)
+  (client_model4:connection_model)
+  : Lemma
+      (requires
+        step_model
+          server_model0
+          (ConnLocalEvent LocalStartServer) == Some server_model1 /\
+        step_model
+          server_model1
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) == Some server_model2 /\
+        step_model
+          server_model2
+          (ConnLocalEvent (LocalSelectServerParameters selection)) ==
+          Some server_model3 /\
+        step_model
+          server_model3
+          (ConnLocalEvent (LocalDeriveSharedSecret server_shared)) ==
+          Some server_model4 /\
+        step_model
+          server_model4
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some server_model5 /\
+        step_model
+          client_model0
+          (ConnLocalEvent (LocalStartHandshake start)) ==
+          Some client_model1 /\
+        step_model
+          client_model1
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) == Some client_model2 /\
+        step_model
+          client_model2
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some client_model3 /\
+        step_model
+          client_model3
+          (ConnLocalEvent (LocalDeriveSharedSecret client_shared)) ==
+          Some client_model4)
+      (ensures
+        paired_replay_split_prefixes_equal_uniform
+          server_model0
+          client_model0
+          (server_cleartext_handshake_prefix_events
+            ch
+            selection
+            server_shared
+            sh)
+          server_suffix
+          (client_cleartext_handshake_prefix_events
+            start
+            ch
+            sh
+            client_shared)
+          client_suffix)
+=
+  let server_received_ch = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+  } in
+  let server_select = ConnLocalEvent (LocalSelectServerParameters selection) in
+  let server_derive = ConnLocalEvent (LocalDeriveSharedSecret server_shared) in
+  let server_sent_sh = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ServerHello sh);
+  } in
+  let client_sent_ch = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+  } in
+  let client_received_sh = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ServerHello sh);
+  } in
+  let client_derive = ConnLocalEvent (LocalDeriveSharedSecret client_shared) in
+  lemma_paired_replay_split_prefixes_equal_uniform_empty
+    server_model5
+    client_model4
+    server_suffix
+    client_suffix;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
+    server_model5
+    client_model3
+    (LocalDeriveSharedSecret client_shared)
+    []
+    server_suffix
+    []
+    client_suffix
+    client_model4;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
+    server_model4
+    client_model2
+    sh
+    []
+    server_suffix
+    [client_derive]
+    client_suffix
+    server_model5
+    client_model3;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
+    server_model3
+    client_model2
+    (LocalDeriveSharedSecret server_shared)
+    [server_sent_sh]
+    server_suffix
+    [client_received_sh; client_derive]
+    client_suffix
+    server_model4;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
+    server_model2
+    client_model2
+    (LocalSelectServerParameters selection)
+    [server_derive; server_sent_sh]
+    server_suffix
+    [client_received_sh; client_derive]
+    client_suffix
+    server_model3;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
+    server_model1
+    client_model1
+    ch
+    [server_select; server_derive; server_sent_sh]
+    server_suffix
+    [client_received_sh; client_derive]
+    client_suffix
+    server_model2
+    client_model2;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
+    server_model0
+    client_model1
+    LocalStartServer
+    [server_received_ch; server_select; server_derive; server_sent_sh]
+    server_suffix
+    [client_sent_ch; client_received_sh; client_derive]
+    client_suffix
+    server_model1;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
+    server_model0
+    client_model0
+    (LocalStartHandshake start)
+    [ConnLocalEvent LocalStartServer; server_received_ch; server_select; server_derive; server_sent_sh]
+    server_suffix
+    [client_sent_ch; client_received_sh; client_derive]
+    client_suffix
+    client_model1;
+  assert (server_cleartext_handshake_prefix_events
+    ch
+    selection
+    server_shared
+    sh ==
+    [ConnLocalEvent LocalStartServer; server_received_ch; server_select; server_derive; server_sent_sh]);
+  assert (client_cleartext_handshake_prefix_events
+    start
+    ch
+    sh
+    client_shared ==
+    [ConnLocalEvent (LocalStartHandshake start); client_sent_ch; client_received_sh; client_derive])
 
 let lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_model:connection_model)
