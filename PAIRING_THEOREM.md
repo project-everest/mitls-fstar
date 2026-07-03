@@ -1023,7 +1023,11 @@ returns the compact `paired_protected_handshake_contiguous_replay_views`
 predicate plus both protected suffix byte equalities, ready to feed the staged
 protected replay theorem.  The next proof obligations are therefore explicit and
 narrow: instantiate those callbacks for the TLS 1.3 pre-protected
-cleartext/local prefix shape.  The remaining skeptical point is still byte
+cleartext/local prefix shape.  As a base case for this callback style, the module
+also proves `lemma_same_endpoint_replay_split_prefixes_equal_empty` and
+`lemma_paired_replay_split_prefixes_equal_empty`, showing that the obligations
+collapse automatically when the chosen full log already starts at the protected
+suffix.  The remaining skeptical point is still byte
 determinacy for protected records: raw replay alone is too weak, so these prefix
 equalities must come from the stronger seal/decode projections and cleartext
 parseback facts, not from `event_raw_delta_legal` alone.
