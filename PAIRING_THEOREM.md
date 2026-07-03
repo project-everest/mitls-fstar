@@ -1016,6 +1016,17 @@ weak, so these prefix equalities must come from the stronger seal/decode
 projections and cleartext parseback facts, not from `event_raw_delta_legal`
 alone.
 
+There is also an event-log shape gap, distinct from byte equality.  The existing
+high-level `paired_handshake_message_states` predicate records that the expected
+handshake messages occur in the event logs (`event_trace_has_tls_message`), but
+occurrence is not a contiguity theorem: it does not by itself split
+`cs_event_log` as `pre_protected_prefix ++ protected_handshake_suffix`.  The new
+segmentation bridge assumes such a split.  A final byte-trace theorem therefore
+needs either a driver/state-machine invariant exposing that exact suffix shape,
+or an additional trace-normalization theorem proving that application-ready,
+first-epoch/no-KeyUpdate runs have no interleaved events between the protected
+handshake records beyond the local skips already modeled in the suffix.
+
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
 It has the same cleartext ClientHello/ServerHello and first-epoch/no-KeyUpdate
