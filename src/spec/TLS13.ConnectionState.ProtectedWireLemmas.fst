@@ -110,6 +110,21 @@ let lemma_append_tails_equal_same_len
   SeqProps.lemma_append_inj left left_tail right right_tail;
   assert (Seq.equal left_tail right_tail)
 
+let lemma_append_tails_equal_from_equal_heads
+  #a
+  (left:Seq.seq a)
+  (left_tail:Seq.seq a)
+  (right:Seq.seq a)
+  (right_tail:Seq.seq a)
+  : Lemma
+    (requires
+      Seq.equal (Seq.append left left_tail) (Seq.append right right_tail) /\
+      Seq.equal left right)
+    (ensures Seq.equal left_tail right_tail)
+=
+  Seq.lemma_eq_elim left right;
+  lemma_append_tails_equal_same_len left left_tail right right_tail
+
 let lemma_raw_delta_heads_equal_same_len
   (sender_delta:B.bytes)
   (sender_tail:B.bytes)

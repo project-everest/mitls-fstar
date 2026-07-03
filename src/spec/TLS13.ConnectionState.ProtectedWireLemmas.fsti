@@ -389,6 +389,18 @@ val lemma_append_tails_equal_same_len:
       Seq.length left == Seq.length right)
     (ensures Seq.equal left_tail right_tail)
 
+val lemma_append_tails_equal_from_equal_heads:
+  #a:eqtype ->
+  left:Seq.seq a ->
+  left_tail:Seq.seq a ->
+  right:Seq.seq a ->
+  right_tail:Seq.seq a ->
+  Lemma
+    (requires
+      Seq.equal (Seq.append left left_tail) (Seq.append right right_tail) /\
+      Seq.equal left right)
+    (ensures Seq.equal left_tail right_tail)
+
 val lemma_raw_delta_heads_equal_same_len:
   sender_delta:B.bytes ->
   sender_tail:B.bytes ->
