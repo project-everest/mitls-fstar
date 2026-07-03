@@ -989,15 +989,24 @@ the paired prefixes consume the same number of bytes.  The wrapper
 `lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes`
 turns that into unconditional suffix equality when supplied with a proof of the
 prefix-length alignment.  `lemma_conn_events_raw_replay_append_split` now also
-provides a common segmentation point for the endpoint's raw log itself.  This
-makes the next proof obligations explicit and narrow: prove, for the concrete
-pre-protected cleartext/local prefix shape, that the server-to-client prefix and
-client-received prefix consume equal bytes, and dually for the
-client-to-server/server-received prefix; then relate the endpoint's sent-seal and
-received-decode split witnesses to the same raw-log segment.  The latter remains
-a skeptical point because `event_raw_delta_legal` is intentionally relational
-for protected records: a raw replay alone does not determine the sealed bytes
-without using the seal/decode replay projections.
+provides a common segmentation point for the endpoint's raw log itself.  The
+same-endpoint alignment problem has been narrowed further by
+`lemma_conn_events_sent_received_replays_same_events_final_model_equal`,
+`lemma_conn_events_raw_sent_seal_replays_same_events_final_model_equal`,
+`lemma_conn_events_raw_received_decode_replays_same_events_final_model_equal`,
+and
+`lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes`.
+Together, these show that sent-seal and received-decode views over the same
+endpoint prefix end at the same post-prefix model, and—if the concrete prefix
+bytes are shown equal—can be made to share the same raw suffix.  This makes the
+next proof obligations explicit and narrow: prove, for the concrete
+pre-protected cleartext/local prefix shape, that the endpoint's sent/decode
+prefix splits consume the same raw bytes, and prove cross-endpoint prefix
+equality for server-to-client and client-to-server directions.  The remaining
+skeptical point is still byte determinacy for protected records: raw replay
+alone is too weak, so these prefix equalities must come from the stronger
+seal/decode projections and cleartext parseback facts, not from
+`event_raw_delta_legal` alone.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
