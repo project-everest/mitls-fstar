@@ -831,6 +831,34 @@ let lemma_same_endpoint_replay_split_prefixes_equal_empty
       assert (Seq.equal received_prefix_sent B.empty);
       assert (Seq.equal received_prefix_received B.empty) )
 
+let lemma_same_endpoint_replay_split_prefixes_equal_uniform_empty
+  (model:connection_model)
+  (suffix:list conn_event)
+  : Lemma
+      (same_endpoint_replay_split_prefixes_equal_uniform
+        model
+        []
+        suffix)
+=
+  introduce forall
+    (raw_sent:B.bytes)
+    (raw_received:B.bytes)
+    (final_model:connection_model).
+    same_endpoint_replay_split_prefixes_equal
+      model
+      []
+      suffix
+      raw_sent
+      raw_received
+      final_model
+  with
+    lemma_same_endpoint_replay_split_prefixes_equal_empty
+      model
+      suffix
+      raw_sent
+      raw_received
+      final_model
+
 let lemma_same_endpoint_replay_split_prefixes_equal_single_local
   (model:connection_model)
   (ev:local_event)
@@ -1076,6 +1104,47 @@ let lemma_same_endpoint_replay_split_prefixes_equal_cons_local
           assert (Seq.equal sent_tail_received received_tail_received);
           assert (Seq.equal sent_prefix_sent received_prefix_sent);
           assert (Seq.equal sent_prefix_received received_prefix_received) ) ) )
+
+let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_local
+  (model:connection_model)
+  (ev:local_event)
+  (tail:list conn_event)
+  (suffix:list conn_event)
+  (post_model:connection_model)
+  : Lemma
+      (requires
+        step_model model (ConnLocalEvent ev) == Some post_model /\
+        same_endpoint_replay_split_prefixes_equal_uniform
+          post_model
+          tail
+          suffix)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal_uniform
+          model
+          (ConnLocalEvent ev :: tail)
+          suffix)
+=
+  introduce forall
+    (raw_sent:B.bytes)
+    (raw_received:B.bytes)
+    (final_model:connection_model).
+    same_endpoint_replay_split_prefixes_equal
+      model
+      (ConnLocalEvent ev :: tail)
+      suffix
+      raw_sent
+      raw_received
+      final_model
+  with
+    lemma_same_endpoint_replay_split_prefixes_equal_cons_local
+      model
+      ev
+      tail
+      suffix
+      raw_sent
+      raw_received
+      final_model
+      post_model
 
 let lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
   (model:connection_model)

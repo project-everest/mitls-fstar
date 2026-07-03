@@ -63,6 +63,24 @@ let same_endpoint_replay_split_prefixes_equal
     Seq.equal sent_prefix_received received_prefix_received
 
 noextract
+let same_endpoint_replay_split_prefixes_equal_uniform
+  (model:CS.connection_model)
+  (prefix:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  : prop =
+  forall
+    (raw_sent:B.bytes)
+    (raw_received:B.bytes)
+    (final_model:CS.connection_model).
+    same_endpoint_replay_split_prefixes_equal
+     model
+     prefix
+     suffix
+     raw_sent
+     raw_received
+     final_model
+
+noextract
 let paired_replay_split_prefixes_equal
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
@@ -424,6 +442,15 @@ val lemma_same_endpoint_replay_split_prefixes_equal_empty
         raw_received
         final_model)
 
+val lemma_same_endpoint_replay_split_prefixes_equal_uniform_empty
+  (model:CS.connection_model)
+  (suffix:list CS.conn_event)
+  : Lemma
+      (same_endpoint_replay_split_prefixes_equal_uniform
+        model
+        []
+        suffix)
+
 val lemma_same_endpoint_replay_split_prefixes_equal_single_local
   (model:CS.connection_model)
   (ev:CS.local_event)
@@ -467,6 +494,25 @@ val lemma_same_endpoint_replay_split_prefixes_equal_cons_local
           raw_sent
           raw_received
           final_model)
+
+val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_local
+  (model:CS.connection_model)
+  (ev:CS.local_event)
+  (tail:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (post_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model model (CS.ConnLocalEvent ev) == Some post_model /\
+        same_endpoint_replay_split_prefixes_equal_uniform
+          post_model
+          tail
+          suffix)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal_uniform
+          model
+          (CS.ConnLocalEvent ev :: tail)
+          suffix)
 
 val lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
   (model:CS.connection_model)
