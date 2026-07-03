@@ -812,6 +812,70 @@ val lemma_conn_events_received_decode_replay_head
             tail_received
             final_model)
 
+val lemma_conn_events_sent_seal_replay_append_split
+  (model:CS.connection_model)
+  (prefix:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_sent_seal_replay
+          model
+          (FStar.List.Tot.append prefix suffix)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists mid prefix_sent prefix_received suffix_sent suffix_received.
+          Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+          Seq.equal raw_received (B.append prefix_received suffix_received) /\
+          CS.conn_events_sent_seal_replay
+            model
+            prefix
+            prefix_sent
+            prefix_received
+            mid /\
+          CS.conn_events_sent_seal_replay
+            mid
+            suffix
+            suffix_sent
+            suffix_received
+            final_model)
+
+val lemma_conn_events_received_decode_replay_append_split
+  (model:CS.connection_model)
+  (prefix:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_received_decode_replay
+          model
+          (FStar.List.Tot.append prefix suffix)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists mid prefix_sent prefix_received suffix_sent suffix_received.
+          Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+          Seq.equal raw_received (B.append prefix_received suffix_received) /\
+          CS.conn_events_received_decode_replay
+            model
+            prefix
+            prefix_sent
+            prefix_received
+            mid /\
+          CS.conn_events_received_decode_replay
+            mid
+            suffix
+            suffix_sent
+            suffix_received
+            final_model)
+
 val lemma_step_received_network_event_preserves_record_write
   (model:CS.connection_model)
   (msg:M.tls_message)
