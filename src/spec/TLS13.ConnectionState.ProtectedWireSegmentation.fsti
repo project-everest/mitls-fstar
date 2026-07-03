@@ -233,6 +233,38 @@ let paired_replay_split_prefixes_equal_with_full_streams
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
 
+noextract
+let paired_replay_split_prefixes_equal_uniform
+  (server_model:CS.connection_model)
+  (client_model:CS.connection_model)
+  (server_prefix:list CS.conn_event)
+  (server_suffix:list CS.conn_event)
+  (client_prefix:list CS.conn_event)
+  (client_suffix:list CS.conn_event)
+  : prop =
+  forall
+    (server_full_sent:B.bytes)
+    (server_full_received:B.bytes)
+    (client_full_sent:B.bytes)
+    (client_full_received:B.bytes)
+    (server_final:CS.connection_model)
+    (client_final:CS.connection_model).
+    Seq.equal server_full_sent client_full_received /\
+    Seq.equal client_full_sent server_full_received ==>
+    paired_replay_split_prefixes_equal_with_full_streams
+      server_model
+      client_model
+      server_prefix
+      server_suffix
+      client_prefix
+      client_suffix
+      server_full_sent
+      server_full_received
+      client_full_sent
+      client_full_received
+      server_final
+      client_final
+
 val lemma_paired_replay_split_prefixes_equal_from_full_streams
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
@@ -320,6 +352,20 @@ val lemma_paired_replay_split_prefixes_equal_with_full_streams_from_plain
           client_full_received
           server_final
           client_final)
+
+val lemma_paired_replay_split_prefixes_equal_uniform_empty
+  (server_model:CS.connection_model)
+  (client_model:CS.connection_model)
+  (server_suffix:list CS.conn_event)
+  (client_suffix:list CS.conn_event)
+  : Lemma
+      (paired_replay_split_prefixes_equal_uniform
+        server_model
+        client_model
+        []
+        server_suffix
+        []
+        client_suffix)
 
 val lemma_same_endpoint_replay_split_prefixes_equal_empty
   (model:CS.connection_model)
@@ -587,6 +633,64 @@ val lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_client_local
           client_full_received
           server_final
           client_final)
+
+val lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
+  (server_model:CS.connection_model)
+  (client_model:CS.connection_model)
+  (server_ev:CS.local_event)
+  (server_tail:list CS.conn_event)
+  (server_suffix:list CS.conn_event)
+  (client_prefix:list CS.conn_event)
+  (client_suffix:list CS.conn_event)
+  (server_post:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model server_model (CS.ConnLocalEvent server_ev) ==
+          Some server_post /\
+        paired_replay_split_prefixes_equal_uniform
+          server_post
+          client_model
+          server_tail
+          server_suffix
+          client_prefix
+          client_suffix)
+      (ensures
+        paired_replay_split_prefixes_equal_uniform
+          server_model
+          client_model
+          (CS.ConnLocalEvent server_ev :: server_tail)
+          server_suffix
+          client_prefix
+          client_suffix)
+
+val lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
+  (server_model:CS.connection_model)
+  (client_model:CS.connection_model)
+  (client_ev:CS.local_event)
+  (server_prefix:list CS.conn_event)
+  (server_suffix:list CS.conn_event)
+  (client_tail:list CS.conn_event)
+  (client_suffix:list CS.conn_event)
+  (client_post:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model client_model (CS.ConnLocalEvent client_ev) ==
+          Some client_post /\
+        paired_replay_split_prefixes_equal_uniform
+          server_model
+          client_post
+          server_prefix
+          server_suffix
+          client_tail
+          client_suffix)
+      (ensures
+        paired_replay_split_prefixes_equal_uniform
+          server_model
+          client_model
+          server_prefix
+          server_suffix
+          (CS.ConnLocalEvent client_ev :: client_tail)
+          client_suffix)
 
 val lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_model:CS.connection_model)
