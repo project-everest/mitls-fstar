@@ -885,6 +885,14 @@ CertificateVerify verification local step and the server Finished record:
   explicit premise from the eventual byte-trace theorem: the client Finished raw
   equality can be inherited from the original paired byte streams once the full
   log segmentation exposes these tails.
+- `lemma_server_encrypted_flight_preserves_client_write_server_read_alignment`
+  proves the matching record-state continuity fact.  If the client handshake
+  write direction and server handshake read direction are aligned before the
+  server encrypted flight, then the server's handshake-write install/sent
+  records and the client's handshake-read install/received records do not disturb
+  that opposite direction; the lemma returns
+  `write_read_record_material_aligned client_after3 server_after3`, exactly the
+  alignment needed at the start of the client Finished extractor.
 
 The client-Finished side now has its own verified staged extractor:
 
@@ -938,10 +946,12 @@ five-message witness packaging anymore; it is deriving those staged premises fro
 the full endpoint event logs and paired byte streams.  The new
 `lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails`
 narrows that gap by deriving the client-Finished raw-stream equality across the
-server-flight segment, but the proof still needs a higher-level segmentation
-lemma that connects the returned tails to the concrete client-Finished replay
-prefix and seeds the client-handshake-write/server-handshake-read alignment at
-that point.
+server-flight segment.  Its companion
+`lemma_server_encrypted_flight_preserves_client_write_server_read_alignment`
+threads the opposite client-write/server-read record alignment to the same
+post-server-Finished models.  The proof still needs a higher-level segmentation
+lemma that connects these returned tails/models to the concrete client-Finished
+replay prefix.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.

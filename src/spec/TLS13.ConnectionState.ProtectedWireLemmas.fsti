@@ -3931,6 +3931,116 @@ val lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails
             client_tail_received
             client_final)
 
+val lemma_server_encrypted_flight_preserves_client_write_server_read_alignment
+  (server:CS.connection_model)
+  (client:CS.connection_model)
+  (server_after_install:CS.connection_model)
+  (client_after_install:CS.connection_model)
+  (server_after0:CS.connection_model)
+  (client_after0:CS.connection_model)
+  (server_after1:CS.connection_model)
+  (client_after1:CS.connection_model)
+  (server_after_auth_skip:CS.connection_model)
+  (client_after_auth_skip:CS.connection_model)
+  (server_after2:CS.connection_model)
+  (client_after2:CS.connection_model)
+  (client_after_verify_skip:CS.connection_model)
+  (server_after3:CS.connection_model)
+  (client_after3:CS.connection_model)
+  (server_auth_skip:CS.local_event)
+  (client_auth_skip:CS.local_event)
+  (client_verify_skip:CS.local_event)
+  (server_material:CS.traffic_key_material)
+  (client_material:CS.traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  : Lemma
+      (requires
+        write_read_record_material_aligned client server /\
+        local_event_does_not_install_record_keys server_auth_skip /\
+        local_event_does_not_install_record_keys client_auth_skip /\
+        local_event_does_not_install_record_keys client_verify_skip /\
+        CS.step_model
+          server
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = server_material;
+              };
+            })) == Some server_after_install /\
+        CS.step_model
+          client
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = client_material;
+            })) == Some client_after_install /\
+        CS.step_model
+          server_after_install
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg0;
+          }) == Some server_after0 /\
+        CS.step_model
+          client_after_install
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg0;
+          }) == Some client_after0 /\
+        CS.step_model
+          server_after0
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg1;
+          }) == Some server_after1 /\
+        CS.step_model
+          client_after0
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg1;
+          }) == Some client_after1 /\
+        CS.step_model server_after1 (CS.ConnLocalEvent server_auth_skip) ==
+          Some server_after_auth_skip /\
+        CS.step_model client_after1 (CS.ConnLocalEvent client_auth_skip) ==
+          Some client_after_auth_skip /\
+        CS.step_model
+          server_after_auth_skip
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg2;
+          }) == Some server_after2 /\
+        CS.step_model
+          client_after_auth_skip
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg2;
+          }) == Some client_after2 /\
+        CS.step_model client_after2 (CS.ConnLocalEvent client_verify_skip) ==
+          Some client_after_verify_skip /\
+        CS.step_model
+          server_after2
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg3;
+          }) == Some server_after3 /\
+        CS.step_model
+          client_after_verify_skip
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg3;
+          }) == Some client_after3)
+      (ensures write_read_record_material_aligned client_after3 server_after3)
+
 val lemma_protected_handshake_event_projection_pair_after_client_write_server_read_install_heads_with_tails
   (client:CS.connection_model)
   (server:CS.connection_model)

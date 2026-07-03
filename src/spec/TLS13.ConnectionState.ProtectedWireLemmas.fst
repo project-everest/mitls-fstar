@@ -8911,6 +8911,187 @@ let lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails
                   client_tail_received
                 and () ) ) ) ) ) ) )
 
+let lemma_server_encrypted_flight_preserves_client_write_server_read_alignment
+  (server:connection_model)
+  (client:connection_model)
+  (server_after_install:connection_model)
+  (client_after_install:connection_model)
+  (server_after0:connection_model)
+  (client_after0:connection_model)
+  (server_after1:connection_model)
+  (client_after1:connection_model)
+  (server_after_auth_skip:connection_model)
+  (client_after_auth_skip:connection_model)
+  (server_after2:connection_model)
+  (client_after2:connection_model)
+  (client_after_verify_skip:connection_model)
+  (server_after3:connection_model)
+  (client_after3:connection_model)
+  (server_auth_skip:local_event)
+  (client_auth_skip:local_event)
+  (client_verify_skip:local_event)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  : Lemma
+      (requires
+        write_read_record_material_aligned client server /\
+        local_event_does_not_install_record_keys server_auth_skip /\
+        local_event_does_not_install_record_keys client_auth_skip /\
+        local_event_does_not_install_record_keys client_verify_skip /\
+        step_model
+          server
+          (ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficWrite;
+                install_material = server_material;
+              };
+            })) == Some server_after_install /\
+        step_model
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficRead;
+              install_material = client_material;
+            })) == Some client_after_install /\
+        step_model
+          server_after_install
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg0;
+          }) == Some server_after0 /\
+        step_model
+          client_after_install
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg0;
+          }) == Some client_after0 /\
+        step_model
+          server_after0
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg1;
+          }) == Some server_after1 /\
+        step_model
+          client_after0
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg1;
+          }) == Some client_after1 /\
+        step_model server_after1 (ConnLocalEvent server_auth_skip) ==
+          Some server_after_auth_skip /\
+        step_model client_after1 (ConnLocalEvent client_auth_skip) ==
+          Some client_after_auth_skip /\
+        step_model
+          server_after_auth_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg2;
+          }) == Some server_after2 /\
+        step_model
+          client_after_auth_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg2;
+          }) == Some client_after2 /\
+        step_model client_after2 (ConnLocalEvent client_verify_skip) ==
+          Some client_after_verify_skip /\
+        step_model
+          server_after2
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg3;
+          }) == Some server_after3 /\
+        step_model
+          client_after_verify_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg3;
+          }) == Some client_after3)
+      (ensures write_read_record_material_aligned client_after3 server_after3)
+=
+  let server_install =
+    LocalInstallTrafficKeysForRole {
+      install_role = ServerEndpoint;
+      install_payload = {
+        install_epoch = TrafficHandshake;
+        install_direction = TrafficWrite;
+        install_material = server_material;
+      };
+    } in
+  let client_install =
+    LocalInstallTrafficKeys {
+      install_epoch = TrafficHandshake;
+      install_direction = TrafficRead;
+      install_material = client_material;
+    } in
+  assert (local_event_preserves_record_read server_install);
+  lemma_step_receiver_local_event_preserves_write_read_record_material_alignment
+    client
+    server
+    server_install
+    server_after_install;
+  assert (local_event_preserves_record_write client_install);
+  lemma_step_sender_local_event_preserves_write_read_record_material_alignment
+    client
+    client_install
+    client_after_install
+    server_after_install;
+  lemma_step_opposite_network_events_preserve_write_read_record_material_alignment
+    client_after_install
+    (M.TlsHandshake received_msg0)
+    client_after0
+    server_after_install
+    (M.TlsHandshake sent_msg0)
+    server_after0;
+  lemma_step_opposite_network_events_preserve_write_read_record_material_alignment
+    client_after0
+    (M.TlsHandshake received_msg1)
+    client_after1
+    server_after0
+    (M.TlsHandshake sent_msg1)
+    server_after1;
+  lemma_step_receiver_non_install_local_event_preserves_write_read_record_material_alignment
+    client_after1
+    server_after1
+    server_auth_skip
+    server_after_auth_skip;
+  lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
+    client_after1
+    client_auth_skip
+    client_after_auth_skip
+    server_after_auth_skip;
+  lemma_step_opposite_network_events_preserve_write_read_record_material_alignment
+    client_after_auth_skip
+    (M.TlsHandshake received_msg2)
+    client_after2
+    server_after_auth_skip
+    (M.TlsHandshake sent_msg2)
+    server_after2;
+  lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
+    client_after2
+    client_verify_skip
+    client_after_verify_skip
+    server_after2;
+  lemma_step_opposite_network_events_preserve_write_read_record_material_alignment
+    client_after_verify_skip
+    (M.TlsHandshake received_msg3)
+    client_after3
+    server_after2
+    (M.TlsHandshake sent_msg3)
+    server_after3
+
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_after_client_write_server_read_install_heads_with_tails
   (client:connection_model)
