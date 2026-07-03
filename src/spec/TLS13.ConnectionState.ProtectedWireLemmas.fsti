@@ -44,6 +44,36 @@ let local_event_does_not_install_record_keys
   | _ ->
     True
 
+noextract
+let local_event_preserves_record_write
+  (ev:CS.local_event)
+  : prop =
+  match ev with
+  | CS.LocalInstallTrafficKeys install ->
+    install.CS.install_direction == CS.TrafficRead \/
+    (install.CS.install_epoch == CS.TrafficApplication /\
+     install.CS.install_direction == CS.TrafficWrite)
+  | CS.LocalInstallTrafficKeysForRole role_install ->
+    let install = role_install.CS.install_payload in
+    install.CS.install_direction == CS.TrafficRead \/
+    (role_install.CS.install_role <> CS.ServerEndpoint /\
+     install.CS.install_epoch == CS.TrafficApplication /\
+     install.CS.install_direction == CS.TrafficWrite)
+  | _ ->
+    True
+
+noextract
+let local_event_preserves_record_read
+  (ev:CS.local_event)
+  : prop =
+  match ev with
+  | CS.LocalInstallTrafficKeys install ->
+    install.CS.install_direction == CS.TrafficWrite
+  | CS.LocalInstallTrafficKeysForRole role_install ->
+    role_install.CS.install_payload.CS.install_direction == CS.TrafficWrite
+  | _ ->
+    True
+
 val lemma_client_traffic_peer_record_material_agrees_and_seq_write_read_aligned
   (epoch:CS.traffic_epoch)
   (client:CS.connection_state)
@@ -541,6 +571,34 @@ val lemma_step_non_install_local_event_preserves_record_layer
           (CS.ConnLocalEvent ev) == Some model_after)
       (ensures model_after.CS.model_record == model.CS.model_record)
 
+val lemma_step_local_event_preserves_record_write
+  (model:CS.connection_model)
+  (ev:CS.local_event)
+  (model_after:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_preserves_record_write ev /\
+        CS.step_model
+          model
+          (CS.ConnLocalEvent ev) == Some model_after)
+      (ensures
+        model_after.CS.model_record.CS.record_write ==
+          model.CS.model_record.CS.record_write)
+
+val lemma_step_local_event_preserves_record_read
+  (model:CS.connection_model)
+  (ev:CS.local_event)
+  (model_after:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_preserves_record_read ev /\
+        CS.step_model
+          model
+          (CS.ConnLocalEvent ev) == Some model_after)
+      (ensures
+        model_after.CS.model_record.CS.record_read ==
+          model.CS.model_record.CS.record_read)
+
 val lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
   (sender:CS.connection_model)
   (ev:CS.local_event)
@@ -555,6 +613,20 @@ val lemma_step_sender_non_install_local_event_preserves_write_read_record_materi
         write_read_record_material_aligned sender receiver)
       (ensures write_read_record_material_aligned sender_after receiver)
 
+val lemma_step_sender_local_event_preserves_write_read_record_material_alignment
+  (sender:CS.connection_model)
+  (ev:CS.local_event)
+  (sender_after:CS.connection_model)
+  (receiver:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_preserves_record_write ev /\
+        CS.step_model
+          sender
+          (CS.ConnLocalEvent ev) == Some sender_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender_after receiver)
+
 val lemma_step_receiver_non_install_local_event_preserves_write_read_record_material_alignment
   (sender:CS.connection_model)
   (receiver:CS.connection_model)
@@ -563,6 +635,20 @@ val lemma_step_receiver_non_install_local_event_preserves_write_read_record_mate
   : Lemma
       (requires
         local_event_does_not_install_record_keys ev /\
+        CS.step_model
+          receiver
+          (CS.ConnLocalEvent ev) == Some receiver_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender receiver_after)
+
+val lemma_step_receiver_local_event_preserves_write_read_record_material_alignment
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (ev:CS.local_event)
+  (receiver_after:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_preserves_record_read ev /\
         CS.step_model
           receiver
           (CS.ConnLocalEvent ev) == Some receiver_after /\
@@ -3363,6 +3449,141 @@ val lemma_protected_handshake_event_projection_pair_after_client_write_server_re
             client_final /\
           CS.conn_events_received_decode_replay
             server_after_head
+            server_rest
+            server_tail_sent
+            server_tail_received
+            server_final)
+
+val lemma_protected_handshake_event_projection_pair_after_client_finished_local_skips_with_tails
+  (client:CS.connection_model)
+  (server:CS.connection_model)
+  (client_after_verify:CS.connection_model)
+  (client_after_app_write:CS.connection_model)
+  (client_after_app_read:CS.connection_model)
+  (server_after_app_write:CS.connection_model)
+  (client_after_finished:CS.connection_model)
+  (server_after_finished:CS.connection_model)
+  (verified_server_finished:M.finished)
+  (client_app_write_material:CS.traffic_key_material)
+  (client_app_read_material:CS.traffic_key_material)
+  (server_app_write_material:CS.traffic_key_material)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (client_rest:list CS.conn_event)
+  (server_rest:list CS.conn_event)
+  (client_raw_sent:B.bytes)
+  (client_raw_received:B.bytes)
+  (server_raw_sent:B.bytes)
+  (server_raw_received:B.bytes)
+  (client_final:CS.connection_model)
+  (server_final:CS.connection_model)
+  : Lemma
+      (requires
+        write_read_record_material_aligned client server /\
+        Seq.equal client_raw_sent server_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        CS.step_model
+          client
+          (CS.ConnLocalEvent (CS.LocalVerifyFinished verified_server_finished)) ==
+          Some client_after_verify /\
+        CS.step_model
+          client_after_verify
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficWrite;
+              CS.install_material = client_app_write_material;
+            })) == Some client_after_app_write /\
+        CS.step_model
+          client_after_app_write
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = client_app_read_material;
+            })) == Some client_after_app_read /\
+        CS.step_model
+          server
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = server_app_write_material;
+              };
+            })) == Some server_after_app_write /\
+        CS.step_model
+          client_after_app_read
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          }) == Some client_after_finished /\
+        CS.step_model
+          server_after_app_write
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          }) == Some server_after_finished /\
+        CS.conn_events_sent_seal_replay
+          client
+          (CS.ConnLocalEvent (CS.LocalVerifyFinished verified_server_finished) ::
+           CS.ConnLocalEvent
+             (CS.LocalInstallTrafficKeys {
+               CS.install_epoch = CS.TrafficApplication;
+               CS.install_direction = CS.TrafficWrite;
+               CS.install_material = client_app_write_material;
+             }) ::
+           CS.ConnLocalEvent
+             (CS.LocalInstallTrafficKeys {
+               CS.install_epoch = CS.TrafficApplication;
+               CS.install_direction = CS.TrafficRead;
+               CS.install_material = client_app_read_material;
+             }) ::
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake sent_msg;
+           } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final /\
+        CS.conn_events_received_decode_replay
+          server
+          (CS.ConnLocalEvent
+             (CS.LocalInstallTrafficKeysForRole {
+               CS.install_role = CS.ServerEndpoint;
+               CS.install_payload = {
+                 CS.install_epoch = CS.TrafficApplication;
+                 CS.install_direction = CS.TrafficWrite;
+                 CS.install_material = server_app_write_material;
+               };
+             }) ::
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake received_msg;
+           } :: server_rest)
+          server_raw_sent
+          server_raw_received
+          server_final)
+      (ensures
+        exists pair client_tail_sent client_tail_received
+          server_tail_sent server_tail_received.
+          pair.pm_sender == client_after_app_read /\
+          pair.pm_receiver == server_after_app_write /\
+          protected_handshake_event_projection_pair
+            pair
+            sent_msg
+            received_msg /\
+          Seq.equal client_tail_sent server_tail_received /\
+          CS.conn_events_sent_seal_replay
+            client_after_finished
+            client_rest
+            client_tail_sent
+            client_tail_received
+            client_final /\
+          CS.conn_events_received_decode_replay
+            server_after_finished
             server_rest
             server_tail_sent
             server_tail_received

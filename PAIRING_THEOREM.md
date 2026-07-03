@@ -864,7 +864,7 @@ post-head replay tails for subsequent encrypted handshake records.  The newer
 the protected record following a one-sided or two-sided skip, which is the form
 needed for an inductive replay proof.
 
-There is now a verified staged skeleton for most of the server encrypted flight.
+There is now a verified staged skeleton for the server encrypted flight.
 The generic helpers chain two consecutive protected heads, then paired
 non-install local heads, then a third protected head.  The server-specialized
 wrappers seed this chain from the server-handshake-write/client-handshake-read
@@ -876,11 +876,21 @@ CertificateVerify verification local step and the server Finished record:
   (EncryptedExtensions, Certificate, CertificateVerify, server Finished), final
   replay tails, and post-Finished write/read alignment.
 
+The client-Finished side now has its own verified staged extractor:
+
+- `lemma_protected_handshake_event_projection_pair_after_client_finished_local_skips_with_tails`
+  accounts for the actual driver ordering after server Finished: the client
+  verifies server Finished, installs client application write keys, installs
+  server application read keys, and then sends client Finished; the server
+  installs server application write keys before receiving that client Finished.
+  The helper skips those zero-byte local events, preserves the existing
+  client-handshake-write/server-handshake-read alignment through the local
+  application installs that do not affect those record directions, and extracts
+  the client Finished protected-message witness with replay tails preserved.
+
 This is still not the full five-record package.  The remaining protected replay
-work is to account for the exact client-Finished-side local/install ordering in
-the actual driver trace and extract the client Finished witness, then package
-the four server-flight witnesses plus the client Finished witness into
-`paired_protected_handshake_event_projection_pairs`.
+work is to combine the four server-flight witnesses plus the client Finished
+witness into `paired_protected_handshake_event_projection_pairs`.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
