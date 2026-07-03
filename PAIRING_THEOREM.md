@@ -775,7 +775,20 @@ equal-stream-head constructor to extract one `protected_message_replay` witness
 when the matching sender and receiver protected events are both at the head of
 their remaining event logs and their remaining raw streams are equal.
 
-The remaining proof obligation is to use that head-replay extractor
+The helper module now also proves the continuation fact needed to iterate this
+extractor.  `lemma_append_tails_equal_same_len` and
+`lemma_protected_handshake_event_tails_equal_from_equal_stream_heads` show that,
+after equal protected-record heads have been consumed from equal raw streams, the
+remaining sender-sent and receiver-received byte tails are still equal.
+`lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails`
+packages this with the head extractor: it returns the protected-message witness,
+the sender/receiver post-step models, the continuation replay predicates, and the
+equal remaining byte streams.  Its `...with_next_alignment_and_tails` variant
+also carries write/read record-material alignment across ordinary protected
+handshake heads whose steps are exactly `R.next_seq` on the relevant write/read
+directions.
+
+The remaining proof obligation is to use these head-replay extractors
 inductively at the five protected handshake event positions: after consuming the
 cleartext prefix and any local/zero-byte events, bring each matching protected
 send/receive event pair to the head of the sender/receiver replay predicates and
@@ -798,7 +811,10 @@ that synchronization and record-state alignment are separate obligations.  The
 module also includes the symmetric two-sided wrapper
 `lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads`,
 which advances one empty/local head on each endpoint before applying the
-head-replay extractor.  For the narrower but common case of skipping only
+head-replay extractor.  Each of these generic skip wrappers now has a
+`...with_tails` variant, so a proof can skip a local/opposite-direction head,
+extract the next protected pair, and continue from the returned replay tails
+without re-proving byte-tail equality.  For the narrower but common case of skipping only
 opposite-direction network events, the module now exposes preservation lemmas
 showing that a sender-side received network event preserves the sender write
 record state, a receiver-side sent network event preserves the receiver read
@@ -809,7 +825,9 @@ preserved through one or both such skips.  The network-specific wrappers
 and `lemma_protected_handshake_event_projection_pair_after_opposite_network_heads`
 combine these preservation facts with stream skipping and head extraction, so
 their callers only need the initial write/read alignment rather than an explicit
-post-skip alignment witness.  Local traffic-key installation remains outside
+post-skip alignment witness.  These network-specific wrappers also now have
+`...with_tails` forms for one-sided and two-sided network skips.  Local
+traffic-key installation remains outside
 those preservation lemmas because it can legitimately change record material;
 for the initial handshake keys, the module now has concrete install-alignment
 lemmas for server-write/client-read and client-write/server-read installs when
@@ -837,7 +855,8 @@ traffic-key installation remains the only local skip class that must be handled
 via key-schedule-specific install lemmas.  There are now local-specific
 projection wrappers for a single non-install local head on either endpoint; they
 compose the zero-byte skip, local record-alignment preservation, and protected
-head extraction in one step.
+head extraction in one step, and their `...with_tails` variants return the
+post-head replay tails for subsequent encrypted handshake records.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
