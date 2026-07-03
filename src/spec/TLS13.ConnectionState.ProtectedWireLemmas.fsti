@@ -2230,3 +2230,79 @@ val lemma_protected_handshake_event_projection_pair_after_receiver_non_install_l
             pair
             sent_msg
             received_msg)
+
+val lemma_protected_handshake_event_projection_pair_after_receiver_non_install_local_head_with_tails
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (skip:CS.local_event)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (sender_rest:list CS.conn_event)
+  (receiver_rest:list CS.conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:CS.connection_model)
+  (receiver_final:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_does_not_install_record_keys skip /\
+        write_read_record_material_aligned sender receiver /\
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        CS.conn_events_sent_seal_replay
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          } :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        CS.conn_events_received_decode_replay
+          receiver
+          (CS.ConnLocalEvent skip :: CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          } :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
+      (ensures
+        exists receiver_after sender_after_head receiver_after_head pair
+          sender_tail_sent sender_tail_received
+          receiver_tail_sent receiver_tail_received.
+          CS.step_model receiver (CS.ConnLocalEvent skip) == Some receiver_after /\
+          CS.step_model
+            sender
+            (CS.ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg;
+            }) == Some sender_after_head /\
+          CS.step_model
+            receiver_after
+            (CS.ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg;
+            }) == Some receiver_after_head /\
+          pair.pm_sender == sender /\
+          pair.pm_receiver == receiver_after /\
+          protected_handshake_event_projection_pair
+            pair
+            sent_msg
+            received_msg /\
+          Seq.equal sender_tail_sent receiver_tail_received /\
+          CS.conn_events_sent_seal_replay
+            sender_after_head
+            sender_rest
+            sender_tail_sent
+            sender_tail_received
+            sender_final /\
+          CS.conn_events_received_decode_replay
+            receiver_after_head
+            receiver_rest
+            receiver_tail_sent
+            receiver_tail_received
+            receiver_final)
