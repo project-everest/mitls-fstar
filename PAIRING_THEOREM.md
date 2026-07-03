@@ -834,7 +834,10 @@ record.  The helper module further distinguishes local events that do not
 install record keys: sign/validate/verify and other non-install local steps
 preserve the record layer, and therefore preserve write/read alignment.  Local
 traffic-key installation remains the only local skip class that must be handled
-via key-schedule-specific install lemmas.
+via key-schedule-specific install lemmas.  There are now local-specific
+projection wrappers for a single non-install local head on either endpoint; they
+compose the zero-byte skip, local record-alignment preservation, and protected
+head extraction in one step.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
