@@ -948,13 +948,10 @@ The five-record packaging boundary is also explicit:
   existential package of the four server-flight pairs plus an existential client
   Finished pair, yielding the single five-witness existential package.
 
-The remaining protected replay work is to compose the concrete staged replay
-extractors into one theorem that supplies this intro lemma from the actual
-client/server replay segments.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
-That concrete composition is now available as
+The concrete staged composition is available as
 `lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_replays`.
 It calls the verified server encrypted-flight extractor and the verified
 client-Finished extractor, then packages the resulting five protected witnesses
@@ -962,12 +959,14 @@ existentially.  Its premises are still deliberately explicit: the caller must
 provide the staged replay shapes, the message-to-final-state correspondence, the
 server-flight key-schedule/install alignment premises, and the separate
 client-write/server-read alignment plus raw-stream equality needed for client
-Finished.  Thus the remaining gap to a true byte-trace theorem is not the
-five-message witness packaging anymore; it is deriving those staged premises from
-the full endpoint event logs and paired byte streams.  The new
+Finished.  The stronger
+`lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_staged_replays`
+removes the separate client-Finished raw/alignment premises when the server
+encrypted flight and client Finished are presented as one contiguous replay
+segment.  The
 `lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails`
-narrows that gap by deriving the client-Finished raw-stream equality across the
-server-flight segment; the replay-tail variant
+derives the client-Finished raw-stream equality across the server-flight segment;
+the replay-tail variant
 `lemma_server_encrypted_flight_preserves_client_to_server_replay_tails_with_tails`
 returns that equality with the exact `sent_seal`/`received_decode` tails consumed
 by the client Finished extractor, and
@@ -975,9 +974,28 @@ by the client Finished extractor, and
 packages those tails with the corresponding alignment fact.  Its companion
 `lemma_server_encrypted_flight_preserves_client_write_server_read_alignment`
 threads the opposite client-write/server-read record alignment to the same
-post-server-Finished models.  The proof still needs a higher-level segmentation
-lemma that derives this contiguous staged replay shape from whole endpoint logs
-and paired byte streams.
+post-server-Finished models.
+
+The remaining gap to a true byte-trace theorem is now whole-log segmentation:
+derive the contiguous staged segment from complete endpoint logs and paired byte
+streams.  The first generic split lemmas for that are now present:
+`lemma_conn_events_sent_seal_replay_append_split` and
+`lemma_conn_events_received_decode_replay_append_split` split replay predicates
+over `prefix ++ suffix` into prefix and suffix replays with corresponding byte
+decompositions.  `lemma_sent_received_replay_append_split_equal_tails` composes a
+sent-seal split with the peer received-decode split, exposing a conditional
+suffix-byte equality from full-stream equality; the condition is precisely that
+the paired prefixes consume the same number of bytes.  The wrapper
+`lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes`
+turns that into unconditional suffix equality when supplied with a proof of the
+prefix-length alignment.  This makes the next proof obligation explicit and
+narrow: prove, for the concrete pre-protected cleartext/local prefix shape, that
+the server-to-client prefix and client-received prefix consume equal bytes, and
+dually for the client-to-server prefix/server-received prefix.  A second
+skeptical point remains: when splitting both replay views for the same endpoint,
+the proof must also ensure that the split model and raw suffix selected for the
+endpoint's sent-seal replay is the same segment as the one selected for its
+received-decode replay, or else provide a common raw-replay segmentation lemma.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
