@@ -988,14 +988,16 @@ suffix-byte equality from full-stream equality; the condition is precisely that
 the paired prefixes consume the same number of bytes.  The wrapper
 `lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes`
 turns that into unconditional suffix equality when supplied with a proof of the
-prefix-length alignment.  This makes the next proof obligation explicit and
-narrow: prove, for the concrete pre-protected cleartext/local prefix shape, that
-the server-to-client prefix and client-received prefix consume equal bytes, and
-dually for the client-to-server prefix/server-received prefix.  A second
-skeptical point remains: when splitting both replay views for the same endpoint,
-the proof must also ensure that the split model and raw suffix selected for the
-endpoint's sent-seal replay is the same segment as the one selected for its
-received-decode replay, or else provide a common raw-replay segmentation lemma.
+prefix-length alignment.  `lemma_conn_events_raw_replay_append_split` now also
+provides a common segmentation point for the endpoint's raw log itself.  This
+makes the next proof obligations explicit and narrow: prove, for the concrete
+pre-protected cleartext/local prefix shape, that the server-to-client prefix and
+client-received prefix consume equal bytes, and dually for the
+client-to-server/server-received prefix; then relate the endpoint's sent-seal and
+received-decode split witnesses to the same raw-log segment.  The latter remains
+a skeptical point because `event_raw_delta_legal` is intentionally relational
+for protected records: a raw replay alone does not determine the sealed bytes
+without using the seal/decode replay projections.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
