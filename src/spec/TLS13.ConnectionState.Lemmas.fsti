@@ -382,6 +382,34 @@ val lemma_model_record_keys_consistent_record_write_key_schedule_projection
       (requires model_record_keys_consistent model)
       (ensures record_write_key_schedule_projection model)
 
+val lemma_step_model_many_append
+  (model0:connection_model)
+  (prefix:list conn_event)
+  (suffix:list conn_event)
+  (mid:connection_model)
+  (final:connection_model)
+  : Lemma
+      (requires
+        step_model_many model0 prefix == Some mid /\
+        step_model_many mid suffix == Some final)
+      (ensures
+        step_model_many model0 (FStar.List.Tot.append prefix suffix) ==
+        Some final)
+
+val lemma_step_model_many_append_split
+  (model0:connection_model)
+  (prefix:list conn_event)
+  (suffix:list conn_event)
+  (final:connection_model)
+  : Lemma
+      (requires
+        step_model_many model0 (FStar.List.Tot.append prefix suffix) ==
+        Some final)
+      (ensures
+        exists mid.
+          step_model_many model0 prefix == Some mid /\
+          step_model_many mid suffix == Some final)
+
 val lemma_step_model_preserves_config
   (model:connection_model)
   (ev:conn_event)

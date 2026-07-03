@@ -4217,6 +4217,71 @@ let rec lemma_step_model_many_snoc
      | Some mid -> lemma_step_model_many_snoc mid rest ev model1 model2
      | None -> assert False)
 
+let rec lemma_step_model_many_append
+  (model0:connection_model)
+  (prefix:list conn_event)
+  (suffix:list conn_event)
+  (mid:connection_model)
+  (final:connection_model)
+  : Lemma
+      (requires
+        step_model_many model0 prefix == Some mid /\
+        step_model_many mid suffix == Some final)
+      (ensures
+        step_model_many model0 (FStar.List.Tot.append prefix suffix) ==
+        Some final)
+      (decreases prefix)
+=
+  match prefix with
+  | [] -> ()
+  | ev :: rest ->
+    (match step_model model0 ev with
+     | Some model1 ->
+       lemma_step_model_many_append model1 rest suffix mid final
+     | None ->
+       assert False)
+
+let rec lemma_step_model_many_append_split
+  (model0:connection_model)
+  (prefix:list conn_event)
+  (suffix:list conn_event)
+  (final:connection_model)
+  : Lemma
+      (requires
+        step_model_many model0 (FStar.List.Tot.append prefix suffix) ==
+        Some final)
+      (ensures
+        exists mid.
+          step_model_many model0 prefix == Some mid /\
+          step_model_many mid suffix == Some final)
+      (decreases prefix)
+=
+  match prefix with
+  | [] ->
+    introduce exists (mid:connection_model).
+      step_model_many model0 [] == Some mid /\
+      step_model_many mid suffix == Some final
+    with model0 and ()
+  | ev :: rest ->
+    (match step_model model0 ev with
+     | Some model1 ->
+       lemma_step_model_many_append_split model1 rest suffix final;
+       eliminate exists (mid:connection_model).
+         step_model_many model1 rest == Some mid /\
+         step_model_many mid suffix == Some final
+       returns
+         exists mid'.
+           step_model_many model0 (ev :: rest) == Some mid' /\
+           step_model_many mid' suffix == Some final
+       with _.
+       ( assert (step_model_many model0 (ev :: rest) == Some mid);
+         introduce exists (mid':connection_model).
+           step_model_many model0 (ev :: rest) == Some mid' /\
+           step_model_many mid' suffix == Some final
+         with mid and () )
+     | None ->
+       assert False)
+
 let lemma_step_model_preserves_config
   (model:connection_model)
   (ev:conn_event)
