@@ -33,6 +33,17 @@ let write_read_record_material_aligned
   | _, _ ->
     False)
 
+noextract
+let local_event_does_not_install_record_keys
+  (ev:CS.local_event)
+  : prop =
+  match ev with
+  | CS.LocalInstallTrafficKeys _
+  | CS.LocalInstallTrafficKeysForRole _ ->
+    False
+  | _ ->
+    True
+
 val lemma_client_traffic_peer_record_material_agrees_and_seq_write_read_aligned
   (epoch:CS.traffic_epoch)
   (client:CS.connection_state)
@@ -505,6 +516,46 @@ val lemma_step_opposite_network_events_preserve_write_read_record_material_align
           }) == Some receiver_after /\
         write_read_record_material_aligned sender receiver)
       (ensures write_read_record_material_aligned sender_after receiver_after)
+
+val lemma_step_non_install_local_event_preserves_record_layer
+  (model:CS.connection_model)
+  (ev:CS.local_event)
+  (model_after:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_does_not_install_record_keys ev /\
+        CS.step_model
+          model
+          (CS.ConnLocalEvent ev) == Some model_after)
+      (ensures model_after.CS.model_record == model.CS.model_record)
+
+val lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
+  (sender:CS.connection_model)
+  (ev:CS.local_event)
+  (sender_after:CS.connection_model)
+  (receiver:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_does_not_install_record_keys ev /\
+        CS.step_model
+          sender
+          (CS.ConnLocalEvent ev) == Some sender_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender_after receiver)
+
+val lemma_step_receiver_non_install_local_event_preserves_write_read_record_material_alignment
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (ev:CS.local_event)
+  (receiver_after:CS.connection_model)
+  : Lemma
+      (requires
+        local_event_does_not_install_record_keys ev /\
+        CS.step_model
+          receiver
+          (CS.ConnLocalEvent ev) == Some receiver_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender receiver_after)
 
 val lemma_next_seq_models_preserve_write_read_record_material_alignment
   (sender:CS.connection_model)

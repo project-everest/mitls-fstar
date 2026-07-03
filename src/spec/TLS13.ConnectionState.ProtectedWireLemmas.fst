@@ -776,6 +776,73 @@ let lemma_step_opposite_network_events_preserve_write_read_record_material_align
     receiver_msg
     receiver_after
 
+let lemma_step_non_install_local_event_preserves_record_layer
+  (model:connection_model)
+  (ev:local_event)
+  (model_after:connection_model)
+  : Lemma
+      (requires
+        local_event_does_not_install_record_keys ev /\
+        step_model
+          model
+          (ConnLocalEvent ev) == Some model_after)
+      (ensures model_after.model_record == model.model_record)
+=
+  match ev with
+  | LocalInstallTrafficKeys _
+  | LocalInstallTrafficKeysForRole _ ->
+    assert False
+  | LocalStartHandshake _
+  | LocalStartServer
+  | LocalSelectServerParameters _
+  | LocalDeriveSharedSecret _
+  | LocalValidateCertificate _
+  | LocalVerifyCertificateSignature _
+  | LocalSignCertificateVerify _
+  | LocalVerifyFinished _
+  | LocalVerifyClientFinished _
+  | LocalDeliverApplicationData _
+  | LocalFail _ ->
+    ()
+
+let lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
+  (sender:connection_model)
+  (ev:local_event)
+  (sender_after:connection_model)
+  (receiver:connection_model)
+  : Lemma
+      (requires
+        local_event_does_not_install_record_keys ev /\
+        step_model
+          sender
+          (ConnLocalEvent ev) == Some sender_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender_after receiver)
+=
+  lemma_step_non_install_local_event_preserves_record_layer
+    sender
+    ev
+    sender_after
+
+let lemma_step_receiver_non_install_local_event_preserves_write_read_record_material_alignment
+  (sender:connection_model)
+  (receiver:connection_model)
+  (ev:local_event)
+  (receiver_after:connection_model)
+  : Lemma
+      (requires
+        local_event_does_not_install_record_keys ev /\
+        step_model
+          receiver
+          (ConnLocalEvent ev) == Some receiver_after /\
+        write_read_record_material_aligned sender receiver)
+      (ensures write_read_record_material_aligned sender receiver_after)
+=
+  lemma_step_non_install_local_event_preserves_record_layer
+    receiver
+    ev
+    receiver_after
+
 let lemma_next_seq_models_preserve_write_read_record_material_alignment
   (sender:connection_model)
   (receiver:connection_model)

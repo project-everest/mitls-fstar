@@ -830,7 +830,11 @@ those steps are `next_seq` advances.  This premise is deliberately explicit:
 client Finished is a protected handshake message whose send step may install
 application write keys after advancing, so not every protected handshake head has
 the simple `next_seq` shape needed to chain to another handshake protected
-record.
+record.  The helper module further distinguishes local events that do not
+install record keys: sign/validate/verify and other non-install local steps
+preserve the record layer, and therefore preserve write/read alignment.  Local
+traffic-key installation remains the only local skip class that must be handled
+via key-schedule-specific install lemmas.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
