@@ -249,6 +249,88 @@ let client_protected_handshake_contiguous_replay_events
       sent_msg4
       rest)
 
+noextract
+let paired_protected_handshake_contiguous_replay_views
+  (server_flight_sender:CS.connection_model)
+  (server_flight_receiver:CS.connection_model)
+  (server_material:CS.traffic_key_material)
+  (client_material:CS.traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (server_auth_skip:CS.local_event)
+  (client_auth_skip:CS.local_event)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (client_verify_skip:CS.local_event)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  (verified_server_finished:M.finished)
+  (client_app_write_material:CS.traffic_key_material)
+  (client_app_read_material:CS.traffic_key_material)
+  (server_app_write_material:CS.traffic_key_material)
+  (sent_msg4:M.handshake_msg)
+  (received_msg4:M.handshake_msg)
+  (client_finished_rest:list CS.conn_event)
+  (server_finished_rest:list CS.conn_event)
+  (server_raw_sent:B.bytes)
+  (server_raw_received:B.bytes)
+  (client_raw_sent:B.bytes)
+  (client_raw_received:B.bytes)
+  (server_final:CS.connection_model)
+  (client_final:CS.connection_model)
+  : prop =
+  let server_events =
+    server_protected_handshake_contiguous_replay_events
+      server_material
+      sent_msg0
+      sent_msg1
+      server_auth_skip
+      sent_msg2
+      sent_msg3
+      server_app_write_material
+      received_msg4
+      server_finished_rest in
+  let client_events =
+    client_protected_handshake_contiguous_replay_events
+      client_material
+      received_msg0
+      received_msg1
+      client_auth_skip
+      received_msg2
+      client_verify_skip
+      received_msg3
+      verified_server_finished
+      client_app_write_material
+      client_app_read_material
+      sent_msg4
+      client_finished_rest in
+  CS.conn_events_sent_seal_replay
+    server_flight_sender
+    server_events
+    server_raw_sent
+    server_raw_received
+    server_final /\
+  CS.conn_events_received_decode_replay
+    server_flight_receiver
+    client_events
+    client_raw_sent
+    client_raw_received
+    client_final /\
+  CS.conn_events_sent_seal_replay
+    server_flight_receiver
+    client_events
+    client_raw_sent
+    client_raw_received
+    client_final /\
+  CS.conn_events_received_decode_replay
+    server_flight_sender
+    server_events
+    server_raw_sent
+    server_raw_received
+    server_final
+
 val lemma_client_traffic_peer_record_material_agrees_and_seq_write_read_aligned
   (epoch:CS.traffic_epoch)
   (client:CS.connection_state)
