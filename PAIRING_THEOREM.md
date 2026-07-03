@@ -1041,13 +1041,22 @@ sent log).  It also has
 and `lemma_paired_replay_split_prefixes_equal_single_server_hello`, covering the
 deterministic ServerHello received side and the paired server-sent/client-received
 ServerHello prefix when both sides already name the same structured
-`M.server_hello`.  The harder ClientHello receive/cross-endpoint case still
-requires parseback/injectivity facts because received ClientHello raw bytes are
-specified by successful parsing, not by syntactic serializer equality.  The
-remaining skeptical point is still byte
-determinacy for protected records: raw replay alone is too weak, so these prefix
-equalities must come from the stronger seal/decode projections and cleartext
-parseback facts, not from `event_raw_delta_legal` alone.
+`M.server_hello`.  The harder ClientHello receive/cross-endpoint case is now
+also covered: `TLS13.Spec.WireFormatLemmas.lemma_received_client_hello_raw_length`
+uses record/message parseback to show that a received ClientHello raw record has
+the same length as the model's serialized ClientHello, and
+`TLS13.ConnectionState.ProtectedWireSegmentation` uses that fact in
+`lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello`
+and `lemma_paired_replay_split_prefixes_equal_single_client_hello`.  The module
+also exposes uniform callback combinators for empty prefixes and one-sided local
+events, plus singleton raw-byte helpers for sent ClientHello, sent ServerHello,
+and received ServerHello replay heads.  The remaining callback work is therefore
+composition over the concrete multi-event pre-protected prefix, not the
+parseback fact for an individual cleartext message.  The remaining skeptical
+point is still byte determinacy for protected records: raw replay alone is too
+weak, so these prefix equalities must come from the stronger seal/decode
+projections and cleartext parseback facts, not from `event_raw_delta_legal`
+alone.
 
 There is also an event-log shape gap, distinct from byte equality.  The existing
 high-level `paired_handshake_message_states` predicate records that the expected
