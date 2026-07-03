@@ -1126,6 +1126,104 @@ val lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_han
             client_shared)
           client_suffix)
 
+val lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_model
+  (server_model0:CS.connection_model)
+  (ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (sh:M.server_hello)
+  (server_model1:CS.connection_model)
+  (server_model2:CS.connection_model)
+  (server_model3:CS.connection_model)
+  (server_model4:CS.connection_model)
+  (server_model5:CS.connection_model)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (mid:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          server_model0
+          (CS.ConnLocalEvent CS.LocalStartServer) == Some server_model1 /\
+        CS.step_model
+          server_model1
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) == Some server_model2 /\
+        CS.step_model
+          server_model2
+          (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)) ==
+          Some server_model3 /\
+        CS.step_model
+          server_model3
+          (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared)) ==
+          Some server_model4 /\
+        CS.step_model
+          server_model4
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some server_model5 /\
+        CS.conn_events_sent_seal_replay
+          server_model0
+          (server_cleartext_handshake_prefix_events
+            ch
+            selection
+            server_shared
+            sh)
+          raw_sent
+          raw_received
+          mid)
+      (ensures mid == server_model5)
+
+val lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_model
+  (client_model0:CS.connection_model)
+  (start:CS.handshake_start)
+  (ch:M.client_hello)
+  (sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (client_model1:CS.connection_model)
+  (client_model2:CS.connection_model)
+  (client_model3:CS.connection_model)
+  (client_model4:CS.connection_model)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (mid:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          client_model0
+          (CS.ConnLocalEvent (CS.LocalStartHandshake start)) ==
+          Some client_model1 /\
+        CS.step_model
+          client_model1
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) == Some client_model2 /\
+        CS.step_model
+          client_model2
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some client_model3 /\
+        CS.step_model
+          client_model3
+          (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared)) ==
+          Some client_model4 /\
+        CS.conn_events_sent_seal_replay
+          client_model0
+          (client_cleartext_handshake_prefix_events
+            start
+            ch
+            sh
+            client_shared)
+          raw_sent
+          raw_received
+          mid)
+      (ensures mid == client_model4)
+
 val lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)

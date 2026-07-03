@@ -1067,7 +1067,16 @@ wrappers for each endpoint's own sent/received replay views.  Finally,
 combines the concrete cleartext prefix with full sent-seal/received-decode replay
 predicates for both endpoints and the paired full byte streams.  Its conclusion
 is the protected contiguous replay view package plus equality of the protected
-suffix byte streams in both directions.
+suffix byte streams in both directions, but it hides the post-cleartext models
+existentially.
+
+That existential midpoint has now been tightened in
+`TLS13.ConnectionState.ProtectedWireConcreteSegmentation`.  Its
+`lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_full_replays_known_start`
+splits the same full replays, uses the named cleartext prefix step chain to prove
+that the server protected suffix starts at `server_model5` and the client suffix
+starts at `client_model4`, and returns the same contiguous protected replay-view
+package at those concrete models.
 
 The Pairing-level packaging step is now factored into
 `TLS13.Impl.Driver.PairingProtectedReplay`.  Its
@@ -1077,18 +1086,29 @@ cleartext-raw Pairing bridge: once the protected suffix is already exposed as
 `paired_protected_handshake_contiguous_replay_views`, the theorem derives the
 protected event-projection witnesses and then proves supported-profile
 client/server key-material agreement and both application record-material
-directions.
+directions.  The newer
+`lemma_client_server_application_record_material_agrees_from_cleartext_prefix_full_replays`
+adds one more layer: from full endpoint replays over
+`cleartext_prefix ++ protected_contiguous_suffix`, with the exact named
+cleartext prefix and paired full byte streams, it invokes the concrete
+segmentation lemma and then the contiguous-view Pairing bridge.
 
-So the byte-segmentation boundary has moved: given a full replay over exactly
-`cleartext_prefix ++ protected_contiguous_suffix`, the proof now derives the
-contiguous protected replay views needed by
-`TLS13.ConnectionState.ProtectedWireStaged.lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_staged_replays`.
-The remaining skeptical point is no longer the cleartext prefix byte alignment;
-it is the stronger question of where the exact prefix/suffix decomposition comes
-from in final endpoint logs.  Raw replay alone is also still too weak for
-protected records: protected equality must come from the stronger seal/decode
-projections and AEAD open-after-seal assumption, not from
+So the byte-segmentation boundary has moved again: given full replays over
+exactly `cleartext_prefix ++ protected_contiguous_suffix`, the proof now reaches
+Pairing-level application record-material agreement.  The remaining skeptical
+point is no longer the cleartext prefix byte alignment or the concrete protected
+suffix start model; it is the stronger question of where the exact prefix/suffix
+decomposition comes from in final endpoint logs.  Raw replay alone is also still
+too weak for protected records: protected equality must come from the stronger
+seal/decode projections and AEAD open-after-seal assumption, not from
 `event_raw_delta_legal` alone.
+
+One important caveat is that this full-replay bridge currently assumes the
+cleartext prefix names the same structured `ClientHello` and `ServerHello` on
+both sides.  This is appropriate for the paired event-trace theorem, but it is
+stronger than the eventual byte-trace theorem should need: raw ClientHello bytes
+can validate the weaker key-share/transcript facts without exact
+`M.client_hello` record equality.
 
 There is also an event-log shape gap, distinct from byte equality.  The existing
 high-level `paired_handshake_message_states` predicate records that the expected
