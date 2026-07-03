@@ -536,6 +536,34 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
           raw_received
           final_model)
 
+val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_sent_cleartext
+  (model:CS.connection_model)
+  (msg:M.tls_message)
+  (tail:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (post_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.network_message_is_cleartext CL.Sent msg == true /\
+        CS.step_model
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          }) == Some post_model /\
+        same_endpoint_replay_split_prefixes_equal_uniform
+          post_model
+          tail
+          suffix)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal_uniform
+          model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          } :: tail)
+          suffix)
+
 val lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
   (model:CS.connection_model)
   (sh:M.server_hello)
