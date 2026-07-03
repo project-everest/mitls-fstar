@@ -1034,6 +1034,75 @@ let lemma_server_handshake_install_materials_agree_from_key_schedule
   | _, _ ->
     assert False
 
+let lemma_server_handshake_write_client_handshake_read_install_aligned_from_key_schedule
+  (server:connection_model)
+  (client:connection_model)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (server_after:connection_model)
+  (client_after:connection_model)
+  : Lemma
+      (requires
+        (match
+          server.model_handshake.hs_keys.ks_handshake_secret,
+          client.model_handshake.hs_keys.ks_handshake_secret
+        with
+        | Some server_secret, Some client_secret ->
+          Seq.equal server_secret client_secret
+        | _, _ ->
+          False) /\
+        Seq.equal
+          server.model_handshake.hs_transcript
+          client.model_handshake.hs_transcript /\
+        traffic_install_matches_key_schedule_for_role
+          ServerEndpoint
+          server.model_handshake
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficWrite;
+            install_material = server_material;
+          } /\
+        traffic_install_matches_key_schedule
+          client.model_handshake
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficRead;
+            install_material = client_material;
+          } /\
+        step_model
+          server
+          (ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficWrite;
+                install_material = server_material;
+              };
+            })) == Some server_after /\
+        step_model
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficRead;
+              install_material = client_material;
+            })) == Some client_after)
+      (ensures write_read_record_material_aligned server_after client_after)
+=
+  lemma_server_handshake_install_materials_agree_from_key_schedule
+    server.model_handshake
+    client.model_handshake
+    server_material
+    client_material;
+  lemma_server_handshake_write_client_handshake_read_install_materials_aligned
+    server
+    client
+    server_material
+    client_material
+    server_after
+    client_after
+
 let lemma_client_handshake_write_server_handshake_read_install_aligned
   (client:connection_model)
   (server:connection_model)
@@ -1179,6 +1248,75 @@ let lemma_client_handshake_install_materials_agree_from_key_schedule
     Seq.lemma_eq_elim client_material.traffic_iv server_material.traffic_iv
   | _, _ ->
     assert False
+
+let lemma_client_handshake_write_server_handshake_read_install_aligned_from_key_schedule
+  (client:connection_model)
+  (server:connection_model)
+  (client_material:traffic_key_material)
+  (server_material:traffic_key_material)
+  (client_after:connection_model)
+  (server_after:connection_model)
+  : Lemma
+      (requires
+        (match
+          client.model_handshake.hs_keys.ks_handshake_secret,
+          server.model_handshake.hs_keys.ks_handshake_secret
+        with
+        | Some client_secret, Some server_secret ->
+          Seq.equal client_secret server_secret
+        | _, _ ->
+          False) /\
+        Seq.equal
+          client.model_handshake.hs_transcript
+          server.model_handshake.hs_transcript /\
+        traffic_install_matches_key_schedule
+          client.model_handshake
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficWrite;
+            install_material = client_material;
+          } /\
+        traffic_install_matches_key_schedule_for_role
+          ServerEndpoint
+          server.model_handshake
+          {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficRead;
+            install_material = server_material;
+          } /\
+        step_model
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficWrite;
+              install_material = client_material;
+            })) == Some client_after /\
+        step_model
+          server
+          (ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficRead;
+                install_material = server_material;
+              };
+            })) == Some server_after)
+      (ensures write_read_record_material_aligned client_after server_after)
+=
+  lemma_client_handshake_install_materials_agree_from_key_schedule
+    client.model_handshake
+    server.model_handshake
+    client_material
+    server_material;
+  lemma_client_handshake_write_server_handshake_read_install_materials_aligned
+    client
+    server
+    client_material
+    server_material
+    client_after
+    server_after
 #pop-options
 
 let lemma_sent_replay_skip_empty_head_preserves_peer_stream
