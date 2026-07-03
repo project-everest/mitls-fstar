@@ -1027,7 +1027,12 @@ cleartext/local prefix shape.  As a base case for this callback style, the modul
 also proves `lemma_same_endpoint_replay_split_prefixes_equal_empty` and
 `lemma_paired_replay_split_prefixes_equal_empty`, showing that the obligations
 collapse automatically when the chosen full log already starts at the protected
-suffix.  The remaining skeptical point is still byte
+suffix.  It further proves the one-local-event variants
+`lemma_same_endpoint_replay_split_prefixes_equal_single_local` and
+`lemma_paired_replay_split_prefixes_equal_single_local`, covering the next
+simplest zero-byte prefix step and providing a template for discharging local
+pre-protected events in the concrete TLS prefix.  The remaining skeptical point
+is still byte
 determinacy for protected records: raw replay alone is too weak, so these prefix
 equalities must come from the stronger seal/decode projections and cleartext
 parseback facts, not from `event_raw_delta_legal` alone.

@@ -160,6 +160,22 @@ val lemma_same_endpoint_replay_split_prefixes_equal_empty
         raw_received
         final_model)
 
+val lemma_same_endpoint_replay_split_prefixes_equal_single_local
+  (model:CS.connection_model)
+  (ev:CS.local_event)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (same_endpoint_replay_split_prefixes_equal
+        model
+        [CS.ConnLocalEvent ev]
+        suffix
+        raw_sent
+        raw_received
+        final_model)
+
 val lemma_paired_replay_split_prefixes_equal_empty
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
@@ -178,6 +194,34 @@ val lemma_paired_replay_split_prefixes_equal_empty
         []
         server_suffix
         []
+        client_suffix
+        server_full_sent
+        server_full_received
+        client_full_sent
+        client_full_received
+        server_final
+        client_final)
+
+val lemma_paired_replay_split_prefixes_equal_single_local
+  (server_model:CS.connection_model)
+  (client_model:CS.connection_model)
+  (server_ev:CS.local_event)
+  (client_ev:CS.local_event)
+  (server_suffix:list CS.conn_event)
+  (client_suffix:list CS.conn_event)
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_final:CS.connection_model)
+  (client_final:CS.connection_model)
+  : Lemma
+      (paired_replay_split_prefixes_equal
+        server_model
+        client_model
+        [CS.ConnLocalEvent server_ev]
+        server_suffix
+        [CS.ConnLocalEvent client_ev]
         client_suffix
         server_full_sent
         server_full_received
