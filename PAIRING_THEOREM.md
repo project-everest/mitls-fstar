@@ -1069,6 +1069,16 @@ predicates for both endpoints and the paired full byte streams.  Its conclusion
 is the protected contiguous replay view package plus equality of the protected
 suffix byte streams in both directions.
 
+The Pairing-level packaging step is now factored into
+`TLS13.Impl.Driver.PairingProtectedReplay`.  Its
+`lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_contiguous_replay_views`
+composes the protected contiguous replay-view theorem with the existing
+cleartext-raw Pairing bridge: once the protected suffix is already exposed as
+`paired_protected_handshake_contiguous_replay_views`, the theorem derives the
+protected event-projection witnesses and then proves supported-profile
+client/server key-material agreement and both application record-material
+directions.
+
 So the byte-segmentation boundary has moved: given a full replay over exactly
 `cleartext_prefix ++ protected_contiguous_suffix`, the proof now derives the
 contiguous protected replay views needed by
