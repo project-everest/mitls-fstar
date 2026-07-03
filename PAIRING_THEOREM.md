@@ -1129,6 +1129,18 @@ or an additional trace-normalization theorem proving that application-ready,
 first-epoch/no-KeyUpdate runs have no interleaved events between the protected
 handshake records beyond the local skips already modeled in the suffix.
 
+There is a stronger skeptical caveat: plain `client_driver_application_ready` and
+`server_driver_application_ready` are probably too weak to imply this exact shape
+on their own.  They say the endpoint is in application-data control state with
+application record keys installed, and their end-to-end invariants include the
+seal/decode replay-consistency predicates consumed by the new state-log wrapper.
+But they do not say the endpoint is at the *first* application-ready boundary or
+that no application data, alerts, or post-handshake traffic has already been
+appended to `cs_event_log`.  A theorem stated for arbitrary application-ready
+states should therefore be prefix-based ("there exists a handshake prefix/suffix
+inside the log") rather than exact-log-based, or it should strengthen the state
+predicate to a handshake-complete boundary state.
+
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
 It has the same cleartext ClientHello/ServerHello and first-epoch/no-KeyUpdate
