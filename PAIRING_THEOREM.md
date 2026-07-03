@@ -1021,18 +1021,22 @@ prefix callbacks are proved.  A second verified specialization,
 fixes the suffixes to the named contiguous protected-handshake shapes.  It
 returns the compact `paired_protected_handshake_contiguous_replay_views`
 predicate plus both protected suffix byte equalities, ready to feed the staged
-protected replay theorem.  The next proof obligations are therefore explicit and
-narrow: instantiate those callbacks for the TLS 1.3 pre-protected
-cleartext/local prefix shape.  As a base case for this callback style, the module
-also proves `lemma_same_endpoint_replay_split_prefixes_equal_empty` and
-`lemma_paired_replay_split_prefixes_equal_empty`, showing that the obligations
-collapse automatically when the chosen full log already starts at the protected
-suffix.  It further proves the one-local-event variants
+protected replay theorem.
+
+That callback instantiation is now verified for the concrete TLS 1.3 cleartext
+prefix.  The named prefix shapes are:
+
+- `server_cleartext_handshake_prefix_events`: server start, received
+  ClientHello, parameter selection, shared-secret derivation, sent ServerHello.
+- `client_cleartext_handshake_prefix_events`: client start, sent ClientHello,
+  received ServerHello, shared-secret derivation.
+
+The module proves the base cases
+`lemma_same_endpoint_replay_split_prefixes_equal_empty` and
+`lemma_paired_replay_split_prefixes_equal_empty`, the one-local-event variants
 `lemma_same_endpoint_replay_split_prefixes_equal_single_local` and
-`lemma_paired_replay_split_prefixes_equal_single_local`, covering the next
-simplest zero-byte prefix step and providing a template for discharging local
-pre-protected events in the concrete TLS prefix.  The same-endpoint prefix side
-also now has
+`lemma_paired_replay_split_prefixes_equal_single_local`, and the network-message
+building blocks.  The same-endpoint prefix side has
 `lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext`, which
 discharges one deterministic sent cleartext network event (the pattern needed
 for client-sent ClientHello and server-sent ServerHello on the endpoint's own
@@ -1050,13 +1054,26 @@ the same length as the model's serialized ClientHello, and
 and `lemma_paired_replay_split_prefixes_equal_single_client_hello`.  The module
 also exposes uniform callback combinators for empty prefixes and one-sided local
 events, plus singleton raw-byte helpers for sent ClientHello, sent ServerHello,
-and received ServerHello replay heads.  The remaining callback work is therefore
-composition over the concrete multi-event pre-protected prefix, not the
-parseback fact for an individual cleartext message.  The remaining skeptical
-point is still byte determinacy for protected records: raw replay alone is too
-weak, so these prefix equalities must come from the stronger seal/decode
-projections and cleartext parseback facts, not from `event_raw_delta_legal`
-alone.
+and received ServerHello replay heads.  These are composed by
+`lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix`
+for the cross-endpoint cleartext prefix and by the same-endpoint cleartext prefix
+wrappers for each endpoint's own sent/received replay views.  Finally,
+`lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_full_replays`
+combines the concrete cleartext prefix with full sent-seal/received-decode replay
+predicates for both endpoints and the paired full byte streams.  Its conclusion
+is the protected contiguous replay view package plus equality of the protected
+suffix byte streams in both directions.
+
+So the byte-segmentation boundary has moved: given a full replay over exactly
+`cleartext_prefix ++ protected_contiguous_suffix`, the proof now derives the
+contiguous protected replay views needed by
+`lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_staged_replays`.
+The remaining skeptical point is no longer the cleartext prefix byte alignment;
+it is the stronger question of where the exact prefix/suffix decomposition comes
+from in final endpoint logs.  Raw replay alone is also still too weak for
+protected records: protected equality must come from the stronger seal/decode
+projections and AEAD open-after-seal assumption, not from
+`event_raw_delta_legal` alone.
 
 There is also an event-log shape gap, distinct from byte equality.  The existing
 high-level `paired_handshake_message_states` predicate records that the expected
