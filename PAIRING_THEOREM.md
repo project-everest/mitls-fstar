@@ -1016,8 +1016,13 @@ obligations
 `paired_replay_split_prefixes_equal`.  This avoids making the large protected-wire
 module's interface conformance depend on the whole bridge while giving downstream
 proofs a public, verified way to use full endpoint replay logs once the concrete
-prefix callbacks are proved.  The next proof obligations are therefore explicit
-and narrow: instantiate those callbacks for the TLS 1.3 pre-protected
+prefix callbacks are proved.  A second verified specialization,
+`lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_with_equal_prefixes`,
+fixes the suffixes to the named contiguous protected-handshake shapes.  It
+returns the compact `paired_protected_handshake_contiguous_replay_views`
+predicate plus both protected suffix byte equalities, ready to feed the staged
+protected replay theorem.  The next proof obligations are therefore explicit and
+narrow: instantiate those callbacks for the TLS 1.3 pre-protected
 cleartext/local prefix shape.  The remaining skeptical point is still byte
 determinacy for protected records: raw replay alone is too weak, so these prefix
 equalities must come from the stronger seal/decode projections and cleartext

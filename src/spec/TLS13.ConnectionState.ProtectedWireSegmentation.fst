@@ -2,6 +2,7 @@ module TLS13.ConnectionState.ProtectedWireSegmentation
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
+module M = TLS13.Messages
 module PWL = TLS13.ConnectionState.ProtectedWireLemmas
 module Seq = FStar.Seq
 
@@ -334,4 +335,342 @@ let lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes
         client_suffix_sent
         client_suffix_received
       and () ) )
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_with_equal_prefixes
+  (server_model:connection_model)
+  (client_model:connection_model)
+  (server_prefix:list conn_event)
+  (client_prefix:list conn_event)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (server_auth_skip:local_event)
+  (client_auth_skip:local_event)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (client_verify_skip:local_event)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  (verified_server_finished:M.finished)
+  (client_app_write_material:traffic_key_material)
+  (client_app_read_material:traffic_key_material)
+  (server_app_write_material:traffic_key_material)
+  (sent_msg4:M.handshake_msg)
+  (received_msg4:M.handshake_msg)
+  (client_finished_rest:list conn_event)
+  (server_finished_rest:list conn_event)
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  : Lemma
+      (requires (
+        let server_suffix =
+          PWL.server_protected_handshake_contiguous_replay_events
+            server_material
+            sent_msg0
+            sent_msg1
+            server_auth_skip
+            sent_msg2
+            sent_msg3
+            server_app_write_material
+            received_msg4
+            server_finished_rest in
+        let client_suffix =
+          PWL.client_protected_handshake_contiguous_replay_events
+            client_material
+            received_msg0
+            received_msg1
+            client_auth_skip
+            received_msg2
+            client_verify_skip
+            received_msg3
+            verified_server_finished
+            client_app_write_material
+            client_app_read_material
+            sent_msg4
+            client_finished_rest in
+        Seq.equal server_full_sent client_full_received /\
+        Seq.equal client_full_sent server_full_received /\
+        same_endpoint_replay_split_prefixes_equal
+          server_model
+          server_prefix
+          server_suffix
+          server_full_sent
+          server_full_received
+          server_final /\
+        same_endpoint_replay_split_prefixes_equal
+          client_model
+          client_prefix
+          client_suffix
+          client_full_sent
+          client_full_received
+          client_final /\
+        paired_replay_split_prefixes_equal
+          server_model
+          client_model
+          server_prefix
+          server_suffix
+          client_prefix
+          client_suffix
+          server_full_sent
+          server_full_received
+          client_full_sent
+          client_full_received
+          server_final
+          client_final /\
+        conn_events_sent_seal_replay
+          server_model
+          (FStar.List.Tot.append server_prefix server_suffix)
+          server_full_sent
+          server_full_received
+          server_final /\
+        conn_events_received_decode_replay
+          server_model
+          (FStar.List.Tot.append server_prefix server_suffix)
+          server_full_sent
+          server_full_received
+          server_final /\
+        conn_events_sent_seal_replay
+          client_model
+          (FStar.List.Tot.append client_prefix client_suffix)
+          client_full_sent
+          client_full_received
+          client_final /\
+        conn_events_received_decode_replay
+          client_model
+          (FStar.List.Tot.append client_prefix client_suffix)
+          client_full_sent
+          client_full_received
+          client_final))
+      (ensures
+        exists server_mid client_mid
+          server_raw_sent server_raw_received
+          client_raw_sent client_raw_received.
+          Seq.equal server_raw_sent client_raw_received /\
+          Seq.equal client_raw_sent server_raw_received /\
+          PWL.paired_protected_handshake_contiguous_replay_views
+            server_mid
+            client_mid
+            server_material
+            client_material
+            sent_msg0
+            received_msg0
+            sent_msg1
+            received_msg1
+            server_auth_skip
+            client_auth_skip
+            sent_msg2
+            received_msg2
+            client_verify_skip
+            sent_msg3
+            received_msg3
+            verified_server_finished
+            client_app_write_material
+            client_app_read_material
+            server_app_write_material
+            sent_msg4
+            received_msg4
+            client_finished_rest
+            server_finished_rest
+            server_raw_sent
+            server_raw_received
+            client_raw_sent
+            client_raw_received
+            server_final
+            client_final)
+=
+  let server_suffix =
+    PWL.server_protected_handshake_contiguous_replay_events
+      server_material
+      sent_msg0
+      sent_msg1
+      server_auth_skip
+      sent_msg2
+      sent_msg3
+      server_app_write_material
+      received_msg4
+      server_finished_rest in
+  let client_suffix =
+    PWL.client_protected_handshake_contiguous_replay_events
+      client_material
+      received_msg0
+      received_msg1
+      client_auth_skip
+      received_msg2
+      client_verify_skip
+      received_msg3
+      verified_server_finished
+      client_app_write_material
+      client_app_read_material
+      sent_msg4
+      client_finished_rest in
+  lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes
+    server_model
+    client_model
+    server_prefix
+    server_suffix
+    client_prefix
+    client_suffix
+    server_full_sent
+    server_full_received
+    client_full_sent
+    client_full_received
+    server_final
+    client_final;
+  eliminate exists
+    (server_mid:connection_model)
+    (client_mid:connection_model)
+    (server_raw_sent:B.bytes)
+    (server_raw_received:B.bytes)
+    (client_raw_sent:B.bytes)
+    (client_raw_received:B.bytes).
+    Seq.equal server_raw_sent client_raw_received /\
+    Seq.equal client_raw_sent server_raw_received /\
+    conn_events_sent_seal_replay
+      server_mid
+      server_suffix
+      server_raw_sent
+      server_raw_received
+      server_final /\
+    conn_events_received_decode_replay
+      server_mid
+      server_suffix
+      server_raw_sent
+      server_raw_received
+      server_final /\
+    conn_events_sent_seal_replay
+      client_mid
+      client_suffix
+      client_raw_sent
+      client_raw_received
+      client_final /\
+    conn_events_received_decode_replay
+      client_mid
+      client_suffix
+      client_raw_sent
+      client_raw_received
+      client_final
+  returns
+    exists server_mid' client_mid'
+      server_raw_sent' server_raw_received'
+      client_raw_sent' client_raw_received'.
+      Seq.equal server_raw_sent' client_raw_received' /\
+      Seq.equal client_raw_sent' server_raw_received' /\
+      PWL.paired_protected_handshake_contiguous_replay_views
+        server_mid'
+        client_mid'
+        server_material
+        client_material
+        sent_msg0
+        received_msg0
+        sent_msg1
+        received_msg1
+        server_auth_skip
+        client_auth_skip
+        sent_msg2
+        received_msg2
+        client_verify_skip
+        sent_msg3
+        received_msg3
+        verified_server_finished
+        client_app_write_material
+        client_app_read_material
+        server_app_write_material
+        sent_msg4
+        received_msg4
+        client_finished_rest
+        server_finished_rest
+        server_raw_sent'
+        server_raw_received'
+        client_raw_sent'
+        client_raw_received'
+        server_final
+        client_final
+  with _.
+  ( assert (
+      PWL.paired_protected_handshake_contiguous_replay_views
+        server_mid
+        client_mid
+        server_material
+        client_material
+        sent_msg0
+        received_msg0
+        sent_msg1
+        received_msg1
+        server_auth_skip
+        client_auth_skip
+        sent_msg2
+        received_msg2
+        client_verify_skip
+        sent_msg3
+        received_msg3
+        verified_server_finished
+        client_app_write_material
+        client_app_read_material
+        server_app_write_material
+        sent_msg4
+        received_msg4
+        client_finished_rest
+        server_finished_rest
+        server_raw_sent
+        server_raw_received
+        client_raw_sent
+        client_raw_received
+        server_final
+        client_final);
+    introduce exists
+      (server_mid':connection_model)
+      (client_mid':connection_model)
+      (server_raw_sent':B.bytes)
+      (server_raw_received':B.bytes)
+      (client_raw_sent':B.bytes)
+      (client_raw_received':B.bytes).
+      Seq.equal server_raw_sent' client_raw_received' /\
+      Seq.equal client_raw_sent' server_raw_received' /\
+      PWL.paired_protected_handshake_contiguous_replay_views
+        server_mid'
+        client_mid'
+        server_material
+        client_material
+        sent_msg0
+        received_msg0
+        sent_msg1
+        received_msg1
+        server_auth_skip
+        client_auth_skip
+        sent_msg2
+        received_msg2
+        client_verify_skip
+        sent_msg3
+        received_msg3
+        verified_server_finished
+        client_app_write_material
+        client_app_read_material
+        server_app_write_material
+        sent_msg4
+        received_msg4
+        client_finished_rest
+        server_finished_rest
+        server_raw_sent'
+        server_raw_received'
+        client_raw_sent'
+        client_raw_received'
+        server_final
+        client_final
+    with
+      server_mid
+      client_mid
+      server_raw_sent
+      server_raw_received
+      client_raw_sent
+      client_raw_received
+    and () )
 #pop-options
