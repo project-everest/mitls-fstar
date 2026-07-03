@@ -282,6 +282,20 @@ val lemma_client_hello_serialize_handshake_from_sent_cleartext_and_received_pars
           (W.serialize_handshake (M.ClientHello sent_ch))
           (W.serialize_handshake (M.ClientHello received_ch)))
 
+val lemma_received_client_hello_raw_length
+  (ch:M.client_hello)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello ch))
+          raw)
+      (ensures
+        B.length raw ==
+          B.length
+            (CS.serialized_cleartext_tls_message
+              (M.TlsHandshake (M.ClientHello ch))))
+
 val lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
   (sent_sh:M.server_hello)
   (received_sh:M.server_hello)

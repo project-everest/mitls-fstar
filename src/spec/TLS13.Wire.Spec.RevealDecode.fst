@@ -158,6 +158,36 @@ let lemma_parse_record_wire_from_prefix input content_type fragment consumed =
   | None ->
     assert False
 
+let lemma_parse_record_wire_serialized_length input content_type fragment consumed =
+  WS.lemma_parse_record_wire_some_consumed_positive
+    input
+    content_type
+    fragment
+    consumed;
+  match WS.parse_record input with
+  | Some (ct, frag, consumed') ->
+    assert (content_type == ct);
+    assert (fragment == frag);
+    assert (consumed == consumed');
+    WS.lemma_parse_record_serializes input;
+    assert (consumed == B.length (WS.serialize_record content_type fragment))
+  | None ->
+    if B.length input < 5 then ()
+    else if Seq.index input 0 <> 0x16uy || WS.read_u16 input 1 <> 0x0301 then ()
+    else
+      let fragment_len = WS.read_u16 input 3 in
+      if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
+      else
+        match WS.take_range input 5 fragment_len with
+        | Some parsed_fragment ->
+          assert (content_type == T.Handshake);
+          assert (fragment == parsed_fragment);
+          assert (consumed == 5 + fragment_len);
+          assert (B.length fragment == fragment_len);
+          WS.lemma_parse_record_serialize_record T.Handshake fragment;
+          assert (consumed == B.length (WS.serialize_record content_type fragment))
+        | None -> ()
+
 let lemma_parse_plaintext_some input =
   let cpos = B.length input - 1 in
   assert (WS.content_type_of_byte (Seq.index input cpos) ==

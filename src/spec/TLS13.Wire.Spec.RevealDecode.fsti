@@ -93,6 +93,17 @@ val lemma_parse_record_wire_from_prefix
     (ensures
       WS.parse_record_wire input == Some (content_type, fragment, consumed))
 
+val lemma_parse_record_wire_serialized_length
+  (input:B.bytes)
+  (content_type:T.content_type)
+  (fragment:M.sealed_record)
+  (consumed:nat)
+  : Lemma
+    (requires
+      WS.parse_record_wire input == Some (content_type, fragment, consumed))
+    (ensures
+      consumed == B.length (WS.serialize_record content_type fragment))
+
 (* Construct [parse_plaintext]'s result for a TLSInnerPlaintext whose last byte
    is a recognised content type (no trailing zero padding): the recovered
    fragment is the prefix, and the content type matches the last byte. *)

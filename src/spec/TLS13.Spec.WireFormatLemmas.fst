@@ -10,6 +10,7 @@ module T = TLS13.Types
 module W = TLS13.Wire.Spec
 module WR = TLS13.Wire.Spec.Reveal
 module WRCP = TLS13.Wire.Spec.Reveal.ClientHello.Parseback
+module WRD = TLS13.Wire.Spec.RevealDecode
 module ID = FStar.IndefiniteDescription
 module RTC = FStar.ReflexiveTransitiveClosure
 
@@ -340,6 +341,52 @@ let lemma_client_hello_serialize_handshake_from_sent_cleartext_and_received_pars
     W.lemma_parse_tls_message_round_trip T.Handshake sent_fragment;
     assert (Seq.equal sent_fragment
       (W.serialize_handshake (M.ClientHello received_ch))) )
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_received_client_hello_raw_length
+  (ch:M.client_hello)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello ch))
+          raw)
+      (ensures
+        B.length raw ==
+          B.length
+            (CS.serialized_cleartext_tls_message
+              (M.TlsHandshake (M.ClientHello ch))))
+=
+  eliminate exists (fragment:B.bytes).
+    W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+    W.parse_tls_message T.Handshake fragment ==
+      Some (M.TlsHandshake (M.ClientHello ch))
+  returns
+    B.length raw ==
+      B.length
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ClientHello ch)))
+  with _.
+  ( W.lemma_parse_tls_message_round_trip T.Handshake fragment;
+    assert (Seq.equal fragment (W.serialize_handshake (M.ClientHello ch)));
+    W.lemma_serialize_tls_message_handshake (M.ClientHello ch);
+    W.lemma_parse_record_wire_fragment_bound raw;
+    assert (B.length fragment <= 16640);
+    WRD.lemma_parse_record_wire_serialized_length
+      raw
+      T.Handshake
+      fragment
+      (B.length raw);
+    W.lemma_parse_record_serialize_record T.Handshake fragment;
+    Seq.lemma_eq_elim fragment (W.serialize_handshake (M.ClientHello ch));
+    assert (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ClientHello ch)) ==
+      W.serialize_record T.Handshake (W.serialize_handshake (M.ClientHello ch)));
+    assert (B.length raw ==
+      B.length
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ClientHello ch)))) )
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"
