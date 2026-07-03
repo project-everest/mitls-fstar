@@ -859,7 +859,28 @@ via key-schedule-specific install lemmas.  There are now local-specific
 projection wrappers for a single non-install local head on either endpoint; they
 compose the zero-byte skip, local record-alignment preservation, and protected
 head extraction in one step, and their `...with_tails` variants return the
-post-head replay tails for subsequent encrypted handshake records.
+post-head replay tails for subsequent encrypted handshake records.  The newer
+`...with_next_alignment_and_tails` wrappers additionally carry alignment through
+the protected record following a one-sided or two-sided skip, which is the form
+needed for an inductive replay proof.
+
+There is now a verified staged skeleton for most of the server encrypted flight.
+The generic helpers chain two consecutive protected heads, then paired
+non-install local heads, then a third protected head.  The server-specialized
+wrappers seed this chain from the server-handshake-write/client-handshake-read
+traffic-key installs and then extend it through the client-side
+CertificateVerify verification local step and the server Finished record:
+
+- `lemma_protected_handshake_event_projection_pairs_after_server_write_client_read_install_server_encrypted_flight_with_tails`
+  returns the four server-to-client protected-message witnesses
+  (EncryptedExtensions, Certificate, CertificateVerify, server Finished), final
+  replay tails, and post-Finished write/read alignment.
+
+This is still not the full five-record package.  The remaining protected replay
+work is to account for the exact client-Finished-side local/install ordering in
+the actual driver trace and extract the client Finished witness, then package
+the four server-flight witnesses plus the client Finished witness into
+`paired_protected_handshake_event_projection_pairs`.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
