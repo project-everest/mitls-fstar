@@ -5130,4 +5130,360 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_w
       client_raw_sent
       client_raw_received
     and () )
+
+let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_full_replays
+  (server_model0:connection_model)
+  (client_model0:connection_model)
+  (start:handshake_start)
+  (ch:M.client_hello)
+  (selection:server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (client_shared:C.x25519_shared_secret)
+  (sh:M.server_hello)
+  (server_model1:connection_model)
+  (server_model2:connection_model)
+  (server_model3:connection_model)
+  (server_model4:connection_model)
+  (server_model5:connection_model)
+  (client_model1:connection_model)
+  (client_model2:connection_model)
+  (client_model3:connection_model)
+  (client_model4:connection_model)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (server_auth_skip:local_event)
+  (client_auth_skip:local_event)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (client_verify_skip:local_event)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  (verified_server_finished:M.finished)
+  (client_app_write_material:traffic_key_material)
+  (client_app_read_material:traffic_key_material)
+  (server_app_write_material:traffic_key_material)
+  (sent_msg4:M.handshake_msg)
+  (received_msg4:M.handshake_msg)
+  (client_finished_rest:list conn_event)
+  (server_finished_rest:list conn_event)
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  : Lemma
+      (requires (
+        let server_suffix =
+          PWL.server_protected_handshake_contiguous_replay_events
+            server_material
+            sent_msg0
+            sent_msg1
+            server_auth_skip
+            sent_msg2
+            sent_msg3
+            server_app_write_material
+            received_msg4
+            server_finished_rest in
+        let client_suffix =
+          PWL.client_protected_handshake_contiguous_replay_events
+            client_material
+            received_msg0
+            received_msg1
+            client_auth_skip
+            received_msg2
+            client_verify_skip
+            received_msg3
+            verified_server_finished
+            client_app_write_material
+            client_app_read_material
+            sent_msg4
+            client_finished_rest in
+        let server_prefix =
+          server_cleartext_handshake_prefix_events
+            ch
+            selection
+            server_shared
+            sh in
+        let client_prefix =
+          client_cleartext_handshake_prefix_events
+            start
+            ch
+            sh
+            client_shared in
+        Seq.equal server_full_sent client_full_received /\
+        Seq.equal client_full_sent server_full_received /\
+        step_model
+          server_model0
+          (ConnLocalEvent LocalStartServer) == Some server_model1 /\
+        step_model
+          server_model1
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) == Some server_model2 /\
+        step_model
+          server_model2
+          (ConnLocalEvent (LocalSelectServerParameters selection)) ==
+          Some server_model3 /\
+        step_model
+          server_model3
+          (ConnLocalEvent (LocalDeriveSharedSecret server_shared)) ==
+          Some server_model4 /\
+        step_model
+          server_model4
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some server_model5 /\
+        step_model
+          client_model0
+          (ConnLocalEvent (LocalStartHandshake start)) ==
+          Some client_model1 /\
+        step_model
+          client_model1
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) == Some client_model2 /\
+        step_model
+          client_model2
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some client_model3 /\
+        step_model
+          client_model3
+          (ConnLocalEvent (LocalDeriveSharedSecret client_shared)) ==
+          Some client_model4 /\
+        conn_events_sent_seal_replay
+          server_model0
+          (FStar.List.Tot.append server_prefix server_suffix)
+          server_full_sent
+          server_full_received
+          server_final /\
+        conn_events_received_decode_replay
+          server_model0
+          (FStar.List.Tot.append server_prefix server_suffix)
+          server_full_sent
+          server_full_received
+          server_final /\
+        conn_events_sent_seal_replay
+          client_model0
+          (FStar.List.Tot.append client_prefix client_suffix)
+          client_full_sent
+          client_full_received
+          client_final /\
+        conn_events_received_decode_replay
+          client_model0
+          (FStar.List.Tot.append client_prefix client_suffix)
+          client_full_sent
+          client_full_received
+          client_final))
+      (ensures
+        exists server_mid client_mid
+          server_raw_sent server_raw_received
+          client_raw_sent client_raw_received.
+          Seq.equal server_raw_sent client_raw_received /\
+          Seq.equal client_raw_sent server_raw_received /\
+          PWL.paired_protected_handshake_contiguous_replay_views
+            server_mid
+            client_mid
+            server_material
+            client_material
+            sent_msg0
+            received_msg0
+            sent_msg1
+            received_msg1
+            server_auth_skip
+            client_auth_skip
+            sent_msg2
+            received_msg2
+            client_verify_skip
+            sent_msg3
+            received_msg3
+            verified_server_finished
+            client_app_write_material
+            client_app_read_material
+            server_app_write_material
+            sent_msg4
+            received_msg4
+            client_finished_rest
+            server_finished_rest
+            server_raw_sent
+            server_raw_received
+            client_raw_sent
+            client_raw_received
+            server_final
+            client_final)
+=
+  let server_suffix =
+    PWL.server_protected_handshake_contiguous_replay_events
+      server_material
+      sent_msg0
+      sent_msg1
+      server_auth_skip
+      sent_msg2
+      sent_msg3
+      server_app_write_material
+      received_msg4
+      server_finished_rest in
+  let client_suffix =
+    PWL.client_protected_handshake_contiguous_replay_events
+      client_material
+      received_msg0
+      received_msg1
+      client_auth_skip
+      received_msg2
+      client_verify_skip
+      received_msg3
+      verified_server_finished
+      client_app_write_material
+      client_app_read_material
+      sent_msg4
+      client_finished_rest in
+  let server_prefix =
+    server_cleartext_handshake_prefix_events
+      ch
+      selection
+      server_shared
+      sh in
+  let client_prefix =
+    client_cleartext_handshake_prefix_events
+      start
+      ch
+      sh
+      client_shared in
+  lemma_same_endpoint_replay_split_prefixes_equal_uniform_server_cleartext_handshake_prefix
+    server_model0
+    ch
+    selection
+    server_shared
+    sh
+    server_suffix
+    server_model1
+    server_model2
+    server_model3
+    server_model4
+    server_model5;
+  lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_handshake_prefix
+    client_model0
+    start
+    ch
+    sh
+    client_shared
+    client_suffix
+    client_model1
+    client_model2
+    client_model3
+    client_model4;
+  lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
+    server_model0
+    client_model0
+    start
+    ch
+    selection
+    server_shared
+    client_shared
+    sh
+    server_suffix
+    client_suffix
+    server_model1
+    server_model2
+    server_model3
+    server_model4
+    server_model5
+    client_model1
+    client_model2
+    client_model3
+    client_model4;
+  assert (same_endpoint_replay_split_prefixes_equal
+    server_model0
+    server_prefix
+    server_suffix
+    server_full_sent
+    server_full_received
+    server_final);
+  assert (same_endpoint_replay_split_prefixes_equal
+    client_model0
+    client_prefix
+    client_suffix
+    client_full_sent
+    client_full_received
+    client_final);
+  assert (paired_replay_split_prefixes_equal_with_full_streams
+    server_model0
+    client_model0
+    server_prefix
+    server_suffix
+    client_prefix
+    client_suffix
+    server_full_sent
+    server_full_received
+    client_full_sent
+    client_full_received
+    server_final
+    client_final);
+  lemma_paired_replay_split_prefixes_equal_from_full_streams
+    server_model0
+    client_model0
+    server_prefix
+    server_suffix
+    client_prefix
+    client_suffix
+    server_full_sent
+    server_full_received
+    client_full_sent
+    client_full_received
+    server_final
+    client_final;
+  assert (paired_replay_split_prefixes_equal
+    server_model0
+    client_model0
+    server_prefix
+    server_suffix
+    client_prefix
+    client_suffix
+    server_full_sent
+    server_full_received
+    client_full_sent
+    client_full_received
+    server_final
+    client_final);
+  lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_with_equal_prefixes
+    server_model0
+    client_model0
+    server_prefix
+    client_prefix
+    server_material
+    client_material
+    sent_msg0
+    received_msg0
+    sent_msg1
+    received_msg1
+    server_auth_skip
+    client_auth_skip
+    sent_msg2
+    received_msg2
+    client_verify_skip
+    sent_msg3
+    received_msg3
+    verified_server_finished
+    client_app_write_material
+    client_app_read_material
+    server_app_write_material
+    sent_msg4
+    received_msg4
+    client_finished_rest
+    server_finished_rest
+    server_full_sent
+    server_full_received
+    client_full_sent
+    client_full_received
+    server_final
+    client_final
 #pop-options
