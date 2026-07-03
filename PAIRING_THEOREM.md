@@ -899,6 +899,13 @@ CertificateVerify verification local step and the server Finished record:
   replay of the server-flight prefix, it returns existential raw tails that
   simultaneously satisfy the client Finished extractor's alignment, raw equality,
   client sent-seal replay, and server received-decode replay preconditions.
+- `lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_staged_replays`
+  is now the main staged protected replay theorem for a contiguous server-flight
+  plus client-Finished segment.  It assumes both replay views of each endpoint
+  over that segment: server sent-seal/client received-decode for the server
+  encrypted flight, and client sent-seal/server received-decode to derive the
+  client Finished replay tails.  It then derives the client Finished raw/alignment
+  inputs internally and calls the earlier five-witness composition theorem.
 - `lemma_server_encrypted_flight_preserves_client_write_server_read_alignment`
   proves the matching record-state continuity fact.  If the client handshake
   write direction and server handshake read direction are aligned before the
@@ -969,8 +976,8 @@ packages those tails with the corresponding alignment fact.  Its companion
 `lemma_server_encrypted_flight_preserves_client_write_server_read_alignment`
 threads the opposite client-write/server-read record alignment to the same
 post-server-Finished models.  The proof still needs a higher-level segmentation
-lemma that connects these returned tails/models to the concrete client-Finished
-replay prefix.
+lemma that derives this contiguous staged replay shape from whole endpoint logs
+and paired byte streams.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.

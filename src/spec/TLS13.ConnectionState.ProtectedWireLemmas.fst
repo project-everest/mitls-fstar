@@ -11664,6 +11664,199 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
           received_msg4
       | _, _, _, _, _, _, _, _, _, _ ->
         assert False ) )
+
+let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_staged_replays
+  (client_state:connection_state)
+  (server_state:connection_state)
+  (server_flight_sender:connection_model)
+  (server_flight_receiver:connection_model)
+  (server_after_install:connection_model)
+  (client_after_install:connection_model)
+  (server_after0:connection_model)
+  (client_after0:connection_model)
+  (server_after1:connection_model)
+  (client_after1:connection_model)
+  (server_after_auth_skip:connection_model)
+  (client_after_auth_skip:connection_model)
+  (server_after2:connection_model)
+  (client_after2:connection_model)
+  (client_after_verify_skip:connection_model)
+  (server_after3:connection_model)
+  (client_after3:connection_model)
+  (server_auth_skip:local_event)
+  (client_auth_skip:local_event)
+  (client_verify_skip:local_event)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  (verified_server_finished:M.finished)
+  (client_app_write_material:traffic_key_material)
+  (client_app_read_material:traffic_key_material)
+  (server_app_write_material:traffic_key_material)
+  (sent_msg4:M.handshake_msg)
+  (received_msg4:M.handshake_msg)
+  (client_finished_rest:list conn_event)
+  (server_finished_rest:list conn_event)
+  (server_raw_sent:B.bytes)
+  (server_raw_received:B.bytes)
+  (client_raw_sent:B.bytes)
+  (client_raw_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  (cf_client_after_verify:connection_model)
+  (cf_client_after_app_write:connection_model)
+  (cf_client_after_app_read:connection_model)
+  (cf_server_after_app_write:connection_model)
+  (cf_client_after_finished:connection_model)
+  (cf_server_after_finished:connection_model)
+=
+  let client_finished_events =
+    client_finished_replay_events
+      verified_server_finished
+      client_app_write_material
+      client_app_read_material
+      sent_msg4
+      client_finished_rest in
+  let server_finished_events =
+    server_receive_client_finished_replay_events
+      server_app_write_material
+      received_msg4
+      server_finished_rest in
+  lemma_server_encrypted_flight_produces_client_finished_replay_inputs_with_tails
+    server_flight_sender
+    server_flight_receiver
+    server_after_install
+    client_after_install
+    server_after0
+    client_after0
+    server_after1
+    client_after1
+    server_after_auth_skip
+    client_after_auth_skip
+    server_after2
+    client_after2
+    client_after_verify_skip
+    server_after3
+    client_after3
+    server_auth_skip
+    client_auth_skip
+    client_verify_skip
+    server_material
+    client_material
+    sent_msg0
+    received_msg0
+    sent_msg1
+    received_msg1
+    sent_msg2
+    received_msg2
+    sent_msg3
+    received_msg3
+    server_finished_events
+    client_finished_events
+    server_raw_sent
+    server_raw_received
+    client_raw_sent
+    client_raw_received
+    server_final
+    client_final;
+  eliminate exists
+    (client_tail_sent:B.bytes)
+    (client_tail_received:B.bytes)
+    (server_tail_sent:B.bytes)
+    (server_tail_received:B.bytes).
+    write_read_record_material_aligned client_after3 server_after3 /\
+    Seq.equal client_tail_sent server_tail_received /\
+    conn_events_sent_seal_replay
+      client_after3
+      client_finished_events
+      client_tail_sent
+      client_tail_received
+      client_final /\
+    conn_events_received_decode_replay
+      server_after3
+      server_finished_events
+      server_tail_sent
+      server_tail_received
+      server_final
+  returns
+    exists server_ee server_cert server_cv server_finished client_finished.
+      paired_protected_handshake_event_projection_pairs
+        client_state
+        server_state
+        server_ee
+        server_cert
+        server_cv
+        server_finished
+        client_finished
+  with _.
+  ( lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_replays
+      client_state
+      server_state
+      server_flight_sender
+      server_flight_receiver
+      server_after_install
+      client_after_install
+      server_after0
+      client_after0
+      server_after1
+      client_after1
+      server_after_auth_skip
+      client_after_auth_skip
+      server_after2
+      client_after2
+      client_after_verify_skip
+      server_after3
+      client_after3
+      server_auth_skip
+      client_auth_skip
+      client_verify_skip
+      server_material
+      client_material
+      sent_msg0
+      received_msg0
+      sent_msg1
+      received_msg1
+      sent_msg2
+      received_msg2
+      sent_msg3
+      received_msg3
+      server_finished_events
+      client_finished_events
+      server_raw_sent
+      server_raw_received
+      client_raw_sent
+      client_raw_received
+      server_final
+      client_final
+      client_after3
+      server_after3
+      cf_client_after_verify
+      cf_client_after_app_write
+      cf_client_after_app_read
+      cf_server_after_app_write
+      cf_client_after_finished
+      cf_server_after_finished
+      verified_server_finished
+      client_app_write_material
+      client_app_read_material
+      server_app_write_material
+      sent_msg4
+      received_msg4
+      client_finished_rest
+      server_finished_rest
+      client_tail_sent
+      client_tail_received
+      server_tail_sent
+      server_tail_received
+      client_final
+      server_final )
 #pop-options
 
 #pop-options
