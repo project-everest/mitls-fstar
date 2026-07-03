@@ -893,6 +893,12 @@ CertificateVerify verification local step and the server Finished record:
   server received-decode tail with equal client-sent/server-received raw streams.
   This is the precise bridge from a full paired byte stream to the client
   Finished protected-message replay.
+- `lemma_server_encrypted_flight_produces_client_finished_replay_inputs_with_tails`
+  packages the preceding tail bridge with the record-alignment bridge.  From
+  initial client-write/server-read alignment plus the client-sent/server-received
+  replay of the server-flight prefix, it returns existential raw tails that
+  simultaneously satisfy the client Finished extractor's alignment, raw equality,
+  client sent-seal replay, and server received-decode replay preconditions.
 - `lemma_server_encrypted_flight_preserves_client_write_server_read_alignment`
   proves the matching record-state continuity fact.  If the client handshake
   write direction and server handshake read direction are aligned before the
@@ -957,7 +963,9 @@ narrows that gap by deriving the client-Finished raw-stream equality across the
 server-flight segment; the replay-tail variant
 `lemma_server_encrypted_flight_preserves_client_to_server_replay_tails_with_tails`
 returns that equality with the exact `sent_seal`/`received_decode` tails consumed
-by the client Finished extractor.  Its companion
+by the client Finished extractor, and
+`lemma_server_encrypted_flight_produces_client_finished_replay_inputs_with_tails`
+packages those tails with the corresponding alignment fact.  Its companion
 `lemma_server_encrypted_flight_preserves_client_write_server_read_alignment`
 threads the opposite client-write/server-read record alignment to the same
 post-server-Finished models.  The proof still needs a higher-level segmentation
