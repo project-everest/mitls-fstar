@@ -1002,15 +1002,19 @@ bytes are shown equal—can be made to share the same raw suffix.  The
 cross-endpoint byte-tail step is factored as
 `lemma_paired_replay_suffixes_equal_from_equal_prefixes`: from paired full
 streams and equal paired prefixes, it proves equality of the remaining
-server-sent/client-received and client-sent/server-received suffixes.  This makes
-the next proof obligations explicit and narrow: prove, for the concrete
-pre-protected cleartext/local prefix shape, that the endpoint's sent/decode
-prefix splits consume the same raw bytes, and prove cross-endpoint prefix
-equality for server-to-client and client-to-server directions.  The remaining
-skeptical point is still byte determinacy for protected records: raw replay
-alone is too weak, so these prefix equalities must come from the stronger
-seal/decode projections and cleartext parseback facts, not from
-`event_raw_delta_legal` alone.
+server-sent/client-received and client-sent/server-received suffixes.  The
+internal combinator
+`lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes` composes
+these facts: from full replay predicates for both endpoints over
+`prefix ++ suffix`, paired full byte streams, same-endpoint prefix-equality
+callbacks, and a cross-endpoint prefix-equality callback, it returns aligned
+suffix replay views plus both cross-direction suffix equalities.  This makes the
+next proof obligations explicit and narrow: instantiate those callbacks for the
+concrete pre-protected cleartext/local prefix shape.  The remaining skeptical
+point is still byte determinacy for protected records: raw replay alone is too
+weak, so these prefix equalities must come from the stronger seal/decode
+projections and cleartext parseback facts, not from `event_raw_delta_legal`
+alone.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
