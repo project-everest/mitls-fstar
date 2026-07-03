@@ -207,7 +207,7 @@ lemmas that derive:
   `lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire`, which
   proves all `CS.paired_handshake_events` checkpoints from cleartext raw replay
   plus protected-handshake serialized-byte equality;
-- `TLS13.ConnectionState.ProtectedWireLemmas.lemma_protected_handshake_wire_equal_from_sent_seal_peer`,
+- `TLS13.ConnectionState.ProtectedWireProjection.lemma_protected_handshake_wire_equal_from_sent_seal_peer`,
   which proves a single protected handshake message's serialized-byte equality
   from sender seal replay, receiver decode replay, peer key/IV agreement, and
   aligned record sequence numbers.  The follow-up
@@ -1013,10 +1013,15 @@ is now exposed in the small module
 `TLS13.ConnectionState.ProtectedWireSegmentation`, with named callback
 obligations
 `same_endpoint_replay_split_prefixes_equal` and
-`paired_replay_split_prefixes_equal`.  This avoids making the large protected-wire
-module's interface conformance depend on the whole bridge while giving downstream
-proofs a public, verified way to use full endpoint replay logs once the concrete
-prefix callbacks are proved.  A second verified specialization,
+`paired_replay_split_prefixes_equal`.  This now sits on top of a modular split of
+the former protected-wire proof monolith:
+`ProtectedWireBase` contains the replay/pairing predicates and named event-list
+shapes, `ProtectedWireStream` contains byte-stream sequence lemmas,
+`ProtectedWireReplay` contains replay append/suffix splitting, and
+`ProtectedWireStaged` packages the contiguous protected-handshake replay witnesses.
+This gives downstream proofs a public, verified way to use full endpoint replay
+logs once the concrete prefix callbacks are proved without rechecking a single
+17K-line proof file.  A second verified specialization,
 `lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_with_equal_prefixes`,
 fixes the suffixes to the named contiguous protected-handshake shapes.  It
 returns the compact `paired_protected_handshake_contiguous_replay_views`
@@ -1067,7 +1072,7 @@ suffix byte streams in both directions.
 So the byte-segmentation boundary has moved: given a full replay over exactly
 `cleartext_prefix ++ protected_contiguous_suffix`, the proof now derives the
 contiguous protected replay views needed by
-`lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_staged_replays`.
+`TLS13.ConnectionState.ProtectedWireStaged.lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_staged_replays`.
 The remaining skeptical point is no longer the cleartext prefix byte alignment;
 it is the stronger question of where the exact prefix/suffix decomposition comes
 from in final endpoint logs.  Raw replay alone is also still too weak for

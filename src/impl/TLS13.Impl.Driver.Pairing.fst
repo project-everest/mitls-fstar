@@ -12,7 +12,8 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
-module PWL = TLS13.ConnectionState.ProtectedWireLemmas
+module PWL = TLS13.ConnectionState.ProtectedWireBase
+module PWP = TLS13.ConnectionState.ProtectedWireProjection
 module R = TLS13.Record.Spec
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
@@ -1647,7 +1648,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client
           server)
 =
-  PWL.lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
+  PWP.lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
     client
     server
     server_ee

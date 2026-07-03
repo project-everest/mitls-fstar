@@ -5,7 +5,7 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
-module PWL = TLS13.ConnectionState.ProtectedWireLemmas
+module PWL = TLS13.ConnectionState.ProtectedWireBase
 module Seq = FStar.Seq
 
 noextract
