@@ -968,6 +968,86 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
         sent_msg4
         received_msg4 ) )
 
+let lemma_conn_events_raw_replay_head
+  (model:connection_model)
+  (ev:conn_event)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        conn_events_raw_replay
+          model
+          (ev :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists model1 delta_sent delta_received tail_sent tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_raw_replay
+            model1
+            rest
+            tail_sent
+            tail_received
+            final_model)
+=
+  eliminate exists
+    (model1:connection_model)
+    (delta_sent:B.bytes)
+    (delta_received:B.bytes)
+    (tail_sent:B.bytes)
+    (tail_received:B.bytes).
+    legal_event model ev /\
+    step_model model ev == Some model1 /\
+    event_raw_delta_legal model ev delta_sent delta_received /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    conn_events_raw_replay
+      model1
+      rest
+      tail_sent
+      tail_received
+      final_model
+  returns
+    exists model1' delta_sent' delta_received' tail_sent' tail_received'.
+      legal_event model ev /\
+      step_model model ev == Some model1' /\
+      event_raw_delta_legal model ev delta_sent' delta_received' /\
+      Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+      Seq.equal raw_received (B.append delta_received' tail_received') /\
+      conn_events_raw_replay
+        model1'
+        rest
+        tail_sent'
+        tail_received'
+        final_model
+  with _.
+  ( introduce exists
+      (model1':connection_model)
+      (delta_sent':B.bytes)
+      (delta_received':B.bytes)
+      (tail_sent':B.bytes)
+      (tail_received':B.bytes).
+      legal_event model ev /\
+      step_model model ev == Some model1' /\
+      event_raw_delta_legal model ev delta_sent' delta_received' /\
+      Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+      Seq.equal raw_received (B.append delta_received' tail_received') /\
+      conn_events_raw_replay
+        model1'
+        rest
+        tail_sent'
+        tail_received'
+        final_model
+    with model1 delta_sent delta_received tail_sent tail_received
+    and () )
+
 let lemma_conn_events_sent_seal_replay_head
   (model:connection_model)
   (ev:conn_event)
@@ -1135,6 +1215,240 @@ let lemma_conn_events_received_decode_replay_head
         final_model
     with model1 delta_sent delta_received tail_sent tail_received
     and () )
+
+let rec lemma_conn_events_raw_replay_append_split
+  (model:connection_model)
+  (prefix:list conn_event)
+  (suffix:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        conn_events_raw_replay
+          model
+          (FStar.List.Tot.append prefix suffix)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists mid prefix_sent prefix_received suffix_sent suffix_received.
+          Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+          Seq.equal raw_received (B.append prefix_received suffix_received) /\
+          conn_events_raw_replay
+            model
+            prefix
+            prefix_sent
+            prefix_received
+            mid /\
+          conn_events_raw_replay
+            mid
+            suffix
+            suffix_sent
+            suffix_received
+            final_model)
+      (decreases prefix)
+=
+  match prefix with
+  | [] ->
+    introduce exists
+      (mid:connection_model)
+      (prefix_sent:B.bytes)
+      (prefix_received:B.bytes)
+      (suffix_sent:B.bytes)
+      (suffix_received:B.bytes).
+      Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+      Seq.equal raw_received (B.append prefix_received suffix_received) /\
+      conn_events_raw_replay
+        model
+        []
+        prefix_sent
+        prefix_received
+        mid /\
+      conn_events_raw_replay
+        mid
+        suffix
+        suffix_sent
+        suffix_received
+        final_model
+    with model B.empty B.empty raw_sent raw_received
+    and ()
+  | ev :: prefix_tail ->
+    lemma_conn_events_raw_replay_head
+      model
+      ev
+      (FStar.List.Tot.append prefix_tail suffix)
+      raw_sent
+      raw_received
+      final_model;
+    eliminate exists
+      (model1:connection_model)
+      (delta_sent:B.bytes)
+      (delta_received:B.bytes)
+      (tail_sent:B.bytes)
+      (tail_received:B.bytes).
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      conn_events_raw_replay
+        model1
+        (FStar.List.Tot.append prefix_tail suffix)
+        tail_sent
+        tail_received
+        final_model
+    returns
+      exists mid prefix_sent prefix_received suffix_sent suffix_received.
+        Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+        Seq.equal raw_received (B.append prefix_received suffix_received) /\
+        conn_events_raw_replay
+          model
+          (ev :: prefix_tail)
+          prefix_sent
+          prefix_received
+          mid /\
+        conn_events_raw_replay
+          mid
+          suffix
+          suffix_sent
+          suffix_received
+          final_model
+    with _.
+    ( lemma_conn_events_raw_replay_append_split
+        model1
+        prefix_tail
+        suffix
+        tail_sent
+        tail_received
+        final_model;
+      eliminate exists
+        (mid:connection_model)
+        (tail_prefix_sent:B.bytes)
+        (tail_prefix_received:B.bytes)
+        (suffix_sent:B.bytes)
+        (suffix_received:B.bytes).
+        Seq.equal tail_sent (B.append tail_prefix_sent suffix_sent) /\
+        Seq.equal tail_received (B.append tail_prefix_received suffix_received) /\
+        conn_events_raw_replay
+          model1
+          prefix_tail
+          tail_prefix_sent
+          tail_prefix_received
+          mid /\
+        conn_events_raw_replay
+          mid
+          suffix
+          suffix_sent
+          suffix_received
+          final_model
+      returns
+        exists mid' prefix_sent prefix_received suffix_sent' suffix_received'.
+          Seq.equal raw_sent (B.append prefix_sent suffix_sent') /\
+          Seq.equal raw_received (B.append prefix_received suffix_received') /\
+          conn_events_raw_replay
+            model
+            (ev :: prefix_tail)
+            prefix_sent
+            prefix_received
+            mid' /\
+          conn_events_raw_replay
+            mid'
+            suffix
+            suffix_sent'
+            suffix_received'
+            final_model
+      with _.
+      ( let prefix_sent = B.append delta_sent tail_prefix_sent in
+        let prefix_received = B.append delta_received tail_prefix_received in
+        Seq.append_assoc delta_sent tail_prefix_sent suffix_sent;
+        Seq.append_assoc delta_received tail_prefix_received suffix_received;
+        assert (Seq.equal raw_sent (B.append prefix_sent suffix_sent));
+        assert (Seq.equal raw_received (B.append prefix_received suffix_received));
+        introduce exists
+          (mid':connection_model)
+          (prefix_sent':B.bytes)
+          (prefix_received':B.bytes)
+          (suffix_sent':B.bytes)
+          (suffix_received':B.bytes).
+          Seq.equal raw_sent (B.append prefix_sent' suffix_sent') /\
+          Seq.equal raw_received (B.append prefix_received' suffix_received') /\
+          conn_events_raw_replay
+            model
+            (ev :: prefix_tail)
+            prefix_sent'
+            prefix_received'
+            mid' /\
+          conn_events_raw_replay
+            mid'
+            suffix
+            suffix_sent'
+            suffix_received'
+            final_model
+        with mid prefix_sent prefix_received suffix_sent suffix_received
+        and
+        ( introduce exists
+            (model1':connection_model)
+            (delta_sent':B.bytes)
+            (delta_received':B.bytes)
+            (tail_sent':B.bytes)
+            (tail_received':B.bytes).
+            legal_event model ev /\
+            step_model model ev == Some model1' /\
+            event_raw_delta_legal model ev delta_sent' delta_received' /\
+            Seq.equal prefix_sent (B.append delta_sent' tail_sent') /\
+            Seq.equal prefix_received (B.append delta_received' tail_received') /\
+            conn_events_raw_replay
+              model1'
+              prefix_tail
+              tail_sent'
+              tail_received'
+              mid
+          with
+            model1
+            delta_sent
+            delta_received
+            tail_prefix_sent
+            tail_prefix_received
+          and ();
+          assert_norm (
+            conn_events_raw_replay
+              model
+              (ev :: prefix_tail)
+              prefix_sent
+              prefix_received
+              mid ==
+            (exists (model1':connection_model)
+                    (delta_sent':B.bytes)
+                    (delta_received':B.bytes)
+                    (tail_sent':B.bytes)
+                    (tail_received':B.bytes).
+              legal_event model ev /\
+              step_model model ev == Some model1' /\
+              event_raw_delta_legal model ev delta_sent' delta_received' /\
+              Seq.equal prefix_sent (B.append delta_sent' tail_sent') /\
+              Seq.equal prefix_received (B.append delta_received' tail_received') /\
+              conn_events_raw_replay
+                model1'
+                prefix_tail
+                tail_sent'
+                tail_received'
+                mid));
+          assert (
+            conn_events_raw_replay
+              model
+              (ev :: prefix_tail)
+              prefix_sent
+              prefix_received
+              mid);
+          assert (
+            conn_events_raw_replay
+              mid
+              suffix
+              suffix_sent
+              suffix_received
+              final_model);
+          () ) ) )
 
 let rec lemma_conn_events_sent_seal_replay_append_split
   (model:connection_model)

@@ -752,6 +752,35 @@ val lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
             server_finished
             client_finished)
 
+val lemma_conn_events_raw_replay_head
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model
+          (ev :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists model1 delta_sent delta_received tail_sent tail_received.
+          CS.legal_event model ev /\
+          CS.step_model model ev == Some model1 /\
+          CS.event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          CS.conn_events_raw_replay
+            model1
+            rest
+            tail_sent
+            tail_received
+            final_model)
+
 val lemma_conn_events_sent_seal_replay_head
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -810,6 +839,38 @@ val lemma_conn_events_received_decode_replay_head
             rest
             tail_sent
             tail_received
+            final_model)
+
+val lemma_conn_events_raw_replay_append_split
+  (model:CS.connection_model)
+  (prefix:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model
+          (FStar.List.Tot.append prefix suffix)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists mid prefix_sent prefix_received suffix_sent suffix_received.
+          Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
+          Seq.equal raw_received (B.append prefix_received suffix_received) /\
+          CS.conn_events_raw_replay
+            model
+            prefix
+            prefix_sent
+            prefix_received
+            mid /\
+          CS.conn_events_raw_replay
+            mid
+            suffix
+            suffix_sent
+            suffix_received
             final_model)
 
 val lemma_conn_events_sent_seal_replay_append_split
