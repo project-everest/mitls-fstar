@@ -309,6 +309,34 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_local
         raw_received
         final_model)
 
+val lemma_same_endpoint_replay_split_prefixes_equal_cons_local
+  (model:CS.connection_model)
+  (ev:CS.local_event)
+  (tail:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  (post_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model model (CS.ConnLocalEvent ev) == Some post_model /\
+        same_endpoint_replay_split_prefixes_equal
+          post_model
+          tail
+          suffix
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal
+          model
+          (CS.ConnLocalEvent ev :: tail)
+          suffix
+          raw_sent
+          raw_received
+          final_model)
+
 val lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
   (model:CS.connection_model)
   (msg:M.tls_message)

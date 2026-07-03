@@ -407,6 +407,185 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_local
       assert (Seq.equal received_prefix_sent B.empty);
       assert (Seq.equal received_prefix_received B.empty) )
 
+let lemma_same_endpoint_replay_split_prefixes_equal_cons_local
+  (model:connection_model)
+  (ev:local_event)
+  (tail:list conn_event)
+  (suffix:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  (post_model:connection_model)
+  : Lemma
+      (requires
+        step_model model (ConnLocalEvent ev) == Some post_model /\
+        same_endpoint_replay_split_prefixes_equal
+          post_model
+          tail
+          suffix
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal
+          model
+          (ConnLocalEvent ev :: tail)
+          suffix
+          raw_sent
+          raw_received
+          final_model)
+=
+  introduce forall
+    (sent_mid:connection_model)
+    (received_mid:connection_model)
+    (sent_prefix_sent:B.bytes)
+    (sent_prefix_received:B.bytes)
+    (sent_suffix_sent:B.bytes)
+    (sent_suffix_received:B.bytes)
+    (received_prefix_sent:B.bytes)
+    (received_prefix_received:B.bytes)
+    (received_suffix_sent:B.bytes)
+    (received_suffix_received:B.bytes).
+    Seq.equal raw_sent (B.append sent_prefix_sent sent_suffix_sent) /\
+    Seq.equal raw_received
+      (B.append sent_prefix_received sent_suffix_received) /\
+    Seq.equal raw_sent
+      (B.append received_prefix_sent received_suffix_sent) /\
+    Seq.equal raw_received
+      (B.append received_prefix_received received_suffix_received) /\
+    conn_events_sent_seal_replay
+      model
+      (ConnLocalEvent ev :: tail)
+      sent_prefix_sent
+      sent_prefix_received
+      sent_mid /\
+    conn_events_sent_seal_replay
+      sent_mid
+      suffix
+      sent_suffix_sent
+      sent_suffix_received
+      final_model /\
+    conn_events_received_decode_replay
+      model
+      (ConnLocalEvent ev :: tail)
+      received_prefix_sent
+      received_prefix_received
+      received_mid /\
+    conn_events_received_decode_replay
+      received_mid
+      suffix
+      received_suffix_sent
+      received_suffix_received
+      final_model ==>
+    Seq.equal sent_prefix_sent received_prefix_sent /\
+    Seq.equal sent_prefix_received received_prefix_received
+  with
+    introduce _ ==> _ with _.
+    ( PWL.lemma_conn_events_sent_seal_replay_head
+        model
+        (ConnLocalEvent ev)
+        tail
+        sent_prefix_sent
+        sent_prefix_received
+        sent_mid;
+      eliminate exists sent_head_model sent_delta_sent sent_delta_received
+        sent_tail_sent sent_tail_received.
+        legal_event model (ConnLocalEvent ev) /\
+        step_model model (ConnLocalEvent ev) == Some sent_head_model /\
+        event_raw_delta_legal
+          model
+          (ConnLocalEvent ev)
+          sent_delta_sent
+          sent_delta_received /\
+        sent_event_nonempty_seal_projection model (ConnLocalEvent ev) sent_delta_sent /\
+        Seq.equal sent_prefix_sent (B.append sent_delta_sent sent_tail_sent) /\
+        Seq.equal sent_prefix_received
+          (B.append sent_delta_received sent_tail_received) /\
+        conn_events_sent_seal_replay
+          sent_head_model
+          tail
+          sent_tail_sent
+          sent_tail_received
+          sent_mid
+      returns
+        Seq.equal sent_prefix_sent received_prefix_sent /\
+        Seq.equal sent_prefix_received received_prefix_received
+      with _.
+      ( PWL.lemma_conn_events_received_decode_replay_head
+          model
+          (ConnLocalEvent ev)
+          tail
+          received_prefix_sent
+          received_prefix_received
+          received_mid;
+        eliminate exists received_head_model received_delta_sent received_delta_received
+          received_tail_sent received_tail_received.
+          legal_event model (ConnLocalEvent ev) /\
+          step_model model (ConnLocalEvent ev) == Some received_head_model /\
+          event_raw_delta_legal
+            model
+            (ConnLocalEvent ev)
+            received_delta_sent
+            received_delta_received /\
+          received_event_nonempty_decode_projection
+            model
+            (ConnLocalEvent ev)
+            received_delta_received /\
+          Seq.equal received_prefix_sent
+            (B.append received_delta_sent received_tail_sent) /\
+          Seq.equal received_prefix_received
+            (B.append received_delta_received received_tail_received) /\
+          conn_events_received_decode_replay
+            received_head_model
+            tail
+            received_tail_sent
+            received_tail_received
+            received_mid
+        returns
+          Seq.equal sent_prefix_sent received_prefix_sent /\
+          Seq.equal sent_prefix_received received_prefix_received
+        with _.
+        ( assert (sent_head_model == post_model);
+          assert (received_head_model == post_model);
+          assert (Seq.equal sent_delta_sent B.empty);
+          assert (Seq.equal sent_delta_received B.empty);
+          assert (Seq.equal received_delta_sent B.empty);
+          assert (Seq.equal received_delta_received B.empty);
+          Seq.lemma_eq_elim sent_delta_sent B.empty;
+          Seq.lemma_eq_elim sent_delta_received B.empty;
+          Seq.lemma_eq_elim received_delta_sent B.empty;
+          Seq.lemma_eq_elim received_delta_received B.empty;
+          assert (Seq.equal (B.append sent_delta_sent sent_tail_sent) sent_tail_sent);
+          assert (Seq.equal (B.append sent_delta_received sent_tail_received) sent_tail_received);
+          assert (Seq.equal (B.append received_delta_sent received_tail_sent) received_tail_sent);
+          assert (Seq.equal (B.append received_delta_received received_tail_received) received_tail_received);
+          Seq.lemma_eq_elim sent_prefix_sent (B.append sent_delta_sent sent_tail_sent);
+          Seq.lemma_eq_elim sent_prefix_received
+            (B.append sent_delta_received sent_tail_received);
+          Seq.lemma_eq_elim received_prefix_sent
+            (B.append received_delta_sent received_tail_sent);
+          Seq.lemma_eq_elim received_prefix_received
+            (B.append received_delta_received received_tail_received);
+          assert (Seq.equal sent_prefix_sent sent_tail_sent);
+          assert (Seq.equal sent_prefix_received sent_tail_received);
+          assert (Seq.equal received_prefix_sent received_tail_sent);
+          assert (Seq.equal received_prefix_received received_tail_received);
+          Seq.lemma_eq_elim sent_prefix_sent sent_tail_sent;
+          Seq.lemma_eq_elim sent_prefix_received sent_tail_received;
+          Seq.lemma_eq_elim received_prefix_sent received_tail_sent;
+          Seq.lemma_eq_elim received_prefix_received received_tail_received;
+          assert (Seq.equal raw_sent (B.append sent_tail_sent sent_suffix_sent));
+          assert (Seq.equal raw_received
+            (B.append sent_tail_received sent_suffix_received));
+          assert (Seq.equal raw_sent
+            (B.append received_tail_sent received_suffix_sent));
+          assert (Seq.equal raw_received
+            (B.append received_tail_received received_suffix_received));
+          assert (Seq.equal sent_tail_sent received_tail_sent);
+          assert (Seq.equal sent_tail_received received_tail_received);
+          assert (Seq.equal sent_prefix_sent received_prefix_sent);
+          assert (Seq.equal sent_prefix_received received_prefix_received) ) ) )
+
 let lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
   (model:connection_model)
   (msg:M.tls_message)
