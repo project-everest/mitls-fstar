@@ -875,6 +875,16 @@ CertificateVerify verification local step and the server Finished record:
   returns the four server-to-client protected-message witnesses
   (EncryptedExtensions, Certificate, CertificateVerify, server Finished), final
   replay tails, and post-Finished write/read alignment.
+- `lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails`
+  proves the dual byte-continuity fact needed for the following client Finished:
+  while the server encrypted flight consumes server-sent/client-received bytes,
+  the opposite client-to-server raw stream is only threaded through zero-byte
+  local events and opposite-direction network events.  The lemma advances through
+  the same staged server-flight replay shape and returns tails satisfying
+  `Seq.equal client_tail_sent server_tail_received`.  This removes one important
+  explicit premise from the eventual byte-trace theorem: the client Finished raw
+  equality can be inherited from the original paired byte streams once the full
+  log segmentation exposes these tails.
 
 The client-Finished side now has its own verified staged extractor:
 
@@ -925,7 +935,13 @@ server-flight key-schedule/install alignment premises, and the separate
 client-write/server-read alignment plus raw-stream equality needed for client
 Finished.  Thus the remaining gap to a true byte-trace theorem is not the
 five-message witness packaging anymore; it is deriving those staged premises from
-the full endpoint event logs and paired byte streams.
+the full endpoint event logs and paired byte streams.  The new
+`lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails`
+narrows that gap by deriving the client-Finished raw-stream equality across the
+server-flight segment, but the proof still needs a higher-level segmentation
+lemma that connects the returned tails to the concrete client-Finished replay
+prefix and seeds the client-handshake-write/server-handshake-read alignment at
+that point.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.

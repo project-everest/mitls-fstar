@@ -2270,6 +2270,181 @@ let lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
     with receiver1 tail_sent tail_received
     and () )
 
+let lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
+  (sender:connection_model)
+  (receiver:connection_model)
+  (sender_ev:conn_event)
+  (receiver_ev:conn_event)
+  (sender_rest:list conn_event)
+  (receiver_rest:list conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:connection_model)
+  (receiver_final:connection_model)
+  : Lemma
+      (requires
+        Seq.equal receiver_raw_sent sender_raw_received /\
+        conn_events_sent_seal_replay
+          sender
+          (sender_ev :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        conn_events_received_decode_replay
+          receiver
+          (receiver_ev :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final /\
+        (match sender_ev with
+         | ConnLocalEvent _ -> True
+         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
+        (match receiver_ev with
+         | ConnLocalEvent _ -> True
+         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+      (ensures
+        exists sender1 receiver1
+          sender_tail_sent sender_tail_received
+          receiver_tail_sent receiver_tail_received.
+          legal_event sender sender_ev /\
+          step_model sender sender_ev == Some sender1 /\
+          legal_event receiver receiver_ev /\
+          step_model receiver receiver_ev == Some receiver1 /\
+          Seq.equal receiver_tail_sent sender_tail_received /\
+          conn_events_sent_seal_replay
+            sender1
+            sender_rest
+            sender_tail_sent
+            sender_tail_received
+            sender_final /\
+          conn_events_received_decode_replay
+            receiver1
+            receiver_rest
+            receiver_tail_sent
+            receiver_tail_received
+            receiver_final)
+=
+  lemma_sent_replay_skip_zero_received_head_preserves_peer_stream
+    receiver_raw_sent
+    sender
+    sender_ev
+    sender_rest
+    sender_raw_sent
+    sender_raw_received
+    sender_final;
+  eliminate exists
+    (sender1:connection_model)
+    (sender_tail_sent:B.bytes)
+    (sender_tail_received:B.bytes).
+    legal_event sender sender_ev /\
+    step_model sender sender_ev == Some sender1 /\
+    Seq.equal receiver_raw_sent sender_tail_received /\
+    conn_events_sent_seal_replay
+      sender1
+      sender_rest
+      sender_tail_sent
+      sender_tail_received
+      sender_final
+  returns
+    exists sender1' receiver1
+      sender_tail_sent' sender_tail_received'
+      receiver_tail_sent receiver_tail_received.
+      legal_event sender sender_ev /\
+      step_model sender sender_ev == Some sender1' /\
+      legal_event receiver receiver_ev /\
+      step_model receiver receiver_ev == Some receiver1 /\
+      Seq.equal receiver_tail_sent sender_tail_received' /\
+      conn_events_sent_seal_replay
+        sender1'
+        sender_rest
+        sender_tail_sent'
+        sender_tail_received'
+        sender_final /\
+      conn_events_received_decode_replay
+        receiver1
+        receiver_rest
+        receiver_tail_sent
+        receiver_tail_received
+        receiver_final
+  with _.
+  ( lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
+      receiver
+      receiver_ev
+      receiver_rest
+      receiver_raw_sent
+      receiver_raw_received
+      sender_tail_received
+      receiver_final;
+    eliminate exists
+      (receiver1:connection_model)
+      (receiver_tail_sent:B.bytes)
+      (receiver_tail_received:B.bytes).
+      legal_event receiver receiver_ev /\
+      step_model receiver receiver_ev == Some receiver1 /\
+      Seq.equal receiver_tail_sent sender_tail_received /\
+      conn_events_received_decode_replay
+        receiver1
+        receiver_rest
+        receiver_tail_sent
+        receiver_tail_received
+        receiver_final
+    returns
+      exists sender1' receiver1'
+        sender_tail_sent' sender_tail_received'
+        receiver_tail_sent' receiver_tail_received'.
+        legal_event sender sender_ev /\
+        step_model sender sender_ev == Some sender1' /\
+        legal_event receiver receiver_ev /\
+        step_model receiver receiver_ev == Some receiver1' /\
+        Seq.equal receiver_tail_sent' sender_tail_received' /\
+        conn_events_sent_seal_replay
+          sender1'
+          sender_rest
+          sender_tail_sent'
+          sender_tail_received'
+          sender_final /\
+        conn_events_received_decode_replay
+          receiver1'
+          receiver_rest
+          receiver_tail_sent'
+          receiver_tail_received'
+          receiver_final
+    with _.
+    ( introduce exists
+        (sender1':connection_model)
+        (receiver1':connection_model)
+        (sender_tail_sent':B.bytes)
+        (sender_tail_received':B.bytes)
+        (receiver_tail_sent':B.bytes)
+        (receiver_tail_received':B.bytes).
+        legal_event sender sender_ev /\
+        step_model sender sender_ev == Some sender1' /\
+        legal_event receiver receiver_ev /\
+        step_model receiver receiver_ev == Some receiver1' /\
+        Seq.equal receiver_tail_sent' sender_tail_received' /\
+        conn_events_sent_seal_replay
+          sender1'
+          sender_rest
+          sender_tail_sent'
+          sender_tail_received'
+          sender_final /\
+        conn_events_received_decode_replay
+          receiver1'
+          receiver_rest
+          receiver_tail_sent'
+          receiver_tail_received'
+          receiver_final
+      with
+        sender1
+        receiver1
+        sender_tail_sent
+        sender_tail_received
+        receiver_tail_sent
+        receiver_tail_received
+      and () ) )
+
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_sent_event_nonempty_seal_projection_protected
   (model:connection_model)
@@ -8104,6 +8279,637 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
           client_tail_sent3
           client_tail_received3
         and () ) )
+
+let lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails
+  (server:connection_model)
+  (client:connection_model)
+  (server_after_install:connection_model)
+  (client_after_install:connection_model)
+  (server_after0:connection_model)
+  (client_after0:connection_model)
+  (server_after1:connection_model)
+  (client_after1:connection_model)
+  (server_after_auth_skip:connection_model)
+  (client_after_auth_skip:connection_model)
+  (server_after2:connection_model)
+  (client_after2:connection_model)
+  (client_after_verify_skip:connection_model)
+  (server_after3:connection_model)
+  (client_after3:connection_model)
+  (server_auth_skip:local_event)
+  (client_auth_skip:local_event)
+  (client_verify_skip:local_event)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  (server_rest:list conn_event)
+  (client_rest:list conn_event)
+  (server_raw_sent:B.bytes)
+  (server_raw_received:B.bytes)
+  (client_raw_sent:B.bytes)
+  (client_raw_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  : Lemma
+      (requires
+        Seq.equal client_raw_sent server_raw_received /\
+        step_model
+          server
+          (ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficWrite;
+                install_material = server_material;
+              };
+            })) == Some server_after_install /\
+        step_model
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficRead;
+              install_material = client_material;
+            })) == Some client_after_install /\
+        step_model
+          server_after_install
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg0;
+          }) == Some server_after0 /\
+        step_model
+          client_after_install
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg0;
+          }) == Some client_after0 /\
+        step_model
+          server_after0
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg1;
+          }) == Some server_after1 /\
+        step_model
+          client_after0
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg1;
+          }) == Some client_after1 /\
+        step_model server_after1 (ConnLocalEvent server_auth_skip) ==
+          Some server_after_auth_skip /\
+        step_model client_after1 (ConnLocalEvent client_auth_skip) ==
+          Some client_after_auth_skip /\
+        step_model
+          server_after_auth_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg2;
+          }) == Some server_after2 /\
+        step_model
+          client_after_auth_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg2;
+          }) == Some client_after2 /\
+        step_model client_after2 (ConnLocalEvent client_verify_skip) ==
+          Some client_after_verify_skip /\
+        step_model
+          server_after2
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg3;
+          }) == Some server_after3 /\
+        step_model
+          client_after_verify_skip
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg3;
+          }) == Some client_after3 /\
+        conn_events_sent_seal_replay
+          server
+          (ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficWrite;
+                install_material = server_material;
+              };
+            }) :: ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg0;
+            } :: ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg1;
+            } :: ConnLocalEvent server_auth_skip :: ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg2;
+            } :: ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg3;
+            } :: server_rest)
+          server_raw_sent
+          server_raw_received
+          server_final /\
+        conn_events_received_decode_replay
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficRead;
+              install_material = client_material;
+            }) :: ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg0;
+            } :: ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg1;
+            } :: ConnLocalEvent client_auth_skip :: ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg2;
+            } :: ConnLocalEvent client_verify_skip :: ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg3;
+            } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
+      (ensures
+        exists server_tail_sent server_tail_received
+          client_tail_sent client_tail_received.
+          Seq.equal client_tail_sent server_tail_received /\
+          conn_events_sent_seal_replay
+            server_after3
+            server_rest
+            server_tail_sent
+            server_tail_received
+            server_final /\
+          conn_events_received_decode_replay
+            client_after3
+            client_rest
+            client_tail_sent
+            client_tail_received
+            client_final)
+=
+  let server_install_ev =
+    ConnLocalEvent
+      (LocalInstallTrafficKeysForRole {
+        install_role = ServerEndpoint;
+        install_payload = {
+          install_epoch = TrafficHandshake;
+          install_direction = TrafficWrite;
+          install_material = server_material;
+        };
+      }) in
+  let client_install_ev =
+    ConnLocalEvent
+      (LocalInstallTrafficKeys {
+        install_epoch = TrafficHandshake;
+        install_direction = TrafficRead;
+        install_material = client_material;
+      }) in
+  let sent_ev0 = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg0;
+  } in
+  let received_ev0 = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg0;
+  } in
+  let sent_ev1 = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg1;
+  } in
+  let received_ev1 = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg1;
+  } in
+  let server_auth_ev = ConnLocalEvent server_auth_skip in
+  let client_auth_ev = ConnLocalEvent client_auth_skip in
+  let sent_ev2 = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg2;
+  } in
+  let received_ev2 = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg2;
+  } in
+  let client_verify_ev = ConnLocalEvent client_verify_skip in
+  let sent_ev3 = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg3;
+  } in
+  let received_ev3 = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg3;
+  } in
+  lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
+    server
+    client
+    server_install_ev
+    client_install_ev
+    (sent_ev0 :: sent_ev1 :: server_auth_ev :: sent_ev2 :: sent_ev3 :: server_rest)
+    (received_ev0 :: received_ev1 :: client_auth_ev :: received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+    server_raw_sent
+    server_raw_received
+    client_raw_sent
+    client_raw_received
+    server_final
+    client_final;
+  eliminate exists
+    (server1:connection_model)
+    (client1:connection_model)
+    (server_sent1:B.bytes)
+    (server_received1:B.bytes)
+    (client_sent1:B.bytes)
+    (client_received1:B.bytes).
+    legal_event server server_install_ev /\
+    step_model server server_install_ev == Some server1 /\
+    legal_event client client_install_ev /\
+    step_model client client_install_ev == Some client1 /\
+    Seq.equal client_sent1 server_received1 /\
+    conn_events_sent_seal_replay
+      server1
+      (sent_ev0 :: sent_ev1 :: server_auth_ev :: sent_ev2 :: sent_ev3 :: server_rest)
+      server_sent1
+      server_received1
+      server_final /\
+    conn_events_received_decode_replay
+      client1
+      (received_ev0 :: received_ev1 :: client_auth_ev :: received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+      client_sent1
+      client_received1
+      client_final
+  returns
+    exists server_tail_sent server_tail_received
+      client_tail_sent client_tail_received.
+      Seq.equal client_tail_sent server_tail_received /\
+      conn_events_sent_seal_replay
+        server_after3
+        server_rest
+        server_tail_sent
+        server_tail_received
+        server_final /\
+      conn_events_received_decode_replay
+        client_after3
+        client_rest
+        client_tail_sent
+        client_tail_received
+        client_final
+  with _.
+  ( assert (server1 == server_after_install);
+    assert (client1 == client_after_install);
+    lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
+      server_after_install
+      client_after_install
+      sent_ev0
+      received_ev0
+      (sent_ev1 :: server_auth_ev :: sent_ev2 :: sent_ev3 :: server_rest)
+      (received_ev1 :: client_auth_ev :: received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+      server_sent1
+      server_received1
+      client_sent1
+      client_received1
+      server_final
+      client_final;
+    eliminate exists
+      (server2:connection_model)
+      (client2:connection_model)
+      (server_sent2:B.bytes)
+      (server_received2:B.bytes)
+      (client_sent2:B.bytes)
+      (client_received2:B.bytes).
+      legal_event server_after_install sent_ev0 /\
+      step_model server_after_install sent_ev0 == Some server2 /\
+      legal_event client_after_install received_ev0 /\
+      step_model client_after_install received_ev0 == Some client2 /\
+      Seq.equal client_sent2 server_received2 /\
+      conn_events_sent_seal_replay
+        server2
+        (sent_ev1 :: server_auth_ev :: sent_ev2 :: sent_ev3 :: server_rest)
+        server_sent2
+        server_received2
+        server_final /\
+      conn_events_received_decode_replay
+        client2
+        (received_ev1 :: client_auth_ev :: received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+        client_sent2
+        client_received2
+        client_final
+    returns
+      exists server_tail_sent server_tail_received
+        client_tail_sent client_tail_received.
+        Seq.equal client_tail_sent server_tail_received /\
+        conn_events_sent_seal_replay
+          server_after3
+          server_rest
+          server_tail_sent
+          server_tail_received
+          server_final /\
+        conn_events_received_decode_replay
+          client_after3
+          client_rest
+          client_tail_sent
+          client_tail_received
+          client_final
+    with _.
+    ( assert (server2 == server_after0);
+      assert (client2 == client_after0);
+      lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
+        server_after0
+        client_after0
+        sent_ev1
+        received_ev1
+        (server_auth_ev :: sent_ev2 :: sent_ev3 :: server_rest)
+        (client_auth_ev :: received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+        server_sent2
+        server_received2
+        client_sent2
+        client_received2
+        server_final
+        client_final;
+      eliminate exists
+        (server3:connection_model)
+        (client3:connection_model)
+        (server_sent3:B.bytes)
+        (server_received3:B.bytes)
+        (client_sent3:B.bytes)
+        (client_received3:B.bytes).
+        legal_event server_after0 sent_ev1 /\
+        step_model server_after0 sent_ev1 == Some server3 /\
+        legal_event client_after0 received_ev1 /\
+        step_model client_after0 received_ev1 == Some client3 /\
+        Seq.equal client_sent3 server_received3 /\
+        conn_events_sent_seal_replay
+          server3
+          (server_auth_ev :: sent_ev2 :: sent_ev3 :: server_rest)
+          server_sent3
+          server_received3
+          server_final /\
+        conn_events_received_decode_replay
+          client3
+          (client_auth_ev :: received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+          client_sent3
+          client_received3
+          client_final
+      returns
+        exists server_tail_sent server_tail_received
+          client_tail_sent client_tail_received.
+          Seq.equal client_tail_sent server_tail_received /\
+          conn_events_sent_seal_replay
+            server_after3
+            server_rest
+            server_tail_sent
+            server_tail_received
+            server_final /\
+          conn_events_received_decode_replay
+            client_after3
+            client_rest
+            client_tail_sent
+            client_tail_received
+            client_final
+      with _.
+      ( assert (server3 == server_after1);
+        assert (client3 == client_after1);
+        lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
+          server_after1
+          client_after1
+          server_auth_ev
+          client_auth_ev
+          (sent_ev2 :: sent_ev3 :: server_rest)
+          (received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+          server_sent3
+          server_received3
+          client_sent3
+          client_received3
+          server_final
+          client_final;
+        eliminate exists
+          (server4:connection_model)
+          (client4:connection_model)
+          (server_sent4:B.bytes)
+          (server_received4:B.bytes)
+          (client_sent4:B.bytes)
+          (client_received4:B.bytes).
+          legal_event server_after1 server_auth_ev /\
+          step_model server_after1 server_auth_ev == Some server4 /\
+          legal_event client_after1 client_auth_ev /\
+          step_model client_after1 client_auth_ev == Some client4 /\
+          Seq.equal client_sent4 server_received4 /\
+          conn_events_sent_seal_replay
+            server4
+            (sent_ev2 :: sent_ev3 :: server_rest)
+            server_sent4
+            server_received4
+            server_final /\
+          conn_events_received_decode_replay
+            client4
+            (received_ev2 :: client_verify_ev :: received_ev3 :: client_rest)
+            client_sent4
+            client_received4
+            client_final
+        returns
+          exists server_tail_sent server_tail_received
+            client_tail_sent client_tail_received.
+            Seq.equal client_tail_sent server_tail_received /\
+            conn_events_sent_seal_replay
+              server_after3
+              server_rest
+              server_tail_sent
+              server_tail_received
+              server_final /\
+            conn_events_received_decode_replay
+              client_after3
+              client_rest
+              client_tail_sent
+              client_tail_received
+              client_final
+        with _.
+        ( assert (server4 == server_after_auth_skip);
+          assert (client4 == client_after_auth_skip);
+          lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
+            server_after_auth_skip
+            client_after_auth_skip
+            sent_ev2
+            received_ev2
+            (sent_ev3 :: server_rest)
+            (client_verify_ev :: received_ev3 :: client_rest)
+            server_sent4
+            server_received4
+            client_sent4
+            client_received4
+            server_final
+            client_final;
+          eliminate exists
+            (server5:connection_model)
+            (client5:connection_model)
+            (server_sent5:B.bytes)
+            (server_received5:B.bytes)
+            (client_sent5:B.bytes)
+            (client_received5:B.bytes).
+            legal_event server_after_auth_skip sent_ev2 /\
+            step_model server_after_auth_skip sent_ev2 == Some server5 /\
+            legal_event client_after_auth_skip received_ev2 /\
+            step_model client_after_auth_skip received_ev2 == Some client5 /\
+            Seq.equal client_sent5 server_received5 /\
+            conn_events_sent_seal_replay
+              server5
+              (sent_ev3 :: server_rest)
+              server_sent5
+              server_received5
+              server_final /\
+            conn_events_received_decode_replay
+              client5
+              (client_verify_ev :: received_ev3 :: client_rest)
+              client_sent5
+              client_received5
+              client_final
+          returns
+            exists server_tail_sent server_tail_received
+              client_tail_sent client_tail_received.
+              Seq.equal client_tail_sent server_tail_received /\
+              conn_events_sent_seal_replay
+                server_after3
+                server_rest
+                server_tail_sent
+                server_tail_received
+                server_final /\
+              conn_events_received_decode_replay
+                client_after3
+                client_rest
+                client_tail_sent
+                client_tail_received
+                client_final
+          with _.
+          ( assert (server5 == server_after2);
+            assert (client5 == client_after2);
+            lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
+              client_after2
+              client_verify_ev
+              (received_ev3 :: client_rest)
+              client_sent5
+              client_received5
+              server_received5
+              client_final;
+            eliminate exists
+              (client6:connection_model)
+              (client_sent6:B.bytes)
+              (client_received6:B.bytes).
+              legal_event client_after2 client_verify_ev /\
+              step_model client_after2 client_verify_ev == Some client6 /\
+              Seq.equal client_sent6 server_received5 /\
+              conn_events_received_decode_replay
+                client6
+                (received_ev3 :: client_rest)
+                client_sent6
+                client_received6
+                client_final
+            returns
+              exists server_tail_sent server_tail_received
+                client_tail_sent client_tail_received.
+                Seq.equal client_tail_sent server_tail_received /\
+                conn_events_sent_seal_replay
+                  server_after3
+                  server_rest
+                  server_tail_sent
+                  server_tail_received
+                  server_final /\
+                conn_events_received_decode_replay
+                  client_after3
+                  client_rest
+                  client_tail_sent
+                  client_tail_received
+                  client_final
+            with _.
+            ( assert (client6 == client_after_verify_skip);
+              lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
+                server_after2
+                client_after_verify_skip
+                sent_ev3
+                received_ev3
+                server_rest
+                client_rest
+                server_sent5
+                server_received5
+                client_sent6
+                client_received6
+                server_final
+                client_final;
+              eliminate exists
+                (server6:connection_model)
+                (client7:connection_model)
+                (server_tail_sent:B.bytes)
+                (server_tail_received:B.bytes)
+                (client_tail_sent:B.bytes)
+                (client_tail_received:B.bytes).
+                legal_event server_after2 sent_ev3 /\
+                step_model server_after2 sent_ev3 == Some server6 /\
+                legal_event client_after_verify_skip received_ev3 /\
+                step_model client_after_verify_skip received_ev3 == Some client7 /\
+                Seq.equal client_tail_sent server_tail_received /\
+                conn_events_sent_seal_replay
+                  server6
+                  server_rest
+                  server_tail_sent
+                  server_tail_received
+                  server_final /\
+                conn_events_received_decode_replay
+                  client7
+                  client_rest
+                  client_tail_sent
+                  client_tail_received
+                  client_final
+              returns
+                exists server_tail_sent' server_tail_received'
+                  client_tail_sent' client_tail_received'.
+                  Seq.equal client_tail_sent' server_tail_received' /\
+                  conn_events_sent_seal_replay
+                    server_after3
+                    server_rest
+                    server_tail_sent'
+                    server_tail_received'
+                    server_final /\
+                  conn_events_received_decode_replay
+                    client_after3
+                    client_rest
+                    client_tail_sent'
+                    client_tail_received'
+                    client_final
+              with _.
+              ( assert (server6 == server_after3);
+                assert (client7 == client_after3);
+                introduce exists
+                  (server_tail_sent':B.bytes)
+                  (server_tail_received':B.bytes)
+                  (client_tail_sent':B.bytes)
+                  (client_tail_received':B.bytes).
+                  Seq.equal client_tail_sent' server_tail_received' /\
+                  conn_events_sent_seal_replay
+                    server_after3
+                    server_rest
+                    server_tail_sent'
+                    server_tail_received'
+                    server_final /\
+                  conn_events_received_decode_replay
+                    client_after3
+                    client_rest
+                    client_tail_sent'
+                    client_tail_received'
+                    client_final
+                with
+                  server_tail_sent
+                  server_tail_received
+                  client_tail_sent
+                  client_tail_received
+                and () ) ) ) ) ) ) )
 
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_after_client_write_server_read_install_heads_with_tails
