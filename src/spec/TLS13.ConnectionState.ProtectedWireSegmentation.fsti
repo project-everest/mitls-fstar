@@ -583,6 +583,33 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
         raw_received
         final_model)
 
+val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server_hello
+  (model:CS.connection_model)
+  (sh:M.server_hello)
+  (tail:list CS.conn_event)
+  (suffix:list CS.conn_event)
+  (post_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+        model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.ServerHello sh);
+        }) == Some post_model /\
+        same_endpoint_replay_split_prefixes_equal_uniform
+        post_model
+        tail
+        suffix)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal_uniform
+        model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.ServerHello sh);
+        } :: tail)
+        suffix)
+
 val lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
   (model:CS.connection_model)
   (ch:M.client_hello)
