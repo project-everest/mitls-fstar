@@ -1076,7 +1076,13 @@ That existential midpoint has now been tightened in
 splits the same full replays, uses the named cleartext prefix step chain to prove
 that the server protected suffix starts at `server_model5` and the client suffix
 starts at `client_model4`, and returns the same contiguous protected replay-view
-package at those concrete models.
+package at those concrete models.  The same module now also exposes
+`lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_state_logs_known_start`,
+which starts one layer higher: instead of asking callers for four full replay
+predicates directly, it consumes final `connection_state`s whose `cs_event_log`s
+are exactly the named cleartext prefix followed by the named protected suffix,
+paired `cs_wire_log` byte streams, and the existing sent-seal/received-decode
+replay-consistency predicates.
 
 The Pairing-level packaging step is now factored into
 `TLS13.Impl.Driver.PairingProtectedReplay`.  Its
@@ -1093,15 +1099,17 @@ adds one more layer: from full endpoint replays over
 cleartext prefix and paired full byte streams, it invokes the concrete
 segmentation lemma and then the contiguous-view Pairing bridge.
 
-So the byte-segmentation boundary has moved again: given full replays over
-exactly `cleartext_prefix ++ protected_contiguous_suffix`, the proof now reaches
-Pairing-level application record-material agreement.  The remaining skeptical
-point is no longer the cleartext prefix byte alignment or the concrete protected
-suffix start model; it is the stronger question of where the exact prefix/suffix
-decomposition comes from in final endpoint logs.  Raw replay alone is also still
-too weak for protected records: protected equality must come from the stronger
-seal/decode projections and AEAD open-after-seal assumption, not from
-`event_raw_delta_legal` alone.
+So the byte-segmentation boundary has moved again: given final endpoint states
+whose event logs are exactly `cleartext_prefix ++ protected_contiguous_suffix`
+and whose logs satisfy the sent-seal/received-decode replay-consistency
+predicates, the proof derives the protected suffix views; given explicit full
+replays, it reaches Pairing-level application record-material agreement.  The
+remaining skeptical point is no longer the cleartext prefix byte alignment or
+the concrete protected suffix start model; it is the stronger question of where
+the exact prefix/suffix decomposition comes from in final endpoint logs.  Raw
+replay alone is also still too weak for protected records: protected equality
+must come from the stronger seal/decode projections and AEAD open-after-seal
+assumption, not from `event_raw_delta_legal` alone.
 
 One important caveat is that this full-replay bridge currently assumes the
 cleartext prefix names the same structured `ClientHello` and `ServerHello` on
