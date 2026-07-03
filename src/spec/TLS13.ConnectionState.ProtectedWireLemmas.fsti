@@ -411,6 +411,65 @@ val lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
           client_finished)
       (ensures WFL.paired_protected_handshake_wire_equivalent client server)
 
+val lemma_paired_protected_handshake_event_projection_pairs_intro
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (server_ee:protected_message_replay)
+  (server_cert:protected_message_replay)
+  (server_cv:protected_message_replay)
+  (server_finished:protected_message_replay)
+  (client_finished:protected_message_replay)
+  : Lemma
+      (requires
+        (match
+          client.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
+          server.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
+          client.CS.cs_model.CS.model_handshake.CS.hs_certificate,
+          server.CS.cs_model.CS.model_handshake.CS.hs_certificate,
+          client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
+          server.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
+          client.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
+          server.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
+          client.CS.cs_model.CS.model_handshake.CS.hs_client_finished,
+          server.CS.cs_model.CS.model_handshake.CS.hs_client_finished
+        with
+        | Some client_ee, Some server_ee_msg,
+          Some client_cert, Some server_cert_msg,
+          Some client_cv, Some server_cv_msg,
+          Some client_sf, Some server_sf,
+          Some client_cf, Some server_cf ->
+          protected_handshake_event_projection_pair
+           server_ee
+           (M.EncryptedExtensions server_ee_msg)
+           (M.EncryptedExtensions client_ee) /\
+          protected_handshake_event_projection_pair
+           server_cert
+           (M.Certificate server_cert_msg)
+           (M.Certificate client_cert) /\
+          protected_handshake_event_projection_pair
+           server_cv
+           (M.CertificateVerify server_cv_msg)
+           (M.CertificateVerify client_cv) /\
+          protected_handshake_event_projection_pair
+           server_finished
+           (M.Finished server_sf)
+           (M.Finished client_sf) /\
+          protected_handshake_event_projection_pair
+           client_finished
+           (M.Finished client_cf)
+           (M.Finished server_cf)
+        | _, _, _, _, _, _, _, _, _, _ ->
+          False))
+      (ensures
+        paired_protected_handshake_event_projection_pairs
+          client
+          server
+          server_ee
+          server_cert
+          server_cv
+          server_finished
+          client_finished)
+
 val lemma_conn_events_sent_seal_replay_head
   (model:CS.connection_model)
   (ev:CS.conn_event)

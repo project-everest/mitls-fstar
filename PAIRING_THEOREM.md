@@ -888,9 +888,18 @@ The client-Finished side now has its own verified staged extractor:
   application installs that do not affect those record directions, and extracts
   the client Finished protected-message witness with replay tails preserved.
 
-This is still not the full five-record package.  The remaining protected replay
-work is to combine the four server-flight witnesses plus the client Finished
-witness into `paired_protected_handshake_event_projection_pairs`.
+The five-record packaging boundary is also explicit:
+
+- `lemma_paired_protected_handshake_event_projection_pairs_intro` turns the four
+  server-flight witnesses plus the client Finished witness into
+  `paired_protected_handshake_event_projection_pairs`, provided they match the
+  final client/server handshake-state fields.  This is the predicate consumed by
+  the high-level bridge
+  `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections`.
+
+The remaining protected replay work is to compose the concrete staged replay
+extractors into one theorem that supplies this intro lemma from the actual
+client/server replay segments.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 

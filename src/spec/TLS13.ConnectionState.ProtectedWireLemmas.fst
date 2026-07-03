@@ -512,6 +512,84 @@ let lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
     assert False
 #pop-options
 
+let lemma_paired_protected_handshake_event_projection_pairs_intro
+  (client:connection_state)
+  (server:connection_state)
+  (server_ee:protected_message_replay)
+  (server_cert:protected_message_replay)
+  (server_cv:protected_message_replay)
+  (server_finished:protected_message_replay)
+  (client_finished:protected_message_replay)
+  : Lemma
+      (requires
+        (match
+          client.cs_model.model_handshake.hs_encrypted_extensions,
+          server.cs_model.model_handshake.hs_encrypted_extensions,
+          client.cs_model.model_handshake.hs_certificate,
+          server.cs_model.model_handshake.hs_certificate,
+          client.cs_model.model_handshake.hs_certificate_verify,
+          server.cs_model.model_handshake.hs_certificate_verify,
+          client.cs_model.model_handshake.hs_server_finished,
+          server.cs_model.model_handshake.hs_server_finished,
+          client.cs_model.model_handshake.hs_client_finished,
+          server.cs_model.model_handshake.hs_client_finished
+        with
+        | Some client_ee, Some server_ee_msg,
+          Some client_cert, Some server_cert_msg,
+          Some client_cv, Some server_cv_msg,
+          Some client_sf, Some server_sf,
+          Some client_cf, Some server_cf ->
+          protected_handshake_event_projection_pair
+            server_ee
+            (M.EncryptedExtensions server_ee_msg)
+            (M.EncryptedExtensions client_ee) /\
+          protected_handshake_event_projection_pair
+            server_cert
+            (M.Certificate server_cert_msg)
+            (M.Certificate client_cert) /\
+          protected_handshake_event_projection_pair
+            server_cv
+            (M.CertificateVerify server_cv_msg)
+            (M.CertificateVerify client_cv) /\
+          protected_handshake_event_projection_pair
+            server_finished
+            (M.Finished server_sf)
+            (M.Finished client_sf) /\
+          protected_handshake_event_projection_pair
+            client_finished
+            (M.Finished client_cf)
+            (M.Finished server_cf)
+        | _, _, _, _, _, _, _, _, _, _ ->
+          False))
+      (ensures
+        paired_protected_handshake_event_projection_pairs
+          client
+          server
+          server_ee
+          server_cert
+          server_cv
+          server_finished
+          client_finished)
+=
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_encrypted_extensions,
+    server_hs.hs_encrypted_extensions,
+    client_hs.hs_certificate,
+    server_hs.hs_certificate,
+    client_hs.hs_certificate_verify,
+    server_hs.hs_certificate_verify,
+    client_hs.hs_server_finished,
+    server_hs.hs_server_finished,
+    client_hs.hs_client_finished,
+    server_hs.hs_client_finished
+  with
+  | Some _, Some _, Some _, Some _, Some _, Some _, Some _, Some _, Some _, Some _ ->
+    ()
+  | _, _, _, _, _, _, _, _, _, _ ->
+    assert False
+
 let lemma_conn_events_sent_seal_replay_head
   (model:connection_model)
   (ev:conn_event)
