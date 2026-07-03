@@ -2080,6 +2080,196 @@ let lemma_received_replay_skip_empty_head_preserves_peer_stream
     with receiver1 tail_sent tail_received
     and () )
 
+let lemma_sent_replay_skip_zero_received_head_preserves_peer_stream
+  (receiver_raw_sent:B.bytes)
+  (sender:connection_model)
+  (ev:conn_event)
+  (sender_rest:list conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (sender_final:connection_model)
+  : Lemma
+      (requires
+        Seq.equal receiver_raw_sent sender_raw_received /\
+        conn_events_sent_seal_replay
+          sender
+          (ev :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        (match ev with
+         | ConnLocalEvent _ -> True
+         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+      (ensures
+        exists sender1 sender_tail_sent sender_tail_received.
+          legal_event sender ev /\
+          step_model sender ev == Some sender1 /\
+          Seq.equal receiver_raw_sent sender_tail_received /\
+          conn_events_sent_seal_replay
+            sender1
+            sender_rest
+            sender_tail_sent
+            sender_tail_received
+            sender_final)
+=
+  lemma_conn_events_sent_seal_replay_head
+    sender
+    ev
+    sender_rest
+    sender_raw_sent
+    sender_raw_received
+    sender_final;
+  eliminate exists
+    (sender1:connection_model)
+    (delta_sent:B.bytes)
+    (delta_received:B.bytes)
+    (tail_sent:B.bytes)
+    (tail_received:B.bytes).
+    legal_event sender ev /\
+    step_model sender ev == Some sender1 /\
+    event_raw_delta_legal sender ev delta_sent delta_received /\
+    sent_event_nonempty_seal_projection sender ev delta_sent /\
+    Seq.equal sender_raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal sender_raw_received (B.append delta_received tail_received) /\
+    conn_events_sent_seal_replay
+      sender1
+      sender_rest
+      tail_sent
+      tail_received
+      sender_final
+  returns
+    exists sender1 sender_tail_sent sender_tail_received.
+      legal_event sender ev /\
+      step_model sender ev == Some sender1 /\
+      Seq.equal receiver_raw_sent sender_tail_received /\
+      conn_events_sent_seal_replay
+        sender1
+        sender_rest
+        sender_tail_sent
+        sender_tail_received
+        sender_final
+  with _.
+  ( match ev with
+    | ConnLocalEvent _ ->
+      assert (Seq.equal delta_received B.empty)
+    | ConnNetworkEvent msg ->
+      assert (msg.CL.message_direction == CL.Sent);
+      assert (Seq.equal delta_received B.empty);
+    lemma_equal_streams_skip_empty_right
+      receiver_raw_sent
+      sender_raw_received
+      tail_received;
+    introduce exists
+      (sender1':connection_model)
+      (sender_tail_sent':B.bytes)
+      (sender_tail_received':B.bytes).
+      legal_event sender ev /\
+      step_model sender ev == Some sender1' /\
+      Seq.equal receiver_raw_sent sender_tail_received' /\
+      conn_events_sent_seal_replay
+        sender1'
+        sender_rest
+        sender_tail_sent'
+        sender_tail_received'
+        sender_final
+    with sender1 tail_sent tail_received
+    and () )
+
+let lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
+  (receiver:connection_model)
+  (ev:conn_event)
+  (receiver_rest:list conn_event)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_final:connection_model)
+  : Lemma
+      (requires
+        Seq.equal receiver_raw_sent sender_raw_received /\
+        conn_events_received_decode_replay
+          receiver
+          (ev :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final /\
+        (match ev with
+         | ConnLocalEvent _ -> True
+         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+      (ensures
+        exists receiver1 receiver_tail_sent receiver_tail_received.
+          legal_event receiver ev /\
+          step_model receiver ev == Some receiver1 /\
+          Seq.equal receiver_tail_sent sender_raw_received /\
+          conn_events_received_decode_replay
+            receiver1
+            receiver_rest
+            receiver_tail_sent
+            receiver_tail_received
+            receiver_final)
+=
+  lemma_conn_events_received_decode_replay_head
+    receiver
+    ev
+    receiver_rest
+    receiver_raw_sent
+    receiver_raw_received
+    receiver_final;
+  eliminate exists
+    (receiver1:connection_model)
+    (delta_sent:B.bytes)
+    (delta_received:B.bytes)
+    (tail_sent:B.bytes)
+    (tail_received:B.bytes).
+    legal_event receiver ev /\
+    step_model receiver ev == Some receiver1 /\
+    event_raw_delta_legal receiver ev delta_sent delta_received /\
+    received_event_nonempty_decode_projection receiver ev delta_received /\
+    Seq.equal receiver_raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal receiver_raw_received (B.append delta_received tail_received) /\
+    conn_events_received_decode_replay
+      receiver1
+      receiver_rest
+      tail_sent
+      tail_received
+      receiver_final
+  returns
+    exists receiver1 receiver_tail_sent receiver_tail_received.
+      legal_event receiver ev /\
+      step_model receiver ev == Some receiver1 /\
+      Seq.equal receiver_tail_sent sender_raw_received /\
+      conn_events_received_decode_replay
+        receiver1
+        receiver_rest
+        receiver_tail_sent
+        receiver_tail_received
+        receiver_final
+  with _.
+  ( match ev with
+    | ConnLocalEvent _ ->
+      assert (Seq.equal delta_sent B.empty)
+    | ConnNetworkEvent msg ->
+      assert (msg.CL.message_direction == CL.Received);
+      assert (Seq.equal delta_sent B.empty);
+    lemma_equal_streams_skip_empty_left
+      receiver_raw_sent
+      sender_raw_received
+      tail_sent;
+    introduce exists
+      (receiver1':connection_model)
+      (receiver_tail_sent':B.bytes)
+      (receiver_tail_received':B.bytes).
+      legal_event receiver ev /\
+      step_model receiver ev == Some receiver1' /\
+      Seq.equal receiver_tail_sent' sender_raw_received /\
+      conn_events_received_decode_replay
+        receiver1'
+        receiver_rest
+        receiver_tail_sent'
+        receiver_tail_received'
+        receiver_final
+    with receiver1 tail_sent tail_received
+    and () )
+
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_sent_event_nonempty_seal_projection_protected
   (model:connection_model)
