@@ -915,6 +915,18 @@ client/server replay segments.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
+That concrete composition is now available as
+`lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_replays`.
+It calls the verified server encrypted-flight extractor and the verified
+client-Finished extractor, then packages the resulting five protected witnesses
+existentially.  Its premises are still deliberately explicit: the caller must
+provide the staged replay shapes, the message-to-final-state correspondence, the
+server-flight key-schedule/install alignment premises, and the separate
+client-write/server-read alignment plus raw-stream equality needed for client
+Finished.  Thus the remaining gap to a true byte-trace theorem is not the
+five-message witness packaging anymore; it is deriving those staged premises from
+the full endpoint event logs and paired byte streams.
+
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
 It has the same cleartext ClientHello/ServerHello and first-epoch/no-KeyUpdate
