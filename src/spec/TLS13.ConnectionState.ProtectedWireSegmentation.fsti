@@ -738,6 +738,52 @@ val lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
           (CS.ConnLocalEvent client_ev :: client_tail)
           client_suffix)
 
+val lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
+  (server_model:CS.connection_model)
+  (client_model:CS.connection_model)
+  (sh:M.server_hello)
+  (server_tail:list CS.conn_event)
+  (server_suffix:list CS.conn_event)
+  (client_tail:list CS.conn_event)
+  (client_suffix:list CS.conn_event)
+  (server_post:CS.connection_model)
+  (client_post:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model
+          server_model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some server_post /\
+        CS.step_model
+          client_model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) == Some client_post /\
+        paired_replay_split_prefixes_equal_uniform
+          server_post
+          client_post
+          server_tail
+          server_suffix
+          client_tail
+          client_suffix)
+      (ensures
+        paired_replay_split_prefixes_equal_uniform
+          server_model
+          client_model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          } :: server_tail)
+          server_suffix
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          } :: client_tail)
+          client_suffix)
+
 val lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
