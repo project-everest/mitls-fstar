@@ -822,7 +822,15 @@ valid with an explicit sequence-number premise: `peer_record_material_agrees`
 talks about epoch/key/IV agreement, not current record sequence counters.  This
 is an important boundary in the state-machine spec, since the protected AEAD
 bridge needs nonce equality and therefore sequence equality in addition to
-key/IV agreement.
+key/IV agreement.  The helper module also proves that alignment is preserved
+when both sides advance the relevant record direction with `R.next_seq`, and it
+offers a head-replay extractor that returns the protected pair and post-head
+alignment when the caller supplies the exact post-step models and the fact that
+those steps are `next_seq` advances.  This premise is deliberately explicit:
+client Finished is a protected handshake message whose send step may install
+application write keys after advancing, so not every protected handshake head has
+the simple `next_seq` shape needed to chain to another handshake protected
+record.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
