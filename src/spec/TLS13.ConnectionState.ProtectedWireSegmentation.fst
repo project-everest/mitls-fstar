@@ -274,6 +274,125 @@ let lemma_paired_replay_split_prefixes_equal_from_full_streams
     ( assert (Seq.equal server_prefix_sent client_prefix_received);
       assert (Seq.equal client_prefix_sent server_prefix_received) )
 
+let lemma_paired_replay_split_prefixes_equal_with_full_streams_from_plain
+  (server_model:connection_model)
+  (client_model:connection_model)
+  (server_prefix:list conn_event)
+  (server_suffix:list conn_event)
+  (client_prefix:list conn_event)
+  (client_suffix:list conn_event)
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  : Lemma
+      (requires
+        paired_replay_split_prefixes_equal
+          server_model
+          client_model
+          server_prefix
+          server_suffix
+          client_prefix
+          client_suffix
+          server_full_sent
+          server_full_received
+          client_full_sent
+          client_full_received
+          server_final
+          client_final)
+      (ensures
+        paired_replay_split_prefixes_equal_with_full_streams
+          server_model
+          client_model
+          server_prefix
+          server_suffix
+          client_prefix
+          client_suffix
+          server_full_sent
+          server_full_received
+          client_full_sent
+          client_full_received
+          server_final
+          client_final)
+=
+  introduce forall
+    (server_mid:connection_model)
+    (client_mid:connection_model)
+    (server_prefix_sent:B.bytes)
+    (server_prefix_received:B.bytes)
+    (server_suffix_sent:B.bytes)
+    (server_suffix_received:B.bytes)
+    (client_prefix_sent:B.bytes)
+    (client_prefix_received:B.bytes)
+    (client_suffix_sent:B.bytes)
+    (client_suffix_received:B.bytes).
+    Seq.equal server_full_sent client_full_received /\
+    Seq.equal client_full_sent server_full_received /\
+    Seq.equal server_full_sent
+      (B.append server_prefix_sent server_suffix_sent) /\
+    Seq.equal server_full_received
+      (B.append server_prefix_received server_suffix_received) /\
+    Seq.equal client_full_sent
+      (B.append client_prefix_sent client_suffix_sent) /\
+    Seq.equal client_full_received
+      (B.append client_prefix_received client_suffix_received) /\
+    conn_events_sent_seal_replay
+      server_model
+      server_prefix
+      server_prefix_sent
+      server_prefix_received
+      server_mid /\
+    conn_events_sent_seal_replay
+      server_mid
+      server_suffix
+      server_suffix_sent
+      server_suffix_received
+      server_final /\
+    conn_events_received_decode_replay
+      server_model
+      server_prefix
+      server_prefix_sent
+      server_prefix_received
+      server_mid /\
+    conn_events_received_decode_replay
+      server_mid
+      server_suffix
+      server_suffix_sent
+      server_suffix_received
+      server_final /\
+    conn_events_sent_seal_replay
+      client_model
+      client_prefix
+      client_prefix_sent
+      client_prefix_received
+      client_mid /\
+    conn_events_sent_seal_replay
+      client_mid
+      client_suffix
+      client_suffix_sent
+      client_suffix_received
+      client_final /\
+    conn_events_received_decode_replay
+      client_model
+      client_prefix
+      client_prefix_sent
+      client_prefix_received
+      client_mid /\
+    conn_events_received_decode_replay
+      client_mid
+      client_suffix
+      client_suffix_sent
+      client_suffix_received
+      client_final ==>
+    Seq.equal server_prefix_sent client_prefix_received /\
+    Seq.equal client_prefix_sent server_prefix_received
+  with
+    introduce _ ==> _ with _.
+    ( assert (Seq.equal server_prefix_sent client_prefix_received);
+      assert (Seq.equal client_prefix_sent server_prefix_received) )
+
 let lemma_same_endpoint_replay_split_prefixes_equal_empty
   (model:connection_model)
   (suffix:list conn_event)
@@ -1064,6 +1183,450 @@ let lemma_paired_replay_split_prefixes_equal_single_local
       assert (Seq.equal server_prefix_received B.empty);
       assert (Seq.equal client_prefix_sent B.empty);
       assert (Seq.equal client_prefix_received B.empty) )
+
+let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_server_local
+  (server_model:connection_model)
+  (client_model:connection_model)
+  (server_ev:local_event)
+  (server_tail:list conn_event)
+  (server_suffix:list conn_event)
+  (client_prefix:list conn_event)
+  (client_suffix:list conn_event)
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  (server_post:connection_model)
+  : Lemma
+      (requires
+        step_model server_model (ConnLocalEvent server_ev) == Some server_post /\
+        paired_replay_split_prefixes_equal_with_full_streams
+          server_post
+          client_model
+          server_tail
+          server_suffix
+          client_prefix
+          client_suffix
+          server_full_sent
+          server_full_received
+          client_full_sent
+          client_full_received
+          server_final
+          client_final)
+      (ensures
+        paired_replay_split_prefixes_equal_with_full_streams
+          server_model
+          client_model
+          (ConnLocalEvent server_ev :: server_tail)
+          server_suffix
+          client_prefix
+          client_suffix
+          server_full_sent
+          server_full_received
+          client_full_sent
+          client_full_received
+          server_final
+          client_final)
+=
+  introduce forall
+    (server_mid:connection_model)
+    (client_mid:connection_model)
+    (server_prefix_sent:B.bytes)
+    (server_prefix_received:B.bytes)
+    (server_suffix_sent:B.bytes)
+    (server_suffix_received:B.bytes)
+    (client_prefix_sent:B.bytes)
+    (client_prefix_received:B.bytes)
+    (client_suffix_sent:B.bytes)
+    (client_suffix_received:B.bytes).
+    Seq.equal server_full_sent client_full_received /\
+    Seq.equal client_full_sent server_full_received /\
+    Seq.equal server_full_sent
+      (B.append server_prefix_sent server_suffix_sent) /\
+    Seq.equal server_full_received
+      (B.append server_prefix_received server_suffix_received) /\
+    Seq.equal client_full_sent
+      (B.append client_prefix_sent client_suffix_sent) /\
+    Seq.equal client_full_received
+      (B.append client_prefix_received client_suffix_received) /\
+    conn_events_sent_seal_replay
+      server_model
+      (ConnLocalEvent server_ev :: server_tail)
+      server_prefix_sent
+      server_prefix_received
+      server_mid /\
+    conn_events_sent_seal_replay
+      server_mid
+      server_suffix
+      server_suffix_sent
+      server_suffix_received
+      server_final /\
+    conn_events_received_decode_replay
+      server_model
+      (ConnLocalEvent server_ev :: server_tail)
+      server_prefix_sent
+      server_prefix_received
+      server_mid /\
+    conn_events_received_decode_replay
+      server_mid
+      server_suffix
+      server_suffix_sent
+      server_suffix_received
+      server_final /\
+    conn_events_sent_seal_replay
+      client_model
+      client_prefix
+      client_prefix_sent
+      client_prefix_received
+      client_mid /\
+    conn_events_sent_seal_replay
+      client_mid
+      client_suffix
+      client_suffix_sent
+      client_suffix_received
+      client_final /\
+    conn_events_received_decode_replay
+      client_model
+      client_prefix
+      client_prefix_sent
+      client_prefix_received
+      client_mid /\
+    conn_events_received_decode_replay
+      client_mid
+      client_suffix
+      client_suffix_sent
+      client_suffix_received
+      client_final ==>
+    Seq.equal server_prefix_sent client_prefix_received /\
+    Seq.equal client_prefix_sent server_prefix_received
+  with
+    introduce _ ==> _ with _.
+    ( PWL.lemma_conn_events_sent_seal_replay_head
+        server_model
+        (ConnLocalEvent server_ev)
+        server_tail
+        server_prefix_sent
+        server_prefix_received
+        server_mid;
+      eliminate exists sent_head_model sent_delta_sent sent_delta_received
+        sent_tail_sent sent_tail_received.
+        legal_event server_model (ConnLocalEvent server_ev) /\
+        step_model server_model (ConnLocalEvent server_ev) == Some sent_head_model /\
+        event_raw_delta_legal
+          server_model
+          (ConnLocalEvent server_ev)
+          sent_delta_sent
+          sent_delta_received /\
+        sent_event_nonempty_seal_projection
+          server_model
+          (ConnLocalEvent server_ev)
+          sent_delta_sent /\
+        Seq.equal server_prefix_sent (B.append sent_delta_sent sent_tail_sent) /\
+        Seq.equal server_prefix_received
+          (B.append sent_delta_received sent_tail_received) /\
+        conn_events_sent_seal_replay
+          sent_head_model
+          server_tail
+          sent_tail_sent
+          sent_tail_received
+          server_mid
+      returns
+        Seq.equal server_prefix_sent client_prefix_received /\
+        Seq.equal client_prefix_sent server_prefix_received
+      with _.
+      ( PWL.lemma_conn_events_received_decode_replay_head
+          server_model
+          (ConnLocalEvent server_ev)
+          server_tail
+          server_prefix_sent
+          server_prefix_received
+          server_mid;
+        eliminate exists received_head_model received_delta_sent received_delta_received
+          received_tail_sent received_tail_received.
+          legal_event server_model (ConnLocalEvent server_ev) /\
+          step_model server_model (ConnLocalEvent server_ev) ==
+            Some received_head_model /\
+          event_raw_delta_legal
+            server_model
+            (ConnLocalEvent server_ev)
+            received_delta_sent
+            received_delta_received /\
+          received_event_nonempty_decode_projection
+            server_model
+            (ConnLocalEvent server_ev)
+            received_delta_received /\
+          Seq.equal server_prefix_sent
+            (B.append received_delta_sent received_tail_sent) /\
+          Seq.equal server_prefix_received
+            (B.append received_delta_received received_tail_received) /\
+          conn_events_received_decode_replay
+            received_head_model
+            server_tail
+            received_tail_sent
+            received_tail_received
+            server_mid
+        returns
+          Seq.equal server_prefix_sent client_prefix_received /\
+          Seq.equal client_prefix_sent server_prefix_received
+        with _.
+        ( assert (sent_head_model == server_post);
+          assert (received_head_model == server_post);
+          assert (Seq.equal sent_delta_sent B.empty);
+          assert (Seq.equal sent_delta_received B.empty);
+          assert (Seq.equal received_delta_sent B.empty);
+          assert (Seq.equal received_delta_received B.empty);
+          Seq.lemma_eq_elim sent_delta_sent B.empty;
+          Seq.lemma_eq_elim sent_delta_received B.empty;
+          Seq.lemma_eq_elim received_delta_sent B.empty;
+          Seq.lemma_eq_elim received_delta_received B.empty;
+          assert (Seq.equal (B.append sent_delta_sent sent_tail_sent) sent_tail_sent);
+          assert (Seq.equal (B.append sent_delta_received sent_tail_received) sent_tail_received);
+          assert (Seq.equal (B.append received_delta_sent received_tail_sent) received_tail_sent);
+          assert (Seq.equal (B.append received_delta_received received_tail_received) received_tail_received);
+          Seq.lemma_eq_elim server_prefix_sent
+            (B.append sent_delta_sent sent_tail_sent);
+          Seq.lemma_eq_elim server_prefix_received
+            (B.append sent_delta_received sent_tail_received);
+          assert (Seq.equal server_prefix_sent sent_tail_sent);
+          assert (Seq.equal server_prefix_received sent_tail_received);
+          Seq.lemma_eq_elim server_prefix_sent sent_tail_sent;
+          Seq.lemma_eq_elim server_prefix_received sent_tail_received;
+          assert (Seq.equal received_tail_sent sent_tail_sent);
+          assert (Seq.equal received_tail_received sent_tail_received);
+          Seq.lemma_eq_elim received_tail_sent sent_tail_sent;
+          Seq.lemma_eq_elim received_tail_received sent_tail_received;
+          assert (Seq.equal server_full_sent
+            (B.append sent_tail_sent server_suffix_sent));
+          assert (Seq.equal server_full_received
+            (B.append sent_tail_received server_suffix_received));
+          assert (Seq.equal sent_tail_sent client_prefix_received);
+          assert (Seq.equal client_prefix_sent sent_tail_received);
+          assert (Seq.equal server_prefix_sent client_prefix_received);
+          assert (Seq.equal client_prefix_sent server_prefix_received) ) ) )
+
+let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_client_local
+  (server_model:connection_model)
+  (client_model:connection_model)
+  (client_ev:local_event)
+  (server_prefix:list conn_event)
+  (server_suffix:list conn_event)
+  (client_tail:list conn_event)
+  (client_suffix:list conn_event)
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  (client_post:connection_model)
+  : Lemma
+      (requires
+        step_model client_model (ConnLocalEvent client_ev) == Some client_post /\
+        paired_replay_split_prefixes_equal_with_full_streams
+          server_model
+          client_post
+          server_prefix
+          server_suffix
+          client_tail
+          client_suffix
+          server_full_sent
+          server_full_received
+          client_full_sent
+          client_full_received
+          server_final
+          client_final)
+      (ensures
+        paired_replay_split_prefixes_equal_with_full_streams
+          server_model
+          client_model
+          server_prefix
+          server_suffix
+          (ConnLocalEvent client_ev :: client_tail)
+          client_suffix
+          server_full_sent
+          server_full_received
+          client_full_sent
+          client_full_received
+          server_final
+          client_final)
+=
+  introduce forall
+    (server_mid:connection_model)
+    (client_mid:connection_model)
+    (server_prefix_sent:B.bytes)
+    (server_prefix_received:B.bytes)
+    (server_suffix_sent:B.bytes)
+    (server_suffix_received:B.bytes)
+    (client_prefix_sent:B.bytes)
+    (client_prefix_received:B.bytes)
+    (client_suffix_sent:B.bytes)
+    (client_suffix_received:B.bytes).
+    Seq.equal server_full_sent client_full_received /\
+    Seq.equal client_full_sent server_full_received /\
+    Seq.equal server_full_sent
+      (B.append server_prefix_sent server_suffix_sent) /\
+    Seq.equal server_full_received
+      (B.append server_prefix_received server_suffix_received) /\
+    Seq.equal client_full_sent
+      (B.append client_prefix_sent client_suffix_sent) /\
+    Seq.equal client_full_received
+      (B.append client_prefix_received client_suffix_received) /\
+    conn_events_sent_seal_replay
+      server_model
+      server_prefix
+      server_prefix_sent
+      server_prefix_received
+      server_mid /\
+    conn_events_sent_seal_replay
+      server_mid
+      server_suffix
+      server_suffix_sent
+      server_suffix_received
+      server_final /\
+    conn_events_received_decode_replay
+      server_model
+      server_prefix
+      server_prefix_sent
+      server_prefix_received
+      server_mid /\
+    conn_events_received_decode_replay
+      server_mid
+      server_suffix
+      server_suffix_sent
+      server_suffix_received
+      server_final /\
+    conn_events_sent_seal_replay
+      client_model
+      (ConnLocalEvent client_ev :: client_tail)
+      client_prefix_sent
+      client_prefix_received
+      client_mid /\
+    conn_events_sent_seal_replay
+      client_mid
+      client_suffix
+      client_suffix_sent
+      client_suffix_received
+      client_final /\
+    conn_events_received_decode_replay
+      client_model
+      (ConnLocalEvent client_ev :: client_tail)
+      client_prefix_sent
+      client_prefix_received
+      client_mid /\
+    conn_events_received_decode_replay
+      client_mid
+      client_suffix
+      client_suffix_sent
+      client_suffix_received
+      client_final ==>
+    Seq.equal server_prefix_sent client_prefix_received /\
+    Seq.equal client_prefix_sent server_prefix_received
+  with
+    introduce _ ==> _ with _.
+    ( PWL.lemma_conn_events_sent_seal_replay_head
+        client_model
+        (ConnLocalEvent client_ev)
+        client_tail
+        client_prefix_sent
+        client_prefix_received
+        client_mid;
+      eliminate exists sent_head_model sent_delta_sent sent_delta_received
+        sent_tail_sent sent_tail_received.
+        legal_event client_model (ConnLocalEvent client_ev) /\
+        step_model client_model (ConnLocalEvent client_ev) == Some sent_head_model /\
+        event_raw_delta_legal
+          client_model
+          (ConnLocalEvent client_ev)
+          sent_delta_sent
+          sent_delta_received /\
+        sent_event_nonempty_seal_projection
+          client_model
+          (ConnLocalEvent client_ev)
+          sent_delta_sent /\
+        Seq.equal client_prefix_sent (B.append sent_delta_sent sent_tail_sent) /\
+        Seq.equal client_prefix_received
+          (B.append sent_delta_received sent_tail_received) /\
+        conn_events_sent_seal_replay
+          sent_head_model
+          client_tail
+          sent_tail_sent
+          sent_tail_received
+          client_mid
+      returns
+        Seq.equal server_prefix_sent client_prefix_received /\
+        Seq.equal client_prefix_sent server_prefix_received
+      with _.
+      ( PWL.lemma_conn_events_received_decode_replay_head
+          client_model
+          (ConnLocalEvent client_ev)
+          client_tail
+          client_prefix_sent
+          client_prefix_received
+          client_mid;
+        eliminate exists received_head_model received_delta_sent received_delta_received
+          received_tail_sent received_tail_received.
+          legal_event client_model (ConnLocalEvent client_ev) /\
+          step_model client_model (ConnLocalEvent client_ev) ==
+            Some received_head_model /\
+          event_raw_delta_legal
+            client_model
+            (ConnLocalEvent client_ev)
+            received_delta_sent
+            received_delta_received /\
+          received_event_nonempty_decode_projection
+            client_model
+            (ConnLocalEvent client_ev)
+            received_delta_received /\
+          Seq.equal client_prefix_sent
+            (B.append received_delta_sent received_tail_sent) /\
+          Seq.equal client_prefix_received
+            (B.append received_delta_received received_tail_received) /\
+          conn_events_received_decode_replay
+            received_head_model
+            client_tail
+            received_tail_sent
+            received_tail_received
+            client_mid
+        returns
+          Seq.equal server_prefix_sent client_prefix_received /\
+          Seq.equal client_prefix_sent server_prefix_received
+        with _.
+        ( assert (sent_head_model == client_post);
+          assert (received_head_model == client_post);
+          assert (Seq.equal sent_delta_sent B.empty);
+          assert (Seq.equal sent_delta_received B.empty);
+          assert (Seq.equal received_delta_sent B.empty);
+          assert (Seq.equal received_delta_received B.empty);
+          Seq.lemma_eq_elim sent_delta_sent B.empty;
+          Seq.lemma_eq_elim sent_delta_received B.empty;
+          Seq.lemma_eq_elim received_delta_sent B.empty;
+          Seq.lemma_eq_elim received_delta_received B.empty;
+          assert (Seq.equal (B.append sent_delta_sent sent_tail_sent) sent_tail_sent);
+          assert (Seq.equal (B.append sent_delta_received sent_tail_received) sent_tail_received);
+          assert (Seq.equal (B.append received_delta_sent received_tail_sent) received_tail_sent);
+          assert (Seq.equal (B.append received_delta_received received_tail_received) received_tail_received);
+          Seq.lemma_eq_elim client_prefix_sent
+            (B.append sent_delta_sent sent_tail_sent);
+          Seq.lemma_eq_elim client_prefix_received
+            (B.append sent_delta_received sent_tail_received);
+          assert (Seq.equal client_prefix_sent sent_tail_sent);
+          assert (Seq.equal client_prefix_received sent_tail_received);
+          Seq.lemma_eq_elim client_prefix_sent sent_tail_sent;
+          Seq.lemma_eq_elim client_prefix_received sent_tail_received;
+          assert (Seq.equal received_tail_sent sent_tail_sent);
+          assert (Seq.equal received_tail_received sent_tail_received);
+          Seq.lemma_eq_elim received_tail_sent sent_tail_sent;
+          Seq.lemma_eq_elim received_tail_received sent_tail_received;
+          assert (Seq.equal client_full_sent
+            (B.append sent_tail_sent client_suffix_sent));
+          assert (Seq.equal client_full_received
+            (B.append sent_tail_received client_suffix_received));
+          assert (Seq.equal server_prefix_sent sent_tail_received);
+          assert (Seq.equal sent_tail_sent server_prefix_received);
+          assert (Seq.equal server_prefix_sent client_prefix_received);
+          assert (Seq.equal client_prefix_sent server_prefix_received) ) ) )
 
 let lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_model:connection_model)
