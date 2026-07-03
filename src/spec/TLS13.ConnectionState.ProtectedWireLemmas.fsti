@@ -90,6 +90,18 @@ val lemma_append_heads_equal_same_len:
       Seq.length left == Seq.length right)
     (ensures Seq.equal left right)
 
+val lemma_append_tails_equal_same_len:
+  #a:eqtype ->
+  left:Seq.seq a ->
+  left_tail:Seq.seq a ->
+  right:Seq.seq a ->
+  right_tail:Seq.seq a ->
+  Lemma
+    (requires
+      Seq.equal (Seq.append left left_tail) (Seq.append right right_tail) /\
+      Seq.length left == Seq.length right)
+    (ensures Seq.equal left_tail right_tail)
+
 val lemma_raw_delta_heads_equal_same_len:
   sender_delta:B.bytes ->
   sender_tail:B.bytes ->
@@ -865,6 +877,40 @@ val lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
           }
           sent_msg
           received_msg)
+
+val lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (sender_stream:B.bytes)
+  (receiver_stream:B.bytes)
+  (sender_delta:B.bytes)
+  (sender_tail:B.bytes)
+  (receiver_delta:B.bytes)
+  (receiver_tail:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal sender_stream receiver_stream /\
+        Seq.equal sender_stream (B.append sender_delta sender_tail) /\
+        Seq.equal receiver_stream (B.append receiver_delta receiver_tail) /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        CS.sent_event_seal_projection
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          })
+          sender_delta /\
+        CS.received_event_decode_projection
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          })
+          receiver_delta)
+      (ensures Seq.equal sender_tail receiver_tail)
 
 val lemma_protected_handshake_event_projection_pair_from_head_replays
   (sender:CS.connection_model)

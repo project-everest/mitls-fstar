@@ -7,6 +7,7 @@ module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module RD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
+module SeqProps = FStar.Seq.Properties
 module T = TLS13.Types
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
@@ -91,6 +92,21 @@ let lemma_append_heads_equal_same_len
   assert (Seq.equal (Seq.slice right_full 0 (Seq.length left)) right);
   assert (Seq.equal (Seq.slice left_full 0 (Seq.length left)) right);
   Seq.lemma_eq_elim (Seq.slice left_full 0 (Seq.length left)) left
+
+let lemma_append_tails_equal_same_len
+  #a
+  (left:Seq.seq a)
+  (left_tail:Seq.seq a)
+  (right:Seq.seq a)
+  (right_tail:Seq.seq a)
+  : Lemma
+    (requires
+      Seq.equal (Seq.append left left_tail) (Seq.append right right_tail) /\
+      Seq.length left == Seq.length right)
+    (ensures Seq.equal left_tail right_tail)
+=
+  SeqProps.lemma_append_inj left left_tail right right_tail;
+  assert (Seq.equal left_tail right_tail)
 
 let lemma_raw_delta_heads_equal_same_len
   (sender_delta:B.bytes)
@@ -1488,6 +1504,119 @@ let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
             received_msg
             sender_stream
             receiver_stream
+            sender_delta
+            sender_tail
+            receiver_delta
+            receiver_tail ) )
+    | _ ->
+      assert False
+  | _ ->
+    assert False
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
+  (sender:connection_model)
+  (receiver:connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (sender_stream:B.bytes)
+  (receiver_stream:B.bytes)
+  (sender_delta:B.bytes)
+  (sender_tail:B.bytes)
+  (receiver_delta:B.bytes)
+  (receiver_tail:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal sender_stream receiver_stream /\
+        Seq.equal sender_stream (B.append sender_delta sender_tail) /\
+        Seq.equal receiver_stream (B.append receiver_delta receiver_tail) /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        sent_event_seal_projection
+          sender
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          })
+          sender_delta /\
+        received_event_decode_projection
+          receiver
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake received_msg;
+          })
+          receiver_delta)
+      (ensures Seq.equal sender_tail receiver_tail)
+=
+  match sent_msg with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ ->
+    match received_msg with
+    | M.EncryptedExtensions _
+    | M.Certificate _
+    | M.CertificateVerify _
+    | M.Finished _ ->
+      assert (network_message_is_cleartext CL.Sent (M.TlsHandshake sent_msg) == false);
+      assert (network_message_is_cleartext CL.Received (M.TlsHandshake received_msg) == false);
+      assert (protected_record_count CL.Sent (M.TlsHandshake sent_msg) == 1);
+      assert (protected_record_count CL.Received (M.TlsHandshake received_msg) == 1);
+      assert (sent_single_protected_message_seal
+        sender
+        (M.TlsHandshake sent_msg)
+        sender_delta);
+      assert (received_single_protected_message_decode
+        receiver
+        (M.TlsHandshake received_msg)
+        receiver_delta);
+      eliminate exists (sender_ciphertext:M.sealed_record).
+        W.parse_record sender_delta ==
+          Some (T.ApplicationData, sender_ciphertext, B.length sender_delta) /\
+        R.seal
+          sender.model_record.record_write
+          (record_header_aad sender_delta)
+          {
+            R.content_type = T.ApplicationData;
+            R.fragment = sent_tls_inner_plaintext_fragment (M.TlsHandshake sent_msg);
+          } ==
+          Some (sender_ciphertext, R.next_seq sender.model_record.record_write)
+      returns Seq.equal sender_tail receiver_tail
+      with _.
+      ( W.lemma_parse_record_implies_parse_record_wire sender_delta;
+        assert (W.parse_record_wire sender_delta ==
+          Some (T.ApplicationData, sender_ciphertext, B.length sender_delta));
+        eliminate exists
+          (receiver_fragment:M.sealed_record)
+          (opened:B.bytes)
+          (plaintext:M.plaintext).
+          W.parse_record_wire receiver_delta ==
+            Some (T.ApplicationData, receiver_fragment, B.length receiver_delta) /\
+          received_record_opened receiver receiver_delta receiver_fragment opened /\
+          W.parse_plaintext opened == Some plaintext /\
+          W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
+            Some (M.TlsHandshake received_msg)
+        returns Seq.equal sender_tail receiver_tail
+        with _.
+        ( lemma_equal_stream_record_head_lengths
+            sender_stream
+            receiver_stream
+            sender_delta
+            sender_tail
+            receiver_delta
+            receiver_tail
+            T.ApplicationData
+            sender_ciphertext
+            T.ApplicationData
+            receiver_fragment;
+          assert (B.length sender_delta == B.length receiver_delta);
+          Seq.lemma_eq_elim sender_stream receiver_stream;
+          Seq.lemma_eq_elim sender_stream (B.append sender_delta sender_tail);
+          assert (Seq.equal
+            (B.append sender_delta sender_tail)
+            (B.append receiver_delta receiver_tail));
+          lemma_append_tails_equal_same_len
             sender_delta
             sender_tail
             receiver_delta
