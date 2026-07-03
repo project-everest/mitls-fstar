@@ -590,6 +590,125 @@ let lemma_paired_protected_handshake_event_projection_pairs_intro
   | _, _, _, _, _, _, _, _, _, _ ->
     assert False
 
+let lemma_paired_protected_handshake_event_projection_pairs_intro_from_messages
+  (client:connection_state)
+  (server:connection_state)
+  (server_ee:protected_message_replay)
+  (server_cert:protected_message_replay)
+  (server_cv:protected_message_replay)
+  (server_finished:protected_message_replay)
+  (client_finished:protected_message_replay)
+  (sent_msg0:M.handshake_msg)
+  (received_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (sent_msg2:M.handshake_msg)
+  (received_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (received_msg3:M.handshake_msg)
+  (sent_msg4:M.handshake_msg)
+  (received_msg4:M.handshake_msg)
+  : Lemma
+      (requires
+        (match
+          client.cs_model.model_handshake.hs_encrypted_extensions,
+          server.cs_model.model_handshake.hs_encrypted_extensions,
+          client.cs_model.model_handshake.hs_certificate,
+          server.cs_model.model_handshake.hs_certificate,
+          client.cs_model.model_handshake.hs_certificate_verify,
+          server.cs_model.model_handshake.hs_certificate_verify,
+          client.cs_model.model_handshake.hs_server_finished,
+          server.cs_model.model_handshake.hs_server_finished,
+          client.cs_model.model_handshake.hs_client_finished,
+          server.cs_model.model_handshake.hs_client_finished
+        with
+        | Some client_ee, Some server_ee_msg,
+          Some client_cert, Some server_cert_msg,
+          Some client_cv, Some server_cv_msg,
+          Some client_sf, Some server_sf,
+          Some client_cf, Some server_cf ->
+          sent_msg0 == M.EncryptedExtensions server_ee_msg /\
+          received_msg0 == M.EncryptedExtensions client_ee /\
+          sent_msg1 == M.Certificate server_cert_msg /\
+          received_msg1 == M.Certificate client_cert /\
+          sent_msg2 == M.CertificateVerify server_cv_msg /\
+          received_msg2 == M.CertificateVerify client_cv /\
+          sent_msg3 == M.Finished server_sf /\
+          received_msg3 == M.Finished client_sf /\
+          sent_msg4 == M.Finished client_cf /\
+          received_msg4 == M.Finished server_cf
+        | _, _, _, _, _, _, _, _, _, _ ->
+          False) /\
+        protected_handshake_event_projection_pair
+          server_ee
+          sent_msg0
+          received_msg0 /\
+        protected_handshake_event_projection_pair
+          server_cert
+          sent_msg1
+          received_msg1 /\
+        protected_handshake_event_projection_pair
+          server_cv
+          sent_msg2
+          received_msg2 /\
+        protected_handshake_event_projection_pair
+          server_finished
+          sent_msg3
+          received_msg3 /\
+        protected_handshake_event_projection_pair
+          client_finished
+          sent_msg4
+          received_msg4)
+      (ensures
+        paired_protected_handshake_event_projection_pairs
+          client
+          server
+          server_ee
+          server_cert
+          server_cv
+          server_finished
+          client_finished)
+=
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_encrypted_extensions,
+    server_hs.hs_encrypted_extensions,
+    client_hs.hs_certificate,
+    server_hs.hs_certificate,
+    client_hs.hs_certificate_verify,
+    server_hs.hs_certificate_verify,
+    client_hs.hs_server_finished,
+    server_hs.hs_server_finished,
+    client_hs.hs_client_finished,
+    server_hs.hs_client_finished
+  with
+  | Some client_ee, Some server_ee_msg,
+    Some client_cert, Some server_cert_msg,
+    Some client_cv, Some server_cv_msg,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    assert (sent_msg0 == M.EncryptedExtensions server_ee_msg);
+    assert (received_msg0 == M.EncryptedExtensions client_ee);
+    assert (sent_msg1 == M.Certificate server_cert_msg);
+    assert (received_msg1 == M.Certificate client_cert);
+    assert (sent_msg2 == M.CertificateVerify server_cv_msg);
+    assert (received_msg2 == M.CertificateVerify client_cv);
+    assert (sent_msg3 == M.Finished server_sf);
+    assert (received_msg3 == M.Finished client_sf);
+    assert (sent_msg4 == M.Finished client_cf);
+    assert (received_msg4 == M.Finished server_cf);
+    lemma_paired_protected_handshake_event_projection_pairs_intro
+      client
+      server
+      server_ee
+      server_cert
+      server_cv
+      server_finished
+      client_finished
+  | _, _, _, _, _, _, _, _, _, _ ->
+    assert False
+
 let lemma_conn_events_sent_seal_replay_head
   (model:connection_model)
   (ev:conn_event)

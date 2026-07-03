@@ -896,6 +896,11 @@ The five-record packaging boundary is also explicit:
   final client/server handshake-state fields.  This is the predicate consumed by
   the high-level bridge
   `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections`.
+- `lemma_paired_protected_handshake_event_projection_pairs_intro_from_messages`
+  is the same bridge in the form used by staged replay extractors: it accepts the
+  five protected-message pairs for explicit `sent_msg`/`received_msg` variables
+  and packages them after proving those variables are exactly the messages stored
+  in the final client/server handshake states.
 
 The remaining protected replay work is to compose the concrete staged replay
 extractors into one theorem that supplies this intro lemma from the actual
