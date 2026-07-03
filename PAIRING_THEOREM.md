@@ -908,6 +908,16 @@ client/server replay segments.
 The AEAD open(seal(...)) step is available, but it remains an explicit trust
 assumption in the crypto spec.
 
+At the driver-pairing level there is also now an existential wrapper,
+`lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
+It has the same cleartext ClientHello/ServerHello and first-epoch/no-KeyUpdate
+requirements as the explicit five-witness theorem, but its protected premise is
+only that the five protected projection witnesses exist.  This is the theorem
+shape the eventual replay/byte theorem should target: prove existence of the
+five protected witnesses from replay, then obtain `paired_handshake_events`, both
+key-derivation checkpoints, and both application record-material directions
+without exposing witness records at the caller boundary.
+
 ### Phase 5: optional existential/server-run theorem
 
 After the paired-run theorem is in place, an existential theorem can be attempted:
