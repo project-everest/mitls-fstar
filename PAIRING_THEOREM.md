@@ -1031,8 +1031,13 @@ suffix.  It further proves the one-local-event variants
 `lemma_same_endpoint_replay_split_prefixes_equal_single_local` and
 `lemma_paired_replay_split_prefixes_equal_single_local`, covering the next
 simplest zero-byte prefix step and providing a template for discharging local
-pre-protected events in the concrete TLS prefix.  The remaining skeptical point
-is still byte
+pre-protected events in the concrete TLS prefix.  The same-endpoint prefix side
+also now has
+`lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext`, which
+discharges one deterministic sent cleartext network event (the pattern needed
+for client-sent ClientHello and server-sent ServerHello on the endpoint's own
+sent log).  The harder cross-endpoint and received-cleartext cases still require
+parseback/injectivity facts.  The remaining skeptical point is still byte
 determinacy for protected records: raw replay alone is too weak, so these prefix
 equalities must come from the stronger seal/decode projections and cleartext
 parseback facts, not from `event_raw_delta_legal` alone.

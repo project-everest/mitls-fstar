@@ -1,6 +1,7 @@
 module TLS13.ConnectionState.ProtectedWireSegmentation
 
 module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
 module PWL = TLS13.ConnectionState.ProtectedWireLemmas
@@ -140,6 +141,91 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_local
     ( assert (Seq.equal sent_prefix_sent B.empty);
       assert (Seq.equal sent_prefix_received B.empty);
       assert (Seq.equal received_prefix_sent B.empty);
+      assert (Seq.equal received_prefix_received B.empty) )
+
+let lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
+  (model:connection_model)
+  (msg:M.tls_message)
+  (suffix:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        network_message_is_cleartext CL.Sent msg == true)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal
+          model
+          [ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          }]
+          suffix
+          raw_sent
+          raw_received
+          final_model)
+=
+  introduce forall
+    (sent_mid:connection_model)
+    (received_mid:connection_model)
+    (sent_prefix_sent:B.bytes)
+    (sent_prefix_received:B.bytes)
+    (sent_suffix_sent:B.bytes)
+    (sent_suffix_received:B.bytes)
+    (received_prefix_sent:B.bytes)
+    (received_prefix_received:B.bytes)
+    (received_suffix_sent:B.bytes)
+    (received_suffix_received:B.bytes).
+    Seq.equal raw_sent (B.append sent_prefix_sent sent_suffix_sent) /\
+    Seq.equal raw_received
+      (B.append sent_prefix_received sent_suffix_received) /\
+    Seq.equal raw_sent
+      (B.append received_prefix_sent received_suffix_sent) /\
+    Seq.equal raw_received
+      (B.append received_prefix_received received_suffix_received) /\
+    conn_events_sent_seal_replay
+      model
+      [ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = msg;
+      }]
+      sent_prefix_sent
+      sent_prefix_received
+      sent_mid /\
+    conn_events_sent_seal_replay
+      sent_mid
+      suffix
+      sent_suffix_sent
+      sent_suffix_received
+      final_model /\
+    conn_events_received_decode_replay
+      model
+      [ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = msg;
+      }]
+      received_prefix_sent
+      received_prefix_received
+      received_mid /\
+    conn_events_received_decode_replay
+      received_mid
+      suffix
+      received_suffix_sent
+      received_suffix_received
+      final_model ==>
+    Seq.equal sent_prefix_sent received_prefix_sent /\
+    Seq.equal sent_prefix_received received_prefix_received
+  with
+    introduce _ ==> _ with _.
+    ( assert (
+        Seq.equal
+          sent_prefix_sent
+          (serialized_cleartext_tls_message msg));
+      assert (
+        Seq.equal
+          received_prefix_sent
+          (serialized_cleartext_tls_message msg));
+      assert (Seq.equal sent_prefix_received B.empty);
       assert (Seq.equal received_prefix_received B.empty) )
 
 let lemma_paired_replay_split_prefixes_equal_empty

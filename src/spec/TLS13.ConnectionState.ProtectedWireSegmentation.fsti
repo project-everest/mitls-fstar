@@ -1,6 +1,7 @@
 module TLS13.ConnectionState.ProtectedWireSegmentation
 
 module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
 module PWL = TLS13.ConnectionState.ProtectedWireLemmas
@@ -175,6 +176,28 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_local
         raw_sent
         raw_received
         final_model)
+
+val lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
+  (model:CS.connection_model)
+  (msg:M.tls_message)
+  (suffix:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.network_message_is_cleartext CL.Sent msg == true)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal
+          model
+          [CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = msg;
+          }]
+          suffix
+          raw_sent
+          raw_received
+          final_model)
 
 val lemma_paired_replay_split_prefixes_equal_empty
   (server_model:CS.connection_model)
