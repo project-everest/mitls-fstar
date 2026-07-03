@@ -11,6 +11,234 @@ module WFL = TLS13.Spec.WireFormatLemmas
 open TLS13.Spec.ConnectionState
 
 #push-options "--split_queries always --z3rlimit 10"
+let lemma_sent_client_hello_raw_from_sent_replay_single
+  (model:connection_model)
+  (ch:M.client_hello)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        conn_events_sent_seal_replay
+          model
+          [ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }]
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        Seq.equal raw_sent
+          (serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ClientHello ch))) /\
+        Seq.equal raw_received B.empty)
+=
+  let ev = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+  } in
+  PWL.lemma_conn_events_sent_seal_replay_head
+    model
+    ev
+    []
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    legal_event model ev /\
+    step_model model ev == Some model1 /\
+    event_raw_delta_legal model ev delta_sent delta_received /\
+    sent_event_nonempty_seal_projection model ev delta_sent /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    conn_events_sent_seal_replay
+      model1
+      []
+      tail_sent
+      tail_received
+      final_model
+  returns
+    Seq.equal raw_sent
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ClientHello ch))) /\
+    Seq.equal raw_received B.empty
+  with _.
+  ( assert (cleartext_tls_message_raw
+      (M.TlsHandshake (M.ClientHello ch))
+      delta_sent);
+    assert (Seq.equal delta_sent
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ClientHello ch))));
+    assert (Seq.equal delta_received B.empty);
+    assert (Seq.equal tail_sent B.empty);
+    assert (Seq.equal tail_received B.empty);
+    Seq.lemma_eq_elim tail_sent B.empty;
+    Seq.lemma_eq_elim tail_received B.empty;
+    assert (Seq.equal (B.append delta_sent tail_sent) delta_sent);
+    assert (Seq.equal (B.append delta_received tail_received) B.empty);
+    Seq.lemma_eq_elim raw_sent (B.append delta_sent tail_sent);
+    Seq.lemma_eq_elim raw_received (B.append delta_received tail_received);
+    assert (Seq.equal raw_sent delta_sent);
+    assert (Seq.equal raw_received B.empty);
+    Seq.lemma_eq_elim raw_sent delta_sent;
+    assert (Seq.equal raw_sent
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ClientHello ch)))) )
+
+let lemma_sent_server_hello_raw_from_sent_replay_single
+  (model:connection_model)
+  (sh:M.server_hello)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        conn_events_sent_seal_replay
+          model
+          [ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }]
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        Seq.equal raw_sent
+          (serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sh))) /\
+        Seq.equal raw_received B.empty)
+=
+  let ev = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ServerHello sh);
+  } in
+  PWL.lemma_conn_events_sent_seal_replay_head
+    model
+    ev
+    []
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    legal_event model ev /\
+    step_model model ev == Some model1 /\
+    event_raw_delta_legal model ev delta_sent delta_received /\
+    sent_event_nonempty_seal_projection model ev delta_sent /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    conn_events_sent_seal_replay
+      model1
+      []
+      tail_sent
+      tail_received
+      final_model
+  returns
+    Seq.equal raw_sent
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ServerHello sh))) /\
+    Seq.equal raw_received B.empty
+  with _.
+  ( assert (cleartext_tls_message_raw
+      (M.TlsHandshake (M.ServerHello sh))
+      delta_sent);
+    assert (Seq.equal delta_sent
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ServerHello sh))));
+    assert (Seq.equal delta_received B.empty);
+    assert (Seq.equal tail_sent B.empty);
+    assert (Seq.equal tail_received B.empty);
+    Seq.lemma_eq_elim tail_sent B.empty;
+    Seq.lemma_eq_elim tail_received B.empty;
+    assert (Seq.equal (B.append delta_sent tail_sent) delta_sent);
+    assert (Seq.equal (B.append delta_received tail_received) B.empty);
+    Seq.lemma_eq_elim raw_sent (B.append delta_sent tail_sent);
+    Seq.lemma_eq_elim raw_received (B.append delta_received tail_received);
+    assert (Seq.equal raw_sent delta_sent);
+    assert (Seq.equal raw_received B.empty);
+    Seq.lemma_eq_elim raw_sent delta_sent;
+    assert (Seq.equal raw_sent
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ServerHello sh)))) )
+
+let lemma_received_server_hello_raw_from_received_replay_single
+  (model:connection_model)
+  (sh:M.server_hello)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        conn_events_received_decode_replay
+          model
+          [ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }]
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        Seq.equal raw_sent B.empty /\
+        Seq.equal raw_received
+          (serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sh))))
+=
+  let ev = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ServerHello sh);
+  } in
+  PWL.lemma_conn_events_received_decode_replay_head
+    model
+    ev
+    []
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    legal_event model ev /\
+    step_model model ev == Some model1 /\
+    event_raw_delta_legal model ev delta_sent delta_received /\
+    received_event_nonempty_decode_projection model ev delta_received /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    conn_events_received_decode_replay
+      model1
+      []
+      tail_sent
+      tail_received
+      final_model
+  returns
+    Seq.equal raw_sent B.empty /\
+    Seq.equal raw_received
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ServerHello sh)))
+  with _.
+  ( assert (Seq.equal delta_sent B.empty);
+    assert (received_cleartext_tls_message_raw
+      (M.TlsHandshake (M.ServerHello sh))
+      delta_received);
+    assert (cleartext_tls_message_raw
+      (M.TlsHandshake (M.ServerHello sh))
+      delta_received);
+    assert (Seq.equal delta_received
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ServerHello sh))));
+    assert (Seq.equal tail_sent B.empty);
+    assert (Seq.equal tail_received B.empty);
+    Seq.lemma_eq_elim tail_sent B.empty;
+    Seq.lemma_eq_elim tail_received B.empty;
+    assert (Seq.equal (B.append delta_sent tail_sent) B.empty);
+    assert (Seq.equal (B.append delta_received tail_received) delta_received);
+    Seq.lemma_eq_elim raw_sent (B.append delta_sent tail_sent);
+    Seq.lemma_eq_elim raw_received (B.append delta_received tail_received);
+    assert (Seq.equal raw_sent B.empty);
+    assert (Seq.equal raw_received delta_received);
+    Seq.lemma_eq_elim raw_received delta_received;
+    assert (Seq.equal raw_received
+      (serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ServerHello sh)))) )
+
 let lemma_received_client_hello_raw_from_sent_replay_single
   (model:connection_model)
   (ch:M.client_hello)
