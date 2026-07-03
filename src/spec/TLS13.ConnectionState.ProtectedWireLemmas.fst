@@ -3228,6 +3228,58 @@ let lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_eq
         sent_suffix_received
       and () ) )
 
+let lemma_paired_replay_suffixes_equal_from_equal_prefixes
+  (server_full_sent:B.bytes)
+  (server_full_received:B.bytes)
+  (client_full_sent:B.bytes)
+  (client_full_received:B.bytes)
+  (server_prefix_sent:B.bytes)
+  (server_prefix_received:B.bytes)
+  (server_suffix_sent:B.bytes)
+  (server_suffix_received:B.bytes)
+  (client_prefix_sent:B.bytes)
+  (client_prefix_received:B.bytes)
+  (client_suffix_sent:B.bytes)
+  (client_suffix_received:B.bytes)
+  : Lemma
+    (requires
+      Seq.equal server_full_sent client_full_received /\
+      Seq.equal client_full_sent server_full_received /\
+      Seq.equal server_full_sent
+        (B.append server_prefix_sent server_suffix_sent) /\
+      Seq.equal server_full_received
+        (B.append server_prefix_received server_suffix_received) /\
+      Seq.equal client_full_sent
+        (B.append client_prefix_sent client_suffix_sent) /\
+      Seq.equal client_full_received
+        (B.append client_prefix_received client_suffix_received) /\
+      Seq.equal server_prefix_sent client_prefix_received /\
+      Seq.equal client_prefix_sent server_prefix_received)
+    (ensures
+      Seq.equal server_suffix_sent client_suffix_received /\
+      Seq.equal client_suffix_sent server_suffix_received)
+=
+  assert (
+    Seq.equal
+      (B.append server_prefix_sent server_suffix_sent)
+      (B.append client_prefix_received client_suffix_received));
+  lemma_append_tails_equal_from_equal_heads
+    server_prefix_sent
+    server_suffix_sent
+    client_prefix_received
+    client_suffix_received;
+  assert (
+    Seq.equal
+      (B.append client_prefix_sent client_suffix_sent)
+      (B.append server_prefix_received server_suffix_received));
+  lemma_append_tails_equal_from_equal_heads
+    client_prefix_sent
+    client_suffix_sent
+    server_prefix_received
+    server_suffix_received;
+  assert (Seq.equal server_suffix_sent client_suffix_received);
+  assert (Seq.equal client_suffix_sent server_suffix_received)
+
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_step_received_network_event_preserves_record_write
   (model:connection_model)
