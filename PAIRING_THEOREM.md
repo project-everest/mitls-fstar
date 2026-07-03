@@ -998,8 +998,12 @@ and
 `lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes`.
 Together, these show that sent-seal and received-decode views over the same
 endpoint prefix end at the same post-prefix model, and—if the concrete prefix
-bytes are shown equal—can be made to share the same raw suffix.  This makes the
-next proof obligations explicit and narrow: prove, for the concrete
+bytes are shown equal—can be made to share the same raw suffix.  The
+cross-endpoint byte-tail step is factored as
+`lemma_paired_replay_suffixes_equal_from_equal_prefixes`: from paired full
+streams and equal paired prefixes, it proves equality of the remaining
+server-sent/client-received and client-sent/server-received suffixes.  This makes
+the next proof obligations explicit and narrow: prove, for the concrete
 pre-protected cleartext/local prefix shape, that the endpoint's sent/decode
 prefix splits consume the same raw bytes, and prove cross-endpoint prefix
 equality for server-to-client and client-to-server directions.  The remaining
