@@ -120,6 +120,135 @@ let server_receive_client_finished_replay_events
     CL.message_value = M.TlsHandshake received_msg;
   } :: rest
 
+noextract
+let server_encrypted_flight_replay_events
+  (server_material:CS.traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (server_auth_skip:CS.local_event)
+  (sent_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (rest:list CS.conn_event)
+  : list CS.conn_event =
+  CS.ConnLocalEvent
+    (CS.LocalInstallTrafficKeysForRole {
+      CS.install_role = CS.ServerEndpoint;
+      CS.install_payload = {
+        CS.install_epoch = CS.TrafficHandshake;
+        CS.install_direction = CS.TrafficWrite;
+        CS.install_material = server_material;
+      };
+    }) ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg0;
+  } ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg1;
+  } ::
+  CS.ConnLocalEvent server_auth_skip ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg2;
+  } ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg3;
+  } ::
+  rest
+
+noextract
+let client_receive_server_encrypted_flight_replay_events
+  (client_material:CS.traffic_key_material)
+  (received_msg0:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (client_auth_skip:CS.local_event)
+  (received_msg2:M.handshake_msg)
+  (client_verify_skip:CS.local_event)
+  (received_msg3:M.handshake_msg)
+  (rest:list CS.conn_event)
+  : list CS.conn_event =
+  CS.ConnLocalEvent
+    (CS.LocalInstallTrafficKeys {
+      CS.install_epoch = CS.TrafficHandshake;
+      CS.install_direction = CS.TrafficRead;
+      CS.install_material = client_material;
+    }) ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg0;
+  } ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg1;
+  } ::
+  CS.ConnLocalEvent client_auth_skip ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg2;
+  } ::
+  CS.ConnLocalEvent client_verify_skip ::
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg3;
+  } ::
+  rest
+
+noextract
+let server_protected_handshake_contiguous_replay_events
+  (server_material:CS.traffic_key_material)
+  (sent_msg0:M.handshake_msg)
+  (sent_msg1:M.handshake_msg)
+  (server_auth_skip:CS.local_event)
+  (sent_msg2:M.handshake_msg)
+  (sent_msg3:M.handshake_msg)
+  (server_app_write_material:CS.traffic_key_material)
+  (received_msg4:M.handshake_msg)
+  (rest:list CS.conn_event)
+  : list CS.conn_event =
+  server_encrypted_flight_replay_events
+    server_material
+    sent_msg0
+    sent_msg1
+    server_auth_skip
+    sent_msg2
+    sent_msg3
+    (server_receive_client_finished_replay_events
+      server_app_write_material
+      received_msg4
+      rest)
+
+noextract
+let client_protected_handshake_contiguous_replay_events
+  (client_material:CS.traffic_key_material)
+  (received_msg0:M.handshake_msg)
+  (received_msg1:M.handshake_msg)
+  (client_auth_skip:CS.local_event)
+  (received_msg2:M.handshake_msg)
+  (client_verify_skip:CS.local_event)
+  (received_msg3:M.handshake_msg)
+  (verified_server_finished:M.finished)
+  (client_app_write_material:CS.traffic_key_material)
+  (client_app_read_material:CS.traffic_key_material)
+  (sent_msg4:M.handshake_msg)
+  (rest:list CS.conn_event)
+  : list CS.conn_event =
+  client_receive_server_encrypted_flight_replay_events
+    client_material
+    received_msg0
+    received_msg1
+    client_auth_skip
+    received_msg2
+    client_verify_skip
+    received_msg3
+    (client_finished_replay_events
+      verified_server_finished
+      client_app_write_material
+      client_app_read_material
+      sent_msg4
+      rest)
+
 val lemma_client_traffic_peer_record_material_agrees_and_seq_write_read_aligned
   (epoch:CS.traffic_epoch)
   (client:CS.connection_state)
