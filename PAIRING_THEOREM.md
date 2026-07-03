@@ -1008,13 +1008,20 @@ internal combinator
 these facts: from full replay predicates for both endpoints over
 `prefix ++ suffix`, paired full byte streams, same-endpoint prefix-equality
 callbacks, and a cross-endpoint prefix-equality callback, it returns aligned
-suffix replay views plus both cross-direction suffix equalities.  This makes the
-next proof obligations explicit and narrow: instantiate those callbacks for the
-concrete pre-protected cleartext/local prefix shape.  The remaining skeptical
-point is still byte determinacy for protected records: raw replay alone is too
-weak, so these prefix equalities must come from the stronger seal/decode
-projections and cleartext parseback facts, not from `event_raw_delta_legal`
-alone.
+suffix replay views plus both cross-direction suffix equalities.  The same bridge
+is now exposed in the small module
+`TLS13.ConnectionState.ProtectedWireSegmentation`, with named callback
+obligations
+`same_endpoint_replay_split_prefixes_equal` and
+`paired_replay_split_prefixes_equal`.  This avoids making the large protected-wire
+module's interface conformance depend on the whole bridge while giving downstream
+proofs a public, verified way to use full endpoint replay logs once the concrete
+prefix callbacks are proved.  The next proof obligations are therefore explicit
+and narrow: instantiate those callbacks for the TLS 1.3 pre-protected
+cleartext/local prefix shape.  The remaining skeptical point is still byte
+determinacy for protected records: raw replay alone is too weak, so these prefix
+equalities must come from the stronger seal/decode projections and cleartext
+parseback facts, not from `event_raw_delta_legal` alone.
 
 There is also an event-log shape gap, distinct from byte equality.  The existing
 high-level `paired_handshake_message_states` predicate records that the expected
