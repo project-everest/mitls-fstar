@@ -928,6 +928,52 @@ let lemma_server_handshake_write_client_handshake_read_install_aligned
       material.traffic_key
       material.traffic_iv)
 
+let lemma_server_handshake_write_client_handshake_read_install_materials_aligned
+  (server:connection_model)
+  (client:connection_model)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (server_after:connection_model)
+  (client_after:connection_model)
+  : Lemma
+      (requires
+        record_key_iv_material_agrees
+          (record_material_of_traffic_material server_material)
+          (record_material_of_traffic_material client_material) /\
+        step_model
+          server
+          (ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficWrite;
+                install_material = server_material;
+              };
+            })) == Some server_after /\
+        step_model
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficRead;
+              install_material = client_material;
+            })) == Some client_after)
+      (ensures write_read_record_material_aligned server_after client_after)
+=
+  assert (server_after.model_record.record_write ==
+    R.install_keys
+      server.model_record.record_write
+      R.Handshake
+      server_material.traffic_key
+      server_material.traffic_iv);
+  assert (client_after.model_record.record_read ==
+    R.install_keys
+      client.model_record.record_read
+      R.Handshake
+      client_material.traffic_key
+      client_material.traffic_iv)
+
 let lemma_client_handshake_write_server_handshake_read_install_aligned
   (client:connection_model)
   (server:connection_model)
@@ -969,6 +1015,52 @@ let lemma_client_handshake_write_server_handshake_read_install_aligned
       R.Handshake
       material.traffic_key
       material.traffic_iv)
+
+let lemma_client_handshake_write_server_handshake_read_install_materials_aligned
+  (client:connection_model)
+  (server:connection_model)
+  (client_material:traffic_key_material)
+  (server_material:traffic_key_material)
+  (client_after:connection_model)
+  (server_after:connection_model)
+  : Lemma
+      (requires
+        record_key_iv_material_agrees
+          (record_material_of_traffic_material client_material)
+          (record_material_of_traffic_material server_material) /\
+        step_model
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficWrite;
+              install_material = client_material;
+            })) == Some client_after /\
+        step_model
+          server
+          (ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficRead;
+                install_material = server_material;
+              };
+            })) == Some server_after)
+      (ensures write_read_record_material_aligned client_after server_after)
+=
+  assert (client_after.model_record.record_write ==
+    R.install_keys
+      client.model_record.record_write
+      R.Handshake
+      client_material.traffic_key
+      client_material.traffic_iv);
+  assert (server_after.model_record.record_read ==
+    R.install_keys
+      server.model_record.record_read
+      R.Handshake
+      server_material.traffic_key
+      server_material.traffic_iv)
 #pop-options
 
 let lemma_sent_replay_skip_empty_head_preserves_peer_stream

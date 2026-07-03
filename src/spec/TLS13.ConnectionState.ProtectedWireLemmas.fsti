@@ -612,6 +612,39 @@ val lemma_server_handshake_write_client_handshake_read_install_aligned
             })) == Some client_after)
       (ensures write_read_record_material_aligned server_after client_after)
 
+val lemma_server_handshake_write_client_handshake_read_install_materials_aligned
+  (server:CS.connection_model)
+  (client:CS.connection_model)
+  (server_material:CS.traffic_key_material)
+  (client_material:CS.traffic_key_material)
+  (server_after:CS.connection_model)
+  (client_after:CS.connection_model)
+  : Lemma
+      (requires
+        CS.record_key_iv_material_agrees
+          (CS.record_material_of_traffic_material server_material)
+          (CS.record_material_of_traffic_material client_material) /\
+        CS.step_model
+          server
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = server_material;
+              };
+            })) == Some server_after /\
+        CS.step_model
+          client
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = client_material;
+            })) == Some client_after)
+      (ensures write_read_record_material_aligned server_after client_after)
+
 val lemma_client_handshake_write_server_handshake_read_install_aligned
   (client:CS.connection_model)
   (server:CS.connection_model)
@@ -637,6 +670,39 @@ val lemma_client_handshake_write_server_handshake_read_install_aligned
                 CS.install_epoch = CS.TrafficHandshake;
                 CS.install_direction = CS.TrafficRead;
                 CS.install_material = material;
+              };
+            })) == Some server_after)
+      (ensures write_read_record_material_aligned client_after server_after)
+
+val lemma_client_handshake_write_server_handshake_read_install_materials_aligned
+  (client:CS.connection_model)
+  (server:CS.connection_model)
+  (client_material:CS.traffic_key_material)
+  (server_material:CS.traffic_key_material)
+  (client_after:CS.connection_model)
+  (server_after:CS.connection_model)
+  : Lemma
+      (requires
+        CS.record_key_iv_material_agrees
+          (CS.record_material_of_traffic_material client_material)
+          (CS.record_material_of_traffic_material server_material) /\
+        CS.step_model
+          client
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficWrite;
+              CS.install_material = client_material;
+            })) == Some client_after /\
+        CS.step_model
+          server
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = server_material;
               };
             })) == Some server_after)
       (ensures write_read_record_material_aligned client_after server_after)
