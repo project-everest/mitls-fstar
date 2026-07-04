@@ -1099,17 +1099,54 @@ adds one more layer: from full endpoint replays over
 cleartext prefix and paired full byte streams, it invokes the concrete
 segmentation lemma and then the contiguous-view Pairing bridge.
 
+The current handshake-complete boundary theorem is
+`lemma_client_server_application_record_material_agrees_from_handshake_complete_boundary`
+(`PairingProtectedReplay.fsti:830-954`, implementation
+`PairingProtectedReplay.fst:967-1479`).  Its new predicate
+`paired_handshake_complete_boundary_state_logs`
+(`PairingProtectedReplay.fsti:23-101`) is the exact no-tail state-log boundary:
+the server log is
+`server_cleartext_handshake_prefix_events ++
+server_protected_handshake_contiguous_replay_events ... []`, the client log is
+the analogous client prefix plus protected suffix with `[]`, the two raw wire
+logs are paired in both directions, and both endpoints satisfy the sent-seal and
+received-decode replay-consistency predicates.  The theorem still requires the
+same explicit cleartext raw replay/profile assumptions, first-epoch/no-KeyUpdate
+state assumptions, cleartext step chain, staged protected step/key-install facts,
+and final protected-message correspondence that the lower bridges need.  Given
+those assumptions, it proves:
+
+```fstar
+CS.supported_profile_client_server_key_material_agrees client server /\
+CS.peer_record_material_agrees
+  (CS.traffic_id CS.TrafficApplication CS.ClientTraffic) client server /\
+CS.peer_record_material_agrees
+  (CS.traffic_id CS.TrafficApplication CS.ServerTraffic) client server
+```
+
+The proof skeleton is deliberately small.  First it calls
+`TLS13.ConnectionState.ProtectedWireConcreteSegmentation.lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_state_logs_known_start`
+with empty server/client suffix rests, thereby extracting the contiguous
+protected replay-view package from the exact final `cs_event_log`s.  Then it
+eliminates the existential raw protected suffix witnesses and calls
+`lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_contiguous_replay_views`.
+So the new theorem is the first verified Pairing-level statement at the exact
+handshake-complete state-log boundary: callers no longer have to provide the full
+protected replay predicates directly, only the boundary-shaped final states and
+the staged semantic witnesses.
+
 So the byte-segmentation boundary has moved again: given final endpoint states
 whose event logs are exactly `cleartext_prefix ++ protected_contiguous_suffix`
 and whose logs satisfy the sent-seal/received-decode replay-consistency
-predicates, the proof derives the protected suffix views; given explicit full
-replays, it reaches Pairing-level application record-material agreement.  The
-remaining skeptical point is no longer the cleartext prefix byte alignment or
-the concrete protected suffix start model; it is the stronger question of where
-the exact prefix/suffix decomposition comes from in final endpoint logs.  Raw
-replay alone is also still too weak for protected records: protected equality
-must come from the stronger seal/decode projections and AEAD open-after-seal
-assumption, not from `event_raw_delta_legal` alone.
+predicates, the proof derives the protected suffix views and reaches
+Pairing-level application record-material agreement.  The remaining skeptical
+point is no longer the cleartext prefix byte alignment, the concrete protected
+suffix start model, or the Pairing-level composition from final boundary states;
+it is the stronger question of where the exact prefix/suffix decomposition comes
+from in final endpoint logs.  Raw replay alone is also still too weak for
+protected records: protected equality must come from the stronger seal/decode
+projections and AEAD open-after-seal assumption, not from
+`event_raw_delta_legal` alone.
 
 One important caveat is that this full-replay bridge currently assumes the
 cleartext prefix names the same structured `ClientHello` and `ServerHello` on
@@ -1123,11 +1160,13 @@ high-level `paired_handshake_message_states` predicate records that the expected
 handshake messages occur in the event logs (`event_trace_has_tls_message`), but
 occurrence is not a contiguity theorem: it does not by itself split
 `cs_event_log` as `pre_protected_prefix ++ protected_handshake_suffix`.  The new
-segmentation bridge assumes such a split.  A final byte-trace theorem therefore
-needs either a driver/state-machine invariant exposing that exact suffix shape,
-or an additional trace-normalization theorem proving that application-ready,
-first-epoch/no-KeyUpdate runs have no interleaved events between the protected
-handshake records beyond the local skips already modeled in the suffix.
+handshake-complete boundary theorem assumes and uses exactly such a split with no
+tail.  A final byte-trace theorem therefore needs either a driver/state-machine
+invariant exposing that exact first-application-ready boundary shape, or an
+additional trace-normalization theorem proving that application-ready,
+first-epoch/no-KeyUpdate runs have the named handshake segment as a prefix and no
+interleaved events between the protected handshake records beyond the local skips
+already modeled in the suffix.
 
 There is a stronger skeptical caveat: plain `client_driver_application_ready` and
 `server_driver_application_ready` are probably too weak to imply this exact shape
