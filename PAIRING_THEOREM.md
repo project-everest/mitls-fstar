@@ -1135,6 +1135,39 @@ handshake-complete state-log boundary: callers no longer have to provide the ful
 protected replay predicates directly, only the boundary-shaped final states and
 the staged semantic witnesses.
 
+The reviewer-facing wrapper layer is now separated into two small modules rather
+than adding more proof code to `PairingProtectedReplay`:
+
+- `TLS13.Impl.Driver.PairingCleanBoundary` defines the compact public predicate
+  `paired_supported_handshake_complete_boundary client server` and proves
+  `lemma_client_server_application_record_material_agrees_from_clean_boundary`.
+  The theorem's public precondition is just that predicate; internally, the
+  predicate packages the backend witness bundle needed by
+  the rest-aware full-replay backend.  The rest parameters are important: on the
+  server side, a satisfiable application-ready boundary must include the local
+  `LocalVerifyClientFinished` step after receiving the client's Finished, since
+  receiving that Finished moves only to `HsClientFinishedReceived`.
+- `TLS13.Impl.Driver.PairingValidByteTrace` defines
+  `paired_valid_byte_traces_at_handshake_complete_boundary`, adding client/server
+  `WFSM.valid_byte_trace` facts and paired sent/received byte streams around the
+  clean boundary predicate.  Its top-level theorem
+  `lemma_client_server_application_record_material_agrees_from_valid_paired_byte_traces_at_handshake_complete_boundary`
+  proves the same application record-material agreement conclusion from this
+  compact valid-byte-trace-at-boundary package.
+
+These wrappers are intentionally thin.  They make the auditable theorem statement
+small and keep the large witness package in one internal predicate, but they do
+not yet prove that an arbitrary valid byte trace ending in `ControlApplicationData`
+must itself have the handshake-complete shape or the protected-record alignment
+witnesses hidden in the clean predicate.  That remaining result is a separate
+endpoint trace-shape/backend-witness theorem: valid byte trace plus a
+first-application-ready boundary condition should derive the clean boundary
+package, including the server's final local Finished verification step and the
+record-material/sequence alignment needed by protected replay.  Without that
+first-boundary condition, only a prefix theorem is true, because application data,
+post-handshake messages, KeyUpdate, and close-notify events are legal after
+entering application data.
+
 So the byte-segmentation boundary has moved again: given final endpoint states
 whose event logs are exactly `cleartext_prefix ++ protected_contiguous_suffix`
 and whose logs satisfy the sent-seal/received-decode replay-consistency
