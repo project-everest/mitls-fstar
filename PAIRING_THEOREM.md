@@ -191,9 +191,56 @@ then the event-trace theorem applies and gives application record key/IV
 agreement.
 ```
 
-The current verified byte-level progress is a cleartext-handshake theorem rather
-than a full byte-trace theorem.  `TLS13.Spec.WireFormatLemmas` now exposes
-lemmas that derive:
+The cleanest verified top-level statement currently lives in
+`TLS13.Impl.Driver.PairingTraceShape`.  It avoids the protected-replay backend
+and goes through the existing `Pairing.paired_handshake_event_trace` theorem.
+Its public state predicate is
+`paired_successful_handshake_complete_state_trace client server`, which packages:
+
+- client and server application-readiness;
+- paired wire logs;
+- the first-epoch/no-KeyUpdate slice;
+- a concrete successful-handshake event-log shape.
+
+The concrete shape predicate names the ClientHello, ServerHello,
+EncryptedExtensions, Certificate, CertificateVerify, server Finished, and client
+Finished messages once, requires both final handshake-state slots to contain those
+same values, requires the final logs to be the expected cleartext prefix plus
+protected server flight/client Finished shape, and records the corresponding
+network-event occurrences in each log.  From that, the proof derives
+`Pairing.paired_handshake_event_trace` and calls
+`lemma_client_server_application_record_material_agrees_from_paired_handshake_event_trace`.
+The reviewer-facing theorem is:
+
+```fstar
+val lemma_client_server_application_record_material_agrees_from_successful_handshake_complete_state_trace
+  (client server:CS.connection_state)
+  : Lemma
+      (requires paired_successful_handshake_complete_state_trace client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic) client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic) client server)
+```
+
+There is also a byte-trace wrapper,
+`lemma_client_server_application_record_material_agrees_from_valid_paired_byte_traces_with_successful_handshake_complete_state_trace`,
+whose precondition adds client/server `WFSM.valid_byte_trace` facts and paired
+sent/received byte streams.  The important remaining gap is not key agreement:
+that theorem is now proved from the clean trace shape.  The remaining trace-shape
+work is to derive `paired_successful_handshake_complete_state_trace` itself from
+`WFSM.valid_byte_trace` plus a first-application-ready boundary.  Today the
+shape predicate records the `event_trace_has_tls_message` occurrence facts
+alongside the exact log equalities to keep the proof small and auditable; a later
+pure list-shape lemma should remove that redundancy by deriving the occurrences
+from the exact lists.
+
+The lower-level byte/replay proof stack remains useful for deriving trace-shape
+facts from raw bytes.  Its currently verified replay progress starts with
+cleartext-handshake facts.  `TLS13.Spec.WireFormatLemmas` now exposes lemmas
+that derive:
 
 - ClientHello serialized-handshake equality from raw cleartext replay and
   supported-profile ClientHello parsing;
