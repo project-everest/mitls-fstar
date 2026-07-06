@@ -12,6 +12,7 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module PBridge = TLS13.Impl.Driver.PairingNormalizedBridge
+module M = TLS13.Messages
 module Pairing = TLS13.Impl.Driver.Pairing
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNS = TLS13.Impl.Driver.PairingNormalizedShape
@@ -21,6 +22,7 @@ module PNTCFS = TLS13.Impl.Driver.PairingNoTailClientFinishedShape
 module PNTCPrS = TLS13.Impl.Driver.PairingNoTailClientProtectedShape
 module PNTCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCS = TLS13.Impl.Driver.PairingNoTailClientShape
+module PNTCSR = TLS13.Impl.Driver.PairingNoTailClientSentRawShape
 module PNTCVS = TLS13.Impl.Driver.PairingNoTailClientVerifyShape
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
@@ -523,6 +525,49 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_serv
 =
   PNTCAS.lemma_client_no_tail_sixteenth_event_client_finished_clean client;
   PNTSS.lemma_server_no_tail_start_spine16 server
+
+let lemma_clean16_no_tail_valid_byte_traces_client_sent_cleartext_and_finished_raw_slices
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures PNTCSR.client_sent_cleartext_and_finished_raw_slices client)
+=
+  lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_server_start_spine16
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  assert (CS.connection_state_raw_event_replay_consistent client);
+  PNTCSR.lemma_client_no_tail_finished_sent_raw_slices client
 
 let lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
   (client_initial:CS.connection_state)
@@ -1493,6 +1538,416 @@ let lemma_clean16_no_tail_valid_byte_traces_paired_wire_logs
   assert (Seq.equal
     server.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received)
+
+let lemma_paired_client_sent_client_hello_not_server_received_ccs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_start:CS.handshake_start)
+  (client_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (client_rest:list CS.conn_event)
+  (server_rest:list CS.conn_event)
+  : Lemma
+      (requires
+        WFL.supported_client_config_wire_profile
+          client.CS.cs_model.CS.model_config /\
+        CS.paired_wire_logs client server /\
+        CS.connection_state_raw_event_replay_consistent client /\
+        CS.connection_state_raw_event_replay_consistent server /\
+        client.CS.cs_event_log ==
+          CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+          }) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+          }) ::
+          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+          client_rest /\
+        server.CS.cs_event_log ==
+          CS.ConnLocalEvent CS.LocalStartServer ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsChangeCipherSpec;
+          }) ::
+          server_rest)
+      (ensures False)
+=
+  let client_model0 =
+    CS.initial_model client.CS.cs_model.CS.model_config in
+  let server_model0 =
+    CS.initial_model server.CS.cs_model.CS.model_config in
+  assert (CS.conn_events_raw_replay
+    client_model0
+    client.CS.cs_event_log
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model);
+  assert (CS.conn_events_raw_replay
+    client_model0
+    (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+     CS.ConnNetworkEvent ({
+       CL.message_direction = CL.Sent;
+       CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+     }) ::
+     CS.ConnNetworkEvent ({
+       CL.message_direction = CL.Received;
+       CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+     }) ::
+     CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+     client_rest)
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model);
+  PNTRB.lemma_client_prefix_sent_client_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
+  assert (WFL.supported_client_hello_wire_profile client_ch);
+  PNTRB.lemma_client_prefix_raw_slices
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
+  eliminate exists client_ch_raw client_sh_raw client_sent_tail client_received_tail.
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_sent
+      (B.append client_ch_raw client_sent_tail) /\
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_received
+      (B.append client_sh_raw client_received_tail) /\
+    CS.cleartext_tls_message_raw
+      (M.TlsHandshake (M.ClientHello client_ch))
+      client_ch_raw /\
+    CS.received_cleartext_tls_message_raw
+      (M.TlsHandshake (M.ServerHello client_sh))
+      client_sh_raw
+  returns False
+  with _.
+  (
+    assert (CS.conn_events_raw_replay
+      server_model0
+      server.CS.cs_event_log
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      server.CS.cs_model);
+    assert (CS.conn_events_raw_replay
+      server_model0
+      (CS.ConnLocalEvent CS.LocalStartServer ::
+       CS.ConnNetworkEvent ({
+         CL.message_direction = CL.Received;
+         CL.message_value = M.TlsChangeCipherSpec;
+       }) ::
+       server_rest)
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      server.CS.cs_model);
+    PNTRB.lemma_server_start_then_received_change_cipher_spec_raw_slice
+      server_model0
+      server_rest
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      server.CS.cs_model;
+    eliminate exists ccs_raw server_received_tail.
+      Seq.equal
+        server.CS.cs_wire_log.CL.raw_received
+        (B.append ccs_raw server_received_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    returns False
+    with _.
+    (
+      assert (Seq.equal
+        client.CS.cs_wire_log.CL.raw_sent
+        server.CS.cs_wire_log.CL.raw_received);
+      PNTRB.lemma_equal_stream_head_sent_supported_client_hello_not_change_cipher_spec
+        client.CS.cs_wire_log.CL.raw_sent
+        server.CS.cs_wire_log.CL.raw_received
+        client_ch
+        client_ch_raw
+        client_sent_tail
+        ccs_raw
+        server_received_tail
+    )
+  )
+
+let lemma_paired_client_received_server_hello_not_server_sent_ccs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_start:CS.handshake_start)
+  (client_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (client_rest:list CS.conn_event)
+  (server_rest:list CS.conn_event)
+  : Lemma
+      (requires
+        CS.paired_wire_logs client server /\
+        CS.connection_state_raw_event_replay_consistent client /\
+        CS.connection_state_raw_event_replay_consistent server /\
+        client.CS.cs_event_log ==
+          CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+          }) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+          }) ::
+          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+          client_rest /\
+        server.CS.cs_event_log ==
+          CS.ConnLocalEvent CS.LocalStartServer ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsChangeCipherSpec;
+          }) ::
+          server_rest)
+      (ensures False)
+=
+  let client_model0 =
+    CS.initial_model client.CS.cs_model.CS.model_config in
+  let server_model0 =
+    CS.initial_model server.CS.cs_model.CS.model_config in
+  assert (CS.conn_events_raw_replay
+    client_model0
+    client.CS.cs_event_log
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model);
+  assert (CS.conn_events_raw_replay
+    client_model0
+    (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+     CS.ConnNetworkEvent ({
+       CL.message_direction = CL.Sent;
+       CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+     }) ::
+     CS.ConnNetworkEvent ({
+       CL.message_direction = CL.Received;
+       CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+     }) ::
+     CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+     client_rest)
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model);
+  PNTRB.lemma_client_prefix_raw_slices
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
+  eliminate exists client_ch_raw client_sh_raw client_sent_tail client_received_tail.
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_sent
+      (B.append client_ch_raw client_sent_tail) /\
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_received
+      (B.append client_sh_raw client_received_tail) /\
+    CS.cleartext_tls_message_raw
+      (M.TlsHandshake (M.ClientHello client_ch))
+      client_ch_raw /\
+    CS.received_cleartext_tls_message_raw
+      (M.TlsHandshake (M.ServerHello client_sh))
+      client_sh_raw
+  returns False
+  with _.
+  (
+    assert (CS.conn_events_raw_replay
+      server_model0
+      server.CS.cs_event_log
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      server.CS.cs_model);
+    assert (CS.conn_events_raw_replay
+      server_model0
+      (CS.ConnLocalEvent CS.LocalStartServer ::
+       CS.ConnNetworkEvent ({
+         CL.message_direction = CL.Sent;
+         CL.message_value = M.TlsChangeCipherSpec;
+       }) ::
+       server_rest)
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      server.CS.cs_model);
+    PNTRB.lemma_server_start_then_sent_change_cipher_spec_raw_slice
+      server_model0
+      server_rest
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      server.CS.cs_model;
+    eliminate exists ccs_raw server_sent_tail.
+      Seq.equal
+        server.CS.cs_wire_log.CL.raw_sent
+        (B.append ccs_raw server_sent_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    returns False
+    with _.
+    (
+      assert (Seq.equal
+        server.CS.cs_wire_log.CL.raw_sent
+        client.CS.cs_wire_log.CL.raw_received);
+      PNTRB.lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
+        client.CS.cs_wire_log.CL.raw_received
+        server.CS.cs_wire_log.CL.raw_sent
+        client_sh
+        client_sh_raw
+        client_received_tail
+        ccs_raw
+        server_sent_tail
+    )
+  )
+
+let lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_cipher_spec
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures server_second_event_not_change_cipher_spec16 server)
+=
+  lemma_clean16_no_tail_valid_byte_traces_paired_wire_logs
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  PNTCS.lemma_client_no_tail_fourth_event_derive_shared_secret_clean client;
+  PNTSS.lemma_server_no_tail_start_spine16 server;
+  assert (CS.paired_wire_logs client server);
+  assert (PNT.paired_no_tail_application_ready_boundary16 client server);
+  assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
+  assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
+  assert (CS.connection_state_raw_event_replay_consistent client);
+  assert (CS.connection_state_raw_event_replay_consistent server);
+  eliminate exists client_start client_ch client_sh client_shared client_rest.
+    client.CS.cs_event_log ==
+      CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+      CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+      }) ::
+      CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+      }) ::
+      CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+      client_rest
+  returns server_second_event_not_change_cipher_spec16 server
+  with _.
+  (
+    eliminate exists e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15.
+      server.CS.cs_event_log ==
+        [ CS.ConnLocalEvent CS.LocalStartServer;
+          e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15 ]
+    returns server_second_event_not_change_cipher_spec16 server
+    with _.
+    (
+      let server_rest = [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15] in
+      assert (server.CS.cs_event_log ==
+        CS.ConnLocalEvent CS.LocalStartServer :: e1 :: server_rest);
+      (match e1 with
+      | CS.ConnNetworkEvent msg ->
+        (match msg.CL.message_value with
+        | M.TlsChangeCipherSpec ->
+          (match msg.CL.message_direction with
+          | CL.Received ->
+            lemma_paired_client_sent_client_hello_not_server_received_ccs
+              client
+              server
+              client_start
+              client_ch
+              client_sh
+              client_shared
+              client_rest
+              server_rest
+          | CL.Sent ->
+            lemma_paired_client_received_server_hello_not_server_sent_ccs
+              client
+              server
+              client_start
+              client_ch
+              client_sh
+              client_shared
+              client_rest
+              server_rest)
+        | _ -> ())
+      | _ -> ());
+      assert (~ (exists m.
+        e1 == CS.ConnNetworkEvent m /\
+        m.CL.message_value == M.TlsChangeCipherSpec));
+      assert (server_second_event_not_change_cipher_spec16 server)
+    )
+  )
+
+let lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures paired_no_tail_role_local_client_shared_prefix client server)
+=
+  PNTCS.lemma_client_no_tail_fourth_event_derive_shared_secret_clean client;
+  lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_cipher_spec
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  PNTSS.lemma_server_no_tail_second_event_client_hello_if_not_ccs16 server
 
 let lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix
   (client_initial:CS.connection_state)

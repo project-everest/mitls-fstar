@@ -1463,6 +1463,349 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs
     )
   )
 
+let lemma_server_no_tail_second_event_client_hello_if_not_ccs16
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        SD.server_driver_application_ready server /\
+        FStar.List.Tot.length server.CS.cs_event_log == 16 /\
+        (exists e1 rest.
+          server.CS.cs_event_log ==
+            CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
+          ~ (exists m.
+              e1 == CS.ConnNetworkEvent m /\
+              m.CL.message_value == M.TlsChangeCipherSpec)))
+      (ensures
+        exists ch rest.
+          server.CS.cs_event_log ==
+            CS.ConnLocalEvent CS.LocalStartServer ::
+            CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ClientHello ch);
+            }) ::
+            rest)
+=
+  PNI.lemma_server_no_tail_log_spine16 server;
+  eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15.
+    server.CS.cs_event_log ==
+      [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+  returns
+    exists ch rest.
+      server.CS.cs_event_log ==
+        CS.ConnLocalEvent CS.LocalStartServer ::
+        CS.ConnNetworkEvent ({
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.ClientHello ch);
+        }) ::
+        rest
+  with _.
+  (
+    eliminate exists e1' rest'.
+      server.CS.cs_event_log ==
+        CS.ConnLocalEvent CS.LocalStartServer :: e1' :: rest' /\
+      ~ (exists m.
+          e1' == CS.ConnNetworkEvent m /\
+          m.CL.message_value == M.TlsChangeCipherSpec)
+    returns
+      exists ch rest.
+        server.CS.cs_event_log ==
+          CS.ConnLocalEvent CS.LocalStartServer ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) ::
+          rest
+    with _.
+    (
+      assert (server.CS.cs_event_log ==
+        e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
+      assert (server.CS.cs_event_log ==
+        CS.ConnLocalEvent CS.LocalStartServer :: e1' :: rest');
+      assert (e0 == CS.ConnLocalEvent CS.LocalStartServer);
+      assert (e1 == e1');
+      assert (rest' == [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
+      assert (~ (exists m.
+        e1 == CS.ConnNetworkEvent m /\
+        m.CL.message_value == M.TlsChangeCipherSpec));
+
+      assert (ST.server_end_to_end_invariant server);
+      assert (CS.connection_state_raw_event_replay_consistent server);
+      let initial = CS.initial_model server.CS.cs_model.CS.model_config in
+      assert (CS.conn_events_raw_replay
+        initial
+        server.CS.cs_event_log
+        server.CS.cs_wire_log.CL.raw_sent
+        server.CS.cs_wire_log.CL.raw_received
+        server.CS.cs_model);
+      assert_norm (
+        CS.conn_events_raw_replay
+          initial
+          (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
+          server.CS.cs_wire_log.CL.raw_sent
+          server.CS.cs_wire_log.CL.raw_received
+          server.CS.cs_model ==
+        (exists model1 delta_sent0 delta_received0 tail_sent0 tail_received0.
+          CS.legal_event initial e0 /\
+          CS.step_model initial e0 == Some model1 /\
+          CS.event_raw_delta_legal initial e0 delta_sent0 delta_received0 /\
+          Seq.equal
+            server.CS.cs_wire_log.CL.raw_sent
+            (B.append delta_sent0 tail_sent0) /\
+          Seq.equal
+            server.CS.cs_wire_log.CL.raw_received
+            (B.append delta_received0 tail_received0) /\
+          CS.conn_events_raw_replay
+            model1
+            [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+            tail_sent0
+            tail_received0
+            server.CS.cs_model));
+      eliminate exists model1 delta_sent0 delta_received0 tail_sent0 tail_received0.
+        CS.legal_event initial e0 /\
+        CS.step_model initial e0 == Some model1 /\
+        CS.event_raw_delta_legal initial e0 delta_sent0 delta_received0 /\
+        Seq.equal
+          server.CS.cs_wire_log.CL.raw_sent
+          (B.append delta_sent0 tail_sent0) /\
+        Seq.equal
+          server.CS.cs_wire_log.CL.raw_received
+          (B.append delta_received0 tail_received0) /\
+        CS.conn_events_raw_replay
+          model1
+          [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+          tail_sent0
+          tail_received0
+          server.CS.cs_model
+      returns
+        exists ch rest.
+          server.CS.cs_event_log ==
+            CS.ConnLocalEvent CS.LocalStartServer ::
+            CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ClientHello ch);
+            }) ::
+            rest
+      with _.
+      (
+        assert (initial.CS.model_control == CS.ControlNew);
+        assert (initial.CS.model_config.CS.config_role == CS.ServerEndpoint);
+        assert_norm (
+          CS.step_model initial (CS.ConnLocalEvent CS.LocalStartServer) ==
+          Some (CS.with_handshake_stage
+            initial
+            initial.CS.model_handshake
+            CS.HsAwaitingClientHello));
+        assert (CS.step_model initial e0 ==
+          Some (CS.with_handshake_stage
+            initial
+            initial.CS.model_handshake
+            CS.HsAwaitingClientHello));
+        assert (model1 ==
+          CS.with_handshake_stage
+            initial
+            initial.CS.model_handshake
+            CS.HsAwaitingClientHello);
+        assert (model1.CS.model_control ==
+          CS.ControlHandshaking CS.HsAwaitingClientHello);
+        assert (model1.CS.model_config == initial.CS.model_config);
+        assert (model1.CS.model_config.CS.config_role == CS.ServerEndpoint);
+
+        assert_norm (
+          CS.conn_events_raw_replay
+            model1
+            [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+            tail_sent0
+            tail_received0
+            server.CS.cs_model ==
+          (exists model2 delta_sent1 delta_received1 tail_sent1 tail_received1.
+            CS.legal_event model1 e1 /\
+            CS.step_model model1 e1 == Some model2 /\
+            CS.event_raw_delta_legal model1 e1 delta_sent1 delta_received1 /\
+            Seq.equal
+              tail_sent0
+              (B.append delta_sent1 tail_sent1) /\
+            Seq.equal
+              tail_received0
+              (B.append delta_received1 tail_received1) /\
+            CS.conn_events_raw_replay
+              model2
+              [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+              tail_sent1
+              tail_received1
+              server.CS.cs_model));
+        eliminate exists model2 delta_sent1 delta_received1 tail_sent1 tail_received1.
+          CS.legal_event model1 e1 /\
+          CS.step_model model1 e1 == Some model2 /\
+          CS.event_raw_delta_legal model1 e1 delta_sent1 delta_received1 /\
+          Seq.equal
+            tail_sent0
+            (B.append delta_sent1 tail_sent1) /\
+          Seq.equal
+            tail_received0
+            (B.append delta_received1 tail_received1) /\
+          CS.conn_events_raw_replay
+            model2
+            [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+            tail_sent1
+            tail_received1
+            server.CS.cs_model
+        returns
+          exists ch rest.
+            server.CS.cs_event_log ==
+              CS.ConnLocalEvent CS.LocalStartServer ::
+              CS.ConnNetworkEvent ({
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.ClientHello ch);
+              }) ::
+              rest
+        with _.
+        (
+          match e1 with
+          | CS.ConnLocalEvent local ->
+            (match local with
+            | CS.LocalFail err ->
+              assert (e1 == CS.ConnLocalEvent (CS.LocalFail err));
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalFail err)) ==
+                Some (CS.fail_model model1 err));
+              assert (model2.CS.model_control == CS.ControlFailed err);
+              lemma_conn_events_raw_replay_from_failed_results_failed
+                model2
+                [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+                tail_sent1
+                tail_received1
+                server.CS.cs_model;
+              assert (CS.ControlFailed? server.CS.cs_model.CS.model_control);
+              assert (server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+              assert False
+            | CS.LocalInstallTrafficKeys install ->
+              lemma_server_hs_awaiting_install_traffic_keys_illegal model1 install;
+              assert False
+            | CS.LocalInstallTrafficKeysForRole role_install ->
+              lemma_server_hs_awaiting_role_install_illegal model1 role_install;
+              assert False
+            | CS.LocalStartHandshake start ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalStartHandshake start)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalStartServer ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent CS.LocalStartServer) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalSelectServerParameters selection ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalDeriveSharedSecret shared ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalValidateCertificate peer ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalValidateCertificate peer)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalVerifyCertificateSignature cv ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalSignCertificateVerify cv ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalVerifyFinished fin ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalVerifyFinished fin)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalVerifyClientFinished fin ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | CS.LocalDeliverApplicationData bytes ->
+              assert_norm (
+                CS.step_model model1 (CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes)) ==
+                None);
+              assert (CS.step_model model1 e1 == None);
+              assert False)
+          | CS.ConnNetworkEvent msg ->
+            (match msg.CL.message_value with
+            | M.TlsAlert alert ->
+              assert (model2.CS.model_control == CS.ControlFailed (T.AlertError alert));
+              lemma_conn_events_raw_replay_from_failed_results_failed
+                model2
+                [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
+                tail_sent1
+                tail_received1
+                server.CS.cs_model;
+              assert (CS.ControlFailed? server.CS.cs_model.CS.model_control);
+              assert (server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+              assert False
+            | M.TlsChangeCipherSpec ->
+              assert (e1 == CS.ConnNetworkEvent msg);
+              assert (exists m.
+                e1 == CS.ConnNetworkEvent m /\
+                m.CL.message_value == M.TlsChangeCipherSpec);
+              assert False
+            | M.TlsHandshake handshake_msg ->
+              (match msg.CL.message_direction, handshake_msg with
+              | CL.Received, M.ClientHello ch ->
+                assert (e1 == CS.ConnNetworkEvent ({
+                  CL.message_direction = CL.Received;
+                  CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                }));
+                assert (server.CS.cs_event_log ==
+                  CS.ConnLocalEvent CS.LocalStartServer ::
+                  CS.ConnNetworkEvent ({
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                  }) ::
+                  [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
+              | _, _ ->
+                lemma_server_hs_awaiting_non_client_hello_received_network_step_none
+                  model1
+                  msg;
+                assert (CS.step_model model1 e1 == None);
+                assert False)
+            | M.TlsApplicationData _ ->
+              lemma_server_hs_awaiting_non_client_hello_received_network_step_none
+                model1
+                msg;
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | M.TlsIgnoredPostHandshake _ ->
+              lemma_server_hs_awaiting_non_client_hello_received_network_step_none
+                model1
+                msg;
+              assert (CS.step_model model1 e1 == None);
+              assert False
+            | M.TlsKeyUpdate _ ->
+              lemma_server_hs_awaiting_non_client_hello_received_network_step_none
+                model1
+                msg;
+              assert (CS.step_model model1 e1 == None);
+              assert False)
+        )
+      )
+    )
+  )
+
 let lemma_server_no_tail_second_event_not_ccs
   (server:CS.connection_state)
   : Lemma

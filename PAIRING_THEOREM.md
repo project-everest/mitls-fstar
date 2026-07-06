@@ -271,20 +271,33 @@ The raw cleartext hello bridge is also now verified:
 `TLS13.Impl.Driver.PairingNoTailRawBridge` derives the paired raw ClientHello and
 ServerHello record slices from role-local prefixes, replay consistency, supported
 ClientHello wire profile, and `CS.paired_wire_logs`, while keeping generated and
-parser-produced hello records distinct.  The remaining hard part is the rest of
-the role-local event-shape and protected projection inversion.  The role-local
-inversion is now past the first nontrivial CCS/no-op cases:
+parser-produced hello records distinct.  It also now exposes record-head
+disjointness lemmas showing that a supported ClientHello raw record, a received
+ServerHello raw record, or a single protected `ApplicationData` raw record cannot
+be the same stream head as a cleartext ChangeCipherSpec.  These are used by
+`PairingNoTailNormalized` to derive the corrected clean16 server second-event
+fact under paired byte traces: the server's post-start event is not an unmatched
+CCS, and therefore the length-16 server trace begins by receiving the client's
+ClientHello.  Separately,
+`TLS13.Impl.Driver.PairingNoTailClientSentRawShape` proves that the completed
+client no-tail raw-sent stream is exactly a cleartext ClientHello followed by the
+single protected `ApplicationData` record carrying Client Finished.  The
+remaining hard part is the rest of the role-local event-shape and protected
+projection inversion.  The role-local inversion is now past the first
+nontrivial CCS/no-op cases:
 `PairingNoTailInversion` proves that a no-tail length-16 client log begins
 `LocalStartHandshake; Sent ClientHello; Received ServerHello;
 LocalDeriveSharedSecret` and that the following client event is some handshake
 traffic-key install, and `PairingNoTailServerShape` proves that a no-tail
 server log under the earlier length-15 milestone begins
 `LocalStartServer; Received ClientHello; LocalSelectServerParameters;
-LocalDeriveSharedSecret; Sent ServerHello`.
-That server length-15 milestone is now known to be stale for the final theorem:
-the satisfiable no-tail server boundary must include the server's
-client-handshake read-key install before receiving ClientFinished, so the final
-target is length 16 with order-insensitive server handshake installs.
+LocalDeriveSharedSecret; Sent ServerHello`.  That server length-15 milestone is
+now known to be stale for the final theorem: the satisfiable no-tail server
+boundary must include the server's client-handshake read-key install before
+receiving ClientFinished.  The current final target is the length-16 clean
+predicate plus paired CCS exclusion and order-insensitive server handshake
+installs/protected-flight segmentation, rather than a false bare role-local
+length-16 theorem.
 `PairingNoTailNormalized` packages these into derived paired milestones from the
 clean paired no-tail valid-byte-trace predicate.
 

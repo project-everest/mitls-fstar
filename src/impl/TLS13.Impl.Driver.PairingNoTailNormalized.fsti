@@ -21,6 +21,7 @@ module PNTCFS = TLS13.Impl.Driver.PairingNoTailClientFinishedShape
 module PNTCPrS = TLS13.Impl.Driver.PairingNoTailClientProtectedShape
 module PNTCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCS = TLS13.Impl.Driver.PairingNoTailClientShape
+module PNTCSR = TLS13.Impl.Driver.PairingNoTailClientSentRawShape
 module PNTCVS = TLS13.Impl.Driver.PairingNoTailClientVerifyShape
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
@@ -262,6 +263,17 @@ let paired_no_tail_role_local_client_handshake_install_cover_server_start_spine1
       client_rest /\
     PNTCPS.client_no_tail_two_handshake_install_cover e4 e5) /\
   PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let server_second_event_not_change_cipher_spec16
+  (server:CS.connection_state)
+  : prop =
+  exists e1 rest.
+    server.CS.cs_event_log ==
+      CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
+    ~ (exists m.
+        e1 == CS.ConnNetworkEvent m /\
+        m.CL.message_value == M.TlsChangeCipherSpec)
 
 noextract
 let paired_no_tail_role_local_client_first_protected_receive_server_start_spine16
@@ -665,6 +677,28 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_serv
         paired_no_tail_role_local_client_finished_sent_server_start_spine16
           client
           server)
+
+val lemma_clean16_no_tail_valid_byte_traces_client_sent_cleartext_and_finished_raw_slices
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures PNTCSR.client_sent_cleartext_and_finished_raw_slices client)
 
 (**
   Client-side half of the asymmetry documented for
@@ -1409,6 +1443,50 @@ val lemma_clean16_no_tail_valid_byte_traces_paired_wire_logs
           server_received
           server_sent)
       (ensures CS.paired_wire_logs client server)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_cipher_spec
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures server_second_event_not_change_cipher_spec16 server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures paired_no_tail_role_local_client_shared_prefix client server)
 
 val lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix
   (client_initial:CS.connection_state)

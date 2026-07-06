@@ -174,6 +174,28 @@ val lemma_server_no_tail_second_event_client_hello_if_not_ccs
             }) ::
             rest)
 
+val lemma_server_no_tail_second_event_client_hello_if_not_ccs16
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        SD.server_driver_application_ready server /\
+        FStar.List.Tot.length server.CS.cs_event_log == 16 /\
+        (exists e1 rest.
+          server.CS.cs_event_log ==
+            CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
+          ~ (exists m.
+              e1 == CS.ConnNetworkEvent m /\
+              m.CL.message_value == M.TlsChangeCipherSpec)))
+      (ensures
+        exists ch rest.
+          server.CS.cs_event_log ==
+            CS.ConnLocalEvent CS.LocalStartServer ::
+            CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ClientHello ch);
+            }) ::
+            rest)
+
 val lemma_server_no_tail_second_event_client_hello_clean
   (server:CS.connection_state)
   : Lemma

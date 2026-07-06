@@ -5,6 +5,7 @@ module TLS13.Impl.Driver.PairingNoTailRawBridge
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module CSL = TLS13.ConnectionState.Lemmas
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
@@ -121,6 +122,388 @@ let lemma_parse_record_wire_of_received_server_hello
     raw);
   lemma_parse_record_wire_of_cleartext_server_hello sh raw
 
+let lemma_cleartext_change_cipher_spec_parse_record
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          raw)
+      (ensures
+        W.parse_record_wire raw ==
+          Some (T.ChangeCipherSpec, B.singleton 1uy, B.length raw))
+=
+  let fragment = B.singleton 1uy in
+  W.lemma_serialize_tls_message_change_cipher_spec();
+  assert (CS.serialized_cleartext_tls_message M.TlsChangeCipherSpec ==
+    W.serialize_record T.ChangeCipherSpec fragment);
+  assert (B.length fragment <= 16640);
+  WFL.lemma_parse_record_wire_serialize_record T.ChangeCipherSpec fragment;
+  assert (Seq.equal raw (W.serialize_record T.ChangeCipherSpec fragment));
+  Seq.lemma_eq_elim raw (W.serialize_record T.ChangeCipherSpec fragment);
+  assert (W.parse_record_wire raw ==
+    Some (T.ChangeCipherSpec, fragment, B.length raw))
+
+let lemma_sent_supported_client_hello_raw_not_change_cipher_spec
+  (ch:M.client_hello)
+  (client_hello_raw:B.bytes)
+  (ccs_raw:B.bytes)
+  : Lemma
+      (requires
+        WFL.supported_client_hello_wire_profile ch /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello ch))
+          client_hello_raw /\
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          ccs_raw /\
+        Seq.equal client_hello_raw ccs_raw)
+      (ensures False)
+=
+  lemma_parse_record_wire_of_sent_supported_client_hello ch client_hello_raw;
+  lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
+  eliminate exists (fragment:B.bytes).
+    W.parse_record_wire client_hello_raw ==
+      Some (T.Handshake, fragment, B.length client_hello_raw)
+  returns False
+  with _.
+  (
+    Seq.lemma_eq_elim client_hello_raw ccs_raw;
+    assert (W.parse_record_wire client_hello_raw ==
+      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+    assert (
+      Some (T.Handshake, fragment, B.length client_hello_raw) ==
+      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+    assert False
+  )
+
+let lemma_received_server_hello_raw_not_change_cipher_spec
+  (sh:M.server_hello)
+  (server_hello_raw:B.bytes)
+  (ccs_raw:B.bytes)
+  : Lemma
+      (requires
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello sh))
+          server_hello_raw /\
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          ccs_raw /\
+        Seq.equal server_hello_raw ccs_raw)
+      (ensures False)
+=
+  lemma_parse_record_wire_of_received_server_hello sh server_hello_raw;
+  lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
+  eliminate exists (fragment:B.bytes).
+    W.parse_record_wire server_hello_raw ==
+      Some (T.Handshake, fragment, B.length server_hello_raw)
+  returns False
+  with _.
+  (
+    Seq.lemma_eq_elim server_hello_raw ccs_raw;
+    assert (W.parse_record_wire server_hello_raw ==
+      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+    assert (
+      Some (T.Handshake, fragment, B.length server_hello_raw) ==
+      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+    assert False
+  )
+
+let lemma_application_data_raw_not_change_cipher_spec
+  (application_raw:B.bytes)
+  (ccs_raw:B.bytes)
+  : Lemma
+      (requires
+        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          ccs_raw /\
+        Seq.equal application_raw ccs_raw)
+      (ensures False)
+=
+  CSL.lemma_raw_records_exactly_one_parse_record
+    application_raw
+    T.ApplicationData;
+  lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
+  eliminate exists (fragment:B.bytes).
+    W.parse_record application_raw ==
+      Some (T.ApplicationData, fragment, B.length application_raw)
+  returns False
+  with _.
+  (
+    W.lemma_parse_record_implies_parse_record_wire application_raw;
+    assert (W.parse_record_wire application_raw ==
+      Some (T.ApplicationData, fragment, B.length application_raw));
+    Seq.lemma_eq_elim application_raw ccs_raw;
+    assert (W.parse_record_wire application_raw ==
+      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+    assert (
+      Some (T.ApplicationData, fragment, B.length application_raw) ==
+      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+    assert False
+  )
+
+let lemma_equal_stream_head_sent_supported_client_hello_not_change_cipher_spec
+  (left_stream:B.bytes)
+  (right_stream:B.bytes)
+  (ch:M.client_hello)
+  (client_hello_raw:B.bytes)
+  (client_tail:B.bytes)
+  (ccs_raw:B.bytes)
+  (ccs_tail:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal left_stream right_stream /\
+        Seq.equal left_stream (B.append client_hello_raw client_tail) /\
+        Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
+        WFL.supported_client_hello_wire_profile ch /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello ch))
+          client_hello_raw /\
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          ccs_raw)
+      (ensures False)
+=
+  lemma_parse_record_wire_of_sent_supported_client_hello ch client_hello_raw;
+  lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
+  eliminate exists (client_fragment:B.bytes).
+    W.parse_record_wire client_hello_raw ==
+      Some (T.Handshake, client_fragment, B.length client_hello_raw)
+  returns False
+  with _.
+  (
+    PWS.lemma_equal_stream_record_head_lengths
+      left_stream
+      right_stream
+      client_hello_raw
+      client_tail
+      ccs_raw
+      ccs_tail
+      T.Handshake
+      client_fragment
+      T.ChangeCipherSpec
+      (B.singleton 1uy);
+    assert (B.length client_hello_raw == B.length ccs_raw);
+    Seq.lemma_eq_elim left_stream right_stream;
+    Seq.lemma_eq_elim left_stream (B.append client_hello_raw client_tail);
+    Seq.lemma_eq_elim right_stream (B.append ccs_raw ccs_tail);
+    assert (Seq.equal
+      (B.append client_hello_raw client_tail)
+      (B.append ccs_raw ccs_tail));
+    PWS.lemma_append_heads_equal_same_len
+      client_hello_raw
+      client_tail
+      ccs_raw
+      ccs_tail;
+    assert (Seq.equal client_hello_raw ccs_raw);
+    lemma_sent_supported_client_hello_raw_not_change_cipher_spec
+      ch
+      client_hello_raw
+      ccs_raw
+  )
+
+let lemma_equal_stream_head_application_data_not_change_cipher_spec
+  (left_stream:B.bytes)
+  (right_stream:B.bytes)
+  (application_raw:B.bytes)
+  (application_tail:B.bytes)
+  (ccs_raw:B.bytes)
+  (ccs_tail:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal left_stream right_stream /\
+        Seq.equal left_stream (B.append application_raw application_tail) /\
+        Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
+        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          ccs_raw)
+      (ensures False)
+=
+  CSL.lemma_raw_records_exactly_one_parse_record
+    application_raw
+    T.ApplicationData;
+  lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
+  eliminate exists (application_fragment:B.bytes).
+    W.parse_record application_raw ==
+      Some (T.ApplicationData, application_fragment, B.length application_raw)
+  returns False
+  with _.
+  (
+    W.lemma_parse_record_implies_parse_record_wire application_raw;
+    assert (W.parse_record_wire application_raw ==
+      Some (T.ApplicationData, application_fragment, B.length application_raw));
+    PWS.lemma_equal_stream_record_head_lengths
+      left_stream
+      right_stream
+      application_raw
+      application_tail
+      ccs_raw
+      ccs_tail
+      T.ApplicationData
+      application_fragment
+      T.ChangeCipherSpec
+      (B.singleton 1uy);
+    assert (B.length application_raw == B.length ccs_raw);
+    Seq.lemma_eq_elim left_stream right_stream;
+    Seq.lemma_eq_elim left_stream (B.append application_raw application_tail);
+    Seq.lemma_eq_elim right_stream (B.append ccs_raw ccs_tail);
+    assert (Seq.equal
+      (B.append application_raw application_tail)
+      (B.append ccs_raw ccs_tail));
+    PWS.lemma_append_heads_equal_same_len
+      application_raw
+      application_tail
+      ccs_raw
+      ccs_tail;
+    assert (Seq.equal application_raw ccs_raw);
+    lemma_application_data_raw_not_change_cipher_spec
+      application_raw
+      ccs_raw
+  )
+
+let lemma_equal_stream_after_client_hello_application_data_not_change_cipher_spec
+  (left_stream:B.bytes)
+  (right_stream:B.bytes)
+  (sent_ch:M.client_hello)
+  (received_ch:M.client_hello)
+  (sent_ch_raw:B.bytes)
+  (application_raw:B.bytes)
+  (received_ch_raw:B.bytes)
+  (ccs_raw:B.bytes)
+  (ccs_tail:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal left_stream right_stream /\
+        Seq.equal left_stream (B.append sent_ch_raw application_raw) /\
+        Seq.equal
+          right_stream
+          (B.append received_ch_raw (B.append ccs_raw ccs_tail)) /\
+        WFL.supported_client_hello_wire_profile sent_ch /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello sent_ch))
+          sent_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello received_ch))
+          received_ch_raw /\
+        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          ccs_raw)
+      (ensures False)
+=
+  lemma_parse_record_wire_of_sent_supported_client_hello sent_ch sent_ch_raw;
+  lemma_parse_record_wire_of_received_client_hello received_ch received_ch_raw;
+  eliminate exists sent_fragment.
+    W.parse_record_wire sent_ch_raw ==
+      Some (T.Handshake, sent_fragment, B.length sent_ch_raw)
+  returns False
+  with _.
+  (
+    eliminate exists received_fragment.
+      W.parse_record_wire received_ch_raw ==
+        Some (T.Handshake, received_fragment, B.length received_ch_raw)
+    returns False
+    with _.
+    (
+      PWS.lemma_equal_stream_record_head_lengths
+        left_stream
+        right_stream
+        sent_ch_raw
+        application_raw
+        received_ch_raw
+        (B.append ccs_raw ccs_tail)
+        T.Handshake
+        sent_fragment
+        T.Handshake
+        received_fragment;
+      assert (B.length sent_ch_raw == B.length received_ch_raw);
+      Seq.lemma_eq_elim left_stream right_stream;
+      Seq.lemma_eq_elim left_stream (B.append sent_ch_raw application_raw);
+      Seq.lemma_eq_elim
+        right_stream
+        (B.append received_ch_raw (B.append ccs_raw ccs_tail));
+      assert (Seq.equal
+        (B.append sent_ch_raw application_raw)
+        (B.append received_ch_raw (B.append ccs_raw ccs_tail)));
+      PWS.lemma_append_tails_equal_same_len
+        sent_ch_raw
+        application_raw
+        received_ch_raw
+        (B.append ccs_raw ccs_tail);
+      assert (Seq.equal application_raw (B.append ccs_raw ccs_tail));
+      Seq.append_empty_r application_raw;
+      assert (Seq.equal application_raw (B.append application_raw B.empty));
+      lemma_equal_stream_head_application_data_not_change_cipher_spec
+        application_raw
+        application_raw
+        application_raw
+        B.empty
+        ccs_raw
+        ccs_tail
+    )
+  )
+
+let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
+  (left_stream:B.bytes)
+  (right_stream:B.bytes)
+  (sh:M.server_hello)
+  (server_hello_raw:B.bytes)
+  (server_tail:B.bytes)
+  (ccs_raw:B.bytes)
+  (ccs_tail:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal left_stream right_stream /\
+        Seq.equal left_stream (B.append server_hello_raw server_tail) /\
+        Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello sh))
+          server_hello_raw /\
+        CS.cleartext_tls_message_raw
+          M.TlsChangeCipherSpec
+          ccs_raw)
+      (ensures False)
+=
+  lemma_parse_record_wire_of_received_server_hello sh server_hello_raw;
+  lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
+  eliminate exists (server_fragment:B.bytes).
+    W.parse_record_wire server_hello_raw ==
+      Some (T.Handshake, server_fragment, B.length server_hello_raw)
+  returns False
+  with _.
+  (
+    PWS.lemma_equal_stream_record_head_lengths
+      left_stream
+      right_stream
+      server_hello_raw
+      server_tail
+      ccs_raw
+      ccs_tail
+      T.Handshake
+      server_fragment
+      T.ChangeCipherSpec
+      (B.singleton 1uy);
+    assert (B.length server_hello_raw == B.length ccs_raw);
+    Seq.lemma_eq_elim left_stream right_stream;
+    Seq.lemma_eq_elim left_stream (B.append server_hello_raw server_tail);
+    Seq.lemma_eq_elim right_stream (B.append ccs_raw ccs_tail);
+    assert (Seq.equal
+      (B.append server_hello_raw server_tail)
+      (B.append ccs_raw ccs_tail));
+    PWS.lemma_append_heads_equal_same_len
+      server_hello_raw
+      server_tail
+      ccs_raw
+      ccs_tail;
+    assert (Seq.equal server_hello_raw ccs_raw);
+    lemma_received_server_hello_raw_not_change_cipher_spec
+      sh
+      server_hello_raw
+      ccs_raw
+  )
+
 let lemma_event_raw_delta_legal_local
   (model:CS.connection_model)
   (ev:CS.local_event)
@@ -138,6 +521,37 @@ let lemma_event_raw_delta_legal_local
         Seq.equal delta_received B.empty)
 =
   ()
+
+let lemma_event_raw_delta_legal_change_cipher_spec
+  (model:CS.connection_model)
+  (dir:CL.direction)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  : Lemma
+      (requires
+        CS.event_raw_delta_legal
+          model
+          (CS.ConnNetworkEvent ({
+            CL.message_direction = dir;
+            CL.message_value = M.TlsChangeCipherSpec;
+          }))
+          delta_sent
+          delta_received)
+      (ensures
+        (dir == CL.Sent ==>
+          CS.cleartext_tls_message_raw
+            M.TlsChangeCipherSpec
+            delta_sent /\
+          Seq.equal delta_received B.empty) /\
+        (dir == CL.Received ==>
+          Seq.equal delta_sent B.empty /\
+          CS.cleartext_tls_message_raw
+            M.TlsChangeCipherSpec
+            delta_received))
+=
+  match dir with
+  | CL.Sent -> ()
+  | CL.Received -> ()
 
 let lemma_event_raw_delta_legal_sent_client_hello
   (model:CS.connection_model)
@@ -230,6 +644,325 @@ let lemma_event_raw_delta_legal_sent_server_hello
         Seq.equal delta_received B.empty)
 =
   ()
+
+let lemma_client_prefix_sent_client_hello_supported
+  (model0:CS.connection_model)
+  (client_start:CS.handshake_start)
+  (client_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (client_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        WFL.supported_client_config_wire_profile model0.CS.model_config /\
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+           client_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures WFL.supported_client_hello_wire_profile client_ch)
+=
+  let ev0 = CS.ConnLocalEvent (CS.LocalStartHandshake client_start) in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+  }) in
+  let ev2 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+  }) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: ev2 :: ev3 :: client_rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay
+      model1
+      (ev1 :: ev2 :: ev3 :: client_rest)
+      tail0_sent
+      tail0_received
+      final_model
+  returns WFL.supported_client_hello_wire_profile client_ch
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      (ev2 :: ev3 :: client_rest)
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay
+        model2
+        (ev2 :: ev3 :: client_rest)
+        tail1_sent
+        tail1_received
+        final_model
+    returns WFL.supported_client_hello_wire_profile client_ch
+    with _.
+    (
+      assert (CS.legal_event model0 ev0);
+      assert (CS.legal_event model1 ev1);
+      assert (CS.legal_local_event model0 (CS.LocalStartHandshake client_start));
+      assert (CS.legal_tls_message
+        model1
+        CL.Sent
+        (M.TlsHandshake (M.ClientHello client_ch)));
+      assert_norm (CS.step_model model0 ev0 ==
+        CS.step_local_event model0 (CS.LocalStartHandshake client_start));
+      assert_norm (CS.step_local_event model0 (CS.LocalStartHandshake client_start) ==
+        Some (CS.with_handshake_stage
+          model0
+          { model0.CS.model_handshake with
+              CS.hs_start = Some client_start
+          }
+          CS.HsStarted));
+      assert (model1 ==
+        CS.with_handshake_stage
+          model0
+          { model0.CS.model_handshake with
+              CS.hs_start = Some client_start
+          }
+          CS.HsStarted);
+      assert (model1.CS.model_config == model0.CS.model_config);
+      assert (model1.CS.model_handshake.CS.hs_start == Some client_start);
+      assert (CS.start_matches_config model0.CS.model_config client_start);
+      assert (CS.client_hello_matches_start client_start client_ch);
+      assert (Seq.equal
+        client_start.CS.start_server_name
+        model0.CS.model_config.CS.config_server_name);
+      Seq.lemma_eq_elim
+        client_start.CS.start_server_name
+        model0.CS.model_config.CS.config_server_name;
+      assert (client_ch.M.cipher_suites ==
+        model0.CS.model_config.CS.config_cipher_suites);
+      assert (client_ch.M.signature_schemes ==
+        model0.CS.model_config.CS.config_signature_schemes);
+      assert (client_ch.M.server_name ==
+        Some model0.CS.model_config.CS.config_server_name);
+      assert (B.length client_ch.M.body == 0);
+      assert (WFL.supported_client_hello_wire_profile client_ch)
+    )
+  )
+
+let lemma_server_start_then_received_change_cipher_spec_raw_slice
+  (model0:CS.connection_model)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists ccs_raw received_tail.
+          Seq.equal raw_received (B.append ccs_raw received_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay model1 (ev1 :: rest) tail0_sent tail0_received final_model
+  returns
+    exists ccs_raw received_tail.
+      Seq.equal raw_received (B.append ccs_raw received_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      rest
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay model2 rest tail1_sent tail1_received final_model
+    returns
+      exists ccs_raw received_tail.
+        Seq.equal raw_received (B.append ccs_raw received_tail) /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    with _.
+    (
+      lemma_event_raw_delta_legal_local
+        model0
+        CS.LocalStartServer
+        delta0_sent
+        delta0_received;
+      lemma_event_raw_delta_legal_change_cipher_spec
+        model1
+        CL.Received
+        delta1_sent
+        delta1_received;
+      assert (Seq.equal delta0_sent B.empty);
+      assert (Seq.equal delta0_received B.empty);
+      assert (Seq.equal delta1_sent B.empty);
+      assert (CS.cleartext_tls_message_raw
+        M.TlsChangeCipherSpec
+        delta1_received);
+      Seq.lemma_eq_elim delta0_received B.empty;
+      CL.lemma_append_empty_left tail0_received;
+      assert (Seq.equal raw_received tail0_received);
+      Seq.lemma_eq_elim raw_received tail0_received;
+      assert (exists ccs_raw received_tail.
+        Seq.equal raw_received (B.append ccs_raw received_tail) /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+    )
+  )
+
+let lemma_server_start_then_sent_change_cipher_spec_raw_slice
+  (model0:CS.connection_model)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists ccs_raw sent_tail.
+          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay model1 (ev1 :: rest) tail0_sent tail0_received final_model
+  returns
+    exists ccs_raw sent_tail.
+      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      rest
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay model2 rest tail1_sent tail1_received final_model
+    returns
+      exists ccs_raw sent_tail.
+        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    with _.
+    (
+      lemma_event_raw_delta_legal_local
+        model0
+        CS.LocalStartServer
+        delta0_sent
+        delta0_received;
+      lemma_event_raw_delta_legal_change_cipher_spec
+        model1
+        CL.Sent
+        delta1_sent
+        delta1_received;
+      assert (Seq.equal delta0_sent B.empty);
+      assert (Seq.equal delta0_received B.empty);
+      assert (CS.cleartext_tls_message_raw
+        M.TlsChangeCipherSpec
+        delta1_sent);
+      assert (Seq.equal delta1_received B.empty);
+      Seq.lemma_eq_elim delta0_sent B.empty;
+      CL.lemma_append_empty_left tail0_sent;
+      assert (Seq.equal raw_sent tail0_sent);
+      Seq.lemma_eq_elim raw_sent tail0_sent;
+      assert (exists ccs_raw sent_tail.
+        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+    )
+  )
 
 let lemma_client_prefix_raw_slices
   (model0:CS.connection_model)
