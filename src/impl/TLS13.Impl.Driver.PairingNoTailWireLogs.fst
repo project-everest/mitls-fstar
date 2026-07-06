@@ -7,6 +7,7 @@ module CS = TLS13.Spec.ConnectionState
 module CW = TLS13.Impl.CanonicalWire
 module CTypes = TLS13.Impl.CanonicalTypes
 module L = FStar.List.Tot
+module RVD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
 module ServerCP = TLS13.Impl.Server.CanonicalProtocol
 module SM = Common.StateMachine
@@ -14,6 +15,7 @@ module TCP = Common.TCP
 module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
 module W = TLS13.Wire.Spec
+module WU = TLS13.Wire.Spec.Reveal.Util
 
 let lemma_b_empty_seq_empty ()
   : Lemma (Seq.equal B.empty Seq.empty)
@@ -126,6 +128,209 @@ let rec lemma_wire_parses_as_serialize_with_tail
             (msg :: rest)
             residual))
     )
+
+let lemma_wire_parse_empty_none ()
+  : Lemma (CW.wire_parse Seq.empty == None)
+=
+  match W.parse_record_wire Seq.empty with
+  | None -> ()
+  | Some (content_type, fragment, consumed) ->
+    W.lemma_parse_record_wire_some_consumed_positive
+      Seq.empty
+      content_type
+      fragment
+      consumed;
+    assert False
+
+let lemma_wire_parse_serialize_prefix
+  (msg:CW.wire_message)
+  (tail:B.bytes)
+  : Lemma
+      (ensures
+        exists parsed.
+          CW.wire_parse (B.append (CW.wire_serialize msg) tail) ==
+            Some (parsed, tail) /\
+          parsed == msg)
+=
+  assert (CW.wire_serialize msg == msg.CW.wm_raw);
+  assert (W.parse_record_wire msg.CW.wm_raw ==
+    Some (msg.CW.wm_content_type, msg.CW.wm_fragment, B.length msg.CW.wm_raw));
+  let full = B.append msg.CW.wm_raw tail in
+  Seq.lemma_len_append msg.CW.wm_raw tail;
+  WU.lemma_slice_append_left msg.CW.wm_raw tail;
+  Seq.lemma_eq_elim
+    (Seq.slice full 0 (B.length msg.CW.wm_raw))
+    msg.CW.wm_raw;
+  RVD.lemma_parse_record_wire_from_prefix
+    full
+    msg.CW.wm_content_type
+    msg.CW.wm_fragment
+    (B.length msg.CW.wm_raw);
+  assert (W.parse_record_wire full ==
+    Some (msg.CW.wm_content_type, msg.CW.wm_fragment, B.length msg.CW.wm_raw));
+  CL.lemma_raw_slice_append_suffix msg.CW.wm_raw tail;
+  assert (CL.raw_slice full (B.length msg.CW.wm_raw) (B.length full) ==
+    Seq.slice full (B.length msg.CW.wm_raw) (B.length full));
+  Seq.lemma_eq_elim
+    tail
+    (Seq.slice full (B.length msg.CW.wm_raw) (B.length full));
+  match CW.wire_parse full with
+  | None ->
+    assert False
+  | Some (parsed, rest) ->
+    assert (rest == tail);
+    assert (parsed.CW.wm_raw == msg.CW.wm_raw);
+    assert (parsed.CW.wm_content_type == msg.CW.wm_content_type);
+    assert (parsed.CW.wm_fragment == msg.CW.wm_fragment);
+    assert (parsed == msg);
+    assert (exists parsed'.
+      CW.wire_parse (B.append (CW.wire_serialize msg) tail) ==
+        Some (parsed', tail) /\
+      parsed' == msg)
+
+let rec lemma_wire_parse_serialize_with_tail_inverse
+  (msgs:list CW.wire_message)
+  (tail:B.bytes)
+  : Lemma
+      (ensures
+        WF.parses_as
+          CW.tls_record_wire_format
+          (WF.serialize_with_tail CW.tls_record_wire_format msgs tail)
+          msgs
+          tail)
+      (decreases msgs)
+=
+  match msgs with
+  | [] ->
+    assert (Seq.equal tail tail)
+  | msg :: rest ->
+    lemma_wire_parse_serialize_prefix
+      msg
+      (WF.serialize_with_tail CW.tls_record_wire_format rest tail);
+    lemma_wire_parse_serialize_with_tail_inverse rest tail;
+    assert (exists parsed_msg bytes_after_msg.
+      CW.wire_parse
+        (WF.serialize_with_tail CW.tls_record_wire_format (msg :: rest) tail) ==
+        Some (parsed_msg, bytes_after_msg) /\
+      parsed_msg == msg /\
+      WF.parses_as
+        CW.tls_record_wire_format
+        bytes_after_msg
+        rest
+        tail)
+
+let lemma_wire_parse_serialize_all_inverse
+  (msgs:list CW.wire_message)
+  : Lemma
+      (ensures
+        WF.parses_as
+          CW.tls_record_wire_format
+          (WF.serialize_all CW.tls_record_wire_format msgs)
+          msgs
+          Seq.empty)
+=
+  lemma_wire_parse_serialize_with_tail_inverse msgs Seq.empty
+
+let rec lemma_wire_parses_as_unique_empty_residual
+  (bytes:B.bytes)
+  (left:list CW.wire_message)
+  (right:list CW.wire_message)
+  : Lemma
+      (requires
+        WF.parses_as CW.tls_record_wire_format bytes left Seq.empty /\
+        WF.parses_as CW.tls_record_wire_format bytes right Seq.empty)
+      (ensures left == right)
+      (decreases left)
+=
+  match left, right with
+  | [], [] -> ()
+  | [], r_hd :: r_tl ->
+    assert (Seq.equal bytes Seq.empty);
+    Seq.lemma_eq_elim bytes Seq.empty;
+    lemma_wire_parse_empty_none ();
+    eliminate exists (parsed_msg:CW.wire_message) (bytes_after_msg:B.bytes).
+      CW.wire_parse bytes == Some (parsed_msg, bytes_after_msg) /\
+      parsed_msg == r_hd /\
+      WF.parses_as
+        CW.tls_record_wire_format
+        bytes_after_msg
+        r_tl
+        Seq.empty
+    returns False
+    with _.
+    (
+      assert False
+    )
+  | l_hd :: l_tl, [] ->
+    assert (Seq.equal bytes Seq.empty);
+    Seq.lemma_eq_elim bytes Seq.empty;
+    lemma_wire_parse_empty_none ();
+    eliminate exists (parsed_msg:CW.wire_message) (bytes_after_msg:B.bytes).
+      CW.wire_parse bytes == Some (parsed_msg, bytes_after_msg) /\
+      parsed_msg == l_hd /\
+      WF.parses_as
+        CW.tls_record_wire_format
+        bytes_after_msg
+        l_tl
+        Seq.empty
+    returns False
+    with _.
+    (
+      assert False
+    )
+  | l_hd :: l_tl, r_hd :: r_tl ->
+    eliminate exists (left_msg:CW.wire_message) (left_after:B.bytes).
+      CW.wire_parse bytes == Some (left_msg, left_after) /\
+      left_msg == l_hd /\
+      WF.parses_as
+        CW.tls_record_wire_format
+        left_after
+        l_tl
+        Seq.empty
+    returns l_hd :: l_tl == r_hd :: r_tl
+    with _.
+    (
+      eliminate exists (right_msg:CW.wire_message) (right_after:B.bytes).
+        CW.wire_parse bytes == Some (right_msg, right_after) /\
+        right_msg == r_hd /\
+        WF.parses_as
+          CW.tls_record_wire_format
+          right_after
+          r_tl
+          Seq.empty
+      returns l_hd :: l_tl == r_hd :: r_tl
+      with _.
+      (
+        assert (left_msg == right_msg);
+        assert (left_after == right_after);
+        assert (l_hd == r_hd);
+        lemma_wire_parses_as_unique_empty_residual
+          left_after
+          l_tl
+          r_tl;
+        assert (l_tl == r_tl)
+      )
+    )
+
+let lemma_wire_serialize_all_injective
+  (left:list CW.wire_message)
+  (right:list CW.wire_message)
+  : Lemma
+      (requires
+        Seq.equal
+          (WF.serialize_all CW.tls_record_wire_format left)
+          (WF.serialize_all CW.tls_record_wire_format right))
+      (ensures left == right)
+=
+  lemma_wire_parse_serialize_all_inverse left;
+  lemma_wire_parse_serialize_all_inverse right;
+  Seq.lemma_eq_elim
+    (WF.serialize_all CW.tls_record_wire_format left)
+    (WF.serialize_all CW.tls_record_wire_format right);
+  lemma_wire_parses_as_unique_empty_residual
+    (WF.serialize_all CW.tls_record_wire_format left)
+    left
+    right
 
 let rec lemma_wire_serialize_all_append
   (left:list CW.wire_message)

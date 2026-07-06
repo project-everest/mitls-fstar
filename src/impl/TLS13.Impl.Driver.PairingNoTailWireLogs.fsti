@@ -32,6 +32,47 @@ val lemma_wire_parses_as_serialize_with_tail
             msgs
             residual))
 
+val lemma_wire_parse_serialize_with_tail_inverse
+  (msgs:list CW.wire_message)
+  (tail:B.bytes)
+  : Lemma
+      (ensures
+        WF.parses_as
+          CW.tls_record_wire_format
+          (WF.serialize_with_tail CW.tls_record_wire_format msgs tail)
+          msgs
+          tail)
+
+val lemma_wire_parse_serialize_all_inverse
+  (msgs:list CW.wire_message)
+  : Lemma
+      (ensures
+        WF.parses_as
+          CW.tls_record_wire_format
+          (WF.serialize_all CW.tls_record_wire_format msgs)
+          msgs
+          Seq.empty)
+
+val lemma_wire_parses_as_unique_empty_residual
+  (bytes:B.bytes)
+  (left:list CW.wire_message)
+  (right:list CW.wire_message)
+  : Lemma
+      (requires
+        WF.parses_as CW.tls_record_wire_format bytes left Seq.empty /\
+        WF.parses_as CW.tls_record_wire_format bytes right Seq.empty)
+      (ensures left == right)
+
+val lemma_wire_serialize_all_injective
+  (left:list CW.wire_message)
+  (right:list CW.wire_message)
+  : Lemma
+      (requires
+        Seq.equal
+          (WF.serialize_all CW.tls_record_wire_format left)
+          (WF.serialize_all CW.tls_record_wire_format right))
+      (ensures left == right)
+
 val lemma_wire_serialize_all_append
   (left:list CW.wire_message)
   (right:list CW.wire_message)

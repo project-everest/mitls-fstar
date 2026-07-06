@@ -331,6 +331,15 @@ inverted.
 then lifts that corrected staged-v2 protected premise, together with the
 normalized cleartext raw hello facts, to the same final application record
 key/IV agreement conclusion as the old contiguous replay bridge.
+`TLS13.Impl.Driver.PairingStagedNormalizedBoundary` now packages exactly those
+staged-v2 premises in the same style as the older normalized replay boundary:
+`paired_supported_normalized_staged_replay_boundary` is still an existential
+witness package, but it no longer contains the stale pre-install
+client-write/server-read alignment.  `PairingNoTailNormalized` also exposes a
+clean16 composition wrapper:
+`lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_staged_replay_boundary`.
+This is the corrected internal milestone to use while deriving the staged replay
+boundary from clean16 traces.
 
 The older `TLS13.Impl.Driver.PairingTraceShape` theorem is still verified, but it
 is not the right final target for parser-backed traces.  It avoids the
@@ -1545,7 +1554,13 @@ wrapper showing that corrected clean16 no-tail byte traces plus the existing
 `PairingNormalizedBoundary.paired_supported_normalized_replay_boundary` still
 yield the final application record-material agreement; this is an internal
 milestone, not the final theorem, because that normalized replay boundary still
-has to be derived.  The attempted role-local server two-install proof found a
+has to be derived.  A corrected staged-v2 variant,
+`PairingStagedNormalizedBoundary.paired_supported_normalized_staged_replay_boundary`,
+and the corresponding
+`PairingNoTailNormalized.lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_staged_replay_boundary`,
+avoid the old pre-install alignment issue, but remain an internal milestone for
+the same reason: the staged boundary still has to be derived from the clean16
+byte traces.  The attempted role-local server two-install proof found a
 stronger problem: that theorem is false under only
 `server_driver_application_ready server /\ length server.cs_event_log == 16`.
 There is a legal server-only trace that inserts a `TlsChangeCipherSpec` no-op
@@ -1563,12 +1578,16 @@ public boundary predicate that includes canonical scheduling/no-extra-CCS (and
 probably a canonical protected server flight) rather than bare abstract WFSM
 validity.
 
-One verified milestone now isolates the client-side half of this asymmetry:
+Verified milestones now isolate the client-side half of this asymmetry:
 `TLS13.ConnectionState.ClientCertificateVerifyReachability` proves that any
 consistent client model in `ControlApplicationData` must have recorded an
 `hs_certificate_verify` witness, and
+`TLS13.ConnectionState.ClientCertificateVerifyEvent` strengthens this to an
+actual network `Received CertificateVerify` occurrence in `cs_event_log`.
 `PairingNoTailNormalized.lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness`
-lifts that fact from the corrected clean16 paired inputs.  This is useful audit
+and
+`PairingNoTailNormalized.lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event`
+lift those facts from the corrected clean16 paired inputs.  This is useful audit
 evidence, but it is deliberately not the missing paired inversion theorem: the
 remaining step is to prove that the server's paired protected byte stream
 actually contains the corresponding network `Sent CertificateVerify` event,

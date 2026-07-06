@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module CS = TLS13.Spec.ConnectionState
+module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module CL = TLS13.ConnectionLog
 module M = TLS13.Messages
 module Pairing = TLS13.Impl.Driver.Pairing
@@ -20,6 +21,7 @@ module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
+module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 module Seq = FStar.Seq
 module SM = Common.StateMachine
 module ServerCP = TLS13.Impl.Server.CanonicalProtocol
@@ -286,6 +288,28 @@ val lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
           server_received
           server_sent)
       (ensures Some? client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
+
+val lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures CVE.contains_received_certificate_verify client.CS.cs_event_log)
 
 noextract
 let paired_no_tail_role_local_client_two_handshake_installs_server_start_spine16_and_client_certificate_verify_witness
@@ -863,6 +887,43 @@ val lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
               TLS13.Impl.CanonicalWire.tls_record_wire_format
               (WFSM.trace_input_messages client_trace)))
 
+val lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        exists client_trace server_trace.
+          SM.trace_reaches
+            (ClientCP.client_state_machine client_initial)
+            client_initial
+            client_trace
+            client /\
+          SM.trace_reaches
+            (ServerCP.server_state_machine server_initial)
+            server_initial
+            server_trace
+            server /\
+          SM.trace_wire_outputs client_trace ==
+            WFSM.trace_input_messages server_trace /\
+          SM.trace_wire_outputs server_trace ==
+            WFSM.trace_input_messages client_trace)
+
 val lemma_clean_no_tail_valid_byte_traces_paired_wire_logs
   (client_initial:CS.connection_state)
   (server_initial:CS.connection_state)
@@ -1114,6 +1175,38 @@ val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_received
           server_sent /\
         PNB.paired_supported_normalized_replay_boundary client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+
+val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_staged_replay_boundary
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        PSNB.paired_supported_normalized_staged_replay_boundary client server)
       (ensures
         CS.supported_profile_client_server_key_material_agrees client server /\
         CS.peer_record_material_agrees
