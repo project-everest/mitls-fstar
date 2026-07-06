@@ -188,6 +188,32 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_start_spine16
   PNTCS.lemma_client_no_tail_start_spine client;
   PNTSS.lemma_server_no_tail_start_spine16 server
 
+let lemma_clean16_no_tail_valid_byte_traces_role_local_start_and_final_witnesses16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures paired_no_tail_role_local_start_and_final_witnesses16 client server)
+=
+  PNTCS.lemma_client_no_tail_start_spine_and_final_model_witnesses client;
+  PNTSS.lemma_server_no_tail_start_spine16 server;
+  PNTSS.lemma_server_no_tail_final_model_witnesses16 server
+
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_start_spine16
   (client_initial:CS.connection_state)
   (server_initial:CS.connection_state)

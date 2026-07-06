@@ -1042,12 +1042,11 @@ let lemma_server_no_tail_start_spine
     )
   )
 
-let lemma_server_no_tail_final_model_witnesses
+let lemma_server_no_tail_final_model_witnesses_from_application_ready
   (server:CS.connection_state)
   : Lemma
      (requires
-       SD.server_driver_application_ready server /\
-       FStar.List.Tot.length server.CS.cs_event_log == 15)
+       SD.server_driver_application_ready server)
      (ensures server_no_tail_final_model_witnesses server)
 =
   let hs = server.CS.cs_model.CS.model_handshake in
@@ -1087,6 +1086,26 @@ let lemma_server_no_tail_final_model_witnesses
      assert False)
   | _, _, _, _ ->
    assert False
+
+let lemma_server_no_tail_final_model_witnesses
+  (server:CS.connection_state)
+  : Lemma
+     (requires
+       SD.server_driver_application_ready server /\
+       FStar.List.Tot.length server.CS.cs_event_log == 15)
+     (ensures server_no_tail_final_model_witnesses server)
+=
+  lemma_server_no_tail_final_model_witnesses_from_application_ready server
+
+let lemma_server_no_tail_final_model_witnesses16
+  (server:CS.connection_state)
+  : Lemma
+     (requires
+       SD.server_driver_application_ready server /\
+       FStar.List.Tot.length server.CS.cs_event_log == 16)
+     (ensures server_no_tail_final_model_witnesses server)
+=
+  lemma_server_no_tail_final_model_witnesses_from_application_ready server
 
 let lemma_server_no_tail_start_spine_and_final_model_witnesses
   (server:CS.connection_state)

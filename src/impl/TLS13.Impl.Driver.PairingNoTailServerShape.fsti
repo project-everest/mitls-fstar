@@ -127,6 +127,14 @@ val lemma_server_no_tail_final_model_witnesses
         FStar.List.Tot.length server.CS.cs_event_log == 15)
       (ensures server_no_tail_final_model_witnesses server)
 
+val lemma_server_no_tail_final_model_witnesses16
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        SD.server_driver_application_ready server /\
+        FStar.List.Tot.length server.CS.cs_event_log == 16)
+      (ensures server_no_tail_final_model_witnesses server)
+
 val lemma_server_no_tail_start_spine_and_final_model_witnesses
   (server:CS.connection_state)
   : Lemma
