@@ -282,6 +282,16 @@ ClientHello.  Separately,
 `TLS13.Impl.Driver.PairingNoTailClientSentRawShape` proves that the completed
 client no-tail raw-sent stream is exactly a cleartext ClientHello followed by the
 single protected `ApplicationData` record carrying Client Finished.  The
+next paired cleartext milestone is now also verified:
+`TLS13.Impl.Driver.PairingNoTailServerCleartextShape` proves a length-16 server
+third-event inversion lemma under a non-CCS premise, and
+`PairingNoTailNormalized` derives that premise from paired bytes.  The derivation
+uses the explicit client `ClientHello ++ ClientFinished` raw-sent slice to rule
+out a server-received CCS immediately after ClientHello, and the client
+received-ServerHello raw head to rule out a server-sent CCS at that same point.
+Consequently, clean16 paired byte traces now imply the server prefix
+`LocalStartServer; Received ClientHello; LocalSelectServerParameters`, paired
+with the client prefix through `LocalDeriveSharedSecret`.  The
 remaining hard part is the rest of the role-local event-shape and protected
 projection inversion.  The role-local inversion is now past the first
 nontrivial CCS/no-op cases:

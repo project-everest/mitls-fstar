@@ -25,6 +25,7 @@ module PNTCSR = TLS13.Impl.Driver.PairingNoTailClientSentRawShape
 module PNTCVS = TLS13.Impl.Driver.PairingNoTailClientVerifyShape
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
+module PNTSC = TLS13.Impl.Driver.PairingNoTailServerCleartextShape
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
 module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
@@ -273,6 +274,23 @@ let server_second_event_not_change_cipher_spec16
       CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
     ~ (exists m.
         e1 == CS.ConnNetworkEvent m /\
+        m.CL.message_value == M.TlsChangeCipherSpec)
+
+noextract
+let server_third_event_not_change_cipher_spec16
+  (server:CS.connection_state)
+  : prop =
+  exists ch e2 rest.
+    server.CS.cs_event_log ==
+      CS.ConnLocalEvent CS.LocalStartServer ::
+      CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.ClientHello ch);
+      }) ::
+      e2 ::
+      rest /\
+    ~ (exists m.
+        e2 == CS.ConnNetworkEvent m /\
         m.CL.message_value == M.TlsChangeCipherSpec)
 
 noextract
@@ -1466,6 +1484,28 @@ val lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_ciphe
           server_sent)
       (ensures server_second_event_not_change_cipher_spec16 server)
 
+val lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher_spec
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures server_third_event_not_change_cipher_spec16 server)
+
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
   (client_initial:CS.connection_state)
   (server_initial:CS.connection_state)
@@ -1487,6 +1527,28 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
           server_received
           server_sent)
       (ensures paired_no_tail_role_local_client_shared_prefix client server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_selection_prefix
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures paired_no_tail_role_local_client_shared_server_selection_prefix client server)
 
 val lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix
   (client_initial:CS.connection_state)

@@ -301,6 +301,69 @@ val lemma_server_start_then_sent_change_cipher_spec_raw_slice
           Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
           CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
 
+val lemma_server_start_client_hello_then_received_change_cipher_spec_raw_slices
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists server_ch_raw ccs_raw received_tail.
+          Seq.equal
+            raw_received
+            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+          CS.received_cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello server_ch))
+            server_ch_raw /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+
+val lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists ccs_raw sent_tail.
+          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+
 val lemma_client_prefix_raw_slices
   (model0:CS.connection_model)
   (client_start:CS.handshake_start)

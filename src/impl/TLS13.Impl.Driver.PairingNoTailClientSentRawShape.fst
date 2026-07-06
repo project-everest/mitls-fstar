@@ -389,59 +389,74 @@ let lemma_tail_empty_sent_until_finished
      [])
     cf)
 
-let lemma_client_no_tail_finished_sent_raw_slices
+let lemma_client_no_tail_finished_sent_raw_slices_for_shape
   (client:CS.connection_state)
+  (start:CS.handshake_start)
+  (ch:M.client_hello)
+  (sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (e4 e5:CS.conn_event)
+  (ee:M.encrypted_extensions)
+  (cert:M.certificate_msg)
+  (peer:X.peer_identity)
+  (cv:M.certificate_verify)
+  (sf:M.finished)
+  (e13 e14:CS.conn_event)
+  (cf:M.finished)
   : Lemma
       (requires
-        PNTCAS.client_no_tail_finished_sent_shape client /\
+        client.CS.cs_event_log ==
+          CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }) ::
+          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+          e4 ::
+          e5 ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+          }) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.Certificate cert);
+          }) ::
+          CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+          }) ::
+          CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.Finished sf);
+          }) ::
+          CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
+          e13 ::
+          e14 ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Finished cf);
+          }) ::
+          [] /\
+        PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
+        PNTCAS.client_no_tail_application_install_cover e13 e14 /\
         CS.connection_state_raw_event_replay_consistent client)
-      (ensures client_sent_cleartext_and_finished_raw_slices client)
+      (ensures
+        exists client_ch_raw client_finished_raw.
+          Seq.equal
+            client.CS.cs_wire_log.CL.raw_sent
+            (B.append client_ch_raw client_finished_raw) /\
+          CS.cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello ch))
+            client_ch_raw /\
+          CS.raw_records_exactly client_finished_raw T.ApplicationData 1)
 =
-  eliminate exists start ch sh client_shared e4 e5 ee cert peer cv sf e13 e14 cf.
-    client.CS.cs_event_log ==
-      CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-      CS.ConnNetworkEvent ({
-        CL.message_direction = CL.Sent;
-        CL.message_value = M.TlsHandshake (M.ClientHello ch);
-      }) ::
-      CS.ConnNetworkEvent ({
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.ServerHello sh);
-      }) ::
-      CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-      e4 ::
-      e5 ::
-      CS.ConnNetworkEvent ({
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-      }) ::
-      CS.ConnNetworkEvent ({
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.Certificate cert);
-      }) ::
-      CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ::
-      CS.ConnNetworkEvent ({
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
-      }) ::
-      CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ::
-      CS.ConnNetworkEvent ({
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.Finished sf);
-      }) ::
-      CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
-      e13 ::
-      e14 ::
-      CS.ConnNetworkEvent ({
-        CL.message_direction = CL.Sent;
-        CL.message_value = M.TlsHandshake (M.Finished cf);
-      }) ::
-      [] /\
-    PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-    PNTCAS.client_no_tail_application_install_cover e13 e14
-  returns client_sent_cleartext_and_finished_raw_slices client
-  with _.
-  (
     let model0 = CS.initial_model client.CS.cs_model.CS.model_config in
     let ev0 = CS.ConnLocalEvent (CS.LocalStartHandshake start) in
     let ev1 = CS.ConnNetworkEvent ({
@@ -504,7 +519,15 @@ let lemma_client_no_tail_finished_sent_raw_slices
         client.CS.cs_wire_log.CL.raw_received
         (B.append delta0_received tail0_received) /\
       CS.conn_events_raw_replay model1 (ev1 :: tail) tail0_sent tail0_received client.CS.cs_model
-    returns client_sent_cleartext_and_finished_raw_slices client
+    returns
+      exists client_ch_raw client_finished_raw.
+        Seq.equal
+          client.CS.cs_wire_log.CL.raw_sent
+          (B.append client_ch_raw client_finished_raw) /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello ch))
+          client_ch_raw /\
+        CS.raw_records_exactly client_finished_raw T.ApplicationData 1
     with _.
     (
       PWR.lemma_conn_events_raw_replay_head
@@ -521,7 +544,15 @@ let lemma_client_no_tail_finished_sent_raw_slices
         Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
         Seq.equal tail0_received (B.append delta1_received tail1_received) /\
         CS.conn_events_raw_replay model2 tail tail1_sent tail1_received client.CS.cs_model
-      returns client_sent_cleartext_and_finished_raw_slices client
+      returns
+        exists client_ch_raw client_finished_raw.
+          Seq.equal
+            client.CS.cs_wire_log.CL.raw_sent
+            (B.append client_ch_raw client_finished_raw) /\
+          CS.cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello ch))
+            client_ch_raw /\
+          CS.raw_records_exactly client_finished_raw T.ApplicationData 1
       with _.
       (
         lemma_event_raw_delta_legal_local
@@ -557,7 +588,15 @@ let lemma_client_no_tail_finished_sent_raw_slices
         eliminate exists finished_raw.
           Seq.equal tail1_sent finished_raw /\
           CS.raw_records_exactly finished_raw T.ApplicationData 1
-        returns client_sent_cleartext_and_finished_raw_slices client
+        returns
+          exists client_ch_raw client_finished_raw.
+            Seq.equal
+              client.CS.cs_wire_log.CL.raw_sent
+              (B.append client_ch_raw client_finished_raw) /\
+            CS.cleartext_tls_message_raw
+              (M.TlsHandshake (M.ClientHello ch))
+              client_ch_raw /\
+            CS.raw_records_exactly client_finished_raw T.ApplicationData 1
         with _.
         (
           Seq.lemma_eq_elim delta0_sent B.empty;
@@ -568,15 +607,105 @@ let lemma_client_no_tail_finished_sent_raw_slices
           assert (Seq.equal
             client.CS.cs_wire_log.CL.raw_sent
             (B.append delta1_sent finished_raw));
-          assert (exists (ch0:M.client_hello) (cf0:M.finished) client_ch_raw client_finished_raw.
+          assert (exists client_ch_raw client_finished_raw.
             Seq.equal
               client.CS.cs_wire_log.CL.raw_sent
               (B.append client_ch_raw client_finished_raw) /\
             CS.cleartext_tls_message_raw
-              (M.TlsHandshake (M.ClientHello ch0))
+              (M.TlsHandshake (M.ClientHello ch))
               client_ch_raw /\
-            CS.raw_records_exactly client_finished_raw T.ApplicationData 1)
+          CS.raw_records_exactly client_finished_raw T.ApplicationData 1)
         )
       )
-    )
+  )
+
+let lemma_client_no_tail_finished_sent_raw_slices
+  (client:CS.connection_state)
+  : Lemma
+    (requires
+      PNTCAS.client_no_tail_finished_sent_shape client /\
+      CS.connection_state_raw_event_replay_consistent client)
+    (ensures client_sent_cleartext_and_finished_raw_slices client)
+=
+  eliminate exists start ch sh client_shared e4 e5 ee cert peer cv sf e13 e14 cf.
+  client.CS.cs_event_log ==
+    CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ClientHello ch);
+    }) ::
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    }) ::
+    CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+    e4 ::
+    e5 ::
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+    }) ::
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.Certificate cert);
+    }) ::
+    CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ::
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+    }) ::
+    CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ::
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.Finished sf);
+    }) ::
+    CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
+    e13 ::
+    e14 ::
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished cf);
+    }) ::
+    [] /\
+  PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
+  PNTCAS.client_no_tail_application_install_cover e13 e14
+  returns client_sent_cleartext_and_finished_raw_slices client
+  with _.
+  (
+  lemma_client_no_tail_finished_sent_raw_slices_for_shape
+    client
+    start
+    ch
+    sh
+    client_shared
+    e4
+    e5
+    ee
+    cert
+    peer
+    cv
+    sf
+    e13
+    e14
+    cf;
+  eliminate exists client_ch_raw client_finished_raw.
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_sent
+      (B.append client_ch_raw client_finished_raw) /\
+    CS.cleartext_tls_message_raw
+      (M.TlsHandshake (M.ClientHello ch))
+      client_ch_raw /\
+    CS.raw_records_exactly client_finished_raw T.ApplicationData 1
+  returns client_sent_cleartext_and_finished_raw_slices client
+  with _.
+  (
+    assert (exists (ch0:M.client_hello) (cf0:M.finished) client_ch_raw0 client_finished_raw0.
+      Seq.equal
+        client.CS.cs_wire_log.CL.raw_sent
+        (B.append client_ch_raw0 client_finished_raw0) /\
+      CS.cleartext_tls_message_raw
+        (M.TlsHandshake (M.ClientHello ch0))
+        client_ch_raw0 /\
+      CS.raw_records_exactly client_finished_raw0 T.ApplicationData 1)
+  )
   )
