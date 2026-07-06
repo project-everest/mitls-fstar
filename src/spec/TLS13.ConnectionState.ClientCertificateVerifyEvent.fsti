@@ -10,6 +10,19 @@ noextract
 val contains_received_certificate_verify
   : events:list conn_event -> Tot prop
 
+val lemma_contains_received_certificate_verify_split
+  (events:list conn_event)
+  : Lemma
+      (requires contains_received_certificate_verify events)
+      (ensures
+        exists prefix cv suffix.
+          events ==
+            prefix @
+            (ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+            } :: suffix))
+
 noextract
 val client_certificate_verify_event_log_invariant
   : st:connection_state -> Tot prop

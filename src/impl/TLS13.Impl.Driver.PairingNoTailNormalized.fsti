@@ -226,6 +226,41 @@ let paired_no_tail_role_local_client_two_handshake_installs_server_start_spine16
     PNI.client_no_tail_handshake_traffic_install_event e5) /\
   PNTSS.server_no_tail_start_spine16 server
 
+noextract
+let paired_no_tail_role_local_client_handshake_install_cover_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  (exists client_start client_ch client_sh client_shared e4 e5 client_rest.
+    client.CS.cs_event_log ==
+      CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+      CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+      }) ::
+      CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+      }) ::
+      CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+      e4 ::
+      e5 ::
+      client_rest /\
+    PNTCPS.client_no_tail_two_handshake_install_cover e4 e5) /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let client_received_certificate_verify_event_split
+  (client:CS.connection_state)
+  : prop =
+  exists prefix cv suffix.
+    client.CS.cs_event_log ==
+      prefix @
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+      } :: suffix)
+
 val lemma_clean16_no_tail_valid_byte_traces_role_local_start_spine16
   (client_initial:CS.connection_state)
   (server_initial:CS.connection_state)
@@ -270,6 +305,31 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_inst
           server_sent)
       (ensures
         paired_no_tail_role_local_client_two_handshake_installs_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_cover_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_handshake_install_cover_server_start_spine16
           client
           server)
 
@@ -337,6 +397,28 @@ val lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_e
           server_received
           server_sent)
       (ensures CVE.contains_received_certificate_verify client.CS.cs_event_log)
+
+val lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event_split
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures client_received_certificate_verify_event_split client)
 
 noextract
 let paired_no_tail_role_local_client_two_handshake_installs_server_start_spine16_and_client_certificate_verify_witness

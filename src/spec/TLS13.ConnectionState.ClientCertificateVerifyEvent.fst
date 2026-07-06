@@ -63,6 +63,101 @@ let rec lemma_contains_received_certificate_verify_snoc_intro
   | _ :: rest ->
     lemma_contains_received_certificate_verify_snoc_intro rest cv
 
+let rec lemma_contains_received_certificate_verify_split
+  (events:list conn_event)
+  : Lemma
+      (requires contains_received_certificate_verify events)
+      (ensures
+        exists prefix cv suffix.
+          events ==
+            prefix @
+            (ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+            } :: suffix))
+      (decreases events)
+=
+  match events with
+  | [] ->
+    assert False
+  | ev :: rest ->
+    (match ev with
+     | ConnNetworkEvent msg ->
+       (match msg.CL.message_direction, msg.CL.message_value with
+        | CL.Received, M.TlsHandshake (M.CertificateVerify cv) ->
+          introduce exists (prefix:list conn_event)
+            (cv':M.certificate_verify)
+            (suffix:list conn_event).
+            events ==
+              prefix @
+              (ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.CertificateVerify cv');
+              } :: suffix)
+          with [] cv rest and ()
+        | _, _ ->
+          assert (contains_received_certificate_verify rest);
+          lemma_contains_received_certificate_verify_split rest;
+          eliminate exists prefix cv suffix.
+            rest ==
+              prefix @
+              (ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+              } :: suffix)
+          returns
+            exists prefix' cv' suffix'.
+              events ==
+                prefix' @
+                (ConnNetworkEvent {
+                  CL.message_direction = CL.Received;
+                  CL.message_value = M.TlsHandshake (M.CertificateVerify cv');
+                } :: suffix')
+          with _.
+          (
+            introduce exists (prefix':list conn_event)
+              (cv':M.certificate_verify)
+              (suffix':list conn_event).
+              events ==
+                prefix' @
+                (ConnNetworkEvent {
+                  CL.message_direction = CL.Received;
+                  CL.message_value = M.TlsHandshake (M.CertificateVerify cv');
+                } :: suffix')
+            with (ev :: prefix) cv suffix and ()
+          ))
+     | _ ->
+       assert (contains_received_certificate_verify rest);
+       lemma_contains_received_certificate_verify_split rest;
+       eliminate exists prefix cv suffix.
+         rest ==
+           prefix @
+           (ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+           } :: suffix)
+       returns
+         exists prefix' cv' suffix'.
+           events ==
+             prefix' @
+             (ConnNetworkEvent {
+               CL.message_direction = CL.Received;
+               CL.message_value = M.TlsHandshake (M.CertificateVerify cv');
+             } :: suffix')
+       with _.
+       (
+         introduce exists (prefix':list conn_event)
+           (cv':M.certificate_verify)
+           (suffix':list conn_event).
+           events ==
+             prefix' @
+             (ConnNetworkEvent {
+               CL.message_direction = CL.Received;
+               CL.message_value = M.TlsHandshake (M.CertificateVerify cv');
+             } :: suffix')
+         with (ev :: prefix) cv suffix and ()
+       ))
+
 noextract
 let client_certificate_verify_event_log_invariant_at
   (model:connection_model)

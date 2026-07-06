@@ -213,6 +213,35 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_inst
     client;
   PNTSS.lemma_server_no_tail_start_spine16 server
 
+let lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_cover_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_handshake_install_cover_server_start_spine16
+          client
+          server)
+=
+  PNTCPS.lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
+    client;
+  PNTSS.lemma_server_no_tail_start_spine16 server
+
 let lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
   (client_initial:CS.connection_state)
   (server_initial:CS.connection_state)
@@ -272,6 +301,39 @@ let lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_e
   assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
   assert (client.CS.cs_model.CS.model_control == CS.ControlApplicationData);
   CVE.lemma_client_application_ready_received_certificate_verify_event client
+
+let lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event_split
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures client_received_certificate_verify_event_split client)
+=
+  lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  CVE.lemma_contains_received_certificate_verify_split client.CS.cs_event_log
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_start_spine16_and_client_certificate_verify_witness
   (client_initial:CS.connection_state)

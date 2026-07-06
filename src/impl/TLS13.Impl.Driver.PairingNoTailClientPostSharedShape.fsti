@@ -53,6 +53,21 @@ module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 **)
 
 (**
+  Direction-sensitive refinements of
+  [PNI.client_no_tail_handshake_traffic_install_event].  The clean no-tail client
+  trace can commute the two post-shared-secret installs, but it cannot spend both
+  slots on the same direction and still reach application data in 16 events.
+**)
+val client_no_tail_handshake_write_install_event
+  : ev:CS.conn_event -> Tot prop
+
+val client_no_tail_handshake_read_install_event
+  : ev:CS.conn_event -> Tot prop
+
+val client_no_tail_two_handshake_install_cover
+  : e4:CS.conn_event -> e5:CS.conn_event -> Tot prop
+
+(**
   The order-insensitive milestone: after the mandatory
   [LocalStartHandshake]/[Sent ClientHello]/[Received ServerHello]/
   [LocalDeriveSharedSecret] prefix, the fifth and sixth events [e4]/[e5] are
@@ -83,3 +98,27 @@ val lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean
             rest /\
           PNI.client_no_tail_handshake_traffic_install_event e4 /\
           PNI.client_no_tail_handshake_traffic_install_event e5)
+
+val lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
+  (client:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        FStar.List.Tot.length client.CS.cs_event_log == 16)
+      (ensures
+        exists start ch sh client_shared e4 e5 rest.
+          client.CS.cs_event_log ==
+           CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ClientHello ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ServerHello sh);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+           e4 ::
+           e5 ::
+           rest /\
+          client_no_tail_two_handshake_install_cover e4 e5)
