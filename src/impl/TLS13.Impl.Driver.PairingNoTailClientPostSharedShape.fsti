@@ -67,6 +67,91 @@ val client_no_tail_handshake_read_install_event
 val client_no_tail_two_handshake_install_cover
   : e4:CS.conn_event -> e5:CS.conn_event -> Tot prop
 
+val lemma_client_no_tail_handshake_write_install_event_cases
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_write_install_event ev)
+      (ensures (
+        match ev with
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+          install.CS.install_epoch == CS.TrafficHandshake /\
+          install.CS.install_direction == CS.TrafficWrite
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+          role_install.CS.install_role == CS.ClientEndpoint /\
+          role_install.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+          role_install.CS.install_payload.CS.install_direction == CS.TrafficWrite
+        | _ ->
+          False))
+
+val lemma_client_no_tail_handshake_read_install_event_cases
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_read_install_event ev)
+      (ensures (
+        match ev with
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+          install.CS.install_epoch == CS.TrafficHandshake /\
+          install.CS.install_direction == CS.TrafficRead
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+          role_install.CS.install_role == CS.ClientEndpoint /\
+          role_install.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+          role_install.CS.install_payload.CS.install_direction == CS.TrafficRead
+        | _ ->
+          False))
+
+val lemma_client_no_tail_handshake_write_install_event_implies_handshake_traffic_install_event
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_write_install_event ev)
+      (ensures PNI.client_no_tail_handshake_traffic_install_event ev)
+
+val lemma_client_no_tail_handshake_read_install_event_implies_handshake_traffic_install_event
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_read_install_event ev)
+      (ensures PNI.client_no_tail_handshake_traffic_install_event ev)
+
+val lemma_client_no_tail_two_handshake_install_cover_cases
+  (e4:CS.conn_event)
+  (e5:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_two_handshake_install_cover e4 e5)
+      (ensures
+        (client_no_tail_handshake_write_install_event e4 /\
+         client_no_tail_handshake_read_install_event e5) \/
+        (client_no_tail_handshake_read_install_event e4 /\
+         client_no_tail_handshake_write_install_event e5))
+
+val lemma_client_two_handshake_install_cover_model_shape
+  (model4 model5 model6:CS.connection_model)
+  (e4 e5:CS.conn_event)
+  : Lemma
+      (requires
+        model4.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        model4.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model4.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model4.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model4.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic == None /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
+        PNI.client_no_tail_handshake_traffic_install_event e4 /\
+        PNI.client_no_tail_handshake_traffic_install_event e5 /\
+        client_no_tail_two_handshake_install_cover e4 e5 /\
+        CS.step_model model4 e4 == Some model5 /\
+        CS.step_model model5 e5 == Some model6)
+      (ensures
+        model6.CS.model_config == model4.CS.model_config /\
+        model6.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None)
+
 (**
   The order-insensitive milestone: after the mandatory
   [LocalStartHandshake]/[Sent ClientHello]/[Received ServerHello]/

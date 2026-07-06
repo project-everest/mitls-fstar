@@ -1507,14 +1507,17 @@ lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean`
 extends this client result one step further: both post-shared-secret events
 `e4` and `e5` are handshake-traffic installs, without committing to
 write-before-read or read-before-write order.
-For the staged-v2 protected replay bridge, a later client-side strengthening is
-still needed to show that these two installs are not duplicates: one must be the
-client-handshake write install and the other the server-handshake read install,
-again in either order.  A draft proof of that cover fact exposed an unstable
-existential/disjunction packaging problem and is not part of the verified public
-interface; the currently verified client module intentionally exposes only the
-weaker "both are handshake-traffic installs" milestone used by the clean16
-composition layer.
+For the staged-v2 protected replay bridge, the necessary direction-sensitive
+strengthening is now also verified:
+`PairingNoTailClientPostSharedShape.
+lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean`
+shows that the two post-shared events are one client-handshake write install and
+one server-handshake read install, order-insensitively.  `PairingNoTailNormalized`
+wraps this from the clean16 byte-trace predicate as
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_cover_server_start_spine16`.
+This is still client-local: it establishes the receiver-side install facts needed
+for protected server-flight decoding, but not the matching server protected
+server-flight send events.
 The server-side length-15 milestone is now known to be stale.  The useful part of
 `PairingNoTailServerShape.lemma_server_no_tail_second_event_client_hello_clean`
 through `lemma_server_no_tail_fifth_event_server_hello_clean` is that, at the
@@ -1621,6 +1624,30 @@ there is also a combined corollary,
 that packages this witness fact together with the existing
 client-two-handshake-installs/server-start-spine16 milestone from a single
 clean16 premise; it is a bundling convenience, not additional proof content.
+
+The client protected-flight prefix has also started to become a concrete
+role-local theorem rather than just an existential occurrence fact.  The new
+module `TLS13.Impl.Driver.PairingNoTailClientProtectedShape` proves, from the
+bare client no-tail length-16/application-ready hypotheses plus the verified
+commuting install cover, that the next protected events are:
+
+```text
+Received EncryptedExtensions; Received Certificate
+```
+
+More precisely, `lemma_client_no_tail_seventh_event_encrypted_extensions_clean`
+and `lemma_client_no_tail_eighth_event_certificate_clean` rule out CCS/no-op and
+duplicate-install alternatives by replaying the client progress-rank argument
+after the two handshake installs.  `PairingNoTailNormalized` exposes these under
+the clean16 paired predicate as
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_receive_server_start_spine16`
+and
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_receive_server_start_spine16`.
+The remaining client-side role-local work is to extend this prefix through
+certificate validation, protected `Received CertificateVerify`, signature
+verification, protected `Received Finished`, server-Finished verification,
+application-key installs, and protected client Finished.  The paired proof still
+then has to match these client receive slices with actual server sent-seal slices.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.

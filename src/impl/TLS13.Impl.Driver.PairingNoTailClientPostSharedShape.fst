@@ -55,6 +55,85 @@ let client_no_tail_two_handshake_install_cover
   (client_no_tail_handshake_read_install_event e4 /\
    client_no_tail_handshake_write_install_event e5)
 
+let lemma_client_no_tail_handshake_write_install_event_cases
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_write_install_event ev)
+      (ensures (
+        match ev with
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+          install.CS.install_epoch == CS.TrafficHandshake /\
+          install.CS.install_direction == CS.TrafficWrite
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+          role_install.CS.install_role == CS.ClientEndpoint /\
+          role_install.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+          role_install.CS.install_payload.CS.install_direction == CS.TrafficWrite
+        | _ ->
+          False))
+=
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys _) -> ()
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole _) -> ()
+  | _ -> assert False
+
+let lemma_client_no_tail_handshake_read_install_event_cases
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_read_install_event ev)
+      (ensures (
+        match ev with
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+          install.CS.install_epoch == CS.TrafficHandshake /\
+          install.CS.install_direction == CS.TrafficRead
+        | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+          role_install.CS.install_role == CS.ClientEndpoint /\
+          role_install.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+          role_install.CS.install_payload.CS.install_direction == CS.TrafficRead
+        | _ ->
+          False))
+=
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys _) -> ()
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole _) -> ()
+  | _ -> assert False
+
+let lemma_client_no_tail_handshake_write_install_event_implies_handshake_traffic_install_event
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_write_install_event ev)
+      (ensures PNI.client_no_tail_handshake_traffic_install_event ev)
+=
+  lemma_client_no_tail_handshake_write_install_event_cases ev;
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys _) -> ()
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole _) -> ()
+  | _ -> assert False
+
+let lemma_client_no_tail_handshake_read_install_event_implies_handshake_traffic_install_event
+  (ev:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_handshake_read_install_event ev)
+      (ensures PNI.client_no_tail_handshake_traffic_install_event ev)
+=
+  lemma_client_no_tail_handshake_read_install_event_cases ev;
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys _) -> ()
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole _) -> ()
+  | _ -> assert False
+
+let lemma_client_no_tail_two_handshake_install_cover_cases
+  (e4:CS.conn_event)
+  (e5:CS.conn_event)
+  : Lemma
+      (requires client_no_tail_two_handshake_install_cover e4 e5)
+      (ensures
+        (client_no_tail_handshake_write_install_event e4 /\
+         client_no_tail_handshake_read_install_event e5) \/
+        (client_no_tail_handshake_read_install_event e4 /\
+         client_no_tail_handshake_write_install_event e5))
+=
+  ()
+
 let lemma_client_no_tail_handshake_install_event_direction_cases
   (ev:CS.conn_event)
   : Lemma
@@ -1179,6 +1258,246 @@ let lemma_client_duplicate_second_install_progress_rank
   | _ ->
    assert (PNI.client_no_tail_handshake_traffic_install_event e5);
    assert False
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_client_second_write_install_model_shape
+  (model5 model6:CS.connection_model)
+  (e5:CS.conn_event)
+  : Lemma
+      (requires
+        model5.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        model5.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        model5.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic == None /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+        model5.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model5.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
+        PNI.client_no_tail_handshake_traffic_install_event e5 /\
+        client_no_tail_handshake_write_install_event e5 /\
+        CS.step_model model5 e5 == Some model6)
+      (ensures
+        model6.CS.model_config == model5.CS.model_config /\
+        model6.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None)
+=
+  CSL.lemma_step_model_preserves_config model5 e5 model6;
+  lemma_client_no_tail_handshake_write_install_event_cases e5;
+  match e5 with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    assert (
+      CS.step_model model5 e5 ==
+      Some {
+        model5 with
+          CS.model_record = CS.install_record_keys model5.CS.model_record install;
+          CS.model_handshake = {
+            model5.CS.model_handshake with
+              CS.hs_keys =
+                CS.update_key_schedule_with_install
+                  model5.CS.model_handshake.CS.hs_keys
+                  install;
+          };
+      });
+    assert (install.CS.install_epoch == CS.TrafficHandshake);
+    assert (install.CS.install_direction == CS.TrafficWrite);
+    assert_norm (
+      CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficWrite ==
+      CS.ClientTraffic);
+    assert_norm (
+      CS.update_key_schedule_with_label
+        model5.CS.model_handshake.CS.hs_keys
+        CS.TrafficHandshake
+        CS.ClientTraffic
+        install.CS.install_material ==
+      { model5.CS.model_handshake.CS.hs_keys with
+          CS.ks_client_handshake_traffic = Some install.CS.install_material })
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    assert (role_install.CS.install_role == CS.ClientEndpoint);
+    let install = role_install.CS.install_payload in
+    assert (
+      CS.step_model model5 e5 ==
+      Some {
+        model5 with
+          CS.model_record =
+            CS.install_record_keys_for_role
+              role_install.CS.install_role
+              model5.CS.model_record
+              install;
+          CS.model_handshake = {
+            model5.CS.model_handshake with
+              CS.hs_keys =
+                CS.update_key_schedule_with_install_for_role
+                  role_install.CS.install_role
+                  model5.CS.model_handshake.CS.hs_keys
+                  install;
+          };
+      });
+    assert (install.CS.install_epoch == CS.TrafficHandshake);
+    assert (install.CS.install_direction == CS.TrafficWrite);
+    assert_norm (
+      CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficWrite ==
+      CS.ClientTraffic);
+    assert_norm (
+      CS.update_key_schedule_with_label
+        model5.CS.model_handshake.CS.hs_keys
+        CS.TrafficHandshake
+        CS.ClientTraffic
+        install.CS.install_material ==
+      { model5.CS.model_handshake.CS.hs_keys with
+          CS.ks_client_handshake_traffic = Some install.CS.install_material })
+  | _ ->
+    assert False
+
+let lemma_client_second_read_install_model_shape
+  (model5 model6:CS.connection_model)
+  (e5:CS.conn_event)
+  : Lemma
+      (requires
+        model5.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        model5.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+        model5.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
+        model5.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model5.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
+        PNI.client_no_tail_handshake_traffic_install_event e5 /\
+        client_no_tail_handshake_read_install_event e5 /\
+        CS.step_model model5 e5 == Some model6)
+      (ensures
+        model6.CS.model_config == model5.CS.model_config /\
+        model6.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None)
+=
+  CSL.lemma_step_model_preserves_config model5 e5 model6;
+  lemma_client_no_tail_handshake_read_install_event_cases e5;
+  match e5 with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    assert (
+      CS.step_model model5 e5 ==
+      Some {
+        model5 with
+          CS.model_record = CS.install_record_keys model5.CS.model_record install;
+          CS.model_handshake = {
+            model5.CS.model_handshake with
+              CS.hs_keys =
+                CS.update_key_schedule_with_install
+                  model5.CS.model_handshake.CS.hs_keys
+                  install;
+          };
+      });
+    assert (install.CS.install_epoch == CS.TrafficHandshake);
+    assert (install.CS.install_direction == CS.TrafficRead);
+    assert_norm (
+      CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficRead ==
+      CS.ServerTraffic);
+    assert_norm (
+      CS.update_key_schedule_with_label
+        model5.CS.model_handshake.CS.hs_keys
+        CS.TrafficHandshake
+        CS.ServerTraffic
+        install.CS.install_material ==
+      { model5.CS.model_handshake.CS.hs_keys with
+          CS.ks_server_handshake_traffic = Some install.CS.install_material })
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    assert (role_install.CS.install_role == CS.ClientEndpoint);
+    let install = role_install.CS.install_payload in
+    assert (
+      CS.step_model model5 e5 ==
+      Some {
+        model5 with
+          CS.model_record =
+            CS.install_record_keys_for_role
+              role_install.CS.install_role
+              model5.CS.model_record
+              install;
+          CS.model_handshake = {
+            model5.CS.model_handshake with
+              CS.hs_keys =
+                CS.update_key_schedule_with_install_for_role
+                  role_install.CS.install_role
+                  model5.CS.model_handshake.CS.hs_keys
+                  install;
+          };
+      });
+    assert (install.CS.install_epoch == CS.TrafficHandshake);
+    assert (install.CS.install_direction == CS.TrafficRead);
+    assert_norm (
+      CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficRead ==
+      CS.ServerTraffic);
+    assert_norm (
+      CS.update_key_schedule_with_label
+        model5.CS.model_handshake.CS.hs_keys
+        CS.TrafficHandshake
+        CS.ServerTraffic
+        install.CS.install_material ==
+      { model5.CS.model_handshake.CS.hs_keys with
+          CS.ks_server_handshake_traffic = Some install.CS.install_material })
+  | _ ->
+    assert False
+
+let lemma_client_two_handshake_install_cover_model_shape
+  (model4 model5 model6:CS.connection_model)
+  (e4 e5:CS.conn_event)
+  : Lemma
+      (requires
+        model4.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        model4.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model4.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model4.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model4.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic == None /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
+        PNI.client_no_tail_handshake_traffic_install_event e4 /\
+        PNI.client_no_tail_handshake_traffic_install_event e5 /\
+        client_no_tail_two_handshake_install_cover e4 e5 /\
+        CS.step_model model4 e4 == Some model5 /\
+        CS.step_model model5 e5 == Some model6)
+      (ensures
+        model6.CS.model_config == model4.CS.model_config /\
+        model6.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+        Some? model6.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model6.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None)
+=
+  lemma_client_post_first_install_model_shape model4 model5 e4;
+  lemma_client_post_first_install_direction_shape model4 model5 e4;
+  lemma_client_no_tail_two_handshake_install_cover_cases e4 e5;
+  if client_no_tail_handshake_write_install_event e4 then (
+    assert (client_no_tail_handshake_read_install_event e5);
+    assert (Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+    assert (None? model5.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    lemma_client_second_read_install_model_shape model5 model6 e5
+  ) else (
+    assert (client_no_tail_handshake_read_install_event e4);
+    assert (client_no_tail_handshake_write_install_event e5);
+    assert (None? model5.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+    assert (Some? model5.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    lemma_client_second_write_install_model_shape model5 model6 e5
+  );
+  assert (model5.CS.model_config == model4.CS.model_config);
+  assert (model6.CS.model_config == model5.CS.model_config)
 #pop-options
 
 (**

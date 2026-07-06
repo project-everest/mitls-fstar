@@ -16,6 +16,7 @@ module Pairing = TLS13.Impl.Driver.Pairing
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNS = TLS13.Impl.Driver.PairingNormalizedShape
 module PNT = TLS13.Impl.Driver.PairingNoTail
+module PNTCPrS = TLS13.Impl.Driver.PairingNoTailClientProtectedShape
 module PNTCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCS = TLS13.Impl.Driver.PairingNoTailClientShape
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
@@ -240,6 +241,62 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_
 =
   PNTCPS.lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
     client;
+  PNTSS.lemma_server_no_tail_start_spine16 server
+
+let lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_receive_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_first_protected_receive_server_start_spine16
+          client
+          server)
+=
+  PNTCPrS.lemma_client_no_tail_seventh_event_encrypted_extensions_clean client;
+  PNTSS.lemma_server_no_tail_start_spine16 server
+
+let lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_receive_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_second_protected_receive_server_start_spine16
+          client
+          server)
+=
+  PNTCPrS.lemma_client_no_tail_eighth_event_certificate_clean client;
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
