@@ -85,6 +85,42 @@ val lemma_protected_handshake_wire_equal_from_event_projections_peer
           (W.serialize_handshake sent_msg)
           (W.serialize_handshake received_msg))
 
+val lemma_protected_finished_not_certificate_verify_from_event_projections_peer
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (fin:M.finished)
+  (cv:M.certificate_verify)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        sender.CS.model_record.CS.record_write.R.seq ==
+          receiver.CS.model_record.CS.record_read.R.seq /\
+        (match
+          CS.record_direction_material sender.CS.model_record.CS.record_write,
+          CS.record_direction_material receiver.CS.model_record.CS.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          CS.record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        Seq.equal raw_sent raw_received /\
+        CS.sent_event_seal_projection
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Finished fin);
+          })
+          raw_sent /\
+        CS.received_event_decode_projection
+          receiver
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+          })
+          raw_received)
+      (ensures False)
+
 
 val lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
   (client:CS.connection_state)

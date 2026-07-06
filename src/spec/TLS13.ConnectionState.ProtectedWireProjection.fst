@@ -12,6 +12,7 @@ module SeqProps = FStar.Seq.Properties
 module T = TLS13.Types
 module Tr = TLS13.Transcript
 module W = TLS13.Wire.Spec
+module WF = TLS13.Wire.Spec.Reveal.Finished
 module WFL = TLS13.Spec.WireFormatLemmas
 module WRT = TLS13.Wire.Spec.Reveal.FinishedRoundTrip
 module WU = TLS13.Wire.Spec.Reveal.Util
@@ -225,6 +226,130 @@ let lemma_protected_handshake_wire_equal_from_event_projections_peer
       raw_sent
   | _, _ ->
     assert False
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
+  (sender:connection_model)
+  (receiver:connection_model)
+  (fin:M.finished)
+  (cv:M.certificate_verify)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        Seq.equal raw_sent raw_received /\
+        sent_event_seal_projection
+          sender
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Finished fin);
+          })
+          raw_sent /\
+        received_event_decode_projection
+          receiver
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+          })
+          raw_received)
+      (ensures False)
+=
+  assert (network_message_is_cleartext CL.Sent (M.TlsHandshake (M.Finished fin)) == false);
+  assert (network_message_is_cleartext CL.Received (M.TlsHandshake (M.CertificateVerify cv)) == false);
+  assert (protected_record_count CL.Sent (M.TlsHandshake (M.Finished fin)) == 1);
+  assert (protected_record_count CL.Received (M.TlsHandshake (M.CertificateVerify cv)) == 1);
+  assert (sent_single_protected_message_seal
+    sender
+    (M.TlsHandshake (M.Finished fin))
+    raw_sent);
+  assert (received_single_protected_message_decode
+    receiver
+    (M.TlsHandshake (M.CertificateVerify cv))
+    raw_received);
+  Seq.lemma_eq_elim raw_sent raw_received;
+  assert (received_single_protected_message_decode
+    receiver
+    (M.TlsHandshake (M.CertificateVerify cv))
+    raw_sent);
+  let sent_tls_msg = M.TlsHandshake (M.Finished fin) in
+  CSL.lemma_received_record_opened_from_sent_single_protected_message_seal_peer
+    sender
+    receiver
+    sent_tls_msg
+    raw_sent;
+  eliminate exists (sent_outer:B.bytes).
+    W.parse_record raw_sent == Some (T.ApplicationData, sent_outer, B.length raw_sent) /\
+    received_record_opened
+      receiver
+      raw_sent
+      sent_outer
+      (sent_tls_inner_plaintext_fragment sent_tls_msg)
+  returns
+    False
+  with _.
+  ( eliminate exists
+      (received_outer:B.bytes)
+      (opened:B.bytes)
+      (plaintext:M.plaintext).
+      W.parse_record_wire raw_sent ==
+        Some (T.ApplicationData, received_outer, B.length raw_sent) /\
+      received_record_opened receiver raw_sent received_outer opened /\
+      W.parse_plaintext opened == Some plaintext /\
+      W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
+        Some (M.TlsHandshake (M.CertificateVerify cv))
+    returns
+      False
+    with _.
+    ( W.lemma_parse_record_implies_parse_record_wire raw_sent;
+      assert (received_outer == sent_outer);
+      eliminate exists (sent_read_state':R.direction_state).
+        R.open_record
+          receiver.model_record.record_read
+          (record_header_aad raw_sent)
+          sent_outer ==
+          Some (sent_tls_inner_plaintext_fragment sent_tls_msg, sent_read_state')
+      returns
+        False
+      with _.
+      ( eliminate exists (received_read_state':R.direction_state).
+          R.open_record
+            receiver.model_record.record_read
+            (record_header_aad raw_sent)
+            received_outer ==
+            Some (opened, received_read_state')
+        returns
+          False
+        with _.
+        ( assert (opened == sent_tls_inner_plaintext_fragment sent_tls_msg);
+          W.lemma_serialize_tls_message_handshake (M.Finished fin);
+          let sent_plaintext = {
+            M.content_type = T.Handshake;
+            M.fragment = W.serialize_handshake (M.Finished fin);
+          } in
+          assert (sent_tls_inner_plaintext_fragment sent_tls_msg ==
+                  W.serialize_plaintext sent_plaintext);
+          W.lemma_parse_plaintext_serialize_plaintext sent_plaintext;
+          assert (W.parse_plaintext
+            (sent_tls_inner_plaintext_fragment sent_tls_msg) ==
+            Some sent_plaintext);
+          assert (plaintext == sent_plaintext);
+          assert (W.parse_tls_message
+            T.Handshake
+            (W.serialize_handshake (M.Finished fin)) ==
+            Some (M.TlsHandshake (M.CertificateVerify cv)));
+          WF.lemma_parse_finished_handshake fin;
+          assert False ) ) ) )
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"

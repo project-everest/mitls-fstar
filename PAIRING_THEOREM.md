@@ -319,6 +319,22 @@ server-handshake-write/client-handshake-read installs, and the ClientFinished
 pair starts from explicit client-handshake-write/server-handshake-read installs
 whose record key/IV material agrees.  The remaining bridge work is to derive
 those staged replay facts from the no-tail endpoint logs and key schedule.
+The server-flight side has also been made less scheduler-sensitive:
+`TLS13.ConnectionState.ProtectedWireServerFlight` now has two verified
+one-local-commute helpers for the first protected server-flight record.  They
+cover both client post-shared orders:
+
+```text
+server write install; client read install; client local read-preserving event; receive record
+server write install; client local read-preserving event; client read install; receive record
+```
+
+The intended `receiver_skip` is the commuting client-handshake write install,
+whose event preserves the client's record-read state.  These helpers are not yet
+the full staged replay inversion theorem: they prove the one-record projection
+pair and preserve replay tails once the relevant suffixes and handshake
+server/client traffic materials are supplied, but they do not by themselves
+extract those suffixes from `paired_supported_no_tail_valid_byte_traces_clean16`.
 One subtle proof-engineering point is worth auditing carefully: the v2
 ClientFinished-side install steps are used to establish the aligned write/read
 record materials that feed the lower staged lemma.  A final trace-inversion proof
@@ -434,7 +450,15 @@ that derive:
   from sender seal replay, receiver decode replay, peer key/IV agreement, and
   aligned record sequence numbers.  The follow-up
   `lemma_protected_handshake_wire_equal_from_event_projections_peer` lifts this
-  to the event-projection predicates used by the replay invariants.  The
+  to the event-projection predicates used by the replay invariants.  A small
+  negative helper,
+  `lemma_protected_finished_not_certificate_verify_from_event_projections_peer`,
+  now makes explicit one crucial disjointness fact needed by the protected-byte
+  inversion: under equal ciphertext, aligned peer record state, and seal/decode
+  projections, a server `Finished` cannot be the record decoded by the client as
+  `CertificateVerify`.  This is the formal tool for ruling out the server-side
+  `LocalSignCertificateVerify`/omitted-network-CertificateVerify bypass once the
+  corresponding raw segments are isolated.  The
   packaged theorem
   `lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs`
   applies that bridge to the five encrypted handshake records and derives the
