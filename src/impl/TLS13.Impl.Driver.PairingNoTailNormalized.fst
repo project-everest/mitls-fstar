@@ -9,6 +9,7 @@ module C = TLS13.Crypto.Spec
 module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module PBridge = TLS13.Impl.Driver.PairingNormalizedBridge
 module Pairing = TLS13.Impl.Driver.Pairing
@@ -101,6 +102,57 @@ let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
     client_sent
     Seq.empty;
   PNT.lemma_server_valid_byte_trace_preserves_connection_state_consistent
+    server_initial
+    server
+    server_received
+    server_sent
+    Seq.empty
+
+let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_replay_consistent
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent client /\
+        CS.connection_state_received_decode_replay_consistent client /\
+        CS.connection_state_sent_seal_replay_consistent server /\
+        CS.connection_state_received_decode_replay_consistent server)
+=
+  CSL.lemma_initial_sent_seal_replay_consistent
+    client_initial.CS.cs_model.CS.model_config;
+  CSL.lemma_initial_received_decode_replay_consistent
+    client_initial.CS.cs_model.CS.model_config;
+  assert (CS.connection_state_sent_seal_replay_consistent client_initial);
+  assert (CS.connection_state_received_decode_replay_consistent client_initial);
+  CSL.lemma_initial_sent_seal_replay_consistent
+    server_initial.CS.cs_model.CS.model_config;
+  CSL.lemma_initial_received_decode_replay_consistent
+    server_initial.CS.cs_model.CS.model_config;
+  assert (CS.connection_state_sent_seal_replay_consistent server_initial);
+  assert (CS.connection_state_received_decode_replay_consistent server_initial);
+  PNT.lemma_client_valid_byte_trace_preserves_connection_state_replay_consistent
+    client_initial
+    client
+    client_received
+    client_sent
+    Seq.empty;
+  PNT.lemma_server_valid_byte_trace_preserves_connection_state_replay_consistent
     server_initial
     server
     server_received

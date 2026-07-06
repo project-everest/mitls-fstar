@@ -87,6 +87,14 @@ let server_step
           CS.delta_raw_received = CW.wire_serialize wire;
         }
         st1 /\
+      CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+      CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        (CW.wire_serialize wire) /\
       server_local_outputs_match conn_ev out.SM.so_local_outputs
   | SM.LocalEvent local ->
     let api = CTypes.server_local_event_api local in
@@ -97,11 +105,19 @@ let server_step
         CS.legal_connection_delta
           st0
           {
-            CS.delta_event = conn_ev;
-            CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = B.empty;
+           CS.delta_event = conn_ev;
+           CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = B.empty;
           }
-           st1
+           st1 /\
+        CS.sent_event_nonempty_seal_projection
+          st0.CS.cs_model
+          conn_ev
+          raw_sent /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          conn_ev
+          B.empty
 
 noextract
 let server_state_machine
@@ -609,6 +625,143 @@ let lemma_server_network_step_ok_legal_response
     assert False
   )
 
+let lemma_server_network_step_ok_received_decode_legal_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.server_network_consumed_input_projection
+          st0
+          st1
+          buffer_resp
+          input
+          network_out
+          app_out /\
+        buffer_resp.ST.response.ST.status == ST.StepOk)
+      (ensures
+        exists msg.
+          CT.received_tls_raw_delta_legal
+            st0
+            msg
+            (ST.server_network_consumed_prefix buffer_resp input) /\
+          ST.legal_network_response
+            st0
+            st1
+            buffer_resp.ST.response
+            msg
+            (ST.server_network_consumed_prefix buffer_resp input)
+            network_out
+            app_out /\
+          (if CS.network_message_is_cleartext CL.Received msg
+           then True
+           else
+             ST.server_protected_record_decode_correct
+               st0
+               (ST.server_network_consumed_prefix buffer_resp input)
+               msg))
+=
+  assert (ST.server_network_step_ok_received_decode_projection
+    st0
+    st1
+    buffer_resp
+    input
+    network_out
+    app_out);
+  assert (exists msg.
+    CT.received_tls_raw_delta_legal
+      st0
+      msg
+      (ST.server_network_consumed_prefix buffer_resp input) /\
+    ST.server_decoded_message_event_projection
+      st0
+      st1
+      buffer_resp.ST.response
+      msg
+      (ST.server_network_consumed_prefix buffer_resp input)
+      network_out
+      app_out /\
+    (if CS.network_message_is_cleartext CL.Received msg
+     then True
+     else
+       ST.server_protected_record_decode_correct
+         st0
+         (ST.server_network_consumed_prefix buffer_resp input)
+         msg));
+  let msg =
+    ID.indefinite_description_ghost
+      M.tls_message
+      (fun msg ->
+        CT.received_tls_raw_delta_legal
+          st0
+          msg
+          (ST.server_network_consumed_prefix buffer_resp input) /\
+        ST.server_decoded_message_event_projection
+          st0
+          st1
+          buffer_resp.ST.response
+          msg
+          (ST.server_network_consumed_prefix buffer_resp input)
+          network_out
+          app_out /\
+        (if CS.network_message_is_cleartext CL.Received msg
+         then True
+         else
+           ST.server_protected_record_decode_correct
+             st0
+             (ST.server_network_consumed_prefix buffer_resp input)
+             msg)) in
+  assert (ST.server_decoded_message_event_projection
+    st0
+    st1
+    buffer_resp.ST.response
+    msg
+    (ST.server_network_consumed_prefix buffer_resp input)
+    network_out
+    app_out);
+  if ST.legal_network_response
+    st0
+    st1
+    buffer_resp.ST.response
+    msg
+    (ST.server_network_consumed_prefix buffer_resp input)
+    network_out
+    app_out
+  then (
+    assert (exists msg'.
+      CT.received_tls_raw_delta_legal
+        st0
+        msg'
+        (ST.server_network_consumed_prefix buffer_resp input) /\
+      ST.legal_network_response
+        st0
+        st1
+        buffer_resp.ST.response
+        msg'
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out /\
+      (if CS.network_message_is_cleartext CL.Received msg'
+       then True
+       else
+         ST.server_protected_record_decode_correct
+           st0
+           (ST.server_network_consumed_prefix buffer_resp input)
+           msg'))
+  ) else (
+    assert (ST.unexpected_message_response
+      st0
+      st1
+      buffer_resp.ST.response
+      network_out
+      app_out);
+    assert (buffer_resp.ST.response.ST.status == ST.IllegalTransition);
+    assert False
+  )
+
 let lemma_server_network_step_ok_process_correct
   (initial:CS.connection_state)
   (st0:CS.connection_state)
@@ -667,25 +820,62 @@ let lemma_server_network_step_ok_process_correct
   let consumed = ST.server_network_consumed_prefix buffer_resp input in
   let wire_outputs = server_response_wire_outputs resp network_out in
   let local_outputs = server_response_local_outputs resp app_out in
-  lemma_server_network_step_ok_legal_response
+  assert (resp.ST.status == ST.StepOk);
+  assert (consumed == ST.server_network_consumed_prefix buffer_resp input);
+  lemma_server_network_step_ok_received_decode_legal_response
     st0
     st1
     buffer_resp
     input
     network_out
     app_out;
+  assert (exists msg.
+    CT.received_tls_raw_delta_legal
+      st0
+      msg
+      (ST.server_network_consumed_prefix buffer_resp input) /\
+    ST.legal_network_response
+      st0
+      st1
+      resp
+      msg
+      (ST.server_network_consumed_prefix buffer_resp input)
+      network_out
+      app_out /\
+    (if CS.network_message_is_cleartext CL.Received msg
+     then True
+     else
+       ST.server_protected_record_decode_correct
+         st0
+         (ST.server_network_consumed_prefix buffer_resp input)
+         msg));
   let msg =
     ID.indefinite_description_ghost
       M.tls_message
       (fun msg ->
+        CT.received_tls_raw_delta_legal
+          st0
+          msg
+          (ST.server_network_consumed_prefix buffer_resp input) /\
         ST.legal_network_response
           st0
           st1
           resp
           msg
-          consumed
+          (ST.server_network_consumed_prefix buffer_resp input)
           network_out
-          app_out) in
+          app_out /\
+        (if CS.network_message_is_cleartext CL.Received msg
+         then True
+         else
+           ST.server_protected_record_decode_correct
+             st0
+             (ST.server_network_consumed_prefix buffer_resp input)
+             msg)) in
+  assert (CT.received_tls_raw_delta_legal
+    st0
+    msg
+    consumed);
   assert (ST.legal_network_response
     st0
     st1
@@ -754,6 +944,19 @@ let lemma_server_network_step_ok_process_correct
       CS.delta_raw_received = consumed;
     }
     st1);
+  assert (B.length (WF.serialize_all CW.tls_record_wire_format wire_outputs) == 0);
+  assert (CS.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    (ST.received_message_event msg)
+    (WF.serialize_all CW.tls_record_wire_format wire_outputs));
+  ST.lemma_server_received_message_event_decode_projection
+    st0
+    msg
+    consumed;
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    (ST.received_message_event msg)
+    consumed);
   assert (server_step
     st0
     (SM.WireEvent wire)
@@ -2186,6 +2389,16 @@ let lemma_server_network_nonstep_canonical_step
       CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
       CS.delta_raw_received = B.empty;
     } st1);
+    assert (B.length (WF.serialize_all CW.tls_record_wire_format []) == 0);
+    assert (CS.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      conn_ev
+      (WF.serialize_all CW.tls_record_wire_format []));
+    assert (B.length B.empty == 0);
+    assert (CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      conn_ev
+      B.empty);
     assert (server_step st0 (SM.LocalEvent (CTypes.ServerAPI api)) st1 (CPI.step_output [] []))
   in
   if resp.ST.status = ST.DecodeError then (
@@ -2211,13 +2424,21 @@ let lemma_server_network_nonstep_canonical_step
         T.alert_description
         (fun alert -> exists raw_received.
           Seq.equal raw_received (ST.server_network_consumed_prefix buffer_resp input_contents) /\
-          ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out) in
+          ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out /\
+          CS.received_event_nonempty_decode_projection
+            st0.CS.cs_model
+            (ST.received_message_event (M.TlsAlert alert))
+            raw_received) in
     let raw_received =
       ID.indefinite_description_ghost
         B.bytes
         (fun raw_received ->
           Seq.equal raw_received (ST.server_network_consumed_prefix buffer_resp input_contents) /\
-          ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out) in
+          ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out /\
+          CS.received_event_nonempty_decode_projection
+            st0.CS.cs_model
+            (ST.received_message_event (M.TlsAlert alert))
+            raw_received) in
     assert (ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out);
     assert (ST.legal_response_for_event st0 st1 resp
       (ST.received_message_event (M.TlsAlert alert))
@@ -2262,6 +2483,19 @@ let lemma_server_network_nonstep_canonical_step
       CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
       CS.delta_raw_received = CW.wire_serialize wire;
     } st1);
+    assert (B.length (WF.serialize_all CW.tls_record_wire_format []) == 0);
+    assert (CS.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      conn_ev
+      (WF.serialize_all CW.tls_record_wire_format []));
+    assert (CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      conn_ev
+      raw_received);
+    assert (CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      conn_ev
+      (CW.wire_serialize wire));
     assert (server_step st0 (SM.WireEvent wire) st1 (CPI.step_output [] local_outputs));
     assert (server_canonical_step_rel st0 st1)
   )

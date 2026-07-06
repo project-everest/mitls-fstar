@@ -22,6 +22,7 @@ module RTC = FStar.ReflexiveTransitiveClosure
 module Seq = FStar.Seq
 module SM = Common.StateMachine
 module SZ = FStar.SizeT
+module Tac = FStar.Tactics
 module TCP = Common.TCP
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -89,6 +90,14 @@ let client_step
           CS.delta_raw_received = CW.wire_serialize wire;
         }
         st1 /\
+      CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+      CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        (CW.wire_serialize wire) /\
       client_local_outputs_match conn_ev out.SM.so_local_outputs
   | SM.LocalEvent local ->
     let api = CTypes.client_local_event_api local in
@@ -99,11 +108,19 @@ let client_step
         CS.legal_connection_delta
           st0
           {
-            CS.delta_event = conn_ev;
-            CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = B.empty;
+           CS.delta_event = conn_ev;
+           CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = B.empty;
           }
-           st1
+           st1 /\
+        CS.sent_event_nonempty_seal_projection
+          st0.CS.cs_model
+          conn_ev
+          raw_sent /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          conn_ev
+          B.empty
 
 noextract
 let client_state_machine
@@ -138,6 +155,68 @@ let client_canonical_step_rel
   (st1:CS.connection_state)
   : prop =
   exists ev out. client_step st0 ev st1 out
+
+let lemma_received_event_nonempty_decode_projection_intro
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        B.length raw_received == 0 \/
+        CS.received_event_decode_projection model ev raw_received)
+      (ensures
+        CS.received_event_nonempty_decode_projection model ev raw_received)
+=
+  assert (CS.received_event_nonempty_decode_projection model ev raw_received)
+  by (
+    FStar.Tactics.norm
+      [delta_only [`%CS.received_event_nonempty_decode_projection];
+       iota; zeta; primops];
+    FStar.Tactics.smt ())
+
+let lemma_client_received_network_event_nonempty_decode_projection
+  (st0:CS.connection_state)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        (if CS.network_message_is_cleartext CL.Received msg
+         then True
+         else CT.protected_record_decode_correct st0 raw_received msg))
+      (ensures
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          })
+          raw_received)
+=
+  let ev = CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = msg;
+  } in
+  if CS.network_message_is_cleartext CL.Received msg
+  then (
+    assert (CS.received_event_decode_projection st0.CS.cs_model ev raw_received)
+  )
+  else (
+    assert (CT.protected_record_decode_correct st0 raw_received msg);
+    assert (CT.protected_record_decodes_to_message st0 raw_received msg);
+    CT.lemma_protected_record_decodes_to_received_single_decode st0 raw_received msg;
+    assert (CS.received_single_protected_message_decode
+      st0.CS.cs_model
+      msg
+      raw_received);
+    assert (CS.protected_record_count CL.Received msg == 1);
+    assert (CS.received_event_decode_projection st0.CS.cs_model ev raw_received)
+  );
+  assert (B.length raw_received == 0 \/
+    CS.received_event_decode_projection st0.CS.cs_model ev raw_received);
+  lemma_received_event_nonempty_decode_projection_intro
+    st0.CS.cs_model
+    ev
+    raw_received
 
 let client_progress_preorder =
   RTC.closure client_canonical_step_rel
@@ -744,7 +823,11 @@ let lemma_client_step_from_local_witness
           CS.delta_event = conn_ev;
           CS.delta_raw_sent = raw_sent;
           CS.delta_raw_received = B.empty;
-        } st1)
+        } st1 /\
+        CS.sent_event_nonempty_seal_projection
+          st0.CS.cs_model
+          conn_ev
+          raw_sent)
       (ensures
         client_step
           st0
@@ -760,6 +843,15 @@ let lemma_client_step_from_local_witness
     st0
     (CTypes.client_local_event_api local_ev)
     conn_ev);
+  assert (CS.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    conn_ev
+    raw_sent);
+  assert (B.length B.empty == 0);
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    conn_ev
+    B.empty);
   assert (exists conn_ev' raw_sent'.
     client_api_event_matches
       st0
@@ -775,7 +867,15 @@ let lemma_client_step_from_local_witness
       CS.delta_event = conn_ev';
       CS.delta_raw_sent = raw_sent';
       CS.delta_raw_received = B.empty;
-    } st1);
+    } st1 /\
+    CS.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      conn_ev'
+      raw_sent' /\
+    CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      conn_ev'
+      B.empty);
   assert (client_step
     st0
     (SM.LocalEvent local_ev)
@@ -1862,6 +1962,7 @@ let lemma_client_network_nonstep_canonical_step
       (requires
         buffer_resp.CT.response.CT.status <> CT.StepOk /\
         st1 <> st0 /\
+        CT.client_state_correct st0 /\
         CT.network_bytes_end_to_end_correct
           st0
           st1
@@ -1879,11 +1980,14 @@ let lemma_client_network_nonstep_canonical_step
   // Shared helper: prove the LocalFail canonical step for a given error and event.
   let lemma_localfail_step
     (err:T.tls_error)
-    (conn_ev:CS.conn_event)
     : Lemma
         (requires
-          conn_ev == CS.ConnLocalEvent (CS.LocalFail err) /\
-          CT.legal_delta st0 st1 conn_ev B.empty B.empty)
+          CT.legal_delta
+            st0
+            st1
+            (CS.ConnLocalEvent (CS.LocalFail err))
+            B.empty
+            B.empty)
         (ensures client_canonical_step_rel st0 st1)
     =
     CW.lemma_wire_outputs_of_empty ();
@@ -1892,6 +1996,14 @@ let lemma_client_network_nonstep_canonical_step
       CTypes.client_local_kind = CT.LocalFail;
       CTypes.client_local_payload = B.empty;
     } in
+    let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
+    assert (api.CTypes.client_local_kind == CT.LocalFail);
+    assert (api.CTypes.client_local_payload == B.empty);
+    assert_norm (CT.local_event_kind_matches
+      st0
+      CT.LocalFail
+      B.empty
+      (CS.ConnLocalEvent (CS.LocalFail err)));
     assert (client_api_event_matches st0 api conn_ev);
     assert (client_wire_outputs_match B.empty []);
     assert (client_local_outputs_match conn_ev []);
@@ -1900,6 +2012,32 @@ let lemma_client_network_nonstep_canonical_step
       CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
       CS.delta_raw_received = B.empty;
     } st1);
+    assert (B.length (WF.serialize_all CW.tls_record_wire_format []) == 0);
+    assert (CS.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      conn_ev
+      (WF.serialize_all CW.tls_record_wire_format []));
+    assert (B.length B.empty == 0);
+    assert (CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      conn_ev
+      B.empty);
+    assert (client_api_event_matches st0 api conn_ev /\
+      client_wire_outputs_match (WF.serialize_all CW.tls_record_wire_format []) [] /\
+      client_local_outputs_match conn_ev [] /\
+      CS.legal_connection_delta st0 {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
+        CS.delta_raw_received = B.empty;
+      } st1 /\
+      CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        (WF.serialize_all CW.tls_record_wire_format []) /\
+      CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        B.empty);
     assert (exists conn_ev' raw_sent.
       client_api_event_matches st0 api conn_ev' /\
       client_wire_outputs_match raw_sent [] /\
@@ -1908,8 +2046,22 @@ let lemma_client_network_nonstep_canonical_step
         CS.delta_event = conn_ev';
         CS.delta_raw_sent = raw_sent;
         CS.delta_raw_received = B.empty;
-      } st1);
-    assert (client_step st0 (SM.LocalEvent (CTypes.ClientAPI api)) st1 (CPI.step_output [] []));
+      } st1 /\
+      CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev'
+        raw_sent /\
+      CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev'
+        B.empty);
+    assert (client_step st0 (SM.LocalEvent (CTypes.ClientAPI api)) st1 (CPI.step_output [] []))
+    by (
+      Tac.norm
+        [delta_only
+          [`%client_step];
+         iota; zeta; primops];
+      Tac.smt ());
     assert (client_canonical_step_rel st0 st1)
   in
   if resp.CT.status = CT.DecodeError then (
@@ -1924,7 +2076,6 @@ let lemma_client_network_nonstep_canonical_step
       (CS.ConnLocalEvent (CS.LocalFail CT.tls_decode_error)) B.empty B.empty);
     lemma_localfail_step
       CT.tls_decode_error
-      (CS.ConnLocalEvent (CS.LocalFail CT.tls_decode_error))
   ) else (
     // Case B: non-DecodeError, non-StepOk, st1 != st0
     // Establish raw_record_parse_success raw_consumed.
@@ -1943,20 +2094,34 @@ let lemma_client_network_nonstep_canonical_step
     // length SZ.v consumed_len when that fits within the input).
     assert (SZ.v consumed_len <= B.length input_contents);
     assert (SZ.v consumed_len > 0);
-    // From network_bytes_consumed_input_event_projection:
+    // From network_bytes_consumed_input_projection:
     // consumed_len != 0sz and resp.status != DecodeError eliminate the first two
-    // options, leaving: exists msg. received_tls_raw_delta_legal /\ decoded_message_event_projection
-    assert (CT.network_bytes_consumed_input_event_projection
+    // options, leaving a decoded message plus protected-decode correctness for
+    // non-cleartext records.
+    CT.lemma_network_bytes_consumed_input_projection
+      st0
+      st1
+      buffer_resp
+      input_contents
+      network_out
+      app_out;
+    assert (CT.network_bytes_consumed_input_projection
       st0 st1 buffer_resp input_contents network_out app_out);
     assert (exists msg.
       CT.received_tls_raw_delta_legal st0 msg raw_consumed /\
-      CT.decoded_message_event_projection st0 st1 resp msg raw_consumed network_out app_out);
+      CT.decoded_message_event_projection st0 st1 resp msg raw_consumed network_out app_out /\
+      (if CS.network_message_is_cleartext CL.Received msg
+       then True
+       else CT.protected_record_decode_correct st0 raw_consumed msg));
     let msg =
       FStar.IndefiniteDescription.indefinite_description_ghost
         M.tls_message
         (fun msg ->
           CT.received_tls_raw_delta_legal st0 msg raw_consumed /\
-          CT.decoded_message_event_projection st0 st1 resp msg raw_consumed network_out app_out) in
+          CT.decoded_message_event_projection st0 st1 resp msg raw_consumed network_out app_out /\
+          (if CS.network_message_is_cleartext CL.Received msg
+           then True
+           else CT.protected_record_decode_correct st0 raw_consumed msg)) in
     if CT.legal_received_tls_response st0 st1 resp msg raw_consumed network_out app_out then (
       // Sub-case B1: legal_received_tls_response → WireEvent step
       assert (CT.legal_response_for_event st0 st1 resp
@@ -2005,6 +2170,16 @@ let lemma_client_network_nonstep_canonical_step
         CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
         CS.delta_raw_received = CW.wire_serialize wire;
       } st1);
+      assert (B.length (WF.serialize_all CW.tls_record_wire_format []) == 0);
+      assert (CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        (WF.serialize_all CW.tls_record_wire_format []));
+      lemma_client_received_network_event_nonempty_decode_projection
+        st0
+        msg
+        raw_consumed;
+      assert (CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev raw_consumed);
       assert (exists msg'.
         let conn_ev' = CS.ConnNetworkEvent {
           CL.message_direction = CL.Received;
@@ -2015,6 +2190,14 @@ let lemma_client_network_nonstep_canonical_step
           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
           CS.delta_raw_received = CW.wire_serialize wire;
         } st1 /\
+        CS.sent_event_nonempty_seal_projection
+          st0.CS.cs_model
+          conn_ev'
+          (WF.serialize_all CW.tls_record_wire_format []) /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          conn_ev'
+          (CW.wire_serialize wire) /\
         client_local_outputs_match conn_ev' local_outputs);
       assert (client_step st0 (SM.WireEvent wire) st1 (CPI.step_output [] local_outputs));
       assert (client_canonical_step_rel st0 st1)
@@ -2028,7 +2211,6 @@ let lemma_client_network_nonstep_canonical_step
         (CS.ConnLocalEvent (CS.LocalFail CT.tls_unexpected_message_error)) B.empty B.empty);
       lemma_localfail_step
         CT.tls_unexpected_message_error
-        (CS.ConnLocalEvent (CS.LocalFail CT.tls_unexpected_message_error))
     )
   )
 
@@ -2051,6 +2233,7 @@ let lemma_client_network_common_witness_progress
   (local_outputs:list CTypes.local_output)
   : Lemma
       (requires
+        client_invariant_pure initial received0 sent0 st0 /\
         client_network_common_witness
           initial
           received0
@@ -2142,6 +2325,9 @@ let lemma_client_network_common_witness_progress
       assert (client_progress_preorder st0 st1)
     else (
       assert (buffer_resp.CT.response.CT.status <> CT.StepOk);
+      assert (client_invariant_pure initial received0 sent0 st0);
+      assert (CT.client_end_to_end_invariant st0);
+      assert (CT.client_state_correct st0);
       lemma_client_network_nonstep_canonical_step
         st0
         st1

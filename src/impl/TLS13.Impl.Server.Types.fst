@@ -1434,6 +1434,50 @@ let server_protected_record_decode_correct
   CT.protected_record_decodes_to_message st0 raw_received msg /\
   server_protected_record_decode_uses_scheduled_read_key st0 raw_received
 
+let lemma_server_received_message_event_decode_projection
+  (st0:CS.connection_state)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        (if CS.network_message_is_cleartext CL.Received msg
+         then True
+         else server_protected_record_decode_correct st0 raw_received msg))
+      (ensures
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (received_message_event msg)
+          raw_received)
+=
+  if CS.network_message_is_cleartext CL.Received msg then (
+    assert (CS.received_event_decode_projection
+      st0.CS.cs_model
+      (received_message_event msg)
+      raw_received);
+    assert (CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      (received_message_event msg)
+      raw_received)
+  ) else (
+    assert (CS.protected_record_count CL.Received msg == 1);
+    CT.lemma_protected_record_decodes_to_received_single_decode
+      st0
+      raw_received
+      msg;
+    assert (CS.received_single_protected_message_decode
+      st0.CS.cs_model
+      msg
+      raw_received);
+    assert (CS.received_event_decode_projection
+      st0.CS.cs_model
+      (received_message_event msg)
+      raw_received);
+    assert (CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      (received_message_event msg)
+      raw_received)
+  )
+
 let server_network_step_ok_received_decode_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1489,7 +1533,11 @@ let server_network_connection_failed_consumed_prefix
         (M.TlsAlert alert)
         raw_received
         network_out
-        app_out
+        app_out /\
+      CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        (received_message_event (M.TlsAlert alert))
+        raw_received
 
 let server_network_consumed_input_projection
   (st0:CS.connection_state)

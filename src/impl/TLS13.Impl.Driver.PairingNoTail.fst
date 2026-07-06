@@ -219,6 +219,264 @@ let lemma_connection_state_consistent_step
     CS.initial st0.CS.cs_model.CS.model_config);
   assert (CS.connection_state_consistent st1)
 
+let lemma_client_step_preserves_connection_state_replay_consistent
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTypes.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTypes.local_output)
+  : Lemma
+      (requires
+        ClientCP.client_step st0 ev st1 out /\
+        CS.connection_state_sent_seal_replay_consistent st0 /\
+        CS.connection_state_received_decode_replay_consistent st0)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent st1 /\
+        CS.connection_state_received_decode_replay_consistent st1)
+=
+  match ev with
+  | SM.WireEvent wire ->
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev =
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        } in
+       let raw_sent =
+        Common.WireFormat.serialize_all
+          CW.tls_record_wire_format
+          out.SM.so_wire_outputs in
+       let raw_received = CW.wire_serialize wire in
+       CS.legal_connection_delta
+         st0
+         {
+           CS.delta_event = conn_ev;
+           CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = raw_received;
+         }
+         st1 /\
+       CS.sent_event_nonempty_seal_projection
+         st0.CS.cs_model
+         conn_ev
+         raw_sent /\
+       CS.received_event_nonempty_decode_projection
+         st0.CS.cs_model
+         conn_ev
+         raw_received /\
+       ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns
+      CS.connection_state_sent_seal_replay_consistent st1 /\
+      CS.connection_state_received_decode_replay_consistent st1
+    with _.
+    ( let conn_ev =
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        } in
+      let raw_sent =
+        Common.WireFormat.serialize_all
+          CW.tls_record_wire_format
+          out.SM.so_wire_outputs in
+      let raw_received = CW.wire_serialize wire in
+      let delta = {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = raw_received;
+      } in
+      assert (CS.legal_connection_delta st0 delta st1);
+      assert (CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_sent);
+      assert (CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_received);
+      CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+        st0
+        delta
+        st1;
+      CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+        st0
+        delta
+        st1 )
+  | SM.LocalEvent local ->
+    let api = CTypes.client_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      ClientCP.client_api_event_matches st0 api conn_ev /\
+      ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty;
+        }
+        st1 /\
+      CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_sent /\
+      CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        B.empty
+    returns
+      CS.connection_state_sent_seal_replay_consistent st1 /\
+      CS.connection_state_received_decode_replay_consistent st1
+    with _.
+    ( let delta = {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = B.empty;
+      } in
+      assert (CS.legal_connection_delta st0 delta st1);
+      assert (CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_sent);
+      assert (CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        B.empty);
+      CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+        st0
+        delta
+        st1;
+      CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+        st0
+        delta
+        st1 )
+
+let lemma_server_step_preserves_connection_state_replay_consistent
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTypes.server_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTypes.local_output)
+  : Lemma
+      (requires
+        ServerCP.server_step st0 ev st1 out /\
+        CS.connection_state_sent_seal_replay_consistent st0 /\
+        CS.connection_state_received_decode_replay_consistent st0)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent st1 /\
+        CS.connection_state_received_decode_replay_consistent st1)
+=
+  match ev with
+  | SM.WireEvent wire ->
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev =
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        } in
+       let raw_sent =
+        Common.WireFormat.serialize_all
+          CW.tls_record_wire_format
+          out.SM.so_wire_outputs in
+       let raw_received = CW.wire_serialize wire in
+       CS.legal_connection_delta
+         st0
+         {
+           CS.delta_event = conn_ev;
+           CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = raw_received;
+         }
+         st1 /\
+       CS.sent_event_nonempty_seal_projection
+         st0.CS.cs_model
+         conn_ev
+         raw_sent /\
+       CS.received_event_nonempty_decode_projection
+         st0.CS.cs_model
+         conn_ev
+         raw_received /\
+       ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns
+      CS.connection_state_sent_seal_replay_consistent st1 /\
+      CS.connection_state_received_decode_replay_consistent st1
+    with _.
+    ( let conn_ev =
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        } in
+      let raw_sent =
+        Common.WireFormat.serialize_all
+          CW.tls_record_wire_format
+          out.SM.so_wire_outputs in
+      let raw_received = CW.wire_serialize wire in
+      let delta = {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = raw_received;
+      } in
+      assert (CS.legal_connection_delta st0 delta st1);
+      assert (CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_sent);
+      assert (CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_received);
+      CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+        st0
+        delta
+        st1;
+      CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+        st0
+        delta
+        st1 )
+  | SM.LocalEvent local ->
+    let api = CTypes.server_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      ServerCP.server_api_event_matches api conn_ev /\
+      ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty;
+        }
+        st1 /\
+      CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_sent /\
+      CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        B.empty
+    returns
+      CS.connection_state_sent_seal_replay_consistent st1 /\
+      CS.connection_state_received_decode_replay_consistent st1
+    with _.
+    ( let delta = {
+        CS.delta_event = conn_ev;
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = B.empty;
+      } in
+      assert (CS.legal_connection_delta st0 delta st1);
+      assert (CS.sent_event_nonempty_seal_projection
+        st0.CS.cs_model
+        conn_ev
+        raw_sent);
+      assert (CS.received_event_nonempty_decode_projection
+        st0.CS.cs_model
+        conn_ev
+        B.empty);
+      CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+        st0
+        delta
+        st1;
+      CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+        st0
+        delta
+        st1 )
+
 let rec lemma_client_trace_reaches_preserves_connection_state_consistent
   (initial:CS.connection_state)
   (st0:CS.connection_state)
@@ -310,6 +568,106 @@ let rec lemma_server_trace_reaches_preserves_connection_state_consistent
       tr.SM.tr_output;
     lemma_connection_state_consistent_step st0 tr.SM.tr_next_state;
     lemma_server_trace_reaches_preserves_connection_state_consistent
+      initial
+      tr.SM.tr_next_state
+      rest
+      st1
+
+let rec lemma_client_trace_reaches_preserves_connection_state_replay_consistent
+  (initial:CS.connection_state)
+  (st0:CS.connection_state)
+  (trace:list
+    (SM.transition
+      CS.connection_state
+      CW.wire_message
+      CTypes.client_local_event
+      CTypes.local_output))
+  (st1:CS.connection_state)
+  : Lemma
+      (requires
+        CS.connection_state_sent_seal_replay_consistent st0 /\
+        CS.connection_state_received_decode_replay_consistent st0 /\
+        SM.trace_reaches
+          (ClientCP.client_system initial).WFSM.wfsm_state_machine
+          st0
+          trace
+          st1)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent st1 /\
+        CS.connection_state_received_decode_replay_consistent st1)
+      (decreases trace)
+=
+  match trace with
+  | [] -> ()
+  | tr :: rest ->
+    assert (ClientCP.client_step
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output)
+    by (
+      Tac.norm
+        [delta_only
+          [`%ClientCP.client_system;
+           `%ClientCP.client_state_machine];
+         iota; zeta; primops];
+      Tac.smt ());
+    lemma_client_step_preserves_connection_state_replay_consistent
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output;
+    lemma_client_trace_reaches_preserves_connection_state_replay_consistent
+      initial
+      tr.SM.tr_next_state
+      rest
+      st1
+
+let rec lemma_server_trace_reaches_preserves_connection_state_replay_consistent
+  (initial:CS.connection_state)
+  (st0:CS.connection_state)
+  (trace:list
+    (SM.transition
+      CS.connection_state
+      CW.wire_message
+      CTypes.server_local_event
+      CTypes.local_output))
+  (st1:CS.connection_state)
+  : Lemma
+      (requires
+        CS.connection_state_sent_seal_replay_consistent st0 /\
+        CS.connection_state_received_decode_replay_consistent st0 /\
+        SM.trace_reaches
+          (ServerCP.server_system initial).WFSM.wfsm_state_machine
+          st0
+          trace
+          st1)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent st1 /\
+        CS.connection_state_received_decode_replay_consistent st1)
+      (decreases trace)
+=
+  match trace with
+  | [] -> ()
+  | tr :: rest ->
+    assert (ServerCP.server_step
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output)
+    by (
+      Tac.norm
+        [delta_only
+          [`%ServerCP.server_system;
+           `%ServerCP.server_state_machine];
+         iota; zeta; primops];
+      Tac.smt ());
+    lemma_server_step_preserves_connection_state_replay_consistent
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output;
+    lemma_server_trace_reaches_preserves_connection_state_replay_consistent
       initial
       tr.SM.tr_next_state
       rest
@@ -472,6 +830,114 @@ let lemma_server_valid_byte_trace_preserves_connection_state_consistent
   ( assert ((ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state ==
       server_initial);
     lemma_server_trace_reaches_preserves_connection_state_consistent
+      server_initial
+      server_initial
+      trace
+      server )
+
+let lemma_client_valid_byte_trace_preserves_connection_state_replay_consistent
+  (client_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (residual_input:TCP.bytes)
+  : Lemma
+      (requires
+        CS.connection_state_sent_seal_replay_consistent client_initial /\
+        CS.connection_state_received_decode_replay_consistent client_initial /\
+        WFSM.valid_byte_trace
+          (ClientCP.client_system client_initial)
+          client_received
+          client
+          client_sent
+          residual_input)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent client /\
+        CS.connection_state_received_decode_replay_consistent client)
+=
+  eliminate exists
+    (trace:list
+      (SM.transition
+        CS.connection_state
+        CW.wire_message
+        CTypes.client_local_event
+        CTypes.local_output)).
+    SM.trace_reaches
+      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
+      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      trace
+      client /\
+    Common.WireFormat.parses_as
+      (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+      client_received
+      (WFSM.trace_input_messages trace)
+      residual_input /\
+    Seq.equal
+      client_sent
+      (Common.WireFormat.serialize_all
+        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (SM.trace_wire_outputs trace))
+  returns
+    CS.connection_state_sent_seal_replay_consistent client /\
+    CS.connection_state_received_decode_replay_consistent client
+  with _.
+  ( assert ((ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state ==
+      client_initial);
+    lemma_client_trace_reaches_preserves_connection_state_replay_consistent
+      client_initial
+      client_initial
+      trace
+      client )
+
+let lemma_server_valid_byte_trace_preserves_connection_state_replay_consistent
+  (server_initial:CS.connection_state)
+  (server:CS.connection_state)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  (residual_input:TCP.bytes)
+  : Lemma
+      (requires
+        CS.connection_state_sent_seal_replay_consistent server_initial /\
+        CS.connection_state_received_decode_replay_consistent server_initial /\
+        WFSM.valid_byte_trace
+          (ServerCP.server_system server_initial)
+          server_received
+          server
+          server_sent
+          residual_input)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent server /\
+        CS.connection_state_received_decode_replay_consistent server)
+=
+  eliminate exists
+    (trace:list
+      (SM.transition
+        CS.connection_state
+        CW.wire_message
+        CTypes.server_local_event
+        CTypes.local_output)).
+    SM.trace_reaches
+      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
+      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      trace
+      server /\
+    Common.WireFormat.parses_as
+      (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+      server_received
+      (WFSM.trace_input_messages trace)
+      residual_input /\
+    Seq.equal
+      server_sent
+      (Common.WireFormat.serialize_all
+        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (SM.trace_wire_outputs trace))
+  returns
+    CS.connection_state_sent_seal_replay_consistent server /\
+    CS.connection_state_received_decode_replay_consistent server
+  with _.
+  ( assert ((ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state ==
+      server_initial);
+    lemma_server_trace_reaches_preserves_connection_state_replay_consistent
       server_initial
       server_initial
       trace

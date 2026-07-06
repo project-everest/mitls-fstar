@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module CL = TLS13.ConnectionLog
 module M = TLS13.Messages
@@ -156,6 +157,32 @@ val lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
       (ensures
         CS.connection_state_consistent client /\
         CS.connection_state_consistent server)
+
+val lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_replay_consistent
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent client /\
+        CS.connection_state_received_decode_replay_consistent client /\
+        CS.connection_state_sent_seal_replay_consistent server /\
+        CS.connection_state_received_decode_replay_consistent server)
 
 noextract
 let paired_no_tail_role_local_start_and_final_witnesses

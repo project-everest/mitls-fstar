@@ -81,6 +81,46 @@ val lemma_server_valid_byte_trace_preserves_connection_state_consistent
           residual_input)
       (ensures CS.connection_state_consistent server)
 
+val lemma_client_valid_byte_trace_preserves_connection_state_replay_consistent
+  (client_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (residual_input:TCP.bytes)
+  : Lemma
+      (requires
+        CS.connection_state_sent_seal_replay_consistent client_initial /\
+        CS.connection_state_received_decode_replay_consistent client_initial /\
+        WFSM.valid_byte_trace
+          (ClientCP.client_system client_initial)
+          client_received
+          client
+          client_sent
+          residual_input)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent client /\
+        CS.connection_state_received_decode_replay_consistent client)
+
+val lemma_server_valid_byte_trace_preserves_connection_state_replay_consistent
+  (server_initial:CS.connection_state)
+  (server:CS.connection_state)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  (residual_input:TCP.bytes)
+  : Lemma
+      (requires
+        CS.connection_state_sent_seal_replay_consistent server_initial /\
+        CS.connection_state_received_decode_replay_consistent server_initial /\
+        WFSM.valid_byte_trace
+          (ServerCP.server_system server_initial)
+          server_received
+          server
+          server_sent
+          residual_input)
+      (ensures
+        CS.connection_state_sent_seal_replay_consistent server /\
+        CS.connection_state_received_decode_replay_consistent server)
+
 noextract
 let client_no_tail_application_ready_boundary
   (client:CS.connection_state)
