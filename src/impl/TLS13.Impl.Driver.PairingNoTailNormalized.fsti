@@ -267,6 +267,14 @@ let paired_no_tail_role_local_client_second_protected_receive_server_start_spine
   PNTSS.server_no_tail_start_spine16 server
 
 noextract
+let paired_no_tail_role_local_client_certificate_validated_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  PNTCPrS.client_no_tail_certificate_validated_shape client /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
 let client_received_certificate_verify_event_split
   (client:CS.connection_state)
   : prop =
@@ -397,6 +405,31 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_r
           server_sent)
       (ensures
         paired_no_tail_role_local_client_second_protected_receive_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_validated_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_certificate_validated_server_start_spine16
           client
           server)
 

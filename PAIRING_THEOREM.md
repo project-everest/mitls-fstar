@@ -1635,19 +1635,23 @@ commuting install cover, that the next protected events are:
 Received EncryptedExtensions; Received Certificate
 ```
 
-More precisely, `lemma_client_no_tail_seventh_event_encrypted_extensions_clean`
-and `lemma_client_no_tail_eighth_event_certificate_clean` rule out CCS/no-op and
-duplicate-install alternatives by replaying the client progress-rank argument
-after the two handshake installs.  `PairingNoTailNormalized` exposes these under
-the clean16 paired predicate as
+More precisely, `lemma_client_no_tail_seventh_event_encrypted_extensions_clean`,
+`lemma_client_no_tail_eighth_event_certificate_clean`, and
+`lemma_client_no_tail_ninth_event_validate_certificate_clean` rule out CCS/no-op
+and duplicate-install alternatives by replaying the client progress-rank
+argument after the two handshake installs and after the protected server-flight
+receives.  `PairingNoTailNormalized` exposes these under the clean16 paired
+predicate as
 `lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_receive_server_start_spine16`
 and
-`lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_receive_server_start_spine16`.
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_receive_server_start_spine16`,
+plus
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_validated_server_start_spine16`.
 The remaining client-side role-local work is to extend this prefix through
-certificate validation, protected `Received CertificateVerify`, signature
-verification, protected `Received Finished`, server-Finished verification,
-application-key installs, and protected client Finished.  The paired proof still
-then has to match these client receive slices with actual server sent-seal slices.
+protected `Received CertificateVerify`, signature verification, protected
+`Received Finished`, server-Finished verification, application-key installs, and
+protected client Finished.  The paired proof still then has to match these client
+receive slices with actual server sent-seal slices.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
