@@ -16,9 +16,12 @@ module Pairing = TLS13.Impl.Driver.Pairing
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNS = TLS13.Impl.Driver.PairingNormalizedShape
 module PNT = TLS13.Impl.Driver.PairingNoTail
+module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
+module PNTCFS = TLS13.Impl.Driver.PairingNoTailClientFinishedShape
 module PNTCPrS = TLS13.Impl.Driver.PairingNoTailClientProtectedShape
 module PNTCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCS = TLS13.Impl.Driver.PairingNoTailClientShape
+module PNTCVS = TLS13.Impl.Driver.PairingNoTailClientVerifyShape
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
@@ -275,6 +278,54 @@ let paired_no_tail_role_local_client_certificate_validated_server_start_spine16
   PNTSS.server_no_tail_start_spine16 server
 
 noextract
+let paired_no_tail_role_local_client_certificate_verify_received_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  PNTCVS.client_no_tail_certificate_verify_received_shape client /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let paired_no_tail_role_local_client_certificate_signature_verified_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  PNTCVS.client_no_tail_certificate_signature_verified_shape client /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let paired_no_tail_role_local_client_server_finished_received_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  PNTCFS.client_no_tail_server_finished_received_shape client /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let paired_no_tail_role_local_client_server_finished_verified_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  PNTCFS.client_no_tail_server_finished_verified_shape client /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let paired_no_tail_role_local_client_application_installs_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  PNTCAS.client_no_tail_application_installs_shape client /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let paired_no_tail_role_local_client_finished_sent_server_start_spine16
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  PNTCAS.client_no_tail_finished_sent_shape client /\
+  PNTSS.server_no_tail_start_spine16 server
+
+noextract
 let client_received_certificate_verify_event_split
   (client:CS.connection_state)
   : prop =
@@ -430,6 +481,156 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_valida
           server_sent)
       (ensures
         paired_no_tail_role_local_client_certificate_validated_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_verify_received_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_certificate_verify_received_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_signature_verified_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_certificate_signature_verified_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_received_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_server_finished_received_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_verified_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_server_finished_verified_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_application_installs_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_application_installs_server_start_spine16
+          client
+          server)
+
+val lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_server_start_spine16
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_no_tail_role_local_client_finished_sent_server_start_spine16
           client
           server)
 

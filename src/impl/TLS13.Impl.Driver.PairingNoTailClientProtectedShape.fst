@@ -74,21 +74,6 @@ let client_after_encrypted_extensions_model
   model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
   model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None
 
-noextract
-let client_after_certificate_model
-  (model:CS.connection_model)
-  : prop =
-  model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-  model.CS.model_control == CS.ControlHandshaking CS.HsCertificateReceived /\
-  Some? model.CS.model_handshake.CS.hs_certificate /\
-  Some? model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
-  Some? model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
-  Some? model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
-  Some? model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-  Some? model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
-  model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
-  model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None
-
 let lemma_client_after_encrypted_extensions_progress_rank
   (model:CS.connection_model)
   : Lemma

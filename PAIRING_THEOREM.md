@@ -1640,18 +1640,33 @@ More precisely, `lemma_client_no_tail_seventh_event_encrypted_extensions_clean`,
 `lemma_client_no_tail_ninth_event_validate_certificate_clean` rule out CCS/no-op
 and duplicate-install alternatives by replaying the client progress-rank
 argument after the two handshake installs and after the protected server-flight
-receives.  `PairingNoTailNormalized` exposes these under the clean16 paired
-predicate as
+receives.  A second split module,
+`TLS13.Impl.Driver.PairingNoTailClientVerifyShape`, extends the same role-local
+prefix through the protected `Received CertificateVerify` and the local
+`LocalVerifyCertificateSignature` step.  A third split module,
+`TLS13.Impl.Driver.PairingNoTailClientFinishedShape`, then extends it through the
+protected `Received Finished` and local `LocalVerifyFinished` steps.  Finally,
+`TLS13.Impl.Driver.PairingNoTailClientAppShape` proves the order-insensitive
+application-key-install pair and the terminal protected client `Sent Finished`.
+These modules keep the client-side inversion proof factored by state-machine
+phase rather than growing the older monolithic inversion files.
+
+`PairingNoTailNormalized` exposes these under the clean16 paired predicate as
 `lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_receive_server_start_spine16`
 and
 `lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_receive_server_start_spine16`,
 plus
-`lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_validated_server_start_spine16`.
-The remaining client-side role-local work is to extend this prefix through
-protected `Received CertificateVerify`, signature verification, protected
-`Received Finished`, server-Finished verification, application-key installs, and
-protected client Finished.  The paired proof still then has to match these client
-receive slices with actual server sent-seal slices.
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_validated_server_start_spine16`,
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_verify_received_server_start_spine16`,
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_signature_verified_server_start_spine16`,
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_received_server_start_spine16`,
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_verified_server_start_spine16`,
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_application_installs_server_start_spine16`,
+and
+`lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_server_start_spine16`.
+The client role-local no-tail prefix is now complete through the 16th event.  The
+paired proof still has to match the client receive slices with actual server
+sent-seal slices and construct the staged protected replay boundary.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
