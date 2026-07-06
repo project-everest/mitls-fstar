@@ -36,12 +36,14 @@ let paired_successful_handshake_complete_event_log_shape_inputs
   (client_shared:C.x25519_shared_secret)
   (server_material:CS.traffic_key_material)
   (client_material:CS.traffic_key_material)
+  (client_hs_write_material:CS.traffic_key_material)
   (server_auth_skip:CS.local_event)
   (client_auth_skip:CS.local_event)
   (client_verify_skip:CS.local_event)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
+  (server_app_read_material:CS.traffic_key_material)
   : prop =
   let server_suffix =
     PWL.server_protected_handshake_contiguous_replay_events
@@ -53,8 +55,25 @@ let paired_successful_handshake_complete_event_log_shape_inputs
       (M.Finished sf)
       server_app_write_material
       (M.Finished cf)
-      [CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)] in
+      [
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = server_app_read_material;
+            };
+          });
+        CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+      ] in
   let client_suffix =
+    CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeys {
+        CS.install_epoch = CS.TrafficHandshake;
+        CS.install_direction = CS.TrafficWrite;
+        CS.install_material = client_hs_write_material;
+      }) ::
     PWL.client_protected_handshake_contiguous_replay_events
       client_material
       (M.EncryptedExtensions ee)
@@ -174,12 +193,14 @@ let paired_successful_handshake_complete_event_log_shape
     (client_shared:C.x25519_shared_secret)
     (server_material:CS.traffic_key_material)
     (client_material:CS.traffic_key_material)
+    (client_hs_write_material:CS.traffic_key_material)
     (server_auth_skip:CS.local_event)
     (client_auth_skip:CS.local_event)
     (client_verify_skip:CS.local_event)
     (client_app_write_material:CS.traffic_key_material)
     (client_app_read_material:CS.traffic_key_material)
-    (server_app_write_material:CS.traffic_key_material).
+    (server_app_write_material:CS.traffic_key_material)
+    (server_app_read_material:CS.traffic_key_material).
     paired_successful_handshake_complete_event_log_shape_inputs
       client
       server
@@ -196,12 +217,14 @@ let paired_successful_handshake_complete_event_log_shape
       client_shared
       server_material
       client_material
+      client_hs_write_material
       server_auth_skip
       client_auth_skip
       client_verify_skip
       client_app_write_material
       client_app_read_material
       server_app_write_material
+      server_app_read_material
 
 noextract
 let paired_successful_handshake_complete_state_trace

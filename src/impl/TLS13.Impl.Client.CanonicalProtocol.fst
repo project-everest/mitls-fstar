@@ -92,7 +92,7 @@ let client_step
       client_local_outputs_match conn_ev out.SM.so_local_outputs
   | SM.LocalEvent local ->
     let api = CTypes.client_local_event_api local in
-      exists conn_ev raw_sent raw_received.
+      exists conn_ev raw_sent.
         client_api_event_matches st0 api conn_ev /\
         client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
         client_local_outputs_match conn_ev out.SM.so_local_outputs /\
@@ -101,7 +101,7 @@ let client_step
           {
             CS.delta_event = conn_ev;
             CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = raw_received;
+            CS.delta_raw_received = B.empty;
           }
            st1
 
@@ -730,7 +730,6 @@ let lemma_client_step_from_local_witness
   (local_ev:CTypes.client_local_event)
   (conn_ev:CS.conn_event)
   (raw_sent:B.bytes)
-  (raw_received:B.bytes)
   (wire_outputs:list CW.wire_message)
   (local_outputs:list CTypes.local_output)
   : Lemma
@@ -744,7 +743,7 @@ let lemma_client_step_from_local_witness
         CS.legal_connection_delta st0 {
           CS.delta_event = conn_ev;
           CS.delta_raw_sent = raw_sent;
-          CS.delta_raw_received = raw_received;
+          CS.delta_raw_received = B.empty;
         } st1)
       (ensures
         client_step
@@ -761,7 +760,7 @@ let lemma_client_step_from_local_witness
     st0
     (CTypes.client_local_event_api local_ev)
     conn_ev);
-  assert (exists conn_ev' raw_sent' raw_received'.
+  assert (exists conn_ev' raw_sent'.
     client_api_event_matches
       st0
       (CTypes.client_local_event_api local_ev)
@@ -775,7 +774,7 @@ let lemma_client_step_from_local_witness
     CS.legal_connection_delta st0 {
       CS.delta_event = conn_ev';
       CS.delta_raw_sent = raw_sent';
-      CS.delta_raw_received = raw_received';
+      CS.delta_raw_received = B.empty;
     } st1);
   assert (client_step
     st0
@@ -1350,24 +1349,24 @@ let lemma_client_local_rejected_process_correct
           CS.delta_raw_received = B.empty;
         }
         st1);
-    assert (exists conn_ev raw_sent raw_received.
+    assert (exists conn_ev raw_sent.
       client_api_event_matches st0 api conn_ev /\
       client_wire_outputs_match raw_sent wire_outputs /\
       client_local_outputs_match conn_ev local_outputs /\
       CS.legal_connection_delta st0 {
         CS.delta_event = conn_ev;
         CS.delta_raw_sent = raw_sent;
-        CS.delta_raw_received = raw_received;
+        CS.delta_raw_received = B.empty;
       } st1);
     assert (CTypes.client_local_event_api local_ev == api);
-    assert (exists conn_ev raw_sent raw_received.
+    assert (exists conn_ev raw_sent.
       client_api_event_matches st0 (CTypes.client_local_event_api local_ev) conn_ev /\
       client_wire_outputs_match raw_sent wire_outputs /\
       client_local_outputs_match conn_ev local_outputs /\
       CS.legal_connection_delta st0 {
         CS.delta_event = conn_ev;
         CS.delta_raw_sent = raw_sent;
-        CS.delta_raw_received = raw_received;
+        CS.delta_raw_received = B.empty;
       } st1);
     assert (api == CTypes.client_local_event_api local_ev);
     assert (client_api_event_matches
@@ -1402,7 +1401,6 @@ let lemma_client_local_rejected_process_correct
       local_ev
       ev'
       raw_sent'
-      raw_received'
       wire_outputs
       local_outputs;
     assert (client_step
@@ -1482,21 +1480,20 @@ let lemma_client_local_rejected_process_correct
         CS.delta_raw_sent = B.empty;
         CS.delta_raw_received = B.empty;
       } st1);
-    assert (exists conn_ev' raw_sent raw_received.
+    assert (exists conn_ev' raw_sent.
       client_api_event_matches st0 api_fail conn_ev' /\
       client_wire_outputs_match raw_sent wire_outputs /\
       client_local_outputs_match conn_ev' local_outputs /\
       CS.legal_connection_delta st0 {
         CS.delta_event = conn_ev';
         CS.delta_raw_sent = raw_sent;
-        CS.delta_raw_received = raw_received;
+        CS.delta_raw_received = B.empty;
       } st1);
     lemma_client_step_from_local_witness
       st0
       st1
       (CTypes.ClientAPI api_fail)
       conn_ev
-      B.empty
       B.empty
       wire_outputs
       local_outputs;
@@ -1577,21 +1574,20 @@ let lemma_client_local_rejected_process_correct
         CS.delta_raw_sent = B.empty;
         CS.delta_raw_received = B.empty;
       } st1);
-    assert (exists conn_ev' raw_sent raw_received.
+    assert (exists conn_ev' raw_sent.
       client_api_event_matches st0 api_fail conn_ev' /\
       client_wire_outputs_match raw_sent wire_outputs /\
       client_local_outputs_match conn_ev' local_outputs /\
       CS.legal_connection_delta st0 {
         CS.delta_event = conn_ev';
         CS.delta_raw_sent = raw_sent;
-        CS.delta_raw_received = raw_received;
+        CS.delta_raw_received = B.empty;
       } st1);
     lemma_client_step_from_local_witness
       st0
       st1
       (CTypes.ClientAPI api_fail)
       conn_ev
-      B.empty
       B.empty
       wire_outputs
       local_outputs;
@@ -1904,14 +1900,14 @@ let lemma_client_network_nonstep_canonical_step
       CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
       CS.delta_raw_received = B.empty;
     } st1);
-    assert (exists conn_ev' raw_sent raw_received.
+    assert (exists conn_ev' raw_sent.
       client_api_event_matches st0 api conn_ev' /\
       client_wire_outputs_match raw_sent [] /\
       client_local_outputs_match conn_ev' [] /\
       CS.legal_connection_delta st0 {
         CS.delta_event = conn_ev';
         CS.delta_raw_sent = raw_sent;
-        CS.delta_raw_received = raw_received;
+        CS.delta_raw_received = B.empty;
       } st1);
     assert (client_step st0 (SM.LocalEvent (CTypes.ClientAPI api)) st1 (CPI.step_output [] []));
     assert (client_canonical_step_rel st0 st1)

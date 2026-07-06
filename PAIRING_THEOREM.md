@@ -191,26 +191,156 @@ then the event-trace theorem applies and gives application record key/IV
 agreement.
 ```
 
-The cleanest verified top-level statement currently lives in
-`TLS13.Impl.Driver.PairingTraceShape`.  It avoids the protected-replay backend
-and goes through the existing `Pairing.paired_handshake_event_trace` theorem.
-Its public state predicate is
-`paired_successful_handshake_complete_state_trace client server`, which packages:
+The cleanest verified normalized bridge now lives in
+`TLS13.Impl.Driver.PairingNormalizedShape`.  Its key predicate,
+`paired_successful_handshake_normalized_replay_shape client server`, deliberately
+does **not** require exact `ClientHello` or `ServerHello` record equality across
+the two endpoints.  Instead, it keeps separate values for:
 
-- client and server application-readiness;
-- paired wire logs;
-- the first-epoch/no-KeyUpdate slice;
-- a concrete successful-handshake event-log shape.
+- the locally generated client `ClientHello` and the parser-produced server
+  `ClientHello`;
+- the locally generated server `ServerHello` and the parser-produced client
+  `ServerHello`;
+- the corresponding raw cleartext fragments.
 
-The concrete shape predicate names the ClientHello, ServerHello,
-EncryptedExtensions, Certificate, CertificateVerify, server Finished, and client
-Finished messages once, requires both final handshake-state slots to contain those
-same values, requires the final logs to be the expected cleartext prefix plus
-protected server flight/client Finished shape, and records the corresponding
-network-event occurrences in each log.  From that, the proof derives
-`Pairing.paired_handshake_event_trace` and calls
-`lemma_client_server_application_record_material_agrees_from_paired_handshake_event_trace`.
-The reviewer-facing theorem is:
+It then relates those values by paired raw bytes, cleartext raw legality,
+supported ServerHello parsing, and the protected event-projection witness package.
+From that normalized/raw-backed shape, the proof calls
+`Pairing.lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`,
+which derives normalized hello wire equivalence, protected serialized-handshake
+equivalence, paired handshake events, and finally application record key/IV
+agreement.  The normalized bridge theorem is:
+
+```fstar
+val lemma_client_server_application_record_material_agrees_from_normalized_replay_shape
+  (client server:CS.connection_state)
+  : Lemma
+      (requires
+        paired_successful_handshake_normalized_replay_shape client server)
+      (ensures
+        WFL.paired_cleartext_hello_wire_equivalent client server /\
+        WFL.paired_cleartext_hello_key_shares client server /\
+        WFL.paired_protected_handshake_wire_equivalent client server /\
+        Pairing.paired_handshake_events client server /\
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic) client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic) client server)
+```
+
+There are two no-tail valid-byte-trace wrappers:
+
+- `PairingNormalizedShape.lemma_client_server_application_record_material_agrees_from_no_tail_valid_byte_traces_with_normalized_replay_shape`
+  includes valid client/server `WFSM.valid_byte_trace` facts, paired byte streams,
+  and the no-tail application-ready boundary, but still assumes the compact
+  normalized replay shape above.
+- `PairingNoTail.lemma_client_server_application_record_material_agrees_from_no_tail_valid_byte_traces`
+  has the desired theorem name and conclusion.  Its predicate
+  `paired_supported_no_tail_valid_byte_traces` **no longer** includes
+  `PairingNormalizedBoundary.paired_supported_normalized_replay_boundary` (the
+  ~30-step `CS.step_model` witness described above), but that is not the clean
+  win it looks like: it now includes
+  `PairingTraceShape.paired_successful_handshake_complete_event_log_shape`
+  instead, i.e. exactly the "older `TLS13.Impl.Driver.PairingTraceShape`
+  theorem" exact-record-equality hypothesis discussed just below, with the same
+  `body`-field defect (see that discussion, and the status note on
+  `paired_supported_no_tail_valid_byte_traces` in
+  `TLS13.Impl.Driver.PairingNoTail.fsti`).  So this is a swap of one
+  not-yet-derived heavy hypothesis for a different, differently-shaped,
+  not-yet-derived (and likely unsatisfiable-as-written for parser-produced
+  traces) heavy hypothesis, not a removal of one.  It should be read the same
+  way as the `PairingTraceShape` byte-trace wrapper below: a type-checked
+  internal milestone, not a "key material agreement from valid byte traces
+  alone" result.
+
+The missing audit-surface bridge is therefore still open in both directions:
+neither the normalized replay boundary/shape nor the exact trace-shape
+predicate has been derived from no-tail valid byte traces plus the light
+per-endpoint state facts (`paired_no_tail_application_ready_boundary` and
+`Pairing.client_server_driver_first_epoch_no_key_update_state_inputs`) alone.
+
+Several important pieces of that bridge are now verified:
+`TLS13.Impl.Driver.PairingNoTailWireLogs` proves that canonical
+`WFSM.valid_byte_trace` input/output bytes are exactly the final
+`cs_wire_log.raw_received/raw_sent` logs, for traces that start from
+`CS.initial`.  `TLS13.Impl.Driver.PairingNoTailNormalized` uses this to derive
+`CS.paired_wire_logs client server` from the clean paired byte-stream premises.
+So raw transport pairing no longer has to be an exposed top-level assumption.
+The raw cleartext hello bridge is also now verified:
+`TLS13.Impl.Driver.PairingNoTailRawBridge` derives the paired raw ClientHello and
+ServerHello record slices from role-local prefixes, replay consistency, supported
+ClientHello wire profile, and `CS.paired_wire_logs`, while keeping generated and
+parser-produced hello records distinct.  The remaining hard part is the rest of
+the role-local event-shape and protected projection inversion.  The role-local
+inversion is now past the first nontrivial CCS/no-op cases:
+`PairingNoTailInversion` proves that a no-tail length-16 client log begins
+`LocalStartHandshake; Sent ClientHello; Received ServerHello;
+LocalDeriveSharedSecret` and that the following client event is some handshake
+traffic-key install, and `PairingNoTailServerShape` proves that a no-tail
+server log under the earlier length-15 milestone begins
+`LocalStartServer; Received ClientHello; LocalSelectServerParameters;
+LocalDeriveSharedSecret; Sent ServerHello`.
+That server length-15 milestone is now known to be stale for the final theorem:
+the satisfiable no-tail server boundary must include the server's
+client-handshake read-key install before receiving ClientFinished, so the final
+target is length 16 with order-insensitive server handshake installs.
+`PairingNoTailNormalized` packages these into derived paired milestones from the
+clean paired no-tail valid-byte-trace predicate.
+
+The client install-order proof exposed a real audit distinction.  The exact
+write-before-read order used by `client_no_tail_normalized_shape` is not a
+consequence of the abstract `WFSM.valid_byte_trace (ClientCP.client_system ...)`
+predicate alone: `client_step` accepts any legal local API event, while the
+concrete `TLS13.Impl.Client.next_local_action` priority is outside that predicate.
+Consequently, the clean theorem should not rely on proving that exact order from
+bare byte traces.  The protected projection/replay bridge either has to be
+insensitive to the commuting client handshake write/read installs, or the public
+trace predicate must be strengthened to include canonical local scheduling.  The
+audit-preferred route is the former.
+
+This is not just a presentation issue.  The current normalized/protected backend
+still contains a pre-install alignment premise of the form
+`PWL.write_read_record_material_aligned client_model4 server_model5`.  At those
+cleartext-prefix models neither endpoint has installed the relevant handshake
+traffic record keys, so the premise requires `record_direction_material` to be
+`Some` where it is still `None`.  A corrected backend should derive alignment
+after the explicit server-handshake-write/client-handshake-read and
+client-handshake-write/server-handshake-read installs, then produce
+`paired_protected_handshake_event_projection_pair_witnesses` directly instead of
+routing through the stale contiguous replay view.
+
+The first piece of that corrected backend is now verified:
+`TLS13.ConnectionState.ProtectedWireStaged.lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_replays_v2`
+constructs the five protected projection pairs without any pre-install
+client-write/server-read alignment premise.  It still requires caller-supplied
+staged replay facts: the server encrypted flight starts from explicit
+server-handshake-write/client-handshake-read installs, and the ClientFinished
+pair starts from explicit client-handshake-write/server-handshake-read installs
+whose record key/IV material agrees.  The remaining bridge work is to derive
+those staged replay facts from the no-tail endpoint logs and key schedule.
+One subtle proof-engineering point is worth auditing carefully: the v2
+ClientFinished-side install steps are used to establish the aligned write/read
+record materials that feed the lower staged lemma.  A final trace-inversion proof
+must still connect those states to the actual post-server-flight client/server
+states (or instead use the lower staged lemma with a directly preserved
+post-flight alignment); otherwise the protected projection witness would be
+well-typed but not yet justified as the projection of the endpoint logs being
+inverted.
+`TLS13.Impl.Driver.PairingProtectedReplay.lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_staged_replays_v2`
+then lifts that corrected staged-v2 protected premise, together with the
+normalized cleartext raw hello facts, to the same final application record
+key/IV agreement conclusion as the old contiguous replay bridge.
+
+The older `TLS13.Impl.Driver.PairingTraceShape` theorem is still verified, but it
+is not the right final target for parser-backed traces.  It avoids the
+protected-replay backend and goes through
+`Pairing.paired_handshake_event_trace`, but its shape predicate names the
+ClientHello and ServerHello once and requires both endpoints' final handshake
+state slots and event logs to contain those exact same records.  That is too
+strong for real byte traces, because locally generated hellos have `body = empty`
+while received/parser-produced hellos retain the full handshake wire bytes in
+`body`.  Its theorem is:
 
 ```fstar
 val lemma_client_server_application_record_material_agrees_from_successful_handshake_complete_state_trace
@@ -228,14 +358,50 @@ val lemma_client_server_application_record_material_agrees_from_successful_hands
 There is also a byte-trace wrapper,
 `lemma_client_server_application_record_material_agrees_from_valid_paired_byte_traces_with_successful_handshake_complete_state_trace`,
 whose precondition adds client/server `WFSM.valid_byte_trace` facts and paired
-sent/received byte streams.  The important remaining gap is not key agreement:
-that theorem is now proved from the clean trace shape.  The remaining trace-shape
-work is to derive `paired_successful_handshake_complete_state_trace` itself from
-`WFSM.valid_byte_trace` plus a first-application-ready boundary.  Today the
-shape predicate records the `event_trace_has_tls_message` occurrence facts
-alongside the exact log equalities to keep the proof small and auditable; a later
-pure list-shape lemma should remove that redundancy by deriving the occurrences
-from the exact lists.
+sent/received byte streams.  Because its trace-shape predicate uses exact hello
+record equality, it should be read as a useful internal milestone and a warning
+about representation sensitivity, not as the final audit surface.
+
+The newest no-tail wrapper layer is `TLS13.Impl.Driver.PairingNoTail`.  It
+separates the first-application-ready boundary fact from the concrete successful
+event-log shape:
+
+- `client_no_tail_application_ready_boundary client` is client application-ready
+  plus final client event-log length `16`;
+- `server_no_tail_application_ready_boundary server` was previously written as
+  server application-ready plus final server event-log length `15`, but this is
+  missing the server handshake read-key install needed before the protected
+  ClientFinished receive.  The satisfiable no-tail target is therefore server
+  length `16`;
+- `lemma_paired_successful_handshake_complete_state_trace_no_tail` proves that
+  the existing successful trace-shape predicate implies those no-tail lengths and
+  no-KeyUpdate traces;
+- `lemma_client_server_application_record_material_agrees_from_valid_byte_traces_at_no_tail_boundary_with_successful_event_log_shape`
+  gives the current no-tail byte-trace wrapper.
+
+This is useful, but it is not yet the fully desired inversion theorem; the
+checked length-`15` server wrappers should now be treated as stale until they are
+updated to include the handshake read install.  The
+remaining bridge should go to the normalized replay shape, not to the exact
+`paired_successful_handshake_complete_event_log_shape`:
+
+```text
+paired no-tail valid byte traces
+  ==> normalized cleartext ClientHello/ServerHello replay facts
+  ==> five protected event-projection pairs
+  ==> paired_successful_handshake_normalized_replay_shape
+  ==> application record key/IV agreement
+```
+
+The old `15`-event client shape had to be treated skeptically.  The
+abstract legality condition for sending the client Finished requires
+`ks_client_handshake_traffic` as well as both application traffic secrets
+(`TLS13.Spec.ConnectionState.legal_handshake_message`, the
+`CL.Sent, M.Finished, HsServerFinishedVerified` case).  The legacy
+client suffix installs the server handshake read traffic keys but does not
+include a separate client handshake write-key install before sending Finished.
+The no-tail exact-shape target has therefore been corrected to include that
+same-stage handshake write install, giving a 16-event client no-tail boundary.
 
 The lower-level byte/replay proof stack remains useful for deriving trace-shape
 facts from raw bytes.  Its currently verified replay progress starts with
@@ -1201,12 +1367,33 @@ than adding more proof code to `PairingProtectedReplay`:
   `lemma_client_server_application_record_material_agrees_from_valid_paired_byte_traces_at_handshake_complete_boundary`
   proves the same application record-material agreement conclusion from this
   compact valid-byte-trace-at-boundary package.
+- `TLS13.Impl.Driver.PairingNoTail` defines no-tail application-ready boundary
+  predicates based on application-readiness and event-log lengths `16` (client)
+  and `15` (server), proves that the concrete successful trace shape implies
+  those boundaries and no-KeyUpdate traces, and adds a no-tail valid-byte-trace
+  wrapper around the `PairingTraceShape` theorem.  It also proves small generic
+  and endpoint-specific lemmas extracting `SM.trace_reaches`/connection
+  consistency from `WFSM.valid_byte_trace`.
+- `TLS13.Impl.Driver.PairingNoTailWireLogs` proves the canonical byte/log bridge:
+  valid byte traces from `CS.initial` have external sent/received byte streams
+  equal to the final `cs_wire_log.raw_sent/raw_received` fields.  The normalized
+  no-tail wrapper uses this to derive `CS.paired_wire_logs` from the external
+  paired byte-stream premises.
+- `TLS13.Impl.Driver.PairingNoTailClientShape` and
+  `TLS13.Impl.Driver.PairingNoTailServerShape` record verified role-local
+  intermediate inversion facts: the client no-tail log starts
+  `LocalStartHandshake; Sent ClientHello; Received ServerHello`; the server
+  no-tail log starts `LocalStartServer; Received ClientHello`; both modules also
+  expose final-model witnesses and intended normalized shapes.  They deliberately
+  do not claim the full event-log inversion.
 
 These wrappers are intentionally thin.  They make the auditable theorem statement
 small and keep the large witness package in one internal predicate, but they do
 not yet prove that an arbitrary valid byte trace ending in `ControlApplicationData`
 must itself have the handshake-complete shape or the protected-record alignment
-witnesses hidden in the clean predicate.  That remaining result is a separate
+witnesses hidden in the clean predicate.  `PairingNoTail` verifies the no-tail
+boundary wrapper and valid-byte-trace-to-consistency pieces, but it does not prove
+the full event-log inversion from no-tail valid traces.  That remaining result is a separate
 endpoint trace-shape/backend-witness theorem: valid byte trace plus a
 first-application-ready boundary condition should derive the clean boundary
 package, including the server's final local Finished verification step and the
@@ -1259,6 +1446,138 @@ appended to `cs_event_log`.  A theorem stated for arbitrary application-ready
 states should therefore be prefix-based ("there exists a handshake prefix/suffix
 inside the log") rather than exact-log-based, or it should strengthen the state
 predicate to a handshake-complete boundary state.
+
+There is a second, more concrete state-machine caveat.  `TlsChangeCipherSpec` is
+legal and a no-op in any handshaking stage.  Therefore a proof that the second
+client no-tail event is the sent ClientHello cannot be obtained from
+`legal_event` and the final length alone; it needs the progress-rank/no-room
+argument used by the current no-tail inversion lemmas, or a stronger driver
+boundary predicate that excludes no-op compatibility records.  Same-stage key
+installs can also commute in the abstract state machine, and
+`WFSM.valid_byte_trace (ClientCP.client_system ...)` / `WFSM.valid_byte_trace
+(ServerCP.server_system ...)` do not encode the concrete endpoints'
+`next_local_action` priorities.  So the final normalized theorem should avoid
+over-specifying the order of byte-neutral installs unless it is really deriving
+that order from a concrete driver-scheduling predicate.
+
+The current verified role-local inversion now discharges the first few instances
+of this obligation:
+`PairingNoTailInversion.lemma_client_no_tail_second_event_client_hello_clean`
+and `lemma_client_no_tail_third_event_server_hello_clean`, together with
+`lemma_client_no_tail_fourth_event_derive_shared_secret_clean` and
+`lemma_client_no_tail_fifth_event_handshake_traffic_install_clean`, prove that a
+16-event application-ready client log starts with
+`LocalStartHandshake; Sent ClientHello; Received ServerHello;
+LocalDeriveSharedSecret` followed by a handshake traffic-key install.
+`PairingNoTailClientPostSharedShape.
+lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean`
+extends this client result one step further: both post-shared-secret events
+`e4` and `e5` are handshake-traffic installs, without committing to
+write-before-read or read-before-write order.
+For the staged-v2 protected replay bridge, a later client-side strengthening is
+still needed to show that these two installs are not duplicates: one must be the
+client-handshake write install and the other the server-handshake read install,
+again in either order.  A draft proof of that cover fact exposed an unstable
+existential/disjunction packaging problem and is not part of the verified public
+interface; the currently verified client module intentionally exposes only the
+weaker "both are handshake-traffic installs" milestone used by the clean16
+composition layer.
+The server-side length-15 milestone is now known to be stale.  The useful part of
+`PairingNoTailServerShape.lemma_server_no_tail_second_event_client_hello_clean`
+through `lemma_server_no_tail_fifth_event_server_hello_clean` is that, at the
+old length-15 boundary, the role-local prefix starts with
+`LocalStartServer; Received ClientHello; LocalSelectServerParameters;
+LocalDeriveSharedSecret; Sent ServerHello`.
+But a satisfiable server no-tail trace must be length 16, not 15, because the
+server must install client-handshake read keys before receiving the protected
+ClientFinished.  Also, the completed server-sixth proof attempt confirms that
+the sixth event is not derivably "server handshake write" under the bare abstract
+WFSM predicate: server handshake write and read installs can commute.  More
+importantly, the later length-16 role-local attempt found a real counterexample:
+the server can insert a CCS no-op after ServerHello and omit the network
+CertificateVerify send while still reaching application-ready in 16 events.
+Therefore the remaining server work is not a stronger role-local theorem from
+bare application-ready/length premises; it must be a paired-byte inversion
+argument, or it must add a stronger canonical-scheduling/no-extra-CCS/no-skipped
+server-flight premise to the public boundary.
+
+**Status update (server no-tail boundary correction pass).** Two of
+`PairingNoTailServerShape.fst`'s existing length-15 role-local lemmas
+(`lemma_server_no_tail_fourth_event_derive_shared_secret_clean` and
+`lemma_server_no_tail_fifth_event_server_hello_clean`) failed to verify --
+not because of a logic gap, but because their final numeric
+`server_application_progress_rank ... == N` facts were being combined, in one
+SMT query, with an increasingly large nested "eliminate exists" nesting of
+role-local case splits.  Query-stats/split-queries diagnosis showed every
+individual fact was cheap in isolation; the fix was to factor the two
+recurring rank computations into standalone lemmas
+(`lemma_server_application_progress_rank_client_hello_received_selected` and
+`_selected_shared`) so they get their own small queries regardless of
+invocation depth, plus a local `--z3rlimit 10` bump (matching the existing
+`--split_queries always --z3rlimit 10` convention already used elsewhere in
+this file and in `PairingNoTailInversion.fst`) on the fifth-event lemma's
+final nested step. Both files now verify with no admits.
+
+This pass also adds the corrected length-16 server boundary scaffolding
+described above, without redoing the ~2000 lines of event-by-event inversion
+at the new length: `PairingNoTailInversion.lemma_server_no_tail_log_spine16`
+and `.lemma_server_no_tail_first_event_start16` (mirroring the existing
+15-length versions), `PairingNoTailInversion.server_no_tail_handshake_traffic_install_event`
+(the server-role, direction-insensitive counterpart of the existing
+client-role predicate), and `PairingNoTailServerShape.server_no_tail_start_spine16`
+plus its proof `lemma_server_no_tail_start_spine16`. The order-insensitive
+two-event milestone itself,
+`PairingNoTailServerShape.server_no_tail_next_two_events_handshake_installs`,
+is intentionally only a strengthened/canonical target, not a theorem derivable
+from bare role-local length-16 readiness.  The composition layer now has a separate
+corrected public input predicate,
+`PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16`,
+using `PairingNoTail.paired_no_tail_application_ready_boundary16`, plus a
+verified start-spine wrapper
+`lemma_clean16_no_tail_valid_byte_traces_role_local_start_spine16`.  The same
+corrected predicate now also has verified byte/log infrastructure:
+connection-state consistency, client supported-hello profile, serialized trace
+pairing, paired wire logs, and
+`lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix`
+for the normalized raw-wire ClientHello/ServerHello bridge once role-local
+cleartext prefixes are available.  There is also now a clean16 composition
+wrapper showing that corrected clean16 no-tail byte traces plus the existing
+`PairingNormalizedBoundary.paired_supported_normalized_replay_boundary` still
+yield the final application record-material agreement; this is an internal
+milestone, not the final theorem, because that normalized replay boundary still
+has to be derived.  The attempted role-local server two-install proof found a
+stronger problem: that theorem is false under only
+`server_driver_application_ready server /\ length server.cs_event_log == 16`.
+There is a legal server-only trace that inserts a `TlsChangeCipherSpec` no-op
+immediately after `Sent ServerHello`, then performs both handshake installs, and
+still reaches application-ready in 16 events by omitting the network
+`CertificateVerify` send: `LocalSignCertificateVerify` sets
+`hs_certificate_verify_verified`, and the server `Sent Finished` legality check
+only requires that boolean.  This violates the predicate that the two events
+immediately after the cleartext prefix are both handshake installs.  The paired
+top-level theorem may still be true, because paired client readiness and paired
+raw bytes should rule out a server flight that omits CertificateVerify or inserts
+an unmatched CCS, but that is no longer a role-local inversion theorem.  Closing
+the gap therefore requires either paired-byte trace inversion, or a stronger
+public boundary predicate that includes canonical scheduling/no-extra-CCS (and
+probably a canonical protected server flight) rather than bare abstract WFSM
+validity.
+
+One verified milestone now isolates the client-side half of this asymmetry:
+`TLS13.ConnectionState.ClientCertificateVerifyReachability` proves that any
+consistent client model in `ControlApplicationData` must have recorded an
+`hs_certificate_verify` witness, and
+`PairingNoTailNormalized.lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness`
+lifts that fact from the corrected clean16 paired inputs.  This is useful audit
+evidence, but it is deliberately not the missing paired inversion theorem: the
+remaining step is to prove that the server's paired protected byte stream
+actually contains the corresponding network `Sent CertificateVerify` event,
+rather than relying only on the server's local-sign witness.  For convenience
+there is also a combined corollary,
+`PairingNoTailNormalized.lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_start_spine16_and_client_certificate_verify_witness`,
+that packages this witness fact together with the existing
+client-two-handshake-installs/server-start-spine16 milestone from a single
+clean16 premise; it is a bundling convenience, not additional proof content.
 
 At the driver-pairing level there is also now an existential wrapper,
 `lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.

@@ -212,6 +212,12 @@ val lemma_parse_client_hello_serialize_client_hello
       (requires exact_client_hello_wire_parseback_profile ch)
       (ensures W.parse_client_hello (W.serialize_client_hello ch) == Some ch)
 
+val lemma_serialize_handshake_client_hello_record_bound
+  (ch:M.client_hello)
+  : Lemma
+      (requires supported_client_hello_wire_profile ch)
+      (ensures B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640)
+
 (**
   ClientHello TLS-message parseback is now proved in
   TLS13.Wire.Spec.Reveal.ClientHello.Parseback.  Exact ServerHello message

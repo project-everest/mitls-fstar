@@ -90,7 +90,7 @@ let server_step
       server_local_outputs_match conn_ev out.SM.so_local_outputs
   | SM.LocalEvent local ->
     let api = CTypes.server_local_event_api local in
-      exists conn_ev raw_sent raw_received.
+      exists conn_ev raw_sent.
         server_api_event_matches api conn_ev /\
         server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
         server_local_outputs_match conn_ev out.SM.so_local_outputs /\
@@ -99,7 +99,7 @@ let server_step
           {
             CS.delta_event = conn_ev;
             CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = raw_received;
+            CS.delta_raw_received = B.empty;
           }
            st1
 
