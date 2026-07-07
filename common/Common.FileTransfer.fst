@@ -63,13 +63,17 @@ module WFSM = Common.WireFormatStateMachine
 
    `ft_classify` (a field of the class below) maps a concrete `wire_message` to
    one of these roles, exposing the fields a file-transfer protocol cares about:
-   the requested filename, a data block's index+payload, or an ack's index.  The
-   index is the ordering mechanism used to reassemble the file.
+   the requested filename, a data block's index+payload, or an ack's index.  A
+   data block's `index` is the ordering mechanism used to reassemble the file; it
+   is `Some n` for protocols that carry an explicit block number on the wire
+   (TFTP, XMODEM, Kermit, Saratoga offsets) and `None` for protocols that order
+   data *positionally*, by its position in the stream, with no on-wire index
+   (FTP block mode over TCP).
    ─────────────────────────────────────────────────────────────────────────── *)
 noeq
 type ft_packet =
   | FT_ReadRequest : filename:TCP.bytes -> ft_packet
-  | FT_Data        : index:nat -> payload:TCP.bytes -> ft_packet
+  | FT_Data        : index:option nat -> payload:TCP.bytes -> ft_packet
   | FT_Ack         : index:nat -> ft_packet
   | FT_Error       : ft_packet
   | FT_Other       : ft_packet
@@ -310,10 +314,13 @@ class file_transfer
         (requires system.WFSM.wfsm_state_machine.SM.sm_step st0 ev st1 out)
         (ensures ft_view_step ft_block_size ft_window (ft_project st0) (ft_project st1));
 
-  (* (L2) A data message emitted on the wire carries its true position: its block
-     index is the successor of the number of blocks already delivered, and its
-     payload is the block appended to the delivered prefix.  This ties the
-     on-the-wire ordering mechanism (block index) to reassembly order. *)
+  (* (L2) A data message emitted on the wire appends its payload to the delivered
+     prefix (preserving reassembly order).  If the protocol carries an explicit
+     block index on the wire (`Some i`), that index must equal the block's true
+     position — the successor of the number of blocks already delivered — tying
+     the on-the-wire ordering mechanism to reassembly order.  Positionally
+     ordered protocols (no on-wire index, `None`, as in FTP block mode) impose no
+     index constraint; ordering is still enforced by the payload append. *)
   ft_law_data_wire:
     st0:state ->
     ev:SM.event wire_message local_event ->
@@ -328,7 +335,9 @@ class file_transfer
         (ensures
           (match ft_classify msg with
            | FT_Data index payload ->
-             index == L.length (ft_project st0).ftv_blocks + 1 /\
+             (match index with
+              | Some i -> i == L.length (ft_project st0).ftv_blocks + 1
+              | None -> True) /\
              (ft_project st1).ftv_blocks == L.append (ft_project st0).ftv_blocks [payload]
            | _ -> True));
 
@@ -371,9 +380,11 @@ class file_transfer
            | _ -> True));
 
   (* (L5) A timeout is an idempotent retransmission: it leaves the abstract view
-     unchanged, and any data block it re-emits is one already sent (same index,
-     same payload).  This models timeout-driven recovery without regressing or
-     corrupting the reconstructed file. *)
+     unchanged, and any data block it re-emits carrying an explicit index is one
+     already sent at that index (same payload).  This models timeout-driven
+     recovery without regressing or corrupting the reconstructed file.  (Positional
+     protocols such as FTP block mode have no timeouts and no on-wire index, so
+     this law is vacuous for them.) *)
   ft_law_timeout:
     st0:state ->
     le:local_event ->
@@ -389,7 +400,9 @@ class file_transfer
           (L.memP msg out.SM.so_wire_outputs /\ FT_Data? (ft_classify msg) ==>
             (match ft_classify msg with
              | FT_Data index payload ->
-               ft_block_at (ft_project st0).ftv_blocks index == Some payload
+               (match index with
+                | Some i -> ft_block_at (ft_project st0).ftv_blocks i == Some payload
+                | None -> True)
              | _ -> True)));
 }
 
