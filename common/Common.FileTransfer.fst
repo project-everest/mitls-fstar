@@ -155,23 +155,34 @@ let ft_step_request (filename content:TCP.bytes) (v0 v1:ft_view) : prop =
   v1.ftv_acked    == 0 /\
   v1.ftv_status   == FT_InProgress
 
+(* Flow control: at most `window` blocks may be in flight (sent but not yet
+   acknowledged).  `None` means an *unbounded* window: the transport itself is
+   reliable and provides flow control (e.g. FTP block mode over TCP), so the
+   application performs no windowing.  `Some 1` recovers TFTP's stop-and-wait;
+   `Some n` with n > 1 models windowed variants (RFC 7440 / ZMODEM / Kermit). *)
+let ft_in_flight_ok (window:option pos) (in_flight:int) : prop =
+  match window with
+  | None -> True
+  | Some w -> in_flight < w
+
 (* The server sends the next data block.  This is where ORDERING and REASSEMBLY
    are enforced:
      * the new block is appended after all previous ones (consecutive index);
      * its payload is at most `block_size` bytes, and a strictly shorter payload
        is the final block;
      * flow control allows at most `window` unacknowledged blocks in flight
-       (`window = 1` recovers TFTP's stop-and-wait; larger windows model RFC 7440
-       / ZMODEM / Kermit);
+       (`Some 1` recovers TFTP's stop-and-wait; larger finite windows model RFC
+       7440 / ZMODEM / Kermit; `None` is an unbounded, transport-reliable window
+       as in FTP block mode over TCP);
      * the running reassembly stays a prefix of the file, and equals the whole
        file exactly when the final (short) block is sent. *)
-let ft_step_send_data (block_size window:nat) (payload:TCP.bytes) (v0 v1:ft_view)
+let ft_step_send_data (block_size:nat) (window:option pos) (payload:TCP.bytes) (v0 v1:ft_view)
   : prop =
   match v0.ftv_content with
   | None -> False
   | Some content ->
     v0.ftv_status == FT_InProgress /\
-    L.length v0.ftv_blocks - v0.ftv_acked < window /\
+    ft_in_flight_ok window (L.length v0.ftv_blocks - v0.ftv_acked) /\
     Seq.length payload <= block_size /\
     v1.ftv_filename == v0.ftv_filename /\
     v1.ftv_content  == v0.ftv_content /\
@@ -207,7 +218,7 @@ let ft_step_error (v0 v1:ft_view) : prop =
    subsumes timeout-driven retransmission: retransmitting an already-sent block
    leaves the abstract view (delivered blocks, acked prefix, file) unchanged.
    The wire-level effect of a timeout is pinned separately by `ft_law_timeout`. *)
-let ft_view_step (block_size window:nat) (v0 v1:ft_view) : prop =
+let ft_view_step (block_size:nat) (window:option pos) (v0 v1:ft_view) : prop =
   v1 == v0 \/
   (exists filename content. ft_step_request filename content v0 v1) \/
   (exists payload. ft_step_send_data block_size window payload v0 v1) \/
@@ -233,7 +244,7 @@ let ft_view_consistent (v:ft_view) : prop =
     (v.ftv_status == FT_Completed ==> Seq.equal (ft_concat v.ftv_blocks) content)
 
 let lemma_ft_view_step_preserves_consistent
-  (block_size window:nat) (v0 v1:ft_view)
+  (block_size:nat) (window:option pos) (v0 v1:ft_view)
   : Lemma (requires ft_view_consistent v0 /\ ft_view_step block_size window v0 v1)
           (ensures ft_view_consistent v1) =
   ()
@@ -265,9 +276,11 @@ class file_transfer
      with strictly fewer bytes ends the transfer. *)
   ft_block_size: n:nat{n >= 1};
 
-  (* Flow-control window: how many blocks may be in flight unacknowledged.  1 is
-     TFTP's classic stop-and-wait; larger values model windowed variants. *)
-  ft_window: n:nat{n >= 1};
+  (* Flow-control window: how many blocks may be in flight unacknowledged.
+     `Some 1` is TFTP's classic stop-and-wait; `Some n` models windowed variants;
+     `None` is an unbounded, transport-reliable window (e.g. FTP block mode over
+     TCP, where TCP provides ordering and flow control). *)
+  ft_window: option pos;
 
   (* File-transfer reading of a wire message. *)
   ft_classify: wire_message -> GTot ft_packet;
