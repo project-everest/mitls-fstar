@@ -1,0 +1,42 @@
+/*
+ * ftp_block.qd.rfc
+ *
+ * QuackyDucky data-format description for the FTP "block mode" (MODE B)
+ * data-connection block, as defined in RFC 959, Section 3.4.2.
+ *
+ * On the wire, a MODE B transfer is a sequence of blocks, each introduced by a
+ * 3-byte header followed by the block's data:
+ *
+ *     +------------+--------------------+------------------+
+ *     | descriptor | byte count (16-bit)| ... data ...     |
+ *     |  (1 byte)  |     (2 bytes)      | (byte-count long)|
+ *     +------------+--------------------+------------------+
+ *
+ * The descriptor is a bit field of flags (RFC 959 Section 3.4.2):
+ *     128 (0x80)  EOR      end of record
+ *      64 (0x40)  EOF      end of file
+ *      32 (0x20)  errors   the data block is suspected to contain errors
+ *      16 (0x10)  restart  the data field is a restart marker, not file data
+ * Flags may be combined (e.g. EOF|EOR = 192), so the descriptor is carried as a
+ * raw uint8; the flag semantics live in the protocol spec (ft_classify), not in
+ * the wire grammar.  The 16-bit byte count is the length of the data field that
+ * follows, so the block is exactly `opaque data<0..2^16-1>` in QuackyDucky: a
+ * 2-byte big-endian length prefix followed by that many data bytes.
+ *
+ * This description covers the *per-message* wire format of one block, which is
+ * what an instance of Common.WireFormat.wire_format needs; sequencing of blocks
+ * (and end-of-file detection via the descriptor's EOF bit) is handled by the
+ * state machine and the Common.WireFormat stream laws, not by this grammar.
+ *
+ * The FTP *control* connection (RETR/STOR commands and 3-digit reply codes,
+ * carried as CRLF-terminated text) is deliberately out of scope here: it is
+ * line-oriented text, which the QuackyDucky binary grammar does not express.
+ *
+ * Generate with:
+ *     qd.exe -pulse -prefix "FTPBlock.Wire.Generated." -odir spec ftp_block.qd.rfc
+ */
+
+struct {
+    uint8   descriptor;          /* 128=EOR 64=EOF 32=errors 16=restart */
+    opaque  data<0..2^16-1>;     /* 16-bit byte count, then that many data bytes */
+} ftp_block;
