@@ -6,9 +6,13 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
+module PCB = TLS13.Impl.Driver.PairingCleanBoundary
+module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNTCFRE = TLS13.Impl.Driver.PairingNoTailClientFinishedRawEquality
+module PNTCFR = TLS13.Impl.Driver.PairingNoTailClientFinishedReplay
 module PNTCFS = TLS13.Impl.Driver.PairingNoTailClientFinishedStaged
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
+module PNTSFR = TLS13.Impl.Driver.PairingNoTailServerFlightReplay
 module PNTSFS = TLS13.Impl.Driver.PairingNoTailServerFlightStaged
 module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 
@@ -81,6 +85,53 @@ val lemma_clean16_no_tail_valid_byte_traces_staged_boundary_derivation_milestone
           server_sent)
       (ensures
         clean16_staged_boundary_derivation_milestones client server)
+
+val lemma_normalized_replay_boundary_inputs_with_staged_fragments
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (w:PCB.handshake_complete_boundary_witnesses)
+  (server_fragment:PNTSFR.server_flight_replay_witnesses)
+  (client_fragment:PNTCFR.client_finished_replay_witnesses)
+  : Lemma
+      (requires
+        PNB.paired_supported_normalized_replay_boundary_inputs
+          client
+          server
+          w /\
+        PNTSFR.server_encrypted_flight_staged_replay_fragment
+          client
+          server
+          w
+          server_fragment /\
+        PNTCFR.client_finished_staged_replay_fragment
+          client
+          server
+          w
+          client_fragment)
+      (ensures
+        PSNB.paired_supported_normalized_staged_replay_boundary client server)
+
+val lemma_normalized_replay_boundary_inputs_with_clean16_fragment_completions
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (w:PCB.handshake_complete_boundary_witnesses)
+  : Lemma
+      (requires
+        PNB.paired_supported_normalized_replay_boundary_inputs
+          client
+          server
+          w /\
+        clean16_staged_boundary_derivation_milestones client server /\
+        PNTSFR.clean16_server_encrypted_flight_semantic_replay_completion
+          client
+          server
+          w /\
+        PNTCFR.clean16_client_finished_semantic_replay_completion
+          client
+          server
+          w)
+      (ensures
+        PSNB.paired_supported_normalized_staged_replay_boundary client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_normalized_staged_replay_boundary_from_completion
   (client_initial:CS.connection_state)

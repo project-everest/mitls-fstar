@@ -11,6 +11,7 @@ module M = TLS13.Messages
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNTCFRE = TLS13.Impl.Driver.PairingNoTailClientFinishedRawEquality
 module PNTCFS = TLS13.Impl.Driver.PairingNoTailClientFinishedStaged
+module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module Seq = FStar.Seq
@@ -86,5 +87,54 @@ let lemma_clean16_client_finished_staged_replay_fragment_from_completion
 =
   assert (exists r.
     client_finished_staged_replay_fragment client server w r)
+
+let lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_replay_fragment_from_completion
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  (w:PCB.handshake_complete_boundary_witnesses)
+  : Lemma
+      (requires
+        PNTN.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        clean16_client_finished_semantic_replay_completion client server w)
+      (ensures
+        exists r.
+          client_finished_staged_replay_fragment client server w r)
+=
+  PNTCFS.lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_milestone
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  PNTCFRE.lemma_clean16_no_tail_valid_byte_traces_client_finished_raw_record_equality
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  lemma_clean16_client_finished_staged_replay_fragment_from_completion
+    client
+    server
+    w
 
 #pop-options
