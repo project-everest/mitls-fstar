@@ -126,6 +126,128 @@ let lemma_client_no_tail_application_install_cover_cases
 =
   ()
 
+let lemma_client_no_tail_application_write_install_event_step_model_as_plain
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_write_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeys {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = material;
+              })) == Some model1)
+=
+  lemma_client_no_tail_application_write_install_event_cases ev;
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    assert (install.CS.install_epoch == CS.TrafficApplication);
+    assert (install.CS.install_direction == CS.TrafficWrite);
+    introduce exists (material:CS.traffic_key_material).
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeys {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = material;
+          })) == Some model1
+    with install.CS.install_material and ()
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    assert (role_install.CS.install_role == CS.ClientEndpoint);
+    let install = role_install.CS.install_payload in
+    assert (install.CS.install_epoch == CS.TrafficApplication);
+    assert (install.CS.install_direction == CS.TrafficWrite);
+    assert_norm (
+      CS.step_model model ev ==
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeys {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = install.CS.install_material;
+          })));
+    introduce exists (material:CS.traffic_key_material).
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeys {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = material;
+          })) == Some model1
+    with install.CS.install_material and ()
+  | _ ->
+    assert False
+
+let lemma_client_no_tail_application_read_install_event_step_model_as_plain
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_read_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeys {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = material;
+              })) == Some model1)
+=
+  lemma_client_no_tail_application_read_install_event_cases ev;
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    assert (install.CS.install_epoch == CS.TrafficApplication);
+    assert (install.CS.install_direction == CS.TrafficRead);
+    introduce exists (material:CS.traffic_key_material).
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeys {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = material;
+          })) == Some model1
+    with install.CS.install_material and ()
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    assert (role_install.CS.install_role == CS.ClientEndpoint);
+    let install = role_install.CS.install_payload in
+    assert (install.CS.install_epoch == CS.TrafficApplication);
+    assert (install.CS.install_direction == CS.TrafficRead);
+    assert_norm (
+      CS.step_model model ev ==
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeys {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = install.CS.install_material;
+          })));
+    introduce exists (material:CS.traffic_key_material).
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeys {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = material;
+          })) == Some model1
+    with install.CS.install_material and ()
+  | _ ->
+    assert False
+
 noextract
 let client_after_one_application_install_model
   (model:CS.connection_model)
