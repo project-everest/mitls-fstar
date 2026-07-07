@@ -281,7 +281,15 @@ CCS, and therefore the length-16 server trace begins by receiving the client's
 ClientHello.  Separately,
 `TLS13.Impl.Driver.PairingNoTailClientSentRawShape` proves that the completed
 client no-tail raw-sent stream is exactly a cleartext ClientHello followed by the
-single protected `ApplicationData` record carrying Client Finished.  The
+single protected `ApplicationData` record carrying Client Finished.  The new
+`TLS13.Impl.Driver.PairingNoTailClientReceivedRawShape` proves the dual
+client-received raw shape for the completed client no-tail log: a cleartext
+ServerHello followed by four protected `ApplicationData` records for
+EncryptedExtensions, Certificate, CertificateVerify, and Server Finished.  This
+is an important byte-level segmentation milestone, but it is deliberately weaker
+than the staged replay boundary: it counts and slices protected records in the
+client's `raw_received` log; it does not yet prove the matching server
+`sent_seal_replay` events or the client's `received_decode_replay` witnesses.  The
 next paired cleartext milestone is now also verified:
 `TLS13.Impl.Driver.PairingNoTailServerCleartextShape` proves a length-16 server
 third-event inversion lemma under a non-CCS premise, and
@@ -358,6 +366,18 @@ the full staged replay inversion theorem: they prove the one-record projection
 pair and preserve replay tails once the relevant suffixes and handshake
 server/client traffic materials are supplied, but they do not by themselves
 extract those suffixes from `paired_supported_no_tail_valid_byte_traces_clean16`.
+The clean16 raw-slice lemmas now supply both paired protected byte segmentations:
+the client-received stream is `ServerHello` followed by four protected
+`ApplicationData` records for the server flight, the server-sent stream has the
+same shape, and the server-received stream is `ClientHello` followed by one
+protected `ApplicationData` record for ClientFinished.  A separate
+`PairingNoTailServerPostHelloShape` milestone proves that the corrected
+length-16 server trace splits after the cleartext `ServerHello` prefix into two
+named post-ServerHello slots plus a nine-event residual suffix.  These facts
+narrow the remaining inversion problem: lift the raw-record slices and
+post-cleartext log split to the paired `sent_seal_replay` and
+`received_decode_replay` staged suffixes required by
+`paired_supported_normalized_staged_replay_boundary`.
 One subtle proof-engineering point is worth auditing carefully: the v2
 ClientFinished-side install steps are used to establish the aligned write/read
 record materials that feed the lower staged lemma.  A final trace-inversion proof
@@ -366,6 +386,13 @@ states (or instead use the lower staged lemma with a directly preserved
 post-flight alignment); otherwise the protected projection witness would be
 well-typed but not yet justified as the projection of the endpoint logs being
 inverted.
+The client side now also exposes a model-source fact at the natural
+ClientFinished boundary:
+`PairingNoTailClientFinishedShape.lemma_client_after_server_finished_model_facts`
+unpacks the model immediately after receiving the server Finished, showing that
+both handshake traffic directions are installed and application traffic is still
+absent.  This is the right audit point for proving the final protected
+ClientFinished send/receive slice.
 `TLS13.Impl.Driver.PairingProtectedReplay.lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_staged_replays_v2`
 then lifts that corrected staged-v2 protected premise, together with the
 normalized cleartext raw hello facts, to the same final application record

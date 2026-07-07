@@ -357,6 +357,128 @@ val lemma_protected_handshake_event_projection_pair_after_server_write_receiver_
             client_tail_received
             client_final)
 
+val lemma_protected_handshake_event_projection_pair_after_sender_preserve_write_local_head_server_write_client_read_install_with_tails
+  (server:CS.connection_model)
+  (client:CS.connection_model)
+  (sender_skip:CS.local_event)
+  (server_after_skip:CS.connection_model)
+  (server_material:CS.traffic_key_material)
+  (client_material:CS.traffic_key_material)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (server_rest:list CS.conn_event)
+  (client_rest:list CS.conn_event)
+  (server_raw_sent:B.bytes)
+  (server_raw_received:B.bytes)
+  (client_raw_sent:B.bytes)
+  (client_raw_received:B.bytes)
+  (server_final:CS.connection_model)
+  (client_final:CS.connection_model)
+  : Lemma
+      (requires
+        (match
+          server_after_skip.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret,
+          client.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret
+        with
+        | Some server_secret, Some client_secret ->
+          Seq.equal server_secret client_secret
+        | _, _ ->
+          False) /\
+        Seq.equal
+          server_after_skip.CS.model_handshake.CS.hs_transcript
+          client.CS.model_handshake.CS.hs_transcript /\
+        local_event_preserves_record_write sender_skip /\
+        Seq.equal server_raw_sent client_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        CS.step_model server (CS.ConnLocalEvent sender_skip) ==
+          Some server_after_skip /\
+        CS.conn_events_sent_seal_replay
+          server
+          (CS.ConnLocalEvent sender_skip :: CS.ConnLocalEvent
+             (CS.LocalInstallTrafficKeysForRole {
+               CS.install_role = CS.ServerEndpoint;
+               CS.install_payload = {
+                 CS.install_epoch = CS.TrafficHandshake;
+                 CS.install_direction = CS.TrafficWrite;
+                 CS.install_material = server_material;
+               };
+             }) :: CS.ConnNetworkEvent {
+               CL.message_direction = CL.Sent;
+               CL.message_value = M.TlsHandshake sent_msg;
+             } :: server_rest)
+          server_raw_sent
+          server_raw_received
+          server_final /\
+        CS.conn_events_received_decode_replay
+          client
+          (CS.ConnLocalEvent
+             (CS.LocalInstallTrafficKeys {
+               CS.install_epoch = CS.TrafficHandshake;
+               CS.install_direction = CS.TrafficRead;
+               CS.install_material = client_material;
+             }) :: CS.ConnNetworkEvent {
+               CL.message_direction = CL.Received;
+               CL.message_value = M.TlsHandshake received_msg;
+             } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
+      (ensures
+        exists server_after client_after server_after_head client_after_head pair
+          server_tail_sent server_tail_received
+          client_tail_sent client_tail_received.
+          CS.step_model
+             server_after_skip
+             (CS.ConnLocalEvent
+               (CS.LocalInstallTrafficKeysForRole {
+                 CS.install_role = CS.ServerEndpoint;
+                 CS.install_payload = {
+                   CS.install_epoch = CS.TrafficHandshake;
+                   CS.install_direction = CS.TrafficWrite;
+                   CS.install_material = server_material;
+                 };
+               })) == Some server_after /\
+          CS.step_model
+             client
+             (CS.ConnLocalEvent
+               (CS.LocalInstallTrafficKeys {
+                 CS.install_epoch = CS.TrafficHandshake;
+                 CS.install_direction = CS.TrafficRead;
+                 CS.install_material = client_material;
+               })) == Some client_after /\
+          CS.step_model
+             server_after
+             (CS.ConnNetworkEvent {
+               CL.message_direction = CL.Sent;
+               CL.message_value = M.TlsHandshake sent_msg;
+             }) == Some server_after_head /\
+          CS.step_model
+             client_after
+             (CS.ConnNetworkEvent {
+               CL.message_direction = CL.Received;
+               CL.message_value = M.TlsHandshake received_msg;
+             }) == Some client_after_head /\
+          pair.pm_sender == server_after /\
+          pair.pm_receiver == client_after /\
+          protected_handshake_event_projection_pair
+             pair
+             sent_msg
+             received_msg /\
+          Seq.equal server_tail_sent client_tail_received /\
+          CS.conn_events_sent_seal_replay
+             server_after_head
+             server_rest
+             server_tail_sent
+             server_tail_received
+             server_final /\
+          CS.conn_events_received_decode_replay
+             client_after_head
+             client_rest
+             client_tail_sent
+             client_tail_received
+             client_final)
+
 val lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_next_alignment_and_tails
   (server:CS.connection_model)
   (client:CS.connection_model)

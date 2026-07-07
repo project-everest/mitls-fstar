@@ -3937,6 +3937,1029 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
     client_shared ==
     [ConnLocalEvent (LocalStartHandshake start); client_sent_ch; client_received_sh; client_derive])
 
+let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalized
+  (server_model:connection_model)
+  (client_model:connection_model)
+  (server_sh:M.server_hello)
+  (client_sh:M.server_hello)
+  (server_tail:list conn_event)
+  (server_suffix:list conn_event)
+  (client_tail:list conn_event)
+  (client_suffix:list conn_event)
+  (server_post:connection_model)
+  (client_post:connection_model)
+  (server_sh_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        step_model
+          server_model
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+          }) == Some server_post /\
+        step_model
+          client_model
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+          }) == Some client_post /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        paired_replay_split_prefixes_equal_uniform
+          server_post
+          client_post
+          server_tail
+          server_suffix
+          client_tail
+          client_suffix)
+      (ensures
+        paired_replay_split_prefixes_equal_uniform
+          server_model
+          client_model
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+          } :: server_tail)
+          server_suffix
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+          } :: client_tail)
+          client_suffix)
+=
+  let server_head = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+  } in
+  let client_head = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+  } in
+  introduce forall
+    (server_full_sent:B.bytes)
+    (server_full_received:B.bytes)
+    (client_full_sent:B.bytes)
+    (client_full_received:B.bytes)
+    (server_final:connection_model)
+    (client_final:connection_model).
+    Seq.equal server_full_sent client_full_received /\
+    Seq.equal client_full_sent server_full_received ==>
+    paired_replay_split_prefixes_equal_with_full_streams
+      server_model
+      client_model
+      (server_head :: server_tail)
+      server_suffix
+      (client_head :: client_tail)
+      client_suffix
+      server_full_sent
+      server_full_received
+      client_full_sent
+      client_full_received
+      server_final
+      client_final
+  with
+    introduce _ ==> _ with _.
+    introduce forall
+      (server_mid:connection_model)
+      (client_mid:connection_model)
+      (server_prefix_sent:B.bytes)
+      (server_prefix_received:B.bytes)
+      (server_suffix_sent:B.bytes)
+      (server_suffix_received:B.bytes)
+      (client_prefix_sent:B.bytes)
+      (client_prefix_received:B.bytes)
+      (client_suffix_sent:B.bytes)
+      (client_suffix_received:B.bytes).
+      Seq.equal server_full_sent client_full_received /\
+      Seq.equal client_full_sent server_full_received /\
+      Seq.equal server_full_sent
+        (B.append server_prefix_sent server_suffix_sent) /\
+      Seq.equal server_full_received
+        (B.append server_prefix_received server_suffix_received) /\
+      Seq.equal client_full_sent
+        (B.append client_prefix_sent client_suffix_sent) /\
+      Seq.equal client_full_received
+        (B.append client_prefix_received client_suffix_received) /\
+      conn_events_sent_seal_replay
+        server_model
+        (server_head :: server_tail)
+        server_prefix_sent
+        server_prefix_received
+        server_mid /\
+      conn_events_sent_seal_replay
+        server_mid
+        server_suffix
+        server_suffix_sent
+        server_suffix_received
+        server_final /\
+      conn_events_received_decode_replay
+        server_model
+        (server_head :: server_tail)
+        server_prefix_sent
+        server_prefix_received
+        server_mid /\
+      conn_events_received_decode_replay
+        server_mid
+        server_suffix
+        server_suffix_sent
+        server_suffix_received
+        server_final /\
+      conn_events_sent_seal_replay
+        client_model
+        (client_head :: client_tail)
+        client_prefix_sent
+        client_prefix_received
+        client_mid /\
+      conn_events_sent_seal_replay
+        client_mid
+        client_suffix
+        client_suffix_sent
+        client_suffix_received
+        client_final /\
+      conn_events_received_decode_replay
+        client_model
+        (client_head :: client_tail)
+        client_prefix_sent
+        client_prefix_received
+        client_mid /\
+      conn_events_received_decode_replay
+        client_mid
+        client_suffix
+        client_suffix_sent
+        client_suffix_received
+        client_final ==>
+      Seq.equal server_prefix_sent client_prefix_received /\
+      Seq.equal client_prefix_sent server_prefix_received
+    with
+      introduce _ ==> _ with _.
+      ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
+          server_model
+          [server_head]
+          server_tail
+          server_prefix_sent
+          server_prefix_received
+          server_mid
+          (fun
+            sent_mid
+            received_mid
+            sent_prefix_sent
+            sent_prefix_received
+            sent_suffix_sent
+            sent_suffix_received
+            received_prefix_sent
+            received_prefix_received
+            received_suffix_sent
+            received_suffix_received ->
+            lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
+              server_model
+              (M.TlsHandshake (M.ServerHello server_sh))
+              server_tail
+              server_prefix_sent
+              server_prefix_received
+              server_mid;
+            assert (Seq.equal sent_prefix_sent received_prefix_sent);
+            assert (Seq.equal sent_prefix_received received_prefix_received));
+        eliminate exists
+          (server_head_mid:connection_model)
+          (server_head_sent:B.bytes)
+          (server_head_received:B.bytes)
+          (server_tail_sent:B.bytes)
+          (server_tail_received:B.bytes).
+          Seq.equal server_prefix_sent
+            (B.append server_head_sent server_tail_sent) /\
+          Seq.equal server_prefix_received
+            (B.append server_head_received server_tail_received) /\
+          conn_events_sent_seal_replay
+            server_model
+            [server_head]
+            server_head_sent
+            server_head_received
+            server_head_mid /\
+          conn_events_sent_seal_replay
+            server_head_mid
+            server_tail
+            server_tail_sent
+            server_tail_received
+            server_mid /\
+          conn_events_received_decode_replay
+            server_model
+            [server_head]
+            server_head_sent
+            server_head_received
+            server_head_mid /\
+          conn_events_received_decode_replay
+            server_head_mid
+            server_tail
+            server_tail_sent
+            server_tail_received
+            server_mid
+        returns
+          Seq.equal server_prefix_sent client_prefix_received /\
+          Seq.equal client_prefix_sent server_prefix_received
+        with _.
+        ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
+            client_model
+            [client_head]
+            client_tail
+            client_prefix_sent
+            client_prefix_received
+            client_mid
+            (fun
+              sent_mid
+              received_mid
+              sent_prefix_sent
+              sent_prefix_received
+              sent_suffix_sent
+              sent_suffix_received
+              received_prefix_sent
+              received_prefix_received
+              received_suffix_sent
+              received_suffix_received ->
+              lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
+                client_model
+                client_sh
+                client_tail
+                client_prefix_sent
+                client_prefix_received
+                client_mid;
+              assert (Seq.equal sent_prefix_sent received_prefix_sent);
+              assert (Seq.equal sent_prefix_received received_prefix_received));
+          eliminate exists
+            (client_head_mid:connection_model)
+            (client_head_sent:B.bytes)
+            (client_head_received:B.bytes)
+            (client_tail_sent:B.bytes)
+            (client_tail_received:B.bytes).
+            Seq.equal client_prefix_sent
+              (B.append client_head_sent client_tail_sent) /\
+            Seq.equal client_prefix_received
+              (B.append client_head_received client_tail_received) /\
+            conn_events_sent_seal_replay
+              client_model
+              [client_head]
+              client_head_sent
+              client_head_received
+              client_head_mid /\
+            conn_events_sent_seal_replay
+              client_head_mid
+              client_tail
+              client_tail_sent
+              client_tail_received
+              client_mid /\
+            conn_events_received_decode_replay
+              client_model
+              [client_head]
+              client_head_sent
+              client_head_received
+              client_head_mid /\
+            conn_events_received_decode_replay
+              client_head_mid
+              client_tail
+              client_tail_sent
+              client_tail_received
+              client_mid
+          returns
+            Seq.equal server_prefix_sent client_prefix_received /\
+            Seq.equal client_prefix_sent server_prefix_received
+          with _.
+          ( assert (server_head_mid == server_post);
+            assert (client_head_mid == client_post);
+            lemma_sent_server_hello_raw_from_sent_replay_single
+              server_model
+              server_sh
+              server_head_sent
+              server_head_received
+              server_head_mid;
+            lemma_received_server_hello_raw_from_received_replay_single
+              client_model
+              client_sh
+              client_head_sent
+              client_head_received
+              client_head_mid;
+            assert (Seq.equal server_head_received B.empty);
+            assert (Seq.equal client_head_sent B.empty);
+            assert (Seq.equal server_head_sent server_sh_raw);
+            assert (Seq.equal client_head_received client_sh_raw);
+            assert (B.length server_head_sent == B.length client_head_received);
+            Seq.lemma_eq_elim
+              server_full_received
+              (B.append server_prefix_received server_suffix_received);
+            Seq.lemma_eq_elim
+              client_full_sent
+              (B.append client_prefix_sent client_suffix_sent);
+            Seq.lemma_eq_elim server_prefix_received
+              (B.append server_head_received server_tail_received);
+            Seq.lemma_eq_elim client_prefix_sent
+              (B.append client_head_sent client_tail_sent);
+            Seq.lemma_eq_elim server_head_received B.empty;
+            Seq.lemma_eq_elim client_head_sent B.empty;
+            CL.lemma_append_empty_left server_tail_received;
+            CL.lemma_append_empty_left client_tail_sent;
+            assert (Seq.equal
+              (B.append server_head_received server_tail_received)
+              server_tail_received);
+            assert (Seq.equal
+              (B.append client_head_sent client_tail_sent)
+              client_tail_sent);
+            assert (Seq.equal server_prefix_received server_tail_received);
+            assert (Seq.equal client_prefix_sent client_tail_sent);
+            Seq.lemma_eq_elim server_prefix_received server_tail_received;
+            Seq.lemma_eq_elim client_prefix_sent client_tail_sent;
+            assert (Seq.equal server_full_received
+              (B.append server_tail_received server_suffix_received));
+            assert (Seq.equal client_full_sent
+              (B.append client_tail_sent client_suffix_sent));
+            assert (Seq.equal
+              (B.append client_tail_sent client_suffix_sent)
+              (B.append server_tail_received server_suffix_received));
+            Seq.lemma_eq_elim
+              server_full_sent
+              (B.append server_prefix_sent server_suffix_sent);
+            Seq.lemma_eq_elim
+              client_full_received
+              (B.append client_prefix_received client_suffix_received);
+            Seq.lemma_eq_elim server_prefix_sent
+              (B.append server_head_sent server_tail_sent);
+            Seq.lemma_eq_elim client_prefix_received
+              (B.append client_head_received client_tail_received);
+            lemma_bytes_append_assoc server_head_sent server_tail_sent server_suffix_sent;
+            lemma_bytes_append_assoc client_head_received client_tail_received client_suffix_received;
+            assert (Seq.equal server_full_sent
+              (B.append server_head_sent
+                (B.append server_tail_sent server_suffix_sent)));
+            assert (Seq.equal client_full_received
+              (B.append client_head_received
+                (B.append client_tail_received client_suffix_received)));
+            assert (Seq.equal
+              (B.append server_head_sent
+                (B.append server_tail_sent server_suffix_sent))
+              (B.append client_head_received
+                (B.append client_tail_received client_suffix_received)));
+            PWS.lemma_append_heads_equal_same_len
+              server_head_sent
+              (B.append server_tail_sent server_suffix_sent)
+              client_head_received
+              (B.append client_tail_received client_suffix_received);
+            assert (Seq.equal server_head_sent client_head_received);
+            PWS.lemma_append_tails_equal_from_equal_heads
+              server_head_sent
+              (B.append server_tail_sent server_suffix_sent)
+              client_head_received
+              (B.append client_tail_received client_suffix_received);
+            assert (Seq.equal
+              (B.append server_tail_sent server_suffix_sent)
+              (B.append client_tail_received client_suffix_received));
+            assert (paired_replay_split_prefixes_equal_with_full_streams
+              server_post
+              client_post
+              server_tail
+              server_suffix
+              client_tail
+              client_suffix
+              (B.append server_tail_sent server_suffix_sent)
+              (B.append server_tail_received server_suffix_received)
+              (B.append client_tail_sent client_suffix_sent)
+              (B.append client_tail_received client_suffix_received)
+              server_final
+              client_final);
+            assert (Seq.equal server_tail_sent client_tail_received);
+            assert (Seq.equal client_tail_sent server_tail_received);
+            lemma_bytes_append_equal
+              server_head_sent
+              client_head_received
+              server_tail_sent
+              client_tail_received;
+            assert (Seq.equal server_prefix_sent client_prefix_received);
+            lemma_bytes_append_equal
+              client_head_sent
+              server_head_received
+              client_tail_sent
+              server_tail_received;
+            assert (Seq.equal client_prefix_sent server_prefix_received) ) ) )
+
+let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalized
+  (server_model:connection_model)
+  (client_model:connection_model)
+  (server_ch:M.client_hello)
+  (client_ch:M.client_hello)
+  (server_tail:list conn_event)
+  (server_suffix:list conn_event)
+  (client_tail:list conn_event)
+  (client_suffix:list conn_event)
+  (server_post:connection_model)
+  (client_post:connection_model)
+  (server_ch_raw:B.bytes)
+  (client_ch_raw:B.bytes)
+  : Lemma
+      (requires
+        step_model
+          server_model
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+          }) == Some server_post /\
+        step_model
+          client_model
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+          }) == Some client_post /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        paired_replay_split_prefixes_equal_uniform
+          server_post
+          client_post
+          server_tail
+          server_suffix
+          client_tail
+          client_suffix)
+      (ensures
+        paired_replay_split_prefixes_equal_uniform
+          server_model
+          client_model
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+          } :: server_tail)
+          server_suffix
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+          } :: client_tail)
+          client_suffix)
+=
+  let server_head = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  } in
+  let client_head = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+  } in
+  introduce forall
+    (server_full_sent:B.bytes)
+    (server_full_received:B.bytes)
+    (client_full_sent:B.bytes)
+    (client_full_received:B.bytes)
+    (server_final:connection_model)
+    (client_final:connection_model).
+    Seq.equal server_full_sent client_full_received /\
+    Seq.equal client_full_sent server_full_received ==>
+    paired_replay_split_prefixes_equal_with_full_streams
+      server_model
+      client_model
+      (server_head :: server_tail)
+      server_suffix
+      (client_head :: client_tail)
+      client_suffix
+      server_full_sent
+      server_full_received
+      client_full_sent
+      client_full_received
+      server_final
+      client_final
+  with
+    introduce _ ==> _ with _.
+    introduce forall
+      (server_mid:connection_model)
+      (client_mid:connection_model)
+      (server_prefix_sent:B.bytes)
+      (server_prefix_received:B.bytes)
+      (server_suffix_sent:B.bytes)
+      (server_suffix_received:B.bytes)
+      (client_prefix_sent:B.bytes)
+      (client_prefix_received:B.bytes)
+      (client_suffix_sent:B.bytes)
+      (client_suffix_received:B.bytes).
+      Seq.equal server_full_sent client_full_received /\
+      Seq.equal client_full_sent server_full_received /\
+      Seq.equal server_full_sent
+        (B.append server_prefix_sent server_suffix_sent) /\
+      Seq.equal server_full_received
+        (B.append server_prefix_received server_suffix_received) /\
+      Seq.equal client_full_sent
+        (B.append client_prefix_sent client_suffix_sent) /\
+      Seq.equal client_full_received
+        (B.append client_prefix_received client_suffix_received) /\
+      conn_events_sent_seal_replay
+        server_model
+        (server_head :: server_tail)
+        server_prefix_sent
+        server_prefix_received
+        server_mid /\
+      conn_events_sent_seal_replay
+        server_mid
+        server_suffix
+        server_suffix_sent
+        server_suffix_received
+        server_final /\
+      conn_events_received_decode_replay
+        server_model
+        (server_head :: server_tail)
+        server_prefix_sent
+        server_prefix_received
+        server_mid /\
+      conn_events_received_decode_replay
+        server_mid
+        server_suffix
+        server_suffix_sent
+        server_suffix_received
+        server_final /\
+      conn_events_sent_seal_replay
+        client_model
+        (client_head :: client_tail)
+        client_prefix_sent
+        client_prefix_received
+        client_mid /\
+      conn_events_sent_seal_replay
+        client_mid
+        client_suffix
+        client_suffix_sent
+        client_suffix_received
+        client_final /\
+      conn_events_received_decode_replay
+        client_model
+        (client_head :: client_tail)
+        client_prefix_sent
+        client_prefix_received
+        client_mid /\
+      conn_events_received_decode_replay
+        client_mid
+        client_suffix
+        client_suffix_sent
+        client_suffix_received
+        client_final ==>
+      Seq.equal server_prefix_sent client_prefix_received /\
+      Seq.equal client_prefix_sent server_prefix_received
+    with
+      introduce _ ==> _ with _.
+      ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
+          server_model
+          [server_head]
+          server_tail
+          server_prefix_sent
+          server_prefix_received
+          server_mid
+          (fun
+            sent_mid
+            received_mid
+            sent_prefix_sent
+            sent_prefix_received
+            sent_suffix_sent
+            sent_suffix_received
+            received_prefix_sent
+            received_prefix_received
+            received_suffix_sent
+            received_suffix_received ->
+            lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
+              server_model
+              server_ch
+              server_tail
+              server_prefix_sent
+              server_prefix_received
+              server_mid;
+            assert (Seq.equal sent_prefix_sent received_prefix_sent);
+            assert (Seq.equal sent_prefix_received received_prefix_received));
+        eliminate exists
+          (server_head_mid:connection_model)
+          (server_head_sent:B.bytes)
+          (server_head_received:B.bytes)
+          (server_tail_sent:B.bytes)
+          (server_tail_received:B.bytes).
+          Seq.equal server_prefix_sent
+            (B.append server_head_sent server_tail_sent) /\
+          Seq.equal server_prefix_received
+            (B.append server_head_received server_tail_received) /\
+          conn_events_sent_seal_replay
+            server_model
+            [server_head]
+            server_head_sent
+            server_head_received
+            server_head_mid /\
+          conn_events_sent_seal_replay
+            server_head_mid
+            server_tail
+            server_tail_sent
+            server_tail_received
+            server_mid /\
+          conn_events_received_decode_replay
+            server_model
+            [server_head]
+            server_head_sent
+            server_head_received
+            server_head_mid /\
+          conn_events_received_decode_replay
+            server_head_mid
+            server_tail
+            server_tail_sent
+            server_tail_received
+            server_mid
+        returns
+          Seq.equal server_prefix_sent client_prefix_received /\
+          Seq.equal client_prefix_sent server_prefix_received
+        with _.
+        ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
+            client_model
+            [client_head]
+            client_tail
+            client_prefix_sent
+            client_prefix_received
+            client_mid
+            (fun
+              sent_mid
+              received_mid
+              sent_prefix_sent
+              sent_prefix_received
+              sent_suffix_sent
+              sent_suffix_received
+              received_prefix_sent
+              received_prefix_received
+              received_suffix_sent
+              received_suffix_received ->
+              lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
+                client_model
+                (M.TlsHandshake (M.ClientHello client_ch))
+                client_tail
+                client_prefix_sent
+                client_prefix_received
+                client_mid;
+              assert (Seq.equal sent_prefix_sent received_prefix_sent);
+              assert (Seq.equal sent_prefix_received received_prefix_received));
+          eliminate exists
+            (client_head_mid:connection_model)
+            (client_head_sent:B.bytes)
+            (client_head_received:B.bytes)
+            (client_tail_sent:B.bytes)
+            (client_tail_received:B.bytes).
+            Seq.equal client_prefix_sent
+              (B.append client_head_sent client_tail_sent) /\
+            Seq.equal client_prefix_received
+              (B.append client_head_received client_tail_received) /\
+            conn_events_sent_seal_replay
+              client_model
+              [client_head]
+              client_head_sent
+              client_head_received
+              client_head_mid /\
+            conn_events_sent_seal_replay
+              client_head_mid
+              client_tail
+              client_tail_sent
+              client_tail_received
+              client_mid /\
+            conn_events_received_decode_replay
+              client_model
+              [client_head]
+              client_head_sent
+              client_head_received
+              client_head_mid /\
+            conn_events_received_decode_replay
+              client_head_mid
+              client_tail
+              client_tail_sent
+              client_tail_received
+              client_mid
+          returns
+            Seq.equal server_prefix_sent client_prefix_received /\
+            Seq.equal client_prefix_sent server_prefix_received
+          with _.
+          ( assert (server_head_mid == server_post);
+            assert (client_head_mid == client_post);
+            lemma_received_client_hello_raw_from_sent_replay_single
+              server_model
+              server_ch
+              server_head_sent
+              server_head_received
+              server_head_mid;
+            lemma_sent_client_hello_raw_from_sent_replay_single
+              client_model
+              client_ch
+              client_head_sent
+              client_head_received
+              client_head_mid;
+            assert (Seq.equal server_head_sent B.empty);
+            assert (Seq.equal client_head_received B.empty);
+            assert (Seq.equal client_head_sent client_ch_raw);
+            WFL.lemma_received_client_hello_raw_length server_ch server_head_received;
+            WFL.lemma_received_client_hello_raw_length server_ch server_ch_raw;
+            assert (B.length client_head_sent == B.length server_head_received);
+            Seq.lemma_eq_elim
+              server_full_sent
+              (B.append server_prefix_sent server_suffix_sent);
+            Seq.lemma_eq_elim
+              client_full_received
+              (B.append client_prefix_received client_suffix_received);
+            Seq.lemma_eq_elim server_prefix_sent
+              (B.append server_head_sent server_tail_sent);
+            Seq.lemma_eq_elim client_prefix_received
+              (B.append client_head_received client_tail_received);
+            Seq.lemma_eq_elim server_head_sent B.empty;
+            Seq.lemma_eq_elim client_head_received B.empty;
+            CL.lemma_append_empty_left server_tail_sent;
+            CL.lemma_append_empty_left client_tail_received;
+            assert (Seq.equal
+              (B.append server_head_sent server_tail_sent)
+              server_tail_sent);
+            assert (Seq.equal
+              (B.append client_head_received client_tail_received)
+              client_tail_received);
+            assert (Seq.equal server_prefix_sent server_tail_sent);
+            assert (Seq.equal client_prefix_received client_tail_received);
+            Seq.lemma_eq_elim server_prefix_sent server_tail_sent;
+            Seq.lemma_eq_elim client_prefix_received client_tail_received;
+            assert (Seq.equal server_full_sent
+              (B.append server_tail_sent server_suffix_sent));
+            assert (Seq.equal client_full_received
+              (B.append client_tail_received client_suffix_received));
+            assert (Seq.equal
+              (B.append server_tail_sent server_suffix_sent)
+              (B.append client_tail_received client_suffix_received));
+            Seq.lemma_eq_elim
+              client_full_sent
+              (B.append client_prefix_sent client_suffix_sent);
+            Seq.lemma_eq_elim
+              server_full_received
+              (B.append server_prefix_received server_suffix_received);
+            Seq.lemma_eq_elim client_prefix_sent
+              (B.append client_head_sent client_tail_sent);
+            Seq.lemma_eq_elim server_prefix_received
+              (B.append server_head_received server_tail_received);
+            lemma_bytes_append_assoc client_head_sent client_tail_sent client_suffix_sent;
+            lemma_bytes_append_assoc server_head_received server_tail_received server_suffix_received;
+            assert (Seq.equal client_full_sent
+              (B.append client_head_sent
+                (B.append client_tail_sent client_suffix_sent)));
+            assert (Seq.equal server_full_received
+              (B.append server_head_received
+                (B.append server_tail_received server_suffix_received)));
+            assert (Seq.equal
+              (B.append client_head_sent
+                (B.append client_tail_sent client_suffix_sent))
+              (B.append server_head_received
+                (B.append server_tail_received server_suffix_received)));
+            PWS.lemma_append_heads_equal_same_len
+              client_head_sent
+              (B.append client_tail_sent client_suffix_sent)
+              server_head_received
+              (B.append server_tail_received server_suffix_received);
+            assert (Seq.equal client_head_sent server_head_received);
+            PWS.lemma_append_tails_equal_from_equal_heads
+              client_head_sent
+              (B.append client_tail_sent client_suffix_sent)
+              server_head_received
+              (B.append server_tail_received server_suffix_received);
+            assert (Seq.equal
+              (B.append client_tail_sent client_suffix_sent)
+              (B.append server_tail_received server_suffix_received));
+            assert (paired_replay_split_prefixes_equal_with_full_streams
+              server_post
+              client_post
+              server_tail
+              server_suffix
+              client_tail
+              client_suffix
+              (B.append server_tail_sent server_suffix_sent)
+              (B.append server_tail_received server_suffix_received)
+              (B.append client_tail_sent client_suffix_sent)
+              (B.append client_tail_received client_suffix_received)
+              server_final
+              client_final);
+            assert (Seq.equal server_tail_sent client_tail_received);
+            assert (Seq.equal client_tail_sent server_tail_received);
+            lemma_bytes_append_equal
+              server_head_sent
+              client_head_received
+              server_tail_sent
+              client_tail_received;
+            assert (Seq.equal server_prefix_sent client_prefix_received);
+            lemma_bytes_append_equal
+              client_head_sent
+              server_head_received
+              client_tail_sent
+              server_tail_received;
+            assert (Seq.equal client_prefix_sent server_prefix_received) ) ) )
+
+let lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handshake_prefix
+  (server_model0:connection_model)
+  (client_model0:connection_model)
+  (start:handshake_start)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (selection:server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (client_shared:C.x25519_shared_secret)
+  (server_sh:M.server_hello)
+  (client_sh:M.server_hello)
+  (server_suffix:list conn_event)
+  (client_suffix:list conn_event)
+  (server_model1:connection_model)
+  (server_model2:connection_model)
+  (server_model3:connection_model)
+  (server_model4:connection_model)
+  (server_model5:connection_model)
+  (client_model1:connection_model)
+  (client_model2:connection_model)
+  (client_model3:connection_model)
+  (client_model4:connection_model)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        step_model
+          server_model0
+          (ConnLocalEvent LocalStartServer) == Some server_model1 /\
+        step_model
+          server_model1
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+          }) == Some server_model2 /\
+        step_model
+          server_model2
+          (ConnLocalEvent (LocalSelectServerParameters selection)) ==
+          Some server_model3 /\
+        step_model
+          server_model3
+          (ConnLocalEvent (LocalDeriveSharedSecret server_shared)) ==
+          Some server_model4 /\
+        step_model
+          server_model4
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+          }) == Some server_model5 /\
+        step_model
+          client_model0
+          (ConnLocalEvent (LocalStartHandshake start)) ==
+          Some client_model1 /\
+        step_model
+          client_model1
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+          }) == Some client_model2 /\
+        step_model
+          client_model2
+          (ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+          }) == Some client_model3 /\
+        step_model
+          client_model3
+          (ConnLocalEvent (LocalDeriveSharedSecret client_shared)) ==
+          Some client_model4 /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw)
+      (ensures
+        paired_replay_split_prefixes_equal_uniform
+          server_model0
+          client_model0
+          (server_cleartext_handshake_prefix_events
+            server_ch
+            selection
+            server_shared
+            server_sh)
+          server_suffix
+          (client_cleartext_handshake_prefix_events
+            start
+            client_ch
+            client_sh
+            client_shared)
+          client_suffix)
+=
+  let server_received_ch = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  } in
+  let server_select = ConnLocalEvent (LocalSelectServerParameters selection) in
+  let server_derive = ConnLocalEvent (LocalDeriveSharedSecret server_shared) in
+  let server_sent_sh = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+  } in
+  let client_sent_ch = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+  } in
+  let client_received_sh = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+  } in
+  let client_derive = ConnLocalEvent (LocalDeriveSharedSecret client_shared) in
+  lemma_paired_replay_split_prefixes_equal_uniform_empty
+    server_model5
+    client_model4
+    server_suffix
+    client_suffix;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
+    server_model5
+    client_model3
+    (LocalDeriveSharedSecret client_shared)
+    []
+    server_suffix
+    []
+    client_suffix
+    client_model4;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalized
+    server_model4
+    client_model2
+    server_sh
+    client_sh
+    []
+    server_suffix
+    [client_derive]
+    client_suffix
+    server_model5
+    client_model3
+    server_sh_raw
+    client_sh_raw;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
+    server_model3
+    client_model2
+    (LocalDeriveSharedSecret server_shared)
+    [server_sent_sh]
+    server_suffix
+    [client_received_sh; client_derive]
+    client_suffix
+    server_model4;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
+    server_model2
+    client_model2
+    (LocalSelectServerParameters selection)
+    [server_derive; server_sent_sh]
+    server_suffix
+    [client_received_sh; client_derive]
+    client_suffix
+    server_model3;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalized
+    server_model1
+    client_model1
+    server_ch
+    client_ch
+    [server_select; server_derive; server_sent_sh]
+    server_suffix
+    [client_received_sh; client_derive]
+    client_suffix
+    server_model2
+    client_model2
+    server_ch_raw
+    client_ch_raw;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
+    server_model0
+    client_model1
+    LocalStartServer
+    [server_received_ch; server_select; server_derive; server_sent_sh]
+    server_suffix
+    [client_sent_ch; client_received_sh; client_derive]
+    client_suffix
+    server_model1;
+  lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
+    server_model0
+    client_model0
+    (LocalStartHandshake start)
+    [ConnLocalEvent LocalStartServer; server_received_ch; server_select; server_derive; server_sent_sh]
+    server_suffix
+    [client_sent_ch; client_received_sh; client_derive]
+    client_suffix
+    client_model1;
+  assert (server_cleartext_handshake_prefix_events
+    server_ch
+    selection
+    server_shared
+    server_sh ==
+    [ConnLocalEvent LocalStartServer; server_received_ch; server_select; server_derive; server_sent_sh]);
+  assert (client_cleartext_handshake_prefix_events
+    start
+    client_ch
+    client_sh
+    client_shared ==
+    [ConnLocalEvent (LocalStartHandshake start); client_sent_ch; client_received_sh; client_derive])
+
 let lemma_same_endpoint_replay_split_prefixes_equal_uniform_server_cleartext_handshake_prefix
   (server_model0:connection_model)
   (ch:M.client_hello)

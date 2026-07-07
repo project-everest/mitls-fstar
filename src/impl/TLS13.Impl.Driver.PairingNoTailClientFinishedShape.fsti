@@ -22,6 +22,27 @@ noextract
 val client_after_server_finished_model
   : model:CS.connection_model -> Tot prop
 
+val lemma_client_after_server_finished_model_facts
+  (model:CS.connection_model)
+  : Lemma
+      (requires client_after_server_finished_model model)
+      (ensures
+        model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedReceived /\
+        Some? model.CS.model_handshake.CS.hs_certificate /\
+        Some? model.CS.model_handshake.CS.hs_validated_peer /\
+        Some? model.CS.model_handshake.CS.hs_certificate_verify /\
+        model.CS.model_handshake.CS.hs_certificate_verify_verified == true /\
+        Some? model.CS.model_handshake.CS.hs_server_finished /\
+        Some? model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input /\
+        Some? model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+        Some? model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+        Some? model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+        Some? model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+        model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
+        model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None)
+
 noextract
 val client_after_server_finished_verified_model
   : model:CS.connection_model -> Tot prop

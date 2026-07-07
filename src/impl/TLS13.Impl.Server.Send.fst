@@ -1596,7 +1596,6 @@ fn process_send_certificate_verify_serialized
                  'st0.CS.cs_model.CS.model_config.CS.config_role ==
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-                 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
                  B.length (Ghost.reveal cv).M.body == 0 /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -1894,7 +1893,6 @@ fn process_send_stored_certificate_verify_serialized
                  'st0.CS.cs_model.CS.model_config.CS.config_role ==
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-                 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits

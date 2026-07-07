@@ -1239,6 +1239,309 @@ let lemma_protected_handshake_event_projection_pair_after_server_write_receiver_
             client_tail_received
           and () ) ) ) )
 
+let lemma_protected_handshake_event_projection_pair_after_sender_preserve_write_local_head_server_write_client_read_install_with_tails
+  (server:connection_model)
+  (client:connection_model)
+  (sender_skip:local_event)
+  (server_after_skip:connection_model)
+  (server_material:traffic_key_material)
+  (client_material:traffic_key_material)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (server_rest:list conn_event)
+  (client_rest:list conn_event)
+  (server_raw_sent:B.bytes)
+  (server_raw_received:B.bytes)
+  (client_raw_sent:B.bytes)
+  (client_raw_received:B.bytes)
+  (server_final:connection_model)
+  (client_final:connection_model)
+  : Lemma
+      (requires
+        (match
+          server_after_skip.model_handshake.hs_keys.ks_handshake_secret,
+          client.model_handshake.hs_keys.ks_handshake_secret
+        with
+        | Some server_secret, Some client_secret ->
+          Seq.equal server_secret client_secret
+        | _, _ ->
+          False) /\
+        Seq.equal
+          server_after_skip.model_handshake.hs_transcript
+          client.model_handshake.hs_transcript /\
+        local_event_preserves_record_write sender_skip /\
+        Seq.equal server_raw_sent client_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        protected_handshake_wire_round_trip_message received_msg /\
+        step_model server (ConnLocalEvent sender_skip) ==
+          Some server_after_skip /\
+        conn_events_sent_seal_replay
+          server
+          (ConnLocalEvent sender_skip :: ConnLocalEvent
+            (LocalInstallTrafficKeysForRole {
+              install_role = ServerEndpoint;
+              install_payload = {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficWrite;
+                install_material = server_material;
+              };
+            }) :: ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg;
+            } :: server_rest)
+          server_raw_sent
+          server_raw_received
+          server_final /\
+        conn_events_received_decode_replay
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficRead;
+              install_material = client_material;
+            }) :: ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg;
+            } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
+      (ensures
+        exists server_after client_after server_after_head client_after_head pair
+          server_tail_sent server_tail_received
+          client_tail_sent client_tail_received.
+          step_model
+            server_after_skip
+            (ConnLocalEvent
+              (LocalInstallTrafficKeysForRole {
+                install_role = ServerEndpoint;
+                install_payload = {
+                  install_epoch = TrafficHandshake;
+                  install_direction = TrafficWrite;
+                  install_material = server_material;
+                };
+              })) == Some server_after /\
+          step_model
+            client
+            (ConnLocalEvent
+              (LocalInstallTrafficKeys {
+                install_epoch = TrafficHandshake;
+                install_direction = TrafficRead;
+                install_material = client_material;
+              })) == Some client_after /\
+          step_model
+            server_after
+            (ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg;
+            }) == Some server_after_head /\
+          step_model
+            client_after
+            (ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg;
+            }) == Some client_after_head /\
+          pair.pm_sender == server_after /\
+          pair.pm_receiver == client_after /\
+          protected_handshake_event_projection_pair
+            pair
+            sent_msg
+            received_msg /\
+          Seq.equal server_tail_sent client_tail_received /\
+          conn_events_sent_seal_replay
+            server_after_head
+            server_rest
+            server_tail_sent
+            server_tail_received
+            server_final /\
+          conn_events_received_decode_replay
+            client_after_head
+            client_rest
+            client_tail_sent
+            client_tail_received
+            client_final)
+=
+  let sender_skip_ev = ConnLocalEvent sender_skip in
+  let server_install_ev =
+    ConnLocalEvent
+      (LocalInstallTrafficKeysForRole {
+        install_role = ServerEndpoint;
+        install_payload = {
+          install_epoch = TrafficHandshake;
+          install_direction = TrafficWrite;
+          install_material = server_material;
+        };
+      }) in
+  let client_install_ev =
+    ConnLocalEvent
+      (LocalInstallTrafficKeys {
+        install_epoch = TrafficHandshake;
+        install_direction = TrafficRead;
+        install_material = client_material;
+      }) in
+  let sent_ev = ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake sent_msg;
+  } in
+  let received_ev = ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake received_msg;
+  } in
+  lemma_sent_replay_skip_empty_head_preserves_peer_stream
+    server
+    sender_skip_ev
+    (server_install_ev :: sent_ev :: server_rest)
+    server_raw_sent
+    server_raw_received
+    client_raw_received
+    server_final;
+  eliminate exists
+    (server_after_skip0:connection_model)
+    (server_sent_after_skip:B.bytes)
+    (server_received_after_skip:B.bytes).
+    legal_event server sender_skip_ev /\
+    step_model server sender_skip_ev == Some server_after_skip0 /\
+    Seq.equal server_sent_after_skip client_raw_received /\
+    conn_events_sent_seal_replay
+      server_after_skip0
+      (server_install_ev :: sent_ev :: server_rest)
+      server_sent_after_skip
+      server_received_after_skip
+      server_final
+  returns
+    exists server_after client_after server_after_head client_after_head pair
+      server_tail_sent server_tail_received
+      client_tail_sent client_tail_received.
+      step_model server_after_skip server_install_ev == Some server_after /\
+      step_model client client_install_ev == Some client_after /\
+      step_model server_after sent_ev == Some server_after_head /\
+      step_model client_after received_ev == Some client_after_head /\
+      pair.pm_sender == server_after /\
+      pair.pm_receiver == client_after /\
+      protected_handshake_event_projection_pair pair sent_msg received_msg /\
+      Seq.equal server_tail_sent client_tail_received /\
+      conn_events_sent_seal_replay
+        server_after_head
+        server_rest
+        server_tail_sent
+        server_tail_received
+        server_final /\
+      conn_events_received_decode_replay
+        client_after_head
+        client_rest
+        client_tail_sent
+        client_tail_received
+        client_final
+  with _.
+  (
+    assert (server_after_skip0 == server_after_skip);
+    lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_tails
+      server_after_skip
+      client
+      server_material
+      client_material
+      sent_msg
+      received_msg
+      server_rest
+      client_rest
+      server_sent_after_skip
+      server_received_after_skip
+      client_raw_sent
+      client_raw_received
+      server_final
+      client_final;
+    eliminate exists server_after client_after server_after_head client_after_head pair
+      server_tail_sent server_tail_received client_tail_sent client_tail_received.
+      step_model server_after_skip server_install_ev == Some server_after /\
+      step_model client client_install_ev == Some client_after /\
+      step_model server_after sent_ev == Some server_after_head /\
+      step_model client_after received_ev == Some client_after_head /\
+      pair.pm_sender == server_after /\
+      pair.pm_receiver == client_after /\
+      protected_handshake_event_projection_pair pair sent_msg received_msg /\
+      Seq.equal server_tail_sent client_tail_received /\
+      conn_events_sent_seal_replay
+        server_after_head
+        server_rest
+        server_tail_sent
+        server_tail_received
+        server_final /\
+      conn_events_received_decode_replay
+        client_after_head
+        client_rest
+        client_tail_sent
+        client_tail_received
+        client_final
+    returns
+      exists server_after' client_after' server_after_head' client_after_head' pair'
+        server_tail_sent' server_tail_received'
+        client_tail_sent' client_tail_received'.
+        step_model server_after_skip server_install_ev == Some server_after' /\
+        step_model client client_install_ev == Some client_after' /\
+        step_model server_after' sent_ev == Some server_after_head' /\
+        step_model client_after' received_ev == Some client_after_head' /\
+        pair'.pm_sender == server_after' /\
+        pair'.pm_receiver == client_after' /\
+        protected_handshake_event_projection_pair pair' sent_msg received_msg /\
+        Seq.equal server_tail_sent' client_tail_received' /\
+        conn_events_sent_seal_replay
+          server_after_head'
+          server_rest
+          server_tail_sent'
+          server_tail_received'
+          server_final /\
+        conn_events_received_decode_replay
+          client_after_head'
+          client_rest
+          client_tail_sent'
+          client_tail_received'
+          client_final
+    with _.
+    (
+      introduce exists
+        (server_after':connection_model)
+        (client_after':connection_model)
+        (server_after_head':connection_model)
+        (client_after_head':connection_model)
+        (pair':protected_message_replay)
+        (server_tail_sent':B.bytes)
+        (server_tail_received':B.bytes)
+        (client_tail_sent':B.bytes)
+        (client_tail_received':B.bytes).
+        step_model server_after_skip server_install_ev == Some server_after' /\
+        step_model client client_install_ev == Some client_after' /\
+        step_model server_after' sent_ev == Some server_after_head' /\
+        step_model client_after' received_ev == Some client_after_head' /\
+        pair'.pm_sender == server_after' /\
+        pair'.pm_receiver == client_after' /\
+        protected_handshake_event_projection_pair pair' sent_msg received_msg /\
+        Seq.equal server_tail_sent' client_tail_received' /\
+        conn_events_sent_seal_replay
+          server_after_head'
+          server_rest
+          server_tail_sent'
+          server_tail_received'
+          server_final /\
+        conn_events_received_decode_replay
+          client_after_head'
+          client_rest
+          client_tail_sent'
+          client_tail_received'
+          client_final
+      with
+        server_after
+        client_after
+        server_after_head
+        client_after_head
+        pair
+        server_tail_sent
+        server_tail_received
+        client_tail_sent
+        client_tail_received
+      and ()
+    )
+  )
+
 let lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_next_alignment_and_tails
   (server:connection_model)
   (client:connection_model)

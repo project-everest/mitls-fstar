@@ -343,7 +343,6 @@ fn next_local_action
       CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
     assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
     assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None));
-    assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
     assert (pure (Some?
       'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
     assert (pure (Some?

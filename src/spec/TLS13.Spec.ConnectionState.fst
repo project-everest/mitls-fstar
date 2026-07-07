@@ -1350,7 +1350,6 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
       model
       { hs with
           hs_certificate_verify = Some cv;
-          hs_certificate_verify_verified = true;
           hs_buffers =
             { hs.hs_buffers with
                 hb_certificate_verify_input =
@@ -1480,6 +1479,7 @@ let step_handshake_message
       (append_handshake_to_transcript
         { hs with
             hs_certificate_verify = Some cv;
+            hs_certificate_verify_verified = true;
         }
         msg)
       HsServerEncryptedFlightSent)
@@ -2305,6 +2305,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | None -> False)
   | LocalSelectServerParameters selection, ControlHandshaking HsClientHelloReceived ->
     model.model_config.config_role == ServerEndpoint /\
+    hs.hs_server_selection == None /\
     hs.hs_keys.ks_shared_secret == None /\
     hs.hs_client_hello == Some selection.server_selected_client_hello /\
     (match model.model_config.config_server with
@@ -2312,6 +2313,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | None -> False)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
     model.model_config.config_role == ClientEndpoint /\
+    hs.hs_keys.ks_shared_secret == None /\
     (match hs.hs_start, hs.hs_server_hello with
      | Some start, Some sh ->
        handshake_start_key_share_consistent start /\
@@ -2321,6 +2323,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | _, _ -> False)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
     model.model_config.config_role == ServerEndpoint /\
+    hs.hs_keys.ks_shared_secret == None /\
     (match hs.hs_server_selection with
      | Some selection ->
        server_selection_key_share_consistent selection /\
@@ -2440,7 +2443,6 @@ let legal_handshake_message
   | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate <> None /\
-    hs.hs_certificate_verify_verified /\
     B.length cv.M.body == 0 /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
     (match hs.hs_certificate_verify with

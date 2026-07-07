@@ -540,6 +540,8 @@ let server_handshake_traffic_obligation_rank
 let server_encrypted_flight_constant
   (hs:CS.handshake_state)
   : nat =
+  // Since the model fix, [hs_certificate_verify_verified] is a wire-progress
+  // marker for sent CertificateVerify, not merely local signing progress.
   match hs.CS.hs_certificate with
   | None -> if hs.CS.hs_certificate_verify_verified then 3 else 5
   | Some _ -> if hs.CS.hs_certificate_verify_verified then 3 else 4
@@ -1404,6 +1406,13 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs
           | CS.ConnNetworkEvent msg ->
             (match msg.CL.message_value with
             | M.TlsAlert alert ->
+              assert (e1 == CS.ConnNetworkEvent msg);
+              assert_norm (
+                CS.step_model model1 (CS.ConnNetworkEvent msg) ==
+                Some (CS.fail_model model1 (T.AlertError alert)));
+              assert (CS.step_model model1 e1 ==
+                Some (CS.fail_model model1 (T.AlertError alert)));
+              assert (model2 == CS.fail_model model1 (T.AlertError alert));
               assert (model2.CS.model_control == CS.ControlFailed (T.AlertError alert));
               lemma_conn_events_raw_replay_from_failed_results_failed
                 model2
@@ -1747,6 +1756,13 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs16
           | CS.ConnNetworkEvent msg ->
             (match msg.CL.message_value with
             | M.TlsAlert alert ->
+              assert (e1 == CS.ConnNetworkEvent msg);
+              assert_norm (
+                CS.step_model model1 (CS.ConnNetworkEvent msg) ==
+                Some (CS.fail_model model1 (T.AlertError alert)));
+              assert (CS.step_model model1 e1 ==
+                Some (CS.fail_model model1 (T.AlertError alert)));
+              assert (model2 == CS.fail_model model1 (T.AlertError alert));
               assert (model2.CS.model_control == CS.ControlFailed (T.AlertError alert));
               lemma_conn_events_raw_replay_from_failed_results_failed
                 model2

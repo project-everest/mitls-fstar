@@ -5,17 +5,11 @@ module TLS13.ConnectionState.ClientCertificateVerifyReachability
   application-ready control state (`ControlApplicationData`) must have a
   recorded `hs_certificate_verify` witness in its model handshake state.
 
-  This is the client-side half of the asymmetry documented in
-  PAIRING_THEOREM.md's server-only counterexample for
-  `TLS13.Impl.Driver.PairingNoTailServerShape.server_no_tail_next_two_events_handshake_installs`.
-  The server can locally sign (and thus "witness") a CertificateVerify message
-  via `LocalSignCertificateVerify` without ever emitting a network `Sent
-  CertificateVerify` event, so a bare role-local server theorem cannot rule
-  out the server skipping the wire send.  The client has no such bypass: every
-  legal client transition from `HsCertificateValidated` onward to
-  `ControlApplicationData` passes through a genuine network `Received
-  CertificateVerify` event (`step_handshake_message`, case
-  `CL.Received, M.CertificateVerify cv, ControlHandshaking
+  Client-side reachability is useful independently of the server-side
+  protected-flight shape: every legal client transition from
+  `HsCertificateValidated` onward to `ControlApplicationData` passes through a
+  genuine network `Received CertificateVerify` event (`step_handshake_message`,
+  case `CL.Received, M.CertificateVerify cv, ControlHandshaking
   HsCertificateValidated`), and `hs_certificate_verify` is never reset once
   set.  This module proves that fact as a reachability invariant over
   `connection_state_consistent`, by lifting a single-step-preserved predicate

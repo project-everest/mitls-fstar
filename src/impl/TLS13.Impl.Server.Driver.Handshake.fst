@@ -108,6 +108,34 @@ let lemma_select_server_parameters_ready_payload_irrelevant
     (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection1)));
   assert (CM.can_select_server_parameters st selection1)
 
+let lemma_server_local_event_input_ready_derive_shared_secret_intro
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  : Lemma
+      (requires
+        B.length payload == 32 /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        st.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsClientHelloReceived /\
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+          None /\
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+        (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+         | Some selection ->
+           CS.server_selection_key_share_consistent selection /\
+           st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+             Some selection.CS.server_selected_client_hello /\
+           Some? selection.CS.server_key_share_private /\
+           Some?.v selection.CS.server_key_share_private == payload
+         | None -> False))
+      (ensures
+        ST.server_local_event_input_ready
+          st
+          ST.LocalDeriveSharedSecret
+          payload)
+=
+  ()
+
 let lemma_select_derive_success_server_hello_ready
   (st0 st2:CS.connection_state)
   (resp:ST.server_response)
@@ -416,6 +444,9 @@ fn select_default_server_parameters_once
     (CL.raw_slice material_bytes 32 64)));
   assert (pure (CR.server_selection_absent
     'st0.CS.cs_model.CS.model_handshake));
+  assert (pure (
+    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
   assert (pure (Some?
     'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
   assert (pure (Some?
@@ -472,6 +503,12 @@ fn select_default_server_parameters_once
   assert (pure (
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       Some (Ghost.reveal selection)));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys ==
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
   assert (pure (Some?
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
   assert (pure (
@@ -605,6 +642,9 @@ fn select_default_server_parameters_from_payload_once
     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)));
   assert (pure (CR.server_selection_absent
     'st0.CS.cs_model.CS.model_handshake));
+  assert (pure (
+    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
   assert (pure (Some?
     'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
   assert (pure (Some?
@@ -661,6 +701,12 @@ fn select_default_server_parameters_from_payload_once
   assert (pure (
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       Some (Ghost.reveal selection)));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys ==
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
   assert (pure (Some?
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
   assert (pure (
@@ -688,10 +734,9 @@ fn select_default_server_parameters_from_payload_once
       Some? selection1.CS.server_key_share_private /\
       Some?.v selection1.CS.server_key_share_private == server_private_key_bytes
     | None -> False));
-  assert_norm (ST.server_local_event_input_ready
+  lemma_server_local_event_input_ready_derive_shared_secret_intro
     st1
-    ST.LocalDeriveSharedSecret
-    server_private_key_bytes);
+    server_private_key_bytes;
   assert (pure (ST.server_local_event_input_ready
     st1
     ST.LocalDeriveSharedSecret
@@ -2098,10 +2143,9 @@ fn select_and_derive_shared_secret_once
       Some? selection1.CS.server_key_share_private /\
       Some?.v selection1.CS.server_key_share_private == CL.raw_slice material_bytes 32 64
     | None -> False));
-  assert_norm (ST.server_local_event_input_ready
+  lemma_server_local_event_input_ready_derive_shared_secret_intro
     st1
-    ST.LocalDeriveSharedSecret
-    (CL.raw_slice material_bytes 32 64));
+    (CL.raw_slice material_bytes 32 64);
   assert (pure (ST.server_local_event_input_ready
     st1
     ST.LocalDeriveSharedSecret

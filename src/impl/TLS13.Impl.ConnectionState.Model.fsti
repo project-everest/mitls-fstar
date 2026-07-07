@@ -727,7 +727,6 @@ let signed_certificate_verify_state
         model0
         { hs0 with
             CS.hs_certificate_verify = Some cv;
-            CS.hs_certificate_verify_verified = true;
             CS.hs_buffers =
               { hs0.CS.hs_buffers with
                   CS.hb_certificate_verify_input = Some cv_input;
@@ -766,7 +765,10 @@ let sent_certificate_verify_state
   let msg = M.CertificateVerify cv in
   let hs1 =
     CS.append_handshake_to_transcript
-      { hs0 with CS.hs_certificate_verify = Some cv }
+      { hs0 with
+          CS.hs_certificate_verify = Some cv;
+          CS.hs_certificate_verify_verified = true;
+      }
       msg in
   {
     CS.cs_model =
@@ -800,7 +802,6 @@ let can_send_certificate_verify
     CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
   st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
   st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-  st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
   Some?
     st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\

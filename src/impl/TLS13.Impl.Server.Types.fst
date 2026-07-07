@@ -91,6 +91,7 @@ let next_local_action_sound
       st.CS.cs_model.CS.model_control ==
         CS.ControlHandshaking CS.HsClientHelloReceived /\
       st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None /\
       Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
       (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
        | Some selection ->
@@ -208,7 +209,6 @@ let next_local_action_sound
         CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
       st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
       st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-      st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
       Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
       Some?
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -436,7 +436,6 @@ let server_local_event_input_ready
       CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
     st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-    st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
     Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
     Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -459,6 +458,7 @@ let server_local_event_input_ready
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsClientHelloReceived /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None /\
     Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some selection ->

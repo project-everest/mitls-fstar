@@ -209,6 +209,8 @@ fn process_derive_shared_secret_from_private_array
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_control ==
                    CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+                   None /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->

@@ -1679,8 +1679,7 @@ fn mark_signed_certificate_verify
       c.handshake.keys
       (signed_certificate_verify_state st0 cv).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-  c.handshake.certificate_verify_verified := true;
-  assert (pure (true ==
+  assert (pure (cv_verified ==
     (signed_certificate_verify_state st0 cv).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
   assert (pure (server_finished_verified ==
     (signed_certificate_verify_state st0 cv).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
@@ -1749,7 +1748,6 @@ fn mark_sent_certificate_verify
   assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role ==
     CS.ServerEndpoint));
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None));
-  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
   assert (pure (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
     | Some stored_cv -> stored_cv == Ghost.reveal cv
     | None -> False));
@@ -1856,7 +1854,7 @@ fn mark_sent_certificate_verify
   assert (pure ((sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_keys ==
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
   assert (pure ((sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
-    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+    true));
   assert (pure ((sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
     st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
   assert (pure ((sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
@@ -1865,7 +1863,8 @@ fn mark_sent_certificate_verify
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
   assert (pure ((sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
-  assert (pure (cv_verified ==
+  c.handshake.certificate_verify_verified := true;
+  assert (pure (true ==
     (sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
   assert (pure (server_finished_verified ==
     (sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
@@ -4414,6 +4413,20 @@ fn try_derive_shared_secret
   unfold (key_schedule_exactly
     c.handshake.keys
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (optional_secret_exactly
+    c.handshake.keys.shared_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+  with shared_present shared_storage. _;
+  let shared_secret_present = !c.handshake.keys.shared_secret.present;
+  assert (pure (shared_secret_present == shared_present));
+  lemma_optional_fixed_bytes_match_present_iff
+    shared_present
+    shared_storage
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret;
+  fold (optional_secret_exactly
+    c.handshake.keys.shared_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
 
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
@@ -4432,7 +4445,13 @@ fn try_derive_shared_secret
   let server_share_storage_e = Ghost.hide server_share_storage;
   assert (pure (has_server_share == server_share_present));
 
-  let ready = role_ok && tag_ok && stage_ok && has_start && has_server_share;
+  let ready =
+    role_ok &&
+    tag_ok &&
+    stage_ok &&
+    has_start &&
+    has_server_share &&
+    not shared_secret_present;
 
   if ready {
     assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint));
@@ -4441,6 +4460,12 @@ fn try_derive_shared_secret
     assert (pure has_start);
     assert (pure has_server_share);
     assert (pure server_share_present);
+    assert (pure (not shared_secret_present));
+    assert (pure (shared_present == false));
+    assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == false));
+    (match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret with
+    | None -> ()
+    | Some _ -> assert False);
     lemma_optional_fixed_bytes_match_some
       server_share_present
       server_share_storage
@@ -4511,6 +4536,7 @@ fn try_derive_shared_secret
           assert (pure (Ghost.reveal shared_secret == shared));
           assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) == Some (Ghost.reveal shared_secret)));
           assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_spec) (Ghost.reveal sh).M.key_share == Some (Ghost.reveal shared_secret)));
+          assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None));
           assert (pure (CS.legal_event
             st0.CS.cs_model
             (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret (Ghost.reveal shared_secret)))));
@@ -4698,6 +4724,8 @@ fn try_derive_server_shared_secret_from_private_array
                    CS.ServerEndpoint /\
                  st0.CS.cs_model.CS.model_control ==
                    CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+                   None /\
                  Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->

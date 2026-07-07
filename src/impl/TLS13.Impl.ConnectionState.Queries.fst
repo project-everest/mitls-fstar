@@ -3131,7 +3131,6 @@ fn can_send_certificate_verify_runtime
               CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -3270,7 +3269,6 @@ fn can_send_certificate_verify_runtime
       tag_ok &&
       stage_ok &&
       has_certificate &&
-      already_verified &&
       has_server_handshake_keys &&
       seq_ok &&
       certificate_verify_seq_slot &&
@@ -3285,8 +3283,6 @@ fn can_send_certificate_verify_runtime
       st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
     assert (pure (ok ==>
       (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None)));
-    assert (pure (ok ==>
-      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
     assert (pure (ok ==> Some?
       st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
     assert (pure (ok ==> Some?

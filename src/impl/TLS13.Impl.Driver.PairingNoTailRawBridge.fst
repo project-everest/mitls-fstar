@@ -553,6 +553,124 @@ let lemma_event_raw_delta_legal_change_cipher_spec
   | CL.Sent -> ()
   | CL.Received -> ()
 
+let lemma_conn_events_raw_replay_received_change_cipher_spec_head
+  (model:CS.connection_model)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model
+          (CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsChangeCipherSpec;
+          }) :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists ccs_raw received_tail.
+          Seq.equal raw_received (B.append ccs_raw received_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model
+    ev
+    rest
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    CS.legal_event model ev /\
+    CS.step_model model ev == Some model1 /\
+    CS.event_raw_delta_legal model ev delta_sent delta_received /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+  returns
+    exists ccs_raw received_tail.
+      Seq.equal raw_received (B.append ccs_raw received_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    lemma_event_raw_delta_legal_change_cipher_spec
+      model
+      CL.Received
+      delta_sent
+      delta_received;
+    assert (CS.cleartext_tls_message_raw
+      M.TlsChangeCipherSpec
+      delta_received);
+    assert (exists ccs_raw received_tail.
+      Seq.equal raw_received (B.append ccs_raw received_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+  )
+
+let lemma_conn_events_raw_replay_sent_change_cipher_spec_head
+  (model:CS.connection_model)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model
+          (CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsChangeCipherSpec;
+          }) :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists ccs_raw sent_tail.
+          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model
+    ev
+    rest
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    CS.legal_event model ev /\
+    CS.step_model model ev == Some model1 /\
+    CS.event_raw_delta_legal model ev delta_sent delta_received /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+  returns
+    exists ccs_raw sent_tail.
+      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    lemma_event_raw_delta_legal_change_cipher_spec
+      model
+      CL.Sent
+      delta_sent
+      delta_received;
+    assert (CS.cleartext_tls_message_raw
+      M.TlsChangeCipherSpec
+      delta_sent);
+    assert (exists ccs_raw sent_tail.
+      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+  )
+
 let lemma_event_raw_delta_legal_sent_client_hello
   (model:CS.connection_model)
   (ch:M.client_hello)
@@ -1260,6 +1378,844 @@ let lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
     )
   )
 
+let lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_slices
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists server_ch_raw ccs_raw received_tail.
+          Seq.equal
+            raw_received
+            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+          CS.received_cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello server_ch))
+            server_ch_raw /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  }) in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let ev3 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: ev2 :: ev3 :: rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay
+      model1
+      (ev1 :: ev2 :: ev3 :: rest)
+      tail0_sent
+      tail0_received
+      final_model
+  returns
+    exists server_ch_raw ccs_raw received_tail.
+      Seq.equal
+        raw_received
+        (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+      CS.received_cleartext_tls_message_raw
+        (M.TlsHandshake (M.ClientHello server_ch))
+        server_ch_raw /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      (ev2 :: ev3 :: rest)
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay
+        model2
+        (ev2 :: ev3 :: rest)
+        tail1_sent
+        tail1_received
+        final_model
+    returns
+      exists server_ch_raw ccs_raw received_tail.
+        Seq.equal
+          raw_received
+          (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head
+        model2
+        ev2
+        (ev3 :: rest)
+        tail1_sent
+        tail1_received
+        final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay model3 (ev3 :: rest) tail2_sent tail2_received final_model
+      returns
+        exists server_ch_raw ccs_raw received_tail.
+          Seq.equal
+            raw_received
+            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+          CS.received_cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello server_ch))
+            server_ch_raw /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head
+          model3
+          ev3
+          rest
+          tail2_sent
+          tail2_received
+          final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay model4 rest tail3_sent tail3_received final_model
+        returns
+          exists server_ch_raw ccs_raw received_tail.
+            Seq.equal
+              raw_received
+              (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+            CS.received_cleartext_tls_message_raw
+              (M.TlsHandshake (M.ClientHello server_ch))
+              server_ch_raw /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+        with _.
+        (
+          lemma_event_raw_delta_legal_local
+            model0
+            CS.LocalStartServer
+            delta0_sent
+            delta0_received;
+          lemma_event_raw_delta_legal_received_client_hello
+            model1
+            server_ch
+            delta1_sent
+            delta1_received;
+          lemma_event_raw_delta_legal_local
+            model2
+            (CS.LocalSelectServerParameters selection)
+            delta2_sent
+            delta2_received;
+          lemma_event_raw_delta_legal_change_cipher_spec
+            model3
+            CL.Received
+            delta3_sent
+            delta3_received;
+          assert (Seq.equal delta0_received B.empty);
+          assert (CS.received_cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello server_ch))
+            delta1_received);
+          assert (Seq.equal delta2_received B.empty);
+          assert (CS.cleartext_tls_message_raw
+            M.TlsChangeCipherSpec
+            delta3_received);
+          Seq.lemma_eq_elim delta0_received B.empty;
+          CL.lemma_append_empty_left tail0_received;
+          assert (Seq.equal raw_received tail0_received);
+          Seq.lemma_eq_elim raw_received tail0_received;
+          Seq.lemma_eq_elim tail0_received (B.append delta1_received tail1_received);
+          Seq.lemma_eq_elim tail1_received (B.append delta2_received tail2_received);
+          Seq.lemma_eq_elim delta2_received B.empty;
+          CL.lemma_append_empty_left tail2_received;
+          assert (Seq.equal tail1_received tail2_received);
+          Seq.lemma_eq_elim tail1_received tail2_received;
+          Seq.lemma_eq_elim tail2_received (B.append delta3_received tail3_received);
+          Seq.append_assoc delta1_received delta3_received tail3_received;
+          assert (Seq.equal
+            raw_received
+            (B.append delta1_received (B.append delta3_received tail3_received)));
+          assert (exists server_ch_raw ccs_raw received_tail.
+            Seq.equal
+              raw_received
+              (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+            CS.received_cleartext_tls_message_raw
+              (M.TlsHandshake (M.ClientHello server_ch))
+              server_ch_raw /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+        )
+      )
+    )
+  )
+
+let lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slice
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists ccs_raw sent_tail.
+          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  }) in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let ev3 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: ev2 :: ev3 :: rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay
+      model1
+      (ev1 :: ev2 :: ev3 :: rest)
+      tail0_sent
+      tail0_received
+      final_model
+  returns
+    exists ccs_raw sent_tail.
+      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      (ev2 :: ev3 :: rest)
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay
+        model2
+        (ev2 :: ev3 :: rest)
+        tail1_sent
+        tail1_received
+        final_model
+    returns
+      exists ccs_raw sent_tail.
+        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head
+        model2
+        ev2
+        (ev3 :: rest)
+        tail1_sent
+        tail1_received
+        final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay model3 (ev3 :: rest) tail2_sent tail2_received final_model
+      returns
+        exists ccs_raw sent_tail.
+          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head
+          model3
+          ev3
+          rest
+          tail2_sent
+          tail2_received
+          final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay model4 rest tail3_sent tail3_received final_model
+        returns
+          exists ccs_raw sent_tail.
+            Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+        with _.
+        (
+          lemma_event_raw_delta_legal_local
+            model0
+            CS.LocalStartServer
+            delta0_sent
+            delta0_received;
+          lemma_event_raw_delta_legal_received_client_hello
+            model1
+            server_ch
+            delta1_sent
+            delta1_received;
+          lemma_event_raw_delta_legal_local
+            model2
+            (CS.LocalSelectServerParameters selection)
+            delta2_sent
+            delta2_received;
+          lemma_event_raw_delta_legal_change_cipher_spec
+            model3
+            CL.Sent
+            delta3_sent
+            delta3_received;
+          assert (Seq.equal delta0_sent B.empty);
+          assert (Seq.equal delta1_sent B.empty);
+          assert (Seq.equal delta2_sent B.empty);
+          assert (CS.cleartext_tls_message_raw
+            M.TlsChangeCipherSpec
+            delta3_sent);
+          Seq.lemma_eq_elim delta0_sent B.empty;
+          CL.lemma_append_empty_left tail0_sent;
+          assert (Seq.equal raw_sent tail0_sent);
+          Seq.lemma_eq_elim raw_sent tail0_sent;
+          Seq.lemma_eq_elim tail0_sent (B.append delta1_sent tail1_sent);
+          Seq.lemma_eq_elim delta1_sent B.empty;
+          CL.lemma_append_empty_left tail1_sent;
+          assert (Seq.equal raw_sent tail1_sent);
+          Seq.lemma_eq_elim tail1_sent (B.append delta2_sent tail2_sent);
+          Seq.lemma_eq_elim delta2_sent B.empty;
+          CL.lemma_append_empty_left tail2_sent;
+          assert (Seq.equal raw_sent tail2_sent);
+          Seq.lemma_eq_elim tail2_sent (B.append delta3_sent tail3_sent);
+          assert (exists ccs_raw sent_tail.
+            Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+        )
+      )
+    )
+  )
+
+let lemma_server_start_client_hello_select_shared_then_received_change_cipher_spec_raw_slices
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists server_ch_raw ccs_raw received_tail.
+          Seq.equal
+            raw_received
+            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+          CS.received_cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello server_ch))
+            server_ch_raw /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  }) in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) in
+  let ev4 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: ev2 :: ev3 :: ev4 :: rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay
+      model1
+      (ev1 :: ev2 :: ev3 :: ev4 :: rest)
+      tail0_sent
+      tail0_received
+      final_model
+  returns
+    exists server_ch_raw ccs_raw received_tail.
+      Seq.equal
+        raw_received
+        (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+      CS.received_cleartext_tls_message_raw
+        (M.TlsHandshake (M.ClientHello server_ch))
+        server_ch_raw /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      (ev2 :: ev3 :: ev4 :: rest)
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay
+        model2
+        (ev2 :: ev3 :: ev4 :: rest)
+        tail1_sent
+        tail1_received
+        final_model
+    returns
+      exists server_ch_raw ccs_raw received_tail.
+        Seq.equal
+          raw_received
+          (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head
+        model2
+        ev2
+        (ev3 :: ev4 :: rest)
+        tail1_sent
+        tail1_received
+        final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay
+          model3
+          (ev3 :: ev4 :: rest)
+          tail2_sent
+          tail2_received
+          final_model
+      returns
+        exists server_ch_raw ccs_raw received_tail.
+          Seq.equal
+            raw_received
+            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+          CS.received_cleartext_tls_message_raw
+            (M.TlsHandshake (M.ClientHello server_ch))
+            server_ch_raw /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head
+          model3
+          ev3
+          (ev4 :: rest)
+          tail2_sent
+          tail2_received
+          final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay model4 (ev4 :: rest) tail3_sent tail3_received final_model
+        returns
+          exists server_ch_raw ccs_raw received_tail.
+            Seq.equal
+              raw_received
+              (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+            CS.received_cleartext_tls_message_raw
+              (M.TlsHandshake (M.ClientHello server_ch))
+              server_ch_raw /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+        with _.
+        (
+          lemma_conn_events_raw_replay_received_change_cipher_spec_head
+            model4
+            rest
+            tail3_sent
+            tail3_received
+            final_model;
+          eliminate exists ccs_raw tail4_received.
+            Seq.equal tail3_received (B.append ccs_raw tail4_received) /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+          returns
+            exists server_ch_raw ccs_raw received_tail.
+              Seq.equal
+                raw_received
+                (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
+              CS.received_cleartext_tls_message_raw
+                (M.TlsHandshake (M.ClientHello server_ch))
+                server_ch_raw /\
+              CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+          with _.
+          (
+            lemma_event_raw_delta_legal_local
+              model0
+              CS.LocalStartServer
+              delta0_sent
+              delta0_received;
+            lemma_event_raw_delta_legal_received_client_hello
+              model1
+              server_ch
+              delta1_sent
+              delta1_received;
+            lemma_event_raw_delta_legal_local
+              model2
+              (CS.LocalSelectServerParameters selection)
+              delta2_sent
+              delta2_received;
+            lemma_event_raw_delta_legal_local
+              model3
+              (CS.LocalDeriveSharedSecret server_shared)
+              delta3_sent
+              delta3_received;
+            assert (Seq.equal delta0_received B.empty);
+            assert (CS.received_cleartext_tls_message_raw
+              (M.TlsHandshake (M.ClientHello server_ch))
+              delta1_received);
+            assert (Seq.equal delta2_received B.empty);
+            assert (Seq.equal delta3_received B.empty);
+            Seq.lemma_eq_elim delta0_received B.empty;
+            CL.lemma_append_empty_left tail0_received;
+            assert (Seq.equal raw_received tail0_received);
+            Seq.lemma_eq_elim raw_received tail0_received;
+            Seq.lemma_eq_elim tail0_received (B.append delta1_received tail1_received);
+            Seq.lemma_eq_elim tail1_received (B.append delta2_received tail2_received);
+            Seq.lemma_eq_elim delta2_received B.empty;
+            CL.lemma_append_empty_left tail2_received;
+            assert (Seq.equal tail1_received tail2_received);
+            Seq.lemma_eq_elim tail1_received tail2_received;
+            Seq.lemma_eq_elim tail2_received (B.append delta3_received tail3_received);
+            Seq.lemma_eq_elim delta3_received B.empty;
+            CL.lemma_append_empty_left tail3_received;
+            assert (Seq.equal tail2_received tail3_received);
+            Seq.lemma_eq_elim tail2_received tail3_received;
+            Seq.lemma_eq_elim tail3_received (B.append ccs_raw tail4_received);
+            Seq.append_assoc delta1_received ccs_raw tail4_received;
+            assert (Seq.equal
+              raw_received
+              (B.append delta1_received (B.append ccs_raw tail4_received)));
+            assert (exists server_ch_raw ccs_raw0 received_tail.
+              Seq.equal
+                raw_received
+                (B.append server_ch_raw (B.append ccs_raw0 received_tail)) /\
+              CS.received_cleartext_tls_message_raw
+                (M.TlsHandshake (M.ClientHello server_ch))
+                server_ch_raw /\
+              CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw0)
+          )
+        )
+      )
+    )
+  )
+
+let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_raw_slice
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsChangeCipherSpec;
+           }) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists ccs_raw sent_tail.
+          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  }) in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) in
+  let ev4 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsChangeCipherSpec;
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: ev2 :: ev3 :: ev4 :: rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay
+      model1
+      (ev1 :: ev2 :: ev3 :: ev4 :: rest)
+      tail0_sent
+      tail0_received
+      final_model
+  returns
+    exists ccs_raw sent_tail.
+      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      (ev2 :: ev3 :: ev4 :: rest)
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay
+        model2
+        (ev2 :: ev3 :: ev4 :: rest)
+        tail1_sent
+        tail1_received
+        final_model
+    returns
+      exists ccs_raw sent_tail.
+        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head
+        model2
+        ev2
+        (ev3 :: ev4 :: rest)
+        tail1_sent
+        tail1_received
+        final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay
+          model3
+          (ev3 :: ev4 :: rest)
+          tail2_sent
+          tail2_received
+          final_model
+      returns
+        exists ccs_raw sent_tail.
+          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head
+          model3
+          ev3
+          (ev4 :: rest)
+          tail2_sent
+          tail2_received
+          final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay model4 (ev4 :: rest) tail3_sent tail3_received final_model
+        returns
+          exists ccs_raw sent_tail.
+            Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+        with _.
+        (
+          lemma_conn_events_raw_replay_sent_change_cipher_spec_head
+            model4
+            rest
+            tail3_sent
+            tail3_received
+            final_model;
+          eliminate exists ccs_raw tail4_sent.
+            Seq.equal tail3_sent (B.append ccs_raw tail4_sent) /\
+            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+          returns
+            exists ccs_raw sent_tail.
+              Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
+              CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
+          with _.
+          (
+            lemma_event_raw_delta_legal_local
+              model0
+              CS.LocalStartServer
+              delta0_sent
+              delta0_received;
+            lemma_event_raw_delta_legal_received_client_hello
+              model1
+              server_ch
+              delta1_sent
+              delta1_received;
+            lemma_event_raw_delta_legal_local
+              model2
+              (CS.LocalSelectServerParameters selection)
+              delta2_sent
+              delta2_received;
+            lemma_event_raw_delta_legal_local
+              model3
+              (CS.LocalDeriveSharedSecret server_shared)
+              delta3_sent
+              delta3_received;
+            assert (Seq.equal delta0_sent B.empty);
+            assert (Seq.equal delta1_sent B.empty);
+            assert (Seq.equal delta2_sent B.empty);
+            assert (Seq.equal delta3_sent B.empty);
+            Seq.lemma_eq_elim delta0_sent B.empty;
+            CL.lemma_append_empty_left tail0_sent;
+            assert (Seq.equal raw_sent tail0_sent);
+            Seq.lemma_eq_elim raw_sent tail0_sent;
+            Seq.lemma_eq_elim tail0_sent (B.append delta1_sent tail1_sent);
+            Seq.lemma_eq_elim delta1_sent B.empty;
+            CL.lemma_append_empty_left tail1_sent;
+            assert (Seq.equal raw_sent tail1_sent);
+            Seq.lemma_eq_elim tail1_sent (B.append delta2_sent tail2_sent);
+            Seq.lemma_eq_elim delta2_sent B.empty;
+            CL.lemma_append_empty_left tail2_sent;
+            assert (Seq.equal raw_sent tail2_sent);
+            Seq.lemma_eq_elim tail2_sent (B.append delta3_sent tail3_sent);
+            Seq.lemma_eq_elim delta3_sent B.empty;
+            CL.lemma_append_empty_left tail3_sent;
+            assert (Seq.equal raw_sent tail3_sent);
+            Seq.lemma_eq_elim tail3_sent (B.append ccs_raw tail4_sent);
+            assert (exists ccs_raw0 sent_tail.
+              Seq.equal raw_sent (B.append ccs_raw0 sent_tail) /\
+              CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw0)
+          )
+        )
+      )
+    )
+  )
+
 let lemma_client_prefix_raw_slices
   (model0:CS.connection_model)
   (client_start:CS.handshake_start)
@@ -1531,6 +2487,303 @@ let lemma_sent_server_hello_head_raw_slice
         server_sh_raw)
   )
 
+let lemma_sent_server_hello_head_step_model_from_raw_replay
+  (model:CS.connection_model)
+  (server_sh:M.server_hello)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model
+          (CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+          }) :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists model1 tail_sent tail_received.
+          CS.step_model
+            model
+            (CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+            })) == Some model1 /\
+          CS.conn_events_raw_replay
+            model1
+            rest
+            tail_sent
+            tail_received
+            final_model)
+=
+  let ev = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model
+    ev
+    rest
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists
+    (model1:CS.connection_model)
+    (delta_sent:B.bytes)
+    (delta_received:B.bytes)
+    (tail_sent:B.bytes)
+    (tail_received:B.bytes).
+    CS.legal_event model ev /\
+    CS.step_model model ev == Some model1 /\
+    CS.event_raw_delta_legal model ev delta_sent delta_received /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    CS.conn_events_raw_replay
+      model1
+      rest
+      tail_sent
+      tail_received
+      final_model
+  returns
+    exists model1 tail_sent tail_received.
+      CS.step_model model ev == Some model1 /\
+      CS.conn_events_raw_replay
+        model1
+        rest
+        tail_sent
+        tail_received
+        final_model
+  with _.
+  (
+    assert (exists model1 tail_sent tail_received.
+      CS.step_model model ev == Some model1 /\
+      CS.conn_events_raw_replay
+        model1
+        rest
+        tail_sent
+        tail_received
+        final_model)
+  )
+
+let lemma_client_cleartext_prefix_step_models_from_raw_replay
+  (model0:CS.connection_model)
+  (client_start:CS.handshake_start)
+  (client_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (client_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+           client_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists model1 model2 model3 model4 tail_sent tail_received.
+          CS.step_model
+            model0
+            (CS.ConnLocalEvent (CS.LocalStartHandshake client_start)) ==
+            Some model1 /\
+          CS.step_model
+            model1
+            (CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+            })) == Some model2 /\
+          CS.step_model
+            model2
+            (CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+            })) == Some model3 /\
+          CS.step_model
+            model3
+            (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared)) ==
+            Some model4 /\
+          CS.conn_events_raw_replay
+            model4
+            client_rest
+            tail_sent
+            tail_received
+            final_model)
+=
+  let ev0 = CS.ConnLocalEvent (CS.LocalStartHandshake client_start) in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+  }) in
+  let ev2 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+  }) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: ev2 :: ev3 :: client_rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay
+      model1
+      (ev1 :: ev2 :: ev3 :: client_rest)
+      tail0_sent
+      tail0_received
+      final_model
+  returns
+    exists model1 model2 model3 model4 tail_sent tail_received.
+      CS.step_model model0 ev0 == Some model1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.step_model model2 ev2 == Some model3 /\
+      CS.step_model model3 ev3 == Some model4 /\
+      CS.conn_events_raw_replay
+        model4
+        client_rest
+        tail_sent
+        tail_received
+        final_model
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      (ev2 :: ev3 :: client_rest)
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay
+        model2
+        (ev2 :: ev3 :: client_rest)
+        tail1_sent
+        tail1_received
+        final_model
+    returns
+      exists model1 model2 model3 model4 tail_sent tail_received.
+        CS.step_model model0 ev0 == Some model1 /\
+        CS.step_model model1 ev1 == Some model2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.step_model model3 ev3 == Some model4 /\
+        CS.conn_events_raw_replay
+          model4
+          client_rest
+          tail_sent
+          tail_received
+          final_model
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head
+        model2
+        ev2
+        (ev3 :: client_rest)
+        tail1_sent
+        tail1_received
+        final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay
+          model3
+          (ev3 :: client_rest)
+          tail2_sent
+          tail2_received
+          final_model
+      returns
+        exists model1 model2 model3 model4 tail_sent tail_received.
+          CS.step_model model0 ev0 == Some model1 /\
+          CS.step_model model1 ev1 == Some model2 /\
+          CS.step_model model2 ev2 == Some model3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.conn_events_raw_replay
+            model4
+            client_rest
+            tail_sent
+            tail_received
+            final_model
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head
+          model3
+          ev3
+          client_rest
+          tail2_sent
+          tail2_received
+          final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay
+            model4
+            client_rest
+            tail3_sent
+            tail3_received
+            final_model
+        returns
+          exists model1 model2 model3 model4 tail_sent tail_received.
+            CS.step_model model0 ev0 == Some model1 /\
+            CS.step_model model1 ev1 == Some model2 /\
+            CS.step_model model2 ev2 == Some model3 /\
+            CS.step_model model3 ev3 == Some model4 /\
+            CS.conn_events_raw_replay
+              model4
+              client_rest
+              tail_sent
+              tail_received
+              final_model
+        with _.
+        (
+          assert (exists model1 model2 model3 model4 tail_sent tail_received.
+            CS.step_model model0 ev0 == Some model1 /\
+            CS.step_model model1 ev1 == Some model2 /\
+            CS.step_model model2 ev2 == Some model3 /\
+            CS.step_model model3 ev3 == Some model4 /\
+            CS.conn_events_raw_replay
+              model4
+              client_rest
+              tail_sent
+              tail_received
+              final_model)
+        )
+      )
+    )
+  )
+
 let lemma_server_prefix_raw_slices
   (model0:CS.connection_model)
   (server_ch:M.client_hello)
@@ -1799,6 +3052,262 @@ let lemma_server_prefix_raw_slices
               CS.cleartext_tls_message_raw
                 (M.TlsHandshake (M.ServerHello server_sh))
                 server_sh_raw')
+          )
+        )
+      )
+    )
+  )
+
+let lemma_server_cleartext_prefix_step_models_from_raw_replay
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (server_sh:M.server_hello)
+  (server_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+           }) ::
+           server_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists model1 model2 model3 model4 model5 tail_sent tail_received.
+          CS.step_model
+            model0
+            (CS.ConnLocalEvent CS.LocalStartServer) == Some model1 /\
+          CS.step_model
+            model1
+            (CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+            })) == Some model2 /\
+          CS.step_model
+            model2
+            (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)) ==
+            Some model3 /\
+          CS.step_model
+            model3
+            (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared)) ==
+            Some model4 /\
+          CS.step_model
+            model4
+            (CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+            })) == Some model5 /\
+          CS.conn_events_raw_replay
+            model5
+            server_rest
+            tail_sent
+            tail_received
+            final_model)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  }) in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) in
+  let ev4 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+  }) in
+  PWR.lemma_conn_events_raw_replay_head
+    model0
+    ev0
+    (ev1 :: ev2 :: ev3 :: ev4 :: server_rest)
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay
+      model1
+      (ev1 :: ev2 :: ev3 :: ev4 :: server_rest)
+      tail0_sent
+      tail0_received
+      final_model
+  returns
+    exists model1 model2 model3 model4 model5 tail_sent tail_received.
+      CS.step_model model0 ev0 == Some model1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.step_model model2 ev2 == Some model3 /\
+      CS.step_model model3 ev3 == Some model4 /\
+      CS.step_model model4 ev4 == Some model5 /\
+      CS.conn_events_raw_replay
+        model5
+        server_rest
+        tail_sent
+        tail_received
+        final_model
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head
+      model1
+      ev1
+      (ev2 :: ev3 :: ev4 :: server_rest)
+      tail0_sent
+      tail0_received
+      final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay
+        model2
+        (ev2 :: ev3 :: ev4 :: server_rest)
+        tail1_sent
+        tail1_received
+        final_model
+    returns
+      exists model1 model2 model3 model4 model5 tail_sent tail_received.
+        CS.step_model model0 ev0 == Some model1 /\
+        CS.step_model model1 ev1 == Some model2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.step_model model3 ev3 == Some model4 /\
+        CS.step_model model4 ev4 == Some model5 /\
+        CS.conn_events_raw_replay
+          model5
+          server_rest
+          tail_sent
+          tail_received
+          final_model
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head
+        model2
+        ev2
+        (ev3 :: ev4 :: server_rest)
+        tail1_sent
+        tail1_received
+        final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay
+          model3
+          (ev3 :: ev4 :: server_rest)
+          tail2_sent
+          tail2_received
+          final_model
+      returns
+        exists model1 model2 model3 model4 model5 tail_sent tail_received.
+          CS.step_model model0 ev0 == Some model1 /\
+          CS.step_model model1 ev1 == Some model2 /\
+          CS.step_model model2 ev2 == Some model3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.step_model model4 ev4 == Some model5 /\
+          CS.conn_events_raw_replay
+            model5
+            server_rest
+            tail_sent
+            tail_received
+            final_model
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head
+          model3
+          ev3
+          (ev4 :: server_rest)
+          tail2_sent
+          tail2_received
+          final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay
+            model4
+            (ev4 :: server_rest)
+            tail3_sent
+            tail3_received
+            final_model
+        returns
+          exists model1 model2 model3 model4 model5 tail_sent tail_received.
+            CS.step_model model0 ev0 == Some model1 /\
+            CS.step_model model1 ev1 == Some model2 /\
+            CS.step_model model2 ev2 == Some model3 /\
+            CS.step_model model3 ev3 == Some model4 /\
+            CS.step_model model4 ev4 == Some model5 /\
+            CS.conn_events_raw_replay
+              model5
+              server_rest
+              tail_sent
+              tail_received
+              final_model
+        with _.
+        (
+          lemma_sent_server_hello_head_step_model_from_raw_replay
+            model4
+            server_sh
+            server_rest
+            tail3_sent
+            tail3_received
+            final_model;
+          eliminate exists model5 tail4_sent tail4_received.
+            CS.step_model model4 ev4 == Some model5 /\
+            CS.conn_events_raw_replay
+              model5
+              server_rest
+              tail4_sent
+              tail4_received
+              final_model
+          returns
+            exists model1 model2 model3 model4 model5 tail_sent tail_received.
+              CS.step_model model0 ev0 == Some model1 /\
+              CS.step_model model1 ev1 == Some model2 /\
+              CS.step_model model2 ev2 == Some model3 /\
+              CS.step_model model3 ev3 == Some model4 /\
+              CS.step_model model4 ev4 == Some model5 /\
+              CS.conn_events_raw_replay
+                model5
+                server_rest
+                tail_sent
+                tail_received
+                final_model
+          with _.
+          (
+            assert (exists model1 model2 model3 model4 model5 tail_sent tail_received.
+              CS.step_model model0 ev0 == Some model1 /\
+              CS.step_model model1 ev1 == Some model2 /\
+              CS.step_model model2 ev2 == Some model3 /\
+              CS.step_model model3 ev3 == Some model4 /\
+              CS.step_model model4 ev4 == Some model5 /\
+              CS.conn_events_raw_replay
+                model5
+                server_rest
+                tail_sent
+                tail_received
+                final_model)
           )
         )
       )

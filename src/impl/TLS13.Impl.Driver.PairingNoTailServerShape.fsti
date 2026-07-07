@@ -328,17 +328,16 @@ val lemma_server_no_tail_start_spine16
   server flight) and which is the read direction (needed before receiving
   the protected [ClientFinished]).
 
-  This predicate is useful as a strengthened/canonical local target, but it is
-  **not derivable** from the bare role-local premises
-  [SD.server_driver_application_ready server /\ length server.cs_event_log == 16].
-  A legal server-only trace can place a [TlsChangeCipherSpec] no-op immediately
-  after [Sent ServerHello], then do both handshake installs, and still reach
-  application-ready in 16 events by omitting the network [CertificateVerify]
-  send: [LocalSignCertificateVerify] sets [hs_certificate_verify_verified], and
-  [Sent Finished] only checks that boolean.  Therefore this predicate needs a
-  stronger canonical/no-extra-CCS/no-skipped-flight premise, or it must be
-  derived from paired client/server byte traces rather than from the server role
-  alone. See [PAIRING_THEOREM.md] for the tracked status.
+  This predicate is useful as a strengthened/canonical local target.  The old
+  model-level skipped-[CertificateVerify] counterexample has been closed:
+  [LocalSignCertificateVerify] only stores the signed value/input, while the
+  network [Sent CertificateVerify] transition is the step that marks
+  [hs_certificate_verify_verified], so [Sent Finished] cannot legally jump over
+  the wire CV send.  The remaining reason this predicate is not exposed as a
+  bare role-local theorem here is narrower: the local length-16 role trace can
+  still include legal [TlsChangeCipherSpec] no-ops unless the caller supplies a
+  canonical/no-extra-CCS premise, or derives the staged boundary from paired
+  clean byte traces.
 **)
 noextract
 let server_no_tail_next_two_events_handshake_installs
