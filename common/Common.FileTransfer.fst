@@ -94,22 +94,29 @@ type ft_status =
    ─────────────────────────────────────────────────────────────────────────── *)
 noeq
 type ft_view = {
-  ftv_filename : option TCP.bytes;   // file named by the client's read request
-  ftv_content  : option TCP.bytes;   // full intended contents of that file
-  ftv_blocks   : list TCP.bytes;     // payloads of data blocks sent so far, in
-                                     // block order: index i (1-based) is the
-                                     // i-th element — the ORDERING MECHANISM
-  ftv_acked    : nat;                // number of leading blocks the client acked
-  ftv_status   : ft_status;          // progress of the transfer
+  ftv_filename    : option TCP.bytes;   // file named by the client's read request
+  ftv_content     : option TCP.bytes;   // full intended contents of that file
+  ftv_content_len : option nat;         // declared content length, when known
+                                        // in-band (e.g. YMODEM block 0).  When
+                                        // Some L, the file is the first L bytes
+                                        // of the eventual reassembly — this is
+                                        // what lets padded protocols recover the
+                                        // exact file by truncation.
+  ftv_blocks      : list TCP.bytes;     // payloads of data blocks sent so far, in
+                                        // block order: index i (1-based) is the
+                                        // i-th element — the ORDERING MECHANISM
+  ftv_acked       : nat;                // number of leading blocks the client acked
+  ftv_status      : ft_status;          // progress of the transfer
 }
 
 (* The empty view: nothing requested and nothing transferred yet. *)
 let ft_view_empty : ft_view = {
-  ftv_filename = None;
-  ftv_content  = None;
-  ftv_blocks   = [];
-  ftv_acked    = 0;
-  ftv_status   = FT_InProgress;
+  ftv_filename    = None;
+  ftv_content     = None;
+  ftv_content_len = None;
+  ftv_blocks      = [];
+  ftv_acked       = 0;
+  ftv_status      = FT_InProgress;
 }
 
 (* ───────────────────────────────────────────────────────────────────────────
@@ -128,6 +135,35 @@ let ft_block_at (blocks:list TCP.bytes) (index:nat)
   if 1 <= index && index <= L.length blocks
   then Some (L.index blocks (index - 1))
   else None
+
+(* Two byte sequences agree on their common prefix.  This is the progress
+   relation between the raw reassembly and the file: while the reassembly is
+   shorter it is a prefix of the file (unpadded protocols, still delivering);
+   once it is longer the file is a prefix of it (padded protocols whose final
+   frame overshoots).  Either way the delivered bytes match the file so far. *)
+let bytes_prefix_agree (a b:TCP.bytes) : prop =
+  let n = if Seq.length a <= Seq.length b then Seq.length a else Seq.length b in
+  Seq.equal (Seq.slice a 0 n) (Seq.slice b 0 n)
+
+(* The reassembly reconstitutes the exact file: the file is the first
+   `Seq.length content` bytes of the raw reassembly.  For unpadded protocols the
+   reassembly equals the file, so this is a full equality; for padded protocols
+   (YMODEM) it truncates the padded final frame away. *)
+let reassembly_exact (blocks:list TCP.bytes) (content:TCP.bytes) : prop =
+  Seq.length content <= Seq.length (ft_concat blocks) /\
+  Seq.equal (Seq.slice (ft_concat blocks) 0 (Seq.length content)) content
+
+(* bytes_extends (a is a genuine prefix of b) refines bytes_prefix_agree. *)
+let lemma_bytes_extends_prefix_agree (a b:TCP.bytes)
+  : Lemma (requires TCP.bytes_extends a b)
+          (ensures bytes_prefix_agree a b) =
+  Seq.slice_length a
+
+(* An exact reassembly agrees with the file on its common prefix. *)
+let lemma_reassembly_exact_prefix_agree (blocks:list TCP.bytes) (content:TCP.bytes)
+  : Lemma (requires reassembly_exact blocks content)
+          (ensures bytes_prefix_agree (ft_concat blocks) content) =
+  ()
 
 (* The empty sequence is a prefix of any byte sequence. *)
 let lemma_ft_bytes_extends_empty (b:TCP.bytes)
@@ -149,15 +185,16 @@ let lemma_ft_append_singleton_length (l:list TCP.bytes) (x:TCP.bytes)
    these.  Each is witness-parametric so the preservation proofs are direct.
    ─────────────────────────────────────────────────────────────────────────── *)
 
-(* A read request starts the transfer: it records the requested file (and its
-   ghost contents) and (re)starts delivery from block 1. *)
+(* A read request starts the transfer: it records the requested file, its ghost
+   contents and declared length, and (re)starts delivery from block 1. *)
 let ft_step_request (filename content:TCP.bytes) (v0 v1:ft_view) : prop =
-  v0.ftv_content  == None /\
-  v1.ftv_filename == Some filename /\
-  v1.ftv_content  == Some content /\
-  v1.ftv_blocks   == [] /\
-  v1.ftv_acked    == 0 /\
-  v1.ftv_status   == FT_InProgress
+  v0.ftv_content      == None /\
+  v1.ftv_filename     == Some filename /\
+  v1.ftv_content      == Some content /\
+  v1.ftv_content_len  == Some (Seq.length content) /\
+  v1.ftv_blocks       == [] /\
+  v1.ftv_acked        == 0 /\
+  v1.ftv_status       == FT_InProgress
 
 (* Flow control: at most `window` blocks may be in flight (sent but not yet
    acknowledged).  `None` means an *unbounded* window: the transport itself is
@@ -172,14 +209,17 @@ let ft_in_flight_ok (window:option pos) (in_flight:int) : prop =
 (* The server sends the next data block.  This is where ORDERING and REASSEMBLY
    are enforced:
      * the new block is appended after all previous ones (consecutive index);
-     * its payload is at most `block_size` bytes, and a strictly shorter payload
-       is the final block;
+     * its payload is at most `block_size` bytes;
      * flow control allows at most `window` unacknowledged blocks in flight
        (`Some 1` recovers TFTP's stop-and-wait; larger finite windows model RFC
        7440 / ZMODEM / Kermit; `None` is an unbounded, transport-reliable window
        as in FTP block mode over TCP);
-     * the running reassembly stays a prefix of the file, and equals the whole
-       file exactly when the final (short) block is sent. *)
+     * the running reassembly keeps agreeing with the file on their common prefix
+       (`bytes_prefix_agree`) — it stays a prefix of the file for unpadded
+       protocols, and may overshoot into padding for padded ones.
+   Sending a block never completes the transfer: completion is an explicit step
+   (`ft_step_complete`), signalled out-of-band (FTP's 226, TFTP's short block,
+   XMODEM's EOT, Kermit's `Z`, ZMODEM's ZEOF). *)
 let ft_step_send_data (block_size:nat) (window:option pos) (payload:TCP.bytes) (v0 v1:ft_view)
   : prop =
   match v0.ftv_content with
@@ -188,15 +228,13 @@ let ft_step_send_data (block_size:nat) (window:option pos) (payload:TCP.bytes) (
     v0.ftv_status == FT_InProgress /\
     ft_in_flight_ok window (L.length v0.ftv_blocks - v0.ftv_acked) /\
     Seq.length payload <= block_size /\
-    v1.ftv_filename == v0.ftv_filename /\
-    v1.ftv_content  == v0.ftv_content /\
-    v1.ftv_blocks   == L.append v0.ftv_blocks [payload] /\
-    v1.ftv_acked    == v0.ftv_acked /\
-    v1.ftv_status   == (if Seq.length payload < block_size
-                        then FT_Completed else FT_InProgress) /\
-    TCP.bytes_extends (ft_concat v1.ftv_blocks) content /\
-    (Seq.length payload < block_size ==>
-       Seq.equal (ft_concat v1.ftv_blocks) content)
+    v1.ftv_filename     == v0.ftv_filename /\
+    v1.ftv_content      == v0.ftv_content /\
+    v1.ftv_content_len  == v0.ftv_content_len /\
+    v1.ftv_blocks       == L.append v0.ftv_blocks [payload] /\
+    v1.ftv_acked        == v0.ftv_acked /\
+    v1.ftv_status       == FT_InProgress /\
+    bytes_prefix_agree (ft_concat v1.ftv_blocks) content
 
 (* The client acknowledges blocks: a cumulative positive ack advances the
    acknowledged prefix to `index`, which must name blocks that were actually
@@ -204,19 +242,39 @@ let ft_step_send_data (block_size:nat) (window:option pos) (payload:TCP.bytes) (
 let ft_step_recv_ack (index:nat) (v0 v1:ft_view) : prop =
   v0.ftv_acked < index /\
   index <= L.length v0.ftv_blocks /\
-  v1.ftv_filename == v0.ftv_filename /\
-  v1.ftv_content  == v0.ftv_content /\
-  v1.ftv_blocks   == v0.ftv_blocks /\
-  v1.ftv_acked    == index /\
-  v1.ftv_status   == v0.ftv_status
+  v1.ftv_filename     == v0.ftv_filename /\
+  v1.ftv_content      == v0.ftv_content /\
+  v1.ftv_content_len  == v0.ftv_content_len /\
+  v1.ftv_blocks       == v0.ftv_blocks /\
+  v1.ftv_acked        == index /\
+  v1.ftv_status       == v0.ftv_status
+
+(* The transfer completes: an explicit, out-of-band completion signal (FTP's
+   226, TFTP's short block, XMODEM's EOT, Kermit's `Z` packet, ZMODEM's ZEOF).
+   It requires that the whole file has been delivered — the raw reassembly,
+   truncated to the file length, equals the file (`reassembly_exact`).  This is
+   the sole way to reach FT_Completed, so exact-file is certified precisely here. *)
+let ft_step_complete (v0 v1:ft_view) : prop =
+  match v0.ftv_content with
+  | None -> False
+  | Some content ->
+    v0.ftv_status == FT_InProgress /\
+    reassembly_exact v0.ftv_blocks content /\
+    v1.ftv_filename     == v0.ftv_filename /\
+    v1.ftv_content      == v0.ftv_content /\
+    v1.ftv_content_len  == v0.ftv_content_len /\
+    v1.ftv_blocks       == v0.ftv_blocks /\
+    v1.ftv_acked        == v0.ftv_acked /\
+    v1.ftv_status       == FT_Completed
 
 (* An error aborts the transfer without delivering more content. *)
 let ft_step_error (v0 v1:ft_view) : prop =
-  v1.ftv_filename == v0.ftv_filename /\
-  v1.ftv_content  == v0.ftv_content /\
-  v1.ftv_blocks   == v0.ftv_blocks /\
-  v1.ftv_acked    == v0.ftv_acked /\
-  v1.ftv_status   == FT_Aborted
+  v1.ftv_filename     == v0.ftv_filename /\
+  v1.ftv_content      == v0.ftv_content /\
+  v1.ftv_content_len  == v0.ftv_content_len /\
+  v1.ftv_blocks       == v0.ftv_blocks /\
+  v1.ftv_acked        == v0.ftv_acked /\
+  v1.ftv_status       == FT_Aborted
 
 (* A single legal abstract file-transfer step.  The `v1 == v0` stutter case
    subsumes timeout-driven retransmission: retransmitting an already-sent block
@@ -227,25 +285,29 @@ let ft_view_step (block_size:nat) (window:option pos) (v0 v1:ft_view) : prop =
   (exists filename content. ft_step_request filename content v0 v1) \/
   (exists payload. ft_step_send_data block_size window payload v0 v1) \/
   (exists index. ft_step_recv_ack index v0 v1) \/
+  ft_step_complete v0 v1 \/
   ft_step_error v0 v1
 
 (* ───────────────────────────────────────────────────────────────────────────
    The consistency invariant carried by every reachable view, and its
    preservation under `ft_view_step`.  The Some-branch is the reconstitution
-   guarantee: the reassembled blocks are a prefix of the file, exact on
-   completion.
+   guarantee: the raw reassembly agrees with the file on their common prefix, and
+   on completion it reconstitutes the exact file (by truncation to the declared
+   length, an identity for unpadded protocols).
    ─────────────────────────────────────────────────────────────────────────── *)
 let ft_view_consistent (v:ft_view) : prop =
   match v.ftv_content with
   | None ->
+    v.ftv_content_len == None /\
     v.ftv_blocks == [] /\
     v.ftv_acked == 0 /\
     (v.ftv_status == FT_InProgress \/ v.ftv_status == FT_Aborted)
   | Some content ->
     Some? v.ftv_filename /\
+    v.ftv_content_len == Some (Seq.length content) /\
     v.ftv_acked <= L.length v.ftv_blocks /\
-    TCP.bytes_extends (ft_concat v.ftv_blocks) content /\
-    (v.ftv_status == FT_Completed ==> Seq.equal (ft_concat v.ftv_blocks) content)
+    bytes_prefix_agree (ft_concat v.ftv_blocks) content /\
+    (v.ftv_status == FT_Completed ==> reassembly_exact v.ftv_blocks content)
 
 let lemma_ft_view_step_preserves_consistent
   (block_size:nat) (window:option pos) (v0 v1:ft_view)
@@ -456,10 +518,12 @@ let lemma_ft_valid_state_consistent
   lemma_ft_trace_preserves_consistent ftc sm.SM.sm_initial_state trace st
 
 (* The audit-facing theorem: in any reachable state whose transfer has a known
-   file, the concatenation of the data blocks the server sent — taken in
-   block-index order — is a prefix of the requested file, and equals the whole
-   file once the transfer has completed.  I.e. the client can always reconstitute
-   (a prefix of) the requested file from the ordered blocks it received. *)
+   file, the raw reassembly of the data blocks the server sent — taken in block
+   order — agrees with the requested file on their common prefix, and once the
+   transfer has completed it reconstitutes the *exact* file by truncation to the
+   file length (an identity for unpadded protocols).  I.e. the client can always
+   reconstitute (a prefix of) the requested file from the ordered blocks it
+   received, and the whole file on completion. *)
 let lemma_ft_reconstitution
   (#state #wire_message #local_event #local_output:Type0)
   (#system:WFSM.wire_format_state_machine state wire_message local_event local_output)
@@ -471,7 +535,7 @@ let lemma_ft_reconstitution
         (match (ftc.ft_project st).ftv_content with
          | None -> True
          | Some content ->
-           TCP.bytes_extends (ft_concat (ftc.ft_project st).ftv_blocks) content /\
+           bytes_prefix_agree (ft_concat (ftc.ft_project st).ftv_blocks) content /\
            ((ftc.ft_project st).ftv_status == FT_Completed ==>
-             Seq.equal (ft_concat (ftc.ft_project st).ftv_blocks) content))) =
+             reassembly_exact (ftc.ft_project st).ftv_blocks content))) =
   lemma_ft_valid_state_consistent ftc st

@@ -74,14 +74,14 @@ let block_payload (b:ftp_block) : TCP.bytes = (b.data <: TCP.bytes)
    Well-formed block plans and reassembly lemmas
    ─────────────────────────────────────────────────────────────────────────── *)
 
-(* A "plan" is the file, pre-framed into data blocks: every non-final block is
-   exactly `bs` bytes and the final block is strictly shorter (possibly empty),
-   so the presence of a short block marks end-of-file. *)
+(* A "plan" is the file, pre-framed into data blocks: each block fits in an
+   `ftp_block` data field (<= block size), so it can be emitted on the wire.
+   Completion is signalled explicitly (FTP's 226), not by a short final block. *)
 let rec plan_wf (bs:pos) (l:list TCP.bytes) : Tot prop (decreases l) =
   match l with
   | [] -> True
   | x :: tl ->
-    (if Nil? tl then Seq.length x < bs else Seq.length x == bs) /\
+    Seq.length x <= bs /\
     plan_wf bs tl
 
 (* Concatenating a block list distributes over list append. *)
@@ -128,6 +128,7 @@ noeq
 type ftp_server_local =
   | FtpStartRetr : filename:TCP.bytes -> plan:list TCP.bytes -> ftp_server_local
   | FtpSendBlock : ftp_server_local
+  | FtpComplete  : ftp_server_local
   | FtpAbort     : ftp_server_local
 
 (* The full file the server is serving, once a request has started: the
@@ -137,17 +138,28 @@ let ftp_server_content (s:ftp_server_state) : option TCP.bytes =
   | None -> None
   | Some _ -> Some (FT.ft_concat (L.append s.fss_sent s.fss_pending))
 
+(* Declared content length: the server knows the file it is serving, so once a
+   request has started it declares the file's length (used, in general, for the
+   truncating exact-file guarantee; here an identity since FTP block mode is
+   unpadded). *)
+let ftp_server_content_len (s:ftp_server_state) : option nat =
+  match ftp_server_content s with
+  | None -> None
+  | Some c -> Some (Seq.length c)
+
 (* Abstract file-transfer view of a server state. *)
 let ftp_server_project (s:ftp_server_state) : FT.ft_view = {
-  FT.ftv_filename = s.fss_filename;
-  FT.ftv_content  = ftp_server_content s;
-  FT.ftv_blocks   = s.fss_sent;
-  FT.ftv_acked    = 0;
-  FT.ftv_status   = s.fss_status;
+  FT.ftv_filename    = s.fss_filename;
+  FT.ftv_content     = ftp_server_content s;
+  FT.ftv_content_len = ftp_server_content_len s;
+  FT.ftv_blocks      = s.fss_sent;
+  FT.ftv_acked       = 0;
+  FT.ftv_status      = s.fss_status;
 }
 
 (* The server emits the next data block: it moves the head of the pending list
-   onto the sent list, tagging it EOF iff it is the final (short) block. *)
+   onto the sent list, tagging it with the EOF descriptor bit iff it is the last
+   pending block.  Sending never completes the transfer (see FtpComplete). *)
 let ftp_server_send (s0 s1:ftp_server_state) (blk:ftp_block) : prop =
   Some? s0.fss_filename /\
   s0.fss_status == FT.FT_InProgress /\
@@ -159,9 +171,8 @@ let ftp_server_send (s0 s1:ftp_server_state) (blk:ftp_block) : prop =
      s1.fss_filename == s0.fss_filename /\
      s1.fss_sent == L.append s0.fss_sent [h] /\
      s1.fss_pending == rest /\
-     s1.fss_status == (if Seq.length h < ftp_block_size
-                       then FT.FT_Completed else FT.FT_InProgress) /\
-     blk.descriptor == (if Seq.length h < ftp_block_size
+     s1.fss_status == FT.FT_InProgress /\
+     blk.descriptor == (if Nil? rest
                         then ftp_eof_descriptor else ftp_data_descriptor))
 
 let ftp_server_step
@@ -182,6 +193,16 @@ let ftp_server_step
     out.SM.so_local_outputs == []
   | SM.LocalEvent FtpSendBlock ->
     (exists blk. ftp_server_send s0 s1 blk /\ out.SM.so_wire_outputs == [blk]) /\
+    out.SM.so_local_outputs == []
+  | SM.LocalEvent FtpComplete ->
+    Some? s0.fss_filename /\
+    s0.fss_status == FT.FT_InProgress /\
+    s0.fss_pending == [] /\
+    s1.fss_filename == s0.fss_filename /\
+    s1.fss_sent == s0.fss_sent /\
+    s1.fss_pending == [] /\
+    s1.fss_status == FT.FT_Completed /\
+    out.SM.so_wire_outputs == [] /\
     out.SM.so_local_outputs == []
   | SM.LocalEvent FtpAbort ->
     s1.fss_filename == s0.fss_filename /\
@@ -325,12 +346,23 @@ let ftp_server_law_step
        lemma_bytes_extends_append
          (FT.ft_concat (L.append st0.fss_sent [h]))
          (FT.ft_concat rest);
+       (match ftp_server_content st0 with
+        | Some content ->
+          FT.lemma_bytes_extends_prefix_agree
+            (FT.ft_concat (L.append st0.fss_sent [h])) content);
        assert (FT.ft_step_send_data ftp_block_size None h
                  (ftp_server_project st0) (ftp_server_project st1));
        introduce exists payload.
          FT.ft_step_send_data ftp_block_size None payload
            (ftp_server_project st0) (ftp_server_project st1)
        with h and ())
+  | SM.LocalEvent FtpComplete ->
+    L.append_l_nil st0.fss_sent;
+    (match ftp_server_content st0 with
+     | Some content ->
+       Seq.slice_length content;
+       assert (FT.reassembly_exact st0.fss_sent content));
+    assert (FT.ft_step_complete (ftp_server_project st0) (ftp_server_project st1))
   | SM.LocalEvent FtpAbort ->
     assert (FT.ft_step_error (ftp_server_project st0) (ftp_server_project st1))
   | SM.WireEvent _ ->
@@ -452,9 +484,11 @@ let ftp_server_file_transfer
   }
 
 (* Capstone: instantiating the generic reconstitution theorem for the FTP server.
-   In any reachable server state that is serving a file, the concatenation of the
-   data blocks it has sent — in order — is a prefix of that file, and equals the
-   whole file once the transfer has completed. *)
+   In any reachable server state that is serving a file, the raw reassembly of the
+   data blocks it has sent — in order — agrees with that file on their common
+   prefix, and reconstitutes the exact file (by truncation to the declared length,
+   an identity here since FTP block mode is unpadded) once the transfer has
+   completed via the explicit FtpComplete (226) step. *)
 let lemma_ftp_server_reconstitution (st:ftp_server_state)
   : Lemma
       (requires SM.valid_state ftp_server_state_machine st)
@@ -462,10 +496,9 @@ let lemma_ftp_server_reconstitution (st:ftp_server_state)
         (match (ftp_server_project st).FT.ftv_content with
          | None -> True
          | Some content ->
-           TCP.bytes_extends
+           FT.bytes_prefix_agree
              (FT.ft_concat (ftp_server_project st).FT.ftv_blocks) content /\
            ((ftp_server_project st).FT.ftv_status == FT.FT_Completed ==>
-             Seq.equal
-               (FT.ft_concat (ftp_server_project st).FT.ftv_blocks) content)))
+             FT.reassembly_exact (ftp_server_project st).FT.ftv_blocks content)))
 =
   FT.lemma_ft_reconstitution ftp_server_file_transfer st
