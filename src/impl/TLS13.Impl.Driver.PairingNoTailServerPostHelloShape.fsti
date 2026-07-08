@@ -209,6 +209,12 @@ val lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
       (ensures
         PNTSS.server_no_tail_next_two_events_handshake_install_cover server)
 
+val lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order
+  (server:CS.connection_state)
+  : Lemma
+      (requires server_no_tail_no_ccs_application_ready_boundary server)
+      (ensures server_no_tail_post_two_handshake_installs_tail_order server)
+
 val lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_tail_order
   (client_initial:CS.connection_state)
   (server_initial:CS.connection_state)

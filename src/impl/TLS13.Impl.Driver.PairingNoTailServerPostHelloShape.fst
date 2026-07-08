@@ -1544,6 +1544,239 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
     )
   )
 
+let lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order
+  (server:CS.connection_state)
+  : Lemma
+      (requires server_no_tail_no_ccs_application_ready_boundary server)
+      (ensures server_no_tail_post_two_handshake_installs_tail_order server)
+=
+  lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape server;
+  assert (SD.server_driver_application_ready server);
+  assert (FStar.List.Tot.length server.CS.cs_event_log == 16);
+  assert (ST.server_end_to_end_invariant server);
+  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    server.CS.cs_model);
+  assert (Some?
+    server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+  PNTWHR.lemma_server_hello_window_rank_application_data_installed_zero
+    server.CS.cs_model;
+  assert (PNTWHR.server_hello_window_rank server.CS.cs_model == 0);
+  eliminate exists
+    server_ch
+    selection
+    server_shared
+    server_sh
+    e5
+    e6
+    rest.
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          server_ch
+          selection
+          server_shared
+          server_sh)
+        (e5 :: e6 :: rest) /\
+    FStar.List.Tot.length rest == 9
+  returns server_no_tail_post_two_handshake_installs_tail_order server
+  with _.
+  (
+    let server_suffix = e5 :: e6 :: rest in
+    let initial = CS.initial_model server.CS.cs_model.CS.model_config in
+    let raw_sent = server.CS.cs_wire_log.CL.raw_sent in
+    let raw_received = server.CS.cs_wire_log.CL.raw_received in
+    lemma_server_cleartext_prefix_append_expand
+      server_ch
+      selection
+      server_shared
+      server_sh
+      server_suffix;
+    assert (CS.conn_events_raw_replay
+      initial
+      server.CS.cs_event_log
+      raw_sent
+      raw_received
+      server.CS.cs_model);
+    assert (CS.conn_events_raw_replay
+      initial
+      (CS.ConnLocalEvent CS.LocalStartServer ::
+       CS.ConnNetworkEvent ({
+         CL.message_direction = CL.Received;
+         CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+       }) ::
+       CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+       CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+       CS.ConnNetworkEvent ({
+         CL.message_direction = CL.Sent;
+         CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+       }) ::
+       server_suffix)
+      raw_sent
+      raw_received
+      server.CS.cs_model);
+    PNTRB.lemma_server_cleartext_prefix_step_models_from_raw_replay
+      initial
+      server_ch
+      selection
+      server_shared
+      server_sh
+      server_suffix
+      raw_sent
+      raw_received
+      server.CS.cs_model;
+    eliminate exists
+      model1
+      model2
+      model3
+      model4
+      model5
+      tail_sent
+      tail_received.
+      CS.step_model
+        initial
+        (CS.ConnLocalEvent CS.LocalStartServer) == Some model1 /\
+      CS.step_model
+        model1
+        (CS.ConnNetworkEvent ({
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+        })) == Some model2 /\
+      CS.step_model
+        model2
+        (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)) ==
+        Some model3 /\
+      CS.step_model
+        model3
+        (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared)) ==
+        Some model4 /\
+      CS.step_model
+        model4
+        (CS.ConnNetworkEvent ({
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+        })) == Some model5 /\
+      CS.conn_events_raw_replay
+        model5
+        server_suffix
+        tail_sent
+        tail_received
+        server.CS.cs_model
+    returns server_no_tail_post_two_handshake_installs_tail_order server
+    with _.
+    (
+      PNTWHR.lemma_server_hello_window_after_server_cleartext_prefix_fresh
+        initial
+        server_ch
+        selection
+        server_shared
+        server_sh
+        model1
+        model2
+        model3
+        model4
+        model5;
+      assert (PNTWHR.server_hello_window_rank model5 == 11);
+      assert_norm (FStar.List.Tot.length (e6 :: rest) ==
+        FStar.List.Tot.length rest + 1);
+      assert (FStar.List.Tot.length (e6 :: rest) == 10);
+      assert (PNTWHR.server_hello_window_rank model5 ==
+        FStar.List.Tot.length (e6 :: rest) + 1);
+      PNTWHR.lemma_server_hello_window_tight_next_two_events_handshake_traffic_installs
+        model5
+        e5
+        e6
+        rest
+        tail_sent
+        tail_received
+        server.CS.cs_model;
+      assert (PNI.server_no_tail_handshake_traffic_install_event e5);
+      assert (PNI.server_no_tail_handshake_traffic_install_event e6);
+      assert_norm (
+        CS.conn_events_raw_replay model5 (e5 :: e6 :: rest)
+          tail_sent tail_received server.CS.cs_model ==
+        (exists model6 delta_sent delta_received tail_sent2 tail_received2.
+          CS.legal_event model5 e5 /\
+          CS.step_model model5 e5 == Some model6 /\
+          CS.event_raw_delta_legal model5 e5 delta_sent delta_received /\
+          Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
+          Seq.equal tail_received (B.append delta_received tail_received2) /\
+          CS.conn_events_raw_replay
+            model6
+            (e6 :: rest)
+            tail_sent2
+            tail_received2
+            server.CS.cs_model));
+      eliminate exists model6 delta_sent delta_received tail_sent2 tail_received2.
+        CS.legal_event model5 e5 /\
+        CS.step_model model5 e5 == Some model6 /\
+        CS.event_raw_delta_legal model5 e5 delta_sent delta_received /\
+        Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
+        Seq.equal tail_received (B.append delta_received tail_received2) /\
+        CS.conn_events_raw_replay
+          model6
+          (e6 :: rest)
+          tail_sent2
+          tail_received2
+          server.CS.cs_model
+      returns server_no_tail_post_two_handshake_installs_tail_order server
+      with _.
+      (
+        assert_norm (
+          CS.conn_events_raw_replay model6 (e6 :: rest)
+            tail_sent2 tail_received2 server.CS.cs_model ==
+          (exists model7 delta_sent2 delta_received2 tail_sent3 tail_received3.
+            CS.legal_event model6 e6 /\
+            CS.step_model model6 e6 == Some model7 /\
+            CS.event_raw_delta_legal model6 e6 delta_sent2 delta_received2 /\
+            Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
+            Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
+            CS.conn_events_raw_replay
+              model7
+              rest
+              tail_sent3
+              tail_received3
+              server.CS.cs_model));
+        eliminate exists model7 delta_sent2 delta_received2 tail_sent3 tail_received3.
+          CS.legal_event model6 e6 /\
+          CS.step_model model6 e6 == Some model7 /\
+          CS.event_raw_delta_legal model6 e6 delta_sent2 delta_received2 /\
+          Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
+          Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
+          CS.conn_events_raw_replay
+            model7
+            rest
+            tail_sent3
+            tail_received3
+            server.CS.cs_model
+        returns server_no_tail_post_two_handshake_installs_tail_order server
+        with _.
+        (
+          lemma_server_tail_order_from_two_step_replay
+            server
+            server_ch
+            selection
+            server_shared
+            server_sh
+            e5
+            e6
+            rest
+            model5
+            model6
+            model7
+            tail_sent
+            tail_received
+            tail_sent2
+            tail_received2
+            tail_sent3
+            tail_received3
+        )
+      )
+    )
+  )
+
 let lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_tail_order
   (client_initial:CS.connection_state)
   (server_initial:CS.connection_state)
