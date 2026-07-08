@@ -4,6 +4,21 @@
 # Inspired by ../calc_sample/Makefile.  Verifies the YMODEM spec, wire format,
 # state-machine instances and the (skeleton) Pulse implementation, and extracts
 # the implementation entry points to C via KaRaMeL for the interop wrappers.
+#
+# Two-layer implementation (mirrors calc_sample):
+#   * YModem.Impl.Server / YModem.Impl.Client hold the executable *leaf*
+#     operations (emit_header, emit_block, recv_block).  They are standalone
+#     (only Pulse/F* array primitives), so KaRaMeL extracts them to two small,
+#     self-contained C files with unprefixed names — the ABI the interop wrappers
+#     link against.
+#   * YModem.Impl.Server.CanonicalProtocol / YModem.Impl.Client.CanonicalProtocol
+#     hold the Common.ProtocolImplementation.protocol_implementation instances
+#     (the verified refinement witnesses for ymodem_server_wfsm / ymodem_client_wfsm),
+#     whose pi_process_local / pi_process_network drive those leaf operations.
+#     Like every type-class dictionary these instances carry separation-logic and
+#     ghost/stt fields, so they are NOT Low* — they are verified by `make verify`
+#     but not extracted to C (KaRaMeL cannot lower a dictionary; cf. calc's
+#     calc_server_protocol_implementation).  Only the leaves they drive lower to C.
 
 # ── Toolchain ──────────────────────────────────────────────────────
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
@@ -79,9 +94,12 @@ check-admits:
 # ═══════════════════════════════════════════════════════════════════
 # Extraction to C
 # ═══════════════════════════════════════════════════════════════════
-# The skeleton implementation modules to extract.  They are standalone (they use
-# only Pulse/F* array primitives), so KaRaMeL bundles away the FStar/Pulse/Prims
-# support and emits one C file per module with unprefixed function names.
+# The executable *leaf* modules to extract.  They are standalone (they use only
+# Pulse/F* array primitives), so KaRaMeL bundles away the FStar/Pulse/Prims
+# support and emits one C file per module with unprefixed function names.  The
+# CanonicalProtocol instance modules that drive these leaves are verified but are
+# not extracted here: a protocol_implementation dictionary is not Low* (it holds
+# separation-logic and ghost/stt fields), so it does not lower to C.
 IMPL_MODULES = \
   YModem.Impl.Server \
   YModem.Impl.Client

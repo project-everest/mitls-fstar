@@ -7,6 +7,15 @@
  * extracting its 128-byte payload — to the extracted (currently skeleton)
  * function `ymodem_client_recv_block` from YModem.Impl.Client.
  *
+ * `ymodem_client_recv_block` is the executable *leaf* operation of the receiver
+ * state-machine implementation: it is the packet-parsing step invoked by
+ * `pi_process_network` of the YMODEM client `protocol_implementation` instance
+ * `YModem.Impl.Client.CanonicalProtocol.ymodem_client_protocol_implementation`.
+ * That instance (the verified refinement witness) is not itself Low* — like
+ * every type-class dictionary it holds separation-logic and ghost fields — so it
+ * is verified but not extracted; the leaf function it drives is what lowers to C
+ * and what this wrapper links against.
+ *
  * Like `rb` with no command-line options, it takes no arguments: the file name
  * is taken from the YMODEM header block (block 0), and the file is written to
  * the current directory.

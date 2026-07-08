@@ -8,6 +8,17 @@
  * extracted (currently skeleton) functions `ymodem_server_emit_header` and
  * `ymodem_server_emit_block` from YModem.Impl.Server.
  *
+ * `ymodem_server_emit_header` / `ymodem_server_emit_block` are the executable
+ * *leaf* operations of the sender state-machine implementation: they are the
+ * packet-framing steps invoked by `pi_process_local` of the YMODEM server
+ * `protocol_implementation` instance
+ * `YModem.Impl.Server.CanonicalProtocol.ymodem_server_protocol_implementation`
+ * (the header block for the `YmodemStart` event, the data blocks for
+ * `YmodemSendBlock`).  That instance (the verified refinement witness) is not
+ * itself Low* — like every type-class dictionary it holds separation-logic and
+ * ghost fields — so it is verified but not extracted; the leaf functions it
+ * drives are what lower to C and what this wrapper links against.
+ *
  * Like `sb filename` with no other command-line options, it takes exactly one
  * argument: the path of the file to send.
  *
