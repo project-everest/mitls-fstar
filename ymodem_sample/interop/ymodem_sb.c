@@ -3,28 +3,30 @@
  *
  * This is the interoperability wrapper for the *sender* side.  It speaks the
  * YMODEM protocol over stdin/stdout (as lrzsz's `sb` does over a serial line),
- * and delegates the per-packet work — building the 133-byte header and data
- * packets (block number, complement, 128-byte payload, CRC-16) — to the
- * extracted (currently skeleton) functions `ymodem_server_emit_header` and
- * `ymodem_server_emit_block` from YModem.Impl.Server.
+ * and delegates the per-packet framing — building the 133-byte packet
+ * (block number, complement, 128-byte payload, CRC-16) — to the extracted,
+ * verified leaf `ymodem_server_emit_block` from YModem.Impl.Server.  The YMODEM
+ * header is simply block 0 whose 128-byte payload carries the file name and
+ * declared length; this wrapper formats that payload and calls
+ * `ymodem_server_emit_block 0 header out`.
  *
- * `ymodem_server_emit_header` / `ymodem_server_emit_block` are the executable
- * *leaf* operations of the sender state-machine implementation: they are the
- * packet-framing steps invoked by `pi_process_local` of the YMODEM server
- * `protocol_implementation` instance
+ * `ymodem_server_emit_block` is the executable *leaf* operation of the sender
+ * state-machine implementation: it is the packet-framing step invoked by
+ * `pi_process_local` of the YMODEM server `protocol_implementation` instance
  * `YModem.Impl.Server.CanonicalProtocol.ymodem_server_protocol_implementation`
- * (the header block for the `YmodemStart` event, the data blocks for
- * `YmodemSendBlock`).  That instance (the verified refinement witness) is not
- * itself Low* — like every type-class dictionary it holds separation-logic and
- * ghost fields — so it is verified but not extracted; the leaf functions it
- * drives are what lower to C and what this wrapper links against.
+ * (block 0 for the `YmodemStart` event, data blocks for `YmodemSendBlock`).  It
+ * is verified: its post-condition proves `out` holds the LowParse serialization
+ * of a `ymodem_packet` whose 128-byte payload is exactly the input chunk.  The
+ * instance dictionary that drives it is not itself Low* (like every type-class
+ * dictionary it holds separation-logic and ghost fields), so it is verified but
+ * not extracted; the leaf it drives is what lowers to C and what this wrapper
+ * links against.
  *
  * Like `sb filename` with no other command-line options, it takes exactly one
  * argument: the path of the file to send.
  *
- * This wrapper is UNVERIFIED C.  It is written to compile and to exercise the
- * extracted ABI; because the extracted implementation is currently a skeleton
- * (admit ()), it is not meant to be run.
+ * This wrapper is UNVERIFIED C.  It orchestrates the verified leaf over the
+ * YMODEM handshake; it is written to compile and exercise the extracted ABI.
  */
 
 #include "YModem_Impl_Server.h"
@@ -123,9 +125,19 @@ int main(int argc, char **argv) {
   /* The receiver opens with 'C' (CRC mode) or NAK. */
   if (wait_for(STDIN_FILENO, YM_CRC_C) != 0) { fclose(in); return 1; }
 
-  /* Header block 0: file name + declared length, built by the extracted core. */
-  ymodem_server_emit_header((uint8_t *)name, strlen(name),
-                            (uint32_t)size, packet);
+  /* Header block 0: its 128-byte payload carries the NUL-terminated file name
+     followed by the file length in ASCII decimal (built here, in the unverified
+     wrapper); the verified core then frames it as block 0. */
+  {
+    uint8_t header[YM_DATA_LEN];
+    memset(header, 0, YM_DATA_LEN);
+    size_t nlen = strlen(name);
+    if (nlen > YM_DATA_LEN - 16) nlen = YM_DATA_LEN - 16;
+    memcpy(header, name, nlen);
+    header[nlen] = 0;
+    snprintf((char *)(header + nlen + 1), YM_DATA_LEN - nlen - 1, "%ld", size);
+    ymodem_server_emit_block(0, header, packet);
+  }
   if (write_full(STDOUT_FILENO, packet, YM_PKT_LEN) != 0) { fclose(in); return 1; }
   if (wait_for(STDIN_FILENO, YM_ACK) != 0) { fclose(in); return 1; }
   if (wait_for(STDIN_FILENO, YM_CRC_C) != 0) { fclose(in); return 1; }
@@ -151,7 +163,13 @@ int main(int argc, char **argv) {
   }
   if (wait_for(STDIN_FILENO, YM_ACK) != 0) { fclose(in); return 1; }
 
-  ymodem_server_emit_header((uint8_t *)"", 0, 0, packet);
+  /* Terminating null header block: block 0 with an all-zero 128-byte payload
+     (empty name) signals the end of the batch. */
+  {
+    uint8_t zero_header[YM_DATA_LEN];
+    memset(zero_header, 0, YM_DATA_LEN);
+    ymodem_server_emit_block(0, zero_header, packet);
+  }
   if (write_full(STDOUT_FILENO, packet, YM_PKT_LEN) != 0) { fclose(in); return 1; }
   wait_for(STDIN_FILENO, YM_ACK);
 

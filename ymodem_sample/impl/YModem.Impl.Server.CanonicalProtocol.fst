@@ -10,8 +10,8 @@ module YModem.Impl.Server.CanonicalProtocol
   `pi_process_local` handler dispatches on the server local events and drives the
   packet-framing helpers of `YModem.Impl.Server`:
 
-    * `YmodemStart` (header block 0, declaring the file name and length) calls
-      `ymodem_server_emit_header`;
+    * `YmodemStart` (header block 0, whose 128-byte payload declares the file
+      name and length) calls `ymodem_server_emit_block 0uy`;
     * `YmodemSendBlock` (a 128-byte data block) calls `ymodem_server_emit_block`;
     * `YmodemEot` / `YmodemAbort` emit no data packet (EOT / CAN are single
       control bytes handled by the driver).
@@ -288,7 +288,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 {
   match ev {
     YP.YmodemStart _ _ _ -> {
-      ymodem_server_emit_header frame.yslf_buf frame.yslf_name_len frame.yslf_file_len out;
+      ymodem_server_emit_block 0uy frame.yslf_buf out;
       admit()
     }
     YP.YmodemSendBlock -> {

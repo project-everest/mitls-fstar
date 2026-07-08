@@ -7,10 +7,13 @@
 #
 # Two-layer implementation (mirrors calc_sample):
 #   * YModem.Impl.Server / YModem.Impl.Client hold the executable *leaf*
-#     operations (emit_header, emit_block, recv_block).  They are standalone
-#     (only Pulse/F* array primitives), so KaRaMeL extracts them to two small,
-#     self-contained C files with unprefixed names — the ABI the interop wrappers
-#     link against.
+#     operations (emit_block, recv_block).  They are standalone (only Pulse/F*
+#     array primitives), so KaRaMeL extracts them to two small, self-contained C
+#     files with unprefixed names — the ABI the interop wrappers link against.
+#     They are fully VERIFIED against the QuackyDucky wire format (emit_block
+#     proves `out` holds the serialization of a ymodem_packet with the given
+#     128-byte payload; recv_block proves the dual for parsing) and carry a
+#     matching .fsti (needed so the .fst may `friend` the generated wire modules).
 #   * YModem.Impl.Server.CanonicalProtocol / YModem.Impl.Client.CanonicalProtocol
 #     hold the Common.ProtocolImplementation.protocol_implementation instances
 #     (the verified refinement witnesses for ymodem_server_wfsm / ymodem_client_wfsm),
@@ -88,7 +91,7 @@ verify: $(ALL_CHECKED_FILES)
 	@echo "All YMODEM modules verified"
 
 check-admits:
-	@echo "Checking for admits (the Pulse impl skeleton is expected to contain them)..."
+	@echo "Checking for admits (the emit_block/recv_block leaves are verified; CanonicalProtocol instance process/ghost fns may still be admit-based)..."
 	@grep -rn "admit *()" $(IMPL_DIR) 2>/dev/null || echo "  none"
 
 # ═══════════════════════════════════════════════════════════════════
@@ -143,8 +146,8 @@ extract: extract-c
 
 # ── C wrappers (unverified interop drivers) ────────────────────────
 # Compile the `rb`/`sb`-style interop wrappers against the extracted C.  This
-# links the (skeleton) extracted core, so the executables are produced for ABI
-# checking only and are NOT meant to be run.
+# links the verified extracted leaves (emit_block/recv_block); the executables
+# are produced for ABI/compile checking and are not exercised here.
 KRML_INCLUDE = $(KRML_HOME)/include
 KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 INTEROP_DIR  = interop
@@ -159,7 +162,7 @@ wrappers: extract-c
 	  $(INTEROP_DIR)/ymodem_rb.c $(EXTRACT_DIR)/YModem_Impl_Client.c
 	$(CC) $(CFLAGS_WRAP) -o $(EXTRACT_DIR)/ymodem_sb \
 	  $(INTEROP_DIR)/ymodem_sb.c $(EXTRACT_DIR)/YModem_Impl_Server.c
-	@echo "Wrappers compiled to $(EXTRACT_DIR)/ymodem_rb and $(EXTRACT_DIR)/ymodem_sb (do not run: skeleton core)."
+	@echo "Wrappers compiled to $(EXTRACT_DIR)/ymodem_rb and $(EXTRACT_DIR)/ymodem_sb (do not run)."
 
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
@@ -170,7 +173,7 @@ clean:
 help:
 	@echo "YMODEM sample - Makefile targets:"
 	@echo "  make verify        - Verify all YMODEM modules (default)"
-	@echo "  make check-admits  - List admits (skeleton impl is expected to have them)"
+	@echo "  make check-admits  - List admits (leaves verified; instances may still have them)"
 	@echo "  make extract-krml  - Extract the impl modules to .krml"
 	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
 	@echo "  make extract       - verify + extract-krml + extract-c"

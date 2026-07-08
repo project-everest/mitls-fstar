@@ -4,25 +4,26 @@
  * This is the interoperability wrapper for the *receiver* side.  It speaks the
  * YMODEM protocol over stdin/stdout (as lrzsz's `rb` does over a serial line),
  * and delegates the per-packet work — validating a 133-byte packet and
- * extracting its 128-byte payload — to the extracted (currently skeleton)
- * function `ymodem_client_recv_block` from YModem.Impl.Client.
+ * extracting its 128-byte payload — to the extracted, verified leaf
+ * `ymodem_client_recv_block` from YModem.Impl.Client.
  *
  * `ymodem_client_recv_block` is the executable *leaf* operation of the receiver
  * state-machine implementation: it is the packet-parsing step invoked by
  * `pi_process_network` of the YMODEM client `protocol_implementation` instance
  * `YModem.Impl.Client.CanonicalProtocol.ymodem_client_protocol_implementation`.
- * That instance (the verified refinement witness) is not itself Low* — like
- * every type-class dictionary it holds separation-logic and ghost fields — so it
- * is verified but not extracted; the leaf function it drives is what lowers to C
- * and what this wrapper links against.
+ * It is verified: its post-condition proves `inp` parses (via the LowParse
+ * `ymodem_parse`) to a `ymodem_packet` whose block number is the returned value
+ * and whose 128-byte payload is exactly the bytes written to `out_data`.  The
+ * instance dictionary that drives it is not itself Low* (it holds
+ * separation-logic and ghost fields), so it is verified but not extracted; the
+ * leaf it drives is what lowers to C and what this wrapper links against.
  *
  * Like `rb` with no command-line options, it takes no arguments: the file name
  * is taken from the YMODEM header block (block 0), and the file is written to
  * the current directory.
  *
- * This wrapper is UNVERIFIED C.  It is written to compile and to exercise the
- * extracted ABI; because the extracted implementation is currently a skeleton
- * (admit ()), it is not meant to be run.
+ * This wrapper is UNVERIFIED C.  It orchestrates the verified leaf over the
+ * YMODEM handshake; it is written to compile and exercise the extracted ABI.
  */
 
 #include "YModem_Impl_Client.h"
