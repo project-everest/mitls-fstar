@@ -283,8 +283,8 @@ generic driver.**
 
 - `Calc.Server.CanonicalProtocol.new_canonical_server` constructs a canonical
   server and `calc_server_protocol_implementation`.
-- `Calc.Server.Endpoint` defines `calc_protocol_endpoint` and an endpoint runner
-  `run_channel_endpoint`.
+- `Calc.Server.Endpoint` defines `calc_protocol_endpoint` and a concrete
+  endpoint runner.
 - But the extracted public wrapper
   `Calc.Server.EndpointRunner.run_channel_endpoint` currently calls
   `Calc.Server.Socket.run_channel`, the direct socket path, not the endpoint path
@@ -292,8 +292,8 @@ generic driver.**
 
 First cleanup target:
 
-1. Change `Calc.Server.EndpointRunner.run_channel_endpoint` to call
-   `Calc.Server.Endpoint.run_channel_endpoint`.
+1. Change `Calc.Server.EndpointRunner.run_channel_endpoint` to call the concrete
+   endpoint runner in `Calc.Server.Endpoint`.
 2. Add the endpoint/canonical modules needed by that path to the calc extraction
    target.
 3. Run `make -C calc_sample test-c`.

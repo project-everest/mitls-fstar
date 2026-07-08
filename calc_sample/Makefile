@@ -148,11 +148,18 @@ IMPL_MODULES = \
   Calc.Impl.Mul \
   Calc.Impl.Div \
   Calc.Server \
-  Calc.Server.Socket \
+  Calc.Server.CanonicalProtocol \
+  Calc.Server.Endpoint \
   Calc.Server.EndpointRunner
 
 COMMON_EXTRACT_MODULES = \
-  Common.TCP
+  Common.TCP \
+  Common.StateMachine \
+  Common.WireFormat \
+  Common.WireFormatStateMachine \
+  Common.ProtocolImplementation \
+  Common.ProtocolEndpoint \
+  Common.ProtocolDriver
 
 # Convert module names to .krml filenames
 KRML_FILES = \
