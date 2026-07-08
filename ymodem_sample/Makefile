@@ -123,6 +123,26 @@ extract-c: extract-krml | $(EXTRACT_DIR)
 
 extract: extract-c
 
+# ── C wrappers (unverified interop drivers) ────────────────────────
+# Compile the `rb`/`sb`-style interop wrappers against the extracted C.  This
+# links the (skeleton) extracted core, so the executables are produced for ABI
+# checking only and are NOT meant to be run.
+KRML_INCLUDE = $(KRML_HOME)/include
+KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
+INTEROP_DIR  = interop
+CC ?= gcc
+CFLAGS_WRAP = -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra \
+  -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR)
+
+.PHONY: wrappers
+wrappers: extract-c
+	@echo "Compiling YMODEM interop wrappers (not run)..."
+	$(CC) $(CFLAGS_WRAP) -o $(EXTRACT_DIR)/ymodem_rb \
+	  $(INTEROP_DIR)/ymodem_rb.c $(EXTRACT_DIR)/YModem_Impl_Client.c
+	$(CC) $(CFLAGS_WRAP) -o $(EXTRACT_DIR)/ymodem_sb \
+	  $(INTEROP_DIR)/ymodem_sb.c $(EXTRACT_DIR)/YModem_Impl_Server.c
+	@echo "Wrappers compiled to $(EXTRACT_DIR)/ymodem_rb and $(EXTRACT_DIR)/ymodem_sb (do not run: skeleton core)."
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -136,4 +156,5 @@ help:
 	@echo "  make extract-krml  - Extract the impl modules to .krml"
 	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
 	@echo "  make extract       - verify + extract-krml + extract-c"
+	@echo "  make wrappers      - Compile the rb/sb interop wrappers (not run)"
 	@echo "  make clean         - Remove build artifacts"
