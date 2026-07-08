@@ -404,32 +404,72 @@ let lemma_lp_server_supported_versions_extension ()
         (GESH.Extension_data_supported_versions GPV.TLS_1p3))
       (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))
 =
-  (*
-   * WIP admit, intentionally scoped to one serializer parseback lemma.
-   *
-   * The statement is the concrete LowParse serialization shape for the TLS 1.3
-   * ServerHello supported_versions extension:
-   *
-   *   extension_type = supported_versions (0x002b)
-   *   extension_data length = 2
-   *   extension_data = TLS 1.3 protocol version (0x0304)
-   *
-   * This is not a cryptographic or state-machine assumption.  It is a local
-   * parser/serializer arithmetic proof about unfolding the generated
-   * `extensionServerHello_extension_data_supported_versions_serializer` through
-   * the bounded-vldata length prefix and flattening the resulting byte lists.
-   *
-   * The neighboring key_share extension parseback proof is completed without an
-   * admit.  This supported_versions proof was the only remaining obstacle to a
-   * committable checkpoint after the semantic trace theorem work; it should be
-   * removed next by proving the same explicit equality chain:
-   *
-   *   tag(0x002b) ++ u16(2) ++ protocol_version(0x0304)
-   *
-   * using `lemma_vldata_unfold_raw`, `lemma_bounded_int_2_raw`, and
-   * `lemma_of_list_append_raw`.
-   *)
-  admit()
+  let x : GESH.extensionServerHello =
+   GESH.Extension_data_supported_versions GPV.TLS_1p3 in
+  let sum = GESH.extensionServerHello_sum in
+  assert_norm (LP.dsum_tag_of_data sum x == LP.Known GET.Supported_versions);
+  assert_norm (LP.repr_of_maybe_enum_key (LP.dsum_enum sum) (LP.Known GET.Supported_versions) == 43us);
+  lemma_u16_parts_fit_raw 43us;
+  lemma_lp_ext_tag_raw GET.Supported_versions 43us;
+  lemma_u8_uint_to_t_eq_raw 0 0uy;
+  lemma_u8_uint_to_t_eq_raw 43 0x2buy;
+  assert (Seq.equal
+   (LP.serialize (LP.serialize_maybe_enum_key _ GET.extensionType_repr_serializer
+                   (LP.dsum_enum GESH.extensionServerHello_sum)) (LP.Known GET.Supported_versions))
+   (B.of_list [0uy; 0x2buy]));
+  assert_norm (LP.synth_dsum_case_recip sum (LP.Known GET.Supported_versions) x == GPV.TLS_1p3);
+  lemma_lp_protocol_version_tls13 ();
+  Seq.lemma_eq_elim
+   (LP.serialize GPV.protocolVersion_serializer GPV.TLS_1p3)
+   (B.of_list [0x03uy; 0x04uy]);
+  GSVSH.supportedVersionsServerHello_parser_serializer_eq ();
+  assert (GSVSH.supportedVersionsServerHello_serializer == GPV.protocolVersion_serializer);
+  assert (Seq.equal
+   (LP.serialize GSVSH.supportedVersionsServerHello_serializer GPV.TLS_1p3)
+   (B.of_list [0x03uy; 0x04uy]));
+  let v : GESHSV.extensionServerHello_extension_data_supported_versions =
+   GPV.TLS_1p3 in
+  lemma_vldata_unfold_raw 0 65535 GSVSH.supportedVersionsServerHello_serializer v;
+  lemma_bounded_int_2_fits_raw 2;
+  lemma_bounded_int_2_raw 2 0uy 2uy;
+  assert (Seq.equal
+   (LP.serialize GESHSV.extensionServerHello_extension_data_supported_versions_serializer v)
+   (Seq.append (B.of_list [0uy; 2uy])
+     (LP.serialize GSVSH.supportedVersionsServerHello_serializer v)));
+  Seq.lemma_eq_elim
+   (LP.serialize GSVSH.supportedVersionsServerHello_serializer v)
+   (B.of_list [0x03uy; 0x04uy]);
+  assert (Seq.equal
+   (LP.serialize GESHSV.extensionServerHello_extension_data_supported_versions_serializer v)
+   (Seq.append (B.of_list [0uy; 2uy]) (B.of_list [0x03uy; 0x04uy])));
+  lemma_of_list_append_raw [0uy; 2uy] [0x03uy; 0x04uy];
+  assert_norm (FStar.List.Tot.append [0uy; 2uy] [0x03uy; 0x04uy]
+              == [0uy; 2uy; 0x03uy; 0x04uy]);
+  assert (Seq.equal
+   (Seq.append (B.of_list [0uy; 2uy]) (B.of_list [0x03uy; 0x04uy]))
+   (B.of_list [0uy; 2uy; 0x03uy; 0x04uy]));
+  lemma_seq_equal_trans
+   (LP.serialize GESHSV.extensionServerHello_extension_data_supported_versions_serializer v)
+   (Seq.append (B.of_list [0uy; 2uy]) (B.of_list [0x03uy; 0x04uy]))
+   (B.of_list [0uy; 2uy; 0x03uy; 0x04uy]);
+  assert (Seq.equal
+   (LP.serialize GESHSV.extensionServerHello_extension_data_supported_versions_serializer v)
+   (B.of_list [0uy; 2uy; 0x03uy; 0x04uy]));
+  assert (GESH.serialize_extensionServerHello_cases GET.Supported_versions
+         == GESHSV.extensionServerHello_extension_data_supported_versions_serializer);
+  lemma_lp_extension_server_hello_bytes_raw x GET.Supported_versions
+   (B.of_list [0uy; 0x2buy])
+   (B.of_list [0uy; 2uy; 0x03uy; 0x04uy]);
+  assert (Seq.equal
+   (LP.serialize GESH.extensionServerHello_serializer x)
+   (Seq.append (B.of_list [0uy; 0x2buy]) (B.of_list [0uy; 2uy; 0x03uy; 0x04uy])));
+  assert_norm (FStar.List.Tot.append [0uy; 0x2buy] [0uy; 2uy; 0x03uy; 0x04uy]
+              == [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]);
+  lemma_of_list_append_raw [0uy; 0x2buy] [0uy; 2uy; 0x03uy; 0x04uy];
+  lemma_seq_equal_trans
+   (LP.serialize GESH.extensionServerHello_serializer x)
+   (Seq.append (B.of_list [0uy; 0x2buy]) (B.of_list [0uy; 2uy; 0x03uy; 0x04uy]))
+   (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])
 #pop-options
 
 #restart-solver
