@@ -4,6 +4,7 @@ module TLS13.Impl.Driver.PairingSemanticTrace
 
 open Pulse.Lib.Pervasives
 
+module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
@@ -13,9 +14,12 @@ module Pairing = TLS13.Impl.Driver.Pairing
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
+module PNTSFShape = TLS13.Impl.Driver.PairingNoTailServerFlightShape
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
+module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module SD = TLS13.Impl.Server.Driver
+module Seq = FStar.Seq
 module X = TLS13.X509.Spec
 
 #push-options "--split_queries always --z3rlimit 10"
@@ -1031,6 +1035,1179 @@ let lemma_client_successful_no_tail_semantic_trace_state_from_boundary
     assert (client_successful_no_tail_semantic_trace_state client client_trace)
   )
 
+noextract
+let server_semantic_handshake_install_event
+  (ev:CS.conn_event)
+  : prop =
+  PNTSS.server_no_tail_handshake_write_install_event ev \/
+  PNTSS.server_no_tail_handshake_read_install_event ev
+
+let lemma_server_semantic_handshake_install_event_local
+  (ev:CS.conn_event)
+  : Lemma
+      (requires server_semantic_handshake_install_event ev)
+      (ensures (
+        match ev with
+        | CS.ConnLocalEvent _ -> True
+        | _ -> False))
+=
+  match ev with
+  | CS.ConnLocalEvent _ -> ()
+  | _ -> assert False
+
+let lemma_server_semantic_handshake_install_event_tls_deltas_empty
+  (ev:CS.conn_event)
+  : Lemma
+      (requires server_semantic_handshake_install_event ev)
+      (ensures
+        CS.conn_event_sent_tls_delta ev == [] /\
+        CS.conn_event_received_tls_delta ev == [])
+=
+  lemma_server_semantic_handshake_install_event_local ev;
+  match ev with
+  | CS.ConnLocalEvent _ -> ()
+  | _ -> assert False
+
+let lemma_local_install_for_role_preserves_slots
+  (model model1:CS.connection_model)
+  (role_install:CS.role_traffic_key_install)
+  : Lemma
+      (requires
+        CS.step_model
+          model
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole role_install)) == Some model1)
+      (ensures
+        model1.CS.model_config == model.CS.model_config /\
+        model1.CS.model_control == model.CS.model_control /\
+        model1.CS.model_handshake.CS.hs_client_hello ==
+          model.CS.model_handshake.CS.hs_client_hello /\
+        model1.CS.model_handshake.CS.hs_server_hello ==
+          model.CS.model_handshake.CS.hs_server_hello /\
+        model1.CS.model_handshake.CS.hs_encrypted_extensions ==
+          model.CS.model_handshake.CS.hs_encrypted_extensions /\
+        model1.CS.model_handshake.CS.hs_certificate ==
+          model.CS.model_handshake.CS.hs_certificate /\
+        model1.CS.model_handshake.CS.hs_certificate_verify ==
+          model.CS.model_handshake.CS.hs_certificate_verify /\
+        model1.CS.model_handshake.CS.hs_server_finished ==
+          model.CS.model_handshake.CS.hs_server_finished /\
+        model1.CS.model_handshake.CS.hs_client_finished ==
+          model.CS.model_handshake.CS.hs_client_finished)
+=
+  match model.CS.model_control with
+  | CS.ControlHandshaking _ ->
+    assert_norm
+      (CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole role_install)) == Some model1)
+  | _ ->
+    assert_norm
+      (CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole role_install)) == None);
+    assert False
+
+let lemma_server_semantic_handshake_install_event_preserves_slots
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        server_semantic_handshake_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        model1.CS.model_config == model.CS.model_config /\
+        model1.CS.model_control == model.CS.model_control /\
+        model1.CS.model_handshake.CS.hs_client_hello ==
+          model.CS.model_handshake.CS.hs_client_hello /\
+        model1.CS.model_handshake.CS.hs_server_hello ==
+          model.CS.model_handshake.CS.hs_server_hello /\
+        model1.CS.model_handshake.CS.hs_encrypted_extensions ==
+          model.CS.model_handshake.CS.hs_encrypted_extensions /\
+        model1.CS.model_handshake.CS.hs_certificate ==
+          model.CS.model_handshake.CS.hs_certificate /\
+        model1.CS.model_handshake.CS.hs_certificate_verify ==
+          model.CS.model_handshake.CS.hs_certificate_verify /\
+        model1.CS.model_handshake.CS.hs_server_finished ==
+          model.CS.model_handshake.CS.hs_server_finished /\
+        model1.CS.model_handshake.CS.hs_client_finished ==
+          model.CS.model_handshake.CS.hs_client_finished)
+=
+  lemma_server_semantic_handshake_install_event_local ev;
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    lemma_local_install_for_role_preserves_slots model model1 role_install
+  | _ ->
+    assert False
+
+let lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
+  (cfg:CS.connection_config)
+  (ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          (CS.initial_model cfg)
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello ch);
+           } ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures selection.CS.server_selected_client_hello == ch)
+=
+  let m0 = CS.initial_model cfg in
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.ClientHello ch);
+    } in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let tail0 = ev1 :: ev2 :: rest in
+  PWR.lemma_conn_events_raw_replay_head
+    m0
+    ev0
+    tail0
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists
+    (m1:CS.connection_model)
+    (delta_sent0:B.bytes)
+    (delta_received0:B.bytes)
+    (tail_sent0:B.bytes)
+    (tail_received0:B.bytes).
+    CS.legal_event m0 ev0 /\
+    CS.step_model m0 ev0 == Some m1 /\
+    CS.event_raw_delta_legal m0 ev0 delta_sent0 delta_received0 /\
+    Seq.equal raw_sent (B.append delta_sent0 tail_sent0) /\
+    Seq.equal raw_received (B.append delta_received0 tail_received0) /\
+    CS.conn_events_raw_replay
+      m1
+      tail0
+      tail_sent0
+      tail_received0
+      final_model
+  returns selection.CS.server_selected_client_hello == ch
+  with _.
+  (
+    assert (m1 == next_model m0 ev0);
+    assert_norm ((next_model m0 ev0).CS.model_control ==
+      CS.ControlHandshaking CS.HsAwaitingClientHello);
+    assert (m1.CS.model_control ==
+      CS.ControlHandshaking CS.HsAwaitingClientHello);
+    PWR.lemma_conn_events_raw_replay_head
+      m1
+      ev1
+      (ev2 :: rest)
+      tail_sent0
+      tail_received0
+      final_model;
+    eliminate exists
+      (m2:CS.connection_model)
+      (delta_sent1:B.bytes)
+      (delta_received1:B.bytes)
+      (tail_sent1:B.bytes)
+      (tail_received1:B.bytes).
+      CS.legal_event m1 ev1 /\
+      CS.step_model m1 ev1 == Some m2 /\
+      CS.event_raw_delta_legal m1 ev1 delta_sent1 delta_received1 /\
+      Seq.equal tail_sent0 (B.append delta_sent1 tail_sent1) /\
+      Seq.equal tail_received0 (B.append delta_received1 tail_received1) /\
+      CS.conn_events_raw_replay
+        m2
+        (ev2 :: rest)
+        tail_sent1
+        tail_received1
+        final_model
+    returns selection.CS.server_selected_client_hello == ch
+    with _.
+    (
+      assert (m2 == next_model m1 ev1);
+      assert_norm ((next_model m1 ev1).CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived);
+      assert_norm ((next_model m1 ev1).CS.model_handshake.CS.hs_client_hello ==
+        Some ch);
+      assert (m2.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived);
+      assert (m2.CS.model_handshake.CS.hs_client_hello == Some ch);
+      PWR.lemma_conn_events_raw_replay_head
+        m2
+        ev2
+        rest
+        tail_sent1
+        tail_received1
+        final_model;
+      eliminate exists
+        (m3:CS.connection_model)
+        (delta_sent2:B.bytes)
+        (delta_received2:B.bytes)
+        (tail_sent2:B.bytes)
+        (tail_received2:B.bytes).
+        CS.legal_event m2 ev2 /\
+        CS.step_model m2 ev2 == Some m3 /\
+        CS.event_raw_delta_legal m2 ev2 delta_sent2 delta_received2 /\
+        Seq.equal tail_sent1 (B.append delta_sent2 tail_sent2) /\
+        Seq.equal tail_received1 (B.append delta_received2 tail_received2) /\
+        CS.conn_events_raw_replay
+          m3
+          rest
+          tail_sent2
+          tail_received2
+          final_model
+      returns selection.CS.server_selected_client_hello == ch
+      with _.
+      (
+        assert_norm (CS.legal_event m2 ev2);
+        assert
+          (m2.CS.model_handshake.CS.hs_client_hello ==
+            Some selection.CS.server_selected_client_hello);
+        assert (Some ch == Some selection.CS.server_selected_client_hello);
+        assert (selection.CS.server_selected_client_hello == ch)
+      )
+    )
+  )
+
+let lemma_server_finished_shape_tls_message_projections
+  (server_trace:list CS.conn_event)
+  (ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (sh:M.server_hello)
+  (e5:CS.conn_event)
+  (e6:CS.conn_event)
+  (ee:M.encrypted_extensions)
+  (cert:M.certificate_msg)
+  (cv:M.certificate_verify)
+  (sf:M.finished)
+  (server_app_write_material:CS.traffic_key_material)
+  (cf:M.finished)
+  (server_app_read_material:CS.traffic_key_material)
+  : Lemma
+      (requires
+        server_trace ==
+          FStar.List.Tot.append
+            (PWSeg.server_cleartext_handshake_prefix_events
+              ch
+              selection
+              server_shared
+              sh)
+            [
+              e5;
+              e6;
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+              };
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.Certificate cert);
+              };
+              CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+              };
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.Finished sf);
+              };
+              CS.ConnLocalEvent
+                (CS.LocalInstallTrafficKeysForRole {
+                  CS.install_role = CS.ServerEndpoint;
+                  CS.install_payload = {
+                    CS.install_epoch = CS.TrafficApplication;
+                    CS.install_direction = CS.TrafficWrite;
+                    CS.install_material = server_app_write_material;
+                  };
+                });
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.Finished cf);
+              };
+              CS.ConnLocalEvent
+                (CS.LocalInstallTrafficKeysForRole {
+                  CS.install_role = CS.ServerEndpoint;
+                  CS.install_payload = {
+                    CS.install_epoch = CS.TrafficApplication;
+                    CS.install_direction = CS.TrafficRead;
+                    CS.install_material = server_app_read_material;
+                  };
+                });
+              CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+            ] /\
+        PNTSS.server_no_tail_two_handshake_install_cover e5 e6)
+      (ensures
+        CS.sent_tls_messages server_trace ==
+          [
+            M.TlsHandshake (M.ServerHello sh);
+            M.TlsHandshake (M.EncryptedExtensions ee);
+            M.TlsHandshake (M.Certificate cert);
+            M.TlsHandshake (M.CertificateVerify cv);
+            M.TlsHandshake (M.Finished sf)
+          ] /\
+        CS.received_tls_messages server_trace ==
+          [
+            M.TlsHandshake (M.ClientHello ch);
+            M.TlsHandshake (M.Finished cf)
+          ])
+=
+  PNTSS.lemma_server_no_tail_two_handshake_install_cover_cases e5 e6;
+  assert (server_semantic_handshake_install_event e5);
+  assert (server_semantic_handshake_install_event e6);
+  lemma_server_semantic_handshake_install_event_local e5;
+  lemma_server_semantic_handshake_install_event_local e6;
+  match e5 with
+  | CS.ConnLocalEvent l5 ->
+    (match e6 with
+     | CS.ConnLocalEvent l6 ->
+       assert (server_trace ==
+         [
+           CS.ConnLocalEvent CS.LocalStartServer;
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello ch);
+           };
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared);
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ServerHello sh);
+           };
+           CS.ConnLocalEvent l5;
+           CS.ConnLocalEvent l6;
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+           };
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.Certificate cert);
+           };
+           CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+           };
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.Finished sf);
+           };
+           CS.ConnLocalEvent
+             (CS.LocalInstallTrafficKeysForRole {
+               CS.install_role = CS.ServerEndpoint;
+               CS.install_payload = {
+                 CS.install_epoch = CS.TrafficApplication;
+                 CS.install_direction = CS.TrafficWrite;
+                 CS.install_material = server_app_write_material;
+               };
+             });
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.Finished cf);
+           };
+           CS.ConnLocalEvent
+             (CS.LocalInstallTrafficKeysForRole {
+               CS.install_role = CS.ServerEndpoint;
+               CS.install_payload = {
+                 CS.install_epoch = CS.TrafficApplication;
+                 CS.install_direction = CS.TrafficRead;
+                 CS.install_material = server_app_read_material;
+               };
+             });
+           CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+         ]);
+       assert_norm (CS.sent_tls_messages
+         [
+          CS.ConnLocalEvent CS.LocalStartServer;
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          };
+          CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared);
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          };
+          CS.ConnLocalEvent l5;
+          CS.ConnLocalEvent l6;
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+          };
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Certificate cert);
+          };
+          CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+          };
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Finished sf);
+          };
+          CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = server_app_write_material;
+              };
+            });
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.Finished cf);
+          };
+          CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = server_app_read_material;
+              };
+            });
+          CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+         ] ==
+         [
+           M.TlsHandshake (M.ServerHello sh);
+           M.TlsHandshake (M.EncryptedExtensions ee);
+           M.TlsHandshake (M.Certificate cert);
+           M.TlsHandshake (M.CertificateVerify cv);
+           M.TlsHandshake (M.Finished sf)
+         ]);
+       assert_norm (CS.received_tls_messages
+         [
+          CS.ConnLocalEvent CS.LocalStartServer;
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          };
+          CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared);
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          };
+          CS.ConnLocalEvent l5;
+          CS.ConnLocalEvent l6;
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+          };
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Certificate cert);
+          };
+          CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+          };
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Finished sf);
+          };
+          CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = server_app_write_material;
+              };
+            });
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.Finished cf);
+          };
+          CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = server_app_read_material;
+              };
+            });
+          CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+         ] ==
+         [
+           M.TlsHandshake (M.ClientHello ch);
+           M.TlsHandshake (M.Finished cf)
+         ]);
+       assert (CS.sent_tls_messages server_trace ==
+         [
+          M.TlsHandshake (M.ServerHello sh);
+          M.TlsHandshake (M.EncryptedExtensions ee);
+          M.TlsHandshake (M.Certificate cert);
+          M.TlsHandshake (M.CertificateVerify cv);
+          M.TlsHandshake (M.Finished sf)
+         ]);
+       assert (CS.received_tls_messages server_trace ==
+         [
+          M.TlsHandshake (M.ClientHello ch);
+          M.TlsHandshake (M.Finished cf)
+         ])
+     | _ -> assert False)
+  | _ -> assert False
+
+let lemma_server_finished_shape_model_slots_from_event_log
+  (server:CS.connection_state)
+  (ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (sh:M.server_hello)
+  (e5:CS.conn_event)
+  (e6:CS.conn_event)
+  (ee:M.encrypted_extensions)
+  (cert:M.certificate_msg)
+  (cv:M.certificate_verify)
+  (sf:M.finished)
+  (server_app_write_material:CS.traffic_key_material)
+  (cf:M.finished)
+  (server_app_read_material:CS.traffic_key_material)
+  : Lemma
+      (requires
+        SD.server_driver_application_ready server /\
+        server.CS.cs_event_log ==
+          FStar.List.Tot.append
+            (PWSeg.server_cleartext_handshake_prefix_events
+              ch
+              selection
+              server_shared
+              sh)
+            [
+              e5;
+              e6;
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+              };
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.Certificate cert);
+              };
+              CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+              };
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.Finished sf);
+              };
+              CS.ConnLocalEvent
+                (CS.LocalInstallTrafficKeysForRole {
+                  CS.install_role = CS.ServerEndpoint;
+                  CS.install_payload = {
+                    CS.install_epoch = CS.TrafficApplication;
+                    CS.install_direction = CS.TrafficWrite;
+                    CS.install_material = server_app_write_material;
+                  };
+                });
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.Finished cf);
+              };
+              CS.ConnLocalEvent
+                (CS.LocalInstallTrafficKeysForRole {
+                  CS.install_role = CS.ServerEndpoint;
+                  CS.install_payload = {
+                    CS.install_epoch = CS.TrafficApplication;
+                    CS.install_direction = CS.TrafficRead;
+                    CS.install_material = server_app_read_material;
+                  };
+                });
+              CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+            ] /\
+        PNTSS.server_no_tail_two_handshake_install_cover e5 e6)
+      (ensures
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_certificate == Some cert /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_finished == Some sf /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_finished == Some cf)
+=
+  assert (CS.connection_state_event_log_consistent server);
+  assert (CS.connection_state_raw_event_replay_consistent server);
+  PNTSS.lemma_server_no_tail_two_handshake_install_cover_cases e5 e6;
+  assert (server_semantic_handshake_install_event e5);
+  assert (server_semantic_handshake_install_event e6);
+  let final_model = server.CS.cs_model in
+  let cfg = final_model.CS.model_config in
+  let m0 = CS.initial_model cfg in
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.ClientHello ch);
+    } in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) in
+  let ev4 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    } in
+  let ev5 = e5 in
+  let ev6 = e6 in
+  let ev7 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+    } in
+  let ev8 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Certificate cert);
+    } in
+  let ev9 = CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv) in
+  let ev10 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+    } in
+  let ev11 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished sf);
+    } in
+  let app_write_install =
+    {
+      CS.install_role = CS.ServerEndpoint;
+      CS.install_payload = {
+        CS.install_epoch = CS.TrafficApplication;
+        CS.install_direction = CS.TrafficWrite;
+        CS.install_material = server_app_write_material;
+      };
+    } in
+  let ev12 =
+    CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole app_write_install) in
+  let ev13 =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.Finished cf);
+    } in
+  let app_read_install =
+    {
+      CS.install_role = CS.ServerEndpoint;
+      CS.install_payload = {
+        CS.install_epoch = CS.TrafficApplication;
+        CS.install_direction = CS.TrafficRead;
+        CS.install_material = server_app_read_material;
+      };
+    } in
+  let ev14 =
+    CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole app_read_install) in
+  let ev15 = CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf) in
+  let tail15 = [] in
+  let tail14 = ev15 :: tail15 in
+  let tail13 = ev14 :: tail14 in
+  let tail12 = ev13 :: tail13 in
+  let tail11 = ev12 :: tail12 in
+  let tail10 = ev11 :: tail11 in
+  let tail9 = ev10 :: tail10 in
+  let tail8 = ev9 :: tail9 in
+  let tail7 = ev8 :: tail8 in
+  let tail6 = ev7 :: tail7 in
+  let tail5 = ev6 :: tail6 in
+  let tail4 = ev5 :: tail5 in
+  let tail3 = ev4 :: tail4 in
+  let tail2 = ev3 :: tail3 in
+  let tail1 = ev2 :: tail2 in
+  let tail0 = ev1 :: tail1 in
+  assert (server.CS.cs_event_log == ev0 :: tail0);
+  assert (CS.step_model_many m0 (ev0 :: tail0) == Some final_model);
+  assert
+    (CS.conn_events_raw_replay
+      m0
+      (ev0 :: tail0)
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      final_model);
+  lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
+    cfg
+    ch
+    selection
+    tail2
+    server.CS.cs_wire_log.CL.raw_sent
+    server.CS.cs_wire_log.CL.raw_received
+    final_model;
+  assert (selection.CS.server_selected_client_hello == ch);
+
+  let m1 = next_model m0 ev0 in
+  lemma_step_model_many_cons_next m0 ev0 tail0 final_model;
+  assert_norm (CS.step_model m0 ev0 == Some m1);
+  assert (m1.CS.model_control == CS.ControlHandshaking CS.HsAwaitingClientHello);
+
+  let m2 = next_model m1 ev1 in
+  lemma_step_model_many_cons_next m1 ev1 tail1 final_model;
+  assert_norm (CS.step_model m1 ev1 == Some m2);
+  assert (m2.CS.model_control == CS.ControlHandshaking CS.HsClientHelloReceived);
+  assert (m2.CS.model_handshake.CS.hs_client_hello == Some ch);
+
+  let m3 = next_model m2 ev2 in
+  lemma_step_model_many_cons_next m2 ev2 tail2 final_model;
+  assert_norm (CS.step_model m2 ev2 == Some m3);
+  assert (m3.CS.model_control == CS.ControlHandshaking CS.HsClientHelloReceived);
+  assert (m3.CS.model_handshake.CS.hs_client_hello == Some ch);
+
+  let m4 = next_model m3 ev3 in
+  lemma_step_model_many_cons_next m3 ev3 tail3 final_model;
+  assert_norm (CS.step_model m3 ev3 == Some m4);
+  assert (m4.CS.model_control == CS.ControlHandshaking CS.HsClientHelloReceived);
+  assert (m4.CS.model_handshake.CS.hs_client_hello == Some ch);
+
+  let m5 = next_model m4 ev4 in
+  lemma_step_model_many_cons_next m4 ev4 tail4 final_model;
+  assert_norm (CS.step_model m4 ev4 == Some m5);
+  assert (m5.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
+  assert (m5.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m5.CS.model_handshake.CS.hs_server_hello == Some sh);
+
+  let m6 = next_model m5 ev5 in
+  lemma_step_model_many_cons_next m5 ev5 tail5 final_model;
+  lemma_server_semantic_handshake_install_event_preserves_slots m5 m6 ev5;
+  assert (m6.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
+  assert (m6.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m6.CS.model_handshake.CS.hs_server_hello == Some sh);
+
+  let m7 = next_model m6 ev6 in
+  lemma_step_model_many_cons_next m6 ev6 tail6 final_model;
+  lemma_server_semantic_handshake_install_event_preserves_slots m6 m7 ev6;
+  assert (m7.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
+  assert (m7.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m7.CS.model_handshake.CS.hs_server_hello == Some sh);
+
+  let m8 = next_model m7 ev7 in
+  lemma_step_model_many_cons_next m7 ev7 tail7 final_model;
+  assert_norm (CS.step_model m7 ev7 == Some m8);
+  assert (m8.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+  assert (m8.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m8.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m8.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+
+  let m9 = next_model m8 ev8 in
+  lemma_step_model_many_cons_next m8 ev8 tail8 final_model;
+  assert_norm (CS.step_model m8 ev8 == Some m9);
+  assert (m9.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+  assert (m9.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m9.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m9.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m9.CS.model_handshake.CS.hs_certificate == Some cert);
+
+  let m10 = next_model m9 ev9 in
+  lemma_step_model_many_cons_next m9 ev9 tail9 final_model;
+  assert_norm (CS.step_model m9 ev9 == Some m10);
+  assert (m10.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+  assert (m10.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m10.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m10.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m10.CS.model_handshake.CS.hs_certificate == Some cert);
+  assert (m10.CS.model_handshake.CS.hs_certificate_verify == Some cv);
+
+  let m11 = next_model m10 ev10 in
+  lemma_step_model_many_cons_next m10 ev10 tail10 final_model;
+  assert_norm (CS.step_model m10 ev10 == Some m11);
+  assert (m11.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+  assert (m11.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m11.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m11.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m11.CS.model_handshake.CS.hs_certificate == Some cert);
+  assert (m11.CS.model_handshake.CS.hs_certificate_verify == Some cv);
+
+  let m12 = next_model m11 ev11 in
+  lemma_step_model_many_cons_next m11 ev11 tail11 final_model;
+  assert_norm (CS.step_model m11 ev11 == Some m12);
+  assert (m12.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent);
+  assert (m12.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m12.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m12.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m12.CS.model_handshake.CS.hs_certificate == Some cert);
+  assert (m12.CS.model_handshake.CS.hs_certificate_verify == Some cv);
+  assert (m12.CS.model_handshake.CS.hs_server_finished == Some sf);
+
+  let m13 = next_model m12 ev12 in
+  lemma_step_model_many_cons_next m12 ev12 tail12 final_model;
+  lemma_local_install_for_role_preserves_slots m12 m13 app_write_install;
+  assert (m13.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent);
+  assert (m13.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m13.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m13.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m13.CS.model_handshake.CS.hs_certificate == Some cert);
+  assert (m13.CS.model_handshake.CS.hs_certificate_verify == Some cv);
+  assert (m13.CS.model_handshake.CS.hs_server_finished == Some sf);
+
+  let m14 = next_model m13 ev13 in
+  lemma_step_model_many_cons_next m13 ev13 tail13 final_model;
+  assert_norm (CS.step_model m13 ev13 == Some m14);
+  assert (m14.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived);
+  assert (m14.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m14.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m14.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m14.CS.model_handshake.CS.hs_certificate == Some cert);
+  assert (m14.CS.model_handshake.CS.hs_certificate_verify == Some cv);
+  assert (m14.CS.model_handshake.CS.hs_server_finished == Some sf);
+  assert (m14.CS.model_handshake.CS.hs_client_finished == Some cf);
+
+  let m15 = next_model m14 ev14 in
+  lemma_step_model_many_cons_next m14 ev14 tail14 final_model;
+  lemma_local_install_for_role_preserves_slots m14 m15 app_read_install;
+  assert (m15.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived);
+  assert (m15.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m15.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m15.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m15.CS.model_handshake.CS.hs_certificate == Some cert);
+  assert (m15.CS.model_handshake.CS.hs_certificate_verify == Some cv);
+  assert (m15.CS.model_handshake.CS.hs_server_finished == Some sf);
+  assert (m15.CS.model_handshake.CS.hs_client_finished == Some cf);
+
+  let m16 = next_model m15 ev15 in
+  lemma_step_model_many_cons_next m15 ev15 tail15 final_model;
+  assert_norm (CS.step_model m15 ev15 == Some m16);
+  assert (m16.CS.model_handshake.CS.hs_client_hello == Some ch);
+  assert (m16.CS.model_handshake.CS.hs_server_hello == Some sh);
+  assert (m16.CS.model_handshake.CS.hs_encrypted_extensions == Some ee);
+  assert (m16.CS.model_handshake.CS.hs_certificate == Some cert);
+  assert (m16.CS.model_handshake.CS.hs_certificate_verify == Some cv);
+  assert (m16.CS.model_handshake.CS.hs_server_finished == Some sf);
+  assert (m16.CS.model_handshake.CS.hs_client_finished == Some cf);
+  assert_norm (CS.step_model_many m16 [] == Some m16);
+  assert (m16 == final_model)
+
+let lemma_server_successful_no_tail_semantic_trace_state_from_witnesses
+  (server:CS.connection_state)
+  (server_trace:list CS.conn_event)
+  (ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (sh:M.server_hello)
+  (e5:CS.conn_event)
+  (e6:CS.conn_event)
+  (ee:M.encrypted_extensions)
+  (cert:M.certificate_msg)
+  (cv:M.certificate_verify)
+  (sf:M.finished)
+  (server_app_write_material:CS.traffic_key_material)
+  (cf:M.finished)
+  (server_app_read_material:CS.traffic_key_material)
+  : Lemma
+      (requires
+        SD.server_driver_application_ready server /\
+        server_trace == server.CS.cs_event_log /\
+        server.CS.cs_event_log ==
+          FStar.List.Tot.append
+            (PWSeg.server_cleartext_handshake_prefix_events
+              ch
+              selection
+              server_shared
+              sh)
+            [
+              e5;
+              e6;
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+              };
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.Certificate cert);
+              };
+              CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+              };
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsHandshake (M.Finished sf);
+              };
+              CS.ConnLocalEvent
+                (CS.LocalInstallTrafficKeysForRole {
+                  CS.install_role = CS.ServerEndpoint;
+                  CS.install_payload = {
+                    CS.install_epoch = CS.TrafficApplication;
+                    CS.install_direction = CS.TrafficWrite;
+                    CS.install_material = server_app_write_material;
+                  };
+                });
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.Finished cf);
+              };
+              CS.ConnLocalEvent
+                (CS.LocalInstallTrafficKeysForRole {
+                  CS.install_role = CS.ServerEndpoint;
+                  CS.install_payload = {
+                    CS.install_epoch = CS.TrafficApplication;
+                    CS.install_direction = CS.TrafficRead;
+                    CS.install_material = server_app_read_material;
+                  };
+                });
+              CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+            ] /\
+        PNTSS.server_no_tail_two_handshake_install_cover e5 e6)
+      (ensures
+        server_successful_no_tail_semantic_trace_state server server_trace)
+=
+  lemma_server_finished_shape_tls_message_projections
+    server_trace
+    ch
+    selection
+    server_shared
+    sh
+    e5
+    e6
+    ee
+    cert
+    cv
+    sf
+    server_app_write_material
+    cf
+    server_app_read_material;
+  lemma_server_finished_shape_model_slots_from_event_log
+    server
+    ch
+    selection
+    server_shared
+    sh
+    e5
+    e6
+    ee
+    cert
+    cv
+    sf
+    server_app_write_material
+    cf
+    server_app_read_material;
+  assert (server_successful_no_tail_semantic_trace_state_inputs
+    server
+    server_trace
+    ch
+    selection
+    server_shared
+    sh
+    e5
+    e6
+    ee
+    cert
+    cv
+    sf
+    server_app_write_material
+    cf
+    server_app_read_material);
+  introduce exists
+    (ch0:M.client_hello)
+    (selection0:CS.server_handshake_selection)
+    (server_shared0:C.x25519_shared_secret)
+    (sh0:M.server_hello)
+    (e50:CS.conn_event)
+    (e60:CS.conn_event)
+    (ee0:M.encrypted_extensions)
+    (cert0:M.certificate_msg)
+    (cv0:M.certificate_verify)
+    (sf0:M.finished)
+    (server_app_write_material0:CS.traffic_key_material)
+    (cf0:M.finished)
+    (server_app_read_material0:CS.traffic_key_material).
+    server_successful_no_tail_semantic_trace_state_inputs
+      server
+      server_trace
+      ch0
+      selection0
+      server_shared0
+      sh0
+      e50
+      e60
+      ee0
+      cert0
+      cv0
+      sf0
+      server_app_write_material0
+      cf0
+      server_app_read_material0
+  with
+    ch
+    selection
+    server_shared
+    sh
+    e5
+    e6
+    ee
+    cert
+    cv
+    sf
+    server_app_write_material
+    cf
+    server_app_read_material
+  and ()
+
+let lemma_server_successful_no_tail_semantic_trace_state_from_no_ccs_boundary
+  (server:CS.connection_state)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        PNTPH.server_no_tail_no_ccs_application_ready_boundary server /\
+        server_trace == server.CS.cs_event_log)
+      (ensures
+        PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
+        server_successful_no_tail_semantic_trace_state server server_trace)
+=
+  PNTPH.lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order server;
+  eliminate exists
+    (ch:M.client_hello)
+    (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret)
+    (sh:M.server_hello)
+    (e5:CS.conn_event)
+    (e6:CS.conn_event)
+    (rest:list CS.conn_event).
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          ch
+          selection
+          server_shared
+          sh)
+        (e5 :: e6 :: rest) /\
+    PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
+    PNTSFShape.server_post_two_handshake_installs_tail_order rest
+  returns
+    PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
+    server_successful_no_tail_semantic_trace_state server server_trace
+  with _.
+  (
+    eliminate exists
+      (ee:M.encrypted_extensions)
+      (cert:M.certificate_msg)
+      (cv:M.certificate_verify)
+      (sf:M.finished)
+      (cf:M.finished)
+      (server_app_write_material:CS.traffic_key_material)
+      (server_app_read_material:CS.traffic_key_material).
+      rest ==
+        [
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+          };
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Certificate cert);
+          };
+          CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+          };
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake (M.Finished sf);
+          };
+          CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = server_app_write_material;
+              };
+            });
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.Finished cf);
+          };
+          CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = server_app_read_material;
+              };
+            });
+          CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+        ]
+    returns
+      PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
+      server_successful_no_tail_semantic_trace_state server server_trace
+    with _.
+    (
+      assert (server_trace == server.CS.cs_event_log);
+      assert (SD.server_driver_application_ready server);
+      lemma_server_successful_no_tail_semantic_trace_state_from_witnesses
+        server
+        server_trace
+        ch
+        selection
+        server_shared
+        sh
+        e5
+        e6
+        ee
+        cert
+        cv
+        sf
+        server_app_write_material
+        cf
+        server_app_read_material;
+      assert (server_successful_no_tail_semantic_trace_state server server_trace)
+    )
+  )
+
+let lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        paired_successful_no_tail_semantic_traces_no_ccs_boundary
+          client
+          server
+          client_trace
+          server_trace)
+      (ensures
+        paired_successful_no_tail_semantic_traces
+          client
+          server
+          client_trace
+          server_trace)
+=
+  lemma_client_successful_no_tail_semantic_trace_state_from_boundary
+    client
+    client_trace;
+  lemma_server_successful_no_tail_semantic_trace_state_from_no_ccs_boundary
+    server
+    server_trace;
+  assert (SD.server_driver_application_ready server);
+  assert
+    (paired_successful_no_tail_semantic_traces
+      client
+      server
+      client_trace
+      server_trace)
+
 let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_states
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -1256,4 +2433,38 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
     client
     server
 
+let lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_traces_no_ccs_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        paired_successful_no_tail_semantic_traces_no_ccs_boundary
+          client
+          server
+          client_trace
+          server_trace)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
+    client
+    server
+    client_trace
+    server_trace;
+  lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_traces
+    client
+    server
+    client_trace
+    server_trace
+ 
 #pop-options

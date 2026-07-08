@@ -311,6 +311,17 @@ let server_successful_no_tail_semantic_trace_state
       cf
       server_app_read_material
 
+val lemma_server_successful_no_tail_semantic_trace_state_from_no_ccs_boundary
+  (server:CS.connection_state)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        PNTPH.server_no_tail_no_ccs_application_ready_boundary server /\
+        server_trace == server.CS.cs_event_log)
+      (ensures
+        PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
+        server_successful_no_tail_semantic_trace_state server server_trace)
+
 noextract
 let paired_successful_no_tail_semantic_traces
   (client:CS.connection_state)
@@ -328,6 +339,42 @@ let paired_successful_no_tail_semantic_traces
   PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
   client_successful_no_tail_semantic_trace_state client client_trace /\
   server_successful_no_tail_semantic_trace_state server server_trace
+
+noextract
+let paired_successful_no_tail_semantic_traces_no_ccs_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : prop =
+  paired_semantic_tls_io_traces client_trace server_trace /\
+  CD.client_driver_application_ready client /\
+  FStar.List.Tot.length client.CS.cs_event_log == 16 /\
+  client_trace == client.CS.cs_event_log /\
+  PNTPH.server_no_tail_no_ccs_application_ready_boundary server /\
+  server_trace == server.CS.cs_event_log /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server
+
+val lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        paired_successful_no_tail_semantic_traces_no_ccs_boundary
+          client
+          server
+          client_trace
+          server_trace)
+      (ensures
+        paired_successful_no_tail_semantic_traces
+          client
+          server
+          client_trace
+          server_trace)
 
 val lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_states
   (client:CS.connection_state)
@@ -351,6 +398,29 @@ val lemma_client_server_application_record_material_agrees_from_paired_successfu
   : Lemma
       (requires
         paired_successful_no_tail_semantic_traces
+          client
+          server
+          client_trace
+          server_trace)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+
+val lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_traces_no_ccs_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        paired_successful_no_tail_semantic_traces_no_ccs_boundary
           client
           server
           client_trace
