@@ -13,6 +13,7 @@ module M = TLS13.Messages
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
+module PNTSC = TLS13.Impl.Driver.PairingNoTailServerCleartextShape
 module PNTSFShape = TLS13.Impl.Driver.PairingNoTailServerFlightShape
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PNTWHR = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
@@ -22,6 +23,21 @@ module SD = TLS13.Impl.Server.Driver
 module ST = TLS13.Impl.Server.Types
 
 #push-options "--split_queries always"
+
+let lemma_not_conn_event_is_ccs_elim
+  (ev:CS.conn_event)
+  : Lemma
+      (requires ~ (conn_event_is_ccs ev))
+      (ensures
+        ~ (exists m.
+          ev == CS.ConnNetworkEvent m /\
+          m.CL.message_value == M.TlsChangeCipherSpec))
+=
+  match ev with
+  | CS.ConnNetworkEvent m ->
+    ()
+  | CS.ConnLocalEvent _ ->
+    ()
 
 let lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shape
   (client_initial:CS.connection_state)
@@ -159,6 +175,243 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shap
         assert (FStar.List.Tot.length rest == 9);
         assert (server_no_tail_post_server_hello_suffix_shape server)
       | _ ->
+        assert False
+    )
+  )
+
+let lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape
+  (server:CS.connection_state)
+  : Lemma
+      (requires server_no_tail_no_ccs_application_ready_boundary server)
+      (ensures server_no_tail_post_server_hello_suffix_shape server)
+=
+  PNTSS.lemma_server_no_tail_start_spine16 server;
+  eliminate exists e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15.
+    server.CS.cs_event_log ==
+      [ CS.ConnLocalEvent CS.LocalStartServer;
+        e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15 ]
+  returns server_no_tail_post_server_hello_suffix_shape server
+  with _.
+  (
+    assert (FStar.List.Tot.mem e1 server.CS.cs_event_log);
+    assert (~ (conn_event_is_ccs e1));
+    lemma_not_conn_event_is_ccs_elim e1;
+    PNTSS.lemma_server_no_tail_second_event_client_hello_if_not_ccs16 server;
+    eliminate exists ch rest1.
+      server.CS.cs_event_log ==
+        CS.ConnLocalEvent CS.LocalStartServer ::
+        CS.ConnNetworkEvent ({
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.ClientHello ch);
+        }) ::
+        rest1
+    returns server_no_tail_post_server_hello_suffix_shape server
+    with _.
+    (
+      match rest1 with
+      | e2' :: rest2 ->
+        assert (server.CS.cs_event_log ==
+          CS.ConnLocalEvent CS.LocalStartServer ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) ::
+          e2' ::
+          rest2);
+        assert_norm (FStar.List.Tot.mem e2'
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+          CS.ConnNetworkEvent ({
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ClientHello ch);
+          }) ::
+          e2' ::
+          rest2));
+        assert (FStar.List.Tot.mem e2' server.CS.cs_event_log);
+        assert (~ (conn_event_is_ccs e2'));
+        lemma_not_conn_event_is_ccs_elim e2';
+        PNTSC.lemma_server_no_tail_third_event_select_parameters_if_not_ccs16 server;
+        eliminate exists ch0 selection rest2'.
+          server.CS.cs_event_log ==
+            CS.ConnLocalEvent CS.LocalStartServer ::
+            CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ClientHello ch0);
+            }) ::
+            CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+            rest2'
+        returns server_no_tail_post_server_hello_suffix_shape server
+        with _.
+        (
+          match rest2' with
+          | e3' :: rest3 ->
+            assert (server.CS.cs_event_log ==
+              CS.ConnLocalEvent CS.LocalStartServer ::
+              CS.ConnNetworkEvent ({
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.ClientHello ch0);
+              }) ::
+              CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+              e3' ::
+              rest3);
+            assert_norm (FStar.List.Tot.mem e3'
+              (CS.ConnLocalEvent CS.LocalStartServer ::
+              CS.ConnNetworkEvent ({
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.ClientHello ch0);
+              }) ::
+              CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+              e3' ::
+              rest3));
+            assert (FStar.List.Tot.mem e3' server.CS.cs_event_log);
+            assert (~ (conn_event_is_ccs e3'));
+            lemma_not_conn_event_is_ccs_elim e3';
+            PNTSC.lemma_server_no_tail_fourth_event_derive_shared_secret_if_not_ccs16 server;
+            eliminate exists ch1 selection1 server_shared rest3'.
+              server.CS.cs_event_log ==
+                CS.ConnLocalEvent CS.LocalStartServer ::
+                CS.ConnNetworkEvent ({
+                  CL.message_direction = CL.Received;
+                  CL.message_value = M.TlsHandshake (M.ClientHello ch1);
+                }) ::
+                CS.ConnLocalEvent (CS.LocalSelectServerParameters selection1) ::
+                CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+                rest3'
+            returns server_no_tail_post_server_hello_suffix_shape server
+            with _.
+            (
+              match rest3' with
+              | e4' :: rest4 ->
+                assert (server.CS.cs_event_log ==
+                  CS.ConnLocalEvent CS.LocalStartServer ::
+                  CS.ConnNetworkEvent ({
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ClientHello ch1);
+                  }) ::
+                  CS.ConnLocalEvent (CS.LocalSelectServerParameters selection1) ::
+                  CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+                  e4' ::
+                  rest4);
+                assert_norm (FStar.List.Tot.mem e4'
+                  (CS.ConnLocalEvent CS.LocalStartServer ::
+                  CS.ConnNetworkEvent ({
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ClientHello ch1);
+                  }) ::
+                  CS.ConnLocalEvent (CS.LocalSelectServerParameters selection1) ::
+                  CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+                  e4' ::
+                  rest4));
+                assert (FStar.List.Tot.mem e4' server.CS.cs_event_log);
+                assert (~ (conn_event_is_ccs e4'));
+                lemma_not_conn_event_is_ccs_elim e4';
+                PNTSC.lemma_server_no_tail_fifth_event_server_hello_if_not_ccs16 server;
+                eliminate exists ch2 selection2 server_shared2 sh rest5.
+                  server.CS.cs_event_log ==
+                    CS.ConnLocalEvent CS.LocalStartServer ::
+                    CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.ClientHello ch2);
+                    }) ::
+                    CS.ConnLocalEvent (CS.LocalSelectServerParameters selection2) ::
+                    CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared2) ::
+                    CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                    }) ::
+                    rest5
+                returns server_no_tail_post_server_hello_suffix_shape server
+                with _.
+                (
+                  let server_prefix =
+                    PWSeg.server_cleartext_handshake_prefix_events
+                      ch2
+                      selection2
+                      server_shared2
+                      sh in
+                  ListP.append_cons_l
+                    (CS.ConnLocalEvent CS.LocalStartServer)
+                    (CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.ClientHello ch2);
+                    }) ::
+                    CS.ConnLocalEvent (CS.LocalSelectServerParameters selection2) ::
+                    CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared2) ::
+                    CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                    }) ::
+                    [])
+                    rest5;
+                  ListP.append_cons_l
+                    (CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.ClientHello ch2);
+                    }))
+                    (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection2) ::
+                    CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared2) ::
+                    CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                    }) ::
+                    [])
+                    rest5;
+                  ListP.append_cons_l
+                    (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection2))
+                    (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared2) ::
+                    CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                    }) ::
+                    [])
+                    rest5;
+                  ListP.append_cons_l
+                    (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared2))
+                    (CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                    }) ::
+                    [])
+                    rest5;
+                  ListP.append_cons_l
+                    (CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                    }))
+                    []
+                    rest5;
+                  ListP.append_nil_l rest5;
+                  assert (server.CS.cs_event_log ==
+                    FStar.List.Tot.append server_prefix rest5);
+                  ListP.append_length server_prefix rest5;
+                  assert_norm (FStar.List.Tot.length
+                    (CS.ConnLocalEvent CS.LocalStartServer ::
+                    CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.ClientHello ch2);
+                    }) ::
+                    CS.ConnLocalEvent (CS.LocalSelectServerParameters selection2) ::
+                    CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared2) ::
+                    CS.ConnNetworkEvent ({
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                    }) ::
+                    []) == 5);
+                  assert (FStar.List.Tot.length server_prefix == 5);
+                  assert (FStar.List.Tot.length rest5 == 11);
+                  match rest5 with
+                  | e5' :: e6' :: rest ->
+                    assert (FStar.List.Tot.length rest == 9);
+                    assert (server_no_tail_post_server_hello_suffix_shape server)
+                  | _ ->
+                    assert False
+                )
+              | [] ->
+                assert False
+            )
+          | [] ->
+            assert False
+        )
+      | [] ->
         assert False
     )
   )

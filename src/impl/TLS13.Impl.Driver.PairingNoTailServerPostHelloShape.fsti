@@ -13,6 +13,29 @@ module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTSFShape = TLS13.Impl.Driver.PairingNoTailServerFlightShape
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
+module SD = TLS13.Impl.Server.Driver
+
+noextract
+let conn_event_is_ccs
+  (ev:CS.conn_event)
+  : prop =
+  match ev with
+  | CS.ConnNetworkEvent m -> m.CL.message_value == M.TlsChangeCipherSpec
+  | _ -> False
+
+noextract
+let trace_no_ccs
+  (trace:list CS.conn_event)
+  : prop =
+  forall ev. FStar.List.Tot.mem ev trace ==> ~ (conn_event_is_ccs ev)
+
+noextract
+let server_no_tail_no_ccs_application_ready_boundary
+  (server:CS.connection_state)
+  : prop =
+  SD.server_driver_application_ready server /\
+  FStar.List.Tot.length server.CS.cs_event_log == 16 /\
+  trace_no_ccs server.CS.cs_event_log
 
 (**
   Server-side no-tail post-[ServerHello] milestone packaged from the clean16
@@ -84,6 +107,12 @@ val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shap
           client_sent
           server_received
           server_sent)
+      (ensures server_no_tail_post_server_hello_suffix_shape server)
+
+val lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape
+  (server:CS.connection_state)
+  : Lemma
+      (requires server_no_tail_no_ccs_application_ready_boundary server)
       (ensures server_no_tail_post_server_hello_suffix_shape server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shape_with_start_spine16
