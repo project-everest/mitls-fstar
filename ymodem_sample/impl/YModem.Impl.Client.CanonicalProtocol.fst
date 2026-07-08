@@ -1,34 +1,35 @@
 module YModem.Impl.Client.CanonicalProtocol
 
 (**
-  YMODEM *client* (receiver) as an instance of the state-machine implementation
-  type class `Common.ProtocolImplementation.protocol_implementation`, the
-  executable refinement of the `YModem.Protocol.ymodem_client_wfsm` specification
-  state machine.
+  YMODEM *client* (receiver) as a verified instance of the state-machine
+  implementation type class `Common.ProtocolImplementation.protocol_implementation`,
+  the executable refinement of the `YModem.Protocol.ymodem_client_wfsm`
+  specification state machine.
 
-  This is the operational counterpart of the client state machine: its
-  `pi_process_network` handler validates an incoming 133-byte YMODEM packet and
-  extracts its 128-byte payload by driving the packet parser of
-  `YModem.Impl.Client`:
+  This is the receiver analogue of `Calc.Server.CanonicalProtocol` (the calc
+  *server* is the wire-input-driven template): its `pi_process_network` handler
+  validates an incoming 133-byte YMODEM data packet, extracts its 128-byte
+  payload by driving the verified `YModem.Impl.Client.ymodem_client_recv_block`
+  leaf, appends the payload to the abstract `ycs_received` list, extends a ghost
+  reachable-trace over the wire history, and advances a monotonic ghost
+  reference.
 
-    * `pi_process_network` calls `ymodem_client_recv_block`, whose returned block
-      number the driver interprets (block 0 = header carrying the file name and
-      declared length; blocks 1, 2, ... = file data, reassembled and truncated to
-      the declared length at end-of-file).
+  The instance is backed by a `Pulse.Lib.MonotonicGhostRef` over the reflexive-
+  transitive closure of a single-`WireEvent` step relation (`YModem.Impl.Client.Log`);
+  the invariant folds the canonical reachable-trace predicate
+  (`Log.client_trace_ok`, which refines the byte history into a valid state
+  machine trace via `WFSM.valid_byte_trace`) together with the WireEvent guard
+  (`Some? ycs_filename /\ ycs_status == FT_InProgress`).  The receiver emits no
+  wire output, so `sent` is always `Seq.empty`.
 
-  The receiver's local events (`YmodemClientStart`, declaring the file name and
-  length learned from the header, and `YmodemClientEot`, completion) produce no
-  wire output, so `pi_process_local` is a stub.
-
-  This is a SKELETON mirroring `Calc.Server.CanonicalProtocol`: the invariant and
-  snapshot are `emp`, and the ghost obligations and the process-function
-  postconditions are discharged with `admit ()`.  Its purpose is to place the
-  packet-parsing helper *inside* a genuine `protocol_implementation` instance
-  (rather than as a free-standing function), pinning the refinement structure and
-  the extracted C ABI for the interoperability wrappers.  A verified
-  implementation would replace the `emp` invariants with a reachable-trace
-  invariant and the `admit ()`s with real proofs relating `out_data` to the
-  parsed `ymodem_packet`.
+  Because the handle carries no concrete runtime state (only the ghost progress),
+  `pi_process_network` cannot branch on the abstract state; the invariant
+  therefore pins the WireEvent guard so that every well-formed 133-byte packet is
+  a genuine `StepOk`.  As a sound consequence, `pi_process_local` refuses both
+  local events (`YmodemClientStart` from a started state is a genuine
+  `IllegalTransition`; `YmodemClientEot` is modeled as a no-op refusal) rather
+  than mutating the (guard-pinned) abstract state.  A client is "born started"
+  via `new_ymodem_client`.
 **)
 
 #lang-pulse
@@ -40,30 +41,51 @@ module CPI = Common.ProtocolImplementation
 module SM = Common.StateMachine
 module SZ = FStar.SizeT
 module TCP = Common.TCP
+module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
+module FT = Common.FileTransfer
 module U8 = FStar.UInt8
 module Seq = FStar.Seq
+module L = FStar.List.Tot
+module MR = Pulse.Lib.MonotonicGhostRef
+module RTC = FStar.ReflexiveTransitiveClosure
 
 module YP = YModem.Protocol
+module Log = YModem.Impl.Client.Log
 
 open YModem.Wire.Generated.Ymodem_packet
+open YModem.Wire
 open YModem.Impl.Client
 
-(* The receiver implementation handle.  A verified implementation would carry the
-   concrete receiver state and a ghost progress witness; the skeleton threads the
-   spec state ghostly and needs nothing at runtime. *)
-type ymodem_client_impl = unit
+(* ───────────────────────────────────────────────────────────────────────────
+   Implementation handle: a monotonic ghost reference tracking the receiver's
+   progress (its wire/abstract history) under the RTC-closure preorder.  The
+   receiver has no concrete runtime state (recv_block writes into a caller
+   buffer), so this is the whole handle.
+   ─────────────────────────────────────────────────────────────────────────── *)
 
-(* SKELETON invariant / snapshot: `emp`. *)
-[@@pulse_unfold]
+noeq
+type ymodem_client_impl = {
+  progress : MR.mref Log.yc_state_ahead_preorder;
+}
+
+(* The reachable-trace invariant: the ghost reference holds the log determined by
+   the (received, sent, state) triple, its byte history refines a valid state
+   machine trace, and the WireEvent guard holds (filename known, in progress). *)
 let ymodem_client_inv
   (i:ymodem_client_impl) (received:TCP.bytes) (sent:TCP.bytes) (st:YP.ymodem_client_state)
-  : slprop = emp
+  : slprop =
+  MR.pts_to i.progress #1.0R (Log.mk_log received sent st) **
+  pure (
+    Log.client_trace_ok received sent (Log.mk_log received sent st) /\
+    Some? st.YP.ycs_filename /\
+    st.YP.ycs_status == FT.FT_InProgress)
 
-[@@pulse_unfold]
+(* A monotone snapshot of the progress at a past history. *)
 let ymodem_client_snap
   (i:ymodem_client_impl) (received:TCP.bytes) (sent:TCP.bytes) (st:YP.ymodem_client_state)
-  : slprop = emp
+  : slprop =
+  MR.snapshot i.progress (Log.mk_log received sent st)
 
 (* Network frame: a 128-byte scratch buffer that `pi_process_network` fills with
    the extracted packet payload. *)
@@ -72,16 +94,14 @@ type ymodem_client_network_frame = {
   ycnf_data : array U8.t;   // 128-byte extracted payload
 }
 
-[@@pulse_unfold]
 let ymodem_client_network_frame_pre
   (frame:ymodem_client_network_frame)
   (input:array U8.t) (input_len:SZ.t) (out:array U8.t) (out_len:SZ.t)
   (input_contents:TCP.bytes) (old_out:TCP.bytes)
   : slprop =
   (exists* d. pts_to frame.ycnf_data d ** pure (Seq.length d == 128)) **
-  pure (Seq.length input_contents == 133)
+  pure (Seq.length input_contents == 133 /\ SZ.v input_len == 133)
 
-[@@pulse_unfold]
 let ymodem_client_network_frame_post
   (frame:ymodem_client_network_frame)
   (result:CPI.process_result)
@@ -90,12 +110,17 @@ let ymodem_client_network_frame_post
   (st0:YP.ymodem_client_state) (st1:YP.ymodem_client_state)
   (consumed:TCP.bytes)
   (wire_outputs:list ymodem_packet) (local_outputs:list unit)
-  : slprop = emp
+  : slprop =
+  (exists* o'. pts_to frame.ycnf_data o' ** pure (Seq.length o' == 128)) **
+  pure (
+    consumed == input_contents /\
+    wire_outputs == Log.ymodem_no_wire_outputs /\
+    local_outputs == Log.ymodem_no_local_outputs)
 
-(* Local frame: the receiver's local events (start / EOT) emit no packet. *)
+(* Local frame: the receiver's local events (start / EOT) emit no packet and
+   touch no buffer. *)
 type ymodem_client_local_frame = unit
 
-[@@pulse_unfold]
 let ymodem_client_local_frame_pre
   (ev:YP.ymodem_client_local)
   (frame:ymodem_client_local_frame)
@@ -103,7 +128,6 @@ let ymodem_client_local_frame_pre
   (out:array U8.t) (out_len:SZ.t) (old_out:TCP.bytes)
   : slprop = emp
 
-[@@pulse_unfold]
 let ymodem_client_local_frame_post
   (ev:YP.ymodem_client_local)
   (frame:ymodem_client_local_frame)
@@ -113,7 +137,7 @@ let ymodem_client_local_frame_post
   (wire_outputs:list ymodem_packet) (local_outputs:list unit)
   : slprop = emp
 
-(* ── ghost obligations (SKELETON: admitted) ──────────────────────────────── *)
+(* ── ghost obligations ────────────────────────────────────────────────────── *)
 
 ghost fn ymodem_client_invariant_valid
   (i:ymodem_client_impl)
@@ -131,7 +155,9 @@ ensures
       (Ghost.reveal sent)
       Seq.empty)
 {
-  admit()
+  unfold (ymodem_client_inv i received sent st);
+  Log.lemma_client_trace_ok_valid received sent (Log.mk_log received sent st);
+  fold (ymodem_client_inv i received sent st)
 }
 
 ghost fn ymodem_client_take_snapshot
@@ -144,7 +170,10 @@ ensures
   ymodem_client_inv i received sent st **
   ymodem_client_snap i received sent st
 {
-  admit()
+  unfold (ymodem_client_inv i received sent st);
+  MR.take_snapshot i.progress (Log.mk_log received sent st);
+  fold (ymodem_client_snap i received sent st);
+  fold (ymodem_client_inv i received sent st)
 }
 
 ghost fn ymodem_client_recall_snapshot
@@ -172,10 +201,20 @@ ensures
       (Ghost.reveal current_received)
       (Ghost.reveal current_sent))
 {
-  admit()
+  unfold (ymodem_client_snap i snapshot_received snapshot_sent snapshot_state);
+  unfold (ymodem_client_inv i current_received current_sent current_state);
+  MR.recall_snapshot i.progress;
+  Log.lemma_yc_closure_state_ahead
+    (Log.mk_log snapshot_received snapshot_sent snapshot_state)
+    (Log.mk_log current_received current_sent current_state);
+  Log.lemma_yc_closure_histories_ahead
+    (Log.mk_log snapshot_received snapshot_sent snapshot_state)
+    (Log.mk_log current_received current_sent current_state);
+  fold (ymodem_client_snap i snapshot_received snapshot_sent snapshot_state);
+  fold (ymodem_client_inv i current_received current_sent current_state)
 }
 
-(* ── network processing: drive the packet-parsing helper ─────────────────── *)
+(* ── network processing: drive the verified packet-parsing leaf ───────────── *)
 
 fn ymodem_client_process_network
   (i:ymodem_client_impl)
@@ -228,11 +267,35 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       wire_outputs
       local_outputs)
 {
+  unfold (ymodem_client_inv i received0 sent0 st0);
+  unfold (ymodem_client_network_frame_pre frame input input_len out out_len input_contents old_out);
+  with d0. _;
   let blk = ymodem_client_recv_block input frame.ycnf_data;
-  admit()
+  with o'. _;
+  Log.lemma_recv_block_packet input_contents o';
+  let pkt = Ghost.hide (Log.ymodem_parsed_packet (Ghost.reveal input_contents));
+  Seq.lemma_eq_elim (Ghost.reveal input_contents) (ymodem_serialize (Ghost.reveal pkt));
+  let st1 = Ghost.hide (Log.wire_next_state (Ghost.reveal st0) (Ghost.reveal pkt));
+  let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
+  let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
+  let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
+  Log.lemma_wire_step_ok received0 sent0 st0 pkt received1 sent0 st1;
+  Log.lemma_client_trace_ok_network_step received0 sent0 log0 pkt log1;
+  assert (pure (Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1)));
+  RTC.closure_step Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1);
+  MR.update i.progress (Ghost.reveal log1);
+  fold (ymodem_client_inv i (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
+  fold (ymodem_client_network_frame_post
+    frame Log.ymodem_client_step_ok_result input_contents input_len old_out (Ghost.reveal old_out)
+    st0 (Ghost.reveal st1) (Ghost.reveal input_contents)
+    Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
+  Log.lemma_ym_network_process_correct_step_ok
+    input_contents input_len old_out old_out out_len
+    received0 sent0 st0 received1 sent0 st1 pkt;
+  Log.ymodem_client_step_ok_result
 }
 
-(* ── local processing (SKELETON stub: receiver local events emit no packet) ─ *)
+(* ── local processing: refuse local events (sound IllegalTransition no-op) ─── *)
 
 fn ymodem_client_process_local
   (i:ymodem_client_impl)
@@ -278,7 +341,28 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       wire_outputs
       local_outputs)
 {
-  admit()
+  unfold (ymodem_client_local_frame_pre ev frame st0 out out_len old_out);
+  Log.lemma_ym_local_process_correct_illegal ev old_out old_out out_len received0 sent0 st0;
+  fold (ymodem_client_local_frame_post
+    ev frame Log.ymodem_client_illegal_result old_out (Ghost.reveal old_out)
+    st0 (Ghost.reveal st0) Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
+  Log.ymodem_client_illegal_result
+}
+
+(* ── constructor: born started ────────────────────────────────────────────── *)
+
+fn new_ymodem_client (filename:erased TCP.bytes) (len:erased nat)
+requires emp
+returns i:ymodem_client_impl
+ensures ymodem_client_inv i Seq.empty Seq.empty (Log.started_log filename len).Log.ycl_state
+{
+  let progress = MR.alloc #_ #Log.yc_state_ahead_preorder (Log.started_log filename len);
+  let i = { progress };
+  rewrite (MR.pts_to progress #1.0R (Log.started_log filename len)) as
+          (MR.pts_to i.progress #1.0R (Log.started_log filename len));
+  Log.lemma_started_trace_ok filename len;
+  fold (ymodem_client_inv i Seq.empty Seq.empty (Log.started_log filename len).Log.ycl_state);
+  i
 }
 
 (* ── the instance ─────────────────────────────────────────────────────────── *)
