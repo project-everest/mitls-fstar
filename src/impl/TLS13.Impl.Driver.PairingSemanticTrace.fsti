@@ -165,6 +165,19 @@ let client_successful_no_tail_semantic_trace_state
       e14
       cf
 
+
+val lemma_client_successful_no_tail_semantic_trace_state_from_boundary
+  (client:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        FStar.List.Tot.length client.CS.cs_event_log == 16 /\
+        client_trace == client.CS.cs_event_log)
+      (ensures
+        PNTCAS.client_no_tail_finished_sent_shape client /\
+        client_successful_no_tail_semantic_trace_state client client_trace)
+
 (**
   Server-side no-tail semantic inversion package.  The two handshake-traffic
   installs after ServerHello are intentionally order-insensitive; they are local
