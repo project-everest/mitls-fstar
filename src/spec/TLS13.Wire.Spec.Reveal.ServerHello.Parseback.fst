@@ -29,9 +29,11 @@ module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module LP = LowParse.Spec
+module LSeqB = LowParse.Pulse.SeqBytes
 module WS = TLS13.Wire.Spec
 module WSR = TLS13.Wire.Spec.Reveal
 module WSRU = TLS13.Wire.Spec.Reveal.Util
+module CHP = TLS13.Wire.Spec.Reveal.ClientHello.Parseback
 module PBU = TLS13.Wire.Spec.Reveal.ClientHello.Parseback.Util
 module GPV = TLS13.Wire.Generated.ProtocolVersion
 module GCS = TLS13.Wire.Generated.CipherSuite
@@ -92,6 +94,31 @@ let u24_literal (n:nat) (b0 b1 b2:U8.t)
   byte_literal (n / 256) b1;
   byte_literal n b2;
   assert (WS.u24 n == B.of_list [WS.byte (n / 65536); WS.byte (n / 256); WS.byte n])
+
+let wsr_byte_literal (n:nat) (b:U8.t)
+  : Lemma
+      (requires U8.v b == n % 256)
+      (ensures WSR.byte n == b)
+=
+  WSR.lemma_byte_value n;
+  assert (U8.v (WSR.byte n) == U8.v b);
+  U8.v_inj (WSR.byte n) b
+
+let wsr_u24_literal (n:nat) (b0 b1 b2:U8.t)
+  : Lemma
+      (requires U8.v b0 == (n / 65536) % 256 /\
+                U8.v b1 == (n / 256) % 256 /\
+                U8.v b2 == n % 256)
+      (ensures Seq.equal (WSR.u24 n) (B.of_list [b0; b1; b2]))
+=
+  WSR.lemma_u24_reveal n;
+  wsr_byte_literal (n / 65536) b0;
+  wsr_byte_literal (n / 256) b1;
+  wsr_byte_literal n b2;
+  assert (B.of_list [WSR.byte (n / 65536); WSR.byte (n / 256); WSR.byte n] ==
+          B.of_list [b0; b1; b2])
+
+let lemma_bounded_int_3_u24 = CHP.lemma_bounded_int_3_u24
 
 let lemma_of_list_append_raw = PBU.lemma_of_list_append_raw
 let lemma_bounded_int_1_raw = PBU.lemma_bounded_int_1_raw
@@ -726,6 +753,59 @@ let lemma_lp_server_hello_body_payload
     (B.of_list [0uy; 0x13uy; 0x03uy; 0uy])
     (B.of_list [0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
     (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))
+#pop-options
+
+#restart-solver
+
+#push-options "--split_queries always --fuel 6 --ifuel 4 --z3rlimit 80"
+private let lemma_lp_server_hello_body_low_bytes
+  (sh:M.server_hello{sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256})
+  : Lemma (Seq.equal
+      (LP.serialize
+        GSHB.serverHello_body_serializer
+        (GSHB.serverHello_body_synth sh.M.random (canonical_server_hello_body sh)))
+      (Seq.append
+        sh.M.random
+        (Seq.append
+          (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+          (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])))))
+=
+  let body = canonical_server_hello_body sh in
+  let low_body = GSHB.serverHello_body_synth sh.M.random body in
+  lemma_lp_server_hello_body_payload sh;
+  Seq.lemma_eq_elim
+    (LP.serialize GSHBody.serverHelloBody_serializer body)
+    (Seq.append
+      (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+      (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])));
+  LP.serialize_ifthenelse_synth_inverse'
+    GSHB.serialize_serverHello_body_param
+    sh.M.random
+    body;
+  assert (GSHB.serialize_serverHello_body_param.LP.serialize_ifthenelse_synth_recip low_body ==
+          (| sh.M.random, body |));
+  LSeqB.serialize_lseq_bytes_eq 32 sh.M.random;
+  assert (GSHB.serverHello_body_random_serializer == LP.serialize_lseq_bytes 32);
+  assert (Seq.equal
+    (LP.serialize GSHB.serverHello_body_random_serializer sh.M.random)
+    sh.M.random);
+  assert (GSHB.serialize_serverHello_body_param.LP.serialize_ifthenelse_payload_serializer
+            (GSHB.parse_serverHello_body_param.LP.parse_ifthenelse_tag_cond sh.M.random)
+          == GSHBody.serverHelloBody_serializer);
+  assert (GSHB.serverHello_body_serializer ==
+          LP.serialize_ifthenelse GSHB.serialize_serverHello_body_param);
+  assert (Seq.equal
+    (LP.serialize GSHB.serverHello_body_serializer low_body)
+    (Seq.append
+      sh.M.random
+      (LP.serialize GSHBody.serverHelloBody_serializer body)));
+  assert (Seq.equal
+    (LP.serialize GSHB.serverHello_body_serializer low_body)
+    (Seq.append
+      sh.M.random
+      (Seq.append
+        (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+        (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])))))
 
 let lemma_lp_server_hello_low_bytes
   (sh:M.server_hello{sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256})
@@ -739,30 +819,59 @@ let lemma_lp_server_hello_low_bytes
             (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
             (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))))))
 =
-  (*
-   * WIP admit, intentionally scoped to the generated LowParse serializer shape
-   * for the canonical low-level ServerHello value.
-   *
-   * This lemma does not introduce a new TLS state-machine or cryptographic
-   * assumption.  It is the byte-level flattening statement for:
-   *
-   *   legacy_version(0x0303)
-   *   ++ random
-   *   ++ legacy_session_id_echo(empty)
-   *   ++ cipher_suite(chacha20_poly1305_sha256)
-   *   ++ legacy_compression_method(0)
-   *   ++ extensions_len(46)
-   *   ++ key_share extension
-   *   ++ supported_versions extension
-   *
-   * The proof immediately above already establishes the body payload shape, and
-   * the old in-progress body here got stuck only on transporting that shape
-   * through generated `serverHello_body`/`serverHello` synth serializers and
-   * reassociating `Seq.append`s.  Keep this admit until the parseback bridge is
-   * revisited after the current semantic trace theorem checkpoint is committed.
-   *)
-  admit()
+  let body = canonical_server_hello_body sh in
+  let low = canonical_server_hello_low sh in
+  assert (low.GSH.legacy_version == GPV.TLS_1p2);
+  assert (low.GSH.body == GSHB.serverHello_body_synth sh.M.random body);
+  lemma_lp_protocol_version_tls12 ();
+  lemma_lp_server_hello_body_low_bytes sh;
+  Seq.lemma_eq_elim
+    (LP.serialize GSHB.serverHello_body_serializer low.GSH.body)
+    (Seq.append
+      sh.M.random
+      (Seq.append
+        (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+        (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))));
+  GSH.synth_serverHello_injective ();
+  GSH.synth_serverHello_inverse ();
+  LP.serialize_synth_eq _
+    GSH.synth_serverHello
+    GSH.serverHello'_serializer
+    GSH.synth_serverHello_recip
+    () low;
+  assert (GSH.synth_serverHello_recip low == (GPV.TLS_1p2, low.GSH.body));
+  LP.serialize_nondep_then_eq
+    GPV.protocolVersion_serializer
+    GSHB.serverHello_body_serializer
+    (GPV.TLS_1p2, low.GSH.body);
+  Seq.lemma_eq_elim
+    (LP.serialize GPV.protocolVersion_serializer GPV.TLS_1p2)
+    (B.of_list [0x03uy; 0x03uy]);
+  assert (Seq.equal
+    (LP.serialize GSH.serverHello_serializer low)
+    (Seq.append
+      (B.of_list [0x03uy; 0x03uy])
+      (LP.serialize GSHB.serverHello_body_serializer low.GSH.body)));
+  Seq.lemma_eq_elim
+    (LP.serialize GSHB.serverHello_body_serializer low.GSH.body)
+    (Seq.append
+      sh.M.random
+      (Seq.append
+        (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+        (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))));
+  assert (Seq.equal
+    (LP.serialize GSH.serverHello_serializer low)
+    (Seq.append
+      (B.of_list [0x03uy; 0x03uy])
+      (Seq.append
+        sh.M.random
+        (Seq.append
+          (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+          (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))))));
+  ()
+#pop-options
 
+#push-options "--split_queries always --fuel 4 --ifuel 2 --z3rlimit 10"
 let lemma_ghs_serialize_server_hello_shape
   (low:GSH.serverHello)
   : Lemma
@@ -775,55 +884,266 @@ let lemma_ghs_serialize_server_hello_shape
             (WSR.u24 (B.length (LP.serialize GSH.serverHello_serializer low)))
             (LP.serialize GSH.serverHello_serializer low))))
 =
-  (*
-   * WIP admit, scoped to the TLS Handshake wrapper around an already-serialized
-   * low-level ServerHello body.
-   *
-   * The admitted fact is exactly the standard Handshake framing equation:
-   *
-   *   handshake_type(ServerHello = 2)
-   *   ++ uint24(length(body))
-   *   ++ body
-   *
-   * This is another generated-parser arithmetic/flattening proof, not an
-   * endpoint-state or cryptographic assumption.  It should be removed together
-   * with the other ServerHello parseback admits by replaying the old proof body
-   * using `lemma_vldata_unfold_raw`,
-   * `ClientHello.Parseback.lemma_bounded_int_3_u24`, and append associativity.
-   *)
-  admit()
+  let body = LP.serialize GSH.serverHello_serializer low in
+  LP.serialize_sum_eq
+    GHS.handshake_sum HT.handshakeType_repr_serializer GHS.serialize_handshake_cases
+    (GHS.Body_server_hello low);
+  LP.serialize_enum_key_eq
+    HT.handshakeType_repr_serializer HT.handshakeType_enum HT.Server_hello;
+  assert_norm (LP.enum_repr_of_key HT.handshakeType_enum HT.Server_hello == 2z);
+  LP.serialize_u8_spec 2z;
+  assert_norm (GHS.serialize_handshake_cases HT.Server_hello == GHS.handshake_body_server_hello_serializer);
+  assert_norm (GHS.handshake_body_server_hello_serializer ==
+               LP.serialize_bounded_vldata 0 16777215 GSH.serverHello_serializer);
+  lemma_vldata_unfold_raw 0 16777215 GSH.serverHello_serializer low;
+  assert_norm (LP.log256' 16777215 == 3);
+  LP.serialize_length GSH.serverHello_serializer low;
+  assert (B.length body < 16777216);
+  assert_norm (pow2 32 == 4294967296);
+  assert (U32.fits (B.length body));
+  lemma_bounded_int_3_u24 (B.length body);
+  Seq.lemma_seq_of_list_induction [2uy];
+  let tag =
+    LP.serialize
+      (LP.serialize_enum_key HT.handshakeType_repr_parser HT.handshakeType_repr_serializer HT.handshakeType_enum)
+      HT.Server_hello in
+  let blen : n:nat{n < pow2 (8 * 3) /\ U32.fits n} = B.length body in
+  let len0 : U32.t = U32.uint_to_t blen in
+  U32.vu_inv blen;
+  assert (U32.v len0 == blen);
+  LP.bounded_integer_prop_equiv 3 len0;
+  assert (LP.bounded_integer_prop 3 len0);
+  let len : LP.bounded_integer 3 = len0 in
+  let lenb = LP.serialize (LP.serialize_bounded_integer 3) len in
+  assert (Seq.equal tag (B.of_list [2uy]));
+  assert (Seq.equal
+    (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello low))
+    (B.append tag (B.append lenb body)));
+  assert (Seq.equal lenb (WSR.u24 (B.length body)));
+  Seq.lemma_eq_elim lenb (WSR.u24 (B.length body));
+  assert (Seq.equal (B.append tag (B.append lenb body))
+                    (B.append (B.of_list [2uy]) (B.append (WSR.u24 (B.length body)) body)));
+  assert (Seq.equal
+    (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello low))
+    (B.append (B.of_list [2uy]) (B.append (WSR.u24 (B.length body)) body)))
 #pop-options
 
 #restart-solver
 
 #push-options "--split_queries always --fuel 6 --ifuel 4 --z3rlimit 80"
-let lemma_ws_server_hello_from_selection_bytes
+private let lemma_ws_server_hello_extensions_bytes (key:B.bytes_of_len 32)
+  : Lemma (Seq.equal
+      (B.append (WS.server_key_share_extension key) (WS.server_supported_versions_extension ()))
+      (Seq.append
+        (B.of_list [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+        (Seq.append key (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))))
+=
+  lemma_ws_server_key_share_extension_bytes key;
+  lemma_ws_server_supported_versions_extension_bytes ();
+  Seq.lemma_eq_elim
+    (WS.server_key_share_extension key)
+    (Seq.append (B.of_list [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy]) key);
+  Seq.lemma_eq_elim
+    (WS.server_supported_versions_extension ())
+    (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]);
+  Seq.append_assoc
+    (B.of_list [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+    key
+    (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])
+
+private let lemma_ws_server_hello_extensions_len (key:B.bytes_of_len 32)
+  : Lemma
+      (B.length (B.append (WS.server_key_share_extension key) (WS.server_supported_versions_extension ())) == 46)
+=
+  let extensions =
+    B.append (WS.server_key_share_extension key) (WS.server_supported_versions_extension ()) in
+  let flat =
+    Seq.append
+      (B.of_list [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+      (Seq.append key (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])) in
+  lemma_ws_server_hello_extensions_bytes key;
+  Seq.lemma_eq_elim extensions flat;
+  Seq.lemma_len_append key (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]);
+  Seq.lemma_len_append
+    (B.of_list [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+    (Seq.append key (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]));
+  assert (B.length extensions == 46)
+
+private let lemma_ws_server_hello_tail_bytes (key:B.bytes_of_len 32)
+  : Lemma (Seq.equal
+      (Seq.append
+        (WS.u8 0)
+        (Seq.append
+          (WS.u16 0x1303)
+          (Seq.append
+            (WS.u8 0)
+            (Seq.append
+              (WS.u16 46)
+              (B.append (WS.server_key_share_extension key) (WS.server_supported_versions_extension ()))))))
+      (Seq.append
+        (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+        (Seq.append key (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))))
+=
+  let sv = B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy] in
+  let ext_prefix = B.of_list [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy] in
+  let extensions = B.append (WS.server_key_share_extension key) (WS.server_supported_versions_extension ()) in
+  let ext_flat = Seq.append ext_prefix (Seq.append key sv) in
+  lemma_ws_server_hello_extensions_bytes key;
+  Seq.lemma_eq_elim extensions ext_flat;
+  u8_literal 0 0uy;
+  u16_literal 0x1303 0x13uy 0x03uy;
+  u16_literal 46 0uy 46uy;
+  Seq.lemma_eq_elim (WS.u8 0) (B.of_list [0uy]);
+  Seq.lemma_eq_elim (WS.u16 0x1303) (B.of_list [0x13uy; 0x03uy]);
+  Seq.lemma_eq_elim (WS.u16 46) (B.of_list [0uy; 46uy]);
+  lemma_olcons_raw [0uy] [0x13uy; 0x03uy]
+    (Seq.append (B.of_list [0uy])
+      (Seq.append (B.of_list [0uy; 46uy]) ext_flat));
+  lemma_olcons_raw [0uy; 0x13uy; 0x03uy] [0uy]
+    (Seq.append (B.of_list [0uy; 46uy]) ext_flat);
+  lemma_olcons_raw [0uy; 0x13uy; 0x03uy; 0uy] [0uy; 46uy] ext_flat;
+  lemma_olcons_raw [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy]
+    [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy]
+    (Seq.append key sv);
+  assert_norm (FStar.List.Tot.append [0uy] [0x13uy; 0x03uy] ==
+    [0uy; 0x13uy; 0x03uy]);
+  assert_norm (FStar.List.Tot.append [0uy; 0x13uy; 0x03uy] [0uy] ==
+    [0uy; 0x13uy; 0x03uy; 0uy]);
+  assert_norm (FStar.List.Tot.append [0uy; 0x13uy; 0x03uy; 0uy] [0uy; 46uy] ==
+    [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy]);
+  assert_norm (FStar.List.Tot.append
+    [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy]
+    [0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy] ==
+    [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy]);
+  let tail0 =
+    Seq.append (B.of_list [0uy])
+      (Seq.append (B.of_list [0x13uy; 0x03uy])
+        (Seq.append (B.of_list [0uy])
+          (Seq.append (B.of_list [0uy; 46uy]) ext_flat))) in
+  let tail1 =
+    Seq.append (B.of_list [0uy; 0x13uy; 0x03uy])
+      (Seq.append (B.of_list [0uy])
+        (Seq.append (B.of_list [0uy; 46uy]) ext_flat)) in
+  let tail2 =
+    Seq.append (B.of_list [0uy; 0x13uy; 0x03uy; 0uy])
+      (Seq.append (B.of_list [0uy; 46uy]) ext_flat) in
+  let tail3 =
+    Seq.append (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy])
+      ext_flat in
+  let tail4 =
+    Seq.append
+      (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+      (Seq.append key sv) in
+  assert (Seq.equal tail0 tail1);
+  assert (Seq.equal tail1 tail2);
+  assert (Seq.equal tail2 tail3);
+  assert (Seq.equal tail3 tail4);
+  lemma_seq_equal_trans tail0 tail1 tail2;
+  lemma_seq_equal_trans tail0 tail2 tail3;
+  lemma_seq_equal_trans tail0 tail3 tail4;
+  assert (Seq.equal
+    (Seq.append
+      (WS.u8 0)
+      (Seq.append
+        (WS.u16 0x1303)
+        (Seq.append
+          (WS.u8 0)
+          (Seq.append
+            (WS.u16 46)
+            extensions))))
+    tail0);
+  Seq.lemma_eq_elim tail0 tail4;
+  ()
+
+private let lemma_ws_server_hello_body_bytes
+  (sh:M.server_hello{sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256})
+  : Lemma
+      (Seq.equal
+        (WS.serialize_server_hello sh)
+        (Seq.append
+          (B.of_list [0x03uy; 0x03uy])
+          (Seq.append
+            sh.M.random
+            (Seq.append
+              (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+              (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))))) /\
+       B.length (WS.serialize_server_hello sh) == 86)
+=
+  let extensions =
+    B.append (WS.server_key_share_extension sh.M.key_share)
+             (WS.server_supported_versions_extension ()) in
+  let flat_tail =
+    Seq.append
+      (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+      (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])) in
+  lemma_ws_server_hello_extensions_len sh.M.key_share;
+  assert (B.length extensions == 46);
+  u16_literal 0x0303 0x03uy 0x03uy;
+  assert (WS.cipher_suite_to_u16 sh.M.cipher_suite == 0x1303);
+  lemma_ws_server_hello_tail_bytes sh.M.key_share;
+  let tail =
+    Seq.append
+      (WS.u8 0)
+      (Seq.append
+        (WS.u16 (WS.cipher_suite_to_u16 sh.M.cipher_suite))
+        (Seq.append
+          (WS.u8 0)
+          (Seq.append
+            (WS.u16 (B.length extensions))
+            extensions))) in
+  assert (Seq.equal tail flat_tail);
+  assert (WS.serialize_server_hello sh ==
+    WS.append6
+      (WS.u16 0x0303)
+      sh.M.random
+      (WS.u8 0)
+      (WS.u16 (WS.cipher_suite_to_u16 sh.M.cipher_suite))
+      (WS.u8 0)
+      (B.append (WS.u16 (B.length extensions)) extensions));
+  Seq.lemma_eq_elim (WS.u16 0x0303) (B.of_list [0x03uy; 0x03uy]);
+  assert (Seq.equal
+    (WS.serialize_server_hello sh)
+    (Seq.append
+      (B.of_list [0x03uy; 0x03uy])
+      (Seq.append
+        sh.M.random
+        flat_tail)));
+  Seq.lemma_len_append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]);
+  Seq.lemma_len_append
+    (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+    (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]));
+  Seq.lemma_len_append
+    sh.M.random
+    (Seq.append
+      (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+      (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])));
+  Seq.lemma_len_append
+    (B.of_list [0x03uy; 0x03uy])
+    (Seq.append
+      sh.M.random
+      (Seq.append
+        (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+        (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))));
+  assert (B.length (WS.serialize_server_hello sh) == 86);
+  ()
+
+private let lemma_ws_server_hello_from_selection_shape
   (sh:M.server_hello{sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256})
   : Lemma (Seq.equal
       (WS.serialize_server_hello_from_selection sh)
-      (Seq.append
-        (B.of_list [2uy; 0uy; 0uy; 86uy; 0x03uy; 0x03uy])
-        (Seq.append
-          sh.M.random
-          (Seq.append
-            (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-            (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))))))
+      (B.append
+        (B.of_list [2uy])
+        (B.append
+          (WS.u24 (B.length (WS.serialize_server_hello sh)))
+          (WS.serialize_server_hello sh))))
 =
-  (*
-   * WIP admit, scoped to the hand-written `TLS13.Wire.Spec`
-   * ServerHello-from-selection serializer shape.
-   *
-   * The admitted equality is the same concrete byte layout as the generated
-   * LowParse canonical ServerHello lemmas above, but phrased for
-   * `WS.serialize_server_hello_from_selection`: handshake header
-   * `02 00 00 56`, legacy_version `0303`, random, empty session id, ChaCha20
-   * suite, empty compression method, and the two canonical extensions.
-   *
-   * This is parser/serializer glue only.  It should be discharged by restoring
-   * the explicit `u8`/`u16`/`u24` literal facts and append reassociation once this
-   * WIP checkpoint is committed.
-   *)
-  admit()
+  let body = WS.serialize_server_hello sh in
+  lemma_ws_server_hello_body_bytes sh;
+  u8_literal 2 2uy;
+  assert (WS.serialize_server_hello_from_selection sh ==
+          WS.append3 (WS.u8 2) (WS.u24 (B.length body)) body);
+  Seq.lemma_eq_elim (WS.u8 2) (B.of_list [2uy]);
+  ()
 #pop-options
 
 #push-options "--split_queries always --fuel 4 --ifuel 2 --z3rlimit 50"
@@ -854,17 +1174,73 @@ let lemma_canonical_server_hello_low_serializes
           (GHS.Body_server_hello (canonical_server_hello_low sh)))
         (WS.serialize_handshake (M.ServerHello sh)))
 =
-  (*
-   * WIP admit, scoped to the final ServerHello parseback serialization bridge:
-   * generated LowParse handshake serialization of the canonical low-level
-   * ServerHello equals the hand-written `WS.serialize_handshake (ServerHello sh)`.
-   *
-   * This lemma depends only on the local byte-shape lemmas above, all of which
-   * are parser/serializer flattening obligations.  It is deliberately kept
-   * separate from the final parse-back theorem below so the remaining trusted
-   * surface is easy to audit and remove after this WIP commit.
-   *)
-  admit()
+  let low = canonical_server_hello_low sh in
+  let low_body = LP.serialize GSH.serverHello_serializer low in
+  let ws_body = WS.serialize_server_hello sh in
+  let flat =
+    Seq.append
+      (B.of_list [0x03uy; 0x03uy])
+      (Seq.append
+        sh.M.random
+        (Seq.append
+          (B.of_list [0uy; 0x13uy; 0x03uy; 0uy; 0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+          (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy])))) in
+  lemma_lp_server_hello_low_bytes sh;
+  lemma_ws_server_hello_body_bytes sh;
+  assert (Seq.equal low_body flat);
+  assert (Seq.equal ws_body flat);
+  lemma_seq_equal_sym ws_body flat;
+  lemma_seq_equal_trans low_body flat ws_body;
+  assert (Seq.equal low_body ws_body);
+  assert (B.length low_body == B.length ws_body);
+  assert (B.length ws_body == 86);
+  assert (B.length low_body == 86);
+  assert (B.length low_body < 16777216);
+  lemma_ghs_serialize_server_hello_shape low;
+  Seq.lemma_eq_elim low_body ws_body;
+  assert (Seq.equal
+    (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello low))
+    (B.append
+      (B.of_list [2uy])
+      (B.append (WSR.u24 (B.length ws_body)) ws_body)));
+  assert (B.length ws_body == 86);
+  wsr_u24_literal 86 0uy 0uy 86uy;
+  u24_literal 86 0uy 0uy 86uy;
+  assert (Seq.equal (WSR.u24 (B.length ws_body)) (WSR.u24 86));
+  assert (Seq.equal (WS.u24 (B.length ws_body)) (WS.u24 86));
+  Seq.lemma_eq_elim (WSR.u24 (B.length ws_body)) (WSR.u24 86);
+  Seq.lemma_eq_elim (WS.u24 (B.length ws_body)) (WS.u24 86);
+  assert (Seq.equal (WSR.u24 (B.length ws_body)) (B.of_list [0uy; 0uy; 86uy]));
+  assert (Seq.equal (WS.u24 (B.length ws_body)) (B.of_list [0uy; 0uy; 86uy]));
+  lemma_seq_equal_sym (WS.u24 (B.length ws_body)) (B.of_list [0uy; 0uy; 86uy]);
+  lemma_seq_equal_trans
+    (WSR.u24 (B.length ws_body))
+    (B.of_list [0uy; 0uy; 86uy])
+    (WS.u24 (B.length ws_body));
+  Seq.lemma_eq_elim (WSR.u24 (B.length ws_body)) (WS.u24 (B.length ws_body));
+  assert (Seq.equal
+    (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello low))
+    (B.append
+      (B.of_list [2uy])
+      (B.append (WS.u24 (B.length ws_body)) ws_body)));
+  lemma_ws_server_hello_from_selection_shape sh;
+  assert (WS.serialize_handshake (M.ServerHello sh) ==
+          WS.serialize_server_hello_from_selection sh);
+  lemma_seq_equal_sym
+    (WS.serialize_server_hello_from_selection sh)
+    (B.append
+      (B.of_list [2uy])
+      (B.append (WS.u24 (B.length ws_body)) ws_body));
+  lemma_seq_equal_trans
+    (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello low))
+    (B.append
+      (B.of_list [2uy])
+      (B.append (WSR.u24 (B.length ws_body)) ws_body))
+    (WS.serialize_server_hello_from_selection sh);
+  Seq.lemma_eq_elim
+    (WS.serialize_server_hello_from_selection sh)
+    (WS.serialize_handshake (M.ServerHello sh));
+  ()
 #pop-options
 
 #push-options "--split_queries always --fuel 8 --ifuel 4 --z3rlimit 100"
