@@ -122,6 +122,42 @@ val lemma_client_no_tail_two_handshake_install_cover_cases
         (client_no_tail_handshake_read_install_event e4 /\
          client_no_tail_handshake_write_install_event e5))
 
+val lemma_client_no_tail_handshake_write_install_event_step_model_as_plain
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_handshake_write_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeys {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = material;
+              })) == Some model1)
+
+val lemma_client_no_tail_handshake_read_install_event_step_model_as_plain
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_handshake_read_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeys {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = material;
+              })) == Some model1)
+
 val lemma_client_two_handshake_install_cover_model_shape
   (model4 model5 model6:CS.connection_model)
   (e4 e5:CS.conn_event)

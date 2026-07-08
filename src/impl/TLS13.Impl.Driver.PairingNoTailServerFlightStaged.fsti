@@ -11,6 +11,7 @@ module M = TLS13.Messages
 module PNTCRR = TLS13.Impl.Driver.PairingNoTailClientReceivedRawShape
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
+module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 
 (**
@@ -64,6 +65,9 @@ let clean16_server_encrypted_flight_staged_milestone
   PNTN.server_sent_cleartext_and_server_flight_raw_slices server /\
   PNTCRR.client_received_cleartext_and_server_flight_raw_slices client /\
   PNTN.server_received_cleartext_and_client_finished_raw_slices server /\
+  PNTSS.server_no_tail_next_two_events_handshake_installs server /\
+  PNTSS.server_no_tail_next_two_events_handshake_install_cover server /\
+  PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
   PNTN.server_sent_certificate_verify_event_split server /\
   server_post_server_hello_sent_certificate_verify_split server
 

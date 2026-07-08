@@ -10,6 +10,7 @@ module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
+module PNTSFShape = TLS13.Impl.Driver.PairingNoTailServerFlightShape
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 
@@ -46,6 +47,22 @@ let server_no_tail_post_server_hello_suffix_shape_with_start_spine16
   : prop =
   server_no_tail_post_server_hello_suffix_shape server /\
   PNTSS.server_no_tail_start_spine16 server
+
+noextract
+let server_no_tail_post_two_handshake_installs_tail_order
+  (server:CS.connection_state)
+  : prop =
+  exists ch selection server_shared sh e5 e6 rest.
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          ch
+          selection
+          server_shared
+          sh)
+        (e5 :: e6 :: rest) /\
+    PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
+    PNTSFShape.server_post_two_handshake_installs_tail_order rest
 
 val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shape
   (client_initial:CS.connection_state)
@@ -92,3 +109,96 @@ val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shap
       (ensures
         server_no_tail_post_server_hello_suffix_shape_with_start_spine16
           server)
+
+val lemma_server_no_tail_post_two_handshake_installs_tail_order_for_split
+  (server:CS.connection_state)
+  (ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (sh:M.server_hello)
+  (e5:CS.conn_event)
+  (e6:CS.conn_event)
+  (rest:list CS.conn_event)
+  : Lemma
+      (requires
+        server_no_tail_post_two_handshake_installs_tail_order server /\
+        server.CS.cs_event_log ==
+          FStar.List.Tot.append
+            (PWSeg.server_cleartext_handshake_prefix_events
+              ch
+              selection
+              server_shared
+              sh)
+            (e5 :: e6 :: rest))
+      (ensures
+        PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
+        PNTSFShape.server_post_two_handshake_installs_tail_order rest)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_installs
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        PNTN.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        PNTSS.server_no_tail_next_two_events_handshake_installs server)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_install_cover
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        PNTN.paired_supported_no_tail_valid_byte_traces_clean16
+         client_initial
+         server_initial
+         client
+         server
+         client_received
+         client_sent
+         server_received
+         server_sent)
+      (ensures
+        PNTSS.server_no_tail_next_two_events_handshake_install_cover server)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_tail_order
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        PNTN.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        server_no_tail_post_two_handshake_installs_tail_order server)

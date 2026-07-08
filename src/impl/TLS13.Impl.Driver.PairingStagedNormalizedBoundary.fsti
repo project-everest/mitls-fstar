@@ -417,6 +417,186 @@ let paired_supported_normalized_staged_replay_boundary
   exists w s.
     paired_supported_normalized_staged_replay_boundary_inputs client server w s
 
+(**
+  Corrected projection-facing boundary.
+
+  The staged-v2 boundary above is still useful for legacy callers that can
+  provide its exact replay schedule, but its ClientFinished slice installs the
+  client-handshake write key and server-handshake read key immediately before
+  ClientFinished.  Those installs are not legal that late in the real clean16
+  traces: both must happen before the server encrypted flight.  This boundary
+  records the schedule-insensitive target used by the normalized pairing theorem:
+  normalized cleartext/raw agreement plus already-derived protected projection
+  witnesses.
+**)
+noeq
+type normalized_projection_boundary_witnesses = {
+  npb_client_ch: M.client_hello;
+  npb_server_ch: M.client_hello;
+  npb_client_sh: M.server_hello;
+  npb_server_sh: M.server_hello;
+  npb_client_ch_raw: B.bytes;
+  npb_server_ch_raw: B.bytes;
+  npb_client_sh_raw: B.bytes;
+  npb_server_sh_raw: B.bytes;
+}
+
+noextract
+let paired_supported_normalized_projection_boundary_cleartext_core_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (w:normalized_projection_boundary_witnesses)
+  : prop =
+  let client_ch = w.npb_client_ch in
+  let server_ch = w.npb_server_ch in
+  let client_sh = w.npb_client_sh in
+  let server_sh = w.npb_server_sh in
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  client.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+   Some client_ch /\
+  server.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+   Some server_ch /\
+  client.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+   Some client_sh /\
+  server.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+   Some server_sh /\
+  WFL.supported_client_hello_wire_profile client_ch /\
+  Seq.equal w.npb_client_ch_raw w.npb_server_ch_raw /\
+  Seq.equal w.npb_server_sh_raw w.npb_client_sh_raw /\
+  CS.cleartext_tls_message_raw
+   (M.TlsHandshake (M.ClientHello client_ch))
+   w.npb_client_ch_raw /\
+  CS.received_cleartext_tls_message_raw
+   (M.TlsHandshake (M.ClientHello server_ch))
+   w.npb_server_ch_raw /\
+  CS.cleartext_tls_message_raw
+   (M.TlsHandshake (M.ServerHello server_sh))
+   w.npb_server_sh_raw /\
+  CS.received_cleartext_tls_message_raw
+   (M.TlsHandshake (M.ServerHello client_sh))
+   w.npb_client_sh_raw /\
+  WFL.paired_cleartext_hello_key_shares client server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+   client
+   server
+
+noextract
+let paired_supported_normalized_projection_boundary_cleartext_core
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  exists w.
+   paired_supported_normalized_projection_boundary_cleartext_core_inputs
+     client
+     server
+     w
+
+noextract
+let paired_supported_normalized_projection_boundary_core_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (w:normalized_projection_boundary_witnesses)
+  : prop =
+  paired_supported_normalized_projection_boundary_cleartext_core_inputs
+   client
+   server
+   w /\
+  Pairing.paired_protected_handshake_event_projection_pair_witnesses
+   client
+   server
+
+noextract
+let paired_supported_normalized_projection_boundary_core
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  exists w.
+   paired_supported_normalized_projection_boundary_core_inputs client server w
+
+val lemma_client_server_application_record_material_agrees_from_normalized_projection_boundary_core
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+     (requires paired_supported_normalized_projection_boundary_core client server)
+     (ensures
+       CS.supported_profile_client_server_key_material_agrees client server /\
+       CS.peer_record_material_agrees
+         (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+         client
+         server /\
+       CS.peer_record_material_agrees
+         (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+         client
+         server)
+
+noextract
+let paired_supported_normalized_projection_boundary_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (w:PCB.handshake_complete_boundary_witnesses)
+  : prop =
+  let client_ch = w.PCB.hcb_client_ch in
+  let server_ch = w.PCB.hcb_server_ch in
+  let client_sh = w.PCB.hcb_client_sh in
+  let server_sh = w.PCB.hcb_server_sh in
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  client.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some client_ch /\
+  server.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some server_ch /\
+  client.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    Some client_sh /\
+  server.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    Some server_sh /\
+  WFL.supported_client_hello_wire_profile client_ch /\
+  Seq.equal w.PCB.hcb_client_ch_raw w.PCB.hcb_server_ch_raw /\
+  Seq.equal w.PCB.hcb_server_sh_raw w.PCB.hcb_client_sh_raw /\
+  CS.cleartext_tls_message_raw
+    (M.TlsHandshake (M.ClientHello client_ch))
+    w.PCB.hcb_client_ch_raw /\
+  CS.received_cleartext_tls_message_raw
+    (M.TlsHandshake (M.ClientHello server_ch))
+    w.PCB.hcb_server_ch_raw /\
+  CS.cleartext_tls_message_raw
+    (M.TlsHandshake (M.ServerHello server_sh))
+    w.PCB.hcb_server_sh_raw /\
+  CS.received_cleartext_tls_message_raw
+    (M.TlsHandshake (M.ServerHello client_sh))
+    w.PCB.hcb_client_sh_raw /\
+  WFL.paired_cleartext_hello_key_shares client server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server /\
+  Pairing.paired_protected_handshake_event_projection_pair_witnesses
+    client
+    server
+
+noextract
+let paired_supported_normalized_projection_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  exists w.
+    paired_supported_normalized_projection_boundary_inputs client server w
+
+val lemma_client_server_application_record_material_agrees_from_normalized_projection_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_supported_normalized_projection_boundary client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+
 val lemma_client_server_application_record_material_agrees_from_normalized_staged_replay_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)

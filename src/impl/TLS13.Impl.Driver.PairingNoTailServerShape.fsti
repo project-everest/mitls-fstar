@@ -354,3 +354,113 @@ let server_no_tail_next_two_events_handshake_installs
         (e5 :: e6 :: rest) /\
     PNI.server_no_tail_handshake_traffic_install_event e5 /\
     PNI.server_no_tail_handshake_traffic_install_event e6
+
+(**
+  Direction-sensitive refinement of the post-[ServerHello] two-install
+  milestone.  The abstract local scheduler may commute the two server handshake
+  installs, but a clean length-16 application-ready run cannot spend both slots
+  on the same direction: the pair must cover the server write material used for
+  the encrypted flight and the server read material used for the protected
+  ClientFinished.
+**)
+noextract
+let server_no_tail_handshake_write_install_event
+  (ev:CS.conn_event)
+  : prop =
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    role_install.CS.install_role == CS.ServerEndpoint /\
+    role_install.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+    role_install.CS.install_payload.CS.install_direction == CS.TrafficWrite
+  | _ ->
+    False
+
+noextract
+let server_no_tail_handshake_read_install_event
+  (ev:CS.conn_event)
+  : prop =
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    role_install.CS.install_role == CS.ServerEndpoint /\
+    role_install.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+    role_install.CS.install_payload.CS.install_direction == CS.TrafficRead
+  | _ ->
+    False
+
+noextract
+let server_no_tail_two_handshake_install_cover
+  (e5:CS.conn_event)
+  (e6:CS.conn_event)
+  : prop =
+  (server_no_tail_handshake_write_install_event e5 /\
+   server_no_tail_handshake_read_install_event e6) \/
+  (server_no_tail_handshake_read_install_event e5 /\
+   server_no_tail_handshake_write_install_event e6)
+
+noextract
+let server_no_tail_next_two_events_handshake_install_cover
+  (server:CS.connection_state)
+  : prop =
+  exists ch selection server_shared sh e5 e6 rest.
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          ch
+          selection
+          server_shared
+          sh)
+        (e5 :: e6 :: rest) /\
+    server_no_tail_two_handshake_install_cover e5 e6
+
+val lemma_server_no_tail_two_handshake_install_cover_cases
+  (e5:CS.conn_event)
+  (e6:CS.conn_event)
+  : Lemma
+      (requires server_no_tail_two_handshake_install_cover e5 e6)
+      (ensures
+        (server_no_tail_handshake_write_install_event e5 /\
+         server_no_tail_handshake_read_install_event e6) \/
+        (server_no_tail_handshake_read_install_event e5 /\
+         server_no_tail_handshake_write_install_event e6))
+
+val lemma_server_no_tail_handshake_write_install_event_step_model_as_role
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        server_no_tail_handshake_write_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeysForRole {
+                CS.install_role = CS.ServerEndpoint;
+                CS.install_payload = {
+                  CS.install_epoch = CS.TrafficHandshake;
+                  CS.install_direction = CS.TrafficWrite;
+                  CS.install_material = material;
+                };
+              })) == Some model1)
+
+val lemma_server_no_tail_handshake_read_install_event_step_model_as_role
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        server_no_tail_handshake_read_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeysForRole {
+                CS.install_role = CS.ServerEndpoint;
+                CS.install_payload = {
+                  CS.install_epoch = CS.TrafficHandshake;
+                  CS.install_direction = CS.TrafficRead;
+                  CS.install_material = material;
+                };
+              })) == Some model1)

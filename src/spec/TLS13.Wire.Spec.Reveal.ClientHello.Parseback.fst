@@ -116,71 +116,6 @@ let lemma_serialize_client_hello_body_eq
       ch.M.key_share)
 #pop-options
 
-#push-options "--split_queries always --fuel 8 --ifuel 2 --z3rlimit 80"
-let lemma_parse_client_hello_serialize_client_hello
-  (ch:M.client_hello{ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                    ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
-                    B.length ch.M.body == 0 /\
-                    (match ch.M.server_name with
-                     | None -> True
-                     | Some hostname -> B.length hostname <= 255)})
-  : Lemma
-      (requires (match ch.M.server_name with
-                 | None -> True
-                 | Some hostname -> B.length hostname > 0))
-      (ensures WS.parse_client_hello (WS.serialize_client_hello ch) == Some ch)
-=
-  match ch.M.server_name with
-  | Some hostname ->
-    assert (B.length hostname <= 255);
-    assert (B.length hostname > 0);
-    assert (ch.M.server_name == Some hostname);
-    assert ((match ch.M.server_name with | Some h -> h | None -> B.empty) == hostname);
-    lemma_serialize_client_hello_body_eq ch;
-    lemma_client_hello_extensions_len hostname ch.M.key_share;
-    let low : l:GCH.clientHello{l == PBL.mk_ch_low_some ch hostname} =
-      PBL.mk_ch_low_some ch hostname in
-    let body = RCH.client_hello_body_bytes
-      ch.M.random
-      (match ch.M.server_name with | Some h -> h | None -> B.empty)
-      ch.M.key_share in
-    PBL.lemma_lp_ch_low_body_some ch hostname;
-    PBL.lemma_lp_ch_low_synth_some ch hostname;
-    let ser = LP.serialize GCH.clientHello_serializer low in
-    assert_spinoff (Seq.equal ser body);
-    LP.parse_serialize GCH.clientHello_serializer low;
-    assert (LP.parse GCH.clientHello_parser ser == Some (low, Seq.length ser));
-    assert (WS.synth_client_hello low == Some ch);
-    lemma_parse_client_hello_from_generated ser low ch;
-    lemma_seq_equal_sym ser body;
-    lemma_parse_client_hello_transport_some body ser ch;
-    assert (WS.serialize_client_hello ch == body);
-    assert (WS.parse_client_hello (WS.serialize_client_hello ch) == Some ch)
-  | None ->
-    assert (ch.M.server_name == None);
-    assert ((match ch.M.server_name with | Some h -> h | None -> B.empty) == B.empty);
-    lemma_serialize_client_hello_body_eq ch;
-    lemma_client_hello_extensions_len B.empty ch.M.key_share;
-    let low : l:GCH.clientHello{l == PBL.mk_ch_low_none ch} =
-      PBL.mk_ch_low_none ch in
-    let body = RCH.client_hello_body_bytes
-      ch.M.random
-      (match ch.M.server_name with | Some h -> h | None -> B.empty)
-      ch.M.key_share in
-    PBL.lemma_lp_ch_low_body_none ch;
-    PBL.lemma_lp_ch_low_synth_none ch;
-    let ser = LP.serialize GCH.clientHello_serializer low in
-    assert_spinoff (Seq.equal ser body);
-    LP.parse_serialize GCH.clientHello_serializer low;
-    assert (LP.parse GCH.clientHello_parser ser == Some (low, Seq.length ser));
-    assert (WS.synth_client_hello low == Some ch);
-    lemma_parse_client_hello_from_generated ser low ch;
-    lemma_seq_equal_sym ser body;
-    lemma_parse_client_hello_transport_some body ser ch;
-    assert (WS.serialize_client_hello ch == body);
-    assert (WS.parse_client_hello (WS.serialize_client_hello ch) == Some ch)
-#pop-options
-
 #push-options "--split_queries always --fuel 4 --ifuel 2 --z3rlimit 10"
 let lemma_bounded_int_3_u24 (n:nat{n < 16777216})
   : Lemma (Seq.equal
@@ -257,12 +192,84 @@ let lemma_bounded_int_3_u24 (n:nat{n < 16777216})
   assert ((n / 256) / 256 == n / 65536);
   assert (n / 256 == 256 * (n / 65536) + (n / 256) % 256);
   assert (n == 256 * (n / 256) + n % 256);
+  assert (n == 256 * (256 * (n / 65536) + (n / 256) % 256) + n % 256);
+  assert (E.be_to_n cand ==
+    n % 256 + 256 * ((n / 256) % 256 + 256 * (n / 65536)));
+  assert (n % 256 + 256 * ((n / 256) % 256 + 256 * (n / 65536)) ==
+    256 * (256 * (n / 65536) + (n / 256) % 256) + n % 256);
+  assert (E.be_to_n cand ==
+    256 * (256 * (n / 65536) + (n / 256) % 256) + n % 256);
   assert (E.be_to_n cand == n);
   E.n_to_be_be_to_n 3 cand;
   LP.serialize_bounded_integer_spec 3 (U32.uint_to_t n);
   WSR.lemma_u24_reveal n;
   Seq.lemma_eq_elim (E.n_to_be 3 n) cand;
   Seq.lemma_eq_elim (WSR.u24 n) cand
+#pop-options
+
+#push-options "--split_queries always --fuel 8 --ifuel 2 --z3rlimit 80"
+let lemma_parse_client_hello_serialize_client_hello
+  (ch:M.client_hello{ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
+                    ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                    B.length ch.M.body == 0 /\
+                    (match ch.M.server_name with
+                     | None -> True
+                     | Some hostname -> B.length hostname <= 255)})
+  : Lemma
+      (requires (match ch.M.server_name with
+                 | None -> True
+                 | Some hostname -> B.length hostname > 0))
+      (ensures WS.parse_client_hello (WS.serialize_client_hello ch) == Some ch)
+=
+  match ch.M.server_name with
+  | Some hostname ->
+    assert (B.length hostname <= 255);
+    assert (B.length hostname > 0);
+    assert (ch.M.server_name == Some hostname);
+    assert ((match ch.M.server_name with | Some h -> h | None -> B.empty) == hostname);
+    lemma_serialize_client_hello_body_eq ch;
+    lemma_client_hello_extensions_len hostname ch.M.key_share;
+    let low : l:GCH.clientHello{l == PBL.mk_ch_low_some ch hostname} =
+      PBL.mk_ch_low_some ch hostname in
+    let body = RCH.client_hello_body_bytes
+      ch.M.random
+      (match ch.M.server_name with | Some h -> h | None -> B.empty)
+      ch.M.key_share in
+    PBL.lemma_lp_ch_low_body_some ch hostname;
+    PBL.lemma_lp_ch_low_synth_some ch hostname;
+    let ser = LP.serialize GCH.clientHello_serializer low in
+    assert_spinoff (Seq.equal ser body);
+    LP.parse_serialize GCH.clientHello_serializer low;
+    assert (LP.parse GCH.clientHello_parser ser == Some (low, Seq.length ser));
+    assert (WS.synth_client_hello low == Some ch);
+    lemma_parse_client_hello_from_generated ser low ch;
+    lemma_seq_equal_sym ser body;
+    lemma_parse_client_hello_transport_some body ser ch;
+    assert (WS.serialize_client_hello ch == body);
+    assert (WS.parse_client_hello (WS.serialize_client_hello ch) == Some ch)
+  | None ->
+    assert (ch.M.server_name == None);
+    assert ((match ch.M.server_name with | Some h -> h | None -> B.empty) == B.empty);
+    lemma_serialize_client_hello_body_eq ch;
+    lemma_client_hello_extensions_len B.empty ch.M.key_share;
+    let low : l:GCH.clientHello{l == PBL.mk_ch_low_none ch} =
+      PBL.mk_ch_low_none ch in
+    let body = RCH.client_hello_body_bytes
+      ch.M.random
+      (match ch.M.server_name with | Some h -> h | None -> B.empty)
+      ch.M.key_share in
+    PBL.lemma_lp_ch_low_body_none ch;
+    PBL.lemma_lp_ch_low_synth_none ch;
+    let ser = LP.serialize GCH.clientHello_serializer low in
+    assert_spinoff (Seq.equal ser body);
+    LP.parse_serialize GCH.clientHello_serializer low;
+    assert (LP.parse GCH.clientHello_parser ser == Some (low, Seq.length ser));
+    assert (WS.synth_client_hello low == Some ch);
+    lemma_parse_client_hello_from_generated ser low ch;
+    lemma_seq_equal_sym ser body;
+    lemma_parse_client_hello_transport_some body ser ch;
+    assert (WS.serialize_client_hello ch == body);
+    assert (WS.parse_client_hello (WS.serialize_client_hello ch) == Some ch)
 #pop-options
 
 #push-options "--split_queries always --fuel 4 --ifuel 2 --z3rlimit 10"

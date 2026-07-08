@@ -4058,3 +4058,102 @@ let lemma_server_no_tail_start_spine16
           e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15 ])
     )
   )
+
+let lemma_server_no_tail_two_handshake_install_cover_cases
+  (e5:CS.conn_event)
+  (e6:CS.conn_event)
+  : Lemma
+      (requires server_no_tail_two_handshake_install_cover e5 e6)
+      (ensures
+        (server_no_tail_handshake_write_install_event e5 /\
+         server_no_tail_handshake_read_install_event e6) \/
+        (server_no_tail_handshake_read_install_event e5 /\
+         server_no_tail_handshake_write_install_event e6))
+=
+  ()
+
+let lemma_server_no_tail_handshake_write_install_event_step_model_as_role
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        server_no_tail_handshake_write_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeysForRole {
+                CS.install_role = CS.ServerEndpoint;
+                CS.install_payload = {
+                  CS.install_epoch = CS.TrafficHandshake;
+                  CS.install_direction = CS.TrafficWrite;
+                  CS.install_material = material;
+                };
+              })) == Some model1)
+=
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    let install = role_install.CS.install_payload in
+    assert (role_install.CS.install_role == CS.ServerEndpoint);
+    assert (install.CS.install_epoch == CS.TrafficHandshake);
+    assert (install.CS.install_direction == CS.TrafficWrite);
+    introduce exists material.
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficWrite;
+              CS.install_material = material;
+            };
+          })) == Some model1
+    with install.CS.install_material and ()
+  | _ ->
+    assert False
+
+let lemma_server_no_tail_handshake_read_install_event_step_model_as_role
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        server_no_tail_handshake_read_install_event ev /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        exists material.
+          CS.step_model
+            model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeysForRole {
+                CS.install_role = CS.ServerEndpoint;
+                CS.install_payload = {
+                  CS.install_epoch = CS.TrafficHandshake;
+                  CS.install_direction = CS.TrafficRead;
+                  CS.install_material = material;
+                };
+              })) == Some model1)
+=
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    let install = role_install.CS.install_payload in
+    assert (role_install.CS.install_role == CS.ServerEndpoint);
+    assert (install.CS.install_epoch == CS.TrafficHandshake);
+    assert (install.CS.install_direction == CS.TrafficRead);
+    introduce exists material.
+      CS.step_model
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = material;
+            };
+          })) == Some model1
+    with install.CS.install_material and ()
+  | _ ->
+    assert False

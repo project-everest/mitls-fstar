@@ -5,6 +5,14 @@ module M = TLS13.Messages
 module T = TLS13.Types
 module WS = TLS13.Wire.Spec
 module Seq = FStar.Seq
+module U32 = FStar.UInt32
+module LP = LowParse.Spec
+module WSR = TLS13.Wire.Spec.Reveal
+
+val lemma_bounded_int_3_u24 (n:nat{n < 16777216})
+  : Lemma (Seq.equal
+      (LP.serialize (LP.serialize_bounded_integer 3) (U32.uint_to_t n))
+      (WSR.u24 n))
 
 val lemma_parse_client_hello_serialize_client_hello
   (ch:M.client_hello{ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\

@@ -28,6 +28,42 @@ let client_sent_cleartext_and_finished_raw_slices
       client_ch_raw /\
     CS.raw_records_exactly client_finished_raw T.ApplicationData 1
 
+(**
+  Reusable raw-suffix fact for the exact ClientFinished tail:
+  [LocalVerifyFinished; app-write/app-read installs; Sent Finished] contributes
+  exactly one protected ApplicationData record on the sent stream.  The
+  application installs may appear in either role-local order accepted by
+  [client_no_tail_application_install_cover].
+**)
+val lemma_client_finished_exact_suffix_raw_slice
+  (model:CS.connection_model)
+  (sf:M.finished)
+  (e13 e14:CS.conn_event)
+  (cf:M.finished)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        PNTCAS.client_no_tail_application_install_cover e13 e14 /\
+        CS.conn_events_raw_replay
+          model
+          (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
+           e13 ::
+           e14 ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.Finished cf);
+           }) ::
+           [])
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists finished_raw.
+          Seq.equal raw_sent finished_raw /\
+          CS.raw_records_exactly finished_raw T.ApplicationData 1)
+
 val lemma_client_no_tail_finished_sent_raw_slices_for_shape
   (client:CS.connection_state)
   (start:CS.handshake_start)

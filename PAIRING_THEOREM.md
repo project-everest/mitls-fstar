@@ -341,15 +341,21 @@ client-handshake-write/server-handshake-read installs, then produce
 `paired_protected_handshake_event_projection_pair_witnesses` directly instead of
 routing through the stale contiguous replay view.
 
-The first piece of that corrected backend is now verified:
+One intermediate backend milestone is verified:
 `TLS13.ConnectionState.ProtectedWireStaged.lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_replays_v2`
 constructs the five protected projection pairs without any pre-install
 client-write/server-read alignment premise.  It still requires caller-supplied
 staged replay facts: the server encrypted flight starts from explicit
 server-handshake-write/client-handshake-read installs, and the ClientFinished
 pair starts from explicit client-handshake-write/server-handshake-read installs
-whose record key/IV material agrees.  The remaining bridge work is to derive
-those staged replay facts from the no-tail endpoint logs and key schedule.
+whose record key/IV material agrees.  This was a useful way to remove the stale
+pre-install alignment assumption, but it is **not** the final clean16 target: in
+the real state machine those ClientFinished-side handshake installs cannot be
+delayed until immediately before ClientFinished.  The client handshake write key
+and server handshake read key are legal only before the server encrypted flight.
+The corrected final bridge must therefore construct protected projection
+witnesses directly from the real post-server-flight states, where those
+handshake directions are already installed.
 The server-flight side has also been made less scheduler-sensitive:
 `TLS13.ConnectionState.ProtectedWireServerFlight` now has two verified
 one-local-commute helpers for the first protected server-flight record.  They
@@ -378,14 +384,20 @@ narrow the remaining inversion problem: lift the raw-record slices and
 post-cleartext log split to the paired `sent_seal_replay` and
 `received_decode_replay` staged suffixes required by
 `paired_supported_normalized_staged_replay_boundary`.
-One subtle proof-engineering point is worth auditing carefully: the v2
-ClientFinished-side install steps are used to establish the aligned write/read
-record materials that feed the lower staged lemma.  A final trace-inversion proof
-must still connect those states to the actual post-server-flight client/server
-states (or instead use the lower staged lemma with a directly preserved
-post-flight alignment); otherwise the protected projection witness would be
-well-typed but not yet justified as the projection of the endpoint logs being
-inverted.
+The schedule-insensitive proof target is now explicit in
+`TLS13.Impl.Driver.PairingStagedNormalizedBoundary`:
+`paired_supported_normalized_projection_boundary_inputs` packages normalized
+cleartext/raw agreement plus
+`Pairing.paired_protected_handshake_event_projection_pair_witnesses`, and
+`lemma_client_server_application_record_material_agrees_from_normalized_projection_boundary`
+routes directly through
+`Pairing.lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses`.
+`TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation` mirrors this with
+`clean16_projection_boundary_completion` and
+`lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_projection_boundary_completion`.
+That is the current audit-facing remaining obligation: derive the protected
+projection witnesses from clean16 paired byte traces, not satisfy the staged-v2
+delayed-install premises.
 The client side now also exposes a model-source fact at the natural
 ClientFinished boundary:
 `PairingNoTailClientFinishedShape.lemma_client_after_server_finished_model_facts`
@@ -393,19 +405,22 @@ unpacks the model immediately after receiving the server Finished, showing that
 both handshake traffic directions are installed and application traffic is still
 absent.  This is the right audit point for proving the final protected
 ClientFinished send/receive slice.
-`TLS13.Impl.Driver.PairingProtectedReplay.lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_staged_replays_v2`
-then lifts that corrected staged-v2 protected premise, together with the
-normalized cleartext raw hello facts, to the same final application record
-key/IV agreement conclusion as the old contiguous replay bridge.
-`TLS13.Impl.Driver.PairingStagedNormalizedBoundary` now packages exactly those
-staged-v2 premises in the same style as the older normalized replay boundary:
-`paired_supported_normalized_staged_replay_boundary` is still an existential
-witness package, but it no longer contains the stale pre-install
-client-write/server-read alignment.  `PairingNoTailNormalized` also exposes a
-clean16 composition wrapper:
-`lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_staged_replay_boundary`.
-This is the corrected internal milestone to use while deriving the staged replay
-boundary from clean16 traces.
+The older staged-v2 wrapper remains in the tree as a checked compatibility
+milestone, but the clean theorem should now flow through the projection boundary.
+This keeps the public audit surface independent of local scheduling choices for
+the commuting handshake installs.
+
+Current WIP status: the tree verifies with `make -j128`, but this checkpoint
+intentionally contains narrowly scoped proof admits.  In
+`TLS13.Wire.Spec.Reveal.ServerHello.Parseback`, the admits are limited to
+ServerHello parser/serializer byte-shape equalities (LowParse generated
+serialization versus the hand-written `TLS13.Wire.Spec` serializer).  In
+`PairingNoTailProtectedProjectionDerivation`, one admit is limited to unpacking
+the large installed protected-projection witness package and passing its named
+witnesses to the already-verified input-level projection constructor.  These
+admits should be removed before treating the final byte-trace theorem as fully
+audited; they do not introduce new intended cryptographic assumptions, but they
+are part of the current trusted proof surface.
 
 The older `TLS13.Impl.Driver.PairingTraceShape` theorem is still verified, but it
 is not the right final target for parser-backed traces.  It avoids the

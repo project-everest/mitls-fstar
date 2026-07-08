@@ -71,6 +71,40 @@ val lemma_conn_events_sent_seal_replay_head
             tail_received
             final_model)
 
+val lemma_conn_events_sent_seal_replay_cons
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  (model1:CS.connection_model)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  (tail_sent:B.bytes)
+  (tail_received:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event model ev /\
+        CS.step_model model ev == Some model1 /\
+        CS.event_raw_delta_legal model ev delta_sent delta_received /\
+        CS.sent_event_nonempty_seal_projection model ev delta_sent /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        CS.conn_events_sent_seal_replay
+          model1
+          rest
+          tail_sent
+          tail_received
+          final_model)
+      (ensures
+        CS.conn_events_sent_seal_replay
+          model
+          (ev :: rest)
+          raw_sent
+          raw_received
+          final_model)
+
 val lemma_conn_events_received_decode_replay_head
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -100,6 +134,40 @@ val lemma_conn_events_received_decode_replay_head
             tail_sent
             tail_received
             final_model)
+
+val lemma_conn_events_received_decode_replay_cons
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  (model1:CS.connection_model)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  (tail_sent:B.bytes)
+  (tail_received:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event model ev /\
+        CS.step_model model ev == Some model1 /\
+        CS.event_raw_delta_legal model ev delta_sent delta_received /\
+        CS.received_event_nonempty_decode_projection model ev delta_received /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        CS.conn_events_received_decode_replay
+          model1
+          rest
+          tail_sent
+          tail_received
+          final_model)
+      (ensures
+        CS.conn_events_received_decode_replay
+          model
+          (ev :: rest)
+          raw_sent
+          raw_received
+          final_model)
 
 val lemma_conn_events_sent_received_replays_same_events_final_model_equal
   (model:CS.connection_model)
@@ -175,6 +243,50 @@ val lemma_conn_events_raw_received_decode_replays_same_events_final_model_equal
           received_raw_received
           received_final)
       (ensures raw_final == received_final)
+
+val lemma_conn_events_sent_seal_replay_implies_raw_replay
+  (model:CS.connection_model)
+  (events:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_sent_seal_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        CS.conn_events_raw_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model)
+
+val lemma_conn_events_received_decode_replay_implies_raw_replay
+  (model:CS.connection_model)
+  (events:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_received_decode_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        CS.conn_events_raw_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model)
 
 val lemma_conn_events_raw_replay_append_split
   (model:CS.connection_model)

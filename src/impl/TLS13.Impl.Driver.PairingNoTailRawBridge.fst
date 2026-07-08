@@ -9,14 +9,17 @@ module CSL = TLS13.ConnectionState.Lemmas
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
+module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module PWS = TLS13.ConnectionState.ProtectedWireStream
 module Seq = FStar.Seq
 module Tac = FStar.Tactics
 module T = TLS13.Types
+module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
+module SHPB = TLS13.Wire.Spec.Reveal.ServerHello.Parseback
 
 let lemma_parse_record_wire_of_sent_supported_client_hello
   (ch:M.client_hello)
@@ -121,6 +124,94 @@ let lemma_parse_record_wire_of_received_server_hello
     (M.TlsHandshake (M.ServerHello sh))
     raw);
   lemma_parse_record_wire_of_cleartext_server_hello sh raw
+
+let lemma_server_hello_key_share_from_sent_supported_and_received_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        CT.network_input_message_projection
+          st0
+          content_type
+          fragment
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh)
+      (ensures
+        CS.server_hello_key_share client_sh ==
+        CS.server_hello_key_share server_sh)
+=
+  eliminate exists (ct:T.content_type).
+    TLS13.Impl.Messages.content_type_matches content_type ct /\
+    W.parse_tls_message ct fragment ==
+      Some (M.TlsHandshake (M.ServerHello client_sh))
+  returns
+    CS.server_hello_key_share client_sh ==
+    CS.server_hello_key_share server_sh
+  with _.
+  (
+    eliminate exists (outer_ct:T.content_type) (outer_fragment:B.bytes).
+      W.parse_record_wire client_sh_raw ==
+        Some (outer_ct, outer_fragment, B.length client_sh_raw) /\
+      (if outer_ct == T.ApplicationData
+       then CT.protected_decoder_fragment_relation st0 content_type fragment client_sh_raw
+       else
+         TLS13.Impl.Messages.content_type_matches content_type outer_ct /\
+         Seq.equal fragment outer_fragment)
+    returns
+      CS.server_hello_key_share client_sh ==
+      CS.server_hello_key_share server_sh
+    with _.
+    (
+      let sent_fragment = W.serialize_handshake (M.ServerHello server_sh) in
+      lemma_parse_record_wire_of_cleartext_server_hello server_sh server_sh_raw;
+      W.lemma_serialize_server_hello_len server_sh;
+      assert (M.server_hello_max_len <= 16640);
+      assert (B.length sent_fragment <= 16640);
+      W.lemma_serialize_tls_message_handshake (M.ServerHello server_sh);
+      assert (CS.serialized_cleartext_tls_message
+        (M.TlsHandshake (M.ServerHello server_sh)) ==
+        W.serialize_record T.Handshake sent_fragment);
+      assert (Seq.equal
+        server_sh_raw
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ServerHello server_sh))));
+      WFL.lemma_parse_record_wire_serialize_record T.Handshake sent_fragment;
+      assert (Seq.equal
+        server_sh_raw
+        (W.serialize_record T.Handshake sent_fragment));
+      Seq.lemma_eq_elim server_sh_raw client_sh_raw;
+      assert (W.parse_record_wire client_sh_raw ==
+        Some (T.Handshake, sent_fragment, B.length client_sh_raw));
+      assert (outer_ct == T.Handshake);
+      assert (Seq.equal fragment sent_fragment);
+      Seq.lemma_eq_elim fragment sent_fragment;
+      match ct with
+      | T.Handshake ->
+        assert (W.parse_tls_message T.Handshake sent_fragment ==
+          Some (M.TlsHandshake (M.ServerHello client_sh)));
+        W.lemma_parse_supported_server_hello_ok sent_fragment;
+        W.lemma_parse_supported_server_hello_fields sent_fragment;
+        assert (B.length server_sh.M.body == 0);
+        assert (server_sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256);
+        SHPB.lemma_parse_tls_message_serialize_server_hello_key_share
+          server_sh
+          client_sh;
+        assert (Seq.equal client_sh.M.key_share server_sh.M.key_share)
+      | _ ->
+        assert False
+    )
+  )
 
 let lemma_cleartext_change_cipher_spec_parse_record
   (raw:B.bytes)

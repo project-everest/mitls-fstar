@@ -5,8 +5,97 @@ module TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 open Pulse.Lib.Pervasives
 
 module CS = TLS13.Spec.ConnectionState
+module Pairing = TLS13.Impl.Driver.Pairing
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PR = TLS13.Impl.Driver.PairingProtectedReplay
+
+let lemma_client_server_application_record_material_agrees_from_normalized_projection_boundary_core
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_supported_normalized_projection_boundary_core client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  eliminate exists
+    (w:normalized_projection_boundary_witnesses).
+    paired_supported_normalized_projection_boundary_core_inputs client server w
+  returns
+    CS.supported_profile_client_server_key_material_agrees client server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+      client
+      server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+      client
+      server
+  with _.
+  (
+    Pairing.lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
+      client
+      server
+      w.npb_client_ch
+      w.npb_server_ch
+      w.npb_client_sh
+      w.npb_server_sh
+      w.npb_client_ch_raw
+      w.npb_server_ch_raw
+      w.npb_client_sh_raw
+      w.npb_server_sh_raw
+  )
+
+let lemma_client_server_application_record_material_agrees_from_normalized_projection_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_supported_normalized_projection_boundary client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  eliminate exists
+    (w:PCB.handshake_complete_boundary_witnesses).
+    paired_supported_normalized_projection_boundary_inputs client server w
+  returns
+    CS.supported_profile_client_server_key_material_agrees client server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+      client
+      server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+      client
+      server
+  with _.
+  (
+    Pairing.lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
+      client
+      server
+      w.PCB.hcb_client_ch
+      w.PCB.hcb_server_ch
+      w.PCB.hcb_client_sh
+      w.PCB.hcb_server_sh
+      w.PCB.hcb_client_ch_raw
+      w.PCB.hcb_server_ch_raw
+      w.PCB.hcb_client_sh_raw
+      w.PCB.hcb_server_sh_raw
+  )
 
 let lemma_client_server_application_record_material_agrees_from_normalized_staged_replay_boundary
   (client:CS.connection_state)

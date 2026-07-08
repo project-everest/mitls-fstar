@@ -233,6 +233,29 @@ let lemma_paired_successful_handshake_complete_event_log_shape_paired_handshake_
         server.CS.cs_event_log);
     assert (Pairing.paired_handshake_event_trace client server) )
 
+let lemma_client_server_application_record_material_agrees_from_successful_handshake_complete_semantic_state_trace
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_successful_handshake_complete_semantic_state_trace client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  lemma_paired_successful_handshake_complete_event_log_shape_paired_handshake_event_trace
+    client
+    server;
+  Pairing.lemma_client_server_application_record_material_agrees_from_paired_handshake_event_trace
+    client
+    server
+
 let lemma_client_server_application_record_material_agrees_from_successful_handshake_complete_state_trace
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -249,10 +272,34 @@ let lemma_client_server_application_record_material_agrees_from_successful_hands
           client
           server)
 =
-  lemma_paired_successful_handshake_complete_event_log_shape_paired_handshake_event_trace
+  lemma_client_server_application_record_material_agrees_from_successful_handshake_complete_semantic_state_trace
     client
-    server;
-  Pairing.lemma_client_server_application_record_material_agrees_from_paired_handshake_event_trace
+    server
+
+let lemma_client_server_application_record_material_agrees_from_paired_application_ready_semantic_traces
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        paired_application_ready_semantic_traces_with_message_states
+          client
+          server
+          client_trace
+          server_trace)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  Pairing.lemma_client_server_application_record_material_agrees_from_paired_handshake_message_states
     client
     server
 

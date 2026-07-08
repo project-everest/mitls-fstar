@@ -12,6 +12,7 @@ module M = TLS13.Messages
 module PNTCRR = TLS13.Impl.Driver.PairingNoTailClientReceivedRawShape
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
+module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 
 #push-options "--split_queries always --z3rlimit 10"
@@ -301,6 +302,33 @@ let lemma_clean16_no_tail_valid_byte_traces_server_encrypted_flight_staged_miles
     server_received
     server_sent;
   PNTN.lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client_finished_raw_slices
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  PNTPH.lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_installs
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  PNTPH.lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_install_cover
+    client_initial
+    server_initial
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  PNTPH.lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_tail_order
     client_initial
     server_initial
     client

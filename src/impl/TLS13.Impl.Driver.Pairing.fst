@@ -1567,6 +1567,108 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
     client
     server
 
+let lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+        WFL.supported_client_hello_wire_profile client_ch /\
+        Seq.equal client_ch_raw server_ch_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        WFL.paired_cleartext_hello_key_shares client server /\
+        paired_handshake_events client server /\
+        client_server_driver_first_epoch_no_key_update_state_inputs
+          client
+          server)
+      (ensures
+        WFL.paired_cleartext_hello_wire_equivalent client server /\
+        WFL.paired_cleartext_hello_key_shares client server /\
+        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
+        client_server_driver_supported_profile_derived_key_share_projection_inputs
+          client
+          server /\
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        client_server_driver_supported_profile_state_inputs client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
+    client
+    server
+    client_ch
+    server_ch
+    client_sh
+    server_sh
+    client_ch_raw
+    server_ch_raw
+    client_sh_raw
+    server_sh_raw;
+  assert (WFL.paired_cleartext_hello_wire_equivalent client server);
+  assert (WFL.paired_cleartext_hello_key_shares client server);
+  lemma_paired_handshake_events_application_derivation_projection_inputs
+    client
+    server;
+  assert (client_server_driver_supported_profile_derived_key_share_projection_inputs
+    client
+    server);
+  lemma_client_server_driver_supported_profile_derived_state_inputs_from_key_share_projection_inputs
+    client
+    server;
+  lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
+    client
+    server;
+  assert (client_server_driver_supported_profile_state_inputs client server);
+  lemma_client_server_driver_supported_profile_key_material_inputs_agree
+    client
+    server;
+  CSL.lemma_supported_profile_client_server_key_material_agrees
+    client
+    server;
+  lemma_client_server_application_record_material_client_to_server_agrees
+    client
+    server;
+  lemma_client_server_application_record_material_server_to_client_agrees
+    client
+    server
+
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -1807,6 +1909,148 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
       server_cv
       server_finished
       client_finished )
+
+let lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_ch:M.client_hello)
+  (server_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_ch_raw:B.bytes)
+  (server_ch_raw:B.bytes)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+       CD.client_driver_application_ready client /\
+       SD.server_driver_application_ready server /\
+       client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
+       server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
+       client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
+       server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
+       WFL.supported_client_hello_wire_profile client_ch /\
+       Seq.equal client_ch_raw server_ch_raw /\
+       Seq.equal server_sh_raw client_sh_raw /\
+       CS.cleartext_tls_message_raw
+         (M.TlsHandshake (M.ClientHello client_ch))
+         client_ch_raw /\
+       CS.received_cleartext_tls_message_raw
+         (M.TlsHandshake (M.ClientHello server_ch))
+         server_ch_raw /\
+       CS.cleartext_tls_message_raw
+         (M.TlsHandshake (M.ServerHello server_sh))
+         server_sh_raw /\
+       CS.received_cleartext_tls_message_raw
+         (M.TlsHandshake (M.ServerHello client_sh))
+         client_sh_raw /\
+       WFL.paired_cleartext_hello_key_shares client server /\
+       paired_protected_handshake_event_projection_pair_witnesses
+         client
+         server /\
+       client_server_driver_first_epoch_no_key_update_state_inputs
+         client
+         server)
+      (ensures
+       WFL.paired_cleartext_hello_wire_equivalent client server /\
+       WFL.paired_cleartext_hello_key_shares client server /\
+       WFL.paired_protected_handshake_wire_equivalent client server /\
+       paired_handshake_events client server /\
+       CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
+       CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server /\
+       client_server_driver_supported_profile_derived_key_share_projection_inputs
+         client
+         server /\
+       client_server_driver_supported_profile_derived_state_inputs
+         client
+         server /\
+       client_server_driver_supported_profile_state_inputs client server /\
+       CS.supported_profile_client_server_key_material_inputs_agree
+         client
+         server /\
+       CS.supported_profile_client_server_key_material_agrees client server /\
+       CS.peer_record_material_agrees
+         (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+         client
+         server /\
+       CS.peer_record_material_agrees
+         (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+         client
+         server)
+=
+  eliminate exists
+    (server_ee:PWL.protected_message_replay)
+    (server_cert:PWL.protected_message_replay)
+    (server_cv:PWL.protected_message_replay)
+    (server_finished:PWL.protected_message_replay)
+    (client_finished:PWL.protected_message_replay).
+    PWL.paired_protected_handshake_event_projection_pairs
+      client
+      server
+      server_ee
+      server_cert
+      server_cv
+      server_finished
+      client_finished
+  returns
+    WFL.paired_cleartext_hello_wire_equivalent client server /\
+    WFL.paired_cleartext_hello_key_shares client server /\
+    WFL.paired_protected_handshake_wire_equivalent client server /\
+    paired_handshake_events client server /\
+    CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
+    CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server /\
+    client_server_driver_supported_profile_derived_key_share_projection_inputs
+      client
+      server /\
+    client_server_driver_supported_profile_derived_state_inputs
+      client
+      server /\
+    client_server_driver_supported_profile_state_inputs client server /\
+    CS.supported_profile_client_server_key_material_inputs_agree
+      client
+      server /\
+    CS.supported_profile_client_server_key_material_agrees client server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+      client
+      server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+      client
+      server
+  with _.
+  (
+    PWP.lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
+      client
+      server
+      server_ee
+      server_cert
+      server_cv
+      server_finished
+      client_finished;
+    WFL.lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
+      client
+      server
+      client_ch
+      server_ch
+      client_sh
+      server_sh
+      client_ch_raw
+      server_ch_raw
+      client_sh_raw
+      server_sh_raw;
+    lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_handshake_events
+      client
+      server
+      client_ch
+      server_ch
+      client_sh
+      server_sh
+      client_ch_raw
+      server_ch_raw
+      client_sh_raw
+      server_sh_raw
+  )
 
 let lemma_client_server_application_record_material_agrees_from_paired_handshake_event_trace
   (client:CS.connection_state)

@@ -246,11 +246,104 @@ val lemma_paired_successful_handshake_complete_event_log_shape_paired_handshake_
       (requires paired_successful_handshake_complete_event_log_shape client server)
       (ensures Pairing.paired_handshake_event_trace client server)
 
+noextract
+let paired_successful_handshake_complete_semantic_state_trace
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server /\
+  paired_successful_handshake_complete_event_log_shape client server
+
+val lemma_client_server_application_record_material_agrees_from_successful_handshake_complete_semantic_state_trace
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_successful_handshake_complete_semantic_state_trace client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+
 val lemma_client_server_application_record_material_agrees_from_successful_handshake_complete_state_trace
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
       (requires paired_successful_handshake_complete_state_trace client server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+
+(**
+  Pure semantic trace pairing, independent of raw record bytes.
+
+  [client_trace] and [server_trace] are connection-event traces, not TCP byte
+  traces.  The two equalities say that every TLS message semantically sent by
+  one side is exactly the TLS message semantically received by the peer, in
+  trace order.  This is the state-machine-level counterpart of paired wire
+  logs; it deliberately avoids parser/canonical-serialization questions.
+
+  The theorem below is the already-proved key-agreement backend with explicit
+  [tc]/[ts] trace parameters.  The remaining inversion theorem we want next is
+  precisely to derive [Pairing.paired_handshake_message_states client server]
+  from this semantic I/O pairing plus role-local no-tail application-ready trace
+  inversion.
+**)
+noextract
+let paired_semantic_tls_io_traces
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : prop =
+  CS.sent_tls_messages client_trace ==
+    CS.received_tls_messages server_trace /\
+  CS.sent_tls_messages server_trace ==
+    CS.received_tls_messages client_trace
+
+noextract
+let paired_application_ready_semantic_traces_with_message_states
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : prop =
+  client.CS.cs_event_log == client_trace /\
+  server.CS.cs_event_log == server_trace /\
+  paired_semantic_tls_io_traces client_trace server_trace /\
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server /\
+  Pairing.paired_handshake_message_states client server
+
+val lemma_client_server_application_record_material_agrees_from_paired_application_ready_semantic_traces
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_trace:list CS.conn_event)
+  (server_trace:list CS.conn_event)
+  : Lemma
+      (requires
+        paired_application_ready_semantic_traces_with_message_states
+          client
+          server
+          client_trace
+          server_trace)
       (ensures
         CS.supported_profile_client_server_key_material_agrees client server /\
         CS.peer_record_material_agrees

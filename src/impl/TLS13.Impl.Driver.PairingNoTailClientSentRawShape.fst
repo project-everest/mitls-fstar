@@ -291,6 +291,63 @@ let lemma_application_install_event_empty_sent
       assert False
     )
 
+let lemma_client_finished_exact_suffix_raw_slice
+  (model:CS.connection_model)
+  (sf:M.finished)
+  (e13 e14:CS.conn_event)
+  (cf:M.finished)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        PNTCAS.client_no_tail_application_install_cover e13 e14 /\
+        CS.conn_events_raw_replay
+          model
+          (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
+           e13 ::
+           e14 ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.Finished cf);
+           }) ::
+           [])
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        exists finished_raw.
+          Seq.equal raw_sent finished_raw /\
+          CS.raw_records_exactly finished_raw T.ApplicationData 1)
+=
+  let verify_ev = CS.ConnLocalEvent (CS.LocalVerifyFinished sf) in
+  let sent_ev = sent_finished_event cf in
+  let events = verify_ev :: e13 :: e14 :: sent_ev :: [] in
+  PNTCAS.lemma_client_no_tail_application_install_cover_cases e13 e14;
+  if PNTCAS.client_no_tail_application_write_install_event e13 then (
+    lemma_application_install_event_empty_sent e13;
+    lemma_application_install_event_empty_sent e14
+  ) else (
+    lemma_application_install_event_empty_sent e13;
+    lemma_application_install_event_empty_sent e14
+  );
+  assert_norm (event_has_empty_sent_delta verify_ev);
+  assert (event_has_empty_sent_delta e13);
+  assert (event_has_empty_sent_delta e14);
+  assert (sent_ev ==
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished cf);
+    }));
+  assert (empty_sent_until_finished events cf);
+  lemma_empty_sent_until_finished_raw_slice
+    model
+    events
+    cf
+    raw_sent
+    raw_received
+    final_model
+
 let lemma_tail_empty_sent_until_finished
   (sh:M.server_hello)
   (client_shared:C.x25519_shared_secret)

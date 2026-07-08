@@ -545,6 +545,8 @@ val lemma_parse_supported_server_hello_fields:
     (ensures (
       match parse_supported_server_hello input with
       | Some sh ->
+        B.length sh.M.body == 0 /\
+        sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
         Seq.equal sh.M.random (Seq.slice input 6 38) /\
         ((SHC.server_hello_ok_52 input /\
           Seq.equal sh.M.key_share (Seq.slice input 52 84)) \/

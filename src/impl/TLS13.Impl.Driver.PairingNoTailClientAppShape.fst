@@ -126,6 +126,58 @@ let lemma_client_no_tail_application_install_cover_cases
 =
   ()
 
+let lemma_client_no_tail_application_write_read_events_disjoint
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_write_install_event ev /\
+        client_no_tail_application_read_install_event ev)
+      (ensures False)
+=
+  lemma_client_no_tail_application_write_install_event_cases ev;
+  lemma_client_no_tail_application_read_install_event_cases ev;
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    assert (install.CS.install_direction == CS.TrafficWrite);
+    assert (install.CS.install_direction == CS.TrafficRead)
+  | CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install) ->
+    assert (role_install.CS.install_payload.CS.install_direction == CS.TrafficWrite);
+    assert (role_install.CS.install_payload.CS.install_direction == CS.TrafficRead)
+  | _ ->
+    assert False
+
+let lemma_client_no_tail_application_install_cover_write_first
+  (e13:CS.conn_event)
+  (e14:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_install_cover e13 e14 /\
+        client_no_tail_application_write_install_event e13)
+      (ensures client_no_tail_application_read_install_event e14)
+=
+  lemma_client_no_tail_application_install_cover_cases e13 e14;
+  if client_no_tail_application_read_install_event e13 then (
+    lemma_client_no_tail_application_write_read_events_disjoint e13;
+    assert False
+  );
+  assert (client_no_tail_application_read_install_event e14)
+
+let lemma_client_no_tail_application_install_cover_read_first
+  (e13:CS.conn_event)
+  (e14:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_install_cover e13 e14 /\
+        client_no_tail_application_read_install_event e13)
+      (ensures client_no_tail_application_write_install_event e14)
+=
+  lemma_client_no_tail_application_install_cover_cases e13 e14;
+  if client_no_tail_application_write_install_event e13 then (
+    lemma_client_no_tail_application_write_read_events_disjoint e13;
+    assert False
+  );
+  assert (client_no_tail_application_write_install_event e14)
+
 let lemma_client_no_tail_application_write_install_event_step_model_as_plain
   (model model1:CS.connection_model)
   (ev:CS.conn_event)

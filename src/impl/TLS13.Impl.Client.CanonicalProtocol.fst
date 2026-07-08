@@ -98,6 +98,13 @@ let client_step
         st0.CS.cs_model
         conn_ev
         (CW.wire_serialize wire) /\
+      (exists content_type fragment.
+        CT.network_input_message_projection
+          st0
+          content_type
+          fragment
+          msg
+          (CW.wire_serialize wire)) /\
       client_local_outputs_match conn_ev out.SM.so_local_outputs
   | SM.LocalEvent local ->
     let api = CTypes.client_local_event_api local in
@@ -182,7 +189,7 @@ let lemma_client_received_network_event_nonempty_decode_projection
       (requires
         (if CS.network_message_is_cleartext CL.Received msg
          then True
-         else CT.protected_record_decode_correct st0 raw_received msg))
+         else CT.protected_record_decodes_to_message st0 raw_received msg))
       (ensures
         CS.received_event_nonempty_decode_projection
           st0.CS.cs_model
@@ -201,7 +208,6 @@ let lemma_client_received_network_event_nonempty_decode_projection
     assert (CS.received_event_decode_projection st0.CS.cs_model ev raw_received)
   )
   else (
-    assert (CT.protected_record_decode_correct st0 raw_received msg);
     assert (CT.protected_record_decodes_to_message st0 raw_received msg);
     CT.lemma_protected_record_decodes_to_received_single_decode st0 raw_received msg;
     assert (CS.received_single_protected_message_decode
@@ -2094,34 +2100,88 @@ let lemma_client_network_nonstep_canonical_step
     // length SZ.v consumed_len when that fits within the input).
     assert (SZ.v consumed_len <= B.length input_contents);
     assert (SZ.v consumed_len > 0);
-    // From network_bytes_consumed_input_projection:
-    // consumed_len != 0sz and resp.status != DecodeError eliminate the first two
-    // options, leaving a decoded message plus protected-decode correctness for
-    // non-cleartext records.
-    CT.lemma_network_bytes_consumed_input_projection
-      st0
-      st1
-      buffer_resp
-      input_contents
-      network_out
-      app_out;
-    assert (CT.network_bytes_consumed_input_projection
+    // From network_bytes_decoded_message_projection: consumed_len != 0sz and
+    // resp.status != DecodeError eliminate the first two options, leaving the
+    // parser-backed decoded message witness.
+    assert (CT.network_bytes_decoded_message_projection
       st0 st1 buffer_resp input_contents network_out app_out);
-    assert (exists msg.
-      CT.received_tls_raw_delta_legal st0 msg raw_consumed /\
-      CT.decoded_message_event_projection st0 st1 resp msg raw_consumed network_out app_out /\
-      (if CS.network_message_is_cleartext CL.Received msg
-       then True
-       else CT.protected_record_decode_correct st0 raw_consumed msg));
+    assert (exists content_type fragment msg.
+      CT.network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        raw_consumed /\
+      CT.decoded_message_event_projection
+        st0
+        st1
+        resp
+        msg
+        raw_consumed
+        network_out
+        app_out);
     let msg =
       FStar.IndefiniteDescription.indefinite_description_ghost
         M.tls_message
-        (fun msg ->
-          CT.received_tls_raw_delta_legal st0 msg raw_consumed /\
-          CT.decoded_message_event_projection st0 st1 resp msg raw_consumed network_out app_out /\
-          (if CS.network_message_is_cleartext CL.Received msg
-           then True
-           else CT.protected_record_decode_correct st0 raw_consumed msg)) in
+        (fun msg -> exists content_type fragment.
+          CT.network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_consumed /\
+          CT.decoded_message_event_projection
+            st0
+            st1
+            resp
+            msg
+            raw_consumed
+            network_out
+            app_out) in
+    let content_type =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        U8.t
+        (fun content_type -> exists fragment.
+          CT.network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_consumed /\
+          CT.decoded_message_event_projection
+            st0
+            st1
+            resp
+            msg
+            raw_consumed
+            network_out
+            app_out) in
+    let fragment =
+      FStar.IndefiniteDescription.indefinite_description_ghost
+        B.bytes
+        (fun fragment ->
+          CT.network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_consumed /\
+          CT.decoded_message_event_projection
+            st0
+            st1
+            resp
+            msg
+            raw_consumed
+            network_out
+            app_out) in
+    assert (CT.network_input_message_projection
+      st0
+      content_type
+      fragment
+      msg
+      raw_consumed);
+    assert (CT.decoded_message_event_projection
+      st0 st1 resp msg raw_consumed network_out app_out);
     if CT.legal_received_tls_response st0 st1 resp msg raw_consumed network_out app_out then (
       // Sub-case B1: legal_received_tls_response → WireEvent step
       assert (CT.legal_response_for_event st0 st1 resp
@@ -2198,8 +2258,18 @@ let lemma_client_network_nonstep_canonical_step
           st0.CS.cs_model
           conn_ev'
           (CW.wire_serialize wire) /\
+        (exists content_type' fragment'.
+          CT.network_input_message_projection
+            st0
+            content_type'
+            fragment'
+            msg'
+            (CW.wire_serialize wire)) /\
         client_local_outputs_match conn_ev' local_outputs);
-      assert (client_step st0 (SM.WireEvent wire) st1 (CPI.step_output [] local_outputs));
+      let no_wire_outputs : list CW.wire_message = [] in
+      assert ((CPI.step_output no_wire_outputs local_outputs).SM.so_wire_outputs == no_wire_outputs);
+      assert ((CPI.step_output no_wire_outputs local_outputs).SM.so_local_outputs == local_outputs);
+      assert (client_step st0 (SM.WireEvent wire) st1 (CPI.step_output no_wire_outputs local_outputs));
       assert (client_canonical_step_rel st0 st1)
     ) else (
       // Sub-case B2: unexpected_message_response → LocalFail tls_unexpected_message_error

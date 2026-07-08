@@ -6,14 +6,21 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
+module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
+module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
+module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
+module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
 module PNTSFS = TLS13.Impl.Driver.PairingNoTailServerFlightStaged
+module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PWL = TLS13.ConnectionState.ProtectedWireBase
+module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
+module X = TLS13.X509.Spec
 
 (**
   A narrow package for exactly the server encrypted-flight part of
@@ -191,9 +198,1002 @@ let clean16_server_encrypted_flight_semantic_replay_completion
   (server:CS.connection_state)
   (w:PCB.handshake_complete_boundary_witnesses)
   : prop =
+  PNB.paired_supported_normalized_replay_boundary_inputs client server w /\
   PNTSFS.clean16_server_encrypted_flight_staged_milestone client server ==>
   exists r.
     server_encrypted_flight_staged_replay_fragment client server w r
+
+(**
+  Actual server post-[ServerHello] sent/seal suffix obtained from the final
+  clean16 server trace.  This is not yet the canonical
+  [server_encrypted_flight_replay_events] fragment consumed by the staged
+  backend: the first two events are kept in their observed order and related
+  only by the write/read install cover.  It is the semantic replay source used
+  by the next canonicalization step.
+**)
+noextract
+let server_post_server_hello_sent_seal_replay_slice
+  (server:CS.connection_state)
+  : prop =
+  exists
+    (ch:M.client_hello)
+    (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret)
+    (sh:M.server_hello)
+    (e5:CS.conn_event)
+    (e6:CS.conn_event)
+    (rest:list CS.conn_event)
+    (model5:CS.connection_model)
+    (prefix_sent:B.bytes)
+    (prefix_received:B.bytes)
+    (suffix_sent:B.bytes)
+    (suffix_received:B.bytes).
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          ch
+          selection
+          server_shared
+          sh)
+        (e5 :: e6 :: rest) /\
+    PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_sent
+      (B.append prefix_sent suffix_sent) /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_received
+      (B.append prefix_received suffix_received) /\
+    CS.conn_events_sent_seal_replay
+      (CS.initial_model server.CS.cs_model.CS.model_config)
+      (PWSeg.server_cleartext_handshake_prefix_events
+        ch
+        selection
+        server_shared
+        sh)
+      prefix_sent
+      prefix_received
+      model5 /\
+    CS.conn_events_sent_seal_replay
+      model5
+      (e5 :: e6 :: rest)
+      suffix_sent
+      suffix_received
+      server.CS.cs_model
+
+(**
+  The same server sent/seal suffix with the nine-event post-install tail exposed
+  in the exact order proved by [PairingNoTailServerPostHelloShape].  The first
+  two post-[ServerHello] installs are still order-insensitive; this predicate is
+  the precise case-split surface for the next replay canonicalization step.
+**)
+noextract
+let server_post_server_hello_ordered_sent_seal_replay_slice
+  (server:CS.connection_state)
+  : prop =
+  exists
+    (ch:M.client_hello)
+    (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret)
+    (sh:M.server_hello)
+    (e5:CS.conn_event)
+    (e6:CS.conn_event)
+    (ee:M.encrypted_extensions)
+    (cert:M.certificate_msg)
+    (cv:M.certificate_verify)
+    (sf:M.finished)
+    (cf:M.finished)
+    (server_app_write_material:CS.traffic_key_material)
+    (server_app_read_material:CS.traffic_key_material)
+    (model5:CS.connection_model)
+    (prefix_sent:B.bytes)
+    (prefix_received:B.bytes)
+    (suffix_sent:B.bytes)
+    (suffix_received:B.bytes).
+    let ordered_rest =
+      [
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Certificate cert);
+        };
+        CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Finished sf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficWrite;
+              CS.install_material = server_app_write_material;
+            };
+          });
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Finished cf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = server_app_read_material;
+            };
+          });
+        CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+      ] in
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          ch
+          selection
+          server_shared
+          sh)
+        (e5 :: e6 :: ordered_rest) /\
+    PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_sent
+      (B.append prefix_sent suffix_sent) /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_received
+      (B.append prefix_received suffix_received) /\
+    CS.conn_events_sent_seal_replay
+      (CS.initial_model server.CS.cs_model.CS.model_config)
+      (PWSeg.server_cleartext_handshake_prefix_events
+        ch
+        selection
+        server_shared
+        sh)
+      prefix_sent
+      prefix_received
+      model5 /\
+    CS.conn_events_sent_seal_replay
+      model5
+      (e5 :: e6 :: ordered_rest)
+      suffix_sent
+      suffix_received
+      server.CS.cs_model
+
+(**
+  Server post-[ServerHello] sent/seal suffix with just the two immediate
+  handshake installs canonicalized to write-then-read.  The event log is still
+  the observed no-tail log named by
+  [server_post_server_hello_ordered_sent_seal_replay_slice]; this predicate only
+  exposes an equivalent replay view for the same raw suffix, relying on the fact
+  that both local install events have empty raw deltas.
+
+  This is intentionally narrower than the staged-v2 ClientFinished split: the
+  server handshake read install remains immediately after the write install,
+  where it is a legal replay event.
+**)
+noextract
+let server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
+  (server:CS.connection_state)
+  : prop =
+  exists
+    (ch:M.client_hello)
+    (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret)
+    (sh:M.server_hello)
+    (ee:M.encrypted_extensions)
+    (cert:M.certificate_msg)
+    (cv:M.certificate_verify)
+    (sf:M.finished)
+    (cf:M.finished)
+    (server_material:CS.traffic_key_material)
+    (server_read_material:CS.traffic_key_material)
+    (server_app_write_material:CS.traffic_key_material)
+    (server_app_read_material:CS.traffic_key_material)
+    (model5:CS.connection_model)
+    (server_after_write:CS.connection_model)
+    (server_after_read:CS.connection_model)
+    (prefix_sent:B.bytes)
+    (prefix_received:B.bytes)
+    (suffix_sent:B.bytes)
+    (suffix_received:B.bytes).
+    let server_write_install =
+      CS.ConnLocalEvent
+        (CS.LocalInstallTrafficKeysForRole {
+          CS.install_role = CS.ServerEndpoint;
+          CS.install_payload = {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = server_material;
+          };
+        }) in
+    let server_read_install =
+      CS.ConnLocalEvent
+        (CS.LocalInstallTrafficKeysForRole {
+          CS.install_role = CS.ServerEndpoint;
+          CS.install_payload = {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = server_read_material;
+          };
+        }) in
+    let ordered_rest =
+      [
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Certificate cert);
+        };
+        CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Finished sf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficWrite;
+              CS.install_material = server_app_write_material;
+            };
+          });
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Finished cf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = server_app_read_material;
+            };
+          });
+        CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+      ] in
+    server_post_server_hello_ordered_sent_seal_replay_slice server /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_sent
+      (B.append prefix_sent suffix_sent) /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_received
+      (B.append prefix_received suffix_received) /\
+    CS.conn_events_sent_seal_replay
+      (CS.initial_model server.CS.cs_model.CS.model_config)
+      (PWSeg.server_cleartext_handshake_prefix_events
+        ch
+        selection
+        server_shared
+        sh)
+      prefix_sent
+      prefix_received
+      model5 /\
+    CS.step_model model5 server_write_install == Some server_after_write /\
+    CS.step_model server_after_write server_read_install == Some server_after_read /\
+    CS.conn_events_sent_seal_replay
+      model5
+      (server_write_install :: server_read_install :: ordered_rest)
+      suffix_sent
+      suffix_received
+      server.CS.cs_model
+
+noextract
+let server_after_handshake_installs_sent_seal_replay_slice
+  (server:CS.connection_state)
+  : prop =
+  exists
+    (ch:M.client_hello)
+    (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret)
+    (sh:M.server_hello)
+    (ee:M.encrypted_extensions)
+    (cert:M.certificate_msg)
+    (cv:M.certificate_verify)
+    (sf:M.finished)
+    (cf:M.finished)
+    (server_material:CS.traffic_key_material)
+    (server_read_material:CS.traffic_key_material)
+    (server_app_write_material:CS.traffic_key_material)
+    (server_app_read_material:CS.traffic_key_material)
+    (model5:CS.connection_model)
+    (server_after_write:CS.connection_model)
+    (server_after_read:CS.connection_model)
+    (installed_suffix_sent:B.bytes)
+    (installed_suffix_received:B.bytes).
+    let server_write_install =
+      CS.ConnLocalEvent
+        (CS.LocalInstallTrafficKeysForRole {
+          CS.install_role = CS.ServerEndpoint;
+          CS.install_payload = {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = server_material;
+          };
+        }) in
+    let server_read_install =
+      CS.ConnLocalEvent
+        (CS.LocalInstallTrafficKeysForRole {
+          CS.install_role = CS.ServerEndpoint;
+          CS.install_payload = {
+            CS.install_epoch = CS.TrafficHandshake;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = server_read_material;
+          };
+        }) in
+    let ordered_rest =
+      [
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Certificate cert);
+        };
+        CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Finished sf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficWrite;
+              CS.install_material = server_app_write_material;
+            };
+          });
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Finished cf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = server_app_read_material;
+            };
+          });
+        CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+      ] in
+    CS.step_model model5 server_write_install == Some server_after_write /\
+    CS.step_model server_after_write server_read_install == Some server_after_read /\
+    CS.conn_events_sent_seal_replay
+      server_after_read
+      ordered_rest
+      installed_suffix_sent
+      installed_suffix_received
+      server.CS.cs_model
+
+val lemma_server_post_server_hello_sent_seal_replay_slice_from_staged_milestone
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        PNTSFS.clean16_server_encrypted_flight_staged_milestone client server /\
+        CS.connection_state_sent_seal_replay_consistent server)
+      (ensures server_post_server_hello_sent_seal_replay_slice server)
+
+val lemma_server_post_server_hello_ordered_sent_seal_replay_slice
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        server_post_server_hello_sent_seal_replay_slice server /\
+        PNTPH.server_no_tail_post_two_handshake_installs_tail_order server)
+      (ensures server_post_server_hello_ordered_sent_seal_replay_slice server)
+
+val lemma_server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
+  (server:CS.connection_state)
+  : Lemma
+      (requires server_post_server_hello_ordered_sent_seal_replay_slice server)
+      (ensures
+        server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
+          server)
+
+val lemma_server_after_handshake_installs_sent_seal_replay_slice
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
+          server)
+      (ensures server_after_handshake_installs_sent_seal_replay_slice server)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_sent_seal_replay_slice
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures server_post_server_hello_sent_seal_replay_slice server)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_ordered_sent_seal_replay_slice
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures server_post_server_hello_ordered_sent_seal_replay_slice server)
+
+(**
+  Server-side received/decode dual of the post-[ServerHello] sent/seal suffix.
+  This is the semantic replay source for the server's protected
+  [ClientFinished] receive path.
+**)
+noextract
+let server_post_server_hello_received_decode_replay_slice
+  (server:CS.connection_state)
+  : prop =
+  exists
+    (ch:M.client_hello)
+    (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret)
+    (sh:M.server_hello)
+    (e5:CS.conn_event)
+    (e6:CS.conn_event)
+    (rest:list CS.conn_event)
+    (model5:CS.connection_model)
+    (prefix_sent:B.bytes)
+    (prefix_received:B.bytes)
+    (suffix_sent:B.bytes)
+    (suffix_received:B.bytes).
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          ch
+          selection
+          server_shared
+          sh)
+        (e5 :: e6 :: rest) /\
+    PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_sent
+      (B.append prefix_sent suffix_sent) /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_received
+      (B.append prefix_received suffix_received) /\
+    CS.conn_events_received_decode_replay
+      (CS.initial_model server.CS.cs_model.CS.model_config)
+      (PWSeg.server_cleartext_handshake_prefix_events
+        ch
+        selection
+        server_shared
+        sh)
+      prefix_sent
+      prefix_received
+      model5 /\
+    CS.conn_events_received_decode_replay
+      model5
+      (e5 :: e6 :: rest)
+      suffix_sent
+      suffix_received
+      server.CS.cs_model
+
+noextract
+let server_post_server_hello_ordered_received_decode_replay_slice
+  (server:CS.connection_state)
+  : prop =
+  exists
+    (ch:M.client_hello)
+    (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret)
+    (sh:M.server_hello)
+    (e5:CS.conn_event)
+    (e6:CS.conn_event)
+    (ee:M.encrypted_extensions)
+    (cert:M.certificate_msg)
+    (cv:M.certificate_verify)
+    (sf:M.finished)
+    (cf:M.finished)
+    (server_app_write_material:CS.traffic_key_material)
+    (server_app_read_material:CS.traffic_key_material)
+    (model5:CS.connection_model)
+    (prefix_sent:B.bytes)
+    (prefix_received:B.bytes)
+    (suffix_sent:B.bytes)
+    (suffix_received:B.bytes).
+    let ordered_rest =
+      [
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Certificate cert);
+        };
+        CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Finished sf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficWrite;
+              CS.install_material = server_app_write_material;
+            };
+          });
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Finished cf);
+        };
+        CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+            CS.install_role = CS.ServerEndpoint;
+            CS.install_payload = {
+              CS.install_epoch = CS.TrafficApplication;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = server_app_read_material;
+            };
+          });
+        CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
+      ] in
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.server_cleartext_handshake_prefix_events
+          ch
+          selection
+          server_shared
+          sh)
+        (e5 :: e6 :: ordered_rest) /\
+    PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_sent
+      (B.append prefix_sent suffix_sent) /\
+    Seq.equal
+      server.CS.cs_wire_log.CL.raw_received
+      (B.append prefix_received suffix_received) /\
+    CS.conn_events_received_decode_replay
+      (CS.initial_model server.CS.cs_model.CS.model_config)
+      (PWSeg.server_cleartext_handshake_prefix_events
+        ch
+        selection
+        server_shared
+        sh)
+      prefix_sent
+      prefix_received
+      model5 /\
+    CS.conn_events_received_decode_replay
+      model5
+      (e5 :: e6 :: ordered_rest)
+      suffix_sent
+      suffix_received
+      server.CS.cs_model
+
+val lemma_server_post_server_hello_received_decode_replay_slice_from_staged_milestone
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        PNTSFS.clean16_server_encrypted_flight_staged_milestone client server /\
+        CS.connection_state_received_decode_replay_consistent server)
+      (ensures server_post_server_hello_received_decode_replay_slice server)
+
+val lemma_server_post_server_hello_ordered_received_decode_replay_slice
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        server_post_server_hello_received_decode_replay_slice server /\
+        PNTPH.server_no_tail_post_two_handshake_installs_tail_order server)
+      (ensures server_post_server_hello_ordered_received_decode_replay_slice server)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_received_decode_replay_slice
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures server_post_server_hello_received_decode_replay_slice server)
+
+val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_ordered_received_decode_replay_slice
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures server_post_server_hello_ordered_received_decode_replay_slice server)
+
+(**
+  Client-side dual of [server_post_server_hello_sent_seal_replay_slice].  It
+  splits the client's received/decode replay at the four-event cleartext prefix
+  ending in [LocalDeriveSharedSecret].  The suffix is the observed clean16
+  client post-derive tail, with the commuting handshake write/read install cover
+  kept explicit.
+**)
+noextract
+let client_post_derive_received_decode_replay_slice
+  (client:CS.connection_state)
+  : prop =
+  exists
+    (start:CS.handshake_start)
+    (ch:M.client_hello)
+    (sh:M.server_hello)
+    (client_shared:C.x25519_shared_secret)
+    (e4:CS.conn_event)
+    (e5:CS.conn_event)
+    (rest:list CS.conn_event)
+    (model4:CS.connection_model)
+    (prefix_sent:B.bytes)
+    (prefix_received:B.bytes)
+    (suffix_sent:B.bytes)
+    (suffix_received:B.bytes).
+    client.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.client_cleartext_handshake_prefix_events
+          start
+          ch
+          sh
+          client_shared)
+        (e4 :: e5 :: rest) /\
+    PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_sent
+      (B.append prefix_sent suffix_sent) /\
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_received
+      (B.append prefix_received suffix_received) /\
+    CS.conn_events_received_decode_replay
+      (CS.initial_model client.CS.cs_model.CS.model_config)
+      (PWSeg.client_cleartext_handshake_prefix_events
+        start
+        ch
+        sh
+        client_shared)
+      prefix_sent
+      prefix_received
+      model4 /\
+    CS.conn_events_received_decode_replay
+      model4
+      (e4 :: e5 :: rest)
+      suffix_sent
+      suffix_received
+      client.CS.cs_model
+
+(**
+  Stronger client-side post-derive slice retaining the exact no-tail receive
+  order after the two commuting handshake installs.  This is the client analogue
+  of [server_post_server_hello_ordered_sent_seal_replay_slice] and is the
+  case-split surface for canonicalizing the server encrypted-flight receiver
+  replay.
+**)
+noextract
+let client_post_derive_ordered_received_decode_replay_slice
+  (client:CS.connection_state)
+  : prop =
+  exists
+    (start:CS.handshake_start)
+    (ch:M.client_hello)
+    (sh:M.server_hello)
+    (client_shared:C.x25519_shared_secret)
+    (e4:CS.conn_event)
+    (e5:CS.conn_event)
+    (ee:M.encrypted_extensions)
+    (cert:M.certificate_msg)
+    (peer:X.peer_identity)
+    (cv:M.certificate_verify)
+    (sf:M.finished)
+    (e13:CS.conn_event)
+    (e14:CS.conn_event)
+    (cf:M.finished)
+    (model4:CS.connection_model)
+    (prefix_sent:B.bytes)
+    (prefix_received:B.bytes)
+    (suffix_sent:B.bytes)
+    (suffix_received:B.bytes).
+    let ordered_rest =
+      [
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Certificate cert);
+        };
+        CS.ConnLocalEvent (CS.LocalValidateCertificate peer);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+        };
+        CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Finished sf);
+        };
+        CS.ConnLocalEvent (CS.LocalVerifyFinished sf);
+        e13;
+        e14;
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Finished cf);
+        }
+      ] in
+    client.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.client_cleartext_handshake_prefix_events
+          start
+          ch
+          sh
+          client_shared)
+        (e4 :: e5 :: ordered_rest) /\
+    PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
+    PNTCAS.client_no_tail_application_install_cover e13 e14 /\
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_sent
+      (B.append prefix_sent suffix_sent) /\
+    Seq.equal
+      client.CS.cs_wire_log.CL.raw_received
+      (B.append prefix_received suffix_received) /\
+    CS.conn_events_received_decode_replay
+      (CS.initial_model client.CS.cs_model.CS.model_config)
+      (PWSeg.client_cleartext_handshake_prefix_events
+        start
+        ch
+        sh
+        client_shared)
+      prefix_sent
+      prefix_received
+      model4 /\
+    CS.conn_events_received_decode_replay
+      model4
+      (e4 :: e5 :: ordered_rest)
+      suffix_sent
+      suffix_received
+      client.CS.cs_model
+
+(**
+  Client-side replay view after the two post-[ServerHello] handshake traffic
+  installs have both occurred.  The installs are still observed in the concrete
+  no-tail order [e4; e5]; this predicate only peels them off the
+  received/decode replay so the protected server-flight projection can start at
+  the real already-installed receiver state.
+**)
+noextract
+let client_after_handshake_installs_received_decode_replay_slice
+  (client:CS.connection_state)
+  : prop =
+  exists
+    (start:CS.handshake_start)
+    (ch:M.client_hello)
+    (sh:M.server_hello)
+    (client_shared:C.x25519_shared_secret)
+    (e4:CS.conn_event)
+    (e5:CS.conn_event)
+    (ee:M.encrypted_extensions)
+    (cert:M.certificate_msg)
+    (peer:X.peer_identity)
+    (cv:M.certificate_verify)
+    (sf:M.finished)
+    (e13:CS.conn_event)
+    (e14:CS.conn_event)
+    (cf:M.finished)
+    (model4:CS.connection_model)
+    (client_after_e4:CS.connection_model)
+    (client_after_installs:CS.connection_model)
+    (installed_suffix_sent:B.bytes)
+    (installed_suffix_received:B.bytes).
+    let ordered_rest =
+      [
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+        };
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Certificate cert);
+        };
+        CS.ConnLocalEvent (CS.LocalValidateCertificate peer);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+        };
+        CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv);
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake (M.Finished sf);
+        };
+        CS.ConnLocalEvent (CS.LocalVerifyFinished sf);
+        e13;
+        e14;
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsHandshake (M.Finished cf);
+        }
+      ] in
+    client.CS.cs_event_log ==
+      FStar.List.Tot.append
+        (PWSeg.client_cleartext_handshake_prefix_events
+          start
+          ch
+          sh
+          client_shared)
+        (e4 :: e5 :: ordered_rest) /\
+    PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
+    PNTCAS.client_no_tail_application_install_cover e13 e14 /\
+    CS.step_model model4 e4 == Some client_after_e4 /\
+    CS.step_model client_after_e4 e5 == Some client_after_installs /\
+    CS.conn_events_received_decode_replay
+      client_after_installs
+      ordered_rest
+      installed_suffix_sent
+      installed_suffix_received
+      client.CS.cs_model
+
+val lemma_client_post_derive_received_decode_replay_slice_from_staged_milestone
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailClientFinishedStaged.paired_no_tail_client_finished_staged_milestone
+          client
+          server /\
+        CS.connection_state_received_decode_replay_consistent client)
+      (ensures client_post_derive_received_decode_replay_slice client)
+
+val lemma_client_post_derive_ordered_received_decode_replay_slice_from_staged_milestone
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailClientFinishedStaged.paired_no_tail_client_finished_staged_milestone
+          client
+          server /\
+        CS.connection_state_received_decode_replay_consistent client)
+      (ensures client_post_derive_ordered_received_decode_replay_slice client)
+
+val lemma_client_after_handshake_installs_received_decode_replay_slice
+  (client:CS.connection_state)
+  : Lemma
+      (requires client_post_derive_ordered_received_decode_replay_slice client)
+      (ensures client_after_handshake_installs_received_decode_replay_slice client)
+
+val lemma_clean16_no_tail_valid_byte_traces_client_post_derive_received_decode_replay_slice
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures client_post_derive_received_decode_replay_slice client)
+
+val lemma_clean16_no_tail_valid_byte_traces_client_post_derive_ordered_received_decode_replay_slice
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures client_post_derive_ordered_received_decode_replay_slice client)
+
+val lemma_clean16_no_tail_valid_byte_traces_client_after_handshake_installs_received_decode_replay_slice
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Impl.Driver.PairingNoTailNormalized.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures client_after_handshake_installs_received_decode_replay_slice client)
 
 val lemma_server_encrypted_flight_staged_replay_fragment_from_normalized_replay_boundary_inputs
   (client:CS.connection_state)
@@ -215,6 +1215,10 @@ val lemma_clean16_server_encrypted_flight_staged_replay_fragment_from_completion
   (w:PCB.handshake_complete_boundary_witnesses)
   : Lemma
       (requires
+        PNB.paired_supported_normalized_replay_boundary_inputs
+          client
+          server
+          w /\
         PNTSFS.clean16_server_encrypted_flight_staged_milestone
           client
           server /\

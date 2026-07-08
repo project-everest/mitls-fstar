@@ -9,9 +9,12 @@ module CSL = TLS13.ConnectionState.Lemmas
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
+module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module T = TLS13.Types
+module U8 = FStar.UInt8
+module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 
 (**
@@ -87,6 +90,32 @@ let normalized_cleartext_raw_wire_bridge
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       client_sh_raw
+
+val lemma_server_hello_key_share_from_sent_supported_and_received_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (client_sh:M.server_hello)
+  (server_sh:M.server_hello)
+  (client_sh_raw:B.bytes)
+  (server_sh_raw:B.bytes)
+  : Lemma
+      (requires
+        CT.network_input_message_projection
+          st0
+          content_type
+          fragment
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        Seq.equal server_sh_raw client_sh_raw /\
+        W.parse_supported_server_hello
+          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh)
+      (ensures
+        CS.server_hello_key_share client_sh ==
+        CS.server_hello_key_share server_sh)
 
 val lemma_sent_supported_client_hello_raw_not_change_cipher_spec
   (ch:M.client_hello)

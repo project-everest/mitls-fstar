@@ -11,6 +11,7 @@ module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
+module CT = TLS13.Impl.Client.Types
 module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
 module ListP = FStar.List.Tot.Properties
@@ -262,6 +263,13 @@ let lemma_client_step_preserves_connection_state_replay_consistent
          st0.CS.cs_model
          conn_ev
          raw_received /\
+       (exists content_type fragment.
+         CT.network_input_message_projection
+           st0
+           content_type
+           fragment
+           msg
+           raw_received) /\
        ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns
       CS.connection_state_sent_seal_replay_consistent st1 /\

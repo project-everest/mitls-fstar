@@ -65,6 +65,32 @@ val lemma_client_no_tail_application_install_cover_cases
         (client_no_tail_application_read_install_event e13 /\
          client_no_tail_application_write_install_event e14))
 
+val lemma_client_no_tail_application_write_read_events_disjoint
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_write_install_event ev /\
+        client_no_tail_application_read_install_event ev)
+      (ensures False)
+
+val lemma_client_no_tail_application_install_cover_write_first
+  (e13:CS.conn_event)
+  (e14:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_install_cover e13 e14 /\
+        client_no_tail_application_write_install_event e13)
+      (ensures client_no_tail_application_read_install_event e14)
+
+val lemma_client_no_tail_application_install_cover_read_first
+  (e13:CS.conn_event)
+  (e14:CS.conn_event)
+  : Lemma
+      (requires
+        client_no_tail_application_install_cover e13 e14 /\
+        client_no_tail_application_read_install_event e13)
+      (ensures client_no_tail_application_write_install_event e14)
+
 val lemma_client_no_tail_application_write_install_event_step_model_as_plain
   (model model1:CS.connection_model)
   (ev:CS.conn_event)
