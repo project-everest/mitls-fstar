@@ -1,0 +1,54 @@
+/*
+ * ymodem.qd.rfc
+ *
+ * QuackyDucky data-format description for a YMODEM data-connection packet.
+ *
+ * YMODEM (Chuck Forsberg's batch XMODEM-CRC extension) frames a transfer as a
+ * sequence of fixed-size packets on the sender -> receiver channel:
+ *
+ *     +-----+-----+--------+------------+-----------+
+ *     | SOH | blk | ~blk   |  data[128] |  CRC-16   |
+ *     | 0x01| (1) |  (1)   |  (128)     |   (2)     |
+ *     +-----+-----+--------+------------+-----------+
+ *
+ *   - SOH (0x01) introduces a 128-byte packet.  (YMODEM also permits STX (0x02)
+ *     for 1024-byte packets; this description covers the 128-byte SOH form, the
+ *     mandatory packet size, which every YMODEM implementation supports.)
+ *   - blk is the block number: 0 for the header block, then 1, 2, 3, ... for the
+ *     data blocks.  blk_complement is 255 - blk (a redundancy check).
+ *   - data is exactly 128 bytes.  For a data block it is 128 bytes of file
+ *     content, with the final block padded (traditionally with 0x1A) up to 128.
+ *     For the header block (blk 0) it is the NUL-terminated file name followed by
+ *     the ASCII decimal file length (and optional fields), padded with NULs.
+ *   - CRC-16 is computed over the 128 data bytes.
+ *
+ * The whole packet is a fixed 133 bytes, so QuackyDucky generates a total,
+ * constant-size (strong-kinded) parser -- exactly what Common.WireFormat's
+ * strong-prefix stream law needs.
+ *
+ * Modeling notes (see YModem.Protocol.fst):
+ *   - This grammar gives the *packet* wire format, which is what an instance of
+ *     Common.WireFormat.wire_format needs; block_payload projects the 128-byte
+ *     data field.
+ *   - The header block's *internal* structure (NUL-terminated name + ASCII
+ *     length) is not expressed here: QuackyDucky sees data as an opaque fixed
+ *     field, and that structure is interpreted at the protocol/spec layer.  In
+ *     the state-machine model the header's role -- declaring the file name and
+ *     length -- is carried by a local start event, and end-of-file (the YMODEM
+ *     EOT, 0x04) by an explicit completion event, mirroring how the FTP block
+ *     mode model treats its control channel.
+ *   - The declared file length lets the receiver recover the *exact* file by
+ *     truncating the padded final block away; this is what the truncating
+ *     exact-file guarantee of Common.FileTransfer captures.
+ *
+ * Generate with:
+ *     qd.exe -pulse -prefix "YModem.Wire.Generated." -odir spec ymodem.qd.rfc
+ */
+
+struct {
+    uint8   soh;              /* 0x01: introduces a 128-byte YMODEM packet */
+    uint8   blk;              /* block number: 0 = header, 1.. = data blocks */
+    uint8   blk_complement;   /* 255 - blk */
+    opaque  data[128];        /* 128-byte payload (file content, padded, or header) */
+    uint16  crc;              /* CRC-16 over the 128 data bytes */
+} ymodem_packet;
