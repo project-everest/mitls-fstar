@@ -68,13 +68,16 @@ module WFSM = Common.WireFormatStateMachine
    is `Some n` for protocols that carry an explicit block number on the wire
    (TFTP, XMODEM, Kermit, Saratoga offsets) and `None` for protocols that order
    data *positionally*, by its position in the stream, with no on-wire index
-   (FTP block mode over TCP).
+   (FTP block mode over TCP).  An ack's `index` is `option nat` for the same
+   reason: `Some i` is a cumulative ack naming the block index it confirms (TFTP
+   acks the block number on the wire), and `None` is a bare *positional* ack that
+   confirms the next outstanding block (YMODEM's index-less ACK byte).
    ─────────────────────────────────────────────────────────────────────────── *)
 noeq
 type ft_packet =
   | FT_ReadRequest : filename:TCP.bytes -> ft_packet
   | FT_Data        : index:option nat -> payload:TCP.bytes -> ft_packet
-  | FT_Ack         : index:nat -> ft_packet
+  | FT_Ack         : index:option nat -> ft_packet
   | FT_Error       : ft_packet
   | FT_Other       : ft_packet
 
@@ -404,7 +407,14 @@ class file_transfer
            | _ -> True));
 
   (* (L3) An acknowledgment consumed from the wire advances the acknowledged
-     prefix to the block index it names. *)
+     prefix.  A cumulative ack that names a block index on the wire (`Some i`,
+     as in TFTP) advances the acknowledged prefix to that index; a bare
+     *positional* ack (`None`, as in YMODEM's index-less ACK byte) confirms the
+     next outstanding block, advancing the acknowledged prefix by one.  Either
+     way the acknowledged prefix only moves forward and never past the blocks
+     actually sent.  `ftv_acked` is flow-control bookkeeping (it bounds the
+     in-flight window in `ft_step_send_data`) and does not enter the
+     reconstitution guarantee. *)
   ft_law_ack_wire:
     st0:state ->
     st1:state ->
@@ -416,10 +426,13 @@ class file_transfer
           FT_Ack? (ft_classify msg))
         (ensures
           (match ft_classify msg with
-           | FT_Ack index ->
+           | FT_Ack (Some index) ->
              (ft_project st0).ftv_acked < index /\
              index <= L.length (ft_project st0).ftv_blocks /\
              (ft_project st1).ftv_acked == index
+           | FT_Ack None ->
+             (ft_project st0).ftv_acked < L.length (ft_project st0).ftv_blocks /\
+             (ft_project st1).ftv_acked == (ft_project st0).ftv_acked + 1
            | _ -> True));
 
   (* (L4) A read request consumed from the wire starts the transfer under the

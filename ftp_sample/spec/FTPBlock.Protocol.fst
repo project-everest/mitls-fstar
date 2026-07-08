@@ -417,10 +417,13 @@ let ftp_server_law_ack_wire
         FT.FT_Ack? (ftp_classify msg))
       (ensures
         (match ftp_classify msg with
-         | FT.FT_Ack index ->
+         | FT.FT_Ack (Some index) ->
            (ftp_server_project st0).FT.ftv_acked < index /\
            index <= L.length (ftp_server_project st0).FT.ftv_blocks /\
            (ftp_server_project st1).FT.ftv_acked == index
+         | FT.FT_Ack None ->
+           (ftp_server_project st0).FT.ftv_acked < L.length (ftp_server_project st0).FT.ftv_blocks /\
+           (ftp_server_project st1).FT.ftv_acked == (ftp_server_project st0).FT.ftv_acked + 1
          | _ -> True))
 =
   ()

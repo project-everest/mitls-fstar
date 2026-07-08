@@ -436,10 +436,13 @@ let ymodem_server_law_ack_wire
         FT.FT_Ack? (ymodem_classify msg))
       (ensures
         (match ymodem_classify msg with
-         | FT.FT_Ack index ->
+         | FT.FT_Ack (Some index) ->
            (ymodem_server_project st0).FT.ftv_acked < index /\
            index <= L.length (ymodem_server_project st0).FT.ftv_blocks /\
            (ymodem_server_project st1).FT.ftv_acked == index
+         | FT.FT_Ack None ->
+           (ymodem_server_project st0).FT.ftv_acked < L.length (ymodem_server_project st0).FT.ftv_blocks /\
+           (ymodem_server_project st1).FT.ftv_acked == (ymodem_server_project st0).FT.ftv_acked + 1
          | _ -> True))
 =
   ()
