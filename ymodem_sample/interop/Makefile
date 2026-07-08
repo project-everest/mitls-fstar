@@ -24,8 +24,12 @@
 # (into ../_extract).  lrzsz's `sb`/`rb` must be on PATH (Debian/Ubuntu package
 # `lrzsz`); a test that cannot find them reports SKIP.
 #
-# NOTE: these are UNVERIFIED interop drivers exercised end-to-end; a timeout
-# guards against a stalled handshake.
+# A test PASSES only if BOTH the transfer terminates cleanly (the pipeline exits
+# 0 within the timeout) AND the received file is byte-identical to the original.
+# A stalled / timed-out session (the transfer is killed after TIMEOUT seconds, or
+# a program exits non-zero) is a FAIL even if the file was already delivered,
+# since it signals a broken end-of-session handshake.  These are UNVERIFIED
+# interop drivers exercised end-to-end.
 
 PARENT      := ..
 EXTRACT_DIR := $(PARENT)/_extract
@@ -54,16 +58,20 @@ test-server: build-wrappers $(DUMMY)
 	@command -v rb >/dev/null 2>&1 || { echo "  SKIP: lrzsz 'rb' not found on PATH (install the 'lrzsz' package)"; exit 3; }
 	@rm -rf $(SRV_DIR); mkdir -p $(SRV_DIR)/recv; mkfifo $(SRV_DIR)/back
 	@echo "  sending $(DUMMY) ($$(wc -c < $(DUMMY)) bytes) with our sender; receiving with lrzsz rb ..."
-	-@cd $(SRV_DIR)/recv && timeout $(TIMEOUT) bash -c '$(SB_OUR) $(SRC) < ../back | rb > ../back' > ../run.log 2>&1
-	@if cmp -s $(SRC) $(SRV_DIR)/recv/$(DUMMY); then \
-	   echo "  RESULT: PASS - rb received an identical copy of $(DUMMY)"; \
-	 else \
-	   echo "  RESULT: FAIL - received file is missing or differs from $(DUMMY)"; \
-	   echo "  --- $(SRV_DIR)/recv ---"; ls -la $(SRV_DIR)/recv 2>/dev/null; \
-	   if [ -f $(SRV_DIR)/recv/$(DUMMY) ]; then echo "  --- cmp ---"; cmp $(SRC) $(SRV_DIR)/recv/$(DUMMY) 2>&1 | head -3; fi; \
-	   echo "  --- run.log (tail) ---"; tail -20 $(SRV_DIR)/run.log 2>/dev/null; \
-	   exit 1; \
-	 fi
+	@cd $(SRV_DIR)/recv && \
+	  timeout $(TIMEOUT) bash -c '$(SB_OUR) $(SRC) < ../back | rb > ../back' > ../run.log 2>&1; \
+	  st=$$?; \
+	  if cmp -s $(SRC) $(DUMMY); then content=match; else content=differ; fi; \
+	  if [ $$st -eq 0 ] && [ "$$content" = match ]; then \
+	    echo "  RESULT: PASS - clean transfer; rb received an identical copy of $(DUMMY)"; \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - session did not terminate cleanly: stalled, killed after $(TIMEOUT)s (file content: $$content)"; \
+	    elif [ $$st -ne 0 ]; then echo "  RESULT: FAIL - a transfer program exited non-zero: exit=$$st (file content: $$content)"; \
+	    else echo "  RESULT: FAIL - received file is missing or differs from $(DUMMY)"; fi; \
+	    echo "  --- recv dir ---"; ls -la . 2>/dev/null; \
+	    echo "  --- run.log (tail) ---"; tail -20 ../run.log 2>/dev/null; \
+	    exit 1; \
+	  fi
 
 # ── Client test: lrzsz sb (sender)  <->  our extracted receiver ────────────
 test-client: build-wrappers $(DUMMY)
@@ -73,16 +81,20 @@ test-client: build-wrappers $(DUMMY)
 	@command -v sb >/dev/null 2>&1 || { echo "  SKIP: lrzsz 'sb' not found on PATH (install the 'lrzsz' package)"; exit 3; }
 	@rm -rf $(CLI_DIR); mkdir -p $(CLI_DIR)/recv; mkfifo $(CLI_DIR)/back
 	@echo "  sending $(DUMMY) ($$(wc -c < $(DUMMY)) bytes) with lrzsz sb; receiving with our receiver ..."
-	-@cd $(CLI_DIR)/recv && timeout $(TIMEOUT) bash -c 'sb $(SRC) < ../back | $(RB_OUR) > ../back' > ../run.log 2>&1
-	@if cmp -s $(SRC) $(CLI_DIR)/recv/$(DUMMY); then \
-	   echo "  RESULT: PASS - our receiver reconstructed an identical copy of $(DUMMY)"; \
-	 else \
-	   echo "  RESULT: FAIL - received file is missing or differs from $(DUMMY)"; \
-	   echo "  --- $(CLI_DIR)/recv ---"; ls -la $(CLI_DIR)/recv 2>/dev/null; \
-	   if [ -f $(CLI_DIR)/recv/$(DUMMY) ]; then echo "  --- cmp ---"; cmp $(SRC) $(CLI_DIR)/recv/$(DUMMY) 2>&1 | head -3; fi; \
-	   echo "  --- run.log (tail) ---"; tail -20 $(CLI_DIR)/run.log 2>/dev/null; \
-	   exit 1; \
-	 fi
+	@cd $(CLI_DIR)/recv && \
+	  timeout $(TIMEOUT) bash -c 'sb $(SRC) < ../back | $(RB_OUR) > ../back' > ../run.log 2>&1; \
+	  st=$$?; \
+	  if cmp -s $(SRC) $(DUMMY); then content=match; else content=differ; fi; \
+	  if [ $$st -eq 0 ] && [ "$$content" = match ]; then \
+	    echo "  RESULT: PASS - clean transfer; our receiver reconstructed an identical copy of $(DUMMY)"; \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - session did not terminate cleanly: stalled, killed after $(TIMEOUT)s (file content: $$content)"; \
+	    elif [ $$st -ne 0 ]; then echo "  RESULT: FAIL - a transfer program exited non-zero: exit=$$st (file content: $$content)"; \
+	    else echo "  RESULT: FAIL - received file is missing or differs from $(DUMMY)"; fi; \
+	    echo "  --- recv dir ---"; ls -la . 2>/dev/null; \
+	    echo "  --- run.log (tail) ---"; tail -20 ../run.log 2>/dev/null; \
+	    exit 1; \
+	  fi
 
 # ── Run both, aggregate, and report ────────────────────────────────────────
 test:
