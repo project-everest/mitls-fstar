@@ -774,6 +774,127 @@ let lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_compl
         server)
     prove
 
+let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_completion
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires clean16_server_hello_key_shares_completion client server)
+      (ensures clean16_cleartext_key_shares_completion client server)
+=
+  assert_norm
+    (clean16_cleartext_key_shares_completion client server ==
+     (clean16_staged_boundary_derivation_milestones client server ==>
+      WFL.paired_cleartext_hello_key_shares client server));
+  let prove
+    (_:clean16_staged_boundary_derivation_milestones client server)
+    : Lemma (WFL.paired_cleartext_hello_key_shares client server)
+    =
+    eliminate exists
+      client_start
+      client_ch
+      client_sh
+      client_shared
+      client_rest
+      server_ch
+      selection
+      server_shared
+      server_sh
+      server_rest.
+      PNTRB.role_local_cleartext_prefix_shape
+        client
+        server
+        client_start
+        client_ch
+        client_sh
+        client_shared
+        client_rest
+        server_ch
+        selection
+        server_shared
+        server_sh
+        server_rest /\
+      WFL.supported_client_hello_wire_profile client_ch /\
+      PNTRB.normalized_cleartext_raw_wire_bridge
+        client_ch
+        server_ch
+        client_sh
+        server_sh /\
+      client.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some client_ch /\
+      client.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+        Some client_sh /\
+      server.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some server_ch /\
+      server.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+        Some server_sh
+    returns WFL.paired_cleartext_hello_key_shares client server
+    with _.
+    (
+      assert (PNTRB.normalized_cleartext_raw_wire_bridge
+        client_ch
+        server_ch
+        client_sh
+        server_sh);
+      assert (exists
+        (client_ch_raw:B.bytes)
+        (server_ch_raw:B.bytes)
+        (client_sh_raw:B.bytes)
+        (server_sh_raw:B.bytes).
+        FStar.Seq.equal client_ch_raw server_ch_raw /\
+        FStar.Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw);
+      eliminate exists
+        (client_ch_raw:B.bytes)
+        (server_ch_raw:B.bytes)
+        (client_sh_raw:B.bytes)
+        (server_sh_raw:B.bytes).
+        FStar.Seq.equal client_ch_raw server_ch_raw /\
+        FStar.Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw
+      returns WFL.paired_cleartext_hello_key_shares client server
+      with _.
+      (
+        WFL.lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
+          client_ch
+          server_ch
+          client_ch_raw
+          server_ch_raw;
+        assert (FStar.Seq.equal client_ch.M.key_share server_ch.M.key_share);
+        FStar.Seq.lemma_eq_elim client_ch.M.key_share server_ch.M.key_share;
+        assert (CS.client_hello_key_share client_ch ==
+          CS.client_hello_key_share server_ch);
+        assert (CS.server_hello_key_share client_sh ==
+          CS.server_hello_key_share server_sh);
+        assert (WFL.paired_cleartext_hello_key_shares client server)
+      )
+    ) in
+  FStar.Classical.impl_intro
+    #(clean16_staged_boundary_derivation_milestones client server)
+    #(WFL.paired_cleartext_hello_key_shares client server)
+    prove
+
 let lemma_clean16_protected_projection_witnesses_completion_from_installed_replay_completion
   (client:CS.connection_state)
   (server:CS.connection_state)

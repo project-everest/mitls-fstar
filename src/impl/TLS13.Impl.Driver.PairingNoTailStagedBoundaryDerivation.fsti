@@ -197,6 +197,21 @@ let clean16_cleartext_key_shares_completion
   clean16_staged_boundary_derivation_milestones client server ==>
   WFL.paired_cleartext_hello_key_shares client server
 
+noextract
+let clean16_server_hello_key_shares_completion
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  clean16_staged_boundary_derivation_milestones client server ==>
+  (match
+    client.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
+    server.CS.cs_model.CS.model_handshake.CS.hs_server_hello
+  with
+  | Some client_sh, Some server_sh ->
+    CS.server_hello_key_share client_sh ==
+      CS.server_hello_key_share server_sh
+  | _, _ -> False)
+
 (**
   The narrower remaining proof obligation.
 
@@ -402,6 +417,13 @@ val lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_compl
   : Lemma
       (requires clean16_cleartext_key_shares_completion client server)
       (ensures clean16_projection_cleartext_boundary_completion client server)
+
+val lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_completion
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires clean16_server_hello_key_shares_completion client server)
+      (ensures clean16_cleartext_key_shares_completion client server)
 
 val lemma_clean16_protected_projection_witnesses_completion_from_installed_replay_completion
   (client:CS.connection_state)
