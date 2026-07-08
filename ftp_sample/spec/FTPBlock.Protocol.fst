@@ -384,11 +384,16 @@ let ftp_server_law_data_wire
       (ensures
         (match ftp_classify msg with
          | FT.FT_Data index payload ->
-           (match index with
-            | Some i -> i == L.length (ftp_server_project st0).FT.ftv_blocks + 1
-            | None -> True) /\
-           (ftp_server_project st1).FT.ftv_blocks ==
-             L.append (ftp_server_project st0).FT.ftv_blocks [payload]
+           ((match index with
+             | Some i -> i == L.length (ftp_server_project st0).FT.ftv_blocks + 1
+             | None -> True) /\
+            (ftp_server_project st1).FT.ftv_blocks ==
+              L.append (ftp_server_project st0).FT.ftv_blocks [payload])
+           \/
+           ((ftp_server_project st1).FT.ftv_blocks == (ftp_server_project st0).FT.ftv_blocks /\
+            (match index with
+             | Some i -> FT.ft_block_at (ftp_server_project st0).FT.ftv_blocks i == Some payload
+             | None -> L.memP payload (ftp_server_project st0).FT.ftv_blocks))
          | _ -> True))
 =
   match ev with
@@ -397,11 +402,16 @@ let ftp_server_law_data_wire
     returns
       (match ftp_classify msg with
        | FT.FT_Data index payload ->
-         (match index with
-          | Some i -> i == L.length (ftp_server_project st0).FT.ftv_blocks + 1
-          | None -> True) /\
-         (ftp_server_project st1).FT.ftv_blocks ==
-           L.append (ftp_server_project st0).FT.ftv_blocks [payload]
+         ((match index with
+           | Some i -> i == L.length (ftp_server_project st0).FT.ftv_blocks + 1
+           | None -> True) /\
+          (ftp_server_project st1).FT.ftv_blocks ==
+            L.append (ftp_server_project st0).FT.ftv_blocks [payload])
+         \/
+         ((ftp_server_project st1).FT.ftv_blocks == (ftp_server_project st0).FT.ftv_blocks /\
+          (match index with
+           | Some i -> FT.ft_block_at (ftp_server_project st0).FT.ftv_blocks i == Some payload
+           | None -> L.memP payload (ftp_server_project st0).FT.ftv_blocks))
        | _ -> True)
     with _. ()
   | _ -> ()

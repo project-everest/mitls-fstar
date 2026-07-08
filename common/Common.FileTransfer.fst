@@ -379,13 +379,21 @@ class file_transfer
         (requires system.WFSM.wfsm_state_machine.SM.sm_step st0 ev st1 out)
         (ensures ft_view_step ft_block_size ft_window (ft_project st0) (ft_project st1));
 
-  (* (L2) A data message emitted on the wire appends its payload to the delivered
-     prefix (preserving reassembly order).  If the protocol carries an explicit
-     block index on the wire (`Some i`), that index must equal the block's true
-     position — the successor of the number of blocks already delivered — tying
-     the on-the-wire ordering mechanism to reassembly order.  Positionally
-     ordered protocols (no on-wire index, `None`, as in FTP block mode) impose no
-     index constraint; ordering is still enforced by the payload append. *)
+  (* (L2) A data message emitted on the wire either appends its payload to the
+     delivered prefix (a fresh, ordered send) or re-emits an already-delivered
+     block unchanged (a retransmission).  For a fresh send, if the protocol
+     carries an explicit block index on the wire (`Some i`), that index must
+     equal the block's true position — the successor of the number of blocks
+     already delivered — tying the on-the-wire ordering mechanism to reassembly
+     order; positionally ordered protocols (no on-wire index, `None`, as in FTP
+     block mode) impose no index constraint, ordering being enforced by the
+     payload append.  For a retransmission the delivered prefix is unchanged and
+     the re-emitted payload is one already delivered (at its true index when the
+     wire carries one) — this is what lets a stop-and-wait ARQ protocol (YMODEM)
+     resend an outstanding block on a NAK or timeout without regressing or
+     duplicating the reconstructed file.  (Only the reassembly-order invariant of
+     `ft_law_step` feeds the reconstitution theorem; this law is an auxiliary
+     tie between the wire and the delivered prefix.) *)
   ft_law_data_wire:
     st0:state ->
     ev:SM.event wire_message local_event ->
@@ -400,10 +408,18 @@ class file_transfer
         (ensures
           (match ft_classify msg with
            | FT_Data index payload ->
-             (match index with
-              | Some i -> i == L.length (ft_project st0).ftv_blocks + 1
-              | None -> True) /\
-             (ft_project st1).ftv_blocks == L.append (ft_project st0).ftv_blocks [payload]
+             (* a fresh block is appended (ordered send): *)
+             ((match index with
+               | Some i -> i == L.length (ft_project st0).ftv_blocks + 1
+               | None -> True) /\
+              (ft_project st1).ftv_blocks == L.append (ft_project st0).ftv_blocks [payload])
+             \/
+             (* or a retransmission: the delivered prefix is unchanged and the
+                payload re-emits an already-delivered block: *)
+             ((ft_project st1).ftv_blocks == (ft_project st0).ftv_blocks /\
+              (match index with
+               | Some i -> ft_block_at (ft_project st0).ftv_blocks i == Some payload
+               | None -> L.memP payload (ft_project st0).ftv_blocks))
            | _ -> True));
 
   (* (L3) An acknowledgment consumed from the wire advances the acknowledged
