@@ -2875,6 +2875,227 @@ let lemma_client_cleartext_prefix_step_models_from_raw_replay
     )
   )
 
+#push-options "--split_queries always --z3rlimit 20"
+
+let hello_slots_frozen_control (control:CS.connection_control_state) : Tot prop =
+  match control with
+  | CS.ControlHandshaking CS.HsServerHelloReceived -> True
+  | CS.ControlHandshaking CS.HsEncryptedExtensionsReceived -> True
+  | CS.ControlHandshaking CS.HsCertificateReceived -> True
+  | CS.ControlHandshaking CS.HsCertificateValidated -> True
+  | CS.ControlHandshaking CS.HsCertificateVerifyReceived -> True
+  | CS.ControlHandshaking CS.HsCertificateVerifyVerified -> True
+  | CS.ControlHandshaking CS.HsServerFinishedReceived -> True
+  | CS.ControlHandshaking CS.HsServerFinishedVerified -> True
+  | CS.ControlHandshaking CS.HsServerHelloSent -> True
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent -> True
+  | CS.ControlHandshaking CS.HsServerFinishedSent -> True
+  | CS.ControlHandshaking CS.HsClientFinishedReceived -> True
+  | CS.ControlApplicationData -> True
+  | CS.ControlClosing -> True
+  | CS.ControlClosed -> True
+  | CS.ControlFailed _ -> True
+  | _ -> False
+
+let lemma_step_model_preserves_frozen_hello_slots
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (model1:CS.connection_model)
+  (ch:M.client_hello)
+  (sh:M.server_hello)
+  : Lemma
+      (requires
+        hello_slots_frozen_control model.CS.model_control /\
+        model.CS.model_handshake.CS.hs_client_hello == Some ch /\
+        model.CS.model_handshake.CS.hs_server_hello == Some sh /\
+        CS.step_model model ev == Some model1)
+      (ensures
+        hello_slots_frozen_control model1.CS.model_control /\
+        model1.CS.model_handshake.CS.hs_client_hello == Some ch /\
+        model1.CS.model_handshake.CS.hs_server_hello == Some sh)
+=
+  match ev with
+  | CS.ConnLocalEvent local ->
+    (match local, model.CS.model_control with
+     | CS.LocalStartHandshake _, CS.ControlNew -> assert False
+     | CS.LocalStartServer, CS.ControlNew -> assert False
+     | CS.LocalSelectServerParameters _, CS.ControlHandshaking CS.HsClientHelloReceived ->
+       assert False
+     | CS.LocalDeriveSharedSecret _, CS.ControlHandshaking CS.HsClientHelloReceived ->
+       assert False
+     | _, _ -> ())
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value, msg.CL.message_direction, model.CS.model_control with
+     | M.TlsHandshake (M.ClientHello _), CL.Sent, CS.ControlHandshaking CS.HsStarted ->
+       assert False
+     | M.TlsHandshake (M.ClientHello _), CL.Received, CS.ControlHandshaking CS.HsAwaitingClientHello ->
+       assert False
+     | M.TlsHandshake (M.ServerHello _), CL.Received, CS.ControlHandshaking CS.HsClientHelloSent ->
+       assert False
+     | M.TlsHandshake (M.ServerHello _), CL.Sent, CS.ControlHandshaking CS.HsClientHelloReceived ->
+       assert False
+     | _, _, _ -> ())
+
+let rec lemma_conn_events_raw_replay_preserves_frozen_hello_slots
+  (model:CS.connection_model)
+  (events:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  (ch:M.client_hello)
+  (sh:M.server_hello)
+  : Lemma
+      (requires
+        hello_slots_frozen_control model.CS.model_control /\
+        model.CS.model_handshake.CS.hs_client_hello == Some ch /\
+        model.CS.model_handshake.CS.hs_server_hello == Some sh /\
+        CS.conn_events_raw_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        final_model.CS.model_handshake.CS.hs_client_hello == Some ch /\
+        final_model.CS.model_handshake.CS.hs_server_hello == Some sh)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | ev :: rest ->
+    PWR.lemma_conn_events_raw_replay_head
+      model
+      ev
+      rest
+      raw_sent
+      raw_received
+      final_model;
+    eliminate exists
+      (model1:CS.connection_model)
+      (delta_sent:B.bytes)
+      (delta_received:B.bytes)
+      (tail_sent:B.bytes)
+      (tail_received:B.bytes).
+      CS.legal_event model ev /\
+      CS.step_model model ev == Some model1 /\
+      CS.event_raw_delta_legal model ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      CS.conn_events_raw_replay
+        model1
+        rest
+        tail_sent
+        tail_received
+        final_model
+    returns
+      final_model.CS.model_handshake.CS.hs_client_hello == Some ch /\
+      final_model.CS.model_handshake.CS.hs_server_hello == Some sh
+    with _.
+    (
+      lemma_step_model_preserves_frozen_hello_slots model ev model1 ch sh;
+      lemma_conn_events_raw_replay_preserves_frozen_hello_slots
+        model1
+        rest
+        tail_sent
+        tail_received
+        final_model
+        ch
+        sh
+    )
+
+let lemma_client_cleartext_prefix_final_hello_slots_from_raw_replay
+  (model0:CS.connection_model)
+  (client_start:CS.handshake_start)
+  (client_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (client_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+           client_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        final_model.CS.model_handshake.CS.hs_client_hello ==
+          Some client_ch /\
+        final_model.CS.model_handshake.CS.hs_server_hello ==
+          Some client_sh)
+=
+  lemma_client_cleartext_prefix_step_models_from_raw_replay
+    model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 model2 model3 model4 tail_sent tail_received.
+    CS.step_model
+      model0
+      (CS.ConnLocalEvent (CS.LocalStartHandshake client_start)) ==
+      Some model1 /\
+    CS.step_model
+      model1
+      (CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+      })) == Some model2 /\
+    CS.step_model
+      model2
+      (CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+      })) == Some model3 /\
+    CS.step_model
+      model3
+      (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared)) ==
+      Some model4 /\
+    CS.conn_events_raw_replay
+      model4
+      client_rest
+      tail_sent
+      tail_received
+      final_model
+  returns
+    final_model.CS.model_handshake.CS.hs_client_hello ==
+      Some client_ch /\
+    final_model.CS.model_handshake.CS.hs_server_hello ==
+      Some client_sh
+  with _.
+  (
+    assert (hello_slots_frozen_control model4.CS.model_control);
+    assert (model4.CS.model_handshake.CS.hs_client_hello == Some client_ch);
+    assert (model4.CS.model_handshake.CS.hs_server_hello == Some client_sh);
+    lemma_conn_events_raw_replay_preserves_frozen_hello_slots
+      model4
+      client_rest
+      tail_sent
+      tail_received
+      final_model
+      client_ch
+      client_sh
+  )
+
+#pop-options
+
 let lemma_server_prefix_raw_slices
   (model0:CS.connection_model)
   (server_ch:M.client_hello)
@@ -3404,6 +3625,105 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
       )
     )
   )
+
+#push-options "--split_queries always --z3rlimit 20"
+
+let lemma_server_cleartext_prefix_final_hello_slots_from_raw_replay
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (server_sh:M.server_hello)
+  (server_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+           }) ::
+           server_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        final_model.CS.model_handshake.CS.hs_client_hello ==
+          Some server_ch /\
+        final_model.CS.model_handshake.CS.hs_server_hello ==
+          Some server_sh)
+=
+  lemma_server_cleartext_prefix_step_models_from_raw_replay
+    model0
+    server_ch
+    selection
+    server_shared
+    server_sh
+    server_rest
+    raw_sent
+    raw_received
+    final_model;
+  eliminate exists model1 model2 model3 model4 model5 tail_sent tail_received.
+    CS.step_model
+      model0
+      (CS.ConnLocalEvent CS.LocalStartServer) == Some model1 /\
+    CS.step_model
+      model1
+      (CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+      })) == Some model2 /\
+    CS.step_model
+      model2
+      (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)) ==
+      Some model3 /\
+    CS.step_model
+      model3
+      (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared)) ==
+      Some model4 /\
+    CS.step_model
+      model4
+      (CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+      })) == Some model5 /\
+    CS.conn_events_raw_replay
+      model5
+      server_rest
+      tail_sent
+      tail_received
+      final_model
+  returns
+    final_model.CS.model_handshake.CS.hs_client_hello ==
+      Some server_ch /\
+    final_model.CS.model_handshake.CS.hs_server_hello ==
+      Some server_sh
+  with _.
+  (
+    assert (hello_slots_frozen_control model5.CS.model_control);
+    assert (model5.CS.model_handshake.CS.hs_client_hello == Some server_ch);
+    assert (model5.CS.model_handshake.CS.hs_server_hello == Some server_sh);
+    lemma_conn_events_raw_replay_preserves_frozen_hello_slots
+      model5
+      server_rest
+      tail_sent
+      tail_received
+      final_model
+      server_ch
+      server_sh
+  )
+
+#pop-options
 
 let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
   (client:CS.connection_state)

@@ -627,6 +627,40 @@ val lemma_client_cleartext_prefix_step_models_from_raw_replay
             tail_received
             final_model)
 
+val lemma_client_cleartext_prefix_final_hello_slots_from_raw_replay
+  (model0:CS.connection_model)
+  (client_start:CS.handshake_start)
+  (client_ch:M.client_hello)
+  (client_sh:M.server_hello)
+  (client_shared:C.x25519_shared_secret)
+  (client_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+           client_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        final_model.CS.model_handshake.CS.hs_client_hello ==
+          Some client_ch /\
+        final_model.CS.model_handshake.CS.hs_server_hello ==
+          Some client_sh)
+
 val lemma_server_prefix_raw_slices
   (model0:CS.connection_model)
   (server_ch:M.client_hello)
@@ -727,6 +761,41 @@ val lemma_server_cleartext_prefix_step_models_from_raw_replay
             tail_sent
             tail_received
             final_model)
+
+val lemma_server_cleartext_prefix_final_hello_slots_from_raw_replay
+  (model0:CS.connection_model)
+  (server_ch:M.client_hello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (server_sh:M.server_hello)
+  (server_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+           }) ::
+           server_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        final_model.CS.model_handshake.CS.hs_client_hello ==
+          Some server_ch /\
+        final_model.CS.model_handshake.CS.hs_server_hello ==
+          Some server_sh)
 
 val lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
   (client:CS.connection_state)

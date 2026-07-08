@@ -5,7 +5,11 @@ module TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
+module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
+module CD = TLS13.Impl.Client.Driver
+module M = TLS13.Messages
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
@@ -15,10 +19,57 @@ module PNTCFR = TLS13.Impl.Driver.PairingNoTailClientFinishedReplay
 module PNTCFS = TLS13.Impl.Driver.PairingNoTailClientFinishedStaged
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTPPD = TLS13.Impl.Driver.PairingNoTailProtectedProjectionDerivation
+module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
 module PNTSFR = TLS13.Impl.Driver.PairingNoTailServerFlightReplay
 module PNTSFS = TLS13.Impl.Driver.PairingNoTailServerFlightStaged
 module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
 module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
+module SD = TLS13.Impl.Server.Driver
+module WFL = TLS13.Spec.WireFormatLemmas
+
+noextract
+let clean16_cleartext_final_hello_slot_milestone
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  exists
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    server_ch
+    selection
+    server_shared
+    server_sh
+    server_rest.
+    PNTRB.role_local_cleartext_prefix_shape
+      client
+      server
+      client_start
+      client_ch
+      client_sh
+      client_shared
+      client_rest
+      server_ch
+      selection
+      server_shared
+      server_sh
+      server_rest /\
+    WFL.supported_client_hello_wire_profile client_ch /\
+    PNTRB.normalized_cleartext_raw_wire_bridge
+      client_ch
+      server_ch
+      client_sh
+      server_sh /\
+    client.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+      Some client_ch /\
+    client.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+      Some client_sh /\
+    server.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+      Some server_ch /\
+    server.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+      Some server_sh
 
 (**
   Narrow staging package derivable today from the clean16 no-tail byte-trace
@@ -37,6 +88,14 @@ let clean16_staged_boundary_derivation_milestones
   (server:CS.connection_state)
   : prop =
   PNTN.paired_no_tail_normalized_cleartext_replay_suffixes_clean16
+    client
+    server /\
+  clean16_cleartext_final_hello_slot_milestone
+    client
+    server /\
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
   PNTSFS.clean16_server_encrypted_flight_staged_milestone
@@ -159,6 +218,29 @@ let clean16_installed_protected_projection_replay_completion
   PNTPPD.installed_protected_projection_replay_witnesses
     client
     server
+
+val lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
+  (client_initial:CS.connection_state)
+  (server_initial:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        PNTN.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        clean16_cleartext_final_hello_slot_milestone client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_staged_boundary_derivation_milestones
   (client_initial:CS.connection_state)
