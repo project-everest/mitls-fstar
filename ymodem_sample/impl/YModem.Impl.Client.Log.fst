@@ -27,6 +27,7 @@ module Pre = FStar.Preorder
 module RTC = FStar.ReflexiveTransitiveClosure
 module LP = LowParse.Spec
 module SZ = FStar.SizeT
+module U8 = FStar.UInt8
 
 module SM = Common.StateMachine
 module WF = Common.WireFormat
@@ -54,6 +55,18 @@ type ymodem_client_log = {
 (* The log is fully determined by the (received, sent, state) triple. *)
 let mk_log (received sent:TCP.bytes) (st:YP.ymodem_client_state) : ymodem_client_log =
   { ycl_received = received; ycl_sent = sent; ycl_state = st }
+
+(* Agreement between the concrete 1-byte status cell carried by the Pulse handle
+   and the abstract completion status (1uy ≙ in-progress, 2uy ≙ completed).
+
+   Both `pi_process_network` and `pi_process_local` read this runtime cell and
+   branch on it: the invariant now *admits* completed states (so it can be
+   re-established after the `YmodemClientEot` step), and neither process fn may
+   branch on the erased abstract state, so the runtime source of truth for the
+   `InProgress` guard is this concrete flag. *)
+let yc_status_flag_ok (s:U8.t) (st:YP.ymodem_client_state) : prop =
+  (s == 1uy /\ st.YP.ycs_status == FT.FT_InProgress) \/
+  (s == 2uy /\ st.YP.ycs_status == FT.FT_Completed)
 
 (* A junk packet, used only to make the parsed-packet projection total. *)
 let default_ymodem_packet : ymodem_packet =
@@ -238,8 +251,22 @@ let yc_wire_step_ok
   Seq.equal log1.ycl_received (Seq.append log0.ycl_received (ymodem_serialize pkt)) /\
   Seq.equal log1.ycl_sent log0.ycl_sent
 
+(* A single local (Start / EOT) step: it advances the abstract state per the
+   spec but leaves both byte histories UNCHANGED (a local event carries no wire
+   I/O).  Broadening `yc_step_rel` with this disjunct is what lets the monotonic
+   ghost log advance across the `YmodemClientEot` completion transition. *)
+let yc_local_step_ok
+  (log0:ymodem_client_log)
+  (ev:YP.ymodem_client_local)
+  (log1:ymodem_client_log)
+  : prop =
+  YP.ymodem_client_step log0.ycl_state (SM.LocalEvent ev) log1.ycl_state yc_empty_output /\
+  Seq.equal log1.ycl_received log0.ycl_received /\
+  Seq.equal log1.ycl_sent log0.ycl_sent
+
 let yc_step_rel (log0 log1:ymodem_client_log) : prop =
-  exists pkt. yc_wire_step_ok log0 pkt log1
+  (exists pkt. yc_wire_step_ok log0 pkt log1) \/
+  (exists ev.  yc_local_step_ok log0 ev  log1)
 
 let yc_state_ahead_preorder : Pre.preorder ymodem_client_log =
   RTC.closure yc_step_rel
@@ -255,6 +282,17 @@ let yc_transition
     SM.tr_output = yc_empty_output;
   }
 
+let yc_local_transition
+  (log0:ymodem_client_log)
+  (ev:YP.ymodem_client_local)
+  (log1:ymodem_client_log)
+  : SM.transition YP.ymodem_client_state ymodem_packet YP.ymodem_client_local unit =
+  {
+    SM.tr_event = SM.LocalEvent ev;
+    SM.tr_next_state = log1.ycl_state;
+    SM.tr_output = yc_empty_output;
+  }
+
 (* ── state_ahead closure ─────────────────────────────────────────────────── *)
 
 let lemma_yc_step_rel_state_ahead
@@ -263,22 +301,44 @@ let lemma_yc_step_rel_state_ahead
       (requires yc_step_rel log0 log1)
       (ensures CPI.state_ahead YP.ymodem_client_wfsm log0.ycl_state log1.ycl_state)
 =
-  let pkt =
-    ID.indefinite_description_ghost
-      ymodem_packet
-      (fun pkt -> yc_wire_step_ok log0 pkt log1) in
-  let tr = yc_transition log0 pkt log1 in
-  assert (SM.trace_reaches
-    YP.ymodem_client_wfsm.WFSM.wfsm_state_machine
-    log0.ycl_state
-    [tr]
-    log1.ycl_state);
-  assert (exists trace.
-    SM.trace_reaches
+  eliminate
+    (exists pkt. yc_wire_step_ok log0 pkt log1) \/
+    (exists ev.  yc_local_step_ok log0 ev  log1)
+  returns CPI.state_ahead YP.ymodem_client_wfsm log0.ycl_state log1.ycl_state
+  with _wire.
+  ( let pkt =
+      ID.indefinite_description_ghost
+        ymodem_packet
+        (fun pkt -> yc_wire_step_ok log0 pkt log1) in
+    let tr = yc_transition log0 pkt log1 in
+    assert (SM.trace_reaches
       YP.ymodem_client_wfsm.WFSM.wfsm_state_machine
       log0.ycl_state
-      trace
-      log1.ycl_state)
+      [tr]
+      log1.ycl_state);
+    assert (exists trace.
+      SM.trace_reaches
+        YP.ymodem_client_wfsm.WFSM.wfsm_state_machine
+        log0.ycl_state
+        trace
+        log1.ycl_state))
+  and _local.
+  ( let ev =
+      ID.indefinite_description_ghost
+        YP.ymodem_client_local
+        (fun ev -> yc_local_step_ok log0 ev log1) in
+    let tr = yc_local_transition log0 ev log1 in
+    assert (SM.trace_reaches
+      YP.ymodem_client_wfsm.WFSM.wfsm_state_machine
+      log0.ycl_state
+      [tr]
+      log1.ycl_state);
+    assert (exists trace.
+      SM.trace_reaches
+        YP.ymodem_client_wfsm.WFSM.wfsm_state_machine
+        log0.ycl_state
+        trace
+        log1.ycl_state))
 
 let lemma_yc_closure_state_ahead
   (log0 log1:ymodem_client_log)
@@ -314,16 +374,32 @@ let lemma_yc_step_rel_histories_ahead
         TCP.bytes_extends log0.ycl_received log1.ycl_received /\
         TCP.bytes_extends log0.ycl_sent log1.ycl_sent)
 =
-  let pkt =
-    ID.indefinite_description_ghost
-      ymodem_packet
-      (fun pkt -> yc_wire_step_ok log0 pkt log1) in
-  CPI.lemma_bytes_extends_append_equal
-    log0.ycl_received
-    log1.ycl_received
-    (ymodem_serialize pkt);
-  Seq.lemma_eq_elim log1.ycl_sent log0.ycl_sent;
-  CPI.lemma_bytes_extends_refl log0.ycl_sent
+  eliminate
+    (exists pkt. yc_wire_step_ok log0 pkt log1) \/
+    (exists ev.  yc_local_step_ok log0 ev  log1)
+  returns
+    (TCP.bytes_extends log0.ycl_received log1.ycl_received /\
+     TCP.bytes_extends log0.ycl_sent log1.ycl_sent)
+  with _wire.
+  ( let pkt =
+      ID.indefinite_description_ghost
+        ymodem_packet
+        (fun pkt -> yc_wire_step_ok log0 pkt log1) in
+    CPI.lemma_bytes_extends_append_equal
+      log0.ycl_received
+      log1.ycl_received
+      (ymodem_serialize pkt);
+    Seq.lemma_eq_elim log1.ycl_sent log0.ycl_sent;
+    CPI.lemma_bytes_extends_refl log0.ycl_sent)
+  and _local.
+  ( let ev =
+      ID.indefinite_description_ghost
+        YP.ymodem_client_local
+        (fun ev -> yc_local_step_ok log0 ev log1) in
+    Seq.lemma_eq_elim log1.ycl_received log0.ycl_received;
+    Seq.lemma_eq_elim log1.ycl_sent log0.ycl_sent;
+    CPI.lemma_bytes_extends_refl log0.ycl_received;
+    CPI.lemma_bytes_extends_refl log0.ycl_sent)
 
 let lemma_yc_closure_histories_ahead
   (log0 log1:ymodem_client_log)
@@ -528,6 +604,68 @@ let lemma_client_trace_ok_network_step
     (L.append trace0 [tr]))
 
 (* ───────────────────────────────────────────────────────────────────────────
+   Extending the canonical trace by one local (EOT) event
+
+   A local event contributes NO wire input and NO wire output, so both the
+   `received` and `sent` histories are unchanged; the trace merely gains one
+   `LocalEvent` transition that advances the abstract state.
+   ─────────────────────────────────────────────────────────────────────────── *)
+
+let lemma_client_trace_ok_local_step
+  (received0 sent0:TCP.bytes)
+  (log0:ymodem_client_log)
+  (log1:ymodem_client_log)
+  : Lemma
+      (requires
+        client_trace_ok received0 sent0 log0 /\
+        yc_local_step_ok log0 YP.YmodemClientEot log1)
+      (ensures
+        client_trace_ok received0 sent0 log1)
+=
+  let trace0 =
+    ID.indefinite_description_ghost client_trace (client_trace_witness received0 sent0 log0) in
+  let tr = yc_local_transition log0 YP.YmodemClientEot log1 in
+  assert (SM.trace_reaches
+    YP.ymodem_client_wfsm.WFSM.wfsm_state_machine
+    log0.ycl_state
+    [tr]
+    log1.ycl_state);
+  SM.lemma_trace_reaches_append
+    YP.ymodem_client_wfsm.WFSM.wfsm_state_machine
+    YP.ymodem_client_initial
+    log0.ycl_state
+    log1.ycl_state
+    trace0
+    [tr];
+  lemma_ym_trace_input_bytes_append_one trace0 tr;
+  lemma_ym_trace_wire_bytes_append_one trace0 tr;
+  (* the LocalEvent transition contributes [] to both input-messages and
+     wire-outputs, so serialize_all of either delta is Seq.empty *)
+  assert (WFSM.event_input_messages tr.SM.tr_event == ([] <: list ymodem_packet));
+  assert (tr.SM.tr_output.SM.so_wire_outputs == ([] <: list ymodem_packet));
+  assert (WF.serialize_all ymodem_wire_format ([] <: list ymodem_packet) == Seq.empty);
+  Seq.lemma_eq_elim
+    received0
+    (WF.serialize_all ymodem_wire_format (WFSM.trace_input_messages trace0));
+  Seq.lemma_eq_elim
+    sent0
+    (WF.serialize_all ymodem_wire_format (SM.trace_wire_outputs trace0));
+  Seq.append_empty_r
+    (WF.serialize_all ymodem_wire_format (WFSM.trace_input_messages trace0));
+  Seq.append_empty_r
+    (WF.serialize_all ymodem_wire_format (SM.trace_wire_outputs trace0));
+  assert (Seq.equal received0
+    (WF.serialize_all ymodem_wire_format (WFSM.trace_input_messages (L.append trace0 [tr]))));
+  assert (Seq.equal sent0
+    (WF.serialize_all ymodem_wire_format (SM.trace_wire_outputs (L.append trace0 [tr]))));
+  (* the local step leaves both histories untouched, so they still match log1 *)
+  Seq.lemma_eq_elim log1.ycl_received log0.ycl_received;
+  Seq.lemma_eq_elim log1.ycl_sent log0.ycl_sent;
+  assert (Seq.equal received0 log1.ycl_received);
+  assert (Seq.equal sent0 log1.ycl_sent);
+  assert (client_trace_witness received0 sent0 log1 (L.append trace0 [tr]))
+
+(* ───────────────────────────────────────────────────────────────────────────
    process_result values and process_correct packaging lemmas
    ─────────────────────────────────────────────────────────────────────────── *)
 
@@ -552,6 +690,12 @@ let ymodem_client_step_ok_result : CPI.process_result =
 let ymodem_client_illegal_result : CPI.process_result =
   ymodem_client_process_result CPI.IllegalTransition 0sz 0sz
 
+(* A faithful local StepOk (the YmodemClientEot completion): the receiver
+   consumes no wire input and produces no wire output, so both lengths are 0. *)
+[@inline_let]
+let ymodem_client_local_stepok_result : CPI.process_result =
+  ymodem_client_process_result CPI.StepOk 0sz 0sz
+
 let ymodem_no_wire_outputs : list ymodem_packet = []
 let ymodem_no_local_outputs : list unit = []
 
@@ -559,6 +703,11 @@ let ymodem_no_local_outputs : list unit = []
 let wire_next_state (st0:YP.ymodem_client_state) (pkt:ymodem_packet)
   : YP.ymodem_client_state =
   { st0 with YP.ycs_received = L.append st0.YP.ycs_received [YP.block_payload pkt] }
+
+(* The state reached after the EOT completion event: only the status flips to
+   FT_Completed; everything else (filename, len, received) is unchanged. *)
+let eot_next_state (st0:YP.ymodem_client_state) : YP.ymodem_client_state =
+  { st0 with YP.ycs_status = FT.FT_Completed }
 
 (* From the WireEvent guard, the canonical single-step relation holds. *)
 let lemma_wire_step_ok
@@ -573,6 +722,22 @@ let lemma_wire_step_ok
         Seq.equal received1 (Seq.append received0 (ymodem_serialize pkt)) /\
         Seq.equal sent1 sent0)
       (ensures yc_wire_step_ok (mk_log received0 sent0 st0) pkt (mk_log received1 sent1 st1))
+=
+  ()
+
+(* From the EOT guard, the canonical single local-step relation holds. *)
+let lemma_eot_step_ok
+  (received0 sent0:TCP.bytes) (st0:YP.ymodem_client_state)
+  (received1 sent1:TCP.bytes) (st1:YP.ymodem_client_state)
+  : Lemma
+      (requires
+        Some? st0.YP.ycs_filename /\
+        st0.YP.ycs_status == FT.FT_InProgress /\
+        st1 == eot_next_state st0 /\
+        Seq.equal received1 received0 /\
+        Seq.equal sent1 sent0)
+      (ensures
+        yc_local_step_ok (mk_log received0 sent0 st0) YP.YmodemClientEot (mk_log received1 sent1 st1))
 =
   ()
 
@@ -661,6 +826,77 @@ let lemma_ym_network_process_correct_step_ok
       FStar.Tactics.smt ())
   | _ -> assert False
 
+(* Package the StepOk obligations of `local_process_correct` for the EOT
+   completion event: the receiver takes the `YmodemClientEot` local step
+   (flipping its status to FT_Completed), consuming and producing nothing. *)
+let lemma_ym_local_process_correct_step_ok
+  (old_out out_bytes:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:YP.ymodem_client_state)
+  (st1:YP.ymodem_client_state)
+  : Lemma
+      (requires
+        SZ.v out_len == Seq.length old_out /\
+        Seq.equal out_bytes old_out /\
+        Seq.length out_bytes == Seq.length old_out /\
+        Some? st0.YP.ycs_filename /\
+        st0.YP.ycs_status == FT.FT_InProgress /\
+        st1 == eot_next_state st0)
+      (ensures
+        CPI.local_process_correct
+          YP.ymodem_client_wfsm
+          YP.YmodemClientEot old_out out_bytes out_len
+          received0 sent0 st0
+          ymodem_client_local_stepok_result
+          received0 sent0 st1
+          ymodem_no_wire_outputs
+          ymodem_no_local_outputs)
+=
+  lemma_eot_step_ok received0 sent0 st0 received0 sent0 st1;
+  assert (WF.serialize_all ymodem_wire_format ymodem_no_wire_outputs == Seq.empty);
+  assert (CPI.output_written out_bytes 0sz Seq.empty);
+  Seq.append_empty_r sent0;
+  assert (CPI.step_output ymodem_no_wire_outputs ymodem_no_local_outputs == yc_empty_output);
+  assert (YP.ymodem_client_wfsm.WFSM.wfsm_state_machine.SM.sm_step
+    st0 (SM.LocalEvent YP.YmodemClientEot) st1
+    (CPI.step_output ymodem_no_wire_outputs ymodem_no_local_outputs));
+  assert_norm (ymodem_client_local_stepok_result.CPI.process_status == CPI.StepOk);
+  assert_norm (ymodem_client_local_stepok_result.CPI.process_consumed_len == 0sz);
+  assert_norm (ymodem_client_local_stepok_result.CPI.process_produced_len == 0sz);
+  assert (CPI.output_written out_bytes ymodem_client_local_stepok_result.CPI.process_produced_len Seq.empty);
+  assert (Seq.equal sent0 (Seq.append sent0 Seq.empty));
+  introduce exists (produced':TCP.bytes).
+    YP.ymodem_client_wfsm.WFSM.wfsm_state_machine.SM.sm_step
+      st0 (SM.LocalEvent YP.YmodemClientEot) st1
+      (CPI.step_output ymodem_no_wire_outputs ymodem_no_local_outputs) /\
+    Seq.equal produced' (WF.serialize_all YP.ymodem_client_wfsm.WFSM.wfsm_wire_format ymodem_no_wire_outputs) /\
+    CPI.output_written out_bytes ymodem_client_local_stepok_result.CPI.process_produced_len produced' /\
+    Seq.equal received0 received0 /\
+    Seq.equal sent0 (Seq.append sent0 produced')
+  with Seq.empty
+  and ();
+  match ymodem_client_local_stepok_result.CPI.process_status with
+  | CPI.StepOk ->
+    assert (CPI.local_process_correct
+      YP.ymodem_client_wfsm
+      YP.YmodemClientEot old_out out_bytes out_len
+      received0 sent0 st0
+      ymodem_client_local_stepok_result
+      received0 sent0 st1
+      ymodem_no_wire_outputs
+      ymodem_no_local_outputs)
+    by (
+      FStar.Tactics.norm
+        [delta_only
+          [`%CPI.local_process_correct;
+           `%ymodem_client_local_stepok_result;
+           `%ymodem_client_process_result;
+           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
+           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+         iota; zeta; primops];
+      FStar.Tactics.smt ())
+  | _ -> assert False
+
 (* Package the IllegalTransition (no-op) obligations of `local_process_correct`:
    the receiver refuses local events (start-when-started / EOT), leaving the
    state and buffers untouched.  Sound because IllegalTransition only asserts a
@@ -713,6 +949,71 @@ let lemma_ym_local_process_correct_illegal
       FStar.Tactics.norm
         [delta_only
           [`%CPI.local_process_correct;
+           `%ymodem_client_illegal_result;
+           `%ymodem_client_process_result;
+           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
+           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+         iota; zeta; primops];
+      FStar.Tactics.smt ())
+  | _ -> assert False
+
+(* Package the IllegalTransition (no-op) obligations of `network_process_correct`:
+   once the receiver has completed (status FT_Completed), a further data packet
+   is refused — nothing is consumed or produced and no state changes.  Sound via
+   the third, "no progress" disjunct of `network_error_refines_state_machine`.
+   This is the receiver analogue of the server's `lemma_network_noop`. *)
+let lemma_ym_network_process_correct_noop
+  (input:TCP.bytes) (input_len:SZ.t)
+  (old_out:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:YP.ymodem_client_state)
+  : Lemma
+      (requires CPI.buffers_wf input input_len old_out out_len)
+      (ensures
+        CPI.network_process_correct
+          YP.ymodem_client_wfsm
+          input input_len old_out old_out out_len
+          received0 sent0 st0
+          ymodem_client_illegal_result
+          received0 sent0 st0
+          Seq.empty
+          ymodem_no_wire_outputs
+          ymodem_no_local_outputs)
+=
+  assert (WF.serialize_all ymodem_wire_format ymodem_no_wire_outputs == Seq.empty);
+  assert (CPI.output_written old_out 0sz Seq.empty);
+  Seq.append_empty_r sent0;
+  assert (Seq.equal (Seq.append received0 (Seq.empty <: TCP.bytes)) received0);
+  assert (CPI.network_error_refines_state_machine
+    YP.ymodem_client_wfsm (CPI.input_bytes input input_len) st0 st0
+    Seq.empty ymodem_no_wire_outputs ymodem_no_local_outputs);
+  assert_norm (ymodem_client_illegal_result.CPI.process_status == CPI.IllegalTransition);
+  assert_norm (ymodem_client_illegal_result.CPI.process_consumed_len == 0sz);
+  assert_norm (ymodem_client_illegal_result.CPI.process_produced_len == 0sz);
+  assert (exists (produced':TCP.bytes).
+    SZ.v ymodem_client_illegal_result.CPI.process_consumed_len == Seq.length (Seq.empty <: TCP.bytes) /\
+    CPI.network_error_refines_state_machine
+      YP.ymodem_client_wfsm (CPI.input_bytes input input_len) st0 st0
+      Seq.empty ymodem_no_wire_outputs ymodem_no_local_outputs /\
+    Seq.equal produced' (WF.serialize_all ymodem_wire_format ymodem_no_wire_outputs) /\
+    CPI.output_written old_out ymodem_client_illegal_result.CPI.process_produced_len produced' /\
+    Seq.equal received0 (Seq.append received0 (Seq.empty <: TCP.bytes)) /\
+    Seq.equal sent0 (Seq.append sent0 produced'));
+  match ymodem_client_illegal_result.CPI.process_status with
+  | CPI.IllegalTransition ->
+    assert (CPI.network_process_correct
+      YP.ymodem_client_wfsm
+      input input_len old_out old_out out_len
+      received0 sent0 st0
+      ymodem_client_illegal_result
+      received0 sent0 st0
+      Seq.empty
+      ymodem_no_wire_outputs
+      ymodem_no_local_outputs)
+    by (
+      FStar.Tactics.norm
+        [delta_only
+          [`%CPI.network_process_correct;
            `%ymodem_client_illegal_result;
            `%ymodem_client_process_result;
            `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;

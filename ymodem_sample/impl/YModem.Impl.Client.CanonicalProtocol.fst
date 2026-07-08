@@ -15,21 +15,32 @@ module YModem.Impl.Client.CanonicalProtocol
   reference.
 
   The instance is backed by a `Pulse.Lib.MonotonicGhostRef` over the reflexive-
-  transitive closure of a single-`WireEvent` step relation (`YModem.Impl.Client.Log`);
-  the invariant folds the canonical reachable-trace predicate
-  (`Log.client_trace_ok`, which refines the byte history into a valid state
-  machine trace via `WFSM.valid_byte_trace`) together with the WireEvent guard
-  (`Some? ycs_filename /\ ycs_status == FT_InProgress`).  The receiver emits no
-  wire output, so `sent` is always `Seq.empty`.
+  transitive closure of a `WireEvent`-or-`LocalEvent` step relation
+  (`YModem.Impl.Client.Log`); the invariant folds the canonical reachable-trace
+  predicate (`Log.client_trace_ok`, which refines the byte history into a valid
+  state machine trace via `WFSM.valid_byte_trace`).  The receiver emits no wire
+  output, so `sent` is always `Seq.empty`.
 
-  Because the handle carries no concrete runtime state (only the ghost progress),
-  `pi_process_network` cannot branch on the abstract state; the invariant
-  therefore pins the WireEvent guard so that every well-formed 133-byte packet is
-  a genuine `StepOk`.  As a sound consequence, `pi_process_local` refuses both
-  local events (`YmodemClientStart` from a started state is a genuine
-  `IllegalTransition`; `YmodemClientEot` is modeled as a no-op refusal) rather
-  than mutating the (guard-pinned) abstract state.  A client is "born started"
-  via `new_ymodem_client`.
+  The handle also carries a concrete single-cell status vector (`1uy` =
+  in progress, `2uy` = completed), tied to the abstract `ycs_status` by the
+  invariant (`Log.yc_status_flag_ok`).  This lets both process handlers branch on
+  the transfer status at runtime — necessary because the class exposes the
+  current abstract state to a handler only through `pi_invariant` (never through
+  the frame precondition), so a handler cannot inspect the erased state directly:
+
+    * `pi_process_local` drives the receiver's local events *faithfully*.  From
+      the in-progress state, `YmodemClientEot` is a genuine `StepOk` completion
+      transition — it flips the concrete status cell to `2uy`, sets the abstract
+      `ycs_status` to `FT_Completed`, and advances the ghost log by a local
+      (Eot) step.  `YmodemClientStart` (a client is "born started", so its
+      filename is always known) and a second `YmodemClientEot` (already
+      completed) are genuine `IllegalTransition` no-ops.
+    * `pi_process_network` reads the status cell: in progress, every well-formed
+      133-byte packet is a genuine `StepOk`; once completed, a further data
+      packet is a sound `IllegalTransition` no-op (a valid state-machine
+      refinement that consumes nothing and leaves the state unchanged).
+
+  A client is "born started" via `new_ymodem_client`.
 **)
 
 #lang-pulse
@@ -49,6 +60,7 @@ module Seq = FStar.Seq
 module L = FStar.List.Tot
 module MR = Pulse.Lib.MonotonicGhostRef
 module RTC = FStar.ReflexiveTransitiveClosure
+module Vec = Pulse.Lib.Vec
 
 module YP = YModem.Protocol
 module Log = YModem.Impl.Client.Log
@@ -66,20 +78,28 @@ open YModem.Impl.Client
 
 noeq
 type ymodem_client_impl = {
+  status   : Vec.vec U8.t;                       // single element: 1uy=InProgress, 2uy=Completed
   progress : MR.mref Log.yc_state_ahead_preorder;
 }
 
-(* The reachable-trace invariant: the ghost reference holds the log determined by
-   the (received, sent, state) triple, its byte history refines a valid state
-   machine trace, and the WireEvent guard holds (filename known, in progress). *)
+(* The reachable-trace invariant.  The concrete `status` cell carries the runtime
+   completion flag (so both process fns can branch on it); the ghost reference
+   holds the log determined by the (received, sent, state) triple; its byte
+   history refines a valid state-machine trace; and the filename is known.  Note
+   the WireEvent guard (`ycs_status == FT_InProgress`) is NO LONGER pinned here —
+   the invariant admits FT_Completed so it can be re-established after the EOT
+   step; the runtime source of truth for "in progress" is the `status` cell,
+   tied to the abstract status by `Log.yc_status_flag_ok`. *)
 let ymodem_client_inv
   (i:ymodem_client_impl) (received:TCP.bytes) (sent:TCP.bytes) (st:YP.ymodem_client_state)
   : slprop =
+  (exists* (svs:Seq.seq U8.t).
+     Vec.pts_to i.status svs **
+     pure (Seq.length svs == 1 /\ Log.yc_status_flag_ok (Seq.index svs 0) st)) **
   MR.pts_to i.progress #1.0R (Log.mk_log received sent st) **
   pure (
     Log.client_trace_ok received sent (Log.mk_log received sent st) /\
-    Some? st.YP.ycs_filename /\
-    st.YP.ycs_status == FT.FT_InProgress)
+    Some? st.YP.ycs_filename)
 
 (* A monotone snapshot of the progress at a past history. *)
 let ymodem_client_snap
@@ -113,7 +133,6 @@ let ymodem_client_network_frame_post
   : slprop =
   (exists* o'. pts_to frame.ycnf_data o' ** pure (Seq.length o' == 128)) **
   pure (
-    consumed == input_contents /\
     wire_outputs == Log.ymodem_no_wire_outputs /\
     local_outputs == Log.ymodem_no_local_outputs)
 
@@ -156,6 +175,7 @@ ensures
       Seq.empty)
 {
   unfold (ymodem_client_inv i received sent st);
+  with svs. _;
   Log.lemma_client_trace_ok_valid received sent (Log.mk_log received sent st);
   fold (ymodem_client_inv i received sent st)
 }
@@ -171,6 +191,7 @@ ensures
   ymodem_client_snap i received sent st
 {
   unfold (ymodem_client_inv i received sent st);
+  with svs. _;
   MR.take_snapshot i.progress (Log.mk_log received sent st);
   fold (ymodem_client_snap i received sent st);
   fold (ymodem_client_inv i received sent st)
@@ -203,6 +224,7 @@ ensures
 {
   unfold (ymodem_client_snap i snapshot_received snapshot_sent snapshot_state);
   unfold (ymodem_client_inv i current_received current_sent current_state);
+  with svs. _;
   MR.recall_snapshot i.progress;
   Log.lemma_yc_closure_state_ahead
     (Log.mk_log snapshot_received snapshot_sent snapshot_state)
@@ -268,31 +290,51 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       local_outputs)
 {
   unfold (ymodem_client_inv i received0 sent0 st0);
+  with svs. _;
+  (* read the concrete completion flag: 1uy = in progress, 2uy = completed *)
+  let s = Vec.op_Array_Access i.status 0sz;
   unfold (ymodem_client_network_frame_pre frame input input_len out out_len input_contents old_out);
   with d0. _;
-  let blk = ymodem_client_recv_block input frame.ycnf_data;
-  with o'. _;
-  Log.lemma_recv_block_packet input_contents o';
-  let pkt = Ghost.hide (Log.ymodem_parsed_packet (Ghost.reveal input_contents));
-  Seq.lemma_eq_elim (Ghost.reveal input_contents) (ymodem_serialize (Ghost.reveal pkt));
-  let st1 = Ghost.hide (Log.wire_next_state (Ghost.reveal st0) (Ghost.reveal pkt));
-  let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
-  let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
-  let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
-  Log.lemma_wire_step_ok received0 sent0 st0 pkt received1 sent0 st1;
-  Log.lemma_client_trace_ok_network_step received0 sent0 log0 pkt log1;
-  assert (pure (Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1)));
-  RTC.closure_step Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1);
-  MR.update i.progress (Ghost.reveal log1);
-  fold (ymodem_client_inv i (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
-  fold (ymodem_client_network_frame_post
-    frame Log.ymodem_client_step_ok_result input_contents input_len old_out (Ghost.reveal old_out)
-    st0 (Ghost.reveal st1) (Ghost.reveal input_contents)
-    Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
-  Log.lemma_ym_network_process_correct_step_ok
-    input_contents input_len old_out old_out out_len
-    received0 sent0 st0 received1 sent0 st1 pkt;
-  Log.ymodem_client_step_ok_result
+  if (s = 1uy) {
+    (* InProgress: the flag agrees `st0.ycs_status == FT_InProgress`, so a
+       well-formed 133-byte packet is a genuine StepOk (the original body). *)
+    let blk = ymodem_client_recv_block input frame.ycnf_data;
+    with o'. _;
+    Log.lemma_recv_block_packet input_contents o';
+    let pkt = Ghost.hide (Log.ymodem_parsed_packet (Ghost.reveal input_contents));
+    Seq.lemma_eq_elim (Ghost.reveal input_contents) (ymodem_serialize (Ghost.reveal pkt));
+    let st1 = Ghost.hide (Log.wire_next_state (Ghost.reveal st0) (Ghost.reveal pkt));
+    let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
+    let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
+    let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
+    Log.lemma_wire_step_ok received0 sent0 st0 pkt received1 sent0 st1;
+    Log.lemma_client_trace_ok_network_step received0 sent0 log0 pkt log1;
+    assert (pure (Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1)));
+    RTC.closure_step Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1);
+    MR.update i.progress (Ghost.reveal log1);
+    (* the status cell is untouched (still 1uy) and st1 is still InProgress *)
+    assert (pure (Log.yc_status_flag_ok (Seq.index svs 0) (Ghost.reveal st1)));
+    fold (ymodem_client_inv i (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
+    fold (ymodem_client_network_frame_post
+      frame Log.ymodem_client_step_ok_result input_contents input_len old_out (Ghost.reveal old_out)
+      st0 (Ghost.reveal st1) (Ghost.reveal input_contents)
+      Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
+    Log.lemma_ym_network_process_correct_step_ok
+      input_contents input_len old_out old_out out_len
+      received0 sent0 st0 received1 sent0 st1 pkt;
+    Log.ymodem_client_step_ok_result
+  } else {
+    (* Completed: a genuine no-op — do NOT call recv_block, consume nothing.
+       `frame.ycnf_data` is returned untouched (still `d0`). *)
+    Log.lemma_ym_network_process_correct_noop
+      input_contents input_len old_out out_len received0 sent0 st0;
+    fold (ymodem_client_inv i received0 sent0 st0);
+    fold (ymodem_client_network_frame_post
+      frame Log.ymodem_client_illegal_result input_contents input_len old_out (Ghost.reveal old_out)
+      st0 (Ghost.reveal st0) Seq.empty
+      Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
+    Log.ymodem_client_illegal_result
+  }
 }
 
 (* ── local processing: refuse local events (sound IllegalTransition no-op) ─── *)
@@ -342,11 +384,54 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       local_outputs)
 {
   unfold (ymodem_client_local_frame_pre ev frame st0 out out_len old_out);
-  Log.lemma_ym_local_process_correct_illegal ev old_out old_out out_len received0 sent0 st0;
-  fold (ymodem_client_local_frame_post
-    ev frame Log.ymodem_client_illegal_result old_out (Ghost.reveal old_out)
-    st0 (Ghost.reveal st0) Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
-  Log.ymodem_client_illegal_result
+  match ev {
+    YP.YmodemClientStart _ _ -> {
+      (* `Start` requires `ycs_filename == None`, but the invariant pins
+         `Some? ycs_filename` (a client is born started), so this is a genuine
+         IllegalTransition no-op; the invariant is untouched. *)
+      Log.lemma_ym_local_process_correct_illegal ev old_out old_out out_len received0 sent0 st0;
+      fold (ymodem_client_local_frame_post
+        ev frame Log.ymodem_client_illegal_result old_out (Ghost.reveal old_out)
+        st0 (Ghost.reveal st0) Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
+      Log.ymodem_client_illegal_result
+    }
+    YP.YmodemClientEot -> {
+      unfold (ymodem_client_inv i received0 sent0 st0);
+      with svs. _;
+      let s = Vec.op_Array_Access i.status 0sz;
+      if (s = 1uy) {
+        (* InProgress: FAITHFUL StepOk — drive the EOT completion transition,
+           flipping the concrete status cell to 2uy (Completed) and advancing the
+           monotonic ghost log by a local (Eot) step. *)
+        let st1 = Ghost.hide (Log.eot_next_state (Ghost.reveal st0));
+        let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
+        let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
+        Vec.op_Array_Assignment i.status 0sz 2uy;
+        with svs2. _;
+        Log.lemma_eot_step_ok received0 sent0 st0 received0 sent0 st1;
+        Log.lemma_client_trace_ok_local_step received0 sent0 log0 log1;
+        assert (pure (Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1)));
+        RTC.closure_step Log.yc_step_rel (Ghost.reveal log0) (Ghost.reveal log1);
+        MR.update i.progress (Ghost.reveal log1);
+        assert (pure (Log.yc_status_flag_ok (Seq.index svs2 0) (Ghost.reveal st1)));
+        fold (ymodem_client_inv i received0 sent0 st1);
+        Log.lemma_ym_local_process_correct_step_ok
+          old_out old_out out_len received0 sent0 st0 st1;
+        fold (ymodem_client_local_frame_post
+          ev frame Log.ymodem_client_local_stepok_result old_out (Ghost.reveal old_out)
+          st0 (Ghost.reveal st1) Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
+        Log.ymodem_client_local_stepok_result
+      } else {
+        (* already Completed: a further EOT is a genuine IllegalTransition no-op. *)
+        Log.lemma_ym_local_process_correct_illegal ev old_out old_out out_len received0 sent0 st0;
+        fold (ymodem_client_inv i received0 sent0 st0);
+        fold (ymodem_client_local_frame_post
+          ev frame Log.ymodem_client_illegal_result old_out (Ghost.reveal old_out)
+          st0 (Ghost.reveal st0) Log.ymodem_no_wire_outputs Log.ymodem_no_local_outputs);
+        Log.ymodem_client_illegal_result
+      }
+    }
+  }
 }
 
 (* ── constructor: born started ────────────────────────────────────────────── *)
@@ -356,10 +441,12 @@ requires emp
 returns i:ymodem_client_impl
 ensures ymodem_client_inv i Seq.empty Seq.empty (Log.started_log filename len).Log.ycl_state
 {
+  let status = Vec.alloc 1uy 1sz;
   let progress = MR.alloc #_ #Log.yc_state_ahead_preorder (Log.started_log filename len);
-  let i = { progress };
+  let i = { status; progress };
   rewrite (MR.pts_to progress #1.0R (Log.started_log filename len)) as
           (MR.pts_to i.progress #1.0R (Log.started_log filename len));
+  with sv. rewrite (Vec.pts_to status sv) as (Vec.pts_to i.status sv);
   Log.lemma_started_trace_ok filename len;
   fold (ymodem_client_inv i Seq.empty Seq.empty (Log.started_log filename len).Log.ycl_state);
   i
