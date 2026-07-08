@@ -639,6 +639,141 @@ let lemma_clean16_projection_boundary_completion_from_split_completions
 =
   assert (clean16_projection_boundary_completion client server)
 
+let lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_completion
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires clean16_cleartext_key_shares_completion client server)
+      (ensures clean16_projection_cleartext_boundary_completion client server)
+=
+  assert_norm
+    (clean16_projection_cleartext_boundary_completion client server ==
+     (clean16_staged_boundary_derivation_milestones client server ==>
+      PSNB.paired_supported_normalized_projection_boundary_cleartext_core
+        client
+        server));
+  let prove
+    (_:clean16_staged_boundary_derivation_milestones client server)
+    : Lemma
+        (PSNB.paired_supported_normalized_projection_boundary_cleartext_core
+          client
+          server)
+    =
+    assert (WFL.paired_cleartext_hello_key_shares client server);
+    eliminate exists
+      client_start
+      client_ch
+      client_sh
+      client_shared
+      client_rest
+      server_ch
+      selection
+      server_shared
+      server_sh
+      server_rest.
+      PNTRB.role_local_cleartext_prefix_shape
+        client
+        server
+        client_start
+        client_ch
+        client_sh
+        client_shared
+        client_rest
+        server_ch
+        selection
+        server_shared
+        server_sh
+        server_rest /\
+      WFL.supported_client_hello_wire_profile client_ch /\
+      PNTRB.normalized_cleartext_raw_wire_bridge
+        client_ch
+        server_ch
+        client_sh
+        server_sh /\
+      client.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some client_ch /\
+      client.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+        Some client_sh /\
+      server.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some server_ch /\
+      server.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+        Some server_sh
+    returns
+      PSNB.paired_supported_normalized_projection_boundary_cleartext_core
+        client
+        server
+    with _.
+    (
+      assert (exists
+        (client_ch_raw:B.bytes)
+        (server_ch_raw:B.bytes)
+        (client_sh_raw:B.bytes)
+        (server_sh_raw:B.bytes).
+        FStar.Seq.equal client_ch_raw server_ch_raw /\
+        FStar.Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw);
+      eliminate exists
+        (client_ch_raw:B.bytes)
+        (server_ch_raw:B.bytes)
+        (client_sh_raw:B.bytes)
+        (server_sh_raw:B.bytes).
+        FStar.Seq.equal client_ch_raw server_ch_raw /\
+        FStar.Seq.equal server_sh_raw client_sh_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello client_ch))
+          client_ch_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ClientHello server_ch))
+          server_ch_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello server_sh))
+          server_sh_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello client_sh))
+          client_sh_raw
+      returns
+        PSNB.paired_supported_normalized_projection_boundary_cleartext_core
+          client
+          server
+      with _.
+      (
+        let w:PSNB.normalized_projection_boundary_witnesses = {
+          PSNB.npb_client_ch = client_ch;
+          PSNB.npb_server_ch = server_ch;
+          PSNB.npb_client_sh = client_sh;
+          PSNB.npb_server_sh = server_sh;
+          PSNB.npb_client_ch_raw = client_ch_raw;
+          PSNB.npb_server_ch_raw = server_ch_raw;
+          PSNB.npb_client_sh_raw = client_sh_raw;
+          PSNB.npb_server_sh_raw = server_sh_raw;
+        } in
+        assert (PSNB.paired_supported_normalized_projection_boundary_cleartext_core_inputs
+          client
+          server
+          w);
+        assert (PSNB.paired_supported_normalized_projection_boundary_cleartext_core
+          client
+          server)
+      )
+    ) in
+  FStar.Classical.impl_intro
+    #(clean16_staged_boundary_derivation_milestones client server)
+    #(PSNB.paired_supported_normalized_projection_boundary_cleartext_core
+        client
+        server)
+    prove
+
 let lemma_clean16_protected_projection_witnesses_completion_from_installed_replay_completion
   (client:CS.connection_state)
   (server:CS.connection_state)
