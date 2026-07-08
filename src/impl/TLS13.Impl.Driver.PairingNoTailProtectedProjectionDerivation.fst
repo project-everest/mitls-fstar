@@ -213,17 +213,137 @@ let lemma_pairing_protected_projection_witnesses_from_installed_replay_witnesses
           client_state
           server_state)
 =
-  (*
-   * WIP admit, scoped to the existential packaging layer.
-   *
-   * The stronger input-level lemma above verifies once all replay witnesses are
-   * named explicitly.  This wrapper should only destruct
-   * [installed_protected_projection_replay_witnesses] and pass the witnesses to
-   * that verified lemma, but the current large nested existential package is not
-   * unfolding/eliminating robustly under the module interface.  The remaining
-   * proof task is therefore mechanical packaging, not a new cryptographic or
-   * state-machine assumption.
-   *)
-  admit()
+  eliminate exists (w:installed_protected_projection_replay_witness_pack).
+    installed_protected_projection_replay_pack_inputs
+      client_state
+      server_state
+      w
+  returns
+    Pairing.paired_protected_handshake_event_projection_pair_witnesses
+      client_state
+      server_state
+  with _.
+  (
+    assert
+      (installed_protected_projection_replay_inputs
+        client_state
+        server_state
+        w.ippr_server_flight_sender
+        w.ippr_server_flight_receiver
+        w.ippr_server_after0
+        w.ippr_client_after0
+        w.ippr_server_after1
+        w.ippr_client_after1
+        w.ippr_server_after_auth_skip
+        w.ippr_client_after_auth_skip
+        w.ippr_server_after2
+        w.ippr_client_after2
+        w.ippr_client_after_verify_skip
+        w.ippr_server_after3
+        w.ippr_client_after3
+        w.ippr_server_auth_skip
+        w.ippr_client_auth_skip
+        w.ippr_client_verify_skip
+        w.ippr_sent_msg0
+        w.ippr_received_msg0
+        w.ippr_sent_msg1
+        w.ippr_received_msg1
+        w.ippr_sent_msg2
+        w.ippr_received_msg2
+        w.ippr_sent_msg3
+        w.ippr_received_msg3
+        w.ippr_server_rest
+        w.ippr_client_rest
+        w.ippr_server_raw_sent
+        w.ippr_server_raw_received
+        w.ippr_client_raw_sent
+        w.ippr_client_raw_received
+        w.ippr_server_final
+        w.ippr_client_final
+        w.ippr_client_finished_sender
+        w.ippr_client_finished_receiver
+        w.ippr_cf_client_after_verify
+        w.ippr_cf_client_after_app_write
+        w.ippr_cf_client_after_app_read
+        w.ippr_cf_server_after_app_write
+        w.ippr_cf_client_after_finished
+        w.ippr_cf_server_after_finished
+        w.ippr_verified_server_finished
+        w.ippr_client_app_write_material
+        w.ippr_client_app_read_material
+        w.ippr_server_app_write_material
+        w.ippr_sent_msg4
+        w.ippr_received_msg4
+        w.ippr_client_finished_rest
+        w.ippr_server_finished_rest
+        w.ippr_client_finished_raw_sent
+        w.ippr_client_finished_raw_received
+        w.ippr_server_finished_raw_sent
+        w.ippr_server_finished_raw_received
+        w.ippr_client_finished_final
+        w.ippr_server_finished_final)
+    by (
+      Tac.norm
+        [delta_only
+          [`%installed_protected_projection_replay_pack_inputs]];
+      Tac.smt ());
+    lemma_pairing_protected_projection_witnesses_from_installed_replay_inputs
+      client_state
+      server_state
+      w.ippr_server_flight_sender
+      w.ippr_server_flight_receiver
+      w.ippr_server_after0
+      w.ippr_client_after0
+      w.ippr_server_after1
+      w.ippr_client_after1
+      w.ippr_server_after_auth_skip
+      w.ippr_client_after_auth_skip
+      w.ippr_server_after2
+      w.ippr_client_after2
+      w.ippr_client_after_verify_skip
+      w.ippr_server_after3
+      w.ippr_client_after3
+      w.ippr_server_auth_skip
+      w.ippr_client_auth_skip
+      w.ippr_client_verify_skip
+      w.ippr_sent_msg0
+      w.ippr_received_msg0
+      w.ippr_sent_msg1
+      w.ippr_received_msg1
+      w.ippr_sent_msg2
+      w.ippr_received_msg2
+      w.ippr_sent_msg3
+      w.ippr_received_msg3
+      w.ippr_server_rest
+      w.ippr_client_rest
+      w.ippr_server_raw_sent
+      w.ippr_server_raw_received
+      w.ippr_client_raw_sent
+      w.ippr_client_raw_received
+      w.ippr_server_final
+      w.ippr_client_final
+      w.ippr_client_finished_sender
+      w.ippr_client_finished_receiver
+      w.ippr_cf_client_after_verify
+      w.ippr_cf_client_after_app_write
+      w.ippr_cf_client_after_app_read
+      w.ippr_cf_server_after_app_write
+      w.ippr_cf_client_after_finished
+      w.ippr_cf_server_after_finished
+      w.ippr_verified_server_finished
+      w.ippr_client_app_write_material
+      w.ippr_client_app_read_material
+      w.ippr_server_app_write_material
+      w.ippr_sent_msg4
+      w.ippr_received_msg4
+      w.ippr_client_finished_rest
+      w.ippr_server_finished_rest
+      w.ippr_client_finished_raw_sent
+      w.ippr_client_finished_raw_received
+      w.ippr_server_finished_raw_sent
+      w.ippr_server_finished_raw_received
+      w.ippr_client_finished_final
+      w.ippr_server_finished_final
+  )
 
 #pop-options

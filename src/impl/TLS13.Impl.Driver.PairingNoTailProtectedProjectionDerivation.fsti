@@ -324,123 +324,138 @@ unfold let installed_protected_projection_replay_inputs
     server_finished_raw_received
     server_finished_final
 
+noeq
+type installed_protected_projection_replay_witness_pack = {
+  ippr_server_flight_sender: CS.connection_model;
+  ippr_server_flight_receiver: CS.connection_model;
+  ippr_server_after0: CS.connection_model;
+  ippr_client_after0: CS.connection_model;
+  ippr_server_after1: CS.connection_model;
+  ippr_client_after1: CS.connection_model;
+  ippr_server_after_auth_skip: CS.connection_model;
+  ippr_client_after_auth_skip: CS.connection_model;
+  ippr_server_after2: CS.connection_model;
+  ippr_client_after2: CS.connection_model;
+  ippr_client_after_verify_skip: CS.connection_model;
+  ippr_server_after3: CS.connection_model;
+  ippr_client_after3: CS.connection_model;
+  ippr_server_auth_skip: CS.local_event;
+  ippr_client_auth_skip: CS.local_event;
+  ippr_client_verify_skip: CS.local_event;
+  ippr_sent_msg0: M.handshake_msg;
+  ippr_received_msg0: M.handshake_msg;
+  ippr_sent_msg1: M.handshake_msg;
+  ippr_received_msg1: M.handshake_msg;
+  ippr_sent_msg2: M.handshake_msg;
+  ippr_received_msg2: M.handshake_msg;
+  ippr_sent_msg3: M.handshake_msg;
+  ippr_received_msg3: M.handshake_msg;
+  ippr_server_rest: list CS.conn_event;
+  ippr_client_rest: list CS.conn_event;
+  ippr_server_raw_sent: B.bytes;
+  ippr_server_raw_received: B.bytes;
+  ippr_client_raw_sent: B.bytes;
+  ippr_client_raw_received: B.bytes;
+  ippr_server_final: CS.connection_model;
+  ippr_client_final: CS.connection_model;
+  ippr_client_finished_sender: CS.connection_model;
+  ippr_client_finished_receiver: CS.connection_model;
+  ippr_cf_client_after_verify: CS.connection_model;
+  ippr_cf_client_after_app_write: CS.connection_model;
+  ippr_cf_client_after_app_read: CS.connection_model;
+  ippr_cf_server_after_app_write: CS.connection_model;
+  ippr_cf_client_after_finished: CS.connection_model;
+  ippr_cf_server_after_finished: CS.connection_model;
+  ippr_verified_server_finished: M.finished;
+  ippr_client_app_write_material: CS.traffic_key_material;
+  ippr_client_app_read_material: CS.traffic_key_material;
+  ippr_server_app_write_material: CS.traffic_key_material;
+  ippr_sent_msg4: M.handshake_msg;
+  ippr_received_msg4: M.handshake_msg;
+  ippr_client_finished_rest: list CS.conn_event;
+  ippr_server_finished_rest: list CS.conn_event;
+  ippr_client_finished_raw_sent: B.bytes;
+  ippr_client_finished_raw_received: B.bytes;
+  ippr_server_finished_raw_sent: B.bytes;
+  ippr_server_finished_raw_received: B.bytes;
+  ippr_client_finished_final: CS.connection_model;
+  ippr_server_finished_final: CS.connection_model;
+}
+
+noextract
+unfold let installed_protected_projection_replay_pack_inputs
+  (client_state:CS.connection_state)
+  (server_state:CS.connection_state)
+  (w:installed_protected_projection_replay_witness_pack)
+  : prop =
+  installed_protected_projection_replay_inputs
+    client_state
+    server_state
+    w.ippr_server_flight_sender
+    w.ippr_server_flight_receiver
+    w.ippr_server_after0
+    w.ippr_client_after0
+    w.ippr_server_after1
+    w.ippr_client_after1
+    w.ippr_server_after_auth_skip
+    w.ippr_client_after_auth_skip
+    w.ippr_server_after2
+    w.ippr_client_after2
+    w.ippr_client_after_verify_skip
+    w.ippr_server_after3
+    w.ippr_client_after3
+    w.ippr_server_auth_skip
+    w.ippr_client_auth_skip
+    w.ippr_client_verify_skip
+    w.ippr_sent_msg0
+    w.ippr_received_msg0
+    w.ippr_sent_msg1
+    w.ippr_received_msg1
+    w.ippr_sent_msg2
+    w.ippr_received_msg2
+    w.ippr_sent_msg3
+    w.ippr_received_msg3
+    w.ippr_server_rest
+    w.ippr_client_rest
+    w.ippr_server_raw_sent
+    w.ippr_server_raw_received
+    w.ippr_client_raw_sent
+    w.ippr_client_raw_received
+    w.ippr_server_final
+    w.ippr_client_final
+    w.ippr_client_finished_sender
+    w.ippr_client_finished_receiver
+    w.ippr_cf_client_after_verify
+    w.ippr_cf_client_after_app_write
+    w.ippr_cf_client_after_app_read
+    w.ippr_cf_server_after_app_write
+    w.ippr_cf_client_after_finished
+    w.ippr_cf_server_after_finished
+    w.ippr_verified_server_finished
+    w.ippr_client_app_write_material
+    w.ippr_client_app_read_material
+    w.ippr_server_app_write_material
+    w.ippr_sent_msg4
+    w.ippr_received_msg4
+    w.ippr_client_finished_rest
+    w.ippr_server_finished_rest
+    w.ippr_client_finished_raw_sent
+    w.ippr_client_finished_raw_received
+    w.ippr_server_finished_raw_sent
+    w.ippr_server_finished_raw_received
+    w.ippr_client_finished_final
+    w.ippr_server_finished_final
+
 noextract
 let installed_protected_projection_replay_witnesses
   (client_state:CS.connection_state)
   (server_state:CS.connection_state)
   : prop =
-  exists
-    server_flight_sender
-    server_flight_receiver
-    server_after0
-    client_after0
-    server_after1
-    client_after1
-    server_after_auth_skip
-    client_after_auth_skip
-    server_after2
-    client_after2
-    client_after_verify_skip
-    server_after3
-    client_after3
-    server_auth_skip
-    client_auth_skip
-    client_verify_skip
-    sent_msg0
-    received_msg0
-    sent_msg1
-    received_msg1
-    sent_msg2
-    received_msg2
-    sent_msg3
-    received_msg3
-    server_rest
-    client_rest
-    server_raw_sent
-    server_raw_received
-    client_raw_sent
-    client_raw_received
-    server_final
-    client_final
-    client_finished_sender
-    client_finished_receiver
-    cf_client_after_verify
-    cf_client_after_app_write
-    cf_client_after_app_read
-    cf_server_after_app_write
-    cf_client_after_finished
-    cf_server_after_finished
-    verified_server_finished
-    client_app_write_material
-    client_app_read_material
-    server_app_write_material
-    sent_msg4
-    received_msg4
-    client_finished_rest
-    server_finished_rest
-    client_finished_raw_sent
-    client_finished_raw_received
-    server_finished_raw_sent
-    server_finished_raw_received
-    client_finished_final
-    server_finished_final.
-    installed_protected_projection_replay_inputs
+  exists (w:installed_protected_projection_replay_witness_pack).
+    installed_protected_projection_replay_pack_inputs
       client_state
       server_state
-      server_flight_sender
-      server_flight_receiver
-      server_after0
-      client_after0
-      server_after1
-      client_after1
-      server_after_auth_skip
-      client_after_auth_skip
-      server_after2
-      client_after2
-      client_after_verify_skip
-      server_after3
-      client_after3
-      server_auth_skip
-      client_auth_skip
-      client_verify_skip
-      sent_msg0
-      received_msg0
-      sent_msg1
-      received_msg1
-      sent_msg2
-      received_msg2
-      sent_msg3
-      received_msg3
-      server_rest
-      client_rest
-      server_raw_sent
-      server_raw_received
-      client_raw_sent
-      client_raw_received
-      server_final
-      client_final
-      client_finished_sender
-      client_finished_receiver
-      cf_client_after_verify
-      cf_client_after_app_write
-      cf_client_after_app_read
-      cf_server_after_app_write
-      cf_client_after_finished
-      cf_server_after_finished
-      verified_server_finished
-      client_app_write_material
-      client_app_read_material
-      server_app_write_material
-      sent_msg4
-      received_msg4
-      client_finished_rest
-      server_finished_rest
-      client_finished_raw_sent
-      client_finished_raw_received
-      server_finished_raw_sent
-      server_finished_raw_received
-      client_finished_final
-      server_finished_final
+      w
 
 val lemma_pairing_protected_projection_witnesses_from_installed_replay_inputs
   (client_state:CS.connection_state)
