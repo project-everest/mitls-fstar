@@ -130,6 +130,17 @@ let ymodem_server_network_frame_pre
     SZ.v out_len >= 133 /\
     Seq.length old_out == SZ.v out_len)
 
+(* Deterministic post-transition witness for the NETWORK handler: the endpoint's
+   state-dependent `pe_frame_ready` coupling is re-established by
+   `pe_finish_network_action`, which receives only this post (NOT
+   `network_process_correct`, whose IllegalTransition disjunct is too lossy to
+   pin `st1`).  Every `pi_process_network` branch lands in one of these three. *)
+unfold
+let ys_network_post_ok (st0 st1:YP.ymodem_server_state) : prop =
+  st1 == st0 \/
+  st1 == Log.ack_next_state st0 \/
+  st1 == Log.abort_next_state st0
+
 let ymodem_server_network_frame_post
   (frame:ymodem_server_network_frame)
   (result:CPI.process_result)
@@ -139,8 +150,8 @@ let ymodem_server_network_frame_post
   (consumed:TCP.bytes)
   (wire_outputs:list ymodem_message) (local_outputs:list unit)
   : slprop =
-  (exists* o'. pts_to frame.ysnf_buf o') **
-  pure (local_outputs == [])
+  (exists* o'. pts_to frame.ysnf_buf o' ** pure (Seq.length o' == 128)) **
+  pure (local_outputs == [] /\ ys_network_post_ok st0 st1)
 
 (* ── local frame: the 128-byte payload buffer + the block number.  Its
    precondition DOES receive `st0`, so it faithfully supplies the outstanding
@@ -195,6 +206,20 @@ let ymodem_server_local_frame_pre
      pure (Seq.length d == 128 /\ local_pre_ok ev st0 d)) **
   pure (Seq.length old_out == 133)
 
+(* Deterministic post-transition witness for the LOCAL handler: like the network
+   case, `pe_finish_local_action` re-establishes the coupling from this post
+   alone.  Each scheduled event lands on its `*_next_state` (Server_send needs a
+   non-empty pending list, supplied by `local_pre_ok`). *)
+unfold
+let ys_local_post_ok (ev:YP.ymodem_server_local) (st0 st1:YP.ymodem_server_state) : prop =
+  match ev with
+  | YP.Server_start filename len plan -> st1 == Log.start_next_state filename len plan
+  | YP.Server_send -> Cons? st0.YP.yss_pending /\ st1 == Log.send_next_state st0
+  | YP.Server_eot -> st1 == Log.eot_next_state st0
+  | YP.Server_complete -> st1 == Log.complete_next_state st0
+  | YP.Server_abort -> st1 == Log.abort_next_state st0
+  | YP.Server_timeout -> st1 == st0
+
 let ymodem_server_local_frame_post
   (ev:YP.ymodem_server_local)
   (frame:ymodem_server_local_frame)
@@ -203,7 +228,8 @@ let ymodem_server_local_frame_post
   (st0:YP.ymodem_server_state) (st1:YP.ymodem_server_state)
   (wire_outputs:list ymodem_message) (local_outputs:list unit)
   : slprop =
-  exists* (d:Seq.seq U8.t). pts_to frame.yslf_buf d
+  (exists* (d:Seq.seq U8.t). pts_to frame.yslf_buf d ** pure (Seq.length d == 128)) **
+  pure (ys_local_post_ok ev st0 st1)
 
 (* ── ghost obligations (copied from the client, re-threading the status cell) ─ *)
 
@@ -684,7 +710,8 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 fn new_ymodem_server ()
 requires emp
 returns i:ymodem_server_impl
-ensures ymodem_server_inv i Seq.empty Seq.empty YP.ymodem_server_initial
+ensures ymodem_server_inv i Seq.empty Seq.empty YP.ymodem_server_initial **
+        pure (Vec.is_full_vec i.status)
 {
   let status = Vec.alloc 0uy 1sz;
   let progress =
@@ -696,6 +723,7 @@ ensures ymodem_server_inv i Seq.empty Seq.empty YP.ymodem_server_initial
   with sv. rewrite (Vec.pts_to status sv) as (Vec.pts_to i.status sv);
   Log.lemma_initial_trace_ok ();
   fold (ymodem_server_inv i Seq.empty Seq.empty YP.ymodem_server_initial);
+  assert (pure (Vec.is_full_vec i.status));
   i
 }
 
