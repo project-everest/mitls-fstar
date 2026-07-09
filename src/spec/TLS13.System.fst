@@ -39,6 +39,7 @@ module CW  = TLS13.Impl.CanonicalWire
 module CTy = TLS13.Impl.CanonicalTypes
 module CCP = TLS13.Impl.Client.CanonicalProtocol
 module SCP = TLS13.Impl.Server.CanonicalProtocol
+module WF  = Common.WireFormat
 
 open FStar.List.Tot
 
@@ -192,6 +193,119 @@ let lemma_server_official_step_model
        match e with
        | SM.WireEvent wire -> finish ()
        | SM.LocalEvent local -> finish ())
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    `ev` is *not* free: it is pinned to the official step's own appended event.
+
+    The concern that `ev` in `official_{client,server}_step` is unconstrained is
+    unfounded — the conjunct `st'.cs_event_log == st.cs_event_log @ [ev]` forces
+    `ev` to be *exactly* the single `CS.conn_event` the official step appends to
+    the log (via `CS.legal_connection_delta`).  Hence `ev` is a *function* of the
+    endpoints `st`/`st'`: two official steps with the same endpoints move the
+    same event.  And through the official step's own internal seal/decode
+    projections, that event is tied to the step's wire `out` (see
+    `lemma_official_server_send_wire_tied` below).
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** `ev` is uniquely determined by the endpoints — it is the step's own event. **)
+let lemma_official_client_step_det
+  (st st':CS.connection_state) (ev1 ev2:CS.conn_event)
+  : Lemma (requires official_client_step st st' ev1 /\ official_client_step st st' ev2)
+          (ensures ev1 == ev2)
+  = lemma_snoc_inj st.CS.cs_event_log ev1 ev2
+
+let lemma_official_server_step_det
+  (st st':CS.connection_state) (ev1 ev2:CS.conn_event)
+  : Lemma (requires official_server_step st st' ev1 /\ official_server_step st st' ev2)
+          (ensures ev1 == ev2)
+  = lemma_snoc_inj st.CS.cs_event_log ev1 ev2
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 120"
+(** A *send* pinned to `sent_tls_event m` genuinely emits `m` on the wire: there
+    is an official `server_step` whose serialized wire output `out` (matched to
+    `raw_sent` by `server_wire_outputs_match`) is the sealing of exactly this
+    sent event (`sent_event_nonempty_seal_projection`).  This is the explicit
+    tie between the moved message and `out` that channel-level pinning induces.
+
+    (The `WireEvent` alternative is ruled out: it would append a *received*
+    event, contradicting the `Sent` pin by `lemma_snoc_inj`.) **)
+let lemma_official_server_send_wire_tied
+  (st st':CS.connection_state) (m:M.tls_message)
+  : Lemma
+      (requires official_server_step st st' (CS.sent_tls_event m))
+      (ensures
+        (exists (e:SM.event CW.wire_message CTy.server_local_event)
+                (out:SM.step_output CW.wire_message CTy.local_output)
+                (raw_sent:B.bytes).
+           SCP.server_step st e st' out /\
+           SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+           CS.sent_event_nonempty_seal_projection st.CS.cs_model (CS.sent_tls_event m) raw_sent))
+  = eliminate exists (e:SM.event CW.wire_message CTy.server_local_event)
+                     (out:SM.step_output CW.wire_message CTy.local_output).
+        SCP.server_step st e st' out
+    returns
+      (exists (e:SM.event CW.wire_message CTy.server_local_event)
+              (out:SM.step_output CW.wire_message CTy.local_output)
+              (raw_sent:B.bytes).
+         SCP.server_step st e st' out /\
+         SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         CS.sent_event_nonempty_seal_projection st.CS.cs_model (CS.sent_tls_event m) raw_sent)
+    with _pf.
+      (match e with
+       | SM.LocalEvent local ->
+         eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+             SCP.server_api_event_matches (CTy.server_local_event_api local) conn_ev /\
+             SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+             SCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+             CS.legal_connection_delta st
+               { CS.delta_event = conn_ev;
+                 CS.delta_raw_sent = raw_sent;
+                 CS.delta_raw_received = B.empty } st' /\
+             CS.sent_event_nonempty_seal_projection st.CS.cs_model conn_ev raw_sent /\
+             CS.received_event_nonempty_decode_projection st.CS.cs_model conn_ev B.empty
+           returns
+             (exists (e:SM.event CW.wire_message CTy.server_local_event)
+                     (out:SM.step_output CW.wire_message CTy.local_output)
+                     (raw_sent:B.bytes).
+                SCP.server_step st e st' out /\
+                SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+                CS.sent_event_nonempty_seal_projection st.CS.cs_model (CS.sent_tls_event m) raw_sent)
+           with _pf2.
+             // pin forces conn_ev == sent_tls_event m
+             (lemma_snoc_inj st.CS.cs_event_log (CS.sent_tls_event m) conn_ev;
+              introduce exists (e:SM.event CW.wire_message CTy.server_local_event)
+                               (out:SM.step_output CW.wire_message CTy.local_output)
+                               (raw_sent:B.bytes).
+                 SCP.server_step st e st' out /\
+                 SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+                 CS.sent_event_nonempty_seal_projection st.CS.cs_model (CS.sent_tls_event m) raw_sent
+              with e out raw_sent
+              and ())
+       | SM.WireEvent wire ->
+         // this branch appends a *received* event, contradicting the Sent pin
+         eliminate exists (msg:M.tls_message).
+             CS.legal_connection_delta st
+               { CS.delta_event = CS.received_tls_event msg;
+                 CS.delta_raw_sent =
+                   WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+                 CS.delta_raw_received = CW.wire_serialize wire } st' /\
+             CS.sent_event_nonempty_seal_projection st.CS.cs_model
+               (CS.received_tls_event msg)
+               (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+             CS.received_event_nonempty_decode_projection st.CS.cs_model
+               (CS.received_tls_event msg)
+               (CW.wire_serialize wire) /\
+             SCP.server_local_outputs_match (CS.received_tls_event msg) out.SM.so_local_outputs
+           returns
+             (exists (e:SM.event CW.wire_message CTy.server_local_event)
+                     (out:SM.step_output CW.wire_message CTy.local_output)
+                     (raw_sent:B.bytes).
+                SCP.server_step st e st' out /\
+                SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+                CS.sent_event_nonempty_seal_projection st.CS.cs_model (CS.sent_tls_event m) raw_sent)
+           with _pf2.
+             lemma_snoc_inj st.CS.cs_event_log (CS.sent_tls_event m) (CS.received_tls_event msg))
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
