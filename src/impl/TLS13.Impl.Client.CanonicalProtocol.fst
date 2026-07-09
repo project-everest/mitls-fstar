@@ -227,37 +227,11 @@ let lemma_client_received_network_event_nonempty_decode_projection
 let client_progress_preorder =
   RTC.closure client_canonical_step_rel
 
-type client_valid_trace_proof
-  (initial:CS.connection_state)
-  =
-  received:B.bytes ->
-  sent:B.bytes ->
-  st:CS.connection_state ->
-    Lemma
-      (requires
-        CT.client_end_to_end_invariant st /\
-        st.CS.cs_model.CS.model_config ==
-          initial.CS.cs_model.CS.model_config /\
-        Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
-        Seq.equal sent st.CS.cs_wire_log.CL.raw_sent)
-      (ensures
-        WFSM.valid_byte_trace
-          (client_system initial)
-          received
-          st
-          sent
-          Seq.empty)
-
-type client_valid_trace_provider =
-  initial:CS.connection_state -> client_valid_trace_proof initial
-
 noeq
 type canonical_client = {
   canonical_client_state: C.client;
   canonical_client_progress: MR.mref client_progress_preorder;
   canonical_client_initial: Ghost.erased CS.connection_state;
-  canonical_client_valid_trace:
-    Ghost.erased (client_valid_trace_proof (Ghost.reveal canonical_client_initial));
 }
 
 noeq
@@ -1860,6 +1834,12 @@ let client_state_ahead
   : prop =
   CPI.state_ahead (client_system initial) st0 st1
 
+let client_initial_wire_logs_empty
+  (initial:CS.connection_state)
+  : prop =
+  Seq.equal initial.CS.cs_wire_log.CL.raw_received B.empty /\
+  Seq.equal initial.CS.cs_wire_log.CL.raw_sent B.empty
+
 let client_invariant_pure
   (initial:CS.connection_state)
   (received:B.bytes)
@@ -1869,7 +1849,8 @@ let client_invariant_pure
   CT.client_end_to_end_invariant st /\
   st.CS.cs_model.CS.model_config == initial.CS.cs_model.CS.model_config /\
   Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
-  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent /\
+  client_initial_wire_logs_empty initial
 
 let client_network_frame_post_fact
   (frame:tls_client_network_frame)
@@ -2479,6 +2460,295 @@ let lemma_client_progress_state_ahead
     st1
     ()
 
+let lemma_client_step_wire_log_delta
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTypes.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTypes.local_output)
+  : Lemma
+      (requires client_step st0 ev st1 out)
+      (ensures
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_sent
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_sent
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              out.SM.so_wire_outputs)) /\
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_received
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              (WFSM.event_input_messages ev))))
+=
+  match ev with
+  | SM.WireEvent wire ->
+    eliminate exists msg.
+      (let conn_ev =
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        } in
+      CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent =
+            WF.serialize_all
+              CW.tls_record_wire_format
+              out.SM.so_wire_outputs;
+          CS.delta_raw_received = CW.wire_serialize wire;
+        }
+        st1 /\
+      client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_sent
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_sent
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            out.SM.so_wire_outputs)) /\
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_received
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.event_input_messages ev)))
+    with _.
+    (
+      assert (WFSM.event_input_messages ev == [wire]);
+      Seq.append_empty_r (CW.wire_serialize wire)
+    )
+  | SM.LocalEvent local ->
+    let api = CTypes.client_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      client_api_event_matches st0 api conn_ev /\
+      client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty;
+        }
+        st1
+    returns
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_sent
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_sent
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            out.SM.so_wire_outputs)) /\
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_received
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.event_input_messages ev)))
+    with _.
+    (
+      assert (WFSM.event_input_messages ev == []);
+      assert (Seq.equal
+        (WF.serialize_all CW.tls_record_wire_format [])
+        Seq.empty);
+      CW.lemma_b_empty_seq_empty ();
+      Seq.lemma_eq_elim
+        raw_sent
+        (WF.serialize_all
+          CW.tls_record_wire_format
+          out.SM.so_wire_outputs)
+    )
+
+let rec lemma_client_trace_wire_logs_match
+  (initial:CS.connection_state)
+  (st0:CS.connection_state)
+  (trace:list
+    (SM.transition
+      CS.connection_state
+      CW.wire_message
+      CTypes.client_local_event
+      CTypes.local_output))
+  (st1:CS.connection_state)
+  : Lemma
+      (requires
+        SM.trace_reaches
+          (client_state_machine initial)
+          st0
+          trace
+          st1)
+      (ensures
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_sent
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_sent
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              (SM.trace_wire_outputs trace))) /\
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_received
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              (WFSM.trace_input_messages trace))))
+      (decreases trace)
+=
+  match trace with
+  | [] ->
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_sent;
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  | tr :: rest ->
+    assert (client_step
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output);
+    lemma_client_step_wire_log_delta
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output;
+    lemma_client_trace_wire_logs_match
+      initial
+      tr.SM.tr_next_state
+      rest
+      st1;
+    let step_sent =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        tr.SM.tr_output.SM.so_wire_outputs in
+    let rest_sent =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        (SM.trace_wire_outputs rest) in
+    let step_received =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.event_input_messages tr.SM.tr_event) in
+    let rest_received =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.trace_input_messages rest) in
+    CW.lemma_wire_serialize_all_append
+      tr.SM.tr_output.SM.so_wire_outputs
+      (SM.trace_wire_outputs rest);
+    CW.lemma_wire_serialize_all_append
+      (WFSM.event_input_messages tr.SM.tr_event)
+      (WFSM.trace_input_messages rest);
+    Seq.lemma_eq_elim
+      tr.SM.tr_next_state.CS.cs_wire_log.CL.raw_sent
+      (B.append st0.CS.cs_wire_log.CL.raw_sent step_sent);
+    Seq.lemma_eq_elim
+      tr.SM.tr_next_state.CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received step_received);
+    Seq.append_assoc st0.CS.cs_wire_log.CL.raw_sent step_sent rest_sent;
+    Seq.append_assoc st0.CS.cs_wire_log.CL.raw_received step_received rest_received;
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_sent
+      (B.append
+        st0.CS.cs_wire_log.CL.raw_sent
+        (B.append step_sent rest_sent)));
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append
+        st0.CS.cs_wire_log.CL.raw_received
+        (B.append step_received rest_received)))
+
+let lemma_client_state_ahead_valid_byte_trace
+  (initial:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        client_invariant_pure initial received sent st /\
+        client_state_ahead initial initial st)
+      (ensures
+        WFSM.valid_byte_trace
+          (client_system initial)
+          received
+          st
+          sent
+          Seq.empty)
+=
+  eliminate exists trace.
+    SM.trace_reaches
+      (client_system initial).WFSM.wfsm_state_machine
+      initial
+      trace
+      st
+  returns
+    WFSM.valid_byte_trace
+      (client_system initial)
+      received
+      st
+      sent
+      Seq.empty
+  with _.
+  (
+    assert ((client_system initial).WFSM.wfsm_state_machine ==
+      client_state_machine initial);
+    assert ((client_system initial).WFSM.wfsm_wire_format ==
+      CW.tls_record_wire_format);
+    lemma_client_trace_wire_logs_match
+      initial
+      initial
+      trace
+      st;
+    CW.lemma_wire_parse_serialize_all_inverse
+      (WFSM.trace_input_messages trace);
+    Seq.append_empty_l
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (SM.trace_wire_outputs trace));
+    Seq.append_empty_l
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.trace_input_messages trace));
+    Seq.lemma_eq_elim initial.CS.cs_wire_log.CL.raw_sent B.empty;
+    Seq.lemma_eq_elim initial.CS.cs_wire_log.CL.raw_received B.empty;
+    Seq.lemma_eq_elim
+      st.CS.cs_wire_log.CL.raw_sent
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (SM.trace_wire_outputs trace));
+    Seq.lemma_eq_elim
+      st.CS.cs_wire_log.CL.raw_received
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.trace_input_messages trace));
+    Seq.lemma_eq_elim sent st.CS.cs_wire_log.CL.raw_sent;
+    Seq.lemma_eq_elim received st.CS.cs_wire_log.CL.raw_received;
+    assert (WF.parses_as
+      CW.tls_record_wire_format
+      received
+      (WFSM.trace_input_messages trace)
+      Seq.empty);
+    assert (exists trace'.
+      SM.trace_reaches
+        (client_system initial).WFSM.wfsm_state_machine
+        (client_system initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        trace'
+        st /\
+      WF.parses_as
+        (client_system initial).WFSM.wfsm_wire_format
+        received
+        (WFSM.trace_input_messages trace')
+        Seq.empty /\
+      Seq.equal
+        sent
+        (WF.serialize_all
+          (client_system initial).WFSM.wfsm_wire_format
+          (SM.trace_wire_outputs trace')))
+  )
+
 let lemma_client_legal_delta_histories_ahead
   (st0:CS.connection_state)
   (delta:CS.connection_delta)
@@ -2685,6 +2955,9 @@ let client_invariant
   : slprop =
   C.connection_exactly cc.canonical_client_state st **
   MR.pts_to cc.canonical_client_progress #1.0R st **
+  MR.snapshot
+    cc.canonical_client_progress
+    (Ghost.reveal cc.canonical_client_initial) **
   pure (client_invariant_pure
     (Ghost.reveal cc.canonical_client_initial)
     received
@@ -2733,10 +3006,17 @@ ensures client_invariant
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st));
-  (Ghost.reveal cc.canonical_client_valid_trace)
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    (Ghost.reveal st);
+    MR.recall_snapshot
+      cc.canonical_client_progress;
+    lemma_client_progress_state_ahead
+      (Ghost.reveal cc.canonical_client_initial)
+      (Ghost.reveal cc.canonical_client_initial)
+      (Ghost.reveal st);
+    lemma_client_state_ahead_valid_byte_trace
+      (Ghost.reveal cc.canonical_client_initial)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal st);
   assert (pure (client_invariant_pure
     (Ghost.reveal cc.canonical_client_initial)
     (Ghost.reveal received)
@@ -2761,7 +3041,6 @@ fn new_canonical_client
   (trust_anchors:array U8.t)
   (trust_anchors_len:SZ.t)
   (validation_time_seconds:SZ.t)
-  (#valid_trace_provider:erased client_valid_trace_provider)
   requires pts_to server_name 'server_name_bytes **
            pts_to trust_anchors 'trust_anchors_bytes **
            pure (B.length 'server_name_bytes == SZ.v server_name_len /\
@@ -2799,6 +3078,12 @@ fn new_canonical_client
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
+  MR.take_snapshot
+    progress
+    (CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
   let cc = {
     canonical_client_state = c;
     canonical_client_progress = progress;
@@ -2808,13 +3093,6 @@ fn new_canonical_client
           (Ghost.reveal 'server_name_bytes)
           (Ghost.reveal 'trust_anchors_bytes)
           validation_time_seconds);
-    canonical_client_valid_trace =
-      Ghost.hide
-        ((Ghost.reveal valid_trace_provider)
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds));
   };
   rewrite
     (CR.connection_exactly
@@ -2846,11 +3124,36 @@ fn new_canonical_client
         (Ghost.reveal 'server_name_bytes)
         (Ghost.reveal 'trust_anchors_bytes)
         validation_time_seconds));
+  rewrite
+    (MR.snapshot
+      progress
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds))
+    as
+    (MR.snapshot
+      cc.canonical_client_progress
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds));
   assert (pure (Ghost.reveal cc.canonical_client_initial ==
     (CR.configured_initial_state
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds)));
+  rewrite
+    (MR.snapshot
+      cc.canonical_client_progress
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds))
+    as
+    (MR.snapshot
+      cc.canonical_client_progress
+      (Ghost.reveal cc.canonical_client_initial));
   assert (pure (Seq.equal B.empty
     (CR.configured_initial_state
       (Ghost.reveal 'server_name_bytes)
@@ -2980,7 +3283,10 @@ ensures client_snapshot
     (Ghost.reveal current_sent)
     (Ghost.reveal current_state));
   MR.recall_snapshot
-    cc.canonical_client_progress;
+    cc.canonical_client_progress
+    #1.0R
+    #(Ghost.reveal current_state)
+    #(Ghost.reveal snapshot_state);
   lemma_client_progress_state_ahead
     (Ghost.reveal cc.canonical_client_initial)
     (Ghost.reveal snapshot_state)
