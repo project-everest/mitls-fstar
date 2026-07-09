@@ -358,7 +358,7 @@ let paired_successful_no_tail_semantic_traces_no_ccs_boundary
     server
 
 noextract
-let paired_successful_no_tail_semantic_logs_no_ccs_boundary
+let paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
@@ -371,6 +371,85 @@ let paired_successful_no_tail_semantic_logs_no_ccs_boundary
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server
+
+noextract
+let conn_event_is_ccs
+  (ev:CS.conn_event)
+  : bool =
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsChangeCipherSpec -> true
+     | _ -> false)
+  | _ ->
+    false
+
+noextract
+let rec conn_events_no_ccs
+  (events:list CS.conn_event)
+  : bool =
+  match events with
+  | [] -> true
+  | ev :: rest ->
+    not (conn_event_is_ccs ev) && conn_events_no_ccs rest
+
+noextract
+let rec application_data_preserving_semantic_suffix
+  (model:CS.connection_model)
+  (suffix:list CS.conn_event)
+  (final_model:CS.connection_model)
+  : Tot prop (decreases suffix) =
+  match suffix with
+  | [] ->
+    model.CS.model_control == CS.ControlApplicationData /\
+    final_model == model
+  | ev :: rest ->
+    model.CS.model_control == CS.ControlApplicationData /\
+    CS.legal_event model ev /\
+    CS.conn_event_is_key_update ev == false /\
+    conn_event_is_ccs ev == false /\
+    (match CS.step_model model ev with
+     | Some model1 ->
+       model1.CS.model_control == CS.ControlApplicationData /\
+       application_data_preserving_semantic_suffix model1 rest final_model
+     | None ->
+       False)
+
+noextract
+let paired_successful_no_tail_semantic_logs_no_ccs_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  paired_semantic_tls_io_traces
+    client.CS.cs_event_log
+    server.CS.cs_event_log /\
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server /\
+  conn_events_no_ccs client.CS.cs_event_log == true /\
+  conn_events_no_ccs server.CS.cs_event_log == true /\
+  exists
+    (client_prefix:CS.connection_state)
+    (server_prefix:CS.connection_state)
+    (client_suffix:list CS.conn_event)
+    (server_suffix:list CS.conn_event).
+    paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
+      client_prefix
+      server_prefix /\
+    client.CS.cs_event_log ==
+      FStar.List.Tot.append client_prefix.CS.cs_event_log client_suffix /\
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append server_prefix.CS.cs_event_log server_suffix /\
+    application_data_preserving_semantic_suffix
+      client_prefix.CS.cs_model
+      client_suffix
+      client.CS.cs_model /\
+    application_data_preserving_semantic_suffix
+      server_prefix.CS.cs_model
+      server_suffix
+      server.CS.cs_model
 
 val lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
   (client:CS.connection_state)
