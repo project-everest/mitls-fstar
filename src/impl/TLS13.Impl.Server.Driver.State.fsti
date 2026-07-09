@@ -407,7 +407,7 @@ noextract
   callers provide that through [frame] instead of treating the 64-byte material
   vec as a splittable subview.
 **)
-val server_driver_endpoint_connected
+let server_driver_endpoint_connected
   (d:server_driver)
   (cfg:SQueries.server_next_local_action_config)
   (frame:EP.server_endpoint_frame)
@@ -419,6 +419,45 @@ val server_driver_endpoint_connected
   (transport_received:B.bytes)
   (transport_sent:B.bytes)
   : slprop
+  =
+  SP.server_invariant
+    (server_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  exists* ch buffered_len.
+    Box.pts_to d.server_driver_channel (Some ch) **
+    Box.pts_to d.server_driver_buffered_len buffered_len **
+    EP.server_endpoint_frame_ready
+      (server_driver_canonical d)
+      cfg
+      frame
+      st **
+    EP.server_endpoint_io_ready
+      (server_driver_canonical d)
+      ch
+      frame
+      transport_received
+      transport_sent
+      st **
+    pure (ST.server_end_to_end_invariant st /\
+          server_driver_config_matches_credentials
+            st
+            certificate_chain
+            credential_identity /\
+          server_driver_supported_profile_selection st credential_identity /\
+          (exists buffered.
+            server_driver_wire_logs_match
+              st
+              transport_received
+              transport_sent
+              buffered
+              buffered_len) /\
+          Seq.equal canonical_sent transport_sent)
 
 noextract
 let server_driver_connected_with_app_out

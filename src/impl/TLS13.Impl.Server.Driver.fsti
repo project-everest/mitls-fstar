@@ -6,6 +6,9 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module CPI = Common.ProtocolImplementation
+module CTypes = TLS13.Impl.CanonicalTypes
+module CW = TLS13.Impl.CanonicalWire
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
@@ -168,6 +171,15 @@ let server_driver_send_correct
       sent
       sent' /\
     server_driver_send_status_correct status resp
+
+noextract
+let server_driver_endpoint_send_event
+  (payload:B.bytes)
+  : CTypes.server_local_event =
+  CTypes.ServerAPI {
+    CTypes.server_local_kind = ST.LocalSendApplicationData;
+    CTypes.server_local_payload = payload;
+  }
 
 noextract
 let server_driver_receive_status_correct
@@ -481,6 +493,76 @@ fn send
             server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
             server_driver_sent_log_exact st1 sent' /\
             server_driver_received_log_accounted st1 (Ghost.reveal 'received))
+
+
+noextract
+fn send_endpoint
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (payload_bytes:B.bytes)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (transport_received0:Ghost.erased B.bytes)
+  (transport_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires server_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              'certificate_chain
+              'credential_identity
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0)
+              (Ghost.reveal transport_received0)
+              (Ghost.reveal transport_sent0) **
+           pts_to payload payload_bytes **
+           pure (B.length payload_bytes == SZ.v payload_len /\
+                 ST.server_connection_control_not_failed (Ghost.reveal st0) /\
+                 ST.server_local_event_input_ready
+                   (Ghost.reveal st0)
+                   ST.LocalSendApplicationData
+                   payload_bytes)
+  returns result:CPI.process_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                  (canonical_sent1:Ghost.erased B.bytes)
+                  (st1:Ghost.erased CS.connection_state).
+           server_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             'certificate_chain
+             'credential_identity
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1)
+             (Ghost.reveal transport_received0)
+             (Ghost.reveal canonical_sent1) **
+           pts_to payload payload_bytes **
+           pure (exists (old_out:B.bytes)
+                        (out_contents:B.bytes)
+                        (wire_outputs:list CW.wire_message)
+                        (local_outputs:list CTypes.local_output).
+             CPI.local_process_correct
+               (SP.server_system
+                 (Ghost.reveal
+                   (server_driver_canonical d).SP.canonical_server_initial))
+               (server_driver_endpoint_send_event payload_bytes)
+               old_out
+               out_contents
+               frame.EP.server_ep_network_out_len
+               (Ghost.reveal canonical_received0)
+               (Ghost.reveal canonical_sent0)
+               (Ghost.reveal st0)
+               result
+               (Ghost.reveal canonical_received1)
+               (Ghost.reveal canonical_sent1)
+               (Ghost.reveal st1)
+               wire_outputs
+               local_outputs)
 
 fn receive
   (d:server_driver)
