@@ -49,6 +49,7 @@ noeq type server_driver = {
   server_driver_certificate_verify_input: V.vec U8.t;
   server_driver_signature: V.vec U8.t;
   server_driver_app_out: V.vec U8.t;
+  server_driver_local_app_out: V.vec U8.t;
   // Ghost/erased fields — zero-cost in C extraction
   server_driver_progress: MR.mref SP.server_progress_preorder;
   server_driver_initial: Ghost.erased CS.connection_state;
@@ -275,7 +276,7 @@ let server_driver_buffers
   : slprop
   =
   Box.pts_to d.server_driver_buffered_len buffered_len **
-  exists* empty_payload raw network_out material cv_input signature app_out.
+  exists* empty_payload raw network_out material cv_input signature app_out local_app_out.
     V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
     V.pts_to d.server_driver_raw #1.0R raw **
     V.pts_to d.server_driver_network_out #1.0R network_out **
@@ -283,6 +284,7 @@ let server_driver_buffers
     V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
     V.pts_to d.server_driver_signature #1.0R signature **
     V.pts_to d.server_driver_app_out #1.0R app_out **
+    V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
     pure (
       B.length empty_payload == 0 /\
       B.length raw == SZ.v driver_rx_capacity /\
@@ -294,6 +296,7 @@ let server_driver_buffers
       B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
       B.length signature == SZ.v driver_signature_capacity /\
       B.length app_out == SZ.v driver_app_out_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
       Bounds.max_certificate_verify_input_len <=
         SZ.v driver_certificate_verify_input_capacity /\
       IM.max_signature_len <= SZ.v driver_signature_capacity /\
@@ -304,7 +307,8 @@ let server_driver_buffers
       V.is_full_vec d.server_driver_material_payload /\
       V.is_full_vec d.server_driver_certificate_verify_input /\
       V.is_full_vec d.server_driver_signature /\
-      V.is_full_vec d.server_driver_app_out)
+      V.is_full_vec d.server_driver_app_out /\
+      V.is_full_vec d.server_driver_local_app_out)
 
 noextract
 let server_driver_buffers_with_app_out
@@ -315,7 +319,7 @@ let server_driver_buffers_with_app_out
   : slprop
   =
   Box.pts_to d.server_driver_buffered_len buffered_len **
-  exists* empty_payload raw network_out material cv_input signature.
+  exists* empty_payload raw network_out material cv_input signature local_app_out.
     V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
     V.pts_to d.server_driver_raw #1.0R raw **
     V.pts_to d.server_driver_network_out #1.0R network_out **
@@ -323,6 +327,7 @@ let server_driver_buffers_with_app_out
     V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
     V.pts_to d.server_driver_signature #1.0R signature **
     V.pts_to d.server_driver_app_out #1.0R app_out **
+    V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
     pure (
       B.length empty_payload == 0 /\
       B.length raw == SZ.v driver_rx_capacity /\
@@ -334,6 +339,7 @@ let server_driver_buffers_with_app_out
       B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
       B.length signature == SZ.v driver_signature_capacity /\
       B.length app_out == SZ.v driver_app_out_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
       Bounds.max_certificate_verify_input_len <=
         SZ.v driver_certificate_verify_input_capacity /\
       IM.max_signature_len <= SZ.v driver_signature_capacity /\
@@ -344,7 +350,8 @@ let server_driver_buffers_with_app_out
       V.is_full_vec d.server_driver_material_payload /\
       V.is_full_vec d.server_driver_certificate_verify_input /\
       V.is_full_vec d.server_driver_signature /\
-      V.is_full_vec d.server_driver_app_out)
+      V.is_full_vec d.server_driver_app_out /\
+      V.is_full_vec d.server_driver_local_app_out)
 
 noextract
 let server_driver_live

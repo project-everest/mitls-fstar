@@ -527,6 +527,7 @@ fn new_server
       let cv_input = V.alloc 0uy driver_certificate_verify_input_capacity;
       let signature = V.alloc 0uy driver_signature_capacity;
       let app_out = V.alloc 0uy driver_app_out_capacity;
+      let local_app_out = V.alloc 0uy driver_app_out_capacity;
       assert (pure (Bounds.max_certificate_verify_input_len <=
         SZ.v driver_certificate_verify_input_capacity));
       assert (pure (IM.max_signature_len <= SZ.v driver_signature_capacity));
@@ -543,6 +544,7 @@ fn new_server
         server_driver_certificate_verify_input = cv_input;
         server_driver_signature = signature;
         server_driver_app_out = app_out;
+        server_driver_local_app_out = local_app_out;
         server_driver_progress = progress;
         server_driver_initial =
           Ghost.hide
@@ -588,6 +590,11 @@ fn new_server
         (V.pts_to app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy))
         as
         (V.pts_to d.server_driver_app_out #1.0R
+          (Seq.create (SZ.v driver_app_out_capacity) 0uy));
+      rewrite
+        (V.pts_to local_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy))
+        as
+        (V.pts_to d.server_driver_local_app_out #1.0R
           (Seq.create (SZ.v driver_app_out_capacity) 0uy));
       rewrite
         (S.connection_exactly
@@ -914,7 +921,7 @@ fn accept
                                   IO.is_channel ch received3 sent3 **
                                   server_driver_buffers d buffered buffered_len);
                         unfold (server_driver_buffers d buffered buffered_len);
-                        with empty_payload raw network_out material cv_input signature app_out.
+                        with empty_payload raw network_out material cv_input signature app_out local_app_out.
                           assert (
                             Box.pts_to d.server_driver_buffered_len buffered_len **
                             V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -923,7 +930,8 @@ fn accept
                             V.pts_to d.server_driver_material_payload #1.0R material **
                             V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
                             V.pts_to d.server_driver_signature #1.0R signature **
-                            V.pts_to d.server_driver_app_out #1.0R app_out);
+                            V.pts_to d.server_driver_app_out #1.0R app_out **
+                            V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
                         let current_buffered_len = Box.(!d.server_driver_buffered_len);
                         assert (pure (current_buffered_len == buffered_len));
                         fold (server_driver_buffers d buffered buffered_len);
@@ -1869,7 +1877,7 @@ fn receive
           buffered
           buffered_len
           loop_app_out);
-        with empty_payload raw network_out material cv_input signature.
+        with empty_payload raw network_out material cv_input signature local_app_out.
           assert (
             Box.pts_to d.server_driver_buffered_len buffered_len **
             V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -1878,7 +1886,8 @@ fn receive
             V.pts_to d.server_driver_material_payload #1.0R material **
             V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
             V.pts_to d.server_driver_signature #1.0R signature **
-            V.pts_to d.server_driver_app_out #1.0R loop_app_out);
+            V.pts_to d.server_driver_app_out #1.0R loop_app_out **
+            V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
         let copy_len = loop.server_driver_network_loop_last.ST.response.ST.app_out_len;
         let app_fits = SZ.lte copy_len out_len;
         let app_src_fits = SZ.lte copy_len driver_app_out_capacity;

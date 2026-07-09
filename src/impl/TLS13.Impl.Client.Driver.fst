@@ -65,6 +65,7 @@ noeq type client_driver = {
   client_driver_auth_cv_input: V.vec U8.t;
   client_driver_auth_signature: V.vec U8.t;
   client_driver_app_out: V.vec U8.t;
+  client_driver_local_app_out: V.vec U8.t;
 }
 
 noextract
@@ -392,7 +393,7 @@ let client_driver_buffers
   (buffered_len:SZ.t)
   : slprop =
   Box.pts_to d.client_driver_buffered_len buffered_len **
-  exists* empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+  exists* empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
     V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
     V.pts_to d.client_driver_raw #1.0R raw **
     V.pts_to d.client_driver_network_out #1.0R network_out **
@@ -401,6 +402,7 @@ let client_driver_buffers
     V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
     V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
     V.pts_to d.client_driver_app_out #1.0R app_out **
+    V.pts_to d.client_driver_local_app_out #1.0R local_app_out **
     pure (
       B.length empty_payload == 0 /\
       B.length raw == SZ.v driver_rx_capacity /\
@@ -413,6 +415,7 @@ let client_driver_buffers
       B.length auth_cv_input == SZ.v driver_certificate_verify_input_capacity /\
       B.length auth_signature == SZ.v driver_signature_capacity /\
       B.length app_out == SZ.v driver_app_out_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
       Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity /\
       SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len /\
       Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity /\
@@ -425,7 +428,8 @@ let client_driver_buffers
       V.is_full_vec d.client_driver_auth_payload /\
       V.is_full_vec d.client_driver_auth_cv_input /\
       V.is_full_vec d.client_driver_auth_signature /\
-      V.is_full_vec d.client_driver_app_out)
+      V.is_full_vec d.client_driver_app_out /\
+      V.is_full_vec d.client_driver_local_app_out)
 
 (**
   Canonical seed carried by every public driver ownership predicate.
@@ -1929,6 +1933,7 @@ fn new_client
   let auth_cv_input = V.alloc 0uy driver_certificate_verify_input_capacity;
   let auth_signature = V.alloc 0uy driver_signature_capacity;
   let app_out = V.alloc 0uy driver_app_out_capacity;
+  let local_app_out = V.alloc 0uy driver_app_out_capacity;
   assert (pure (Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity));
   assert (pure (SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len));
   assert (pure (Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity));
@@ -1949,6 +1954,7 @@ fn new_client
         client_driver_auth_cv_input = auth_cv_input;
         client_driver_auth_signature = auth_signature;
         client_driver_app_out = app_out;
+        client_driver_local_app_out = local_app_out;
       };
       rewrite
          (MR.pts_to progress #1.0R (Ghost.reveal initial))
@@ -2007,6 +2013,10 @@ fn new_client
         (V.pts_to app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy))
         as
         (V.pts_to d.client_driver_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy));
+      rewrite
+        (V.pts_to local_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_local_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy));
       rewrite
         (C.connection_exactly
           c
@@ -6145,7 +6155,7 @@ fn free_client_driver_buffers
   with buffered.
     assert (client_driver_buffers d buffered buffered_len);
   unfold (client_driver_buffers d buffered buffered_len);
-  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
     assert (Box.pts_to d.client_driver_buffered_len buffered_len **
             V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
             V.pts_to d.client_driver_raw #1.0R raw **
@@ -6154,7 +6164,8 @@ fn free_client_driver_buffers
             V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
             V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
             V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-            V.pts_to d.client_driver_app_out #1.0R app_out);
+            V.pts_to d.client_driver_app_out #1.0R app_out **
+            V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
   V.free d.client_driver_empty_payload;
   V.free d.client_driver_raw;
   V.free d.client_driver_network_out;
@@ -6163,6 +6174,7 @@ fn free_client_driver_buffers
   V.free d.client_driver_auth_cv_input;
   V.free d.client_driver_auth_signature;
   V.free d.client_driver_app_out;
+  V.free d.client_driver_local_app_out;
   Box.free d.client_driver_buffered_len;
 }
 
@@ -6253,7 +6265,7 @@ fn connect
       assert (pure (client_driver_wire_logs_match 'st0 B.empty B.empty B.empty current_buffered_len));
       fold (channel_open ch 'st0 B.empty current_buffered_len);
       unfold (client_driver_buffers d B.empty buffered_len);
-      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
                 V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
                 V.pts_to d.client_driver_raw #1.0R raw **
@@ -6262,7 +6274,8 @@ fn connect
                 V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
                 V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
                 V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-                V.pts_to d.client_driver_app_out #1.0R app_out);
+                V.pts_to d.client_driver_app_out #1.0R app_out **
+                V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
       V.to_array_pts_to d.client_driver_empty_payload;
       V.to_array_pts_to d.client_driver_raw;
       V.to_array_pts_to d.client_driver_network_out;
@@ -6487,7 +6500,7 @@ fn send
       DriverWorkflowStepFailed
     }
     Some concrete_ch -> {
-      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
                 V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
                 V.pts_to d.client_driver_raw #1.0R raw **
@@ -6496,7 +6509,8 @@ fn send
                 V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
                 V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
                 V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-                V.pts_to d.client_driver_app_out #1.0R app_out);
+                V.pts_to d.client_driver_app_out #1.0R app_out **
+                V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
       V.to_array_pts_to d.client_driver_network_out;
       V.to_array_pts_to d.client_driver_app_out;
       let core = {
@@ -7215,7 +7229,7 @@ fn receive
       }
     }
     Some concrete_ch -> {
-      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
                 V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
                 V.pts_to d.client_driver_raw #1.0R raw **
@@ -7224,7 +7238,8 @@ fn receive
                 V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
                 V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
                 V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-                V.pts_to d.client_driver_app_out #1.0R app_out);
+                V.pts_to d.client_driver_app_out #1.0R app_out **
+                V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
       V.to_array_pts_to d.client_driver_empty_payload;
       V.to_array_pts_to d.client_driver_raw;
       V.to_array_pts_to d.client_driver_network_out;
@@ -7502,7 +7517,7 @@ fn close
   unfold (client_driver_buffers d buffered buffered_len);
   let current_buffered_len = Box.(!d.client_driver_buffered_len);
   assert (pure (current_buffered_len == buffered_len));
-  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
     assert (Box.pts_to d.client_driver_buffered_len buffered_len **
             V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
             V.pts_to d.client_driver_raw #1.0R raw **
@@ -7511,7 +7526,8 @@ fn close
             V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
             V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
             V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-            V.pts_to d.client_driver_app_out #1.0R app_out);
+            V.pts_to d.client_driver_app_out #1.0R app_out **
+            V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
   V.to_array_pts_to d.client_driver_empty_payload;
   V.to_array_pts_to d.client_driver_raw;
   V.to_array_pts_to d.client_driver_network_out;

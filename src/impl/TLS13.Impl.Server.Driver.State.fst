@@ -549,7 +549,7 @@ fn forget_server_driver_connected_app_out
     buffered
     buffered_len
     'app_out);
-  with empty_payload raw network_out material cv_input signature.
+  with empty_payload raw network_out material cv_input signature local_app_out.
     assert (
       Box.pts_to d.server_driver_buffered_len buffered_len **
       V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -558,7 +558,8 @@ fn forget_server_driver_connected_app_out
       V.pts_to d.server_driver_material_payload #1.0R material **
       V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
       V.pts_to d.server_driver_signature #1.0R signature **
-      V.pts_to d.server_driver_app_out #1.0R 'app_out);
+      V.pts_to d.server_driver_app_out #1.0R 'app_out **
+      V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
   fold (server_driver_buffers d buffered buffered_len);
   fold (server_driver_connected
     d
@@ -600,7 +601,7 @@ fn expose_server_driver_connected_app_out
             IO.is_channel ch 'received 'sent **
             server_driver_buffers d buffered buffered_len);
   unfold (server_driver_buffers d buffered buffered_len);
-  with empty_payload raw network_out material cv_input signature app_out.
+  with empty_payload raw network_out material cv_input signature app_out local_app_out.
     assert (
       Box.pts_to d.server_driver_buffered_len buffered_len **
       V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -609,7 +610,8 @@ fn expose_server_driver_connected_app_out
       V.pts_to d.server_driver_material_payload #1.0R material **
       V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
       V.pts_to d.server_driver_signature #1.0R signature **
-      V.pts_to d.server_driver_app_out #1.0R app_out);
+      V.pts_to d.server_driver_app_out #1.0R app_out **
+      V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
   fold (server_driver_buffers_with_app_out d buffered buffered_len app_out);
   fold (server_driver_connected_with_app_out
     d

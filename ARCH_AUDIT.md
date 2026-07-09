@@ -30,6 +30,11 @@ The first cleanup stages are complete:
    `CPI.local_process_correct` fact, so proof-facing driver wrappers can reason
    about endpoint local actions without re-entering the legacy direct-driver
    local-write proofs.
+7. Client/server proof-facing `send_endpoint` wrappers now consume and restore
+   the endpoint-owned connected predicates around endpoint local actions.
+8. Endpoint frame construction now uses distinct network and local application
+   output buffers, matching the separate ownership required by the canonical
+   query resources.
 
 The remaining gap is deliberately narrower: the C-facing runtime wrappers call
 `Client.Endpoint.client_endpoint_run_workflow` /
@@ -82,7 +87,7 @@ The remaining implementation milestones are:
 
 | Milestone | Current status | Done when |
 | --- | --- | --- |
-| Endpoint-owned `send` wrappers | Not committed.  Endpoint API-local wrappers now expose `CPI.local_process_correct`, but proof-facing driver `send_endpoint` wrappers still need to be finished or discarded. | Client and server wrappers consume/restore `*_driver_endpoint_connected`, call `*_run_api_local_action`, verify, and do not weaken public specs. |
+| Endpoint-owned `send` wrappers | Done as proof-facing wrappers.  Public `send` still returns the legacy connected predicate. | Becomes part of the final public surface once `connect`/`accept` produce endpoint-owned connected states. |
 | Endpoint-owned `connect`/`accept` | Not started.  Public `connect`/`accept` still produce legacy `*_driver_connected`. | Public handshake APIs call the monomorphic endpoint workflow and return endpoint-owned connected predicates. |
 | Endpoint-owned `receive` | Not started.  Public `receive` still uses direct network/local loops. | Public receive calls the monomorphic endpoint workflow from endpoint-owned connected state and restores it with updated transport/canonical histories. |
 | Endpoint-owned `close` | Not started.  Public close still uses direct local close logic. | Public close is an endpoint local action/workflow step over endpoint-owned state. |
