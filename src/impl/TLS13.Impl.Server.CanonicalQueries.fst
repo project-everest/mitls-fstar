@@ -29,14 +29,6 @@ noeq
 type server_next_local_action_frame = {
   server_query_network_app_out: array U8.t;
   server_query_network_app_out_len: SZ.t;
-  server_query_network_bridge_proof:
-    old:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SP.server_network_bridge_obligation {
-          SP.tls_server_network_app_out = server_query_network_app_out;
-          SP.tls_server_network_app_out_len = server_query_network_app_out_len;
-          SP.tls_server_network_old_app_out = old;
-        });
   server_query_local_payload: array U8.t;
   server_query_local_payload_len: SZ.t;
   server_query_local_app_out: array U8.t;
@@ -65,8 +57,6 @@ let server_network_frame_of_current
   } in
   {
     SP.tls_server_network_bridge_base = base;
-    SP.tls_server_network_bridge_proof =
-      frame.server_query_network_bridge_proof old;
   }
 
 let server_local_frame_of_current

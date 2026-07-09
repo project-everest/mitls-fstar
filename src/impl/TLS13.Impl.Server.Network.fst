@@ -1295,7 +1295,8 @@ fn process_network_bytes
                    network_out_bytes
                   app_out_bytes /\
                 (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-                 W.parse_record_wire (Ghost.reveal 'raw_bytes) == None))
+                 W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
+                 Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)))
 {
   unfold (connection_exactly s 'st0);
   let decoded = P.decode_network_buffer s raw raw_len;
@@ -1322,6 +1323,8 @@ fn process_network_bytes
         buffer_resp.ST.consumed_len == 0sz));
       assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
         W.parse_record_wire (Ghost.reveal 'raw_bytes) == None));
+      assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+        Seq.equal (Ghost.reveal 'old_network_out) (Ghost.reveal 'old_network_out)));
       buffer_resp
     }
     IM.NetworkBufferDecodeError -> {
@@ -1350,6 +1353,9 @@ fn process_network_bytes
         resp
         network_out_bytes
         app_out_bytes));
+      assert (pure (buffer_resp.ST.consumed_len == 0sz));
+      assert (pure (resp.ST.network_out_len == 0sz));
+      assert (pure (resp.ST.app_out_len == 0sz));
       assert (pure (ST.server_network_bytes_end_to_end_correct
         'st0
         st1
@@ -1387,7 +1393,7 @@ fn process_network_bytes
               app_out_len;
           let buffer_resp = {
             ST.response = resp;
-            ST.consumed_len = decoded_buffer.IM.decoded_buffer_consumed_len;
+            ST.consumed_len = 0sz;
           };
           with st1 network_out_bytes app_out_bytes.
             assert (connection_exactly s st1 **

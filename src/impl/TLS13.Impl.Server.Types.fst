@@ -1555,13 +1555,18 @@ let server_network_consumed_input_projection
   (resp.response.status == NeedMoreInput ==>
     st1 == st0 /\
     resp.consumed_len == 0sz /\
-    resp.response.network_out_len == 0sz) /\
+    resp.response.network_out_len == 0sz /\
+    resp.response.app_out_len == 0sz) /\
   (resp.response.status == IllegalTransition ==>
     st1 == st0 /\
     resp.consumed_len == 0sz /\
-    resp.response.network_out_len == 0sz) /\
+    resp.response.network_out_len == 0sz /\
+    resp.response.app_out_len == 0sz) /\
   (resp.response.status == DecodeError ==>
-    decode_error_response st0 st1 resp.response network_out app_out) /\
+    decode_error_response st0 st1 resp.response network_out app_out /\
+    resp.consumed_len == 0sz /\
+    resp.response.network_out_len == 0sz /\
+    resp.response.app_out_len == 0sz) /\
   (resp.response.status == OutputBufferTooSmall ==> False)
 
 let server_connection_control_not_failed

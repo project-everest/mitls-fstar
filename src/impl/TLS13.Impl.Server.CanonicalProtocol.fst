@@ -2274,6 +2274,81 @@ let server_network_common_witness
     wire_outputs
     local_outputs
 
+let lemma_server_network_common_witness_from_parts
+  (initial:CS.connection_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_network_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (buffer_resp:ST.server_buffer_response)
+  (consumed:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        server_invariant_pure
+          initial
+          st1.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_sent
+          st1 /\
+        server_network_frame_post_fact
+          base
+          (CTypes.server_process_result buffer_resp)
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          st0
+          st1
+          consumed
+          wire_outputs
+          local_outputs
+          app_out
+          buffer_resp /\
+        CPI.network_process_correct
+          (server_system initial)
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          received0
+          sent0
+          st0
+          (CTypes.server_process_result buffer_resp)
+          st1.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_sent
+          st1
+          consumed
+          wire_outputs
+          local_outputs)
+      (ensures
+        server_network_common_witness
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp
+          consumed
+          wire_outputs
+          local_outputs)
+= ()
+
 let server_network_bridge_result
   (initial:CS.connection_state)
   (received0:B.bytes)
@@ -2307,6 +2382,119 @@ let server_network_bridge_result
       consumed
       wire_outputs
       local_outputs
+
+let lemma_server_network_bridge_result_from_common_witness
+  (initial:CS.connection_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_network_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (buffer_resp:ST.server_buffer_response)
+  (consumed:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        server_network_common_witness
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp
+          consumed
+          wire_outputs
+          local_outputs)
+      (ensures
+        server_network_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp)
+=
+  FStar.Classical.exists_intro
+    (fun local_outputs' ->
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed
+        wire_outputs
+        local_outputs')
+    local_outputs;
+  FStar.Classical.exists_intro
+    (fun wire_outputs' -> exists local_outputs'.
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed
+        wire_outputs'
+        local_outputs')
+    wire_outputs;
+  FStar.Classical.exists_intro
+    (fun consumed' -> exists wire_outputs' local_outputs'.
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed'
+        wire_outputs'
+        local_outputs')
+    consumed
 
 let lemma_server_network_step_ok_bridge_result
   (initial:CS.connection_state)
@@ -2432,7 +2620,7 @@ let lemma_server_network_step_ok_bridge_result
     local_outputs
     app_out
     buffer_resp);
-  assert (server_network_common_witness
+  lemma_server_network_common_witness_from_parts
     initial
     received0
     sent0
@@ -2448,31 +2636,86 @@ let lemma_server_network_step_ok_bridge_result
     buffer_resp
     consumed
     wire_outputs
-    local_outputs);
-  assert (exists consumed' wire_outputs' local_outputs'.
-    server_network_common_witness
-      initial
-      received0
-      sent0
-      st0
-      input_contents
-      input_len
-      old_network_out
-      network_out
-      out_len
-      base
-      st1
-      app_out
-      buffer_resp
-      consumed'
-      wire_outputs'
-      local_outputs')
+    local_outputs;
+  FStar.Classical.exists_intro
+    (fun local_outputs' ->
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed
+        wire_outputs
+        local_outputs')
+    local_outputs;
+  FStar.Classical.exists_intro
+    (fun wire_outputs' -> exists local_outputs'.
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed
+        wire_outputs'
+        local_outputs')
+    wire_outputs;
+  FStar.Classical.exists_intro
+    (fun consumed' -> exists wire_outputs' local_outputs'.
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed'
+        wire_outputs'
+        local_outputs')
+    consumed;
+  assert (server_network_bridge_result
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp)
 
 // Partial non-StepOk bridge lemmas for the stuttering network results.  These
 // are not yet enough to discharge server_network_bridge_obligation globally:
-// NeedMoreInput still needs the concrete output-stutter fact, and both
-// stuttering branches need the app-output length fact, threaded from the server
-// network wrapper.
+// DecodeError needs a spec/implementation decision about whether the common
+// LocalFail refinement may consume a framed-but-undecodable record.
 let lemma_server_network_need_more_input_bridge_result
   (initial:CS.connection_state)
   (received0:B.bytes)
@@ -2510,8 +2753,7 @@ let lemma_server_network_need_more_input_bridge_result
           app_out /\
         buffer_resp.ST.response.ST.status == ST.NeedMoreInput /\
         WS.parse_record_wire input_contents == None /\
-        Seq.equal network_out old_network_out /\
-        buffer_resp.ST.response.ST.app_out_len == 0sz)
+        Seq.equal network_out old_network_out)
       (ensures
         server_network_bridge_result
           initial
@@ -2619,7 +2861,7 @@ let lemma_server_network_need_more_input_bridge_result
     local_outputs
     app_out
     buffer_resp);
-  assert (server_network_common_witness
+  lemma_server_network_common_witness_from_parts
     initial
     received0
     sent0
@@ -2635,25 +2877,24 @@ let lemma_server_network_need_more_input_bridge_result
     buffer_resp
     consumed
     wire_outputs
-    local_outputs);
-  assert (exists consumed' wire_outputs' local_outputs'.
-    server_network_common_witness
-      initial
-      received0
-      sent0
-      st0
-      input_contents
-      input_len
-      old_network_out
-      network_out
-      out_len
-      base
-      st1
-      app_out
-      buffer_resp
-      consumed'
-      wire_outputs'
-      local_outputs')
+    local_outputs;
+  lemma_server_network_bridge_result_from_common_witness
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp
+    consumed
+    wire_outputs
+    local_outputs
 
 let lemma_server_network_illegal_transition_bridge_result
   (initial:CS.connection_state)
@@ -2690,8 +2931,7 @@ let lemma_server_network_illegal_transition_bridge_result
           input_contents
           network_out
           app_out /\
-        buffer_resp.ST.response.ST.status == ST.IllegalTransition /\
-        buffer_resp.ST.response.ST.app_out_len == 0sz)
+        buffer_resp.ST.response.ST.status == ST.IllegalTransition)
       (ensures
         server_network_bridge_result
           initial
@@ -2818,7 +3058,7 @@ let lemma_server_network_illegal_transition_bridge_result
     local_outputs
     app_out
     buffer_resp);
-  assert (server_network_common_witness
+  lemma_server_network_common_witness_from_parts
     initial
     received0
     sent0
@@ -2834,25 +3074,849 @@ let lemma_server_network_illegal_transition_bridge_result
     buffer_resp
     consumed
     wire_outputs
-    local_outputs);
-  assert (exists consumed' wire_outputs' local_outputs'.
-    server_network_common_witness
-      initial
-      received0
-      sent0
+    local_outputs;
+  lemma_server_network_bridge_result_from_common_witness
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp
+    consumed
+    wire_outputs
+    local_outputs
+
+let lemma_server_local_fail_empty_step
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (err:T.tls_error)
+  : Lemma
+      (requires
+        CS.legal_connection_delta
+          st0
+          {
+            CS.delta_event = CS.ConnLocalEvent (CS.LocalFail err);
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = B.empty;
+          }
+          st1)
+      (ensures
+        server_step
+          st0
+          (SM.LocalEvent (CTypes.ServerAPI {
+            CTypes.server_local_kind = ST.LocalFail;
+            CTypes.server_local_payload = B.empty;
+          }))
+          st1
+          (CPI.step_output [] []))
+=
+  let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
+  CW.lemma_wire_outputs_of_empty ();
+  Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format []) B.empty;
+  let api : CTypes.server_api_event = {
+    CTypes.server_local_kind = ST.LocalFail;
+    CTypes.server_local_payload = B.empty;
+  } in
+  assert (server_api_event_matches api conn_ev);
+  assert (server_wire_outputs_match B.empty []);
+  assert (server_local_outputs_match conn_ev []);
+  assert (CS.legal_connection_delta st0 {
+    CS.delta_event = conn_ev;
+    CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
+    CS.delta_raw_received = B.empty;
+  } st1);
+  assert (B.length (WF.serialize_all CW.tls_record_wire_format []) == 0);
+  assert (CS.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    conn_ev
+    (WF.serialize_all CW.tls_record_wire_format []));
+  assert (B.length B.empty == 0);
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    conn_ev
+    B.empty);
+  assert (server_step
+    st0
+    (SM.LocalEvent (CTypes.ServerAPI api))
+    st1
+    (CPI.step_output [] []))
+
+let lemma_server_decode_error_network_process_correct
+  (initial:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (result:CPI.process_result)
+  (received1:B.bytes)
+  (sent1:B.bytes)
+  (st1:CS.connection_state)
+  (consumed:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  (produced:B.bytes)
+  : Lemma
+      (requires
+        CPI.buffers_wf input_contents input_len old_network_out out_len /\
+        Seq.length network_out == Seq.length old_network_out /\
+        result.CPI.process_status == CPI.DecodeError /\
+        SZ.v result.CPI.process_consumed_len == Seq.length consumed /\
+        CPI.network_error_refines_state_machine
+          (server_system initial)
+          (CPI.input_bytes input_contents input_len)
+          st0
+          st1
+          consumed
+          wire_outputs
+          local_outputs /\
+        Seq.equal
+          produced
+          (WF.serialize_all
+            (server_system initial).WFSM.wfsm_wire_format
+            wire_outputs) /\
+        CPI.output_written network_out result.CPI.process_produced_len produced /\
+        Seq.equal received1 (Seq.append received0 consumed) /\
+        Seq.equal sent1 (Seq.append sent0 produced))
+      (ensures
+        CPI.network_process_correct
+          (server_system initial)
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          consumed
+          wire_outputs
+          local_outputs)
+=
+  match result.CPI.process_status with
+  | CPI.DecodeError ->
+    FStar.Classical.exists_intro
+      (fun produced' ->
+        SZ.v result.CPI.process_consumed_len == Seq.length consumed /\
+        CPI.network_error_refines_state_machine
+          (server_system initial)
+          (CPI.input_bytes input_contents input_len)
+          st0
+          st1
+          consumed
+          wire_outputs
+          local_outputs /\
+        Seq.equal
+          produced'
+          (WF.serialize_all
+            (server_system initial).WFSM.wfsm_wire_format
+            wire_outputs) /\
+        CPI.output_written network_out result.CPI.process_produced_len produced' /\
+        Seq.equal received1 (Seq.append received0 consumed) /\
+        Seq.equal sent1 (Seq.append sent0 produced'))
+      produced
+  | _ ->
+    assert False
+
+let lemma_server_wire_network_error_refines_state_machine
+  (initial:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (consumed:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  (wire:CW.wire_message)
+  (residual:B.bytes)
+  : Lemma
+      (requires
+        B.length input_contents == SZ.v input_len /\
+        CPI.consumed_by_parse
+          CW.tls_record_wire_format
+          input_contents
+          wire
+          consumed
+          residual /\
+        server_step
+          st0
+          (SM.WireEvent wire)
+          st1
+          (CPI.step_output wire_outputs local_outputs))
+      (ensures
+        CPI.network_error_refines_state_machine
+          (server_system initial)
+          (CPI.input_bytes input_contents input_len)
+          st0
+          st1
+          consumed
+          wire_outputs
+          local_outputs)
+=
+  assert (CPI.bounded_len input_contents input_len == B.length input_contents);
+  assert (CPI.input_bytes input_contents input_len ==
+    Seq.slice input_contents 0 (B.length input_contents));
+  Seq.lemma_len_slice input_contents 0 (B.length input_contents);
+  Seq.lemma_eq_intro (CPI.input_bytes input_contents input_len) input_contents;
+  assert (Seq.equal (CPI.input_bytes input_contents input_len) input_contents);
+  Seq.lemma_eq_elim (CPI.input_bytes input_contents input_len) input_contents;
+  assert (CPI.consumed_by_parse
+    (server_system initial).WFSM.wfsm_wire_format
+    (CPI.input_bytes input_contents input_len)
+    wire
+    consumed
+    residual);
+  assert (exists residual'.
+    CPI.consumed_by_parse
+      (server_system initial).WFSM.wfsm_wire_format
+      (CPI.input_bytes input_contents input_len)
+      wire
+      consumed
+      residual' /\
+    server_step
       st0
-      input_contents
-      input_len
-      old_network_out
-      network_out
-      out_len
-      base
+      (SM.WireEvent wire)
       st1
-      app_out
-      buffer_resp
-      consumed'
-      wire_outputs'
-      local_outputs')
+      (CPI.step_output wire_outputs local_outputs));
+  assert (exists msg residual'.
+    CPI.consumed_by_parse
+      (server_system initial).WFSM.wfsm_wire_format
+      (CPI.input_bytes input_contents input_len)
+      msg
+      consumed
+      residual' /\
+    server_step
+      st0
+      (SM.WireEvent msg)
+      st1
+      (CPI.step_output wire_outputs local_outputs));
+  assert (CPI.network_error_refines_state_machine
+    (server_system initial)
+    (CPI.input_bytes input_contents input_len)
+    st0
+    st1
+    consumed
+    wire_outputs
+    local_outputs)
+
+let lemma_server_connection_failed_network_process_correct
+  (initial:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (result:CPI.process_result)
+  (received1:B.bytes)
+  (sent1:B.bytes)
+  (st1:CS.connection_state)
+  (consumed:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  (produced:B.bytes)
+  : Lemma
+      (requires
+        CPI.buffers_wf input_contents input_len old_network_out out_len /\
+        Seq.length network_out == Seq.length old_network_out /\
+        result.CPI.process_status == CPI.ConnectionFailed /\
+        SZ.v result.CPI.process_consumed_len == Seq.length consumed /\
+        CPI.network_error_refines_state_machine
+          (server_system initial)
+          (CPI.input_bytes input_contents input_len)
+          st0
+          st1
+          consumed
+          wire_outputs
+          local_outputs /\
+        Seq.equal
+          produced
+          (WF.serialize_all
+            (server_system initial).WFSM.wfsm_wire_format
+            wire_outputs) /\
+        CPI.output_written network_out result.CPI.process_produced_len produced /\
+        Seq.equal received1 (Seq.append received0 consumed) /\
+        Seq.equal sent1 (Seq.append sent0 produced))
+      (ensures
+        CPI.network_process_correct
+          (server_system initial)
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          consumed
+          wire_outputs
+          local_outputs)
+=
+  match result.CPI.process_status with
+  | CPI.ConnectionFailed ->
+    FStar.Classical.exists_intro
+      (fun produced' ->
+        SZ.v result.CPI.process_consumed_len == Seq.length consumed /\
+        CPI.network_error_refines_state_machine
+          (server_system initial)
+          (CPI.input_bytes input_contents input_len)
+          st0
+          st1
+          consumed
+          wire_outputs
+          local_outputs /\
+        Seq.equal
+          produced'
+          (WF.serialize_all
+            (server_system initial).WFSM.wfsm_wire_format
+            wire_outputs) /\
+        CPI.output_written network_out result.CPI.process_produced_len produced' /\
+        Seq.equal received1 (Seq.append received0 consumed) /\
+        Seq.equal sent1 (Seq.append sent0 produced'))
+      produced
+  | _ ->
+    assert False
+
+let lemma_server_network_decode_error_bridge_result
+  (initial:CS.connection_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_network_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (buffer_resp:ST.server_buffer_response)
+  : Lemma
+      (requires
+        server_invariant_pure initial received0 sent0 st0 /\
+        CPI.buffers_wf input_contents input_len old_network_out out_len /\
+        B.length input_contents == SZ.v input_len /\
+        B.length network_out == B.length old_network_out /\
+        B.length app_out == SZ.v base.tls_server_network_app_out_len /\
+        ST.server_network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          input_contents
+          network_out
+          app_out /\
+        ST.server_network_consumed_input_projection
+          st0
+          st1
+          buffer_resp
+          input_contents
+          network_out
+          app_out /\
+        buffer_resp.ST.response.ST.status == ST.DecodeError)
+      (ensures
+        server_network_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp)
+=
+  let resp = buffer_resp.ST.response in
+  let result = CTypes.server_process_result buffer_resp in
+  let consumed = ST.server_network_consumed_prefix buffer_resp input_contents in
+  let wire_outputs = server_response_wire_outputs resp network_out in
+  let local_outputs = server_response_local_outputs resp app_out in
+  let decode_err = T.AlertError T.DecodeError in
+  let conn_ev = CS.ConnLocalEvent (CS.LocalFail decode_err) in
+  assert (resp.ST.status == ST.DecodeError);
+  assert (ST.decode_error_response st0 st1 resp network_out app_out);
+  assert (buffer_resp.ST.consumed_len == 0sz);
+  assert (resp.ST.network_out_len == 0sz);
+  assert (resp.ST.app_out_len == 0sz);
+  assert (result.CPI.process_status == CPI.DecodeError);
+  assert (result.CPI.process_consumed_len == 0sz);
+  assert (result.CPI.process_produced_len == 0sz);
+  assert (consumed == Seq.slice input_contents 0 0);
+  Seq.lemma_len_slice input_contents 0 0;
+  Seq.lemma_eq_intro consumed B.empty;
+  assert (Seq.equal consumed B.empty);
+  assert (Seq.equal consumed Seq.empty);
+  assert (ST.response_network_out resp network_out == Seq.slice network_out 0 0);
+  Seq.lemma_len_slice network_out 0 0;
+  Seq.lemma_eq_intro (ST.response_network_out resp network_out) B.empty;
+  assert (Seq.equal (ST.response_network_out resp network_out) B.empty);
+  Seq.lemma_eq_elim (ST.response_network_out resp network_out) B.empty;
+  CW.lemma_wire_outputs_of_empty ();
+  assert (wire_outputs == []);
+  assert (ST.response_app_out resp app_out == Seq.slice app_out 0 0);
+  Seq.lemma_len_slice app_out 0 0;
+  Seq.lemma_eq_intro (ST.response_app_out resp app_out) B.empty;
+  assert (Seq.equal (ST.response_app_out resp app_out) B.empty);
+  Seq.lemma_eq_elim (ST.response_app_out resp app_out) B.empty;
+  assert (local_outputs == []);
+  assert (ST.legal_response_for_event
+    st0
+    st1
+    resp
+    conn_ev
+    B.empty
+    B.empty
+    network_out
+    app_out);
+  assert (CS.legal_connection_delta st0 {
+    CS.delta_event = conn_ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } st1);
+  lemma_server_local_fail_empty_step st0 st1 decode_err;
+  assert (server_step
+    st0
+    (SM.LocalEvent (CTypes.ServerAPI {
+      CTypes.server_local_kind = ST.LocalFail;
+      CTypes.server_local_payload = B.empty;
+    }))
+    st1
+    (CPI.step_output wire_outputs local_outputs));
+  assert (CPI.network_error_refines_state_machine
+    (server_system initial)
+    (CPI.input_bytes input_contents input_len)
+    st0
+    st1
+    consumed
+    wire_outputs
+    local_outputs);
+  assert (Seq.equal
+    B.empty
+    (WF.serialize_all (server_system initial).WFSM.wfsm_wire_format wire_outputs));
+  CPI.lemma_output_prefix_empty network_out;
+  assert (CPI.output_written network_out result.CPI.process_produced_len B.empty);
+  Seq.lemma_eq_elim received0 st0.CS.cs_wire_log.CL.raw_received;
+  Seq.lemma_eq_elim sent0 st0.CS.cs_wire_log.CL.raw_sent;
+  Seq.append_empty_r received0;
+  Seq.append_empty_r sent0;
+  assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received received0);
+  assert (Seq.equal st1.CS.cs_wire_log.CL.raw_sent sent0);
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    (Seq.append received0 consumed));
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (Seq.append sent0 B.empty));
+  assert (CPI.buffers_wf input_contents input_len old_network_out out_len);
+  assert (Seq.length network_out == Seq.length old_network_out);
+  let produced = B.empty in
+  assert (Seq.equal
+    produced
+    (WF.serialize_all (server_system initial).WFSM.wfsm_wire_format wire_outputs));
+  assert (CPI.output_written network_out result.CPI.process_produced_len produced);
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (Seq.append sent0 produced));
+  assert (Seq.length consumed == 0);
+  assert (SZ.v result.CPI.process_consumed_len == Seq.length consumed);
+  lemma_server_decode_error_network_process_correct
+    initial
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    received0
+    sent0
+    st0
+    result
+    st1.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_sent
+    st1
+    consumed
+    wire_outputs
+    local_outputs
+    produced;
+  ST.lemma_server_network_bytes_preserves_config
+    st0
+    st1
+    buffer_resp
+    input_contents
+    network_out
+    app_out;
+  assert (server_invariant_pure
+    initial
+    st1.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_sent
+    st1);
+  assert (server_network_frame_post_fact
+    base
+    result
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    st0
+    st1
+    consumed
+    wire_outputs
+    local_outputs
+    app_out
+    buffer_resp);
+  lemma_server_network_common_witness_from_parts
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp
+    consumed
+    wire_outputs
+    local_outputs;
+  lemma_server_network_bridge_result_from_common_witness
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp
+    consumed
+    wire_outputs
+    local_outputs
+
+let lemma_server_network_connection_failed_bridge_result
+  (initial:CS.connection_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_network_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (buffer_resp:ST.server_buffer_response)
+  : Lemma
+      (requires
+        server_invariant_pure initial received0 sent0 st0 /\
+        CPI.buffers_wf input_contents input_len old_network_out out_len /\
+        B.length input_contents == SZ.v input_len /\
+        B.length network_out == B.length old_network_out /\
+        B.length app_out == SZ.v base.tls_server_network_app_out_len /\
+        ST.server_network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          input_contents
+          network_out
+          app_out /\
+        ST.server_network_consumed_input_projection
+          st0
+          st1
+          buffer_resp
+          input_contents
+          network_out
+          app_out /\
+        buffer_resp.ST.response.ST.status == ST.ConnectionFailed)
+      (ensures
+        server_network_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp)
+=
+  let resp = buffer_resp.ST.response in
+  let result = CTypes.server_process_result buffer_resp in
+  let consumed = ST.server_network_consumed_prefix buffer_resp input_contents in
+  let wire_outputs = server_response_wire_outputs resp network_out in
+  let local_outputs = server_response_local_outputs resp app_out in
+  assert (resp.ST.status == ST.ConnectionFailed);
+  assert (ST.server_network_connection_failed_consumed_prefix
+    st0 st1 buffer_resp input_contents network_out app_out);
+  let alert =
+    ID.indefinite_description_ghost
+      T.alert_description
+      (fun alert -> exists raw_received.
+        Seq.equal raw_received consumed /\
+        ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (ST.received_message_event (M.TlsAlert alert))
+          raw_received) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        Seq.equal raw_received consumed /\
+        ST.legal_network_response st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (ST.received_message_event (M.TlsAlert alert))
+          raw_received) in
+  assert (Seq.equal raw_received consumed);
+  assert (ST.legal_network_response
+    st0
+    st1
+    resp
+    (M.TlsAlert alert)
+    raw_received
+    network_out
+    app_out);
+  assert (ST.legal_response_for_event
+    st0
+    st1
+    resp
+    (ST.received_message_event (M.TlsAlert alert))
+    B.empty
+    raw_received
+    network_out
+    app_out);
+  assert (CS.legal_connection_delta st0 {
+    CS.delta_event = ST.received_message_event (M.TlsAlert alert);
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } st1);
+  assert (CT.received_tls_raw_delta_legal st0 (M.TlsAlert alert) raw_received);
+  lemma_received_tls_raw_delta_legal_raw_record_parse_success
+    st0
+    (M.TlsAlert alert)
+    raw_received;
+  Seq.lemma_eq_elim raw_received consumed;
+  assert (CT.raw_record_parse_success consumed);
+  lemma_server_consumed_prefix_parse input_contents buffer_resp;
+  let wire =
+    ID.indefinite_description_ghost
+      CW.wire_message
+      (fun wire -> exists residual.
+        CPI.consumed_by_parse
+          CW.tls_record_wire_format
+          input_contents
+          wire
+          consumed
+          residual /\
+        Seq.equal (CW.wire_serialize wire) consumed) in
+  let residual =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun residual ->
+        CPI.consumed_by_parse
+          CW.tls_record_wire_format
+          input_contents
+          wire
+          consumed
+          residual /\
+        Seq.equal (CW.wire_serialize wire) consumed) in
+  assert (CPI.consumed_by_parse
+    CW.tls_record_wire_format
+    input_contents
+    wire
+    consumed
+    residual);
+  assert (Seq.equal (CW.wire_serialize wire) consumed);
+  assert (resp.ST.network_out_len == 0sz);
+  assert (ST.response_network_out resp network_out == Seq.slice network_out 0 0);
+  Seq.lemma_len_slice network_out 0 0;
+  Seq.lemma_eq_intro (ST.response_network_out resp network_out) B.empty;
+  assert (Seq.equal (ST.response_network_out resp network_out) B.empty);
+  Seq.lemma_eq_elim (ST.response_network_out resp network_out) B.empty;
+  CW.lemma_wire_outputs_of_empty ();
+  assert (wire_outputs == []);
+  lemma_server_response_local_outputs_match
+    resp
+    (ST.received_message_event (M.TlsAlert alert))
+    app_out;
+  assert (server_local_outputs_match
+    (ST.received_message_event (M.TlsAlert alert))
+    local_outputs);
+  assert (CS.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    (ST.received_message_event (M.TlsAlert alert))
+    (WF.serialize_all CW.tls_record_wire_format []));
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    (ST.received_message_event (M.TlsAlert alert))
+    raw_received);
+  Seq.lemma_eq_elim raw_received (CW.wire_serialize wire);
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    (ST.received_message_event (M.TlsAlert alert))
+    (CW.wire_serialize wire));
+  assert (CS.legal_connection_delta st0 {
+    CS.delta_event = ST.received_message_event (M.TlsAlert alert);
+    CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
+    CS.delta_raw_received = CW.wire_serialize wire;
+  } st1);
+  assert (server_step
+    st0
+    (SM.WireEvent wire)
+    st1
+    (CPI.step_output wire_outputs local_outputs));
+  lemma_server_wire_network_error_refines_state_machine
+    initial
+    input_contents
+    input_len
+    st0
+    st1
+    consumed
+    wire_outputs
+    local_outputs
+    wire
+    residual;
+  assert (Seq.equal
+    B.empty
+    (WF.serialize_all (server_system initial).WFSM.wfsm_wire_format wire_outputs));
+  CPI.lemma_output_prefix_empty network_out;
+  assert (CPI.output_written network_out result.CPI.process_produced_len B.empty);
+  Seq.lemma_eq_elim received0 st0.CS.cs_wire_log.CL.raw_received;
+  Seq.lemma_eq_elim sent0 st0.CS.cs_wire_log.CL.raw_sent;
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    (Seq.append received0 consumed));
+  Seq.append_empty_r sent0;
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (Seq.append sent0 B.empty));
+  let produced = B.empty in
+  assert (result.CPI.process_status == CPI.ConnectionFailed);
+  assert (SZ.v buffer_resp.ST.consumed_len <= B.length input_contents);
+  assert (consumed ==
+    Seq.slice input_contents 0 (SZ.v buffer_resp.ST.consumed_len));
+  Seq.lemma_len_slice input_contents 0 (SZ.v buffer_resp.ST.consumed_len);
+  assert (Seq.length consumed == SZ.v buffer_resp.ST.consumed_len);
+  assert (SZ.v result.CPI.process_consumed_len == Seq.length consumed);
+  assert (Seq.equal
+    produced
+    (WF.serialize_all (server_system initial).WFSM.wfsm_wire_format wire_outputs));
+  assert (CPI.output_written network_out result.CPI.process_produced_len produced);
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (Seq.append sent0 produced));
+  lemma_server_connection_failed_network_process_correct
+    initial
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    received0
+    sent0
+    st0
+    result
+    st1.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_sent
+    st1
+    consumed
+    wire_outputs
+    local_outputs
+    produced;
+  ST.lemma_server_network_bytes_preserves_config
+    st0
+    st1
+    buffer_resp
+    input_contents
+    network_out
+    app_out;
+  assert (server_invariant_pure
+    initial
+    st1.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_sent
+    st1);
+  assert (server_network_frame_post_fact
+    base
+    result
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    st0
+    st1
+    consumed
+    wire_outputs
+    local_outputs
+    app_out
+    buffer_resp);
+  lemma_server_network_common_witness_from_parts
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp
+    consumed
+    wire_outputs
+    local_outputs;
+  lemma_server_network_bridge_result_from_common_witness
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp
+    consumed
+    wire_outputs
+    local_outputs
 
 let server_network_bridge_obligation
   (base:tls_server_network_frame)
@@ -2880,6 +3944,9 @@ let server_network_bridge_obligation
       app_out /\
     (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
       WS.parse_record_wire input_contents == None)
+    /\
+    (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+      Seq.equal network_out old_network_out)
     ==> server_network_bridge_result
           initial
           received0
@@ -2895,12 +3962,134 @@ let server_network_bridge_obligation
           app_out
           buffer_resp
 
+let lemma_server_network_bridge_obligation
+  (base:tls_server_network_frame)
+  : Lemma
+      (ensures server_network_bridge_obligation base)
+=
+  introduce forall initial received0 sent0 st0 input_contents input_len
+    old_network_out network_out out_len st1 app_out buffer_resp.
+    server_invariant_pure initial received0 sent0 st0 /\
+    CPI.buffers_wf input_contents input_len old_network_out out_len /\
+    B.length input_contents == SZ.v input_len /\
+    B.length network_out == B.length old_network_out /\
+    B.length app_out == SZ.v base.tls_server_network_app_out_len /\
+    ST.server_network_bytes_end_to_end_correct
+      st0
+      st1
+      buffer_resp
+      input_contents
+      network_out
+      app_out /\
+    ST.server_network_consumed_input_projection
+      st0
+      st1
+      buffer_resp
+      input_contents
+      network_out
+      app_out /\
+    (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+      WS.parse_record_wire input_contents == None) /\
+    (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+      Seq.equal network_out old_network_out)
+    ==> server_network_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp
+  with
+    introduce _ ==> _ with _.
+    match buffer_resp.ST.response.ST.status with
+    | ST.StepOk ->
+      lemma_server_network_step_ok_bridge_result
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+    | ST.NeedMoreInput ->
+      lemma_server_network_need_more_input_bridge_result
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+    | ST.DecodeError ->
+      lemma_server_network_decode_error_bridge_result
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+    | ST.IllegalTransition ->
+      lemma_server_network_illegal_transition_bridge_result
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+    | ST.OutputBufferTooSmall ->
+      assert False
+    | ST.ConnectionFailed ->
+      lemma_server_network_connection_failed_bridge_result
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+
 noeq
 type tls_server_network_bridge_frame = {
   tls_server_network_bridge_base: tls_server_network_frame;
-  tls_server_network_bridge_proof:
-    Ghost.erased
-      (server_network_bridge_obligation tls_server_network_bridge_base);
 }
 
 let lemma_server_network_bridge_frame_obligation
@@ -2909,8 +4098,7 @@ let lemma_server_network_bridge_frame_obligation
       (ensures
         server_network_bridge_obligation frame.tls_server_network_bridge_base)
 =
-  let _ = Ghost.reveal frame.tls_server_network_bridge_proof in
-  ()
+  lemma_server_network_bridge_obligation frame.tls_server_network_bridge_base
 
 [@@pulse_unfold]
 let server_network_bridge_frame_pre
@@ -3676,7 +4864,8 @@ ensures server_process_network_post
     network_out_bytes
     app_out_bytes));
   assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-    WS.parse_record_wire (Ghost.reveal input_contents) == None));
+    WS.parse_record_wire (Ghost.reveal input_contents) == None /\
+    Seq.equal network_out_bytes (Ghost.reveal old_out)));
   lemma_server_network_bridge_frame_obligation frame;
   assert (pure (server_network_bridge_obligation
     frame.tls_server_network_bridge_base));
