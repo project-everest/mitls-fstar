@@ -1,170 +1,154 @@
 /*
- * ymodem_rb.c — unverified YMODEM receiver wrapper (an `rb`-style program).
+ * ymodem_rb.c — YMODEM receiver (`rb`-style) whose data-transfer loop is the
+ * VERIFIED, extracted Pulse driver loop `ymodem_client_run`.
  *
- * This is the interoperability wrapper for the *receiver* side.  It speaks the
- * YMODEM protocol over stdin/stdout (as lrzsz's `rb` does over a serial line),
- * and delegates the per-packet work — parsing a 133-byte data packet and
- * extracting its 128-byte payload and block number — to the extracted, verified
- * leaf `ymodem_recv_data_block` from YModem.Impl.Codec.
+ * Unlike the previous wrapper (whose per-packet loop was unverified C), the core
+ * receive loop here — framing each incoming message, validating/decoding it via
+ * the verified codec, driving the state machine, and emitting each ACK — is the
+ * verified F-star/Pulse loop extracted to C in YModem_Verified.c.  This program
+ * is the thin, UNVERIFIED glue around it: the YMODEM header block 0 (file name /
+ * length), the initial 'C' CRC solicitation, writing the reconstructed bytes to
+ * disk, and the end-of-batch null block — all of which live outside the modeled
+ * state machine.
  *
- * `ymodem_recv_data_block` is the executable *leaf* codec of the receiver side:
- * its post-condition proves `inp` parses (via the LowParse `ymodem_parse` over
- * the `ymodem_message` union) to a `Body_soh body` whose block number is the
- * returned value and whose 128-byte payload is exactly the bytes written to
- * `out_data`.  It is verified against the QuackyDucky wire format; only this leaf
- * lowers to C, and this wrapper links against it.  The control frames (EOT/ACK/
- * NAK/CAN/'C') are single literal bytes, written/compared directly here.
- *
- * Like `rb` with no command-line options, it takes no arguments: the file name
- * is taken from the YMODEM header block (block 0), and the file is written to
- * the current directory.
- *
- * This wrapper is UNVERIFIED C.  It orchestrates the verified leaf over the
- * YMODEM handshake; it is written to compile and interoperate with lrzsz.
+ * It speaks YMODEM over stdin (received bytes) / stdout (ACK/NAK/'C'); the
+ * verified loop reads and writes through a Common.TCP channel bridging those two
+ * descriptors.
  */
 
-#include "YModem_Impl_Codec.h"
+#include "YModem_Verified.h"
+#include "common_tcp_karamel.h"
 
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
 
 #define YM_SOH   0x01u
-#define YM_STX   0x02u
 #define YM_EOT   0x04u
 #define YM_ACK   0x06u
 #define YM_NAK   0x15u
 #define YM_CAN   0x18u
-#define YM_CRC_C 0x43u /* 'C': request 16-bit CRC mode */
+#define YM_CRC_C 0x43u
 
-#define YM_PKT_LEN  133 /* SOH | blk | ~blk | data[128] | crc[2] */
+#define YM_PKT_LEN  133
 #define YM_DATA_LEN 128
+#define FUEL        1000000
 
-/* Read exactly len bytes from fd; returns 0 on success, -1 on EOF/error. */
 static int read_full(int fd, uint8_t *buf, size_t len) {
   size_t off = 0;
   while (off < len) {
     ssize_t n = read(fd, buf + off, len - off);
-    if (n < 0) {
-      if (errno == EINTR) continue;
-      return -1;
-    }
+    if (n < 0) { if (errno == EINTR) continue; return -1; }
     if (n == 0) return -1;
     off += (size_t)n;
   }
   return 0;
 }
 
-/* Write a single control byte to fd; returns 0 on success, -1 on error. */
 static int write_byte(int fd, uint8_t b) {
-  while (write(fd, &b, 1) < 0) {
-    if (errno == EINTR) continue;
-    return -1;
-  }
+  while (write(fd, &b, 1) < 0) { if (errno == EINTR) continue; return -1; }
   return 0;
 }
 
-/* Read a single byte from fd; returns the byte (0..255) or -1 on EOF/error. */
 static int read_byte(int fd) {
   uint8_t b;
   if (read_full(fd, &b, 1) != 0) return -1;
   return (int)b;
 }
 
+/* Read one 133-byte SOH packet: the caller has already consumed the SOH lead
+   byte, so read the remaining 132 into packet[1..]. */
+static int read_soh_rest(int fd, uint8_t *packet) {
+  packet[0] = YM_SOH;
+  return read_full(fd, packet + 1, YM_PKT_LEN - 1);
+}
+
 int main(void) {
   uint8_t packet[YM_PKT_LEN];
   uint8_t data[YM_DATA_LEN];
-  char    filename[256];
+  char    filename[YM_DATA_LEN + 1];
   uint32_t file_len = 0;
-  uint32_t received = 0;
   FILE    *out = NULL;
-  int      have_file = 0;
 
-  filename[0] = '\0';
-
+  signal(SIGPIPE, SIG_IGN); /* a late write to a closed peer must not kill us */
   /* Kick off a CRC-mode transfer. */
   if (write_byte(STDOUT_FILENO, YM_CRC_C) != 0) return 1;
 
+  /* ── Header block 0 (impl glue: not part of the state machine) ──────────
+     Wait for the leading SOH, read the 133-byte header, decode it with the
+     verified codec, and pull the NUL-terminated name + ASCII length out of the
+     128-byte payload. */
+  for (;;) {
+    int lead = read_byte(STDIN_FILENO);
+    if (lead < 0) return 1;
+    if (lead == (int)YM_CAN) return 1;
+    if (lead == (int)YM_SOH) break;
+    /* stray byte before the header: re-solicit */
+    write_byte(STDOUT_FILENO, YM_CRC_C);
+  }
+  if (read_soh_rest(STDIN_FILENO, packet) != 0) return 1;
+  (void)ymodem_recv_data_block(packet, data); /* verified codec: extract the 128-byte payload */
+
+  if (data[0] == 0) {
+    /* An immediate empty-name header is an empty batch: acknowledge and stop. */
+    write_byte(STDOUT_FILENO, YM_ACK);
+    return 0;
+  }
+  memcpy(filename, data, YM_DATA_LEN);
+  filename[YM_DATA_LEN] = '\0';
+  size_t name_end = strnlen(filename, sizeof(filename));
+  if (name_end + 1 < YM_DATA_LEN) {
+    file_len = (uint32_t)strtoul((const char *)(data + name_end + 1), NULL, 10);
+  }
+  out = fopen(filename, "wb");
+  if (out == NULL) { write_byte(STDOUT_FILENO, YM_CAN); return 1; }
+  write_byte(STDOUT_FILENO, YM_ACK);
+  write_byte(STDOUT_FILENO, YM_CRC_C);
+
+  /* ── Data transfer: the VERIFIED loop ──────────────────────────────────
+     ymodem_client_run reads data blocks 1..N and the EOT, validates/decodes
+     each with the verified codec, drives the state machine, emits every ACK,
+     and reconstructs the padded file into outbuf. */
+  size_t   ncap  = (size_t)((file_len + YM_DATA_LEN - 1) / YM_DATA_LEN) * YM_DATA_LEN;
+  if (ncap == 0) ncap = YM_DATA_LEN;
+  uint8_t *outbuf = calloc(ncap, 1);
+  uint8_t *ctrl = malloc(1), *soh = malloc(YM_PKT_LEN), *tail = malloc(YM_PKT_LEN - 1),
+          *ack  = malloc(1), *ycnf = malloc(YM_DATA_LEN);
+  if (!outbuf || !ctrl || !soh || !tail || !ack || !ycnf) { fclose(out); return 1; }
+
+  uint8_t *i = new_ymodem_client();
+  ymodem_client_start(i);
+  Common_TCP_channel ch = Common_TCP_channel_of_fds(STDIN_FILENO, STDOUT_FILENO);
+
+  size_t nbytes = ymodem_client_run(i, ch, ctrl, soh, tail, ack, ycnf, outbuf, ncap, (size_t)FUEL);
+
+  /* Persist the reconstructed file, truncated to the declared length (the
+     padding of the final block is not part of the file). */
+  size_t towrite = (nbytes < (size_t)file_len) ? nbytes : (size_t)file_len;
+  if (towrite > 0) fwrite(outbuf, 1, towrite, out);
+  fclose(out);
+
+  /* ── End of batch (impl glue): the verified loop stopped after ACKing the
+     EOT; solicit and acknowledge the terminating null header block. */
+  write_byte(STDOUT_FILENO, YM_CRC_C);
   for (;;) {
     int lead = read_byte(STDIN_FILENO);
     if (lead < 0) break;
-
-    if (lead == (int)YM_EOT) {
-      /* End of file: acknowledge and re-arm for the next file (or the
-         terminating null header block). */
-      write_byte(STDOUT_FILENO, YM_ACK);
-      write_byte(STDOUT_FILENO, YM_CRC_C);
-      if (out != NULL) {
-        fclose(out);
-        out = NULL;
-      }
-      have_file = 0;
-      received = 0;
-      continue;
-    }
-
-    if (lead == (int)YM_CAN) break; /* transfer cancelled */
-
-    if (lead != (int)YM_SOH && lead != (int)YM_STX) {
-      /* Unexpected lead byte: ask for a retransmission. */
-      write_byte(STDOUT_FILENO, YM_NAK);
-      continue;
-    }
-
-    /* Read the rest of the (128-byte) packet.  STX/1024-byte packets are not
-       handled by this wrapper; treat them as an error. */
-    if (lead != (int)YM_SOH) {
-      write_byte(STDOUT_FILENO, YM_NAK);
-      continue;
-    }
-    packet[0] = (uint8_t)lead;
-    if (read_full(STDIN_FILENO, packet + 1, YM_PKT_LEN - 1) != 0) break;
-
-    /* Delegate parsing + payload extraction to the extracted verified codec. */
-    uint8_t blk = ymodem_recv_data_block(packet, data);
-
-    if (blk == 0) {
-      /* Header block: an empty name marks the end of the batch. */
-      if (data[0] == 0) {
-        write_byte(STDOUT_FILENO, YM_ACK);
-        break;
-      }
-      memcpy(filename, data, YM_DATA_LEN);
-      filename[YM_DATA_LEN] = '\0';
-      /* The ASCII file length follows the NUL-terminated name. */
-      size_t name_end = strnlen(filename, sizeof(filename));
-      file_len = 0;
-      if (name_end + 1 < YM_DATA_LEN) {
-        file_len = (uint32_t)strtoul((const char *)(data + name_end + 1), NULL, 10);
-      }
-      received = 0;
-      out = fopen(filename, "wb");
-      if (out == NULL) {
-        write_byte(STDOUT_FILENO, YM_CAN);
-        break;
-      }
-      have_file = 1;
-      write_byte(STDOUT_FILENO, YM_ACK);
-      write_byte(STDOUT_FILENO, YM_CRC_C);
-    } else if (have_file) {
-      /* Data block: write only the real (un-padded) bytes, truncating the
-         padded final block to the declared length. */
-      uint32_t remaining = (file_len > received) ? (file_len - received) : 0;
-      uint32_t n = (remaining < YM_DATA_LEN) ? remaining : YM_DATA_LEN;
-      if (n > 0) {
-        fwrite(data, 1, n, out);
-        received += n;
-      }
-      write_byte(STDOUT_FILENO, YM_ACK);
-    } else {
-      /* Data block before a header: ignore, request retransmission. */
-      write_byte(STDOUT_FILENO, YM_NAK);
+    if (lead == (int)YM_EOT) { write_byte(STDOUT_FILENO, YM_ACK); write_byte(STDOUT_FILENO, YM_CRC_C); continue; }
+    if (lead == (int)YM_CAN) break;
+    if (lead == (int)YM_SOH) {
+      if (read_soh_rest(STDIN_FILENO, packet) != 0) break;
+      (void)ymodem_recv_data_block(packet, data);
+      write_byte(STDOUT_FILENO, YM_ACK); /* the null header block: acknowledge and finish */
+      break;
     }
   }
 
-  if (out != NULL) fclose(out);
+  Common_TCP_close(ch);
+  free(i); free(outbuf); free(ctrl); free(soh); free(tail); free(ack); free(ycnf);
   return 0;
 }

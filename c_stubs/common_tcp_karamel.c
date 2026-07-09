@@ -14,7 +14,8 @@
 #endif
 
 struct Common_TCP_channel_s {
-  int fd;
+  int rfd;
+  int wfd;
 };
 
 struct Common_TCP_listener_s {
@@ -38,12 +39,26 @@ static Common_TCP_channel common_tcp_channel_from_fd(int fd) {
   if (ch == NULL) {
     return NULL;
   }
-  ch->fd = fd;
+  ch->rfd = fd;
+  ch->wfd = fd;
   return ch;
 }
 
 Common_TCP_channel Common_TCP_channel_of_fd(int fd) {
   return common_tcp_channel_from_fd(fd);
+}
+
+/* A channel that reads from one fd and writes to another (e.g. stdin/stdout).
+   The single-fd constructors above set rfd == wfd (a bidirectional socket), so
+   existing callers are unaffected. */
+Common_TCP_channel Common_TCP_channel_of_fds(int rfd, int wfd) {
+  Common_TCP_channel ch = malloc(sizeof *ch);
+  if (ch == NULL) {
+    return NULL;
+  }
+  ch->rfd = rfd;
+  ch->wfd = wfd;
+  return ch;
 }
 
 static Common_TCP_listener common_tcp_listener_from_fd(int fd) {
@@ -150,7 +165,7 @@ size_t Common_TCP_read(
   if (ch == NULL) {
     return 0;
   }
-  ssize_t n = common_tcp_read_fd(ch->fd, out, max_len);
+  ssize_t n = common_tcp_read_fd(ch->rfd, out, max_len);
   if (n <= 0) {
     return 0;
   }
@@ -167,7 +182,7 @@ size_t Common_TCP_read_full(
   }
   size_t off = 0;
   while (off < len) {
-    ssize_t n = common_tcp_read_fd(ch->fd, out + off, len - off);
+    ssize_t n = common_tcp_read_fd(ch->rfd, out + off, len - off);
     if (n <= 0) {
       return off;
     }
@@ -186,7 +201,7 @@ size_t Common_TCP_write(
   }
   size_t off = 0;
   while (off < len) {
-    ssize_t n = common_tcp_write_fd(ch->fd, buf + off, len - off);
+    ssize_t n = common_tcp_write_fd(ch->wfd, buf + off, len - off);
     if (n <= 0) {
       return off;
     }
@@ -199,8 +214,11 @@ void Common_TCP_close(Common_TCP_channel ch, ...) {
   if (ch == NULL) {
     return;
   }
-  if (ch->fd >= 0) {
-    (void)common_tcp_close_fd(ch->fd);
+  if (ch->rfd >= 0) {
+    (void)common_tcp_close_fd(ch->rfd);
+  }
+  if (ch->wfd >= 0 && ch->wfd != ch->rfd) {
+    (void)common_tcp_close_fd(ch->wfd);
   }
   free(ch);
 }

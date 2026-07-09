@@ -161,13 +161,17 @@ CC ?= gcc
 CFLAGS_WRAP = -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra \
   -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR)
 
-wrappers: extract-c
-	@echo "Compiling YMODEM interop wrappers..."
-	$(CC) $(CFLAGS_WRAP) -o $(EXTRACT_DIR)/ymodem_rb \
-	  $(INTEROP_DIR)/ymodem_rb.c $(EXTRACT_DIR)/YModem_Impl_Codec.c
-	$(CC) $(CFLAGS_WRAP) -o $(EXTRACT_DIR)/ymodem_sb \
-	  $(INTEROP_DIR)/ymodem_sb.c $(EXTRACT_DIR)/YModem_Impl_Codec.c
-	@echo "Wrappers compiled to $(EXTRACT_DIR)/ymodem_rb and $(EXTRACT_DIR)/ymodem_sb."
+wrappers: extract-loops
+	@echo "Compiling YMODEM interop drivers over the VERIFIED loops..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/ymodem_rb \
+	  $(INTEROP_DIR)/ymodem_rb.c $(VERIFIED_DIR)/pulse_array_shim.c \
+	  $(EXTRACT_DIR)/YModem_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/ymodem_sb \
+	  $(INTEROP_DIR)/ymodem_sb.c $(VERIFIED_DIR)/pulse_array_shim.c \
+	  $(EXTRACT_DIR)/YModem_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "Interop drivers ymodem_rb / ymodem_sb (verified loops) compiled to $(EXTRACT_DIR)/."
 
 # ── Verified driver loops → C + end-to-end test ────────────────────
 # Extract the VERIFIED YMODEM driver loops (ymodem_client_run / ymodem_server_run
