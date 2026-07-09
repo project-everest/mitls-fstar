@@ -169,6 +169,40 @@ wrappers: extract-c
 	  $(INTEROP_DIR)/ymodem_sb.c $(EXTRACT_DIR)/YModem_Impl_Codec.c
 	@echo "Wrappers compiled to $(EXTRACT_DIR)/ymodem_rb and $(EXTRACT_DIR)/ymodem_sb."
 
+# ── Verified driver loops → C + end-to-end test ────────────────────
+# Extract the VERIFIED YMODEM driver loops (ymodem_client_run / ymodem_server_run
+# in YModem.Impl.{Client,Server}.Loop) — which reuse the verified process_network
+# leaf and the verified send wrappers — to a single self-contained C bundle
+# (_extract/YModem_Verified.c), then link the socketpair test harness that runs a
+# real file transfer through them (verified sender -> verified receiver) and
+# checks the reconstructed bytes.  Unlike the endpoint / drive_steps model (which
+# is a verified but non-extractable orchestration over typeclass dictionaries),
+# these loops lower to first-order Low* C, so they are the *runnable* verified
+# orchestration.  pulse_array_shim.c is the trusted C realization of the Pulse
+# library's verified memcpy_l (as the TCP stub is the trusted realization of the
+# verified read/write interface).
+VERIFIED_DIR = verified
+STUBS_DIR    = ../c_stubs
+CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
+  -include $(STUBS_DIR)/common_tcp_karamel.h -Wall -Wno-unused-function \
+  -Wno-unused-parameter -Wno-implicit-function-declaration \
+  -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+
+extract-loops: verify
+	@echo "Extracting the verified driver loops to C ..."
+	@EVERPARSE_HOME=$(EVERPARSE_HOME) bash extract_loops.sh
+
+vloop-test: extract-loops
+	@echo "Building the verified-loop transfer test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
+	  $(VERIFIED_DIR)/vloop_test.c $(VERIFIED_DIR)/pulse_array_shim.c \
+	  $(EXTRACT_DIR)/YModem_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified server loop  ->  verified client loop  (over a socketpair)"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/vloop_test $(INTEROP_DIR)/dummy.txt
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -184,4 +218,6 @@ help:
 	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
 	@echo "  make extract       - verify + extract-krml + extract-c"
 	@echo "  make wrappers      - Compile the rb/sb interop wrappers"
+	@echo "  make extract-loops - Extract the verified driver loops to C (_extract/YModem_Verified.c)"
+	@echo "  make vloop-test    - Build + run the verified server->client transfer test"
 	@echo "  make clean         - Remove build artifacts"

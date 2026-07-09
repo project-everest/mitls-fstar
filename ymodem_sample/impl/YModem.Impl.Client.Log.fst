@@ -468,7 +468,7 @@ let lemma_client_trace_ok_step
    ─────────────────────────────────────────────────────────────────────────── *)
 
 [@inline_let]
-noextract
+inline_for_extraction
 let ymodem_client_process_result
   (status:CPI.process_status) (consumed produced:SZ.t) : CPI.process_result =
   {
@@ -480,27 +480,27 @@ let ymodem_client_process_result
 
 (* A received SOH data packet: consumed the 133-byte frame, emitted a 1-byte ACK. *)
 [@inline_let]
-noextract
+inline_for_extraction
 let soh_result : CPI.process_result = ymodem_client_process_result CPI.StepOk 133sz 1sz
 
 (* A received EOT: consumed the 1-byte control frame, emitted a 1-byte ACK. *)
 [@inline_let]
-noextract
+inline_for_extraction
 let eot_result : CPI.process_result = ymodem_client_process_result CPI.StepOk 1sz 1sz
 
 (* A received CAN: consumed the 1-byte control frame, emitted nothing. *)
 [@inline_let]
-noextract
+inline_for_extraction
 let can_result : CPI.process_result = ymodem_client_process_result CPI.StepOk 1sz 0sz
 
 (* A refused wire/local event: a sound no-op. *)
 [@inline_let]
-noextract
+inline_for_extraction
 let illegal_result : CPI.process_result = ymodem_client_process_result CPI.IllegalTransition 0sz 0sz
 
 (* The Client_start local step: consumes/produces nothing. *)
 [@inline_let]
-noextract
+inline_for_extraction
 let start_result : CPI.process_result = ymodem_client_process_result CPI.StepOk 0sz 0sz
 
 noextract
