@@ -604,8 +604,8 @@ let client_server_driver_first_epoch_no_key_update_state_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
-  CS.first_epoch_application_traffic_material_no_key_update_invariant client /\
-  CS.first_epoch_application_traffic_material_no_key_update_invariant server
+  CS.connection_state_no_key_update_trace client /\
+  CS.connection_state_no_key_update_trace server
 
 val lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
   (client:CS.connection_state)

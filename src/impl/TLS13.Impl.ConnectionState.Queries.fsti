@@ -576,6 +576,7 @@ fn can_send_certificate_verify_runtime
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\

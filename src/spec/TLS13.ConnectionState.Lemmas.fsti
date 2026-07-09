@@ -418,6 +418,15 @@ val lemma_step_model_preserves_config
       (requires step_model model ev == Some model')
       (ensures model'.model_config == model.model_config)
 
+val lemma_connection_state_no_key_update_trace_first_epoch_application_traffic_material_slots_match_expected
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_raw_event_replay_consistent st /\
+        connection_state_no_key_update_trace st)
+      (ensures
+        first_epoch_application_traffic_material_slots_match_expected st)
+
 val lemma_connection_state_consistent_server_certificate_verify_body_empty
   (st:connection_state)
   : Lemma

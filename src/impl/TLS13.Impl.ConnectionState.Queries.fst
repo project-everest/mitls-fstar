@@ -3132,6 +3132,7 @@ fn can_send_certificate_verify_runtime
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
@@ -3205,6 +3206,9 @@ fn can_send_certificate_verify_runtime
   assert (pure (already_verified == cv_verified));
   assert (pure (already_verified ==>
     st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  let not_verified = not already_verified;
+  assert (pure (not_verified ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified == false));
 
   let has_server_handshake_keys = !c.handshake.keys.server_handshake_traffic.present;
   let seq_ok = Rec.can_advance_seq c.records.write;
@@ -3269,6 +3273,7 @@ fn can_send_certificate_verify_runtime
       tag_ok &&
       stage_ok &&
       has_certificate &&
+      not_verified &&
       has_server_handshake_keys &&
       seq_ok &&
       certificate_verify_seq_slot &&
@@ -3283,6 +3288,8 @@ fn can_send_certificate_verify_runtime
       st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
     assert (pure (ok ==>
       (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None)));
+    assert (pure (ok ==>
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified == false));
     assert (pure (ok ==> Some?
       st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
     assert (pure (ok ==> Some?

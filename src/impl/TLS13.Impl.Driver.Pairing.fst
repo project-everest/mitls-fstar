@@ -674,6 +674,11 @@ let lemma_client_server_driver_supported_profile_application_record_state_inputs
   assert (CS.application_record_keys_installed_for_role
     CS.ClientEndpoint
     client.CS.cs_model);
+  assert (CS.connection_state_raw_event_replay_consistent client);
+  CSL.lemma_connection_state_no_key_update_trace_first_epoch_application_traffic_material_slots_match_expected
+    client;
+  assert (CS.first_epoch_application_traffic_material_no_key_update_invariant
+    client);
   CSL.lemma_no_key_update_application_traffic_material_matches_expected
     CS.ClientEndpoint
     client;
@@ -682,6 +687,11 @@ let lemma_client_server_driver_supported_profile_application_record_state_inputs
   assert (CS.application_record_keys_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
+  assert (CS.connection_state_raw_event_replay_consistent server);
+  CSL.lemma_connection_state_no_key_update_trace_first_epoch_application_traffic_material_slots_match_expected
+    server;
+  assert (CS.first_epoch_application_traffic_material_no_key_update_invariant
+    server);
   CSL.lemma_no_key_update_application_traffic_material_matches_expected
     CS.ServerEndpoint
     server
