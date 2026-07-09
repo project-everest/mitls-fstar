@@ -16,6 +16,8 @@ module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
+module SQueries = TLS13.Impl.Server.CanonicalQueries
+module EP = TLS13.Impl.Server.Endpoint
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
@@ -33,6 +35,64 @@ let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
 let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
 
 let no_channel : option IO.channel = None
+
+noextract
+let server_driver_endpoint_config
+  (_d: server_driver)
+  : SQueries.server_next_local_action_config =
+  ()
+
+noextract
+let server_driver_endpoint_frame
+  (d: server_driver)
+  (network_app_out: array U8.t)
+  (network_app_out_len: SZ.t)
+  (local_payload: array U8.t)
+  (local_payload_len: SZ.t)
+  (local_app_out: array U8.t)
+  (local_app_out_len: SZ.t)
+  (certificate_chain_len: SZ.t)
+  (certificate_chain_len_proof:
+    (certificate_chain:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
+  (certificate_chain_len_bound:
+    Ghost.erased
+      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
+  (material_spec: Ghost.erased (b:B.bytes{B.length b == 64}))
+  (private_key: V.vec U8.t)
+  (material_deferred_ready:
+    (st:Ghost.erased CS.connection_state ->
+    action:SQueries.server_deferred_action ->
+      Ghost.erased
+        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
+         EP.server_endpoint_material_bytes_match_state
+           (Ghost.reveal material_spec)
+           (Ghost.reveal st))))
+  : EP.server_endpoint_frame =
+  {
+    EP.server_ep_query = {
+      SQueries.server_query_network_app_out = network_app_out;
+      SQueries.server_query_network_app_out_len = network_app_out_len;
+      SQueries.server_query_local_payload = local_payload;
+      SQueries.server_query_local_payload_len = local_payload_len;
+      SQueries.server_query_local_app_out = local_app_out;
+      SQueries.server_query_local_app_out_len = local_app_out_len;
+    };
+    EP.server_ep_raw_len = driver_rx_capacity;
+    EP.server_ep_raw = d.server_driver_raw;
+    EP.server_ep_network_out_len = driver_network_out_capacity;
+    EP.server_ep_network_out = d.server_driver_network_out;
+    EP.server_ep_certificate_chain_len = certificate_chain_len;
+    EP.server_ep_certificate_chain_len_proof = certificate_chain_len_proof;
+    EP.server_ep_certificate_chain_len_bound = certificate_chain_len_bound;
+    EP.server_ep_material_len = driver_material_capacity;
+    EP.server_ep_material = d.server_driver_material_payload;
+    EP.server_ep_material_spec = material_spec;
+    EP.server_ep_private_len = 32sz;
+    EP.server_ep_private = private_key;
+    EP.server_ep_material_deferred_ready = material_deferred_ready;
+  }
 
 let lemma_logged_received_bytes_accounted_transport
   (st:CS.connection_state)
@@ -174,6 +234,58 @@ let lemma_server_driver_wire_logs_match_received_no_read_ahead
   Seq.lemma_eq_elim (B.append st.CS.cs_wire_log.CL.raw_received buffered) received;
   assert (B.length buffered == 0);
   assert (B.length received == B.length st.CS.cs_wire_log.CL.raw_received)
+
+noextract
+let server_driver_endpoint_connected
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (canonical_received:B.bytes)
+  (canonical_sent:B.bytes)
+  (transport_received:B.bytes)
+  (transport_sent:B.bytes)
+  : slprop
+  =
+  SP.server_invariant
+    (server_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  exists* ch buffered buffered_len.
+    Box.pts_to d.server_driver_channel (Some ch) **
+    Box.pts_to d.server_driver_buffered_len buffered_len **
+    EP.server_endpoint_frame_ready
+      (server_driver_canonical d)
+      cfg
+      frame
+      st **
+    EP.server_endpoint_io_ready
+      (server_driver_canonical d)
+      ch
+      frame
+      transport_received
+      transport_sent
+      st **
+    pure (ST.server_end_to_end_invariant st /\
+          server_driver_config_matches_credentials
+            st
+            certificate_chain
+            credential_identity /\
+          server_driver_supported_profile_selection st credential_identity /\
+          server_driver_wire_logs_match
+            st
+            transport_received
+            transport_sent
+            buffered
+            buffered_len /\
+          Seq.equal canonical_sent transport_sent)
 
 let lemma_legal_response_network_out_len
   (st0:CS.connection_state)

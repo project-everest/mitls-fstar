@@ -14,6 +14,8 @@ module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
+module SQueries = TLS13.Impl.Server.CanonicalQueries
+module EP = TLS13.Impl.Server.Endpoint
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
@@ -71,6 +73,40 @@ let server_driver_canonical_progress
   : slprop =
   MR.pts_to d.server_driver_progress #1.0R st **
   MR.snapshot d.server_driver_progress (Ghost.reveal d.server_driver_initial)
+
+noextract
+val server_driver_endpoint_config
+  (d: server_driver)
+  : SQueries.server_next_local_action_config
+
+noextract
+val server_driver_endpoint_frame
+  (d: server_driver)
+  (network_app_out: array U8.t)
+  (network_app_out_len: SZ.t)
+  (local_payload: array U8.t)
+  (local_payload_len: SZ.t)
+  (local_app_out: array U8.t)
+  (local_app_out_len: SZ.t)
+  (certificate_chain_len: SZ.t)
+  (certificate_chain_len_proof:
+    (certificate_chain:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
+  (certificate_chain_len_bound:
+    Ghost.erased
+      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
+  (material_spec: Ghost.erased (b:B.bytes{B.length b == 64}))
+  (private_key: V.vec U8.t)
+  (material_deferred_ready:
+    (st:Ghost.erased CS.connection_state ->
+    action:SQueries.server_deferred_action ->
+      Ghost.erased
+        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
+         EP.server_endpoint_material_bytes_match_state
+           (Ghost.reveal material_spec)
+           (Ghost.reveal st))))
+  : EP.server_endpoint_frame
 
 type server_driver_transport_status =
   | ServerDriverTransportOk
@@ -359,6 +395,30 @@ let server_driver_connected
             credential_identity /\
           server_driver_supported_profile_selection st credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
+
+noextract
+(**
+  Endpoint-owned connected server state.
+
+  The endpoint frame owns the resources consumed by [Server.Endpoint], including
+  the canonical progress/current-state resource.  It is separate from the legacy
+  public predicate while the driver workflows are still routed through the direct
+  low-level path.  The server endpoint requires a distinct private-key vec, so
+  callers provide that through [frame] instead of treating the 64-byte material
+  vec as a splittable subview.
+**)
+val server_driver_endpoint_connected
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (canonical_received:B.bytes)
+  (canonical_sent:B.bytes)
+  (transport_received:B.bytes)
+  (transport_sent:B.bytes)
+  : slprop
 
 noextract
 let server_driver_connected_with_app_out

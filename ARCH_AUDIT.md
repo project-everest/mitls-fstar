@@ -33,15 +33,27 @@ The remaining gap is deliberately narrower: the C-facing runtime wrappers call
 modules still retain the older direct `connect`/`accept` workflows and
 `client_driver_live` / `server_driver_live` predicates.
 
+Client-side verified-driver bridge checkpoint: `Client.Driver` now exports
+`client_driver_endpoint_config`, `client_driver_endpoint_frame`, and
+`client_driver_endpoint_connected`.  The endpoint-owned connected predicate owns
+the canonical client invariant, endpoint frame readiness, endpoint IO readiness,
+driver channel cell, buffered-length cell, and the existing wire-log accounting.
+The legacy public `client_driver_connected` predicate is intentionally unchanged
+until the public workflows are routed through endpoint calls.
+
 Server-side verified-driver bridge checkpoint: `Server.Driver.State.server_driver`
 now also carries erased canonical progress/initial/supported-profile fields and
 exports `server_driver_canonical` plus `server_driver_canonical_progress`, so a
 fresh driver can be packaged as the canonical server expected by
-`Server.Endpoint`.  The remaining routing gap is that the public direct
-`accept`/`send`/`receive`/`close` workflows do not yet thread or advance that
-canonical progress resource; the next server stage must replace those direct
-workflow predicates with endpoint-owned predicates before calling
-`server_endpoint_run_workflow` from verified F*.
+`Server.Endpoint`.  It also exposes `server_driver_endpoint_config`,
+`server_driver_endpoint_frame`, and `server_driver_endpoint_connected`.  The
+server endpoint frame deliberately takes a distinct private-key vec because the
+Pulse vec library has no subview ownership that would let the proof split the
+64-byte material payload into a 32-byte private-key alias.  The remaining routing
+gap is that the public direct `accept`/`send`/`receive`/`close` workflows do not
+yet thread or advance that canonical progress resource; the next server stage
+must replace those direct workflow predicates with endpoint-owned predicates
+before calling `server_endpoint_run_workflow` from verified F*.
 
 ## Current client architecture
 

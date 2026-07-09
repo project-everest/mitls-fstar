@@ -31,6 +31,8 @@ module DT = TLS13.Impl.Server.Driver.Transport
 module DN = TLS13.Impl.Server.Driver.Network
 module DL = TLS13.Impl.Server.Driver.Local
 module DH = TLS13.Impl.Server.Driver.Handshake
+module SQueries = TLS13.Impl.Server.CanonicalQueries
+module EP = TLS13.Impl.Server.Endpoint
 module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
@@ -56,6 +58,12 @@ noextract
 let server_driver_canonical_progress = DS.server_driver_canonical_progress
 
 noextract
+let server_driver_endpoint_config = DS.server_driver_endpoint_config
+
+noextract
+let server_driver_endpoint_frame = DS.server_driver_endpoint_frame
+
+noextract
 let server_driver_wire_logs_match = DS.server_driver_wire_logs_match
 
 noextract
@@ -63,6 +71,9 @@ let server_driver_live = DS.server_driver_live
 
 noextract
 let server_driver_connected = DS.server_driver_connected
+
+noextract
+let server_driver_endpoint_connected = DS.server_driver_endpoint_connected
 
 noextract
 let server_driver_closed = DS.server_driver_closed
