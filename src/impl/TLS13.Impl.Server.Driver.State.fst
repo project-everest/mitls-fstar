@@ -59,7 +59,7 @@ let server_driver_endpoint_frame
   (certificate_chain_len_bound:
     Ghost.erased
       (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
-  (material_spec: Ghost.erased (b:B.bytes{B.length b == 64}))
+  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
   (private_key: V.vec U8.t)
   (material_deferred_ready:
     (st:Ghost.erased CS.connection_state ->
@@ -69,7 +69,24 @@ let server_driver_endpoint_frame
          EP.server_endpoint_material_bytes_match_state
            (Ghost.reveal material_spec)
            (Ghost.reveal st))))
-  : EP.server_endpoint_frame =
+  : f:EP.server_endpoint_frame{
+      f.EP.server_ep_query.SQueries.server_query_network_app_out == network_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_network_app_out_len ==
+        SZ.v network_app_out_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_payload == local_payload /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_payload_len ==
+        SZ.v local_payload_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_app_out == local_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_app_out_len ==
+        SZ.v local_app_out_len /\
+      f.EP.server_ep_raw == d.server_driver_raw /\
+      SZ.v f.EP.server_ep_raw_len == SZ.v driver_rx_capacity /\
+      f.EP.server_ep_network_out == d.server_driver_network_out /\
+      SZ.v f.EP.server_ep_network_out_len == SZ.v driver_network_out_capacity /\
+      f.EP.server_ep_material == d.server_driver_material_payload /\
+      SZ.v f.EP.server_ep_material_len == SZ.v driver_material_capacity /\
+      f.EP.server_ep_material_spec == material_spec /\
+      f.EP.server_ep_private == private_key} =
   {
     EP.server_ep_query = {
       SQueries.server_query_network_app_out = network_app_out;

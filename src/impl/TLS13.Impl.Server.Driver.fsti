@@ -63,7 +63,7 @@ val server_driver_endpoint_frame
   (certificate_chain_len_bound:
     Ghost.erased
       (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
-  (material_spec: Ghost.erased (b:B.bytes{B.length b == 64}))
+  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
   (private_key: V.vec U8.t)
   (material_deferred_ready:
     (st:Ghost.erased CS.connection_state ->
@@ -73,7 +73,34 @@ val server_driver_endpoint_frame
          EP.server_endpoint_material_bytes_match_state
            (Ghost.reveal material_spec)
            (Ghost.reveal st))))
-  : EP.server_endpoint_frame
+  : f:EP.server_endpoint_frame{
+      f.EP.server_ep_material_spec == material_spec /\
+      f.EP.server_ep_private == private_key}
+
+noextract
+val server_driver_endpoint_workflow_frame
+  (d: server_driver)
+  (certificate_chain_len: SZ.t)
+  (certificate_chain_len_proof:
+    (certificate_chain:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
+  (certificate_chain_len_bound:
+    Ghost.erased
+      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
+  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
+  (private_key: V.vec U8.t)
+  (material_deferred_ready:
+    (st:Ghost.erased CS.connection_state ->
+    action:SQueries.server_deferred_action ->
+      Ghost.erased
+        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
+         EP.server_endpoint_material_bytes_match_state
+           (Ghost.reveal material_spec)
+           (Ghost.reveal st))))
+  : f:EP.server_endpoint_frame{
+      f.EP.server_ep_material_spec == material_spec /\
+      f.EP.server_ep_private == private_key}
 
 noextract
 val server_driver_wire_logs_match
@@ -90,6 +117,15 @@ val server_driver_live
   (st:CS.connection_state)
   (certificate_chain:B.bytes)
   (credential_identity:CS.server_credential_identity)
+  : slprop
+
+noextract
+val server_driver_endpoint_live
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (material_spec:Ghost.erased EP.server_endpoint_material_spec)
   : slprop
 
 noextract
@@ -450,6 +486,67 @@ fn accept
                  sent **
                pure (st1.CS.cs_model.CS.model_config ==
                  'st0.CS.cs_model.CS.model_config))
+
+noextract
+fn accept_endpoint
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (fuel:SZ.t)
+  (certificate_chain_len:SZ.t)
+  (certificate_chain_len_proof:
+    (certificate_chain:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
+  (certificate_chain_len_bound:
+    Ghost.erased
+      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
+  (material_spec:Ghost.erased EP.server_endpoint_material_spec)
+  (private_key:V.vec U8.t)
+  (material_deferred_ready:
+    (st:Ghost.erased CS.connection_state ->
+    action:SQueries.server_deferred_action ->
+      Ghost.erased
+        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
+         EP.server_endpoint_material_bytes_match_state
+           (Ghost.reveal material_spec)
+           (Ghost.reveal st))))
+  requires server_driver_endpoint_live d 'st0 'certificate_chain 'credential_identity material_spec **
+           pts_to bind_host 'bind_host_bytes **
+           V.pts_to private_key #1.0R 'private_key_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                B.length 'private_key_bytes == 32 /\
+                Seq.equal 'private_key_bytes
+                  (EP.server_endpoint_private_bytes_of_material
+                    (Ghost.reveal material_spec)))
+  returns result:option EP.server_endpoint_run_result
+  ensures pts_to bind_host 'bind_host_bytes **
+          (let cfg = server_driver_endpoint_config d in
+           let frame =
+             server_driver_endpoint_workflow_frame
+               d
+               certificate_chain_len
+               certificate_chain_len_proof
+               certificate_chain_len_bound
+               material_spec
+               private_key
+               material_deferred_ready in
+           match result with
+           | None ->
+             server_driver_endpoint_live d 'st0 'certificate_chain 'credential_identity material_spec **
+             V.pts_to private_key #1.0R 'private_key_bytes
+           | Some _ ->
+             exists* st1 received1 sent1.
+               server_driver_endpoint_connected
+                d
+                cfg
+                frame
+                st1
+                'certificate_chain
+                'credential_identity
+                received1
+                sent1)
 
 fn send
   (d:server_driver)

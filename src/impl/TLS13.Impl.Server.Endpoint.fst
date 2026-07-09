@@ -36,6 +36,9 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 
+noextract
+type server_endpoint_material_spec = b:B.bytes{B.length b == 64}
+
 let server_endpoint_private_bytes_of_material
   (material:B.bytes)
   : GTot B.bytes =
@@ -82,8 +85,8 @@ type server_endpoint_frame = {
        Bounds.max_server_certificate_chain_len);
   server_ep_material_len: SZ.t;
   server_ep_material: V.vec U8.t;
-  server_ep_material_spec: Ghost.erased (b:B.bytes{B.length b == 64});
-  server_ep_private_len: SZ.t;
+  server_ep_material_spec: Ghost.erased server_endpoint_material_spec;
+  server_ep_private_len: l:SZ.t{SZ.v l == 32};
   server_ep_private: V.vec U8.t;
   server_ep_material_deferred_ready:
     st:Ghost.erased CS.connection_state ->

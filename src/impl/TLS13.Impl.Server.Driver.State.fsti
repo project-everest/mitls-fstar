@@ -97,7 +97,7 @@ val server_driver_endpoint_frame
   (certificate_chain_len_bound:
     Ghost.erased
       (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
-  (material_spec: Ghost.erased (b:B.bytes{B.length b == 64}))
+  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
   (private_key: V.vec U8.t)
   (material_deferred_ready:
     (st:Ghost.erased CS.connection_state ->
@@ -107,7 +107,24 @@ val server_driver_endpoint_frame
          EP.server_endpoint_material_bytes_match_state
            (Ghost.reveal material_spec)
            (Ghost.reveal st))))
-  : EP.server_endpoint_frame
+  : f:EP.server_endpoint_frame{
+      f.EP.server_ep_query.SQueries.server_query_network_app_out == network_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_network_app_out_len ==
+        SZ.v network_app_out_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_payload == local_payload /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_payload_len ==
+        SZ.v local_payload_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_app_out == local_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_app_out_len ==
+        SZ.v local_app_out_len /\
+      f.EP.server_ep_raw == d.server_driver_raw /\
+      SZ.v f.EP.server_ep_raw_len == SZ.v driver_rx_capacity /\
+      f.EP.server_ep_network_out == d.server_driver_network_out /\
+      SZ.v f.EP.server_ep_network_out_len == SZ.v driver_network_out_capacity /\
+      f.EP.server_ep_material == d.server_driver_material_payload /\
+      SZ.v f.EP.server_ep_material_len == SZ.v driver_material_capacity /\
+      f.EP.server_ep_material_spec == material_spec /\
+      f.EP.server_ep_private == private_key}
 
 type server_driver_transport_status =
   | ServerDriverTransportOk
@@ -430,13 +447,11 @@ let server_driver_endpoint_connected
     canonical_received
     canonical_sent
     st **
-  O.is_server_credentials
-    d.server_driver_credentials
-    certificate_chain
-    credential_identity **
-  exists* ch buffered_len.
+  exists* ch buffered_len cv_input signature.
     Box.pts_to d.server_driver_channel (Some ch) **
     Box.pts_to d.server_driver_buffered_len buffered_len **
+    V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+    V.pts_to d.server_driver_signature #1.0R signature **
     EP.server_endpoint_frame_ready
       (server_driver_canonical d)
       cfg
@@ -455,7 +470,14 @@ let server_driver_endpoint_connected
             certificate_chain
             credential_identity /\
           server_driver_supported_profile_selection st credential_identity /\
-          SZ.v buffered_len <= SZ.v frame.EP.server_ep_raw_len)
+          SZ.v buffered_len <= SZ.v frame.EP.server_ep_raw_len /\
+          B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
+          B.length signature == SZ.v driver_signature_capacity /\
+          Bounds.max_certificate_verify_input_len <=
+            SZ.v driver_certificate_verify_input_capacity /\
+          IM.max_signature_len <= SZ.v driver_signature_capacity /\
+          V.is_full_vec d.server_driver_certificate_verify_input /\
+          V.is_full_vec d.server_driver_signature)
 
 noextract
 let server_driver_connected_with_app_out
