@@ -22,6 +22,8 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module MR = Pulse.Lib.MonotonicGhostRef
+module SP = TLS13.Impl.Server.CanonicalProtocol
 
 let driver_network_out_capacity : SZ.t = SZ.uint_to_t 20000
 let driver_app_out_capacity : SZ.t = SZ.uint_to_t 16640

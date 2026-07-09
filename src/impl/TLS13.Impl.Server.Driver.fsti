@@ -20,8 +20,20 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module SP = TLS13.Impl.Server.CanonicalProtocol
 
 val server_driver : Type0
+
+noextract
+val server_driver_canonical
+  (d: server_driver)
+  : SP.canonical_server
+
+noextract
+val server_driver_canonical_progress
+  (d: server_driver)
+  (st: CS.connection_state)
+  : slprop
 
 noextract
 val server_driver_wire_logs_match
@@ -277,6 +289,7 @@ fn new_server
   (certificate_chain_len:SZ.t)
   (private_key:array U8.t)
   (private_key_len:SZ.t)
+  (#supported_profile_provider: erased SP.server_supported_profile_provider)
   requires pts_to certificate_chain 'certificate_chain_bytes **
            pts_to private_key 'private_key_bytes **
            pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
@@ -296,6 +309,11 @@ fn new_server
                    credential_identity)
                  (Ghost.reveal 'certificate_chain_bytes)
                  credential_identity **
+               server_driver_canonical_progress
+                 d
+                 (CR.server_initial_state
+                   (Ghost.reveal 'certificate_chain_bytes)
+                   credential_identity) **
                pure (ST.server_state_correct
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)

@@ -305,8 +305,12 @@ let lemma_legal_response_for_event_preserves_server_selection_except_select
     }
     st1);
   assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
-  assert (
-    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+  match ev with
+  | CS.ConnNetworkEvent _ ->
+    assert (st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+  | CS.ConnLocalEvent local ->
+    assert (st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
 
 let lemma_legal_local_response_preserves_server_selection_except_select

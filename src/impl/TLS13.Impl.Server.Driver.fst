@@ -44,8 +44,16 @@ module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
+module MR = Pulse.Lib.MonotonicGhostRef
+module SP = TLS13.Impl.Server.CanonicalProtocol
 
 type server_driver = DS.server_driver
+
+noextract
+let server_driver_canonical = DS.server_driver_canonical
+
+noextract
+let server_driver_canonical_progress = DS.server_driver_canonical_progress
 
 noextract
 let server_driver_wire_logs_match = DS.server_driver_wire_logs_match
@@ -152,6 +160,7 @@ fn new_server
   (certificate_chain_len:SZ.t)
   (private_key:array U8.t)
   (private_key_len:SZ.t)
+  (#supported_profile_provider: erased SP.server_supported_profile_provider)
   requires pts_to certificate_chain 'certificate_chain_bytes **
            pts_to private_key 'private_key_bytes **
            pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
@@ -171,6 +180,11 @@ fn new_server
                    credential_identity)
                  (Ghost.reveal 'certificate_chain_bytes)
                  credential_identity **
+               server_driver_canonical_progress
+                 d
+                 (CR.server_initial_state
+                   (Ghost.reveal 'certificate_chain_bytes)
+                   credential_identity) **
                pure (ST.server_state_correct
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
@@ -236,6 +250,15 @@ fn new_server
           (CR.server_initial_state
             (Ghost.reveal 'certificate_chain_bytes)
             credential_identity));
+      let progress = MR.alloc #_ #SP.server_progress_preorder
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity);
+      MR.take_snapshot
+        progress
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity);
       let channel = Box.alloc no_channel;
       let buffered_len = Box.alloc 0sz;
       let empty_payload = V.alloc 0uy 0sz;
@@ -260,6 +283,18 @@ fn new_server
         server_driver_certificate_verify_input = cv_input;
         server_driver_signature = signature;
         server_driver_app_out = app_out;
+        server_driver_progress = progress;
+        server_driver_initial =
+          Ghost.hide
+            (CR.server_initial_state
+              (Ghost.reveal 'certificate_chain_bytes)
+              credential_identity);
+        server_driver_supported_profile =
+          Ghost.hide
+            ((Ghost.reveal supported_profile_provider)
+              (CR.server_initial_state
+                (Ghost.reveal 'certificate_chain_bytes)
+                credential_identity));
       };
       rewrite (Box.pts_to channel no_channel) as
         (Box.pts_to d.server_driver_channel no_channel);
@@ -316,6 +351,42 @@ fn new_server
           d.server_driver_credentials
           (Ghost.reveal 'certificate_chain_bytes)
           credential_identity);
+      rewrite
+        (MR.pts_to progress #1.0R
+          (CR.server_initial_state
+            (Ghost.reveal 'certificate_chain_bytes)
+            credential_identity))
+        as
+        (MR.pts_to d.server_driver_progress #1.0R
+          (CR.server_initial_state
+            (Ghost.reveal 'certificate_chain_bytes)
+            credential_identity));
+      rewrite
+        (MR.snapshot progress
+          (CR.server_initial_state
+            (Ghost.reveal 'certificate_chain_bytes)
+            credential_identity))
+        as
+        (MR.snapshot d.server_driver_progress
+          (CR.server_initial_state
+            (Ghost.reveal 'certificate_chain_bytes)
+            credential_identity));
+      assert (pure (Ghost.reveal d.server_driver_initial ==
+        CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
+      rewrite
+        (MR.snapshot d.server_driver_progress
+          (CR.server_initial_state
+            (Ghost.reveal 'certificate_chain_bytes)
+            credential_identity))
+        as
+        (MR.snapshot d.server_driver_progress
+          (Ghost.reveal d.server_driver_initial));
+      fold (server_driver_canonical_progress d
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
       fold (server_driver_buffers d B.empty 0sz);
       fold (server_driver_live
         d

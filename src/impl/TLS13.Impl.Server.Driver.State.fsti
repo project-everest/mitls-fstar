@@ -20,6 +20,8 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module MR = Pulse.Lib.MonotonicGhostRef
+module SP = TLS13.Impl.Server.CanonicalProtocol
 
 val driver_network_out_capacity : c:SZ.t { SZ.v c == 20000 }
 val driver_app_out_capacity :
@@ -45,7 +47,30 @@ noeq type server_driver = {
   server_driver_certificate_verify_input: V.vec U8.t;
   server_driver_signature: V.vec U8.t;
   server_driver_app_out: V.vec U8.t;
+  // Ghost/erased fields — zero-cost in C extraction
+  server_driver_progress: MR.mref SP.server_progress_preorder;
+  server_driver_initial: Ghost.erased CS.connection_state;
+  server_driver_supported_profile:
+    Ghost.erased
+      (SP.server_supported_profile_proof (Ghost.reveal server_driver_initial));
 }
+
+noextract
+let server_driver_canonical (d: server_driver) : SP.canonical_server = {
+  SP.canonical_server_state = d.server_driver_server;
+  SP.canonical_server_credentials = d.server_driver_credentials;
+  SP.canonical_server_progress = d.server_driver_progress;
+  SP.canonical_server_initial = d.server_driver_initial;
+  SP.canonical_server_supported_profile = d.server_driver_supported_profile;
+}
+
+noextract
+let server_driver_canonical_progress
+  (d: server_driver)
+  (st: CS.connection_state)
+  : slprop =
+  MR.pts_to d.server_driver_progress #1.0R st **
+  MR.snapshot d.server_driver_progress (Ghost.reveal d.server_driver_initial)
 
 type server_driver_transport_status =
   | ServerDriverTransportOk

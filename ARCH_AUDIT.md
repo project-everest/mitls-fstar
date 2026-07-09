@@ -33,6 +33,16 @@ The remaining gap is deliberately narrower: the C-facing runtime wrappers call
 modules still retain the older direct `connect`/`accept` workflows and
 `client_driver_live` / `server_driver_live` predicates.
 
+Server-side verified-driver bridge checkpoint: `Server.Driver.State.server_driver`
+now also carries erased canonical progress/initial/supported-profile fields and
+exports `server_driver_canonical` plus `server_driver_canonical_progress`, so a
+fresh driver can be packaged as the canonical server expected by
+`Server.Endpoint`.  The remaining routing gap is that the public direct
+`accept`/`send`/`receive`/`close` workflows do not yet thread or advance that
+canonical progress resource; the next server stage must replace those direct
+workflow predicates with endpoint-owned predicates before calling
+`server_endpoint_run_workflow` from verified F*.
+
 ## Current client architecture
 
 ```mermaid
