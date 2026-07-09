@@ -727,66 +727,42 @@ let lemma_soh_output_written (o:TCP.bytes) (body:ymodem_soh_body)
 (* ───────────────────────────────────────────────────────────────────────────
    Message identification from an observed (length, lead-byte)
 
-   The Pulse `process_network` observes the input as exactly one serialized
-   message (`input == ymodem_serialize msg` for some msg — the network frame
-   precondition), plus its byte length and lead byte.  These lemmas turn those
-   observations into the concrete control-message identity, so the caller never
-   needs the erased `msg` witness.
+   The Pulse `process_network` observes the input as one complete framed control
+   message (a single byte) WITHOUT assuming it is well formed.  These lemmas
+   recover the concrete control-message identity directly from the observed
+   length and lead byte, so the caller never needs an erased `msg` witness and an
+   unrecognized control byte is handled soundly.
    ─────────────────────────────────────────────────────────────────────────── *)
 
 let lemma_input_is_serialize_ack (input:TCP.bytes)
   : Lemma
       (requires
-        (exists (msg:ymodem_message). input == ymodem_serialize msg) /\
         Seq.length input == 1 /\ Seq.index input 0 == 6uy)
       (ensures input == ymodem_serialize (Body_ack ()))
 =
-  eliminate exists (msg:ymodem_message). input == ymodem_serialize msg
-  returns input == ymodem_serialize (Body_ack ())
-  with _pf.
-  ( match msg with
-    | Body_soh body -> lemma_soh_serialize_length body
-    | Body_ack _ -> ()
-    | Body_eot _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 4uy 0
-    | Body_nak _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 21uy 0
-    | Body_can _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 24uy 0
-    | Body_crc_c _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 67uy 0 )
+  lemma_serialize_control (Body_ack ());
+  Seq.lemma_index_create 1 6uy 0;
+  Seq.lemma_eq_elim input (Seq.create 1 6uy)
 
 let lemma_input_is_serialize_nak (input:TCP.bytes)
   : Lemma
       (requires
-        (exists (msg:ymodem_message). input == ymodem_serialize msg) /\
         Seq.length input == 1 /\ Seq.index input 0 == 21uy)
       (ensures input == ymodem_serialize (Body_nak ()))
 =
-  eliminate exists (msg:ymodem_message). input == ymodem_serialize msg
-  returns input == ymodem_serialize (Body_nak ())
-  with _pf.
-  ( match msg with
-    | Body_soh body -> lemma_soh_serialize_length body
-    | Body_nak _ -> ()
-    | Body_eot _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 4uy 0
-    | Body_ack _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 6uy 0
-    | Body_can _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 24uy 0
-    | Body_crc_c _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 67uy 0 )
+  lemma_serialize_control (Body_nak ());
+  Seq.lemma_index_create 1 21uy 0;
+  Seq.lemma_eq_elim input (Seq.create 1 21uy)
 
 let lemma_input_is_serialize_can (input:TCP.bytes)
   : Lemma
       (requires
-        (exists (msg:ymodem_message). input == ymodem_serialize msg) /\
         Seq.length input == 1 /\ Seq.index input 0 == 24uy)
       (ensures input == ymodem_serialize (Body_can ()))
 =
-  eliminate exists (msg:ymodem_message). input == ymodem_serialize msg
-  returns input == ymodem_serialize (Body_can ())
-  with _pf.
-  ( match msg with
-    | Body_soh body -> lemma_soh_serialize_length body
-    | Body_can _ -> ()
-    | Body_eot _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 4uy 0
-    | Body_ack _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 6uy 0
-    | Body_nak _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 21uy 0
-    | Body_crc_c _ -> lemma_serialize_control msg; Seq.lemma_index_create 1 67uy 0 )
+  lemma_serialize_control (Body_can ());
+  Seq.lemma_index_create 1 24uy 0;
+  Seq.lemma_eq_elim input (Seq.create 1 24uy)
 
 (* ───────────────────────────────────────────────────────────────────────────
    Advance lemmas: re-establish `server_trace_ok` and expose `ys_step_rel`

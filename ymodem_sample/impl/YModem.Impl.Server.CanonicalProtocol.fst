@@ -125,7 +125,6 @@ let ymodem_server_network_frame_pre
   : slprop =
   (exists* d. pts_to frame.ysnf_buf d ** pure (Seq.length d == 128)) **
   pure (
-    (exists (msg:ymodem_message). input_contents == ymodem_serialize msg) /\
     SZ.v input_len == Seq.length input_contents /\
     SZ.v input_len >= 1 /\
     SZ.v out_len >= 133 /\

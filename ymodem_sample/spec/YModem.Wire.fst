@@ -44,6 +44,23 @@ let lemma_ymodem_parse_serialize_exact (m:ymodem_message)
   Seq.lemma_eq_elim (Seq.slice b (Seq.length b) (Seq.length b)) Seq.empty;
   assert (ymodem_parse (ymodem_serialize m) == Some (m, Seq.empty))
 
+(* Inverse of the round trip: if [input] parses to [m] leaving [rest], then
+   [input] is exactly the serialization of [m] followed by [rest].  This is the
+   LowParse [parsed_data_is_serialize] fact (a serializer is the unique inverse
+   of its strong parser), specialized to the YMODEM union.  It lets a robust
+   receiver recover [input == ymodem_serialize m ++ rest] from a *parse* (e.g.
+   the verified data-block reader), without assuming the input is well formed a
+   priori. *)
+let lemma_ymodem_parse_implies_serialize (input:TCP.bytes) (m:ymodem_message) (rest:TCP.bytes)
+  : Lemma
+      (requires ymodem_parse input == Some (m, rest))
+      (ensures input == Seq.append (ymodem_serialize m) rest)
+=
+  match LP.parse ymodem_message_parser input with
+  | Some (v, consumed) ->
+    LP.parsed_data_is_serialize ymodem_message_serializer input;
+    Seq.lemma_eq_elim input (Seq.append (ymodem_serialize m) rest)
+
 let lemma_ymodem_parse_serialize_prefix (m:ymodem_message) (rest:TCP.bytes)
   : Lemma
       (ensures

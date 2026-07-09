@@ -9,9 +9,11 @@ module YModem.Impl.Client.CanonicalProtocol
   Unlike the prior download-only receiver, the ARQ receiver both CONSUMES a mix
   of wire frames and EMITS wire output:
 
-    * `pi_process_network` dispatches on the single serialized message in its
-      input buffer (the network frame precondition pins the buffer to exactly one
-      `ymodem_serialize msg`):
+    * `pi_process_network` dispatches on the framed message in its input buffer
+      (the network frame precondition bounds the buffer — a complete 1-byte
+      control frame or 133-byte SOH frame — but does NOT assume it is well
+      formed; the message identity is recovered from the verified reader / the
+      observed lead byte, so an unrecognized frame is handled soundly):
         - a 133-byte SOH data block (lead byte 0x01) is a genuine `StepOk`: it
           drives the verified `YModem.Impl.Codec.ymodem_recv_data_block` leaf to
           extract the 128-byte payload, appends it to the abstract `ycs_received`,
@@ -106,8 +108,10 @@ let ymodem_client_snap
   MR.snapshot i.progress (Log.mk_log received sent st)
 
 (* Network frame: a 128-byte scratch buffer that the SOH case fills with the
-   extracted payload, plus the "exactly one serialized message" pin on the input
-   and room for the 1-byte ACK in the output buffer. *)
+   extracted payload.  The frame precondition bounds the input to one complete
+   framed message (a 1-byte control or 133-byte SOH frame) and leaves room for
+   the 1-byte ACK in the output buffer, but does NOT assume the input is well
+   formed. *)
 noeq
 type ymodem_client_network_frame = {
   ycnf_data : array U8.t;   // 128-byte extracted payload scratch
@@ -120,7 +124,6 @@ let ymodem_client_network_frame_pre
   : slprop =
   (exists* d. pts_to frame.ycnf_data d ** pure (Seq.length d == 128)) **
   pure (
-    (exists (msg:ymodem_message). input_contents == ymodem_serialize msg) /\
     SZ.v input_len == Seq.length input_contents /\
     SZ.v input_len >= 1 /\
     SZ.v out_len >= 1)
