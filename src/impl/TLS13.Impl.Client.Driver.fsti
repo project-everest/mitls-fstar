@@ -49,6 +49,11 @@ val client_driver_endpoint_frame
   : EP.client_endpoint_frame
 
 noextract
+val client_driver_endpoint_workflow_frame
+  (d:client_driver)
+  : EP.client_endpoint_frame
+
+noextract
 val client_driver_wire_logs_match
   (st:TLS13.Spec.ConnectionState.connection_state)
   (received:B.bytes)
@@ -77,6 +82,12 @@ val client_driver_connected
   (st:TLS13.Spec.ConnectionState.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
+  : slprop
+
+noextract
+val client_driver_endpoint_live
+  (d:client_driver)
+  (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop
 
 noextract
@@ -422,6 +433,27 @@ fn connect
                      client_driver_received_no_read_ahead st1 received)
            | _ ->
              client_driver_closed d st1)
+
+noextract
+fn connect_endpoint
+  (d:client_driver)
+  (connect_host:array U8.t)
+  (connect_host_len:SZ.t)
+  (port:U16.t)
+  (fuel:SZ.t)
+  requires client_driver_endpoint_live d 'st0 **
+           pts_to connect_host 'connect_host_bytes **
+           pure (B.length 'connect_host_bytes == SZ.v connect_host_len)
+  returns result:option EP.client_endpoint_run_result
+  ensures pts_to connect_host 'connect_host_bytes **
+          (let cfg = client_driver_endpoint_config d in
+           let frame = client_driver_endpoint_workflow_frame d in
+           match result with
+           | None ->
+             client_driver_endpoint_live d 'st0
+           | Some _ ->
+             exists* st1 received1 sent1.
+               client_driver_endpoint_connected d cfg frame st1 received1 sent1)
 
 fn send
   (d:client_driver)
