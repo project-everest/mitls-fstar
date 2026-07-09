@@ -75,7 +75,15 @@ fn handle_alert
                   resp
                   'old_network_out
                   'old_app_out /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    st1
+                    resp
+                    'old_network_out
+                    'old_app_out) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   with m. unfold (L.is_valid_tls_message (L.LTlsAlert alert_wire) m);
   with malert. _;
@@ -154,6 +162,7 @@ fn handle_alert
         resp
         'old_network_out
         'old_app_out));
+      assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
       resp
     } else {
       CF.mark_unexpected_message c;
@@ -186,6 +195,13 @@ fn handle_alert
         resp
         'old_network_out
         'old_app_out));
+      assert (pure (resp.CT.status == CT.IllegalTransition ==>
+        CT.unexpected_message_response
+          'st0
+          (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+          resp
+          'old_network_out
+          'old_app_out));
       resp
     }
   } else {
@@ -237,6 +253,7 @@ fn handle_alert
       resp
       'old_network_out
       'old_app_out));
+    assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
     resp
   }
 }

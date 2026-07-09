@@ -359,7 +359,12 @@ fn process_network_bytes
                   app_out_bytes /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
                  buffer_resp.CT.consumed_len == 0sz /\
-                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None))
+                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
+                (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
+                 buffer_resp.CT.consumed_len == 0sz) /\
+                (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
+                 buffer_resp.CT.consumed_len == 0sz) /\
+                (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False))
 
 fn process_local_event
   (c:client)

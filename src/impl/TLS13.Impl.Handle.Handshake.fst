@@ -69,7 +69,15 @@ fn handle_unexpected_handshake_input
                   resp
                   'old_network_out
                   'old_app_out /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                    resp
+                    'old_network_out
+                    'old_app_out) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   with m. assert (pure True);
   L.free_tls_message l;
@@ -171,7 +179,15 @@ fn handle_handshake_message
                   resp
                   'old_network_out
                   'old_app_out /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    st1
+                    resp
+                    'old_network_out
+                    'old_app_out) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   match l {
     L.LTlsHandshake lhs -> {
@@ -237,6 +253,7 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             handle_unexpected_handshake_input
@@ -343,6 +360,7 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             L.free_server_hello lsh;
@@ -376,6 +394,13 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==>
+              CT.unexpected_message_response
+                'st0
+                (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
             resp
           }
         }
@@ -452,6 +477,7 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             L.free_encrypted_extensions lee;
@@ -485,6 +511,13 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==>
+              CT.unexpected_message_response
+                'st0
+                (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
             resp
           }
         }
@@ -561,6 +594,7 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             L.free_certificate_msg lcert;
@@ -594,6 +628,13 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==>
+              CT.unexpected_message_response
+                'st0
+                (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
             resp
           }
         }
@@ -670,6 +711,7 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             L.free_certificate_verify lcv;
@@ -703,6 +745,13 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==>
+              CT.unexpected_message_response
+                'st0
+                (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
             resp
           }
         }
@@ -776,6 +825,7 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             L.free_finished lfin;
@@ -809,6 +859,13 @@ fn handle_handshake_message
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==>
+              CT.unexpected_message_response
+                'st0
+                (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
             resp
           }
         }

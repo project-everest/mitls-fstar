@@ -2544,10 +2544,13 @@ let network_bytes_step_correct
    response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out) \/
   (SZ.v buffer_resp.consumed_len <= B.length network_input /\
    ((resp.status == DecodeError /\ buffer_resp.consumed_len == 0sz) \/
+    (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz) \/
     raw_record_parse_success
      (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
    (resp.status == DecodeError ==>
     decode_error_response st0 st1 resp network_out app_out) /\
+   (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz ==>
+    unexpected_message_response st0 st1 resp network_out app_out) /\
    some_legal_response st0 st1 resp network_out app_out /\
    some_legal_response_for_network_prefix
     st0
@@ -4672,6 +4675,34 @@ let lemma_decode_error_response_network_out_seal_projection
       st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
     CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
 
+let lemma_unexpected_message_response_network_out_seal_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires unexpected_message_response st0 st1 resp network_out app_out)
+      (ensures response_network_out_seal_projection st0 st1 resp network_out app_out)
+=
+  assert (legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+    B.empty
+    B.empty
+    network_out
+    app_out);
+  assert (CS.sent_event_seal_projection
+    st0.CS.cs_model
+    (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+    B.empty);
+  assert (exists ev' raw_sent' raw_received'.
+    legal_response_for_event
+      st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
+    CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
+
 let lemma_decoded_message_event_response_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4795,10 +4826,13 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
     assert (resp.status == DecodeError ==> False);
     assert (SZ.v buffer_resp.consumed_len <= B.length network_input /\
       ((resp.status == DecodeError /\ buffer_resp.consumed_len == 0sz) \/
+       (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz) \/
        raw_record_parse_success
         (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
       (resp.status == DecodeError ==>
        decode_error_response st0 st1 resp network_out app_out) /\
+      (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz ==>
+       unexpected_message_response st0 st1 resp network_out app_out) /\
       some_legal_response st0 st1 resp network_out app_out /\
       some_legal_response_for_network_prefix
         st0
@@ -4808,6 +4842,17 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
         buffer_resp.consumed_len
         network_out
         app_out);
+    if resp.status == IllegalTransition && buffer_resp.consumed_len = 0sz then (
+      assert (unexpected_message_response st0 st1 resp network_out app_out);
+      lemma_unexpected_message_response_network_out_seal_projection
+        st0
+        st1
+        resp
+        network_out
+        app_out;
+      assert (network_bytes_network_out_seal_projection
+        st0 st1 buffer_resp network_input network_out app_out)
+    ) else (
     assert (raw_record_parse_success
       (network_consumed_prefix network_input buffer_resp.consumed_len));
     if buffer_resp.consumed_len = 0sz then (
@@ -4872,6 +4917,7 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
       app_out;
     assert (network_bytes_network_out_seal_projection
       st0 st1 buffer_resp network_input network_out app_out)
+    )
   )
 #pop-options
 
@@ -5638,6 +5684,20 @@ let lemma_decode_error_response_for_network_input
   (app_out:B.bytes)
   : Lemma
       (requires decode_error_response st0 st1 resp network_out app_out)
+      (ensures some_legal_response_for_network_input
+        st0 st1 resp network_input network_out app_out)
+=
+  ()
+
+let lemma_unexpected_message_response_for_network_input
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires unexpected_message_response st0 st1 resp network_out app_out)
       (ensures some_legal_response_for_network_input
         st0 st1 resp network_input network_out app_out)
 =
