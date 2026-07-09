@@ -1293,7 +1293,9 @@ fn process_network_bytes
                    buffer_resp
                    (Ghost.reveal 'raw_bytes)
                    network_out_bytes
-                   app_out_bytes)
+                  app_out_bytes /\
+                (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                 W.parse_record_wire (Ghost.reveal 'raw_bytes) == None))
 {
   unfold (connection_exactly s 'st0);
   let decoded = P.decode_network_buffer s raw raw_len;
@@ -1318,6 +1320,8 @@ fn process_network_bytes
         'old_app_out));
       assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
         buffer_resp.ST.consumed_len == 0sz));
+      assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+        W.parse_record_wire (Ghost.reveal 'raw_bytes) == None));
       buffer_resp
     }
     IM.NetworkBufferDecodeError -> {

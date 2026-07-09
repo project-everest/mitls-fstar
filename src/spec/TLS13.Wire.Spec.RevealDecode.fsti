@@ -67,6 +67,25 @@ val lemma_parse_record_wire_from_header (raw:B.bytes)
          (U8.v (Seq.index raw 0) = 0x16 ==> ct == T.Handshake) /\
          (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.ApplicationData)))
 
+val lemma_parse_record_wire_none_short (raw:B.bytes)
+  : Lemma
+    (requires B.length raw < 5)
+    (ensures WS.parse_record_wire raw == None)
+
+val lemma_parse_record_wire_none_incomplete (raw:B.bytes)
+  : Lemma
+    (requires
+      B.length raw >= 5 /\
+      (let b0 = U8.v (Seq.index raw 0) in
+       b0 = 0x14 \/ b0 = 0x15 \/ b0 = 0x16 \/ b0 = 0x17) /\
+      U8.v (Seq.index raw 1) = 0x03 /\
+      (let b0 = U8.v (Seq.index raw 0) in
+       U8.v (Seq.index raw 2) = 0x03 \/
+       (b0 = 0x16 /\ U8.v (Seq.index raw 2) = 0x01)) /\
+      (let flen = U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) in
+       flen <= 16640 /\ B.length raw < 5 + flen))
+    (ensures WS.parse_record_wire raw == None)
+
 val lemma_parse_record_wire_prefix
   (input:B.bytes)
   (content_type:T.content_type)

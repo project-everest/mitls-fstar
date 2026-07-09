@@ -16,6 +16,7 @@ module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 
 type client = CR.connection_state
 
@@ -357,7 +358,8 @@ fn process_network_bytes
                   'old_app_out
                   app_out_bytes /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                 buffer_resp.CT.consumed_len == 0sz))
+                 buffer_resp.CT.consumed_len == 0sz /\
+                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None))
 
 fn process_local_event
   (c:client)

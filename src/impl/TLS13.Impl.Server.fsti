@@ -26,6 +26,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U64 = FStar.UInt64
 module U8 = FStar.UInt8
+module W = TLS13.Wire.Spec
 
 type server = CR.connection_state
 
@@ -1985,4 +1986,6 @@ fn process_network_bytes
                    buffer_resp
                    (Ghost.reveal 'raw_bytes)
                    network_out_bytes
-                   app_out_bytes)
+                   app_out_bytes /\
+                (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  W.parse_record_wire (Ghost.reveal 'raw_bytes) == None))

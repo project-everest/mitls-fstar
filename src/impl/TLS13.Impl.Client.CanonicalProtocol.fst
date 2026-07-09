@@ -3366,6 +3366,7 @@ let client_network_bridge_obligation
          network_out out_len st1 app_out buffer_resp.
     client_invariant_pure initial received0 sent0 st0 /\
     CPI.buffers_wf input_contents input_len old_network_out out_len /\
+    B.length input_contents == SZ.v input_len /\
     B.length network_out == B.length old_network_out /\
     B.length app_out == SZ.v base.tls_client_network_app_out_len /\
     CT.network_bytes_end_to_end_correct
@@ -3378,7 +3379,8 @@ let client_network_bridge_obligation
       (Ghost.reveal base.tls_client_network_old_app_out)
       app_out /\
     (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-      buffer_resp.CT.consumed_len == 0sz)
+      buffer_resp.CT.consumed_len == 0sz /\
+      WS.parse_record_wire input_contents == None)
     ==> client_network_bridge_result
           initial
           received0
@@ -3613,7 +3615,8 @@ ensures client_process_network_post
     (Ghost.reveal frame.tls_client_network_bridge_base.tls_client_network_old_app_out)
     app_out_bytes));
   assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-    buffer_resp.CT.consumed_len == 0sz));
+    buffer_resp.CT.consumed_len == 0sz /\
+    WS.parse_record_wire (Ghost.reveal input_contents) == None));
   lemma_client_network_bridge_frame_obligation frame;
   assert (pure (client_network_bridge_obligation
     frame.tls_client_network_bridge_base));

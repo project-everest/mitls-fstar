@@ -47,6 +47,15 @@ let lemma_parse_record_wire_from_header raw =
     assert (Seq.equal (Seq.slice raw 5 (5 + flen)) (Seq.slice raw 5 (5 + flen)))
   )
 
+let lemma_parse_record_wire_none_short raw =
+  ()
+
+let lemma_parse_record_wire_none_incomplete raw =
+  let flen = U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) in
+  assert (WS.read_u16 raw 3 == flen);
+  assert (WS.parse_record raw == None);
+  assert (WS.parse_record_wire raw == None)
+
 let lemma_parse_record_wire_prefix input content_type fragment consumed =
   WS.lemma_parse_record_wire_some_consumed_positive
     input

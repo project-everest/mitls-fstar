@@ -2491,7 +2491,9 @@ let server_network_bridge_obligation
       buffer_resp
       input_contents
       network_out
-      app_out
+      app_out /\
+    (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+      WS.parse_record_wire input_contents == None)
     ==> server_network_bridge_result
           initial
           received0
@@ -3287,6 +3289,8 @@ ensures server_process_network_post
     (Ghost.reveal input_contents)
     network_out_bytes
     app_out_bytes));
+  assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+    WS.parse_record_wire (Ghost.reveal input_contents) == None));
   lemma_server_network_bridge_frame_obligation frame;
   assert (pure (server_network_bridge_obligation
     frame.tls_server_network_bridge_base));

@@ -54,6 +54,14 @@ let wire_parse (bytes:B.bytes) : GTot (WF.parse_result wire_message) =
     } in
     Some (msg, Seq.slice bytes consumed (B.length bytes))
 
+let lemma_wire_parse_none
+  (bytes:B.bytes)
+  : Lemma
+      (requires WS.parse_record_wire bytes == None)
+      (ensures wire_parse bytes == None)
+=
+  ()
+
 let empty_wire_outputs : list wire_message = []
 
 let wire_outputs_of_full_record (raw:B.bytes) : GTot (list wire_message) =

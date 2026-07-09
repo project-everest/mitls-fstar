@@ -6030,7 +6030,8 @@ fn build_decoded_record_ok
   returns r: L.decoded_network_record_result
   ensures
     (match r with
-     | L.NetworkRecordNeedMoreInput -> emp
+     | L.NetworkRecordNeedMoreInput ->
+       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkRecordDecodeError -> emp
      | L.NetworkRecordOk decoded ->
       exists* fragment_bytes2.
@@ -6093,7 +6094,8 @@ fn decode_network_record
   ensures CR.connection_exactly c 'st0 **
           pts_to raw 'raw_bytes **
           (match r with
-           | L.NetworkRecordNeedMoreInput -> emp
+           | L.NetworkRecordNeedMoreInput ->
+             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkRecordDecodeError -> emp
            | L.NetworkRecordOk decoded ->
             exists* fragment_bytes.
@@ -6140,6 +6142,7 @@ fn decode_network_record
 {
   Arr.pts_to_len raw;
   if (SZ.lt raw_len 5sz) {
+    RVD.lemma_parse_record_wire_none_short 'raw_bytes;
     L.NetworkRecordNeedMoreInput
   } else {
     let b0 = raw.(0sz);
@@ -6320,7 +6323,8 @@ fn build_decoded_buffer_ok
   returns r: L.decoded_network_buffer_result
   ensures
     (match r with
-     | L.NetworkBufferNeedMoreInput -> emp
+     | L.NetworkBufferNeedMoreInput ->
+       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkBufferDecodeError -> emp
      | L.NetworkBufferOk decoded ->
       exists* raw_record_bytes2 fragment_bytes2.
@@ -6402,7 +6406,8 @@ fn decode_network_buffer
   ensures CR.connection_exactly c 'st0 **
           pts_to raw 'raw_bytes **
           (match r with
-           | L.NetworkBufferNeedMoreInput -> emp
+           | L.NetworkBufferNeedMoreInput ->
+             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkBufferDecodeError -> emp
            | L.NetworkBufferOk decoded ->
             exists* raw_record_bytes fragment_bytes.
@@ -6466,6 +6471,7 @@ fn decode_network_buffer
   Arr.pts_to_len raw;
   if (SZ.lt raw_len 5sz) {
     (* not even a full record header yet *)
+    RVD.lemma_parse_record_wire_none_short 'raw_bytes;
     L.NetworkBufferNeedMoreInput
   } else {
     let b0 = raw.(0sz);
@@ -6603,6 +6609,7 @@ fn decode_network_buffer
         }
       } else {
         (* header parsed but the full fragment has not arrived yet *)
+        RVD.lemma_parse_record_wire_none_incomplete 'raw_bytes;
         L.NetworkBufferNeedMoreInput
       }
     } else {

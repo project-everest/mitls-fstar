@@ -24,6 +24,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module WS = TLS13.Wire.Spec
 
 fn new_client_default ()
   returns c:client
@@ -577,7 +578,8 @@ fn process_network_bytes
                   'old_app_out
                   app_out_bytes /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                 buffer_resp.CT.consumed_len == 0sz))
+                 buffer_resp.CT.consumed_len == 0sz /\
+                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None))
 {
   let decoded = P.decode_network_buffer c raw raw_len;
   match decoded {
@@ -615,7 +617,8 @@ fn process_network_bytes
         'old_app_out
         'old_app_out;
       assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-        buffer_resp.CT.consumed_len == 0sz));
+        buffer_resp.CT.consumed_len == 0sz /\
+        WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None));
       buffer_resp
     }
     L.NetworkBufferDecodeError -> {
