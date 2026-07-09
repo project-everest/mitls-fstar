@@ -195,6 +195,13 @@ let client_stage_ok (st:CS.connection_state) : prop =
     Some? h.CS.hs_encrypted_extensions /\ Some? h.CS.hs_certificate /\
     Some? h.CS.hs_certificate_verify /\ Some? h.CS.hs_server_finished /\
     Some? h.CS.hs_client_finished
+  // Terminal (post-application) control states, reached by sending/receiving an
+  // alert (close-notify or a fatal alert).  No field lower bound is imposed
+  // here — these stages carry no key-material obligation for the payoff, which
+  // fires only at `ControlApplicationData`.
+  | CS.ControlClosing -> True
+  | CS.ControlClosed -> True
+  | CS.ControlFailed _ -> True
   | _ -> False
 
 (**
@@ -235,6 +242,9 @@ let server_stage_ok (st:CS.connection_state) : prop =
     Some? h.CS.hs_encrypted_extensions /\ Some? h.CS.hs_certificate /\
     Some? h.CS.hs_certificate_verify /\ Some? h.CS.hs_server_finished /\
     Some? h.CS.hs_client_finished
+  | CS.ControlClosing -> True
+  | CS.ControlClosed -> True
+  | CS.ControlFailed _ -> True
   | _ -> False
 
 (**
@@ -260,9 +270,13 @@ let fields_directional_agree (s:tls_system_state) : prop =
   (Some? v.CS.hs_client_finished ==> v.CS.hs_client_finished == c.CS.hs_client_finished)
 
 (**
-  Channel consistency: a message in flight equals the sender's already-populated
-  field, so delivering it makes the peer's field match by construction.  Only
-  semantic handshake messages ever travel on the channel.
+  Channel consistency: a *handshake* message in flight equals the sender's
+  already-populated field, so delivering it makes the peer's field match by
+  construction.  Non-handshake messages (application data, alerts,
+  change-cipher-spec, ignored post-handshake records) carry no handshake-field
+  obligation and are always admissible in flight; a `TlsKeyUpdate` is never in
+  flight (sends exclude it, since the flagship models the no-rekeying
+  discipline).
 **)
 let channel_consistent (s:tls_system_state) : prop =
   match s.channel with
@@ -273,7 +287,9 @@ let channel_consistent (s:tls_system_state) : prop =
        (hsf s.client).CS.hs_client_hello == Some ch
      | M.TlsHandshake (M.Finished cf) ->
        (hsf s.client).CS.hs_client_finished == Some cf
-     | _ -> False)
+     | M.TlsHandshake _ -> False
+     | M.TlsKeyUpdate _ -> False
+     | _ -> True)
   | TlsInFlight CS.ClientEndpoint m ->
     (match m with
      | M.TlsHandshake (M.ServerHello sh) ->
@@ -286,7 +302,9 @@ let channel_consistent (s:tls_system_state) : prop =
        (hsf s.server).CS.hs_certificate_verify == Some cv
      | M.TlsHandshake (M.Finished sf) ->
        (hsf s.server).CS.hs_server_finished == Some sf
-     | _ -> False)
+     | M.TlsHandshake _ -> False
+     | M.TlsKeyUpdate _ -> False
+     | _ -> True)
 
 (** The inductive structural invariant. **)
 let tls_system_inv (s:tls_system_state) : prop =
@@ -334,32 +352,58 @@ let preserves_tracked_fields (st st':CS.connection_state) : prop =
 (** ─────────────────────────────────────────────────────────────────────────
     The six transition shapes.  Each advances exactly one endpoint by exactly
     one real `CS.step_model` event through `ep_apply`.
+
+    Sends and deliveries carry *arbitrary* TLS messages — handshake messages,
+    application data, alerts (close-notify / fatal), change-cipher-spec and
+    ignored post-handshake records — not just handshake messages.  The only
+    excluded message is `TlsKeyUpdate`, because the flagship theorem models the
+    no-rekeying discipline (a key update would falsify `tls_no_rekeying`).
     ───────────────────────────────────────────────────────────────────────── **)
+
+(** Honesty guard on the message an endpoint *emits*: never a key update; a
+    handshake message is emitted at most once (its target field is empty, and a
+    server `Finished` requires its Certificate/CertificateVerify already sent);
+    a non-handshake message leaves all seven tracked handshake fields intact. **)
+let send_msg_ok
+  (role:CS.endpoint_role) (st st':CS.connection_state) (m:M.tls_message)
+  : prop =
+  ~(M.TlsKeyUpdate? m) /\
+  (match m with
+   | M.TlsHandshake hmsg ->
+     sent_field_none role st hmsg /\
+     ((role == CS.ServerEndpoint /\ M.Finished? hmsg) ==>
+        (Some? (hsf st).CS.hs_certificate /\
+         Some? (hsf st).CS.hs_certificate_verify))
+   | _ -> preserves_tracked_fields st st')
+
+(** Honesty guard on a *delivered* message: a non-handshake message leaves the
+    receiver's tracked handshake fields intact (a handshake message legitimately
+    installs its field, matched to the sender's copy by channel consistency). **)
+let deliver_msg_ok (st st':CS.connection_state) (m:M.tls_message) : prop =
+  match m with
+  | M.TlsHandshake _ -> True
+  | _ -> preserves_tracked_fields st st'
 
 let tls_step_client_send (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
-  (exists (hmsg:M.handshake_msg) (c':CS.connection_state).
-     sent_field_none CS.ClientEndpoint a.client hmsg /\
-     ep_apply a.client (CS.sent_tls_event (M.TlsHandshake hmsg)) == Some c' /\
+  (exists (m:M.tls_message) (c':CS.connection_state).
+     send_msg_ok CS.ClientEndpoint a.client c' m /\
+     ep_apply a.client (CS.sent_tls_event m) == Some c' /\
      client_stage_ok c' /\
-     b == { a with client = c';
-                   channel = TlsInFlight CS.ServerEndpoint (M.TlsHandshake hmsg) })
+     b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint m })
 
 let tls_step_server_send (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
-  (exists (hmsg:M.handshake_msg) (s':CS.connection_state).
-     sent_field_none CS.ServerEndpoint a.server hmsg /\
-     (M.Finished? hmsg ==>
-        (Some? (hsf a.server).CS.hs_certificate /\
-         Some? (hsf a.server).CS.hs_certificate_verify)) /\
-     ep_apply a.server (CS.sent_tls_event (M.TlsHandshake hmsg)) == Some s' /\
+  (exists (m:M.tls_message) (s':CS.connection_state).
+     send_msg_ok CS.ServerEndpoint a.server s' m /\
+     ep_apply a.server (CS.sent_tls_event m) == Some s' /\
      server_stage_ok s' /\
-     b == { a with server = s';
-                   channel = TlsInFlight CS.ClientEndpoint (M.TlsHandshake hmsg) })
+     b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint m })
 
 let tls_step_deliver_to_client (a b:tls_system_state) : prop =
   (exists (m:M.tls_message) (c':CS.connection_state).
      a.channel == TlsInFlight CS.ClientEndpoint m /\
+     deliver_msg_ok a.client c' m /\
      ep_apply a.client (CS.received_tls_event m) == Some c' /\
      client_stage_ok c' /\
      b == { a with client = c'; channel = TlsQuiet })
@@ -367,6 +411,7 @@ let tls_step_deliver_to_client (a b:tls_system_state) : prop =
 let tls_step_deliver_to_server (a b:tls_system_state) : prop =
   (exists (m:M.tls_message) (s':CS.connection_state).
      a.channel == TlsInFlight CS.ServerEndpoint m /\
+     deliver_msg_ok a.server s' m /\
      ep_apply a.server (CS.received_tls_event m) == Some s' /\
      server_stage_ok s' /\
      b == { a with server = s'; channel = TlsQuiet })
@@ -418,58 +463,62 @@ let lemma_initial_inv (cfg_c cfg_s:CS.connection_config)
   : Lemma (ensures tls_system_inv (initial_tls_system cfg_c cfg_s))
   = ()
 
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 80"
 let lemma_pres_client_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_client_send a b)
           (ensures tls_system_inv b)
-  = eliminate exists (hmsg:M.handshake_msg) (c':CS.connection_state).
-      sent_field_none CS.ClientEndpoint a.client hmsg /\
-      ep_apply a.client (CS.sent_tls_event (M.TlsHandshake hmsg)) == Some c' /\
+  = eliminate exists (m:M.tls_message) (c':CS.connection_state).
+      send_msg_ok CS.ClientEndpoint a.client c' m /\
+      ep_apply a.client (CS.sent_tls_event m) == Some c' /\
       client_stage_ok c' /\
       b == { a with client = c';
-                    channel = TlsInFlight CS.ServerEndpoint (M.TlsHandshake hmsg) }
+                    channel = TlsInFlight CS.ServerEndpoint m }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.client.CS.cs_event_log
-        (CS.sent_tls_event (M.TlsHandshake hmsg));
-       match hmsg with
-       | M.ClientHello ch -> ()
-       | M.Finished cf -> ()
+      (lemma_no_ku_append a.client.CS.cs_event_log (CS.sent_tls_event m);
+       match m with
+       | M.TlsHandshake hmsg ->
+         (match hmsg with
+          | M.ClientHello ch -> ()
+          | M.Finished cf -> ()
+          | _ -> ())
+       // non-handshake: preserves_tracked_fields keeps directional agreement,
+       // and a non-key-update, non-handshake message in flight is admissible.
        | _ -> ())
 #pop-options
 
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 80"
 let lemma_pres_server_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_server_send a b)
           (ensures tls_system_inv b)
-  = eliminate exists (hmsg:M.handshake_msg) (s':CS.connection_state).
-      sent_field_none CS.ServerEndpoint a.server hmsg /\
-      (M.Finished? hmsg ==>
-         (Some? (hsf a.server).CS.hs_certificate /\
-          Some? (hsf a.server).CS.hs_certificate_verify)) /\
-      ep_apply a.server (CS.sent_tls_event (M.TlsHandshake hmsg)) == Some s' /\
+  = eliminate exists (m:M.tls_message) (s':CS.connection_state).
+      send_msg_ok CS.ServerEndpoint a.server s' m /\
+      ep_apply a.server (CS.sent_tls_event m) == Some s' /\
       server_stage_ok s' /\
       b == { a with server = s';
-                    channel = TlsInFlight CS.ClientEndpoint (M.TlsHandshake hmsg) }
+                    channel = TlsInFlight CS.ClientEndpoint m }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.server.CS.cs_event_log
-        (CS.sent_tls_event (M.TlsHandshake hmsg));
-       match hmsg with
-       | M.ServerHello sh -> ()
-       | M.EncryptedExtensions ee -> ()
-       | M.Certificate cert -> ()
-       | M.CertificateVerify cv -> ()
-       | M.Finished sf -> ()
+      (lemma_no_ku_append a.server.CS.cs_event_log (CS.sent_tls_event m);
+       match m with
+       | M.TlsHandshake hmsg ->
+         (match hmsg with
+          | M.ServerHello sh -> ()
+          | M.EncryptedExtensions ee -> ()
+          | M.Certificate cert -> ()
+          | M.CertificateVerify cv -> ()
+          | M.Finished sf -> ()
+          | _ -> ())
        | _ -> ())
 #pop-options
 
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 80"
 let lemma_pres_deliver_to_client (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_client a b)
           (ensures tls_system_inv b)
   = eliminate exists (m:M.tls_message) (c':CS.connection_state).
       a.channel == TlsInFlight CS.ClientEndpoint m /\
+      deliver_msg_ok a.client c' m /\
       ep_apply a.client (CS.received_tls_event m) == Some c' /\
       client_stage_ok c' /\
       b == { a with client = c'; channel = TlsQuiet }
@@ -485,12 +534,13 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        | _ -> ())
 #pop-options
 
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 80"
 let lemma_pres_deliver_to_server (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_server a b)
           (ensures tls_system_inv b)
   = eliminate exists (m:M.tls_message) (s':CS.connection_state).
       a.channel == TlsInFlight CS.ServerEndpoint m /\
+      deliver_msg_ok a.server s' m /\
       ep_apply a.server (CS.received_tls_event m) == Some s' /\
       server_stage_ok s' /\
       b == { a with server = s'; channel = TlsQuiet }
