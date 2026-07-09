@@ -762,6 +762,69 @@ low-level `Calc.Client` operations plug straight into the framework.
 
 ---
 
+## Temporal Reasoning: An LTL/CTL Layer over Client–Server Interaction
+
+With both endpoints modelled as state machines, we can reason about their
+*interaction over time*. `Common.Temporal`, `Calc.System` and
+`Calc.System.Temporal` add a small, genuine path-based temporal-logic layer and
+prove properties like "the client and server stacks always agree".
+
+### The lag problem
+
+The naive property `AG (client_stack = server_stack)` is **false**: while a
+request or response is in flight the stacks disagree by exactly the in-flight
+work. (The full TLS stack models the same lag in its `Pairing*` family, where
+what one endpoint *sent* is a prefix-extension of what the other *received*.)
+The fix is to only compare stacks when the system is **quiescent** (nothing in
+flight).
+
+### Combined system (`Calc.System.fst`)
+
+```fstar
+type channel_state = Quiet | InReq calc_frame | InResp calc_frame
+type system_state  = { client: client_state_abs; server: calc_log; channel }
+```
+
+Three transitions (`sys_step`): **issue** (client sends a request → `InReq`),
+**serve** (server processes it → `InResp`), **recv** (client receives the
+response → `Quiet`). A structural invariant `system_inv` pins down the lag:
+
+- `Quiet` / `InReq`: `server == client.completed` (stacks agree);
+- `InResp`: the server is exactly one processed request ahead.
+
+`system_inv` is proved **inductive** (`lemma_inv_preserved`) and therefore holds
+on every reachable state (`lemma_reachable_inv`, via `stable_on_closure`). It is
+phrased over the logs directly (`==`), reusing the fact that the `recv` step's
+`recv_completed` is the *same computation* as the server's `server_process`
+(`lemma_recv_completed_eq`) — so no `calc_log` record-equality proofs are needed.
+
+### Generic temporal operators (`Common.Temporal.fst`)
+
+Parameterised over an abstract state and step relation, so it is protocol-
+independent and lives in `common/` alongside `Common.StateMachine` (reusable by
+the full TLS stack, not just the calculator demo):
+
+- paths (`path = nat -> state`), runs (`is_run`), suffixes (`shift`);
+- LTL operators `holds_G` / `holds_F` / `holds_X` / `holds_U`;
+- path quantifiers `ag` (`A G`), `ef`, `af`;
+- the **soundness bridge** `lemma_ag_of_invariant`: an inductive invariant true
+  on all reachable states entails the genuine path-based `AG`. This lets a cheap
+  invariant proof discharge a real temporal property.
+
+### Theorems (`Calc.System.Temporal.fst`)
+
+1. **Flagship safety** — `lemma_flagship_quiescent_agreement`:
+   `AG (quiescent ⟹ client_stack = server_stack)`.
+2. **A next-step (`X`) property** — `lemma_x_next_is_request`: from an idle,
+   quiescent state the *next* state always has a request in flight.
+3. **Liveness under fairness** — `lemma_liveness_response_delivered`:
+   `AG (in flight ⟹ F quiescent)` — every outstanding request is eventually
+   completed. Fairness (no message stays in flight forever) is modelled as an
+   eventual strict decrease of a channel rank (Quiet=0, InResp=1, InReq=2); the
+   proof chases to quiescence by well-founded recursion on that rank.
+
+---
+
 ## Module Reference
 
 ### Specification Modules (710 lines)
@@ -809,6 +872,22 @@ low-level `Calc.Client` operations plug straight into the framework.
 - `calc_client_state_machine` - `Common.StateMachine.state_machine` instance
 - `calc_client_wire_format_state_machine` (reuses `calc_frame_wire_format`)
 - `lemma_client_single_step_evolves` - bridge to `SM.state_evolves`
+
+**Common.Temporal.fst** (in `common/`, protocol-independent)
+- Generic path-based temporal logic over `(state, step)`
+- `path` / `is_run` / `shift`; operators `holds_G` / `holds_F` / `holds_X` / `holds_U`
+- Path quantifiers `ag` (`A G`) / `ef` / `af`
+- `lemma_ag_of_invariant` / `lemma_ag_of_inductive` - reachable-invariant ⇒ `AG`
+
+**Calc.System.fst**
+- `channel_state` (`Quiet` / `InReq` / `InResp`), `system_state`
+- `sys_step` (issue / serve / recv) + `sys_step_stutter`, `initial_system`
+- `system_inv` structural invariant; `lemma_inv_preserved`, `lemma_reachable_inv`
+
+**Calc.System.Temporal.fst**
+- `lemma_flagship_quiescent_agreement` - `AG (quiescent ⇒ stacks agree)`
+- `lemma_x_next_is_request` - `X` next-step property
+- `fair` + `lemma_liveness_response_delivered` - `AG (in flight ⇒ F quiescent)`
 
 ### Implementation Modules (1092 lines)
 
