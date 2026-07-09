@@ -14,9 +14,10 @@ module TLS13.System
       (no raw-byte bookkeeping is needed: record-material agreement follows from
       semantic handshake-message pairing plus the per-endpoint `application_ready`
       invariant — see the payoff bridge at the bottom of this module);
-    - each transition advances exactly one endpoint by exactly one real
-      `CS.step_model` event, so the system is a faithful model of the real TLS
-      transition function rather than a puppet;
+    - each transition advances exactly one endpoint by exactly one step of the
+      *official* canonical TLS transition relation (`client_step` / `server_step`
+      from `TLS13.Impl.{Client,Server}.CanonicalProtocol`), so the system is a
+      faithful model of the real TLS transition function rather than a puppet;
     - the structural invariant `tls_system_inv` (proved inductive) maintains the
       cross-endpoint agreement of every populated handshake message field and the
       "no rekeying" discipline, which at a completed + quiescent state yields the
@@ -33,6 +34,11 @@ module CD  = TLS13.Impl.Client.Driver
 module SD  = TLS13.Impl.Server.Driver
 module P   = TLS13.Impl.Driver.Pairing
 module CSL = TLS13.ConnectionState.Lemmas
+module SM  = Common.StateMachine
+module CW  = TLS13.Impl.CanonicalWire
+module CTy = TLS13.Impl.CanonicalTypes
+module CCP = TLS13.Impl.Client.CanonicalProtocol
+module SCP = TLS13.Impl.Server.CanonicalProtocol
 
 open FStar.List.Tot
 
@@ -80,17 +86,113 @@ let initial_tls_system (cfg_c cfg_s:CS.connection_config) : tls_system_state = {
     Applying a single real TLS event to one endpoint.
     ───────────────────────────────────────────────────────────────────────── **)
 
-(** Advance one endpoint by one real `CS.step_model` event, recording it in the
-    endpoint's event log (so the "no key update" trace stays meaningful). The
-    raw wire log is irrelevant to record-material agreement and is left as-is. **)
-let ep_apply (st:CS.connection_state) (ev:CS.conn_event)
-  : GTot (option CS.connection_state) =
-  match CS.step_model st.CS.cs_model ev with
-  | Some m' ->
-    Some ({ st with
-            CS.cs_model     = m';
-            CS.cs_event_log = st.CS.cs_event_log @ [ev] })
-  | None -> None
+(** ─────────────────────────────────────────────────────────────────────────
+    Advancing one endpoint through the *official* TLS transition relation.
+
+    The canonical low-level transition relations for the two roles are
+    `TLS13.Impl.Client.CanonicalProtocol.client_step` and
+    `TLS13.Impl.Server.CanonicalProtocol.server_step` — the very relations the
+    real state machines and drivers are shown to implement.  We advance each
+    endpoint through *these* relations rather than calling `CS.step_model`
+    directly, so the system is a faithful model of the real TLS transition
+    function.
+
+    An official step relates `st` to `st'` via a state-machine event (a received
+    wire message, or a local API event such as "send ServerHello" / "send
+    application data").  By `CS.legal_connection_delta` such a step appends
+    exactly one `CS.conn_event` to the endpoint's event log and advances its
+    model by exactly that event through `CS.step_model`.  We therefore *pin* the
+    appended event to the message we are moving, which lets the preservation
+    proofs recover the `CS.step_model` effect (see `lemma_*_official_step_model`
+    below).  The raw wire log is irrelevant to record-material agreement and is
+    left unconstrained.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** The client endpoint takes one official `client_step` whose single appended
+    event is `ev`. **)
+let official_client_step (st st':CS.connection_state) (ev:CS.conn_event) : prop =
+  (exists (e:SM.event CW.wire_message CTy.client_local_event)
+          (out:SM.step_output CW.wire_message CTy.local_output).
+     CCP.client_step st e st' out) /\
+  st'.CS.cs_event_log == st.CS.cs_event_log @ [ev]
+
+(** The server endpoint takes one official `server_step` whose single appended
+    event is `ev`. **)
+let official_server_step (st st':CS.connection_state) (ev:CS.conn_event) : prop =
+  (exists (e:SM.event CW.wire_message CTy.server_local_event)
+          (out:SM.step_output CW.wire_message CTy.local_output).
+     SCP.server_step st e st' out) /\
+  st'.CS.cs_event_log == st.CS.cs_event_log @ [ev]
+
+(** Appending to a fixed prefix is injective in the appended element. **)
+let rec lemma_snoc_inj (#a:Type) (l:list a) (x y:a)
+  : Lemma (requires l @ [x] == l @ [y]) (ensures x == y) (decreases l)
+  = match l with
+    | [] -> ()
+    | _ :: t -> lemma_snoc_inj t x y
+
+(** A legal delta whose appended event is pinned to `ev` advances the model by
+    exactly `ev`. **)
+let lemma_legal_delta_step
+  (st st':CS.connection_state) (delta:CS.connection_delta) (ev:CS.conn_event)
+  : Lemma
+      (requires
+        CS.legal_connection_delta st delta st' /\
+        st'.CS.cs_event_log == st.CS.cs_event_log @ [ev])
+      (ensures CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model)
+  = lemma_snoc_inj st.CS.cs_event_log ev delta.CS.delta_event
+
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
+(** An official client step advances the model by its pinned event. **)
+let lemma_client_official_step_model
+  (st st':CS.connection_state) (ev:CS.conn_event)
+  : Lemma (requires official_client_step st st' ev)
+          (ensures
+            CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model /\
+            st'.CS.cs_event_log == st.CS.cs_event_log @ [ev])
+  = eliminate exists (e:SM.event CW.wire_message CTy.client_local_event)
+                     (out:SM.step_output CW.wire_message CTy.local_output).
+        CCP.client_step st e st' out
+    returns CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model
+    with _pf.
+      (let finish ()
+         : Lemma
+             (requires (exists (d:CS.connection_delta). CS.legal_connection_delta st d st'))
+             (ensures CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model)
+         = eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st d st'
+           returns CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model
+           with _pf2. lemma_legal_delta_step st st' d ev
+       in
+       match e with
+       | SM.WireEvent wire -> finish ()
+       | SM.LocalEvent local -> finish ())
+#pop-options
+
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
+(** An official server step advances the model by its pinned event. **)
+let lemma_server_official_step_model
+  (st st':CS.connection_state) (ev:CS.conn_event)
+  : Lemma (requires official_server_step st st' ev)
+          (ensures
+            CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model /\
+            st'.CS.cs_event_log == st.CS.cs_event_log @ [ev])
+  = eliminate exists (e:SM.event CW.wire_message CTy.server_local_event)
+                     (out:SM.step_output CW.wire_message CTy.local_output).
+        SCP.server_step st e st' out
+    returns CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model
+    with _pf.
+      (let finish ()
+         : Lemma
+             (requires (exists (d:CS.connection_delta). CS.legal_connection_delta st d st'))
+             (ensures CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model)
+         = eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st d st'
+           returns CS.step_model st.CS.cs_model ev == Some st'.CS.cs_model
+           with _pf2. lemma_legal_delta_step st st' d ev
+       in
+       match e with
+       | SM.WireEvent wire -> finish ()
+       | SM.LocalEvent local -> finish ())
+#pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
     Payoff bridge (reuses the existing verified pairing lemma chain).
@@ -136,9 +238,10 @@ let lemma_agrees_from_ready_paired client server =
     This scales the `Calc.System` phase-indexed invariant up to real TLS.  The
     proof is *genuinely inductive*: there are no hardcoded packet/event counts,
     no trace splitting, and no fixed-length event lists.  Every endpoint advance
-    goes through the real `CS.step_model` transition (via `ep_apply`); the
-    channel carries exactly one semantic message and re-establishes cross-endpoint
-    pairing *by construction* on delivery.
+    goes through the real canonical `client_step` / `server_step` transition (via
+    `official_client_step` / `official_server_step`); the channel carries exactly
+    one semantic message and re-establishes cross-endpoint pairing *by
+    construction* on delivery.
     ───────────────────────────────────────────────────────────────────────── **)
 
 (** Handy projections. **)
@@ -351,7 +454,9 @@ let preserves_tracked_fields (st st':CS.connection_state) : prop =
 
 (** ─────────────────────────────────────────────────────────────────────────
     The six transition shapes.  Each advances exactly one endpoint by exactly
-    one real `CS.step_model` event through `ep_apply`.
+    one step of the official canonical TLS transition relation
+    (`official_client_step` / `official_server_step`, wrapping `client_step` /
+    `server_step`).
 
     Sends and deliveries carry *arbitrary* TLS messages — handshake messages,
     application data, alerts (close-notify / fatal), change-cipher-spec and
@@ -388,7 +493,7 @@ let tls_step_client_send (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
   (exists (m:M.tls_message) (c':CS.connection_state).
      send_msg_ok CS.ClientEndpoint a.client c' m /\
-     ep_apply a.client (CS.sent_tls_event m) == Some c' /\
+     official_client_step a.client c' (CS.sent_tls_event m) /\
      client_stage_ok c' /\
      b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint m })
 
@@ -396,7 +501,7 @@ let tls_step_server_send (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
   (exists (m:M.tls_message) (s':CS.connection_state).
      send_msg_ok CS.ServerEndpoint a.server s' m /\
-     ep_apply a.server (CS.sent_tls_event m) == Some s' /\
+     official_server_step a.server s' (CS.sent_tls_event m) /\
      server_stage_ok s' /\
      b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint m })
 
@@ -404,7 +509,7 @@ let tls_step_deliver_to_client (a b:tls_system_state) : prop =
   (exists (m:M.tls_message) (c':CS.connection_state).
      a.channel == TlsInFlight CS.ClientEndpoint m /\
      deliver_msg_ok a.client c' m /\
-     ep_apply a.client (CS.received_tls_event m) == Some c' /\
+     official_client_step a.client c' (CS.received_tls_event m) /\
      client_stage_ok c' /\
      b == { a with client = c'; channel = TlsQuiet })
 
@@ -412,14 +517,14 @@ let tls_step_deliver_to_server (a b:tls_system_state) : prop =
   (exists (m:M.tls_message) (s':CS.connection_state).
      a.channel == TlsInFlight CS.ServerEndpoint m /\
      deliver_msg_ok a.server s' m /\
-     ep_apply a.server (CS.received_tls_event m) == Some s' /\
+     official_server_step a.server s' (CS.received_tls_event m) /\
      server_stage_ok s' /\
      b == { a with server = s'; channel = TlsQuiet })
 
 let tls_step_client_local (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
   (exists (lev:CS.local_event) (c':CS.connection_state).
-     ep_apply a.client (CS.ConnLocalEvent lev) == Some c' /\
+     official_client_step a.client c' (CS.ConnLocalEvent lev) /\
      preserves_tracked_fields a.client c' /\
      client_stage_ok c' /\
      b == { a with client = c' })
@@ -427,7 +532,7 @@ let tls_step_client_local (a b:tls_system_state) : prop =
 let tls_step_server_local (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
   (exists (lev:CS.local_event) (s':CS.connection_state).
-     ep_apply a.server (CS.ConnLocalEvent lev) == Some s' /\
+     official_server_step a.server s' (CS.ConnLocalEvent lev) /\
      preserves_tracked_fields a.server s' /\
      server_stage_ok s' /\
      b == { a with server = s' })
@@ -469,13 +574,14 @@ let lemma_pres_client_send (a b:tls_system_state)
           (ensures tls_system_inv b)
   = eliminate exists (m:M.tls_message) (c':CS.connection_state).
       send_msg_ok CS.ClientEndpoint a.client c' m /\
-      ep_apply a.client (CS.sent_tls_event m) == Some c' /\
+      official_client_step a.client c' (CS.sent_tls_event m) /\
       client_stage_ok c' /\
       b == { a with client = c';
                     channel = TlsInFlight CS.ServerEndpoint m }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.client.CS.cs_event_log (CS.sent_tls_event m);
+      (lemma_client_official_step_model a.client c' (CS.sent_tls_event m);
+       lemma_no_ku_append a.client.CS.cs_event_log (CS.sent_tls_event m);
        match m with
        | M.TlsHandshake hmsg ->
          (match hmsg with
@@ -493,13 +599,14 @@ let lemma_pres_server_send (a b:tls_system_state)
           (ensures tls_system_inv b)
   = eliminate exists (m:M.tls_message) (s':CS.connection_state).
       send_msg_ok CS.ServerEndpoint a.server s' m /\
-      ep_apply a.server (CS.sent_tls_event m) == Some s' /\
+      official_server_step a.server s' (CS.sent_tls_event m) /\
       server_stage_ok s' /\
       b == { a with server = s';
                     channel = TlsInFlight CS.ClientEndpoint m }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.server.CS.cs_event_log (CS.sent_tls_event m);
+      (lemma_server_official_step_model a.server s' (CS.sent_tls_event m);
+       lemma_no_ku_append a.server.CS.cs_event_log (CS.sent_tls_event m);
        match m with
        | M.TlsHandshake hmsg ->
          (match hmsg with
@@ -519,12 +626,13 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
   = eliminate exists (m:M.tls_message) (c':CS.connection_state).
       a.channel == TlsInFlight CS.ClientEndpoint m /\
       deliver_msg_ok a.client c' m /\
-      ep_apply a.client (CS.received_tls_event m) == Some c' /\
+      official_client_step a.client c' (CS.received_tls_event m) /\
       client_stage_ok c' /\
       b == { a with client = c'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.client.CS.cs_event_log (CS.received_tls_event m);
+      (lemma_client_official_step_model a.client c' (CS.received_tls_event m);
+       lemma_no_ku_append a.client.CS.cs_event_log (CS.received_tls_event m);
        match m with
        | M.TlsHandshake (M.ServerHello sh) -> ()
        | M.TlsHandshake (M.EncryptedExtensions ee) -> ()
@@ -541,12 +649,13 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
   = eliminate exists (m:M.tls_message) (s':CS.connection_state).
       a.channel == TlsInFlight CS.ServerEndpoint m /\
       deliver_msg_ok a.server s' m /\
-      ep_apply a.server (CS.received_tls_event m) == Some s' /\
+      official_server_step a.server s' (CS.received_tls_event m) /\
       server_stage_ok s' /\
       b == { a with server = s'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.server.CS.cs_event_log (CS.received_tls_event m);
+      (lemma_server_official_step_model a.server s' (CS.received_tls_event m);
+       lemma_no_ku_append a.server.CS.cs_event_log (CS.received_tls_event m);
        match m with
        | M.TlsHandshake (M.ClientHello ch) -> ()
        | M.TlsHandshake (M.Finished cf) -> ()
@@ -558,13 +667,14 @@ let lemma_pres_client_local (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_client_local a b)
           (ensures tls_system_inv b)
   = eliminate exists (lev:CS.local_event) (c':CS.connection_state).
-      ep_apply a.client (CS.ConnLocalEvent lev) == Some c' /\
+      official_client_step a.client c' (CS.ConnLocalEvent lev) /\
       preserves_tracked_fields a.client c' /\
       client_stage_ok c' /\
       b == { a with client = c' }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.client.CS.cs_event_log (CS.ConnLocalEvent lev))
+      (lemma_client_official_step_model a.client c' (CS.ConnLocalEvent lev);
+       lemma_no_ku_append a.client.CS.cs_event_log (CS.ConnLocalEvent lev))
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
@@ -572,13 +682,14 @@ let lemma_pres_server_local (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_server_local a b)
           (ensures tls_system_inv b)
   = eliminate exists (lev:CS.local_event) (s':CS.connection_state).
-      ep_apply a.server (CS.ConnLocalEvent lev) == Some s' /\
+      official_server_step a.server s' (CS.ConnLocalEvent lev) /\
       preserves_tracked_fields a.server s' /\
       server_stage_ok s' /\
       b == { a with server = s' }
     returns tls_system_inv b
     with _pf.
-      (lemma_no_ku_append a.server.CS.cs_event_log (CS.ConnLocalEvent lev))
+      (lemma_server_official_step_model a.server s' (CS.ConnLocalEvent lev);
+       lemma_no_ku_append a.server.CS.cs_event_log (CS.ConnLocalEvent lev))
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
