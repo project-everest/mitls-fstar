@@ -156,27 +156,6 @@ let server_canonical_step_rel
 let server_progress_preorder =
   RTC.closure server_canonical_step_rel
 
-type server_valid_trace_proof
-  (initial:CS.connection_state)
-  =
-  received:B.bytes ->
-  sent:B.bytes ->
-  st:CS.connection_state ->
-    Lemma
-      (requires
-        ST.server_end_to_end_invariant st /\
-        st.CS.cs_model.CS.model_config ==
-          initial.CS.cs_model.CS.model_config /\
-        Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
-        Seq.equal sent st.CS.cs_wire_log.CL.raw_sent)
-      (ensures
-        WFSM.valid_byte_trace
-          (server_system initial)
-          received
-          st
-          sent
-          Seq.empty)
-
 let server_invariant_pure
   (initial:CS.connection_state)
   (received:B.bytes)
@@ -186,7 +165,9 @@ let server_invariant_pure
   ST.server_end_to_end_invariant st /\
   st.CS.cs_model.CS.model_config == initial.CS.cs_model.CS.model_config /\
   Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
-  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent /\
+  Seq.equal initial.CS.cs_wire_log.CL.raw_received B.empty /\
+  Seq.equal initial.CS.cs_wire_log.CL.raw_sent B.empty
 
 let server_config_matches_credentials
   (initial:CS.connection_state)
@@ -248,9 +229,6 @@ let server_supported_profile_selection
    | None ->
      True)
 
-type server_valid_trace_provider =
-  initial:CS.connection_state -> server_valid_trace_proof initial
-
 type server_supported_profile_proof
   (initial:CS.connection_state)
   =
@@ -282,8 +260,6 @@ type canonical_server = {
   canonical_server_credentials: O.server_credentials;
   canonical_server_progress: MR.mref server_progress_preorder;
   canonical_server_initial: Ghost.erased CS.connection_state;
-  canonical_server_valid_trace:
-    Ghost.erased (server_valid_trace_proof (Ghost.reveal canonical_server_initial));
   canonical_server_supported_profile:
     Ghost.erased
       (server_supported_profile_proof (Ghost.reveal canonical_server_initial));
@@ -1283,6 +1259,295 @@ let lemma_server_progress_state_ahead
     st1
     ()
 
+let lemma_server_step_wire_log_delta
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTypes.server_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTypes.local_output)
+  : Lemma
+      (requires server_step st0 ev st1 out)
+      (ensures
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_sent
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_sent
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              out.SM.so_wire_outputs)) /\
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_received
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              (WFSM.event_input_messages ev))))
+=
+  match ev with
+  | SM.WireEvent wire ->
+    eliminate exists msg.
+      (let conn_ev =
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        } in
+      CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent =
+            WF.serialize_all
+              CW.tls_record_wire_format
+              out.SM.so_wire_outputs;
+          CS.delta_raw_received = CW.wire_serialize wire;
+        }
+        st1 /\
+      server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_sent
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_sent
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            out.SM.so_wire_outputs)) /\
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_received
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.event_input_messages ev)))
+    with _.
+    (
+      assert (WFSM.event_input_messages ev == [wire]);
+      Seq.append_empty_r (CW.wire_serialize wire)
+    )
+  | SM.LocalEvent local ->
+    let api = CTypes.server_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      server_api_event_matches api conn_ev /\
+      server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty;
+        }
+        st1
+    returns
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_sent
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_sent
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            out.SM.so_wire_outputs)) /\
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append
+          st0.CS.cs_wire_log.CL.raw_received
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.event_input_messages ev)))
+    with _.
+    (
+      assert (WFSM.event_input_messages ev == []);
+      assert (Seq.equal
+        (WF.serialize_all CW.tls_record_wire_format [])
+        Seq.empty);
+      CW.lemma_b_empty_seq_empty ();
+      Seq.lemma_eq_elim
+        raw_sent
+        (WF.serialize_all
+          CW.tls_record_wire_format
+          out.SM.so_wire_outputs)
+    )
+
+let rec lemma_server_trace_wire_logs_match
+  (initial:CS.connection_state)
+  (st0:CS.connection_state)
+  (trace:list
+    (SM.transition
+      CS.connection_state
+      CW.wire_message
+      CTypes.server_local_event
+      CTypes.local_output))
+  (st1:CS.connection_state)
+  : Lemma
+      (requires
+        SM.trace_reaches
+          (server_state_machine initial)
+          st0
+          trace
+          st1)
+      (ensures
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_sent
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_sent
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              (SM.trace_wire_outputs trace))) /\
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_received
+            (WF.serialize_all
+              CW.tls_record_wire_format
+              (WFSM.trace_input_messages trace))))
+      (decreases trace)
+=
+  match trace with
+  | [] ->
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_sent;
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  | tr :: rest ->
+    assert (server_step
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output);
+    lemma_server_step_wire_log_delta
+      st0
+      tr.SM.tr_event
+      tr.SM.tr_next_state
+      tr.SM.tr_output;
+    lemma_server_trace_wire_logs_match
+      initial
+      tr.SM.tr_next_state
+      rest
+      st1;
+    let step_sent =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        tr.SM.tr_output.SM.so_wire_outputs in
+    let rest_sent =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        (SM.trace_wire_outputs rest) in
+    let step_received =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.event_input_messages tr.SM.tr_event) in
+    let rest_received =
+      WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.trace_input_messages rest) in
+    CW.lemma_wire_serialize_all_append
+      tr.SM.tr_output.SM.so_wire_outputs
+      (SM.trace_wire_outputs rest);
+    CW.lemma_wire_serialize_all_append
+      (WFSM.event_input_messages tr.SM.tr_event)
+      (WFSM.trace_input_messages rest);
+    Seq.lemma_eq_elim
+      tr.SM.tr_next_state.CS.cs_wire_log.CL.raw_sent
+      (B.append st0.CS.cs_wire_log.CL.raw_sent step_sent);
+    Seq.lemma_eq_elim
+      tr.SM.tr_next_state.CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received step_received);
+    Seq.append_assoc st0.CS.cs_wire_log.CL.raw_sent step_sent rest_sent;
+    Seq.append_assoc st0.CS.cs_wire_log.CL.raw_received step_received rest_received;
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_sent
+      (B.append
+        st0.CS.cs_wire_log.CL.raw_sent
+        (B.append step_sent rest_sent)));
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append
+        st0.CS.cs_wire_log.CL.raw_received
+        (B.append step_received rest_received)))
+
+let lemma_server_state_ahead_valid_byte_trace
+  (initial:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        server_invariant_pure initial received sent st /\
+        server_state_ahead initial initial st)
+      (ensures
+        WFSM.valid_byte_trace
+          (server_system initial)
+          received
+          st
+          sent
+          Seq.empty)
+=
+  eliminate exists trace.
+    SM.trace_reaches
+      (server_system initial).WFSM.wfsm_state_machine
+      initial
+      trace
+      st
+  returns
+    WFSM.valid_byte_trace
+      (server_system initial)
+      received
+      st
+      sent
+      Seq.empty
+  with _.
+  (
+    assert ((server_system initial).WFSM.wfsm_state_machine ==
+      server_state_machine initial);
+    assert ((server_system initial).WFSM.wfsm_wire_format ==
+      CW.tls_record_wire_format);
+    lemma_server_trace_wire_logs_match
+      initial
+      initial
+      trace
+      st;
+    CW.lemma_wire_parse_serialize_all_inverse
+      (WFSM.trace_input_messages trace);
+    Seq.append_empty_l
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (SM.trace_wire_outputs trace));
+    Seq.append_empty_l
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.trace_input_messages trace));
+    Seq.lemma_eq_elim initial.CS.cs_wire_log.CL.raw_sent B.empty;
+    Seq.lemma_eq_elim initial.CS.cs_wire_log.CL.raw_received B.empty;
+    Seq.lemma_eq_elim
+      st.CS.cs_wire_log.CL.raw_sent
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (SM.trace_wire_outputs trace));
+    Seq.lemma_eq_elim
+      st.CS.cs_wire_log.CL.raw_received
+      (WF.serialize_all
+        CW.tls_record_wire_format
+        (WFSM.trace_input_messages trace));
+    Seq.lemma_eq_elim sent st.CS.cs_wire_log.CL.raw_sent;
+    Seq.lemma_eq_elim received st.CS.cs_wire_log.CL.raw_received;
+    assert (WF.parses_as
+      CW.tls_record_wire_format
+      received
+      (WFSM.trace_input_messages trace)
+      Seq.empty);
+    assert (exists trace'.
+      SM.trace_reaches
+        (server_system initial).WFSM.wfsm_state_machine
+        (server_system initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        trace'
+        st /\
+      WF.parses_as
+        (server_system initial).WFSM.wfsm_wire_format
+        received
+        (WFSM.trace_input_messages trace')
+        Seq.empty /\
+      Seq.equal
+        sent
+        (WF.serialize_all
+          (server_system initial).WFSM.wfsm_wire_format
+          (SM.trace_wire_outputs trace')))
+  )
+
 let lemma_server_legal_delta_histories_ahead
   (st0:CS.connection_state)
   (delta:CS.connection_delta)
@@ -1494,6 +1759,9 @@ let server_invariant
       certificate_chain
       credential_identity **
     MR.pts_to srv.canonical_server_progress #1.0R st **
+    MR.snapshot
+      srv.canonical_server_progress
+      (Ghost.reveal srv.canonical_server_initial) **
     pure (
       server_invariant_pure
         (Ghost.reveal srv.canonical_server_initial)
@@ -1548,7 +1816,17 @@ ensures server_invariant
     (Ghost.reveal sent)
     (Ghost.reveal st));
   with certificate_chain credential_identity. _;
-  (Ghost.reveal srv.canonical_server_valid_trace)
+  MR.recall_snapshot
+    srv.canonical_server_progress
+    #1.0R
+    #(Ghost.reveal st)
+    #(Ghost.reveal srv.canonical_server_initial);
+  lemma_server_progress_state_ahead
+    (Ghost.reveal srv.canonical_server_initial)
+    (Ghost.reveal srv.canonical_server_initial)
+    (Ghost.reveal st);
+  lemma_server_state_ahead_valid_byte_trace
+    (Ghost.reveal srv.canonical_server_initial)
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st);
@@ -1576,7 +1854,6 @@ fn new_canonical_server
   (certificate_chain_len:SZ.t)
   (private_key:array U8.t)
   (private_key_len:SZ.t)
-  (#valid_trace_provider:erased server_valid_trace_provider)
   (#supported_profile_provider:erased server_supported_profile_provider)
   requires pts_to certificate_chain 'certificate_chain_bytes **
            pts_to private_key 'private_key_bytes **
@@ -1644,6 +1921,11 @@ fn new_canonical_server
       (CR.server_initial_state
         (Ghost.reveal 'certificate_chain_bytes)
         credential_identity);
+    MR.take_snapshot
+      progress
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity);
     let srv = {
       canonical_server_state = s;
       canonical_server_credentials = creds;
@@ -1653,12 +1935,6 @@ fn new_canonical_server
           (CR.server_initial_state
             (Ghost.reveal 'certificate_chain_bytes)
             credential_identity);
-      canonical_server_valid_trace =
-        Ghost.hide
-          ((Ghost.reveal valid_trace_provider)
-            (CR.server_initial_state
-              (Ghost.reveal 'certificate_chain_bytes)
-              credential_identity));
       canonical_server_supported_profile =
         Ghost.hide
           ((Ghost.reveal supported_profile_provider)
@@ -1702,10 +1978,32 @@ fn new_canonical_server
         (CR.server_initial_state
           (Ghost.reveal 'certificate_chain_bytes)
           credential_identity));
+    rewrite
+      (MR.snapshot
+        progress
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity))
+      as
+      (MR.snapshot
+        srv.canonical_server_progress
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
     assert (pure (Ghost.reveal srv.canonical_server_initial ==
       (CR.server_initial_state
         (Ghost.reveal 'certificate_chain_bytes)
         credential_identity)));
+    rewrite
+      (MR.snapshot
+        srv.canonical_server_progress
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity))
+      as
+      (MR.snapshot
+        srv.canonical_server_progress
+        (Ghost.reveal srv.canonical_server_initial));
     assert (pure (Seq.equal B.empty
       (CR.server_initial_state
         (Ghost.reveal 'certificate_chain_bytes)
@@ -1841,7 +2139,10 @@ ensures server_snapshot
     (Ghost.reveal current_state));
   with certificate_chain credential_identity. _;
   MR.recall_snapshot
-    srv.canonical_server_progress;
+    srv.canonical_server_progress
+    #1.0R
+    #(Ghost.reveal current_state)
+    #(Ghost.reveal snapshot_state);
   lemma_server_progress_state_ahead
     (Ghost.reveal srv.canonical_server_initial)
     (Ghost.reveal snapshot_state)
