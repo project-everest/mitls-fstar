@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
+module CP = TLS13.Impl.Client.CanonicalProtocol
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -19,6 +20,7 @@ module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module MR = Pulse.Lib.MonotonicGhostRef
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
@@ -45,6 +47,8 @@ let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
 
 noeq type client_driver = {
   client_driver_client: C.client;
+  client_driver_progress: MR.mref CP.client_progress_preorder;
+  client_driver_initial: Ghost.erased CS.connection_state;
   client_driver_auth: O.auth_context;
   client_driver_channel: Box.box (option IO.channel);
   client_driver_buffered_len: Box.box SZ.t;
@@ -57,6 +61,16 @@ noeq type client_driver = {
   client_driver_auth_signature: V.vec U8.t;
   client_driver_app_out: V.vec U8.t;
 }
+
+noextract
+let client_driver_canonical
+  (d:client_driver)
+  : CP.canonical_client =
+  {
+    CP.canonical_client_state = d.client_driver_client;
+    CP.canonical_client_progress = d.client_driver_progress;
+    CP.canonical_client_initial = d.client_driver_initial;
+  }
 
 noeq type driver = {
   driver_client: C.client;
@@ -361,16 +375,59 @@ let client_driver_buffers
       V.is_full_vec d.client_driver_auth_signature /\
       V.is_full_vec d.client_driver_app_out)
 
+(**
+  Canonical seed carried by every public driver ownership predicate.
+
+  This is deliberately only the initial canonical progress token/snapshot.  The
+  existing public driver workflow below still calls the legacy low-level client
+  operations directly, so it cannot soundly claim that the monotonic reference is
+  at each post-state without routing that step through
+  [TLS13.Impl.Client.Endpoint] (or proving the corresponding canonical progress
+  lemma at the call site).  Keeping this seed in the public predicates preserves
+  the current API resources while making the canonical client identity available
+  for the endpoint-owned helpers below.
+**)
+noextract
+let client_driver_canonical_seed
+  (d:client_driver)
+  : slprop =
+  MR.pts_to
+    d.client_driver_progress
+    #1.0R
+    (Ghost.reveal d.client_driver_initial) **
+  MR.snapshot
+    d.client_driver_progress
+    (Ghost.reveal d.client_driver_initial)
+
+noextract
+let client_driver_endpoint_live
+  (d:client_driver)
+  (st:CS.connection_state)
+  : slprop =
+  CP.client_invariant (client_driver_canonical d) B.empty B.empty st **
+  O.is_auth_context d.client_driver_auth **
+  Box.pts_to d.client_driver_channel no_channel **
+  client_driver_buffers d B.empty 0sz **
+  pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
+        st == Ghost.reveal d.client_driver_initial)
+
 noextract
 let client_driver_live
   (d:client_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
+  client_driver_canonical_seed d **
   O.is_auth_context d.client_driver_auth **
   Box.pts_to d.client_driver_channel no_channel **
   client_driver_buffers d B.empty 0sz **
   pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
+        st == Ghost.reveal d.client_driver_initial /\
+        CP.client_invariant_pure
+          (Ghost.reveal d.client_driver_initial)
+          B.empty
+          B.empty
+          st /\
         CT.client_end_to_end_invariant st)
 
 noextract
@@ -381,6 +438,7 @@ let client_driver_connected
   (sent:B.bytes)
   : slprop =
   C.connection_exactly d.client_driver_client st **
+  client_driver_canonical_seed d **
   O.is_auth_context d.client_driver_auth **
   exists* ch buffered buffered_len.
     Box.pts_to d.client_driver_channel (Some ch) **
@@ -393,7 +451,42 @@ let client_driver_closed
   (d:client_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop =
-  C.connection_exactly d.client_driver_client st
+  C.connection_exactly d.client_driver_client st **
+  client_driver_canonical_seed d
+
+ghost fn client_driver_live_to_endpoint_live
+  (d:client_driver)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_live d (Ghost.reveal st)
+  ensures client_driver_endpoint_live d (Ghost.reveal st)
+{
+  unfold (client_driver_live d (Ghost.reveal st));
+  unfold (client_driver_canonical_seed d);
+  assert (pure (Ghost.reveal st == Ghost.reveal d.client_driver_initial));
+  fold (CP.client_invariant
+    (client_driver_canonical d)
+    B.empty
+    B.empty
+    (Ghost.reveal st));
+  fold (client_driver_endpoint_live d (Ghost.reveal st))
+}
+
+ghost fn client_driver_endpoint_live_to_live
+  (d:client_driver)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_live d (Ghost.reveal st)
+  ensures client_driver_live d (Ghost.reveal st)
+{
+  unfold (client_driver_endpoint_live d (Ghost.reveal st));
+  unfold (CP.client_invariant
+    (client_driver_canonical d)
+    B.empty
+    B.empty
+    (Ghost.reveal st));
+  assert (pure (Ghost.reveal st == Ghost.reveal d.client_driver_initial));
+  fold (client_driver_canonical_seed d);
+  fold (client_driver_live d (Ghost.reveal st))
+}
 
 let lemma_client_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
@@ -1459,6 +1552,11 @@ fn new_client
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds))
 {
+  let initial = Ghost.hide (
+    CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
   let auth =
     O.auth_context_new
       server_name
@@ -1466,6 +1564,9 @@ fn new_client
       trust_anchors
       trust_anchors_len
       validation_time_seconds;
+  let progress =
+    MR.alloc #_ #CP.client_progress_preorder (Ghost.reveal initial);
+  MR.take_snapshot progress (Ghost.reveal initial);
   let c =
     C.new_client
       server_name
@@ -1476,17 +1577,11 @@ fn new_client
   rewrite
     (CR.connection_exactly
       c
-      (CR.configured_initial_state
-        (Ghost.reveal 'server_name_bytes)
-        (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds))
+      (Ghost.reveal initial))
     as
     (C.connection_exactly
       c
-      (CR.configured_initial_state
-        (Ghost.reveal 'server_name_bytes)
-        (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds));
+      (Ghost.reveal initial));
   let channel = Box.alloc no_channel;
   let buffered_len = Box.alloc 0sz;
   let empty_payload = V.alloc 0uy 0sz;
@@ -1504,6 +1599,8 @@ fn new_client
   assert (pure (L.max_record_fragment_len <= SZ.v driver_app_out_capacity));
   let d = {
     client_driver_client = c;
+    client_driver_progress = progress;
+    client_driver_initial = initial;
     client_driver_auth = auth;
     client_driver_channel = channel;
     client_driver_buffered_len = buffered_len;
@@ -1516,8 +1613,31 @@ fn new_client
         client_driver_auth_signature = auth_signature;
         client_driver_app_out = app_out;
       };
+      rewrite
+         (MR.pts_to progress #1.0R (Ghost.reveal initial))
+         as
+         (MR.pts_to d.client_driver_progress #1.0R (Ghost.reveal initial));
+      rewrite
+         (MR.snapshot progress (Ghost.reveal initial))
+         as
+         (MR.snapshot d.client_driver_progress (Ghost.reveal initial));
+      assert (pure (Ghost.reveal d.client_driver_initial == Ghost.reveal initial));
+      rewrite
+         (MR.pts_to d.client_driver_progress #1.0R (Ghost.reveal initial))
+         as
+         (MR.pts_to
+           d.client_driver_progress
+           #1.0R
+           (Ghost.reveal d.client_driver_initial));
+      rewrite
+         (MR.snapshot d.client_driver_progress (Ghost.reveal initial))
+         as
+         (MR.snapshot
+           d.client_driver_progress
+           (Ghost.reveal d.client_driver_initial));
+      fold (client_driver_canonical_seed d);
       rewrite (Box.pts_to channel no_channel) as
-        (Box.pts_to d.client_driver_channel no_channel);
+         (Box.pts_to d.client_driver_channel no_channel);
       rewrite (Box.pts_to buffered_len 0sz) as
         (Box.pts_to d.client_driver_buffered_len 0sz);
       rewrite (V.pts_to empty_payload #1.0R (Seq.create 0 0uy)) as
@@ -1553,29 +1673,33 @@ fn new_client
       rewrite
         (C.connection_exactly
           c
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds))
+          (Ghost.reveal initial))
         as
         (C.connection_exactly
           d.client_driver_client
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds));
+          (Ghost.reveal initial));
       rewrite (O.is_auth_context auth) as (O.is_auth_context d.client_driver_auth);
       fold (client_driver_buffers d B.empty 0sz);
       assert (pure (client_driver_wire_logs_match
-        (CR.configured_initial_state
-          (Ghost.reveal 'server_name_bytes)
-          (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds)
+        (Ghost.reveal initial)
         B.empty
         B.empty
         B.empty
         0sz));
+      assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_received));
+      assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_sent));
+      assert (pure (CP.client_invariant_pure
+        (Ghost.reveal initial)
+        B.empty
+        B.empty
+        (Ghost.reveal initial)));
       fold
+        (client_driver_live
+          d
+          (Ghost.reveal initial));
+      rewrite
+        (client_driver_live d (Ghost.reveal initial))
+        as
         (client_driver_live
           d
           (CR.configured_initial_state
@@ -5710,6 +5834,7 @@ fn free_disconnected_client_driver
   (d:client_driver)
   (buffered_len:SZ.t)
   requires C.connection_exactly d.client_driver_client 'st0 **
+           client_driver_canonical_seed d **
            O.is_auth_context d.client_driver_auth **
            Box.pts_to d.client_driver_channel no_channel **
            (exists* buffered. client_driver_buffers d buffered buffered_len)
@@ -5727,6 +5852,7 @@ fn close_failed_connect
   (ch:IO.channel)
   (buffered_len:SZ.t)
   requires C.connection_exactly d.client_driver_client 'st0 **
+           client_driver_canonical_seed d **
            O.is_auth_context d.client_driver_auth **
            channel_open ch 'st0 'buffered buffered_len **
            Box.pts_to d.client_driver_channel no_channel **

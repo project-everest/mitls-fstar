@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module C = TLS13.Impl.Client
+module CP = TLS13.Impl.Client.CanonicalProtocol
 module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
@@ -20,6 +21,11 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
 val client_driver : Type0
+
+noextract
+val client_driver_canonical
+  (d:client_driver)
+  : CP.canonical_client
 
 noextract
 val client_driver_wire_logs_match
