@@ -4250,6 +4250,723 @@ let server_local_bridge_result
       wire_outputs
       local_outputs
 
+let lemma_server_local_bridge_result_from_common_witness
+  (initial:CS.connection_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (local_ev:CTypes.server_local_event)
+  (api:CTypes.server_api_event)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_local_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (resp:ST.server_response)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        server_local_common_witness
+          initial
+          received0
+          sent0
+          st0
+          local_ev
+          api
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          resp
+          wire_outputs
+          local_outputs)
+      (ensures
+        server_local_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          local_ev
+          api
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          resp)
+=
+  FStar.Classical.exists_intro
+    (fun local_outputs' ->
+      server_local_common_witness
+        initial
+        received0
+        sent0
+        st0
+        local_ev
+        api
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        resp
+        wire_outputs
+        local_outputs')
+    local_outputs;
+  FStar.Classical.exists_intro
+    (fun wire_outputs' -> exists local_outputs'.
+      server_local_common_witness
+        initial
+        received0
+        sent0
+        st0
+        local_ev
+        api
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        resp
+        wire_outputs'
+        local_outputs')
+    wire_outputs
+
+let lemma_server_step_from_local_witness
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (local_ev:CTypes.server_local_event)
+  (conn_ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        server_api_event_matches
+          (CTypes.server_local_event_api local_ev)
+          conn_ev /\
+        server_wire_outputs_match raw_sent wire_outputs /\
+        server_local_outputs_match conn_ev local_outputs /\
+        CS.legal_connection_delta st0 {
+          CS.delta_event = conn_ev;
+          CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty;
+        } st1 /\
+        CS.sent_event_nonempty_seal_projection
+          st0.CS.cs_model
+          conn_ev
+          raw_sent)
+      (ensures
+        server_step
+          st0
+          (SM.LocalEvent local_ev)
+          st1
+          (CPI.step_output wire_outputs local_outputs))
+=
+  assert ((CPI.step_output wire_outputs local_outputs).SM.so_wire_outputs ==
+    wire_outputs);
+  assert ((CPI.step_output wire_outputs local_outputs).SM.so_local_outputs ==
+    local_outputs);
+  assert (B.length B.empty == 0);
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    conn_ev
+    B.empty);
+  assert (exists conn_ev' raw_sent'.
+    server_api_event_matches
+      (CTypes.server_local_event_api local_ev)
+      conn_ev' /\
+    server_wire_outputs_match
+      raw_sent'
+      (CPI.step_output wire_outputs local_outputs).SM.so_wire_outputs /\
+    server_local_outputs_match
+      conn_ev'
+      (CPI.step_output wire_outputs local_outputs).SM.so_local_outputs /\
+    CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev';
+      CS.delta_raw_sent = raw_sent';
+      CS.delta_raw_received = B.empty;
+    } st1 /\
+    CS.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      conn_ev'
+      raw_sent' /\
+    CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      conn_ev'
+      B.empty);
+  assert (server_step
+    st0
+    (SM.LocalEvent local_ev)
+    st1
+    (CPI.step_output wire_outputs local_outputs))
+
+let lemma_server_local_raw_sent_parse_success
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.legal_local_response
+          st0
+          st1
+          resp
+          kind
+          payload
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out)
+      (ensures
+        B.length raw_sent == 0 \/
+        exists content_type fragment.
+          WS.parse_record_wire raw_sent ==
+            Some (content_type, fragment, B.length raw_sent))
+=
+  assert (ST.local_event_kind_matches kind payload ev);
+  assert (ST.local_event_supported_profile kind payload ev);
+  assert (ST.legal_response_for_event
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out);
+  assert (CS.legal_connection_delta st0 {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = raw_received;
+  } st1);
+  assert (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    ev
+    raw_sent
+    raw_received);
+  match ev with
+  | CS.ConnLocalEvent _ ->
+    assert (Seq.equal raw_sent B.empty);
+    Seq.lemma_eq_elim raw_sent B.empty
+  | CS.ConnNetworkEvent msg ->
+    assert (msg.CL.message_direction == CL.Sent);
+    if CS.network_message_is_cleartext
+        msg.CL.message_direction
+        msg.CL.message_value
+    then (
+      assert (CS.cleartext_tls_message_raw msg.CL.message_value raw_sent);
+      match msg.CL.message_value with
+      | M.TlsHandshake M.HelloRetryRequest ->
+        assert (CS.raw_records_exactly raw_sent T.Handshake 1);
+        CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.Handshake;
+        let fragment =
+          ID.indefinite_description_ghost
+            B.bytes
+            (fun fragment ->
+              WS.parse_record raw_sent ==
+                Some (T.Handshake, fragment, B.length raw_sent)) in
+        assert (WS.parse_record raw_sent ==
+          Some (T.Handshake, fragment, B.length raw_sent));
+        WS.lemma_parse_record_implies_parse_record_wire raw_sent;
+        assert (exists content_type fragment'.
+          WS.parse_record_wire raw_sent ==
+            Some (content_type, fragment', B.length raw_sent))
+      | M.TlsHandshake (M.ServerHello sh) ->
+        let (content_type, fragment) =
+          WS.serialize_tls_message msg.CL.message_value in
+        WS.lemma_serialize_tls_message_handshake (M.ServerHello sh);
+        WS.lemma_serialize_server_hello_len sh;
+        assert (Seq.equal
+          raw_sent
+          (CS.serialized_cleartext_tls_message msg.CL.message_value));
+        assert (B.length fragment <= 16640);
+        WS.lemma_parse_record_serialize_record content_type fragment;
+        Seq.lemma_eq_elim
+          raw_sent
+          (CS.serialized_cleartext_tls_message msg.CL.message_value);
+        WS.lemma_parse_record_implies_parse_record_wire raw_sent;
+        assert (WS.parse_record_wire raw_sent ==
+          Some (content_type, fragment, B.length raw_sent));
+        assert (exists content_type' fragment'.
+          WS.parse_record_wire raw_sent ==
+            Some (content_type', fragment', B.length raw_sent))
+      | M.TlsChangeCipherSpec ->
+        let (content_type, fragment) =
+          WS.serialize_tls_message msg.CL.message_value in
+        WS.lemma_serialize_tls_message_change_cipher_spec ();
+        assert (Seq.equal
+          raw_sent
+          (CS.serialized_cleartext_tls_message msg.CL.message_value));
+        assert (B.length fragment <= 16640);
+        WS.lemma_parse_record_serialize_record content_type fragment;
+        Seq.lemma_eq_elim
+          raw_sent
+          (CS.serialized_cleartext_tls_message msg.CL.message_value);
+        WS.lemma_parse_record_implies_parse_record_wire raw_sent;
+        assert (WS.parse_record_wire raw_sent ==
+          Some (content_type, fragment, B.length raw_sent));
+        assert (exists content_type' fragment'.
+          WS.parse_record_wire raw_sent ==
+            Some (content_type', fragment', B.length raw_sent))
+      | _ ->
+        assert False
+    ) else (
+      assert (CS.network_message_raw_delta_legal st0.CS.cs_model msg raw_sent);
+      assert (CS.raw_records_exactly
+        raw_sent
+        T.ApplicationData
+        (CS.protected_record_count
+          msg.CL.message_direction
+          msg.CL.message_value));
+      assert (CS.protected_record_count
+        msg.CL.message_direction
+        msg.CL.message_value == 1);
+      CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.ApplicationData;
+      let fragment =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun fragment ->
+            WS.parse_record raw_sent ==
+              Some (T.ApplicationData, fragment, B.length raw_sent)) in
+      assert (WS.parse_record raw_sent ==
+        Some (T.ApplicationData, fragment, B.length raw_sent));
+      WS.lemma_parse_record_implies_parse_record_wire raw_sent;
+      assert (exists content_type fragment'.
+        WS.parse_record_wire raw_sent ==
+          Some (content_type, fragment', B.length raw_sent))
+    )
+
+let lemma_server_api_event_raw_received_empty
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (api:CTypes.server_api_event)
+  (resp:ST.server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.legal_local_response
+          st0
+          st1
+          resp
+          api.CTypes.server_local_kind
+          api.CTypes.server_local_payload
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out)
+      (ensures Seq.equal raw_received B.empty)
+=
+  assert (ST.local_event_kind_matches
+    api.CTypes.server_local_kind
+    api.CTypes.server_local_payload
+    ev);
+  assert (ST.legal_response_for_event
+    st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (CS.legal_connection_delta
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1);
+  assert (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    ev
+    raw_sent
+    raw_received);
+  match ev with
+  | CS.ConnLocalEvent _ ->
+    ()
+  | CS.ConnNetworkEvent msg ->
+    match api.CTypes.server_local_kind with
+    | ST.LocalSendApplicationData
+    | ST.LocalSendServerHello
+    | ST.LocalSendEncryptedExtensions
+    | ST.LocalSendCertificate
+    | ST.LocalSendCertificateVerify
+    | ST.LocalSendServerFinished
+    | ST.LocalSendCloseNotify ->
+      assert (msg.CL.message_direction == CL.Sent)
+    | _ ->
+      assert False
+
+let lemma_server_wire_outputs_match_response
+  (resp:ST.server_response)
+  (network_out:B.bytes)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal raw_sent (ST.response_network_out resp network_out) /\
+        (B.length raw_sent == 0 \/
+         exists content_type fragment.
+           WS.parse_record_wire raw_sent ==
+             Some (content_type, fragment, B.length raw_sent)))
+      (ensures
+        server_wire_outputs_match
+          raw_sent
+          (server_response_wire_outputs resp network_out))
+=
+  let raw = ST.response_network_out resp network_out in
+  if B.length raw_sent == 0 then (
+    Seq.lemma_eq_elim raw_sent B.empty;
+    Seq.lemma_eq_elim raw raw_sent;
+    CW.lemma_wire_outputs_of_empty ();
+    assert (server_response_wire_outputs resp network_out ==
+      CW.wire_outputs_of_full_record B.empty);
+    assert (server_wire_outputs_match
+      raw_sent
+      (server_response_wire_outputs resp network_out))
+  ) else (
+    let content_type =
+      ID.indefinite_description_ghost
+        T.content_type
+        (fun content_type -> exists fragment.
+          WS.parse_record_wire raw_sent ==
+            Some (content_type, fragment, B.length raw_sent)) in
+    let fragment =
+      ID.indefinite_description_ghost
+        M.sealed_record
+        (fun fragment ->
+          WS.parse_record_wire raw_sent ==
+            Some (content_type, fragment, B.length raw_sent)) in
+    assert (WS.parse_record_wire raw_sent ==
+      Some (content_type, fragment, B.length raw_sent));
+    Seq.lemma_eq_elim raw raw_sent;
+    assert (WS.parse_record_wire raw ==
+      Some (content_type, fragment, B.length raw));
+    CW.lemma_wire_outputs_of_full_record_serializes
+      raw
+      content_type
+      fragment;
+    assert (server_wire_outputs_match
+      raw_sent
+      (server_response_wire_outputs resp network_out))
+  )
+
+let lemma_server_local_process_correct
+  (initial:CS.connection_state)
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (local_ev:CTypes.server_local_event)
+  (api:CTypes.server_api_event)
+  (resp:ST.server_response)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (app_out:B.bytes)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  : Lemma
+      (requires
+        ST.server_local_event_end_to_end_correct
+          st0
+          st1
+          resp
+          api.CTypes.server_local_kind
+          api.CTypes.server_local_payload
+          network_out
+          app_out /\
+        api == CTypes.server_local_event_api local_ev /\
+        ST.server_local_event_input_ready
+          st0
+          api.CTypes.server_local_kind
+          api.CTypes.server_local_payload /\
+        SZ.v out_len == B.length old_network_out /\
+        B.length network_out == B.length old_network_out /\
+        Seq.equal received0 st0.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal sent0 st0.CS.cs_wire_log.CL.raw_sent)
+      (ensures
+        CPI.local_process_correct
+          (server_system initial)
+          local_ev
+          old_network_out
+          network_out
+          out_len
+          received0
+          sent0
+          st0
+          (CTypes.server_local_process_result resp)
+          st1.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_sent
+          st1
+          (server_response_wire_outputs resp network_out)
+          (server_response_local_outputs resp app_out))
+=
+  let wire_outputs = server_response_wire_outputs resp network_out in
+  let local_outputs = server_response_local_outputs resp app_out in
+  let result = CTypes.server_local_process_result resp in
+  assert (ST.legal_handled_local_response
+    st0
+    st1
+    resp
+    api.CTypes.server_local_kind
+    api.CTypes.server_local_payload
+    network_out
+    app_out);
+  assert (result.CPI.process_consumed_len == 0sz);
+  if resp.ST.status == ST.StepOk then (
+    assert (exists ev raw_sent raw_received.
+      ST.legal_local_response
+        st0
+        st1
+        resp
+        api.CTypes.server_local_kind
+        api.CTypes.server_local_payload
+        ev
+        raw_sent
+        raw_received
+        network_out
+        app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          ST.legal_local_response
+            st0
+            st1
+            resp
+            api.CTypes.server_local_kind
+            api.CTypes.server_local_payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          ST.legal_local_response
+            st0
+            st1
+            resp
+            api.CTypes.server_local_kind
+            api.CTypes.server_local_payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          ST.legal_local_response
+            st0
+            st1
+            resp
+            api.CTypes.server_local_kind
+            api.CTypes.server_local_payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out) in
+    assert (ST.legal_local_response
+      st0
+      st1
+      resp
+      api.CTypes.server_local_kind
+      api.CTypes.server_local_payload
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out);
+    assert (ST.legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    assert (server_api_event_matches api ev);
+    assert (ST.local_event_kind_matches
+      api.CTypes.server_local_kind
+      api.CTypes.server_local_payload
+      ev);
+    assert (Seq.equal raw_sent (ST.response_network_out resp network_out));
+    lemma_server_local_raw_sent_parse_success
+      st0
+      st1
+      resp
+      api.CTypes.server_local_kind
+      api.CTypes.server_local_payload
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out;
+    lemma_server_wire_outputs_match_response resp network_out raw_sent;
+    assert (server_wire_outputs_match raw_sent wire_outputs);
+    lemma_server_response_local_outputs_match resp ev app_out;
+    assert (server_local_outputs_match ev local_outputs);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    } st1);
+    lemma_server_api_event_raw_received_empty
+      st0
+      st1
+      api
+      resp
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out;
+    assert (Seq.equal raw_received B.empty);
+    Seq.lemma_eq_elim raw_received B.empty;
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = B.empty;
+    } st1);
+    assert (CS.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      ev
+      raw_sent);
+    lemma_server_step_from_local_witness
+      st0
+      st1
+      local_ev
+      ev
+      raw_sent
+      wire_outputs
+      local_outputs;
+    let produced = WF.serialize_all CW.tls_record_wire_format wire_outputs in
+    assert (Seq.equal produced raw_sent);
+    assert (Seq.equal produced (ST.response_network_out resp network_out));
+    assert (SZ.v resp.ST.network_out_len <= B.length network_out);
+    assert (B.length raw_sent == SZ.v resp.ST.network_out_len);
+    assert (B.length produced == SZ.v resp.ST.network_out_len);
+    assert (CPI.output_written
+      network_out
+      result.CPI.process_produced_len
+      produced);
+    Seq.lemma_eq_elim received0 st0.CS.cs_wire_log.CL.raw_received;
+    Seq.lemma_eq_elim sent0 st0.CS.cs_wire_log.CL.raw_sent;
+    CL.lemma_append_empty_right st0.CS.cs_wire_log.CL.raw_received;
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received received0);
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 raw_sent));
+    Seq.lemma_eq_elim raw_sent produced;
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced));
+    assert (result.CPI.process_status == CPI.StepOk);
+    assert (exists produced'.
+      (server_system initial).WFSM.wfsm_state_machine.SM.sm_step
+        st0
+        (SM.LocalEvent local_ev)
+        st1
+        (CPI.step_output wire_outputs local_outputs) /\
+      Seq.equal produced'
+        (WF.serialize_all
+          (server_system initial).WFSM.wfsm_wire_format
+          wire_outputs) /\
+      CPI.output_written network_out result.CPI.process_produced_len produced' /\
+      Seq.equal st1.CS.cs_wire_log.CL.raw_received received0 /\
+      Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced'));
+    assert (CPI.local_process_correct
+      (server_system initial)
+      local_ev
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      result
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      wire_outputs
+      local_outputs)
+  ) else (
+    assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
+    let err : T.tls_error = T.AlertError T.UnexpectedMessage in
+    let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
+    let api_fail : CTypes.server_api_event = {
+      CTypes.server_local_kind = ST.LocalFail;
+      CTypes.server_local_payload = B.empty;
+    } in
+    assert (ST.legal_response_for_event
+      st0 st1 resp conn_ev B.empty B.empty network_out app_out);
+    assert (resp.ST.status == ST.IllegalTransition);
+    assert (result.CPI.process_status == CPI.IllegalTransition);
+    assert (result.CPI.process_produced_len == 0sz);
+    assert (Seq.equal (ST.response_network_out resp network_out) B.empty);
+    CW.lemma_wire_outputs_of_empty ();
+    assert (wire_outputs == []);
+    assert (server_wire_outputs_match B.empty wire_outputs);
+    lemma_server_response_local_outputs_match resp conn_ev app_out;
+    assert (server_local_outputs_match conn_ev local_outputs);
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    } st1);
+    assert (server_api_event_matches api_fail conn_ev);
+    assert_norm (CTypes.server_local_event_api (CTypes.ServerAPI api_fail) == api_fail);
+    assert (CS.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      conn_ev
+      B.empty);
+    lemma_server_step_from_local_witness
+      st0
+      st1
+      (CTypes.ServerAPI api_fail)
+      conn_ev
+      B.empty
+      wire_outputs
+      local_outputs;
+    let produced = B.empty in
+    assert (Seq.equal
+      produced
+      (WF.serialize_all CW.tls_record_wire_format wire_outputs));
+    CPI.lemma_output_prefix_empty network_out;
+    assert (CPI.output_written network_out result.CPI.process_produced_len produced);
+    Seq.lemma_eq_elim received0 st0.CS.cs_wire_log.CL.raw_received;
+    Seq.lemma_eq_elim sent0 st0.CS.cs_wire_log.CL.raw_sent;
+    CL.lemma_append_empty_right st0.CS.cs_wire_log.CL.raw_received;
+    CL.lemma_append_empty_right st0.CS.cs_wire_log.CL.raw_sent;
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received received0);
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_sent sent0);
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced));
+    CPI.lemma_local_process_error_refines_step
+      (server_system initial)
+      local_ev
+      (CTypes.ServerAPI api_fail)
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      result
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      wire_outputs
+      local_outputs
+      produced
+  )
+
 let server_local_bridge_obligation
   (base:tls_server_local_frame)
   : prop =
@@ -4289,12 +5006,124 @@ let server_local_bridge_obligation
           app_out
           resp
 
+let lemma_server_local_bridge_obligation
+  (base:tls_server_local_frame)
+  : Lemma
+      (ensures server_local_bridge_obligation base)
+=
+  introduce forall initial received0 sent0 st0 local_ev api old_network_out
+    network_out out_len st1 app_out resp.
+    server_invariant_pure initial received0 sent0 st0 /\
+    api == CTypes.server_local_event_api local_ev /\
+    SZ.v out_len == B.length old_network_out /\
+    B.length network_out == B.length old_network_out /\
+    B.length app_out == SZ.v base.tls_server_local_app_out_len /\
+    B.length api.CTypes.server_local_payload ==
+      SZ.v base.tls_server_local_payload_len /\
+    ST.server_local_event_input_ready
+      st0
+      api.CTypes.server_local_kind
+      api.CTypes.server_local_payload /\
+    ST.server_local_event_end_to_end_correct
+      st0
+      st1
+      resp
+      api.CTypes.server_local_kind
+      api.CTypes.server_local_payload
+      network_out
+      app_out
+    ==> server_local_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          local_ev
+          api
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          resp
+  with
+    introduce _ ==> _ with _.
+    let wire_outputs = server_response_wire_outputs resp network_out in
+    let local_outputs = server_response_local_outputs resp app_out in
+    lemma_server_local_process_correct
+      initial
+      st0
+      st1
+      local_ev
+      api
+      resp
+      old_network_out
+      network_out
+      out_len
+      app_out
+      received0
+      sent0;
+    ST.lemma_server_local_event_preserves_config
+      st0
+      st1
+      resp
+      api.CTypes.server_local_kind
+      api.CTypes.server_local_payload
+      network_out
+      app_out;
+    assert (server_invariant_pure
+      initial
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1);
+    assert (server_local_api_frame_post_fact
+      api
+      base
+      (CTypes.server_local_process_result resp)
+      old_network_out
+      network_out
+      st0
+      st1
+      wire_outputs
+      local_outputs
+      app_out
+      resp);
+    assert (server_local_common_witness
+      initial
+      received0
+      sent0
+      st0
+      local_ev
+      api
+      old_network_out
+      network_out
+      out_len
+      base
+      st1
+      app_out
+      resp
+      wire_outputs
+      local_outputs);
+    lemma_server_local_bridge_result_from_common_witness
+      initial
+      received0
+      sent0
+      st0
+      local_ev
+      api
+      old_network_out
+      network_out
+      out_len
+      base
+      st1
+      app_out
+      resp
+      wire_outputs
+      local_outputs
+
 noeq
 type tls_server_local_bridge_frame = {
   tls_server_local_bridge_base: tls_server_local_frame;
-  tls_server_local_bridge_proof:
-    Ghost.erased
-      (server_local_bridge_obligation tls_server_local_bridge_base);
 }
 
 let lemma_server_local_bridge_frame_obligation
@@ -4303,8 +5132,7 @@ let lemma_server_local_bridge_frame_obligation
       (ensures
         server_local_bridge_obligation frame.tls_server_local_bridge_base)
 =
-  let _ = Ghost.reveal frame.tls_server_local_bridge_proof in
-  ()
+  lemma_server_local_bridge_obligation frame.tls_server_local_bridge_base
 
 [@@pulse_unfold]
 let server_local_bridge_frame_pre

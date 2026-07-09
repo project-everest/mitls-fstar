@@ -83,32 +83,8 @@ type server_endpoint_frame = {
   server_ep_material_len: SZ.t;
   server_ep_material: V.vec U8.t;
   server_ep_material_spec: Ghost.erased (b:B.bytes{B.length b == 64});
-  server_ep_material_bridge_proof:
-    old:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SP.server_local_bridge_obligation {
-          SP.tls_server_local_payload = V.vec_to_array server_ep_material;
-          SP.tls_server_local_payload_len = server_ep_material_len;
-          SP.tls_server_local_app_out =
-            server_ep_query.SQueries.server_query_local_app_out;
-          SP.tls_server_local_app_out_len =
-            server_ep_query.SQueries.server_query_local_app_out_len;
-          SP.tls_server_local_old_app_out = old;
-        });
   server_ep_private_len: SZ.t;
   server_ep_private: V.vec U8.t;
-  server_ep_private_bridge_proof:
-    old:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SP.server_local_bridge_obligation {
-          SP.tls_server_local_payload = V.vec_to_array server_ep_private;
-          SP.tls_server_local_payload_len = server_ep_private_len;
-          SP.tls_server_local_app_out =
-            server_ep_query.SQueries.server_query_local_app_out;
-          SP.tls_server_local_app_out_len =
-            server_ep_query.SQueries.server_query_local_app_out_len;
-          SP.tls_server_local_old_app_out = old;
-        });
   server_ep_material_deferred_ready:
     st:Ghost.erased CS.connection_state ->
     action:SQueries.server_deferred_action ->
@@ -167,8 +143,6 @@ let server_endpoint_material_local_frame
   } in
   {
     SP.tls_server_local_bridge_base = base;
-    SP.tls_server_local_bridge_proof =
-      frame.server_ep_material_bridge_proof old;
   }
 
 let server_endpoint_private_local_frame
@@ -186,8 +160,6 @@ let server_endpoint_private_local_frame
   } in
   {
     SP.tls_server_local_bridge_base = base;
-    SP.tls_server_local_bridge_proof =
-      frame.server_ep_private_bridge_proof old;
   }
 
 let server_endpoint_payload_remainder_ready
