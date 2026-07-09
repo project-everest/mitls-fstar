@@ -2761,9 +2761,6 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
       server
   with _.
   (
-    Pairing.lemma_paired_handshake_event_trace_paired_handshake_message_states
-      client_prefix
-      server_prefix;
     lemma_paired_handshake_message_states_preserved_by_application_suffixes
       client_prefix
       server_prefix

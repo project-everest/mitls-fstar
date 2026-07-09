@@ -462,12 +462,9 @@ let paired_first_application_ready_semantic_cut
   (client_ready:CS.connection_state)
   (server_ready:CS.connection_state)
   : prop =
-  paired_semantic_tls_io_traces
-    client_ready.CS.cs_event_log
-    server_ready.CS.cs_event_log /\
   CD.client_driver_application_ready client_ready /\
   SD.server_driver_application_ready server_ready /\
-  Pairing.paired_handshake_event_trace client_ready server_ready
+  Pairing.paired_handshake_message_states client_ready server_ready
 
 noextract
 let paired_successful_semantic_logs_no_ccs_application_suffix_boundary
