@@ -519,7 +519,7 @@ ensures
             (Ghost.reveal sent)
             (Ghost.reveal st));
           with certificate_chain credential_identity. _;
-          srv.SP.canonical_server_supported_profile
+          (Ghost.reveal srv.SP.canonical_server_supported_profile)
             (Ghost.reveal received)
             (Ghost.reveal sent)
             (Ghost.reveal st)
@@ -977,7 +977,7 @@ ensures
             (Ghost.reveal sent)
             (Ghost.reveal st));
           with certificate_chain credential_identity. _;
-          srv.SP.canonical_server_supported_profile
+          (Ghost.reveal srv.SP.canonical_server_supported_profile)
             (Ghost.reveal received)
             (Ghost.reveal sent)
             (Ghost.reveal st)

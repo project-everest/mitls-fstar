@@ -156,6 +156,27 @@ let server_canonical_step_rel
 let server_progress_preorder =
   RTC.closure server_canonical_step_rel
 
+type server_valid_trace_proof
+  (initial:CS.connection_state)
+  =
+  received:B.bytes ->
+  sent:B.bytes ->
+  st:CS.connection_state ->
+    Lemma
+      (requires
+        ST.server_end_to_end_invariant st /\
+        st.CS.cs_model.CS.model_config ==
+          initial.CS.cs_model.CS.model_config /\
+        Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal sent st.CS.cs_wire_log.CL.raw_sent)
+      (ensures
+        WFSM.valid_byte_trace
+          (server_system initial)
+          received
+          st
+          sent
+          Seq.empty)
+
 let server_invariant_pure
   (initial:CS.connection_state)
   (received:B.bytes)
@@ -227,6 +248,34 @@ let server_supported_profile_selection
    | None ->
      True)
 
+type server_valid_trace_provider =
+  initial:CS.connection_state -> server_valid_trace_proof initial
+
+type server_supported_profile_proof
+  (initial:CS.connection_state)
+  =
+  received:B.bytes ->
+  sent:B.bytes ->
+  st:CS.connection_state ->
+  certificate_chain:B.bytes ->
+  credential_identity:CS.server_credential_identity ->
+    Lemma
+      (requires
+        server_invariant_pure
+          initial
+          received
+          sent
+          st /\
+        server_config_matches_credentials
+          initial
+          certificate_chain
+          credential_identity)
+      (ensures
+        server_supported_profile_selection st credential_identity)
+
+type server_supported_profile_provider =
+  initial:CS.connection_state -> server_supported_profile_proof initial
+
 noeq
 type canonical_server = {
   canonical_server_state: S.server;
@@ -234,42 +283,10 @@ type canonical_server = {
   canonical_server_progress: MR.mref server_progress_preorder;
   canonical_server_initial: Ghost.erased CS.connection_state;
   canonical_server_valid_trace:
-    received:B.bytes ->
-    sent:B.bytes ->
-    st:CS.connection_state ->
-      Lemma
-        (requires
-          ST.server_end_to_end_invariant st /\
-          st.CS.cs_model.CS.model_config ==
-            (Ghost.reveal canonical_server_initial).CS.cs_model.CS.model_config /\
-          Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
-          Seq.equal sent st.CS.cs_wire_log.CL.raw_sent)
-        (ensures
-          WFSM.valid_byte_trace
-            (server_system (Ghost.reveal canonical_server_initial))
-            received
-            st
-            sent
-            Seq.empty);
+    Ghost.erased (server_valid_trace_proof (Ghost.reveal canonical_server_initial));
   canonical_server_supported_profile:
-    received:B.bytes ->
-    sent:B.bytes ->
-    st:CS.connection_state ->
-    certificate_chain:B.bytes ->
-    credential_identity:CS.server_credential_identity ->
-      Lemma
-        (requires
-          server_invariant_pure
-            (Ghost.reveal canonical_server_initial)
-            received
-            sent
-            st /\
-          server_config_matches_credentials
-            (Ghost.reveal canonical_server_initial)
-            certificate_chain
-            credential_identity)
-        (ensures
-          server_supported_profile_selection st credential_identity);
+    Ghost.erased
+      (server_supported_profile_proof (Ghost.reveal canonical_server_initial));
 }
 
 noeq
@@ -1531,7 +1548,7 @@ ensures server_invariant
     (Ghost.reveal sent)
     (Ghost.reveal st));
   with certificate_chain credential_identity. _;
-  srv.canonical_server_valid_trace
+  (Ghost.reveal srv.canonical_server_valid_trace)
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st);
@@ -1552,6 +1569,177 @@ ensures server_invariant
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st))
+}
+
+fn new_canonical_server
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (private_key:array U8.t)
+  (private_key_len:SZ.t)
+  (#valid_trace_provider:erased server_valid_trace_provider)
+  (#supported_profile_provider:erased server_supported_profile_provider)
+  requires pts_to certificate_chain 'certificate_chain_bytes **
+           pts_to private_key 'private_key_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'private_key_bytes == SZ.v private_key_len /\
+                 B.length 'certificate_chain_bytes <=
+                   TLS13.Impl.ConnectionState.Bounds.max_server_certificate_chain_len)
+  returns result:option canonical_server
+  ensures pts_to certificate_chain 'certificate_chain_bytes **
+          pts_to private_key 'private_key_bytes **
+          (match result with
+           | Some srv ->
+             exists* credential_identity.
+               server_invariant
+                 srv
+                 B.empty
+                 B.empty
+                 (CR.server_initial_state
+                   (Ghost.reveal 'certificate_chain_bytes)
+                   credential_identity) **
+               pure (ST.server_end_to_end_invariant
+                 (CR.server_initial_state
+                   (Ghost.reveal 'certificate_chain_bytes)
+                   credential_identity))
+           | None ->
+             emp)
+{
+  let creds_opt =
+    O.server_credentials_new
+      certificate_chain
+      certificate_chain_len
+      private_key
+      private_key_len;
+  match creds_opt {
+  None -> {
+    None
+  }
+  Some creds -> {
+    with credential_identity. assert (
+      O.is_server_credentials
+        creds
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity);
+    let erased_identity : erased CS.server_credential_identity =
+      Ghost.hide credential_identity;
+    let s =
+      S.new_server_erased_credential_identity
+        certificate_chain
+        certificate_chain_len
+        #erased_identity;
+    assert (pure (Ghost.reveal erased_identity == credential_identity));
+    rewrite
+      (S.connection_exactly
+        s
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          (Ghost.reveal erased_identity)))
+      as
+      (S.connection_exactly
+        s
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
+    let progress = MR.alloc #_ #server_progress_preorder
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity);
+    let srv = {
+      canonical_server_state = s;
+      canonical_server_credentials = creds;
+      canonical_server_progress = progress;
+      canonical_server_initial =
+        Ghost.hide
+          (CR.server_initial_state
+            (Ghost.reveal 'certificate_chain_bytes)
+            credential_identity);
+      canonical_server_valid_trace =
+        Ghost.hide
+          ((Ghost.reveal valid_trace_provider)
+            (CR.server_initial_state
+              (Ghost.reveal 'certificate_chain_bytes)
+              credential_identity));
+      canonical_server_supported_profile =
+        Ghost.hide
+          ((Ghost.reveal supported_profile_provider)
+            (CR.server_initial_state
+              (Ghost.reveal 'certificate_chain_bytes)
+              credential_identity));
+    };
+    rewrite
+      (S.connection_exactly
+        s
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity))
+      as
+      (S.connection_exactly
+        srv.canonical_server_state
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
+    rewrite
+      (O.is_server_credentials
+        creds
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity)
+      as
+      (O.is_server_credentials
+        srv.canonical_server_credentials
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity);
+    rewrite
+      (MR.pts_to
+        progress
+        #1.0R
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity))
+      as
+      (MR.pts_to
+        srv.canonical_server_progress
+        #1.0R
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
+    assert (pure (Ghost.reveal srv.canonical_server_initial ==
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity)));
+    assert (pure (Seq.equal B.empty
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity).CS.cs_wire_log.CL.raw_received));
+    assert (pure (Seq.equal B.empty
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity).CS.cs_wire_log.CL.raw_sent));
+    assert (pure (server_invariant_pure
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity)
+      B.empty
+      B.empty
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity)));
+    assert (pure (server_config_matches_credentials
+      (CR.server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity)
+      (Ghost.reveal 'certificate_chain_bytes)
+      credential_identity));
+    fold
+      (server_invariant
+        srv
+        B.empty
+        B.empty
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
+    Some srv
+  }
+  }
 }
 
 ghost fn take_server_snapshot

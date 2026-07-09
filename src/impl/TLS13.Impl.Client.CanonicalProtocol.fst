@@ -227,29 +227,37 @@ let lemma_client_received_network_event_nonempty_decode_projection
 let client_progress_preorder =
   RTC.closure client_canonical_step_rel
 
+type client_valid_trace_proof
+  (initial:CS.connection_state)
+  =
+  received:B.bytes ->
+  sent:B.bytes ->
+  st:CS.connection_state ->
+    Lemma
+      (requires
+        CT.client_end_to_end_invariant st /\
+        st.CS.cs_model.CS.model_config ==
+          initial.CS.cs_model.CS.model_config /\
+        Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal sent st.CS.cs_wire_log.CL.raw_sent)
+      (ensures
+        WFSM.valid_byte_trace
+          (client_system initial)
+          received
+          st
+          sent
+          Seq.empty)
+
+type client_valid_trace_provider =
+  initial:CS.connection_state -> client_valid_trace_proof initial
+
 noeq
 type canonical_client = {
   canonical_client_state: C.client;
   canonical_client_progress: MR.mref client_progress_preorder;
   canonical_client_initial: Ghost.erased CS.connection_state;
   canonical_client_valid_trace:
-    received:B.bytes ->
-    sent:B.bytes ->
-    st:CS.connection_state ->
-      Lemma
-        (requires
-          CT.client_end_to_end_invariant st /\
-          st.CS.cs_model.CS.model_config ==
-            (Ghost.reveal canonical_client_initial).CS.cs_model.CS.model_config /\
-          Seq.equal received st.CS.cs_wire_log.CL.raw_received /\
-          Seq.equal sent st.CS.cs_wire_log.CL.raw_sent)
-        (ensures
-          WFSM.valid_byte_trace
-            (client_system (Ghost.reveal canonical_client_initial))
-            received
-            st
-            sent
-            Seq.empty);
+    Ghost.erased (client_valid_trace_proof (Ghost.reveal canonical_client_initial));
 }
 
 noeq
@@ -2725,7 +2733,7 @@ ensures client_invariant
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st));
-  cc.canonical_client_valid_trace
+  (Ghost.reveal cc.canonical_client_valid_trace)
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st);
@@ -2745,6 +2753,135 @@ ensures client_invariant
     (Ghost.reveal received)
     (Ghost.reveal sent)
     (Ghost.reveal st))
+}
+
+fn new_canonical_client
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  (#valid_trace_provider:erased client_valid_trace_provider)
+  requires pts_to server_name 'server_name_bytes **
+           pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
+                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
+                 SZ.v server_name_len <=
+                   TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
+                 SZ.v trust_anchors_len <=
+                   TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
+  returns cc:canonical_client
+  ensures pts_to server_name 'server_name_bytes **
+          pts_to trust_anchors 'trust_anchors_bytes **
+          client_invariant
+            cc
+            B.empty
+            B.empty
+            (CR.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds) **
+          pure (CT.client_end_to_end_invariant
+            (CR.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds))
+{
+  let c =
+    C.new_client
+      server_name
+      server_name_len
+      trust_anchors
+      trust_anchors_len
+      validation_time_seconds;
+  let progress = MR.alloc #_ #client_progress_preorder
+    (CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
+  let cc = {
+    canonical_client_state = c;
+    canonical_client_progress = progress;
+    canonical_client_initial =
+      Ghost.hide
+        (CR.configured_initial_state
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds);
+    canonical_client_valid_trace =
+      Ghost.hide
+        ((Ghost.reveal valid_trace_provider)
+          (CR.configured_initial_state
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds));
+  };
+  rewrite
+    (CR.connection_exactly
+      c
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds))
+    as
+    (C.connection_exactly
+      cc.canonical_client_state
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds));
+  rewrite
+    (MR.pts_to
+      progress
+      #1.0R
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds))
+    as
+    (MR.pts_to
+      cc.canonical_client_progress
+      #1.0R
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds));
+  assert (pure (Ghost.reveal cc.canonical_client_initial ==
+    (CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds)));
+  assert (pure (Seq.equal B.empty
+    (CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds).CS.cs_wire_log.CL.raw_received));
+  assert (pure (Seq.equal B.empty
+    (CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds).CS.cs_wire_log.CL.raw_sent));
+  assert (pure (client_invariant_pure
+    (CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds)
+    B.empty
+    B.empty
+    (CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds)));
+  fold
+    (client_invariant
+      cc
+      B.empty
+      B.empty
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds));
+  cc
 }
 
 ghost fn take_client_snapshot
