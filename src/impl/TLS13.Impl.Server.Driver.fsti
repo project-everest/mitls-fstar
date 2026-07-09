@@ -119,8 +119,6 @@ val server_driver_endpoint_connected
   (credential_identity:CS.server_credential_identity)
   (canonical_received:B.bytes)
   (canonical_sent:B.bytes)
-  (transport_received:B.bytes)
-  (transport_sent:B.bytes)
   : slprop
 
 noextract
@@ -505,8 +503,6 @@ fn send_endpoint
   (payload_bytes:B.bytes)
   (canonical_received0:Ghost.erased B.bytes)
   (canonical_sent0:Ghost.erased B.bytes)
-  (transport_received0:Ghost.erased B.bytes)
-  (transport_sent0:Ghost.erased B.bytes)
   (st0:Ghost.erased CS.connection_state)
   requires server_driver_endpoint_connected
               d
@@ -516,9 +512,7 @@ fn send_endpoint
               'certificate_chain
               'credential_identity
               (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0)
-              (Ghost.reveal transport_received0)
-              (Ghost.reveal transport_sent0) **
+              (Ghost.reveal canonical_sent0) **
            pts_to payload payload_bytes **
            pure (B.length payload_bytes == SZ.v payload_len /\
                  ST.server_connection_control_not_failed (Ghost.reveal st0) /\
@@ -538,8 +532,6 @@ fn send_endpoint
              'certificate_chain
              'credential_identity
              (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1)
-             (Ghost.reveal transport_received0)
              (Ghost.reveal canonical_sent1) **
            pts_to payload payload_bytes **
            pure (exists (old_out:B.bytes)

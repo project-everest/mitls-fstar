@@ -510,8 +510,6 @@ let client_driver_endpoint_connected
   (st:TLS13.Spec.ConnectionState.connection_state)
   (canonical_received:B.bytes)
   (canonical_sent:B.bytes)
-  (transport_received:B.bytes)
-  (transport_sent:B.bytes)
   : slprop =
   CP.client_invariant
     (client_driver_canonical d)
@@ -530,18 +528,10 @@ let client_driver_endpoint_connected
       (client_driver_canonical d)
       ch
       frame
-      transport_received
-      transport_sent
+      canonical_received
+      canonical_sent
       st **
-    pure (
-      (exists buffered.
-        client_driver_wire_logs_match
-          st
-          transport_received
-          transport_sent
-          buffered
-          buffered_len) /\
-      Seq.equal canonical_sent transport_sent)
+    pure (SZ.v buffered_len <= SZ.v frame.EP.client_ep_raw_len)
 
 let lemma_client_local_process_correct_received_unchanged
   (initial:CS.connection_state)
@@ -6822,8 +6812,6 @@ fn send_endpoint
   (payload_bytes:B.bytes)
   (canonical_received0:Ghost.erased B.bytes)
   (canonical_sent0:Ghost.erased B.bytes)
-  (transport_received0:Ghost.erased B.bytes)
-  (transport_sent0:Ghost.erased B.bytes)
   (st0:Ghost.erased CS.connection_state)
   requires client_driver_endpoint_connected
               d
@@ -6831,9 +6819,7 @@ fn send_endpoint
               frame
               (Ghost.reveal st0)
               (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0)
-              (Ghost.reveal transport_received0)
-              (Ghost.reveal transport_sent0) **
+              (Ghost.reveal canonical_sent0) **
            pts_to payload payload_bytes **
            pure (B.length payload_bytes == SZ.v payload_len /\
                  CT.connection_control_not_failed (Ghost.reveal st0) /\
@@ -6851,8 +6837,6 @@ fn send_endpoint
              frame
              (Ghost.reveal st1)
              (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1)
-             (Ghost.reveal transport_received0)
              (Ghost.reveal canonical_sent1) **
            pts_to payload payload_bytes **
            pure (exists (old_out:B.bytes)
@@ -6884,26 +6868,8 @@ fn send_endpoint
     frame
     (Ghost.reveal st0)
     (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0));
+    (Ghost.reveal canonical_sent0));
   with ch buffered_len. _;
-  let buffered_e = Ghost.hide (ID.indefinite_description_ghost B.bytes (fun buffered ->
-    client_driver_wire_logs_match
-      (Ghost.reveal st0)
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal transport_sent0)
-      buffered
-      buffered_len));
-  assert (pure (client_driver_wire_logs_match
-    (Ghost.reveal st0)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0)
-    (Ghost.reveal buffered_e)
-    buffered_len));
-  assert (pure (Seq.equal
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal transport_sent0)));
   expose_client_invariant_pure
     (client_driver_canonical d)
     canonical_received0
@@ -6920,16 +6886,16 @@ fn send_endpoint
       (client_driver_canonical d)
       ch
       frame
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal transport_sent0)
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
       (Ghost.reveal st0))
     as
     (EP.client_endpoint_io_ready
       (client_driver_canonical d)
       concrete_ch
       frame
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal transport_sent0)
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
       (Ghost.reveal st0));
   let local_frame =
     prepare_endpoint_send_api_ready
@@ -6942,8 +6908,8 @@ fn send_endpoint
       payload_bytes
       canonical_received0
       canonical_sent0
-      transport_received0
-      transport_sent0
+      canonical_received0
+      canonical_sent0
       st0;
   rewrite
     (EP.client_api_local_action_ready
@@ -7074,60 +7040,13 @@ fn send_endpoint
     (client_driver_canonical d)
     concrete_ch
     frame
-    (Ghost.reveal transport_received0)
+    (Ghost.reveal received1)
     (Ghost.reveal sent1)
     (Ghost.reveal st1));
   rewrite
     (Box.pts_to d.client_driver_channel (Some ch))
     as
     (Box.pts_to d.client_driver_channel (Some concrete_ch));
-  lemma_client_driver_endpoint_local_wire_logs_match
-    (Ghost.reveal (client_driver_canonical d).CP.canonical_client_initial)
-    (Ghost.reveal st0)
-    (Ghost.reveal st1)
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0)
-    (Ghost.reveal buffered_e)
-    buffered_len
-    ev
-    (Ghost.reveal old_out)
-    (Ghost.reveal out_contents)
-    frame.EP.client_ep_network_out_len
-    result
-    (Ghost.reveal wire_outputs)
-    (Ghost.reveal local_outputs);
-  assert (pure (client_driver_wire_logs_match
-    (Ghost.reveal st1)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal sent1)
-    (Ghost.reveal buffered_e)
-    buffered_len));
-  lemma_client_driver_wire_logs_match_exists
-    (Ghost.reveal st1)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal sent1)
-    (Ghost.reveal buffered_e)
-    buffered_len;
-  assert (pure (Seq.equal (Ghost.reveal sent1) (Ghost.reveal sent1)));
-  assert (pure (exists buffered.
-    client_driver_wire_logs_match
-      (Ghost.reveal st1)
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal sent1)
-      buffered
-      buffered_len));
-  assert (pure ((exists buffered.
-    client_driver_wire_logs_match
-      (Ghost.reveal st1)
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal sent1)
-      buffered
-      buffered_len) /\
-    Seq.equal (Ghost.reveal sent1) (Ghost.reveal sent1)));
   with concrete_ch buffered_len.
   fold (client_driver_endpoint_connected
     d
@@ -7135,8 +7054,6 @@ fn send_endpoint
     frame
     (Ghost.reveal st1)
     (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal transport_received0)
     (Ghost.reveal sent1));
   assert (pure (exists (old_out0:B.bytes)
                        (out_contents0:B.bytes)

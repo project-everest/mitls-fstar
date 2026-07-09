@@ -86,8 +86,10 @@ noextract
   This is the canonical endpoint-side counterpart of [client_driver_connected]:
   it owns the canonical progress/current-state resource, the endpoint frame
   resources, endpoint IO state, the driver's channel cell, and the retained
-  input-buffer length cell.  It is intentionally separate from the legacy public
-  connected predicate, which still carries only the initial canonical seed.
+  input-buffer length cell.  Its byte histories are the canonical endpoint
+  histories from [Client.CanonicalProtocol]; it is intentionally separate from
+  the legacy public connected predicate, which still carries only the initial
+  canonical seed.
 **)
 val client_driver_endpoint_connected
   (d:client_driver)
@@ -96,8 +98,6 @@ val client_driver_endpoint_connected
   (st:TLS13.Spec.ConnectionState.connection_state)
   (canonical_received:B.bytes)
   (canonical_sent:B.bytes)
-  (transport_received:B.bytes)
-  (transport_sent:B.bytes)
   : slprop
 
 noextract
@@ -462,8 +462,6 @@ fn send_endpoint
   (payload_bytes:B.bytes)
   (canonical_received0:Ghost.erased B.bytes)
   (canonical_sent0:Ghost.erased B.bytes)
-  (transport_received0:Ghost.erased B.bytes)
-  (transport_sent0:Ghost.erased B.bytes)
   (st0:Ghost.erased CS.connection_state)
   requires client_driver_endpoint_connected
               d
@@ -471,9 +469,7 @@ fn send_endpoint
               frame
               (Ghost.reveal st0)
               (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0)
-              (Ghost.reveal transport_received0)
-              (Ghost.reveal transport_sent0) **
+              (Ghost.reveal canonical_sent0) **
            pts_to payload payload_bytes **
            pure (B.length payload_bytes == SZ.v payload_len /\
                  CT.connection_control_not_failed (Ghost.reveal st0) /\
@@ -491,8 +487,6 @@ fn send_endpoint
              frame
              (Ghost.reveal st1)
              (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1)
-             (Ghost.reveal transport_received0)
              (Ghost.reveal canonical_sent1) **
            pts_to payload payload_bytes **
            pure (exists (old_out:B.bytes)

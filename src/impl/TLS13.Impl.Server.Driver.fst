@@ -1318,8 +1318,6 @@ fn send_endpoint
   (payload_bytes:B.bytes)
   (canonical_received0:Ghost.erased B.bytes)
   (canonical_sent0:Ghost.erased B.bytes)
-  (transport_received0:Ghost.erased B.bytes)
-  (transport_sent0:Ghost.erased B.bytes)
   (st0:Ghost.erased CS.connection_state)
   requires server_driver_endpoint_connected
               d
@@ -1329,9 +1327,7 @@ fn send_endpoint
               'certificate_chain
               'credential_identity
               (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0)
-              (Ghost.reveal transport_received0)
-              (Ghost.reveal transport_sent0) **
+              (Ghost.reveal canonical_sent0) **
            pts_to payload payload_bytes **
            pure (B.length payload_bytes == SZ.v payload_len /\
                  ST.server_connection_control_not_failed (Ghost.reveal st0) /\
@@ -1351,8 +1347,6 @@ fn send_endpoint
              'certificate_chain
              'credential_identity
              (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1)
-             (Ghost.reveal transport_received0)
              (Ghost.reveal canonical_sent1) **
            pts_to payload payload_bytes **
            pure (exists (old_out:B.bytes)
@@ -1386,26 +1380,8 @@ fn send_endpoint
     (Ghost.reveal 'certificate_chain)
     (Ghost.reveal 'credential_identity)
     (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0));
+    (Ghost.reveal canonical_sent0));
   with ch buffered_len. _;
-  let buffered_e = Ghost.hide (ID.indefinite_description_ghost B.bytes (fun buffered ->
-    server_driver_wire_logs_match
-      (Ghost.reveal st0)
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal transport_sent0)
-      buffered
-      buffered_len));
-  assert (pure (server_driver_wire_logs_match
-    (Ghost.reveal st0)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0)
-    (Ghost.reveal buffered_e)
-    buffered_len));
-  assert (pure (Seq.equal
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal transport_sent0)));
   expose_server_invariant_pure
     (DS.server_driver_canonical d)
     canonical_received0
@@ -1422,16 +1398,16 @@ fn send_endpoint
       (DS.server_driver_canonical d)
       ch
       frame
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal transport_sent0)
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
       (Ghost.reveal st0))
     as
     (EP.server_endpoint_io_ready
       (DS.server_driver_canonical d)
       concrete_ch
       frame
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal transport_sent0)
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
       (Ghost.reveal st0));
   let local_frame =
     prepare_endpoint_send_api_ready
@@ -1444,8 +1420,8 @@ fn send_endpoint
       payload_bytes
       canonical_received0
       canonical_sent0
-      transport_received0
-      transport_sent0
+      canonical_received0
+      canonical_sent0
       st0;
   rewrite
     (EP.server_api_local_action_ready
@@ -1576,7 +1552,7 @@ fn send_endpoint
     (DS.server_driver_canonical d)
     concrete_ch
     frame
-    (Ghost.reveal transport_received0)
+    (Ghost.reveal received1)
     (Ghost.reveal sent1)
     (Ghost.reveal st1));
   rewrite
@@ -1604,45 +1580,6 @@ fn send_endpoint
   assert (pure (DS.server_driver_supported_profile_selection
     (Ghost.reveal st1)
     (Ghost.reveal 'credential_identity)));
-  lemma_server_driver_endpoint_local_wire_logs_match
-    (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_initial)
-    (Ghost.reveal st0)
-    (Ghost.reveal st1)
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0)
-    (Ghost.reveal buffered_e)
-    buffered_len
-    ev
-    (Ghost.reveal old_out)
-    (Ghost.reveal out_contents)
-    frame.EP.server_ep_network_out_len
-    result
-    (Ghost.reveal wire_outputs)
-    (Ghost.reveal local_outputs);
-  assert (pure (DS.server_driver_wire_logs_match
-    (Ghost.reveal st1)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal sent1)
-    (Ghost.reveal buffered_e)
-    buffered_len));
-  lemma_server_driver_wire_logs_match_exists
-    (Ghost.reveal st1)
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal sent1)
-    (Ghost.reveal buffered_e)
-    buffered_len;
-  assert (pure (Seq.equal (Ghost.reveal sent1) (Ghost.reveal sent1)));
-  assert (pure (exists buffered.
-    DS.server_driver_wire_logs_match
-      (Ghost.reveal st1)
-      (Ghost.reveal transport_received0)
-      (Ghost.reveal sent1)
-      buffered
-      buffered_len));
   assert (pure (ST.server_end_to_end_invariant (Ghost.reveal st1) /\
     DS.server_driver_config_matches_credentials
       (Ghost.reveal st1)
@@ -1651,14 +1588,7 @@ fn send_endpoint
     DS.server_driver_supported_profile_selection
       (Ghost.reveal st1)
       (Ghost.reveal 'credential_identity) /\
-    (exists buffered.
-      DS.server_driver_wire_logs_match
-        (Ghost.reveal st1)
-        (Ghost.reveal transport_received0)
-        (Ghost.reveal sent1)
-        buffered
-        buffered_len) /\
-    Seq.equal (Ghost.reveal sent1) (Ghost.reveal sent1)));
+    SZ.v buffered_len <= SZ.v frame.EP.server_ep_raw_len));
   with concrete_ch buffered_len.
   fold (DS.server_driver_endpoint_connected
     d
@@ -1668,8 +1598,6 @@ fn send_endpoint
     (Ghost.reveal 'certificate_chain)
     (Ghost.reveal 'credential_identity)
     (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal transport_received0)
     (Ghost.reveal sent1));
   assert (
     DS.server_driver_endpoint_connected
@@ -1680,8 +1608,6 @@ fn send_endpoint
       (Ghost.reveal 'certificate_chain)
       (Ghost.reveal 'credential_identity)
       (Ghost.reveal received1)
-      (Ghost.reveal sent1)
-      (Ghost.reveal transport_received0)
       (Ghost.reveal sent1) **
     pts_to payload payload_bytes **
     pure (CPI.local_process_correct
