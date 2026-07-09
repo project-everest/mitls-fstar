@@ -2738,21 +2738,17 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
     (server_prefix:CS.connection_state)
     (client_suffix:list CS.conn_event)
     (server_suffix:list CS.conn_event).
-    paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
+    paired_first_application_ready_semantic_cut
       client_prefix
       server_prefix /\
-    client.CS.cs_event_log ==
-      FStar.List.Tot.append client_prefix.CS.cs_event_log client_suffix /\
-    server.CS.cs_event_log ==
-      FStar.List.Tot.append server_prefix.CS.cs_event_log server_suffix /\
-    application_data_preserving_semantic_suffix
-      client_prefix.CS.cs_model
-      client_suffix
-      client.CS.cs_model /\
-    application_data_preserving_semantic_suffix
-      server_prefix.CS.cs_model
+    first_application_ready_semantic_cut
+      client
+      client_prefix
+      client_suffix /\
+    first_application_ready_semantic_cut
+      server
+      server_prefix
       server_suffix
-      server.CS.cs_model
   returns
     CS.supported_profile_client_server_key_material_agrees client server /\
     CS.peer_record_material_agrees
@@ -2765,16 +2761,9 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
       server
   with _.
   (
-    lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
+    Pairing.lemma_paired_handshake_event_trace_paired_handshake_message_states
       client_prefix
-      server_prefix
-      client_prefix.CS.cs_event_log
-      server_prefix.CS.cs_event_log;
-    lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_states
-      client_prefix
-      server_prefix
-      client_prefix.CS.cs_event_log
-      server_prefix.CS.cs_event_log;
+      server_prefix;
     lemma_paired_handshake_message_states_preserved_by_application_suffixes
       client_prefix
       server_prefix

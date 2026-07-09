@@ -394,6 +394,34 @@ let rec conn_events_no_ccs
     not (conn_event_is_ccs ev) && conn_events_no_ccs rest
 
 noextract
+let rec first_application_ready_semantic_replay
+  (model:CS.connection_model)
+  (events:list CS.conn_event)
+  (ready_model:CS.connection_model)
+  : Tot prop (decreases events) =
+  match events with
+  | [] ->
+    model.CS.model_control == CS.ControlApplicationData /\
+    ready_model == model
+  | ev :: rest ->
+    model.CS.model_control <> CS.ControlApplicationData /\
+    CS.legal_event model ev /\
+    (match CS.step_model model ev with
+     | Some model1 ->
+       first_application_ready_semantic_replay model1 rest ready_model
+     | None ->
+       False)
+
+noextract
+let first_application_ready_semantic_log_state
+  (ready:CS.connection_state)
+  : prop =
+  first_application_ready_semantic_replay
+    (CS.initial_model ready.CS.cs_model.CS.model_config)
+    ready.CS.cs_event_log
+    ready.CS.cs_model
+
+noextract
 let rec application_data_preserving_semantic_suffix
   (model:CS.connection_model)
   (suffix:list CS.conn_event)
@@ -416,6 +444,32 @@ let rec application_data_preserving_semantic_suffix
        False)
 
 noextract
+let first_application_ready_semantic_cut
+  (final:CS.connection_state)
+  (ready:CS.connection_state)
+  (suffix:list CS.conn_event)
+  : prop =
+  first_application_ready_semantic_log_state ready /\
+  final.CS.cs_event_log ==
+    FStar.List.Tot.append ready.CS.cs_event_log suffix /\
+  application_data_preserving_semantic_suffix
+    ready.CS.cs_model
+    suffix
+    final.CS.cs_model
+
+noextract
+let paired_first_application_ready_semantic_cut
+  (client_ready:CS.connection_state)
+  (server_ready:CS.connection_state)
+  : prop =
+  paired_semantic_tls_io_traces
+    client_ready.CS.cs_event_log
+    server_ready.CS.cs_event_log /\
+  CD.client_driver_application_ready client_ready /\
+  SD.server_driver_application_ready server_ready /\
+  Pairing.paired_handshake_event_trace client_ready server_ready
+
+noextract
 let paired_successful_semantic_logs_no_ccs_application_suffix_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -435,21 +489,17 @@ let paired_successful_semantic_logs_no_ccs_application_suffix_boundary
     (server_prefix:CS.connection_state)
     (client_suffix:list CS.conn_event)
     (server_suffix:list CS.conn_event).
-    paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
+    paired_first_application_ready_semantic_cut
       client_prefix
       server_prefix /\
-    client.CS.cs_event_log ==
-      FStar.List.Tot.append client_prefix.CS.cs_event_log client_suffix /\
-    server.CS.cs_event_log ==
-      FStar.List.Tot.append server_prefix.CS.cs_event_log server_suffix /\
-    application_data_preserving_semantic_suffix
-      client_prefix.CS.cs_model
-      client_suffix
-      client.CS.cs_model /\
-    application_data_preserving_semantic_suffix
-      server_prefix.CS.cs_model
+    first_application_ready_semantic_cut
+      client
+      client_prefix
+      client_suffix /\
+    first_application_ready_semantic_cut
+      server
+      server_prefix
       server_suffix
-      server.CS.cs_model
 
 val lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
   (client:CS.connection_state)
