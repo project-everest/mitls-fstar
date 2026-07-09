@@ -472,7 +472,8 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 fn new_ymodem_client ()
 requires emp
 returns i:ymodem_client_impl
-ensures ymodem_client_inv i Seq.empty Seq.empty YP.ymodem_client_initial
+ensures ymodem_client_inv i Seq.empty Seq.empty YP.ymodem_client_initial **
+        pure (Vec.is_full_vec i.status)
 {
   let status = Vec.alloc 0uy 1sz;
   let progress =
@@ -484,6 +485,7 @@ ensures ymodem_client_inv i Seq.empty Seq.empty YP.ymodem_client_initial
   with sv. rewrite (Vec.pts_to status sv) as (Vec.pts_to i.status sv);
   Log.lemma_initial_trace_ok ();
   fold (ymodem_client_inv i Seq.empty Seq.empty YP.ymodem_client_initial);
+  assert (pure (Vec.is_full_vec i.status));
   i
 }
 
