@@ -4292,6 +4292,1182 @@ let lemma_step_model_preserves_config
 =
   ()
 
+#push-options "--split_queries always --z3rlimit 10 --z3refresh"
+
+let state_of_model_for_first_epoch_application_material
+  (model:connection_model)
+  : connection_state =
+  {
+    cs_model = model;
+    cs_wire_log = empty_wire_log;
+    cs_event_log = [];
+  }
+
+let first_epoch_application_traffic_material_slots_match_expected_model
+  (model:connection_model)
+  : prop =
+  first_epoch_application_traffic_material_slots_match_expected
+    (state_of_model_for_first_epoch_application_material model)
+
+let application_traffic_key_slot_stage_shape_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  : prop =
+  let keys = model.model_handshake.hs_keys in
+  match role, model.model_control with
+  | ClientEndpoint, ControlNew
+  | ClientEndpoint, ControlHandshaking HsStarted
+  | ClientEndpoint, ControlHandshaking HsClientHelloSent
+  | ClientEndpoint, ControlHandshaking HsServerHelloReceived
+  | ClientEndpoint, ControlHandshaking HsEncryptedExtensionsReceived
+  | ClientEndpoint, ControlHandshaking HsCertificateReceived
+  | ClientEndpoint, ControlHandshaking HsCertificateValidated
+  | ClientEndpoint, ControlHandshaking HsCertificateVerifyReceived
+  | ClientEndpoint, ControlHandshaking HsCertificateVerifyVerified
+  | ClientEndpoint, ControlHandshaking HsServerFinishedReceived ->
+    no_application_traffic_keys keys
+  | ServerEndpoint, ControlNew
+  | ServerEndpoint, ControlHandshaking HsAwaitingClientHello
+  | ServerEndpoint, ControlHandshaking HsClientHelloReceived
+  | ServerEndpoint, ControlHandshaking HsServerHelloSent
+  | ServerEndpoint, ControlHandshaking HsServerEncryptedFlightSent ->
+    no_application_traffic_keys keys
+  | ServerEndpoint, ControlHandshaking HsServerFinishedSent ->
+    keys.ks_client_application_traffic == None
+  | _, _ ->
+    True
+
+let lemma_step_model_preserves_application_traffic_key_slot_stage_shape_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires
+        model.model_config.config_role == role /\
+        application_traffic_key_slot_stage_shape_for_role role model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures
+        application_traffic_key_slot_stage_shape_for_role role model')
+=
+  ()
+
+let transcript_after_encrypted_extensions_bytes
+  (hs:handshake_state)
+  : GTot (option B.bytes) =
+  match
+    hs.hs_client_hello,
+    hs.hs_server_hello,
+    hs.hs_encrypted_extensions
+  with
+  | Some ch, Some sh, Some ee ->
+    let th_ch = W.serialize_handshake (M.ClientHello ch) in
+    let th_sh = append_handshake_bytes th_ch (M.ServerHello sh) in
+    Some (append_handshake_bytes th_sh (M.EncryptedExtensions ee))
+  | _, _, _ ->
+    None
+
+let no_handshake_message_slots_after_start
+  (hs:handshake_state)
+  : prop =
+  hs.hs_client_hello == None /\
+  hs.hs_server_hello == None /\
+  hs.hs_encrypted_extensions == None /\
+  hs.hs_certificate == None /\
+  hs.hs_certificate_verify == None /\
+  hs.hs_certificate_verify_verified == false /\
+  hs.hs_server_finished == None /\
+  hs.hs_server_finished_verified == false /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_client_hello
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  hs.hs_server_hello == None /\
+  hs.hs_encrypted_extensions == None /\
+  hs.hs_certificate == None /\
+  hs.hs_certificate_verify == None /\
+  hs.hs_certificate_verify_verified == false /\
+  hs.hs_server_finished == None /\
+  hs.hs_server_finished_verified == false /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_server_hello
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  Some? hs.hs_server_hello /\
+  hs.hs_encrypted_extensions == None /\
+  hs.hs_certificate == None /\
+  hs.hs_certificate_verify == None /\
+  hs.hs_certificate_verify_verified == false /\
+  hs.hs_server_finished == None /\
+  hs.hs_server_finished_verified == false /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_encrypted_extensions
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  Some? hs.hs_server_hello /\
+  Some? hs.hs_encrypted_extensions /\
+  hs.hs_certificate == None /\
+  hs.hs_certificate_verify == None /\
+  hs.hs_certificate_verify_verified == false /\
+  hs.hs_server_finished == None /\
+  hs.hs_server_finished_verified == false /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_certificate
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  Some? hs.hs_server_hello /\
+  Some? hs.hs_encrypted_extensions /\
+  Some? hs.hs_certificate /\
+  hs.hs_certificate_verify_verified == false /\
+  hs.hs_server_finished == None /\
+  hs.hs_server_finished_verified == false /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_certificate_verify
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  Some? hs.hs_server_hello /\
+  Some? hs.hs_encrypted_extensions /\
+  Some? hs.hs_certificate /\
+  Some? hs.hs_certificate_verify /\
+  hs.hs_server_finished == None /\
+  hs.hs_server_finished_verified == false /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_server_finished_received
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  Some? hs.hs_server_hello /\
+  Some? hs.hs_encrypted_extensions /\
+  Some? hs.hs_certificate /\
+  Some? hs.hs_certificate_verify /\
+  Some? hs.hs_server_finished /\
+  hs.hs_server_finished_verified == false /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_server_finished
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  Some? hs.hs_server_hello /\
+  Some? hs.hs_encrypted_extensions /\
+  Some? hs.hs_certificate /\
+  Some? hs.hs_certificate_verify /\
+  Some? hs.hs_server_finished /\
+  hs.hs_client_finished == None
+
+let no_handshake_message_slots_after_client_finished_received
+  (hs:handshake_state)
+  : prop =
+  Some? hs.hs_client_hello /\
+  Some? hs.hs_server_hello /\
+  Some? hs.hs_encrypted_extensions /\
+  Some? hs.hs_certificate /\
+  Some? hs.hs_certificate_verify /\
+  Some? hs.hs_server_finished /\
+  Some? hs.hs_client_finished
+
+let application_traffic_install_checkpoint_ready_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  : prop =
+  let hs = model.model_handshake in
+  match role, model.model_control with
+  | _, ControlNew ->
+    hs.hs_transcript == Tr.empty /\
+    no_handshake_message_slots_after_start hs
+  | ClientEndpoint, ControlHandshaking HsStarted
+  | ServerEndpoint, ControlHandshaking HsAwaitingClientHello ->
+    hs.hs_transcript == Tr.empty /\
+    no_handshake_message_slots_after_start hs
+  | ClientEndpoint, ControlHandshaking HsClientHelloSent
+  | ServerEndpoint, ControlHandshaking HsClientHelloReceived ->
+    no_handshake_message_slots_after_client_hello hs /\
+    transcript_checkpoint_bytes TH_CH hs == Some hs.hs_transcript
+  | ClientEndpoint, ControlHandshaking HsServerHelloReceived
+  | ServerEndpoint, ControlHandshaking HsServerHelloSent ->
+    no_handshake_message_slots_after_server_hello hs /\
+    transcript_checkpoint_bytes TH_SH hs == Some hs.hs_transcript
+  | ClientEndpoint, ControlHandshaking HsEncryptedExtensionsReceived ->
+    no_handshake_message_slots_after_encrypted_extensions hs /\
+    transcript_after_encrypted_extensions_bytes hs == Some hs.hs_transcript
+  | ClientEndpoint, ControlHandshaking HsCertificateReceived
+  | ClientEndpoint, ControlHandshaking HsCertificateValidated ->
+    no_handshake_message_slots_after_certificate hs /\
+    transcript_checkpoint_bytes TH_before_CV hs == Some hs.hs_transcript
+  | ClientEndpoint, ControlHandshaking HsCertificateVerifyReceived
+  | ClientEndpoint, ControlHandshaking HsCertificateVerifyVerified ->
+    no_handshake_message_slots_after_certificate_verify hs /\
+    transcript_checkpoint_bytes TH_before_SF hs == Some hs.hs_transcript
+  | ClientEndpoint, ControlHandshaking HsServerFinishedReceived ->
+    no_handshake_message_slots_after_server_finished_received hs /\
+    transcript_checkpoint_bytes TH_before_SF hs == Some hs.hs_transcript
+  | ClientEndpoint, ControlHandshaking HsServerFinishedVerified
+  | ServerEndpoint, ControlHandshaking HsServerFinishedSent ->
+    no_handshake_message_slots_after_server_finished hs /\
+    transcript_checkpoint_bytes TH_SF hs == Some hs.hs_transcript
+  | ServerEndpoint, ControlHandshaking HsClientFinishedReceived ->
+    no_handshake_message_slots_after_client_finished_received hs /\
+    transcript_checkpoint_bytes TH_SF hs == Some hs.hs_transcript
+  | ServerEndpoint, ControlHandshaking HsServerEncryptedFlightSent ->
+    Some? hs.hs_client_hello /\
+    Some? hs.hs_server_hello /\
+    Some? hs.hs_encrypted_extensions /\
+    hs.hs_server_finished == None /\
+    hs.hs_server_finished_verified == false /\
+    hs.hs_client_finished == None /\
+    (if hs.hs_certificate_verify_verified then
+      Some? hs.hs_certificate /\
+      Some? hs.hs_certificate_verify /\
+      transcript_checkpoint_bytes TH_before_SF hs == Some hs.hs_transcript
+    else if Some? hs.hs_certificate then
+      transcript_checkpoint_bytes TH_before_CV hs == Some hs.hs_transcript
+    else
+      hs.hs_certificate == None /\
+      hs.hs_certificate_verify == None /\
+      transcript_after_encrypted_extensions_bytes hs == Some hs.hs_transcript)
+  | _, _ ->
+    True
+
+let first_epoch_application_traffic_material_replay_invariant_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  : prop =
+  model.model_config.config_role == role /\
+  model_supported_profile_key_schedule_reachable_shape model /\
+  model_application_record_epoch_reachable_shape_for_role role model /\
+  application_traffic_key_slot_stage_shape_for_role role model /\
+  application_traffic_install_checkpoint_ready_for_role role model /\
+  first_epoch_application_traffic_material_slots_match_expected_model model
+
+let lemma_server_hs_server_hello_sent_checkpoint_ready_elim
+  (model:connection_model)
+  : Lemma
+      (requires
+        application_traffic_install_checkpoint_ready_for_role
+          ServerEndpoint
+          model /\
+        model.model_control == ControlHandshaking HsServerHelloSent)
+      (ensures
+        transcript_checkpoint_bytes TH_SH model.model_handshake ==
+        Some model.model_handshake.hs_transcript)
+=
+  match model.model_control with
+  | ControlHandshaking HsServerHelloSent ->
+    ()
+  | _ ->
+    assert False
+
+let lemma_client_certificate_verify_verified_checkpoint_ready_elim
+  (model:connection_model)
+  : Lemma
+      (requires
+        application_traffic_install_checkpoint_ready_for_role
+          ClientEndpoint
+          model /\
+        model.model_control == ControlHandshaking HsCertificateVerifyVerified)
+      (ensures
+        transcript_checkpoint_bytes TH_before_SF model.model_handshake ==
+        Some model.model_handshake.hs_transcript)
+=
+  match model.model_control with
+  | ControlHandshaking HsCertificateVerifyVerified ->
+    ()
+  | _ ->
+    assert False
+
+let lemma_server_finished_sent_checkpoint_ready_elim
+  (model:connection_model)
+  : Lemma
+      (requires
+        application_traffic_install_checkpoint_ready_for_role
+          ServerEndpoint
+          model /\
+        model.model_control == ControlHandshaking HsServerFinishedSent)
+      (ensures
+        transcript_checkpoint_bytes TH_SF model.model_handshake ==
+        Some model.model_handshake.hs_transcript)
+=
+  match model.model_control with
+  | ControlHandshaking HsServerFinishedSent ->
+    ()
+  | _ ->
+    assert False
+
+let lemma_step_sent_client_hello_checkpoint_ready
+  (model0:connection_model)
+  (ch:M.client_hello)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model0.model_control == ControlHandshaking HsStarted /\
+        model0.model_handshake.hs_transcript == Tr.empty /\
+        no_handshake_message_slots_after_start model0.model_handshake /\
+        step_model
+          model0
+          (ConnNetworkEvent
+            { CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake (M.ClientHello ch) }) ==
+        Some model1)
+      (ensures
+        application_traffic_install_checkpoint_ready_for_role
+          ClientEndpoint
+          model1)
+=
+  Seq.append_empty_l (W.serialize_handshake (M.ClientHello ch));
+  Seq.lemma_create_len 0 B.zero;
+  Seq.lemma_empty B.empty;
+  assert (B.append B.empty (W.serialize_handshake (M.ClientHello ch)) ==
+          W.serialize_handshake (M.ClientHello ch))
+
+let lemma_step_received_client_hello_checkpoint_ready
+  (model0:connection_model)
+  (ch:M.client_hello)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model0.model_control == ControlHandshaking HsAwaitingClientHello /\
+        model0.model_handshake.hs_transcript == Tr.empty /\
+        no_handshake_message_slots_after_start model0.model_handshake /\
+        step_model
+          model0
+          (ConnNetworkEvent
+            { CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ClientHello ch) }) ==
+        Some model1)
+      (ensures
+        application_traffic_install_checkpoint_ready_for_role
+          ServerEndpoint
+          model1)
+=
+  Seq.append_empty_l (W.serialize_handshake (M.ClientHello ch));
+  Seq.lemma_create_len 0 B.zero;
+  Seq.lemma_empty B.empty;
+  assert (B.append B.empty (W.serialize_handshake (M.ClientHello ch)) ==
+          W.serialize_handshake (M.ClientHello ch))
+
+let lemma_initial_first_epoch_application_traffic_material_replay_invariant_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma
+      (requires cfg.config_role == role)
+      (ensures
+        first_epoch_application_traffic_material_replay_invariant_for_role
+          role
+          (initial_model cfg))
+=
+  lemma_initial_application_record_epoch_reachable_shape_for_role role cfg
+
+let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_role
+  (role:endpoint_role)
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model0.model_config.config_role == role /\
+        application_traffic_install_checkpoint_ready_for_role role model0 /\
+        legal_event model0 ev /\
+        step_model model0 ev == Some model1)
+      (ensures
+        application_traffic_install_checkpoint_ready_for_role role model1)
+=
+  lemma_step_model_preserves_config model0 ev model1;
+  let hs0 = model0.model_handshake in
+  match ev with
+  | ConnLocalEvent local ->
+    (match role, local, model0.model_control with
+     | ClientEndpoint,
+       LocalStartHandshake _,
+       ControlNew ->
+       assert (hs0.hs_transcript == Tr.empty)
+     | ServerEndpoint,
+       LocalStartServer,
+       ControlNew ->
+       assert (hs0.hs_transcript == Tr.empty)
+     | ServerEndpoint,
+       LocalSelectServerParameters selection,
+       ControlHandshaking HsClientHelloReceived ->
+       assert (hs0.hs_client_hello == Some selection.server_selected_client_hello)
+     | ClientEndpoint,
+       LocalVerifyFinished fin,
+       ControlHandshaking HsServerFinishedReceived ->
+       assert (transcript_checkpoint_bytes TH_before_SF hs0 ==
+               Some hs0.hs_transcript)
+     | ServerEndpoint,
+       LocalVerifyClientFinished fin,
+       ControlHandshaking HsClientFinishedReceived ->
+       assert (transcript_checkpoint_bytes TH_SF hs0 ==
+               Some hs0.hs_transcript)
+     | _, _, _ ->
+       ())
+  | ConnNetworkEvent msg ->
+    (match
+       role,
+       msg.CL.message_direction,
+       msg.CL.message_value,
+       model0.model_control
+     with
+     | ClientEndpoint,
+       CL.Sent,
+       M.TlsHandshake (M.ClientHello ch),
+       ControlHandshaking HsStarted ->
+       assert (hs0.hs_transcript == Tr.empty);
+       lemma_step_sent_client_hello_checkpoint_ready model0 ch model1
+     | ClientEndpoint,
+       CL.Received,
+       M.TlsHandshake (M.ServerHello sh),
+       ControlHandshaking HsClientHelloSent ->
+       assert (transcript_checkpoint_bytes TH_CH hs0 ==
+               Some hs0.hs_transcript)
+     | ClientEndpoint,
+       CL.Received,
+       M.TlsHandshake (M.EncryptedExtensions ee),
+       ControlHandshaking HsServerHelloReceived ->
+       assert (transcript_checkpoint_bytes TH_SH hs0 ==
+               Some hs0.hs_transcript)
+     | ClientEndpoint,
+       CL.Received,
+       M.TlsHandshake (M.Certificate cert),
+       ControlHandshaking HsEncryptedExtensionsReceived ->
+       assert (transcript_after_encrypted_extensions_bytes hs0 ==
+               Some hs0.hs_transcript)
+     | ClientEndpoint,
+       CL.Received,
+       M.TlsHandshake (M.CertificateVerify cv),
+       ControlHandshaking HsCertificateValidated ->
+       assert (transcript_checkpoint_bytes TH_before_CV hs0 ==
+               Some hs0.hs_transcript)
+     | ClientEndpoint,
+       CL.Received,
+       M.TlsHandshake (M.Finished fin),
+       ControlHandshaking HsCertificateVerifyVerified ->
+       lemma_client_certificate_verify_verified_checkpoint_ready_elim model0
+     | ClientEndpoint,
+       CL.Sent,
+       M.TlsHandshake (M.Finished fin),
+       ControlHandshaking HsServerFinishedVerified ->
+       assert (transcript_checkpoint_bytes TH_SF hs0 ==
+               Some hs0.hs_transcript)
+     | ServerEndpoint,
+       CL.Received,
+       M.TlsHandshake (M.ClientHello ch),
+       ControlHandshaking HsAwaitingClientHello ->
+       assert (hs0.hs_transcript == Tr.empty);
+       lemma_step_received_client_hello_checkpoint_ready model0 ch model1
+     | ServerEndpoint,
+       CL.Sent,
+       M.TlsHandshake (M.ServerHello sh),
+       ControlHandshaking HsClientHelloReceived ->
+       assert (transcript_checkpoint_bytes TH_CH hs0 ==
+               Some hs0.hs_transcript)
+     | ServerEndpoint,
+       CL.Sent,
+       M.TlsHandshake (M.EncryptedExtensions ee),
+       ControlHandshaking HsServerHelloSent ->
+       assert (role == ServerEndpoint);
+       assert (model0.model_control == ControlHandshaking HsServerHelloSent);
+       assert (application_traffic_install_checkpoint_ready_for_role
+         ServerEndpoint
+         model0);
+       (match role, model0.model_control with
+        | ServerEndpoint, ControlHandshaking HsServerHelloSent ->
+          lemma_server_hs_server_hello_sent_checkpoint_ready_elim model0;
+          assert (transcript_checkpoint_bytes TH_SH model0.model_handshake ==
+                  Some model0.model_handshake.hs_transcript)
+        | _, _ ->
+          assert False)
+     | ServerEndpoint,
+       CL.Sent,
+       M.TlsHandshake (M.Certificate cert),
+       ControlHandshaking HsServerEncryptedFlightSent ->
+       assert (transcript_after_encrypted_extensions_bytes hs0 ==
+               Some hs0.hs_transcript)
+     | ServerEndpoint,
+       CL.Sent,
+       M.TlsHandshake (M.CertificateVerify cv),
+       ControlHandshaking HsServerEncryptedFlightSent ->
+       assert (Some? hs0.hs_certificate);
+       assert (hs0.hs_certificate_verify_verified == false);
+       assert (transcript_checkpoint_bytes TH_before_CV hs0 ==
+               Some hs0.hs_transcript)
+     | ServerEndpoint,
+       CL.Sent,
+       M.TlsHandshake (M.Finished fin),
+       ControlHandshaking HsServerEncryptedFlightSent ->
+       assert (hs0.hs_certificate_verify_verified);
+       assert (transcript_checkpoint_bytes TH_before_SF hs0 ==
+               Some hs0.hs_transcript)
+     | ServerEndpoint,
+       CL.Received,
+       M.TlsHandshake (M.Finished fin),
+       ControlHandshaking HsServerFinishedSent ->
+       lemma_server_finished_sent_checkpoint_ready_elim model0
+     | _, _, _, _ ->
+       ())
+
+let lemma_application_traffic_install_for_role_material_matches_expected
+  (role:endpoint_role)
+  (model0:connection_model)
+  (stage:handshake_stage)
+  (install:traffic_key_install)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model0.model_config.config_role == role /\
+        model0.model_control == ControlHandshaking stage /\
+        application_traffic_install_checkpoint_ready_for_role role model0 /\
+        traffic_install_allowed_at_stage_for_role role stage install /\
+        traffic_install_matches_key_schedule_for_role
+          role
+          model0.model_handshake
+          install /\
+        install.install_epoch == TrafficApplication /\
+        model1.model_handshake ==
+          { model0.model_handshake with
+              hs_keys =
+                update_key_schedule_with_install_for_role
+                  role
+                  model0.model_handshake.hs_keys
+                  install })
+      (ensures
+        traffic_material_matches_expected_derived_material
+          (traffic_id
+            TrafficApplication
+            (traffic_label_for_endpoint_direction
+              role
+              install.install_direction))
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  let hs0 = model0.model_handshake in
+  let hs1 = model1.model_handshake in
+  assert (transcript_checkpoint_bytes TH_SF hs0 == Some hs0.hs_transcript);
+  assert (transcript_checkpoint_bytes TH_SF hs1 == Some hs0.hs_transcript);
+  match role, install.install_direction with
+  | ClientEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite ==
+                 ClientTraffic)
+  | ClientEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead ==
+                 ServerTraffic)
+  | ServerEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite ==
+                 ServerTraffic)
+  | ServerEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead ==
+                 ClientTraffic);
+  match
+    expected_traffic_secret_for_role
+      role
+      hs0
+      install.install_epoch
+      install.install_direction
+  with
+  | Some secret ->
+    assert (install.install_material == traffic_key_material_for_secret secret);
+    assert (install.install_material.traffic_key == K.derive_aead_key secret);
+    assert (install.install_material.traffic_iv == K.derive_aead_iv secret);
+    Seq.lemma_eq_refl
+      install.install_material.traffic_key
+      (K.derive_aead_key secret);
+    Seq.lemma_eq_refl
+      install.install_material.traffic_iv
+      (K.derive_aead_iv secret)
+  | None ->
+    assert False
+
+let lemma_application_traffic_label_match_expected_preserved
+  (label:traffic_label)
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficApplication label)
+          (state_of_model_for_first_epoch_application_material model0) /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficApplication
+          label ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          label /\
+        model1.model_handshake.hs_keys.ks_master_secret ==
+        model0.model_handshake.hs_keys.ks_master_secret /\
+        transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+        transcript_checkpoint_bytes TH_SF model0.model_handshake)
+      (ensures
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficApplication label)
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  let st0 = state_of_model_for_first_epoch_application_material model0 in
+  let st1 = state_of_model_for_first_epoch_application_material model1 in
+  assert
+    (expected_traffic_secret_for_state
+      (traffic_id TrafficApplication label)
+      st1 ==
+     expected_traffic_secret_for_state
+      (traffic_id TrafficApplication label)
+      st0);
+  assert
+    (expected_derived_key_material
+      (TrafficKey (traffic_id TrafficApplication label))
+      st1 ==
+     expected_derived_key_material
+      (TrafficKey (traffic_id TrafficApplication label))
+      st0);
+  assert
+    (expected_derived_key_material
+      (TrafficIV (traffic_id TrafficApplication label))
+      st1 ==
+     expected_derived_key_material
+      (TrafficIV (traffic_id TrafficApplication label))
+      st0)
+
+let lemma_first_epoch_application_label_match_expected_preserved
+  (label:traffic_label)
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_slots_match_expected_model
+          model0 /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficApplication
+          label ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          label /\
+        model1.model_handshake.hs_keys.ks_master_secret ==
+        model0.model_handshake.hs_keys.ks_master_secret /\
+        transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+        transcript_checkpoint_bytes TH_SF model0.model_handshake)
+      (ensures
+        Some?
+          (traffic_material_for_label
+            model1.model_handshake.hs_keys
+            TrafficApplication
+            label) ==>
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficApplication label)
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  match label with
+  | ClientTraffic ->
+    if Some? model1.model_handshake.hs_keys.ks_client_application_traffic
+    then begin
+      assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
+      assert
+        (traffic_material_matches_expected_derived_material
+          (traffic_id TrafficApplication ClientTraffic)
+          (state_of_model_for_first_epoch_application_material model0));
+      lemma_application_traffic_label_match_expected_preserved
+        ClientTraffic
+        model0
+        model1
+    end
+  | ServerTraffic ->
+    if Some? model1.model_handshake.hs_keys.ks_server_application_traffic
+    then begin
+      assert (Some? model0.model_handshake.hs_keys.ks_server_application_traffic);
+      assert
+        (traffic_material_matches_expected_derived_material
+          (traffic_id TrafficApplication ServerTraffic)
+          (state_of_model_for_first_epoch_application_material model0));
+      lemma_application_traffic_label_match_expected_preserved
+        ServerTraffic
+        model0
+        model1
+    end
+
+let lemma_first_epoch_application_label_match_expected_preserved_when_slot_unchanged_or_checkpoint_stable
+  (label:traffic_label)
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_slots_match_expected_model
+          model0 /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficApplication
+          label ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          label /\
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          label == None \/
+         (model1.model_handshake.hs_keys.ks_master_secret ==
+          model0.model_handshake.hs_keys.ks_master_secret /\
+          transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+          transcript_checkpoint_bytes TH_SF model0.model_handshake)))
+      (ensures
+        Some?
+          (traffic_material_for_label
+            model1.model_handshake.hs_keys
+            TrafficApplication
+            label) ==>
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficApplication label)
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  if Some?
+      (traffic_material_for_label
+        model1.model_handshake.hs_keys
+        TrafficApplication
+        label)
+  then begin
+    assert
+      (Some?
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          label));
+    match
+      traffic_material_for_label
+        model0.model_handshake.hs_keys
+        TrafficApplication
+        label
+    with
+    | None ->
+      assert False
+    | Some _ ->
+      assert
+        (model1.model_handshake.hs_keys.ks_master_secret ==
+         model0.model_handshake.hs_keys.ks_master_secret);
+      assert
+        (transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+         transcript_checkpoint_bytes TH_SF model0.model_handshake);
+      lemma_application_traffic_label_match_expected_preserved
+        label
+        model0
+        model1
+  end
+
+let lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_slots_match_expected_model
+          model0 /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficApplication
+          ClientTraffic ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          ClientTraffic /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficApplication
+          ServerTraffic ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          ServerTraffic /\
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          ClientTraffic == None \/
+         (model1.model_handshake.hs_keys.ks_master_secret ==
+          model0.model_handshake.hs_keys.ks_master_secret /\
+          transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+          transcript_checkpoint_bytes TH_SF model0.model_handshake)) /\
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          ServerTraffic == None \/
+         (model1.model_handshake.hs_keys.ks_master_secret ==
+          model0.model_handshake.hs_keys.ks_master_secret /\
+          transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+          transcript_checkpoint_bytes TH_SF model0.model_handshake)))
+      (ensures
+        first_epoch_application_traffic_material_slots_match_expected_model
+          model1)
+=
+  lemma_first_epoch_application_label_match_expected_preserved_when_slot_unchanged_or_checkpoint_stable
+    ClientTraffic
+    model0
+    model1;
+  lemma_first_epoch_application_label_match_expected_preserved_when_slot_unchanged_or_checkpoint_stable
+    ServerTraffic
+    model0
+    model1
+
+let lemma_first_epoch_application_slots_preserved_when_application_labels_unchanged
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_slots_match_expected_model
+          model0 /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficApplication
+          ClientTraffic ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          ClientTraffic /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficApplication
+          ServerTraffic ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficApplication
+          ServerTraffic /\
+        model1.model_handshake.hs_keys.ks_master_secret ==
+        model0.model_handshake.hs_keys.ks_master_secret /\
+        transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+        transcript_checkpoint_bytes TH_SF model0.model_handshake)
+      (ensures
+        first_epoch_application_traffic_material_slots_match_expected_model
+          model1)
+=
+  lemma_first_epoch_application_label_match_expected_preserved
+    ClientTraffic
+    model0
+    model1;
+  lemma_first_epoch_application_label_match_expected_preserved
+    ServerTraffic
+    model0
+    model1
+
+let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_match_expected_model
+  (role:endpoint_role)
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_replay_invariant_for_role
+          role
+          model0 /\
+        legal_event model0 ev /\
+        step_model model0 ev == Some model1 /\
+        conn_event_is_key_update ev == false)
+      (ensures
+        first_epoch_application_traffic_material_slots_match_expected_model
+          model1)
+=
+  let hs0 = model0.model_handshake in
+  lemma_step_model_preserves_application_traffic_key_slot_stage_shape_for_role
+    role
+    model0
+    ev
+    model1;
+  lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_role
+    role
+    model0
+    ev
+    model1;
+  match ev with
+  | ConnLocalEvent local ->
+    (match local, model0.model_control with
+     | LocalInstallTrafficKeys install, ControlHandshaking stage ->
+       assert (role == ClientEndpoint);
+       assert (traffic_install_allowed_at_stage stage install);
+       assert (traffic_install_allowed_at_stage_for_role
+         ClientEndpoint
+         stage
+         install);
+       lemma_expected_traffic_secret_client_projection
+         hs0
+         install.install_epoch
+         install.install_direction;
+       assert
+         (traffic_install_matches_key_schedule_for_role
+           ClientEndpoint
+           hs0
+           install);
+       assert (model1.model_handshake ==
+         { hs0 with
+             hs_keys =
+               update_key_schedule_with_install
+                 hs0.hs_keys
+                 install });
+       lemma_update_key_schedule_with_install_client_projection
+         hs0.hs_keys
+         install;
+       assert (model1.model_handshake ==
+         { hs0 with
+             hs_keys =
+               update_key_schedule_with_install_for_role
+                 ClientEndpoint
+                 hs0.hs_keys
+                 install });
+       (match install.install_epoch with
+        | TrafficApplication ->
+          lemma_application_traffic_install_for_role_material_matches_expected
+            ClientEndpoint
+            model0
+            stage
+            install
+            model1;
+          (match install.install_direction with
+           | TrafficWrite ->
+             assert_norm
+               (traffic_label_for_endpoint_direction
+                 ClientEndpoint
+                 TrafficWrite == ClientTraffic);
+             lemma_first_epoch_application_label_match_expected_preserved
+               ServerTraffic
+               model0
+               model1
+           | TrafficRead ->
+             assert_norm
+               (traffic_label_for_endpoint_direction
+                 ClientEndpoint
+                 TrafficRead == ServerTraffic);
+             lemma_first_epoch_application_label_match_expected_preserved
+               ClientTraffic
+               model0
+               model1);
+          assert (first_epoch_application_traffic_material_slots_match_expected_model
+            model1)
+        | TrafficHandshake ->
+          lemma_first_epoch_application_slots_preserved_when_application_labels_unchanged
+            model0
+            model1)
+     | LocalInstallTrafficKeysForRole role_install, ControlHandshaking stage ->
+       let install = role_install.install_payload in
+       assert (role_install.install_role == role);
+       assert (model1.model_handshake ==
+         { hs0 with
+             hs_keys =
+               update_key_schedule_with_install_for_role
+                 role_install.install_role
+                 hs0.hs_keys
+                 install });
+       assert (model1.model_handshake ==
+         { hs0 with
+             hs_keys =
+               update_key_schedule_with_install_for_role
+                 role
+                 hs0.hs_keys
+                 install });
+       (match install.install_epoch with
+        | TrafficApplication ->
+          lemma_application_traffic_install_for_role_material_matches_expected
+            role
+            model0
+            stage
+            install
+            model1;
+          (match role, install.install_direction with
+           | ClientEndpoint, TrafficWrite ->
+             assert_norm
+               (traffic_label_for_endpoint_direction
+                 ClientEndpoint
+                 TrafficWrite == ClientTraffic);
+             lemma_first_epoch_application_label_match_expected_preserved
+               ServerTraffic
+               model0
+               model1
+           | ClientEndpoint, TrafficRead ->
+             assert_norm
+               (traffic_label_for_endpoint_direction
+                 ClientEndpoint
+                 TrafficRead == ServerTraffic);
+             lemma_first_epoch_application_label_match_expected_preserved
+               ClientTraffic
+               model0
+               model1
+           | ServerEndpoint, TrafficWrite ->
+             assert_norm
+               (traffic_label_for_endpoint_direction
+                 ServerEndpoint
+                 TrafficWrite == ServerTraffic);
+             lemma_first_epoch_application_label_match_expected_preserved
+               ClientTraffic
+               model0
+               model1
+           | ServerEndpoint, TrafficRead ->
+             assert_norm
+               (traffic_label_for_endpoint_direction
+                 ServerEndpoint
+                 TrafficRead == ClientTraffic);
+             lemma_first_epoch_application_label_match_expected_preserved
+               ServerTraffic
+               model0
+               model1);
+          assert (first_epoch_application_traffic_material_slots_match_expected_model
+            model1)
+        | TrafficHandshake ->
+          lemma_first_epoch_application_slots_preserved_when_application_labels_unchanged
+            model0
+            model1)
+     | _, _ ->
+       lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+         model0
+         model1)
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsKeyUpdate _ ->
+       assert False
+     | _ ->
+       lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+         model0
+         model1)
+
+let lemma_step_model_preserves_first_epoch_application_traffic_material_replay_invariant_for_role
+  (role:endpoint_role)
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_replay_invariant_for_role
+          role
+          model0 /\
+        legal_event model0 ev /\
+        step_model model0 ev == Some model1 /\
+        conn_event_is_key_update ev == false)
+      (ensures
+        first_epoch_application_traffic_material_replay_invariant_for_role
+          role
+          model1)
+=
+  lemma_step_model_preserves_config model0 ev model1;
+  lemma_step_model_supported_profile_key_schedule_reachable_shape
+    model0
+    ev
+    model1;
+  lemma_step_model_application_record_epoch_reachable_shape_for_role
+    role
+    model0
+    ev
+    model1;
+  lemma_step_model_preserves_application_traffic_key_slot_stage_shape_for_role
+    role
+    model0
+    ev
+    model1;
+  lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_role
+    role
+    model0
+    ev
+    model1;
+  lemma_step_model_preserves_first_epoch_application_traffic_material_slots_match_expected_model
+    role
+    model0
+    ev
+    model1
+
+let rec lemma_conn_events_raw_replay_no_key_update_first_epoch_application_traffic_material_replay_invariant_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  (events:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_replay_invariant_for_role
+          role
+          model /\
+        conn_events_raw_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model /\
+        conn_events_no_key_update events == true)
+      (ensures
+        first_epoch_application_traffic_material_replay_invariant_for_role
+          role
+          final_model)
+      (decreases events)
+=
+  match events with
+  | [] ->
+    assert (final_model == model)
+  | ev :: rest ->
+    assert (conn_event_is_key_update ev == false);
+    assert (conn_events_no_key_update rest == true);
+    eliminate exists
+      (model1:connection_model)
+      (delta_sent:B.bytes)
+      (delta_received:B.bytes)
+      (tail_sent:B.bytes)
+      (tail_received:B.bytes).
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      conn_events_raw_replay model1 rest tail_sent tail_received final_model
+    returns
+      first_epoch_application_traffic_material_replay_invariant_for_role
+        role
+        final_model
+    with _.
+    ( lemma_step_model_preserves_first_epoch_application_traffic_material_replay_invariant_for_role
+        role
+        model
+        ev
+        model1;
+      lemma_conn_events_raw_replay_no_key_update_first_epoch_application_traffic_material_replay_invariant_for_role
+        role
+        model1
+        rest
+        tail_sent
+        tail_received
+        final_model )
+
+let lemma_connection_state_no_key_update_trace_first_epoch_application_traffic_material_slots_match_expected
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_raw_event_replay_consistent st /\
+        connection_state_no_key_update_trace st)
+      (ensures
+        first_epoch_application_traffic_material_slots_match_expected st)
+=
+  let role = st.cs_model.model_config.config_role in
+  let cfg = st.cs_model.model_config in
+  lemma_initial_first_epoch_application_traffic_material_replay_invariant_for_role
+    role
+    cfg;
+  lemma_conn_events_raw_replay_no_key_update_first_epoch_application_traffic_material_replay_invariant_for_role
+    role
+    (initial_model cfg)
+    st.cs_event_log
+    st.cs_wire_log.CL.raw_sent
+    st.cs_wire_log.CL.raw_received
+    st.cs_model;
+  assert
+    (first_epoch_application_traffic_material_slots_match_expected_model
+      st.cs_model);
+  assert
+    (first_epoch_application_traffic_material_slots_match_expected
+      (state_of_model_for_first_epoch_application_material st.cs_model));
+  assert
+    (first_epoch_application_traffic_material_slots_match_expected st)
+
+#pop-options
+
 let server_certificate_verify_body_empty_reachable_shape
   (st:connection_state)
   : prop =

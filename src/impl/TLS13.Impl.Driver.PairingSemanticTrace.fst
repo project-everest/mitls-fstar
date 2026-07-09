@@ -20,9 +20,10 @@ module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
+module T = TLS13.Types
 module X = TLS13.X509.Spec
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--split_queries always --z3rlimit 10 --z3refresh"
 
 noextract
 let next_model
@@ -51,6 +52,76 @@ let lemma_step_model_many_cons_next
   | None ->
     assert_norm (CS.step_model_many model (ev :: rest) == None);
     assert False
+
+let rec lemma_conn_events_raw_replay_legal_after_prefix
+  (model:CS.connection_model)
+  (prefix_model:CS.connection_model)
+  (prefix:list CS.conn_event)
+  (ev:CS.conn_event)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model_many model prefix == Some prefix_model /\
+        CS.conn_events_raw_replay
+          model
+          (prefix @ (ev :: rest))
+          raw_sent
+          raw_received
+          final_model)
+      (ensures CS.legal_event prefix_model ev)
+      (decreases prefix)
+=
+  match prefix with
+  | [] ->
+    assert (prefix_model == model);
+    assert_norm ([] @ (ev :: rest) == ev :: rest);
+    eliminate exists
+      (model1:CS.connection_model)
+      (delta_sent:B.bytes)
+      (delta_received:B.bytes)
+      (tail_sent:B.bytes)
+      (tail_received:B.bytes).
+      CS.legal_event model ev /\
+      CS.step_model model ev == Some model1 /\
+      CS.event_raw_delta_legal model ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+    returns CS.legal_event prefix_model ev
+    with _.
+    ( assert (prefix_model == model) )
+  | hd :: tl ->
+    assert_norm ((hd :: tl) @ (ev :: rest) == hd :: (tl @ (ev :: rest)));
+    eliminate exists
+      (model1:CS.connection_model)
+      (delta_sent:B.bytes)
+      (delta_received:B.bytes)
+      (tail_sent:B.bytes)
+      (tail_received:B.bytes).
+      CS.legal_event model hd /\
+      CS.step_model model hd == Some model1 /\
+      CS.event_raw_delta_legal model hd delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      CS.conn_events_raw_replay model1 (tl @ (ev :: rest)) tail_sent tail_received final_model
+    returns CS.legal_event prefix_model ev
+    with _.
+    ( assert (model1 == next_model model hd);
+      assert (CS.step_model_many model (hd :: tl) ==
+        CS.step_model_many model1 tl);
+      assert (CS.step_model_many model1 tl == Some prefix_model);
+      lemma_conn_events_raw_replay_legal_after_prefix
+        model1
+        prefix_model
+        tl
+        ev
+        rest
+        tail_sent
+        tail_received
+        final_model )
 
 noextract
 let client_semantic_install_event
@@ -2466,5 +2537,254 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
     server
     client_trace
     server_trace
+
+noextract
+let handshake_message_slots_equal_model
+  (model0:CS.connection_model)
+  (model1:CS.connection_model)
+  : prop =
+  model1.CS.model_handshake.CS.hs_client_hello ==
+    model0.CS.model_handshake.CS.hs_client_hello /\
+  model1.CS.model_handshake.CS.hs_server_hello ==
+    model0.CS.model_handshake.CS.hs_server_hello /\
+  model1.CS.model_handshake.CS.hs_encrypted_extensions ==
+    model0.CS.model_handshake.CS.hs_encrypted_extensions /\
+  model1.CS.model_handshake.CS.hs_certificate ==
+    model0.CS.model_handshake.CS.hs_certificate /\
+  model1.CS.model_handshake.CS.hs_certificate_verify ==
+    model0.CS.model_handshake.CS.hs_certificate_verify /\
+  model1.CS.model_handshake.CS.hs_server_finished ==
+    model0.CS.model_handshake.CS.hs_server_finished /\
+  model1.CS.model_handshake.CS.hs_client_finished ==
+    model0.CS.model_handshake.CS.hs_client_finished
+
+let lemma_application_data_step_preserves_handshake_message_slots
+  (model model1:CS.connection_model)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        model.CS.model_control == CS.ControlApplicationData /\
+        CS.legal_event model ev /\
+        CS.conn_event_is_key_update ev == false /\
+        conn_event_is_ccs ev == false /\
+        CS.step_model model ev == Some model1 /\
+        model1.CS.model_control == CS.ControlApplicationData)
+      (ensures handshake_message_slots_equal_model model model1)
+=
+  match ev with
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData _ ->
+       assert_norm (CS.step_model model ev == Some model1)
+     | CS.LocalFail err ->
+       assert_norm (CS.step_model model ev == Some (CS.fail_model model err));
+       assert (model1 == CS.fail_model model err);
+       assert (model1.CS.model_control == CS.ControlFailed err);
+       assert False
+     | _ ->
+       assert_norm (CS.step_model model ev == None);
+       assert False)
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsApplicationData _ ->
+       assert_norm (CS.step_model model ev == Some model1)
+     | M.TlsIgnoredPostHandshake _ ->
+       (match msg.CL.message_direction with
+        | CL.Received ->
+          assert_norm (CS.step_model model ev == Some model1)
+        | CL.Sent ->
+          assert_norm (CS.step_model model ev == None);
+          assert False)
+     | M.TlsKeyUpdate _ ->
+       assert_norm (CS.conn_event_is_key_update ev == true);
+       assert False
+     | M.TlsAlert alert ->
+       (match alert with
+        | T.CloseNotify ->
+          (match msg.CL.message_direction with
+           | CL.Sent ->
+             assert_norm (CS.step_model model ev == Some model1);
+             assert (model1.CS.model_control == CS.ControlClosing);
+             assert False
+           | CL.Received ->
+             assert_norm (CS.step_model model ev == Some model1);
+             assert (model1.CS.model_control == CS.ControlClosed);
+             assert False)
+        | _ ->
+          assert_norm
+            (CS.step_model model ev ==
+              Some (CS.fail_model model (T.AlertError alert)));
+          assert (model1 == CS.fail_model model (T.AlertError alert));
+          assert (model1.CS.model_control == CS.ControlFailed (T.AlertError alert));
+          assert False)
+     | M.TlsChangeCipherSpec ->
+       assert_norm (conn_event_is_ccs ev == true);
+       assert False
+     | M.TlsHandshake _ ->
+       assert_norm (CS.step_model model ev == None);
+       assert False)
+
+let rec lemma_application_data_preserving_semantic_suffix_preserves_handshake_message_slots
+  (model:CS.connection_model)
+  (suffix:list CS.conn_event)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        application_data_preserving_semantic_suffix model suffix final_model)
+      (ensures
+        handshake_message_slots_equal_model model final_model /\
+        final_model.CS.model_control == CS.ControlApplicationData)
+      (decreases suffix)
+=
+  match suffix with
+  | [] ->
+    assert (final_model == model)
+  | ev :: rest ->
+    match CS.step_model model ev with
+    | Some model1 ->
+      assert (model1.CS.model_control == CS.ControlApplicationData);
+      lemma_application_data_step_preserves_handshake_message_slots
+        model
+        model1
+        ev;
+      lemma_application_data_preserving_semantic_suffix_preserves_handshake_message_slots
+        model1
+        rest
+        final_model;
+      assert (handshake_message_slots_equal_model model model1);
+      assert (handshake_message_slots_equal_model model1 final_model);
+      assert (handshake_message_slots_equal_model model final_model)
+    | None ->
+      assert False
+
+let lemma_paired_handshake_message_states_preserved_by_application_suffixes
+  (client_prefix:CS.connection_state)
+  (server_prefix:CS.connection_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_suffix:list CS.conn_event)
+  (server_suffix:list CS.conn_event)
+  : Lemma
+      (requires
+        Pairing.paired_handshake_message_states client_prefix server_prefix /\
+        application_data_preserving_semantic_suffix
+          client_prefix.CS.cs_model
+          client_suffix
+          client.CS.cs_model /\
+        application_data_preserving_semantic_suffix
+          server_prefix.CS.cs_model
+          server_suffix
+          server.CS.cs_model)
+      (ensures Pairing.paired_handshake_message_states client server)
+=
+  lemma_application_data_preserving_semantic_suffix_preserves_handshake_message_slots
+    client_prefix.CS.cs_model
+    client_suffix
+    client.CS.cs_model;
+  lemma_application_data_preserving_semantic_suffix_preserves_handshake_message_slots
+    server_prefix.CS.cs_model
+    server_suffix
+    server.CS.cs_model;
+  assert (handshake_message_slots_equal_model client_prefix.CS.cs_model client.CS.cs_model);
+  assert (handshake_message_slots_equal_model server_prefix.CS.cs_model server.CS.cs_model);
+  assert (Pairing.paired_handshake_message_states client server)
+
+let lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
+          client
+          server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_traces_no_ccs_boundary
+    client
+    server
+    client.CS.cs_event_log
+    server.CS.cs_event_log
+
+let lemma_client_server_application_record_material_agrees_from_paired_successful_semantic_logs_no_ccs_application_suffix_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        paired_successful_semantic_logs_no_ccs_application_suffix_boundary
+          client
+          server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  eliminate exists
+    (client_prefix:CS.connection_state)
+    (server_prefix:CS.connection_state)
+    (client_suffix:list CS.conn_event)
+    (server_suffix:list CS.conn_event).
+    paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
+      client_prefix
+      server_prefix /\
+    client.CS.cs_event_log ==
+      FStar.List.Tot.append client_prefix.CS.cs_event_log client_suffix /\
+    server.CS.cs_event_log ==
+      FStar.List.Tot.append server_prefix.CS.cs_event_log server_suffix /\
+    application_data_preserving_semantic_suffix
+      client_prefix.CS.cs_model
+      client_suffix
+      client.CS.cs_model /\
+    application_data_preserving_semantic_suffix
+      server_prefix.CS.cs_model
+      server_suffix
+      server.CS.cs_model
+  returns
+    CS.supported_profile_client_server_key_material_agrees client server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+      client
+      server /\
+    CS.peer_record_material_agrees
+      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+      client
+      server
+  with _.
+  (
+    lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
+      client_prefix
+      server_prefix
+      client_prefix.CS.cs_event_log
+      server_prefix.CS.cs_event_log;
+    lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_states
+      client_prefix
+      server_prefix
+      client_prefix.CS.cs_event_log
+      server_prefix.CS.cs_event_log;
+    lemma_paired_handshake_message_states_preserved_by_application_suffixes
+      client_prefix
+      server_prefix
+      client
+      server
+      client_suffix
+      server_suffix;
+    Pairing.lemma_client_server_application_record_material_agrees_from_paired_handshake_message_states
+      client
+      server
+  )
  
 #pop-options

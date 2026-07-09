@@ -1250,6 +1250,8 @@ let lemma_clean_no_tail_valid_byte_traces_client_supported_hello_profile
     server_received
     server_sent;
   assert (CS.connection_state_consistent client);
+  assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+  CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
   assert (CS.client_x25519_key_share_projection client);
   WFL.lemma_state_supported_client_hello_wire_profile_from_config client
 
@@ -1285,6 +1287,8 @@ let lemma_clean16_no_tail_valid_byte_traces_client_supported_hello_profile
     server_received
     server_sent;
   assert (CS.connection_state_consistent client);
+  assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+  CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
   assert (CS.client_x25519_key_share_projection client);
   WFL.lemma_state_supported_client_hello_wire_profile_from_config client
 

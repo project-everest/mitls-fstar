@@ -4,16 +4,15 @@ module Calc.Server.EndpointRunner
 
 open Pulse.Lib.Pervasives
 
-module Socket = Calc.Server.Socket
-module Seq = FStar.Seq
+module Endpoint = Calc.Server.Endpoint
 module SZ = FStar.SizeT
 module TCP = Common.TCP
 
 fn run_channel_endpoint
   (ch:TCP.channel)
   (fuel:SZ.t)
-requires TCP.is_channel ch (Seq.create 0 0uy) (Seq.create 0 0uy)
+requires TCP.is_channel ch Endpoint.calc_empty_bytes Endpoint.calc_empty_bytes
 ensures emp
 {
-  Socket.run_channel ch fuel
+  Endpoint.run_channel_endpoint_impl ch fuel
 }

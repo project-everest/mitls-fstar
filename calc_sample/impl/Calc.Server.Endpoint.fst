@@ -1878,7 +1878,7 @@ ensures
   }
 }
 
-fn run_channel_endpoint
+fn run_channel_endpoint_impl
   (ch:TCP.channel)
   (fuel:SZ.t)
 requires TCP.is_channel ch calc_empty_bytes calc_empty_bytes

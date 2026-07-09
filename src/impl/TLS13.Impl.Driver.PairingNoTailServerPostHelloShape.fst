@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module ListP = FStar.List.Tot.Properties
 module M = TLS13.Messages
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
@@ -1060,6 +1061,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
   assert (CS.application_record_keys_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
+  CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
   assert (CS.stable_server_x25519_key_share_projection server);
   assert (CS.server_x25519_key_share_projection server);
   assert (Some?
@@ -1270,6 +1272,9 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
   assert (CS.application_record_keys_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
+  CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
   assert (Some?
     server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
   PNTWHR.lemma_server_hello_window_rank_application_data_installed_zero
@@ -1559,6 +1564,9 @@ let lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order
   assert (CS.application_record_keys_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
+  CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
   assert (Some?
     server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
   PNTWHR.lemma_server_hello_window_rank_application_data_installed_zero
@@ -1817,6 +1825,9 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_t
   assert (CS.application_record_keys_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
+  CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
   assert (Some?
     server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
   PNTWHR.lemma_server_hello_window_rank_application_data_installed_zero

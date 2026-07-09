@@ -2443,6 +2443,7 @@ let legal_handshake_message
   | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate <> None /\
+    hs.hs_certificate_verify_verified == false /\
     B.length cv.M.body == 0 /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
     (match hs.hs_certificate_verify with
