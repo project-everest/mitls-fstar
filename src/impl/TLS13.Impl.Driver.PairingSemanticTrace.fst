@@ -2714,12 +2714,12 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
     client.CS.cs_event_log
     server.CS.cs_event_log
 
-let lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_logs_no_ccs_boundary
+let lemma_client_server_application_record_material_agrees_from_paired_successful_semantic_logs_no_ccs_application_suffix_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
       (requires
-        paired_successful_no_tail_semantic_logs_no_ccs_boundary
+        paired_successful_semantic_logs_no_ccs_application_suffix_boundary
           client
           server)
       (ensures

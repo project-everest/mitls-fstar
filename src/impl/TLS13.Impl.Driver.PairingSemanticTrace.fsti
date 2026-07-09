@@ -416,7 +416,7 @@ let rec application_data_preserving_semantic_suffix
        False)
 
 noextract
-let paired_successful_no_tail_semantic_logs_no_ccs_boundary
+let paired_successful_semantic_logs_no_ccs_application_suffix_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
@@ -507,12 +507,12 @@ val lemma_client_server_application_record_material_agrees_from_paired_successfu
           client
           server)
 
-val lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_logs_no_ccs_boundary
+val lemma_client_server_application_record_material_agrees_from_paired_successful_semantic_logs_no_ccs_application_suffix_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
       (requires
-        paired_successful_no_tail_semantic_logs_no_ccs_boundary
+        paired_successful_semantic_logs_no_ccs_application_suffix_boundary
           client
           server)
       (ensures
