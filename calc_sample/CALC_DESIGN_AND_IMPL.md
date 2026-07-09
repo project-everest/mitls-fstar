@@ -665,6 +665,166 @@ return {heap_ref; ...}                // Safe!
 
 ---
 
+## Client Mirror: A Small Client State Machine
+
+The calculator server above is the small-scale analogue of the TLS **server**.
+For symmetry with the TLS **client**, `calc_sample` also includes a small
+**client state machine** built with the exact same layered-log technique, but
+with the send/receive directions flipped.
+
+Where the server *receives* requests and *sends* responses, the client *sends*
+requests and *receives* responses. The client adds a genuine two-phase state
+machine on top of the server's log:
+
+- `ClientIdle` – ready to issue the next request;
+- `ClientAwaiting b` – request frame `b` was sent, its response is awaited.
+
+### Key idea: reuse the server by simulating it
+
+The client is implemented as a **predicted server** (it embeds a full
+`server_state`) plus a buffer holding the outstanding request's wire bytes. To
+predict / validate the response for a request, the client simply runs
+`Calc.Server.process_request` on its embedded server. This reuses **every**
+verified server handler and the whole `server_exactly` proof, so the client adds
+almost no new proof burden.
+
+```fstar
+// spec/Calc.Client.Log.fst — abstract client state
+noeq type client_state_abs = {
+  completed: calc_log;              // predicted-server view of completed round-trips
+  pending: option client_frame;     // outstanding request bytes (None = Idle)
+}
+
+let client_sent_bytes (st:client_state_abs) : bytes = // requests the client sent
+  match st.pending with
+  | None   -> st.completed.input_bytes
+  | Some b -> Seq.append st.completed.input_bytes b
+let client_recv_bytes (st:client_state_abs) : bytes = // responses it received
+  st.completed.output_bytes
+```
+
+```pulse
+// impl/Calc.Client.Types.fst — concrete client
+noeq type client_state = { predicted: server_state; pending: Vec.vec U8.t; }
+let client_exactly (c:client_state) (st:client_state_abs) : slprop = ...
+```
+
+### The two transitions
+
+`impl/Calc.Client.fst` provides the mirror of `new_server`/`process_request`:
+
+- `issue_request` : `Idle → Awaiting`. Writes the request frame into the pending
+  buffer and appends it to the sent-byte stream. The one non-trivial obligation
+  is that the extended sent stream still parses back to the issued-request list
+  (`lemma_client_issue_correspondence`).
+- `process_response` : `Awaiting → Idle`. Runs the embedded predicted server on
+  the pending request, checks the received bytes equal the predicted response,
+  and advances the completed log. Because a fully-`Idle` client's wire
+  correspondence *is* just `log_consistent` of its completed log, consistency and
+  correspondence come **for free** from the reused server.
+
+Both entry points expose the same style of postcondition as the server: a
+`client_single_step` evolution fact plus byte/message/semantic correspondence,
+with **0 admits**. This core (state machine + layered-log proof) is verified by
+`make verify`; the transport/socket/C-extraction stack is intentionally left to
+the server side to keep the client a focused demo.
+
+### Framework instance: `calc_client_state_machine`
+
+Just as the server packages its behaviour as a `Common.StateMachine.state_machine`
+instance (`Calc.Protocol.calc_frame_state_machine`), the client exposes its own
+instance in `Calc.Client.Protocol.fst`:
+
+```fstar
+let calc_client_step (st0) (ev) (st1) (out) : GTot prop =
+  match ev with
+  // Response received from the server → delivered to the application.
+  | SM.WireEvent resp ->
+      client_recv_step_ok st0 st1 resp /\
+      out.so_wire_outputs == [] /\ out.so_local_outputs == [resp]
+  // Application issues a request → emitted on the wire.
+  | SM.LocalEvent (CalcClientIssue b) ->
+      client_issue_step_ok st0 st1 b /\
+      out.so_wire_outputs == [b] /\ out.so_local_outputs == []
+
+let calc_client_state_machine : SM.state_machine ... =
+  { sm_initial_state = initial_client; sm_step = calc_client_step; }
+```
+
+Note the direction flip versus the server: the client's `WireEvent` is a
+*received* response and its `so_wire_outputs` are *sent* requests. It reuses the
+server's wire format (`calc_frame_wire_format`) — both requests and responses are
+5-byte `calc_frame`s. A bridge lemma `lemma_client_single_step_evolves` proves
+every `client_single_step` is a one-transition `SM.state_evolves` of this
+instance (mirroring the server's
+`Calc.Server.CanonicalProtocol.lemma_calc_server_step_rel_state_ahead`), so the
+low-level `Calc.Client` operations plug straight into the framework.
+
+---
+
+## Temporal Reasoning: An LTL/CTL Layer over Client–Server Interaction
+
+With both endpoints modelled as state machines, we can reason about their
+*interaction over time*. `Common.Temporal`, `Calc.System` and
+`Calc.System.Temporal` add a small, genuine path-based temporal-logic layer and
+prove properties like "the client and server stacks always agree".
+
+### The lag problem
+
+The naive property `AG (client_stack = server_stack)` is **false**: while a
+request or response is in flight the stacks disagree by exactly the in-flight
+work. (The full TLS stack models the same lag in its `Pairing*` family, where
+what one endpoint *sent* is a prefix-extension of what the other *received*.)
+The fix is to only compare stacks when the system is **quiescent** (nothing in
+flight).
+
+### Combined system (`Calc.System.fst`)
+
+```fstar
+type channel_state = Quiet | InReq calc_frame | InResp calc_frame
+type system_state  = { client: client_state_abs; server: calc_log; channel }
+```
+
+Three transitions (`sys_step`): **issue** (client sends a request → `InReq`),
+**serve** (server processes it → `InResp`), **recv** (client receives the
+response → `Quiet`). A structural invariant `system_inv` pins down the lag:
+
+- `Quiet` / `InReq`: `server == client.completed` (stacks agree);
+- `InResp`: the server is exactly one processed request ahead.
+
+`system_inv` is proved **inductive** (`lemma_inv_preserved`) and therefore holds
+on every reachable state (`lemma_reachable_inv`, via `stable_on_closure`). It is
+phrased over the logs directly (`==`), reusing the fact that the `recv` step's
+`recv_completed` is the *same computation* as the server's `server_process`
+(`lemma_recv_completed_eq`) — so no `calc_log` record-equality proofs are needed.
+
+### Generic temporal operators (`Common.Temporal.fst`)
+
+Parameterised over an abstract state and step relation, so it is protocol-
+independent and lives in `common/` alongside `Common.StateMachine` (reusable by
+the full TLS stack, not just the calculator demo):
+
+- paths (`path = nat -> state`), runs (`is_run`), suffixes (`shift`);
+- LTL operators `holds_G` / `holds_F` / `holds_X` / `holds_U`;
+- path quantifiers `ag` (`A G`), `ef`, `af`;
+- the **soundness bridge** `lemma_ag_of_invariant`: an inductive invariant true
+  on all reachable states entails the genuine path-based `AG`. This lets a cheap
+  invariant proof discharge a real temporal property.
+
+### Theorems (`Calc.System.Temporal.fst`)
+
+1. **Flagship safety** — `lemma_flagship_quiescent_agreement`:
+   `AG (quiescent ⟹ client_stack = server_stack)`.
+2. **A next-step (`X`) property** — `lemma_x_next_is_request`: from an idle,
+   quiescent state the *next* state always has a request in flight.
+3. **Liveness under fairness** — `lemma_liveness_response_delivered`:
+   `AG (in flight ⟹ F quiescent)` — every outstanding request is eventually
+   completed. Fairness (no message stays in flight forever) is modelled as an
+   eventual strict decrease of a channel rank (Quiet=0, InResp=1, InReq=2); the
+   proof chases to quiescence by well-founded recursion on that rank.
+
+---
+
 ## Module Reference
 
 ### Specification Modules (710 lines)
@@ -697,6 +857,37 @@ return {heap_ref; ...}                // Safe!
 - 6 × `lemma_step_log_X_consistent` proofs
 - 6 × `lemma_step_log_X_evolves` proofs
 - `all_parse` predicate + inductive lemmas
+
+**Calc.Client.Log.fst**
+- `client_phase` (`ClientIdle` / `ClientAwaiting`)
+- `client_state_abs` type (completed log + optional pending frame)
+- `client_sent_bytes` / `client_recv_bytes`
+- `client_consistent`, `client_wire_correspondence`
+- `client_issue` / `client_recv` transitions
+- `client_single_step` relation + `lemma_client_issue_correspondence`
+
+**Calc.Client.Protocol.fst**
+- `calc_client_local_event` (`CalcClientIssue`) / `calc_client_local_output`
+- `calc_client_step` - client step relation (direction-flipped from server)
+- `calc_client_state_machine` - `Common.StateMachine.state_machine` instance
+- `calc_client_wire_format_state_machine` (reuses `calc_frame_wire_format`)
+- `lemma_client_single_step_evolves` - bridge to `SM.state_evolves`
+
+**Common.Temporal.fst** (in `common/`, protocol-independent)
+- Generic path-based temporal logic over `(state, step)`
+- `path` / `is_run` / `shift`; operators `holds_G` / `holds_F` / `holds_X` / `holds_U`
+- Path quantifiers `ag` (`A G`) / `ef` / `af`
+- `lemma_ag_of_invariant` / `lemma_ag_of_inductive` - reachable-invariant ⇒ `AG`
+
+**Calc.System.fst**
+- `channel_state` (`Quiet` / `InReq` / `InResp`), `system_state`
+- `sys_step` (issue / serve / recv) + `sys_step_stutter`, `initial_system`
+- `system_inv` structural invariant; `lemma_inv_preserved`, `lemma_reachable_inv`
+
+**Calc.System.Temporal.fst**
+- `lemma_flagship_quiescent_agreement` - `AG (quiescent ⇒ stacks agree)`
+- `lemma_x_next_is_request` - `X` next-step property
+- `fair` + `lemma_liveness_response_delivered` - `AG (in flight ⇒ F quiescent)`
 
 ### Implementation Modules (1092 lines)
 
