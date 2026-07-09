@@ -2712,10 +2712,9 @@ let lemma_server_network_step_ok_bridge_result
     app_out
     buffer_resp)
 
-// Partial non-StepOk bridge lemmas for the stuttering network results.  These
-// are not yet enough to discharge server_network_bridge_obligation globally:
-// DecodeError needs a spec/implementation decision about whether the common
-// LocalFail refinement may consume a framed-but-undecodable record.
+// Non-StepOk bridge lemmas for stuttering and rejected network results.  The
+// DecodeError branch uses the zero-consume semantics exposed by Server.Network,
+// so these helpers now feed the global server_network_bridge_obligation proof.
 let lemma_server_network_need_more_input_bridge_result
   (initial:CS.connection_state)
   (received0:B.bytes)

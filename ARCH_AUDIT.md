@@ -23,6 +23,9 @@ The first cleanup stages are complete:
    internally from canonical progress and wire-log facts.
 4. TLS extraction and the extracted OpenSSL client/server interop tests pass with
    the endpoint modules in the bundle.
+5. Client/server network and server local bridge obligations are now derived
+   globally from the role specs; canonical/query/endpoint frames no longer carry
+   ad-hoc bridge proof fields.
 
 The remaining gap is deliberately narrower: the C-facing runtime wrappers call
 `Client.Endpoint.client_endpoint_run_workflow` /
@@ -165,7 +168,7 @@ flowchart TD
   `Common.ProtocolEndpoint` for that implementation
   (`src/impl/TLS13.Impl.Server.Endpoint.fst:4102-4135`).  The endpoint frame
   carries query state, raw/network buffers, certificate-chain/material buffers,
-  and bridge obligations for credential-dependent local actions
+  and credential-dependent material facts
   (`src/impl/TLS13.Impl.Server.Endpoint.fst:66-120`).
 - `Server.CanonicalProtocol.new_canonical_server` now allocates the concrete
   server, credentials, progress reference, supported-profile proof carrier, and
