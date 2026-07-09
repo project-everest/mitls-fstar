@@ -52,6 +52,76 @@ let lemma_step_model_many_cons_next
     assert_norm (CS.step_model_many model (ev :: rest) == None);
     assert False
 
+let rec lemma_conn_events_raw_replay_legal_after_prefix
+  (model:CS.connection_model)
+  (prefix_model:CS.connection_model)
+  (prefix:list CS.conn_event)
+  (ev:CS.conn_event)
+  (rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_model_many model prefix == Some prefix_model /\
+        CS.conn_events_raw_replay
+          model
+          (prefix @ (ev :: rest))
+          raw_sent
+          raw_received
+          final_model)
+      (ensures CS.legal_event prefix_model ev)
+      (decreases prefix)
+=
+  match prefix with
+  | [] ->
+    assert (prefix_model == model);
+    assert_norm ([] @ (ev :: rest) == ev :: rest);
+    eliminate exists
+      (model1:CS.connection_model)
+      (delta_sent:B.bytes)
+      (delta_received:B.bytes)
+      (tail_sent:B.bytes)
+      (tail_received:B.bytes).
+      CS.legal_event model ev /\
+      CS.step_model model ev == Some model1 /\
+      CS.event_raw_delta_legal model ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+    returns CS.legal_event prefix_model ev
+    with _.
+    ( assert (prefix_model == model) )
+  | hd :: tl ->
+    assert_norm ((hd :: tl) @ (ev :: rest) == hd :: (tl @ (ev :: rest)));
+    eliminate exists
+      (model1:CS.connection_model)
+      (delta_sent:B.bytes)
+      (delta_received:B.bytes)
+      (tail_sent:B.bytes)
+      (tail_received:B.bytes).
+      CS.legal_event model hd /\
+      CS.step_model model hd == Some model1 /\
+      CS.event_raw_delta_legal model hd delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      CS.conn_events_raw_replay model1 (tl @ (ev :: rest)) tail_sent tail_received final_model
+    returns CS.legal_event prefix_model ev
+    with _.
+    ( assert (model1 == next_model model hd);
+      assert (CS.step_model_many model (hd :: tl) ==
+        CS.step_model_many model1 tl);
+      assert (CS.step_model_many model1 tl == Some prefix_model);
+      lemma_conn_events_raw_replay_legal_after_prefix
+        model1
+        prefix_model
+        tl
+        ev
+        rest
+        tail_sent
+        tail_received
+        final_model )
+
 noextract
 let client_semantic_install_event
   (ev:CS.conn_event)
