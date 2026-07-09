@@ -26,6 +26,10 @@ The first cleanup stages are complete:
 5. Client/server network and server local bridge obligations are now derived
    globally from the role specs; canonical/query/endpoint frames no longer carry
    ad-hoc bridge proof fields.
+6. Client/server endpoint API-local wrappers now expose the underlying
+   `CPI.local_process_correct` fact, so proof-facing driver wrappers can reason
+   about endpoint local actions without re-entering the legacy direct-driver
+   local-write proofs.
 
 The remaining gap is deliberately narrower: the C-facing runtime wrappers call
 `Client.Endpoint.client_endpoint_run_workflow` /
