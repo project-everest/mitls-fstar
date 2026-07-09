@@ -22,7 +22,7 @@ module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module X = TLS13.X509.Spec
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--split_queries always --z3rlimit 10 --z3refresh"
 
 noextract
 let next_model
@@ -2466,5 +2466,30 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
     server
     client_trace
     server_trace
+
+let lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_logs_no_ccs_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        paired_successful_no_tail_semantic_logs_no_ccs_boundary
+          client
+          server)
+      (ensures
+        CS.supported_profile_client_server_key_material_agrees client server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+          client
+          server /\
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+          client
+          server)
+=
+  lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_traces_no_ccs_boundary
+    client
+    server
+    client.CS.cs_event_log
+    server.CS.cs_event_log
  
 #pop-options

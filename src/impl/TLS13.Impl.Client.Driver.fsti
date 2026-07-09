@@ -64,8 +64,7 @@ let client_driver_application_ready
   : prop =
   CT.client_end_to_end_invariant st /\
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-  CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model /\
-  CS.stable_client_x25519_key_share_projection st
+  CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model
 
 noextract
 let client_driver_sent_log_exact

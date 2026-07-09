@@ -647,6 +647,7 @@ let lemma_server_application_ready_progress_rank_zero
       (ensures server_application_progress_rank server.CS.cs_model == 0)
 =
   let keys = server.CS.cs_model.CS.model_handshake.CS.hs_keys in
+  CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
   assert (CS.stable_server_x25519_key_share_projection server);
   assert (CS.server_x25519_key_share_projection server);
   assert (CS.application_record_keys_installed_for_role
@@ -1052,6 +1053,7 @@ let lemma_server_no_tail_final_model_witnesses_from_application_ready
      (ensures server_no_tail_final_model_witnesses server)
 =
   let hs = server.CS.cs_model.CS.model_handshake in
+  CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
   assert (CS.stable_server_x25519_key_share_projection server);
   assert (CS.server_x25519_key_share_projection server);
   assert (CS.application_record_keys_installed_for_role
