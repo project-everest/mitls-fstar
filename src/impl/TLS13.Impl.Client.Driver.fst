@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
+module CQueries = TLS13.Impl.Client.CanonicalQueries
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -16,6 +17,7 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
+module EP = TLS13.Impl.Client.Endpoint
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
 module L = TLS13.Impl.Messages
@@ -70,6 +72,53 @@ let client_driver_canonical
     CP.canonical_client_state = d.client_driver_client;
     CP.canonical_client_progress = d.client_driver_progress;
     CP.canonical_client_initial = d.client_driver_initial;
+  }
+
+noextract
+let client_driver_endpoint_config
+  (_d:client_driver)
+  : CQueries.client_next_local_action_config =
+  {
+    CQueries.client_query_network_out_len = driver_network_out_capacity;
+    CQueries.client_query_certificate_public_key_len =
+      driver_public_key_payload_capacity;
+    CQueries.client_query_server_finished_payload_len =
+      driver_server_finished_payload_len;
+  }
+
+noextract
+let client_driver_endpoint_frame
+  (d:client_driver)
+  (network_app_out:array U8.t)
+  (network_app_out_len:SZ.t)
+  (local_payload:array U8.t)
+  (local_payload_len:SZ.t)
+  (local_app_out:array U8.t)
+  (local_app_out_len:SZ.t)
+  : EP.client_endpoint_frame =
+  {
+    EP.client_ep_query = {
+      CQueries.client_query_network_app_out = network_app_out;
+      CQueries.client_query_network_app_out_len = network_app_out_len;
+      CQueries.client_query_local_payload = local_payload;
+      CQueries.client_query_local_payload_len = local_payload_len;
+      CQueries.client_query_local_app_out = local_app_out;
+      CQueries.client_query_local_app_out_len = local_app_out_len;
+    };
+    EP.client_ep_raw_len = driver_rx_capacity;
+    EP.client_ep_raw = d.client_driver_raw;
+    EP.client_ep_network_out_len = driver_network_out_capacity;
+    EP.client_ep_network_out = d.client_driver_network_out;
+    EP.client_ep_auth = d.client_driver_auth;
+    EP.client_ep_auth_leaf_der_len = driver_auth_leaf_der_capacity;
+    EP.client_ep_auth_leaf_der = d.client_driver_auth_leaf_der;
+    EP.client_ep_auth_payload_len = driver_public_key_payload_capacity;
+    EP.client_ep_auth_payload = d.client_driver_auth_payload;
+    EP.client_ep_auth_cv_input_len =
+      driver_certificate_verify_input_capacity;
+    EP.client_ep_auth_cv_input = d.client_driver_auth_cv_input;
+    EP.client_ep_auth_signature_len = driver_signature_capacity;
+    EP.client_ep_auth_signature = d.client_driver_auth_signature;
   }
 
 noeq type driver = {
@@ -445,6 +494,46 @@ let client_driver_connected
     IO.is_channel ch received sent **
     client_driver_buffers d buffered buffered_len **
     pure (client_driver_wire_logs_match st received sent buffered buffered_len)
+
+noextract
+let client_driver_endpoint_connected
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  (canonical_received:B.bytes)
+  (canonical_sent:B.bytes)
+  (transport_received:B.bytes)
+  (transport_sent:B.bytes)
+  : slprop =
+  CP.client_invariant
+    (client_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st **
+  exists* ch buffered buffered_len.
+    Box.pts_to d.client_driver_channel (Some ch) **
+    Box.pts_to d.client_driver_buffered_len buffered_len **
+    EP.client_endpoint_frame_ready
+      (client_driver_canonical d)
+      cfg
+      frame
+      st **
+    EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      transport_received
+      transport_sent
+      st **
+    pure (
+      client_driver_wire_logs_match
+        st
+        transport_received
+        transport_sent
+        buffered
+        buffered_len /\
+      Seq.equal canonical_sent transport_sent)
 
 noextract
 let client_driver_closed

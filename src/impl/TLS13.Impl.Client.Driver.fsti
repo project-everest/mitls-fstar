@@ -8,10 +8,12 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
+module CQueries = TLS13.Impl.Client.CanonicalQueries
 module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
+module EP = TLS13.Impl.Client.Endpoint
 module IO = Common.TCP
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
@@ -26,6 +28,22 @@ noextract
 val client_driver_canonical
   (d:client_driver)
   : CP.canonical_client
+
+noextract
+val client_driver_endpoint_config
+  (d:client_driver)
+  : CQueries.client_next_local_action_config
+
+noextract
+val client_driver_endpoint_frame
+  (d:client_driver)
+  (network_app_out:array U8.t)
+  (network_app_out_len:SZ.t)
+  (local_payload:array U8.t)
+  (local_payload_len:SZ.t)
+  (local_app_out:array U8.t)
+  (local_app_out_len:SZ.t)
+  : EP.client_endpoint_frame
 
 noextract
 val client_driver_wire_logs_match
@@ -56,6 +74,27 @@ val client_driver_connected
   (st:TLS13.Spec.ConnectionState.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
+  : slprop
+
+noextract
+(**
+  Endpoint-owned connected driver state.
+
+  This is the canonical endpoint-side counterpart of [client_driver_connected]:
+  it owns the canonical progress/current-state resource, the endpoint frame
+  resources, endpoint IO state, the driver's channel cell, and the retained
+  input-buffer length cell.  It is intentionally separate from the legacy public
+  connected predicate, which still carries only the initial canonical seed.
+**)
+val client_driver_endpoint_connected
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  (canonical_received:B.bytes)
+  (canonical_sent:B.bytes)
+  (transport_received:B.bytes)
+  (transport_sent:B.bytes)
   : slprop
 
 noextract
