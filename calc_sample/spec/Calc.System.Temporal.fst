@@ -33,7 +33,7 @@ open Calc.System
     1. Flagship: AG (quiescent ==> client_stack = server_stack)
     ───────────────────────────────────────────────────────────────────────── **)
 
-let stacks_agree_when_quiescent (s:system_state) : prop =
+let stacks_agree_when_quiescent : T.sprop system_state = fun s ->
   quiescent s ==> client_stack s == server_stack s
 
 (** The invariant entails the flagship state-predicate. **)
