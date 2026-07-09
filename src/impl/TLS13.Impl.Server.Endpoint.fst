@@ -2820,7 +2820,23 @@ ensures
       (Ghost.reveal st)
       (Ghost.reveal st1)
       (Ghost.reveal wire_outputs)
-      (Ghost.reveal local_outputs)
+      (Ghost.reveal local_outputs) **
+    pure (
+      CPI.local_process_correct
+        (SP.server_system (Ghost.reveal srv.SP.canonical_server_initial))
+        ev
+        (Ghost.reveal old_out)
+        (Ghost.reveal out_contents)
+        frame.server_ep_network_out_len
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal st)
+        result
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputs)
+        (Ghost.reveal local_outputs))
 {
   unfold (server_api_local_action_ready
     srv
@@ -2911,6 +2927,22 @@ ensures
       (Ghost.reveal st1)
       (Ghost.reveal wire_outputse)
       (Ghost.reveal local_outputse));
+  assert (pure (
+    CPI.local_process_correct
+      (SP.server_system (Ghost.reveal srv.SP.canonical_server_initial))
+      ev
+      (Ghost.reveal (server_local_old_output lio))
+      (Ghost.reveal out_contentse)
+      frame.server_ep_network_out_len
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal st)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      (Ghost.reveal wire_outputse)
+      (Ghost.reveal local_outputse)));
   server_finish_local_io
     srv
     ch
