@@ -29,6 +29,16 @@ let client_hello_max_signature_schemes : nat = 16
 // the TLS13.Wire.Semantics accessors instead of hand-written projection-record
 // fields, and transcript exactness is the generated parse/serialize round-trip
 // rather than a verbatim `body` field.
+//
+// [noextract]: this spec/model datatype wraps the generated high-level wire
+// records (GCH.clientHello, ...), which are themselves `noextract` (they carry
+// F* `list`s and are non-Low*).  `handshake_msg` is a ghost/model type: the impl
+// operates on the L mirror (TLS13.Impl.Messages arrays) and the generated LOW
+// representation at runtime, never on these high records.  Marking it `noextract`
+// prevents KaRaMeL from emitting a C struct whose union members would reference
+// the (undefined-in-C) generated high records.  Nothing extracted references it
+// (only its own auto-generated discriminators, which vanish with the type).
+noextract
 type handshake_msg =
   | ClientHello of GCH.clientHello
   | ServerHello of GSH.serverHello
@@ -49,6 +59,12 @@ type plaintext = {
 
 type sealed_record = B.bytes
 
+// [noextract]: wraps `handshake_msg` (above) via `TlsHandshake`, so it is a
+// ghost/model type for the same reason.  Its only C referencer (the surrounding
+// `conn_event` model type) is already dead-code-eliminated; marking it
+// `noextract` keeps the extraction consistent (a non-noextract type embedding a
+// noextract one would produce a dangling C reference).
+noextract
 type tls_message =
   | TlsHandshake of handshake_msg
   | TlsApplicationData of B.bytes
