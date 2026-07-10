@@ -5,6 +5,8 @@ module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
 module K = TLS13.Keys
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
+module GCV = TLS13.Wire.Generated.CertificateVerify
 module R = TLS13.Record.Spec
 module RD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
@@ -232,8 +234,8 @@ let lemma_protected_handshake_wire_equal_from_event_projections_peer
 let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
   (sender:connection_model)
   (receiver:connection_model)
-  (fin:M.finished)
-  (cv:M.certificate_verify)
+  (fin:GFin.finished)
+  (cv:GCV.certificateVerify)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   : Lemma

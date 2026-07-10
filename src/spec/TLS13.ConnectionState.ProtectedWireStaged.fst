@@ -5,6 +5,7 @@ module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
 module K = TLS13.Keys
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
 module R = TLS13.Record.Spec
 module RD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
@@ -71,7 +72,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
   (cf_server_after_app_write:connection_model)
   (cf_client_after_finished:connection_model)
   (cf_server_after_finished:connection_model)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)
@@ -632,7 +633,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
   (cf_server_after_app_write:connection_model)
   (cf_client_after_finished:connection_model)
   (cf_server_after_finished:connection_model)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)
@@ -759,7 +760,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_instal
   (cf_server_after_app_write:connection_model)
   (cf_client_after_finished:connection_model)
   (cf_server_after_finished:connection_model)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)
@@ -1005,7 +1006,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contig
   (received_msg2:M.handshake_msg)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)
@@ -1197,7 +1198,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contig
   (received_msg2:M.handshake_msg)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)

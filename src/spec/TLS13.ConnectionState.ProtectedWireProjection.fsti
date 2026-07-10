@@ -4,6 +4,8 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
+module GCV = TLS13.Wire.Generated.CertificateVerify
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module T = TLS13.Types
@@ -88,8 +90,8 @@ val lemma_protected_handshake_wire_equal_from_event_projections_peer
 val lemma_protected_finished_not_certificate_verify_from_event_projections_peer
   (sender:CS.connection_model)
   (receiver:CS.connection_model)
-  (fin:M.finished)
-  (cv:M.certificate_verify)
+  (fin:GFin.finished)
+  (cv:GCV.certificateVerify)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   : Lemma

@@ -4,6 +4,7 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module T = TLS13.Types
@@ -76,7 +77,7 @@ let local_event_preserves_record_read
 
 noextract
 let client_finished_replay_events
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (sent_msg:M.handshake_msg)
@@ -228,7 +229,7 @@ let client_protected_handshake_contiguous_replay_events
   (received_msg2:M.handshake_msg)
   (client_verify_skip:CS.local_event)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (sent_msg4:M.handshake_msg)
@@ -266,7 +267,7 @@ let paired_protected_handshake_contiguous_replay_views
   (client_verify_skip:CS.local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)

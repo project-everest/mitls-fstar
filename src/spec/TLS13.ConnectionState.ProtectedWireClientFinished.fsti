@@ -4,6 +4,7 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module T = TLS13.Types
@@ -138,7 +139,7 @@ val lemma_protected_handshake_event_projection_pair_after_client_finished_local_
   (server_after_app_write:CS.connection_model)
   (client_after_finished:CS.connection_model)
   (server_after_finished:CS.connection_model)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
