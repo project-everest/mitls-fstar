@@ -18,7 +18,6 @@ module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module Rec = TLS13.Record
 module Ref = Pulse.Lib.Reference
-module SerCV = TLS13.Impl.Serializer.CertificateVerify
 module SerCert = TLS13.Impl.Serializer.Certificate
 module SerEE = TLS13.Impl.Serializer.EncryptedExtensions
 module SerFin = TLS13.Impl.Serializer.Finished
@@ -35,7 +34,19 @@ module Cast = FStar.Int.Cast
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
 module WSR = TLS13.Wire.Spec.Reveal
-module WSRD = TLS13.Wire.Spec.RevealDecode
+module Rev = TLS13.Wire.Spec.Reveal.Handshake
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHB = TLS13.Wire.Generated.ServerHello_body
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
+module GHS = TLS13.Wire.Generated.Handshake
+module SerH = TLS13.Impl.Serializer.Handshake
 
 noextract
 let byte (n:nat) : B.byte =
@@ -69,13 +80,6 @@ let u8_of_sizet_v_byte (n:SZ.t)
 let u8_of_sizet_div2_byte (n:SZ.t)
   : Lemma (u8_of_sizet (SZ.div (SZ.div n 256sz) 256sz) == byte (SZ.v n / 65536))
   = FStar.Math.Lemmas.division_multiplication_lemma (SZ.v n) 256 256
-
-let lemma_client_hello_byte_eq (n:nat)
-  : Lemma (byte n == WSR.client_hello_byte n)
-=
-  WSR.lemma_client_hello_byte_v n;
-  assert_norm (U8.v (byte n) == n % 256);
-  U8.v_inj (byte n) (WSR.client_hello_byte n)
 
 let write_u16_bytes (n:nat) : GTot B.bytes =
   B.of_list [byte (n / 256); byte n]
@@ -1159,7 +1163,7 @@ fn build_server_certificate_verify_input
 }
 
 fn serialize_finished_handshake
-  (#fin: erased M.finished)
+  (#fin: erased GFin.finished)
   (lfin: L.finished)
   (handshake_out: array U8.t)
   (handshake_out_len: SZ.t)
@@ -1177,34 +1181,7 @@ fn serialize_finished_handshake
                 WS.parse_tls_message T.Handshake handshake_bytes ==
                   Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
 {
-  unfold (L.is_valid_finished lfin (Ghost.reveal fin));
-  with verify_data. assert (V.pts_to lfin.L.finished_verify_data verify_data);
-  handshake_out.(0sz) <- 20uy;
-  handshake_out.(1sz) <- 0uy;
-  handshake_out.(2sz) <- 0uy;
-  handshake_out.(3sz) <- 32uy;
-  V.to_array_pts_to lfin.L.finished_verify_data;
-  copy_array_slice_to_array
-    (V.vec_to_array lfin.L.finished_verify_data)
-    32sz
-    0sz
-    32sz
-    handshake_out
-    36sz
-    4sz;
-  V.to_vec_pts_to lfin.L.finished_verify_data;
-  with handshake_bytes. assert (pts_to handshake_out handshake_bytes);
-  assert (pure (B.length handshake_bytes == 36));
-  assert (pure (B.length verify_data == 32));
-  WS.lemma_serialize_finished_len (Ghost.reveal fin);
-  WSR.lemma_serialize_finished_reveal (Ghost.reveal fin);
-  assert (pure (Seq.equal verify_data (Ghost.reveal fin).M.verify_data));
-  assert (pure (Seq.equal
-    handshake_bytes
-    (WS.serialize_handshake (M.Finished (Ghost.reveal fin)))));
-  WSR.lemma_parse_finished_handshake (Ghost.reveal fin);
-  fold (L.is_valid_finished lfin (Ghost.reveal fin));
-  36sz
+  SerFin.serialize_server_finished #fin lfin handshake_out handshake_out_len
 }
 
 fn encode_inner_plaintext_no_padding_slice
@@ -1685,7 +1662,7 @@ fn serialize_client_finished_outputs
       M.content_type = T.Handshake;
       M.fragment = WS.serialize_handshake (M.Finished fin);
     })));
-  WSRD.lemma_serialize_tls_message_handshake (M.Finished fin);
+  WS.lemma_serialize_tls_message_handshake (M.Finished fin);
   assert (pure (Seq.equal
     inner_plaintext_bytes
     (CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (M.Finished fin)))));
@@ -1728,7 +1705,10 @@ fn serialize_client_finished_outputs
 }
 
 fn serialize_server_hello_from_selection
-  (#sh: erased M.server_hello)
+  (#sh: erased GSH.serverHello)
+  (#rnd: erased B.bytes)
+  (#ks: erased B.bytes)
+  (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -1736,8 +1716,13 @@ fn serialize_server_hello_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                B.length (Ghost.reveal sh).M.body == 0 /\
-                SZ.v out_len == 90)
+                SZ.v out_len == 90 /\
+                Seq.length (Ghost.reveal rnd) == 32 /\
+                (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
+                Seq.length (Ghost.reveal ks) == 32 /\
+                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
+                Ghost.reveal sh ==
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
@@ -1745,28 +1730,16 @@ fn serialize_server_hello_from_selection
           pure (B.length out_bytes == 90 /\
                SZ.v written == 90 /\
                Seq.equal out_bytes
-                (WS.serialize_server_hello_from_selection (Ghost.reveal sh)) /\
-               Seq.equal out_bytes
                 (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 {
-  let written = SerSH.serialize_server_hello_from_selection #sh lsh out out_len #old_bytes;
-  with out_bytes. assert (pts_to out out_bytes);
-  WS.lemma_fixed_server_handshake_serializers
-    (Ghost.reveal sh)
-    { M.chain = []; M.body = B.empty }
-    { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
-    { M.verify_data = Seq.create 32 0uy };
-  Seq.lemma_eq_elim
-    (WS.serialize_server_hello_from_selection (Ghost.reveal sh))
-    (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)));
-  assert (pure (Seq.equal
-    out_bytes
-    (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)))));
-  written
+  SerSH.serialize_server_hello_from_selection #sh #rnd #ks #cs lsh out out_len #old_bytes
 }
 
 fn serialize_server_hello_record_from_selection
-  (#sh: erased M.server_hello)
+  (#sh: erased GSH.serverHello)
+  (#rnd: erased B.bytes)
+  (#ks: erased B.bytes)
+  (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -1774,8 +1747,13 @@ fn serialize_server_hello_record_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                B.length (Ghost.reveal sh).M.body == 0 /\
-                SZ.v out_len == 95)
+                SZ.v out_len == 95 /\
+                Seq.length (Ghost.reveal rnd) == 32 /\
+                (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
+                Seq.length (Ghost.reveal ks) == 32 /\
+                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
+                Ghost.reveal sh ==
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
@@ -1785,31 +1763,20 @@ fn serialize_server_hello_record_from_selection
                Seq.equal out_bytes
                  (WS.serialize_record
                    T.Handshake
-                   (WS.serialize_server_hello_from_selection (Ghost.reveal sh))) /\
+                   (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)))) /\
                Seq.equal out_bytes
                 (CS.serialized_cleartext_tls_message
                   (M.TlsHandshake (M.ServerHello (Ghost.reveal sh)))) /\
                WS.parse_record out_bytes ==
                  Some
                    (T.Handshake,
-                    WS.serialize_server_hello_from_selection (Ghost.reveal sh),
+                    WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
                     95) /\
                CS.raw_records_exactly out_bytes T.Handshake 1)
 {
-  let written = SerSH.serialize_server_hello_record_from_selection #sh lsh out out_len #old_bytes;
+  let written = SerSH.serialize_server_hello_record_from_selection #sh #rnd #ks #cs lsh out out_len #old_bytes;
   with out_bytes. assert (pts_to out out_bytes);
-  WS.lemma_fixed_server_handshake_serializers
-    (Ghost.reveal sh)
-    { M.chain = []; M.body = B.empty }
-    { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
-    { M.verify_data = Seq.create 32 0uy };
-  Seq.lemma_eq_elim
-    (WS.serialize_server_hello_from_selection (Ghost.reveal sh))
-    (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)));
-  WSR.lemma_serialize_record_reveal
-    T.Handshake
-    (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)));
-  WSRD.lemma_serialize_tls_message_handshake (M.ServerHello (Ghost.reveal sh));
+  WS.lemma_serialize_tls_message_handshake (M.ServerHello (Ghost.reveal sh));
   assert (pure (Seq.equal
     out_bytes
     (CS.serialized_cleartext_tls_message
@@ -1829,13 +1796,15 @@ fn serialize_empty_encrypted_extensions
           pts_to out out_bytes **
           pure (B.length out_bytes == 6 /\
                SZ.v written == 6 /\
-               Seq.equal out_bytes (WS.serialize_empty_encrypted_extensions ()))
+               Seq.equal out_bytes
+                 (WS.serialize_handshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions))))
 {
   SerEE.serialize_empty_encrypted_extensions out out_len #old_bytes
 }
 
 fn serialize_certificate_from_credential
-  (#cert: erased M.certificate_msg)
+  (#cert: erased GCert.certificate)
+  (#chain: erased B.bytes)
   (lcert: L.certificate_msg)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -1843,10 +1812,10 @@ fn serialize_certificate_from_credential
   requires L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                 lcert.L.certificate_msg_cert_count == 1sz /\
-                 (exists (certificate:B.bytes).
-                   (Ghost.reveal cert).M.chain == [certificate]) /\
-                 SZ.v out_len == B.length (WS.serialize_certificate_from_credential (Ghost.reveal cert)))
+                 1 <= Seq.length (Ghost.reveal chain) /\
+                 Seq.length (Ghost.reveal chain) <= 32768 /\
+                 Ghost.reveal cert == SerH.poc_canonical_cert (Ghost.reveal chain) /\
+                 SZ.v out_len == B.length (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
@@ -1854,13 +1823,13 @@ fn serialize_certificate_from_credential
           pure (B.length out_bytes == SZ.v out_len /\
                SZ.v written == SZ.v out_len /\
                Seq.equal out_bytes
-                 (WS.serialize_certificate_from_credential (Ghost.reveal cert)))
+                 (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
 {
-  SerCert.serialize_certificate_from_credential #cert lcert out out_len #old_bytes
+  SerCert.serialize_certificate_from_credential #cert #chain lcert out out_len #old_bytes
 }
 
 fn serialize_certificate_verify_from_signature
-  (#cv: erased M.certificate_verify)
+  (#cv: erased GCV.certificateVerify)
   (lcv: L.certificate_verify)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -1868,7 +1837,7 @@ fn serialize_certificate_verify_from_signature
   requires L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == B.length (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
+                SZ.v out_len == B.length (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
@@ -1876,13 +1845,13 @@ fn serialize_certificate_verify_from_signature
           pure (B.length out_bytes == SZ.v out_len /\
                SZ.v written == SZ.v out_len /\
                Seq.equal out_bytes
-                 (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
+                 (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
 {
-  SerCV.serialize_certificate_verify_from_signature #cv lcv out out_len #old_bytes
+  SerH.serialize_certificate_verify_handshake_poc #cv lcv out out_len #old_bytes
 }
 
 fn serialize_server_finished
-  (#fin: erased M.finished)
+  (#fin: erased GFin.finished)
   (lfin: L.finished)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -1898,787 +1867,67 @@ fn serialize_server_finished
           pure (B.length out_bytes == 36 /\
                SZ.v written == 36 /\
                Seq.equal out_bytes
-                 (WS.serialize_server_finished (Ghost.reveal fin)) /\
+                 (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
                WS.parse_tls_message T.Handshake out_bytes ==
                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
 {
   SerFin.serialize_server_finished #fin lfin out out_len #old_bytes
 }
 
-#push-options "--z3rlimit 100"
-fn write_client_hello_common_extensions
-  (key_share_src: array U8.t)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (off: SZ.t)
-  requires pts_to key_share_src 'key_share **
-           pts_to out 'old_out **
-           pure (B.length 'key_share == 32 /\
-                 B.length 'old_out == SZ.v out_len /\
-                 SZ.v out_len == 512 /\
-                 SZ.v off + 65 <= SZ.v out_len)
-  ensures exists* out_bytes.
-          pts_to key_share_src 'key_share **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                Seq.equal
-                  (CL.raw_slice out_bytes 0 (SZ.v off))
-                  (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off)) /\
-                Seq.equal
-                  (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 65))
-                  (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share)))
-{
-  assert (pure (SZ.v off + 65 <= 512));
-  SZ.fits_lte (SZ.v off + 65) 512;
-  pts_to_len out;
-  (out).(off) <- 0uy;
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let rec lemma_cipher_suites_match_length
+  (wire:Seq.seq U16.t) (len:nat) (suites:list T.cipher_suite)
+  : Lemma (requires L.cipher_suites_match wire len suites)
+          (ensures FStar.List.Tot.length suites == len)
+          (decreases len)
+  = if len = 0 then ()
+    else match suites with
+         | [] -> ()
+         | _ :: rest -> lemma_cipher_suites_match_length (Seq.slice wire 1 (Seq.length wire)) (len - 1) rest
 
-  SZ.fits_lte (SZ.v off + 1) (SZ.v off + 65);
-  let off_1 = off `SZ.add` 1sz;
-  (out).(off_1) <- 0x0auy;
-  SZ.fits_lte (SZ.v off + 2) (SZ.v off + 65);
-  let off_2 = off `SZ.add` 2sz;
-  (out).(off_2) <- 0uy;
-  SZ.fits_lte (SZ.v off + 3) (SZ.v off + 65);
-  let off_3 = off `SZ.add` 3sz;
-  (out).(off_3) <- 4uy;
-  SZ.fits_lte (SZ.v off + 4) (SZ.v off + 65);
-  let off_4 = off `SZ.add` 4sz;
-  (out).(off_4) <- 0uy;
-  SZ.fits_lte (SZ.v off + 5) (SZ.v off + 65);
-  let off_5 = off `SZ.add` 5sz;
-  (out).(off_5) <- 2uy;
-  SZ.fits_lte (SZ.v off + 6) (SZ.v off + 65);
-  let off_6 = off `SZ.add` 6sz;
-  (out).(off_6) <- 0uy;
-  SZ.fits_lte (SZ.v off + 7) (SZ.v off + 65);
-  let off_7 = off `SZ.add` 7sz;
-  (out).(off_7) <- 0x1duy;
-  with out_after_supported_groups. assert (pts_to out out_after_supported_groups);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_supported_groups 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off))));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_supported_groups (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])));
+let rec lemma_signature_schemes_match_length
+  (wire:Seq.seq U16.t) (len:nat) (schemes:list T.signature_scheme)
+  : Lemma (requires L.signature_schemes_match wire len schemes)
+          (ensures FStar.List.Tot.length schemes == len)
+          (decreases len)
+  = if len = 0 then ()
+    else match schemes with
+         | [] -> ()
+         | _ :: rest -> lemma_signature_schemes_match_length (Seq.slice wire 1 (Seq.length wire)) (len - 1) rest
 
-  SZ.fits_lte (SZ.v off + 8) (SZ.v off + 65);
-  let off_8 = off `SZ.add` 8sz;
-  (out).(off_8) <- 0uy;
-  SZ.fits_lte (SZ.v off + 9) (SZ.v off + 65);
-  let off_9 = off `SZ.add` 9sz;
-  (out).(off_9) <- 0x0duy;
-  SZ.fits_lte (SZ.v off + 10) (SZ.v off + 65);
-  let off_10 = off `SZ.add` 10sz;
-  (out).(off_10) <- 0uy;
-  SZ.fits_lte (SZ.v off + 11) (SZ.v off + 65);
-  let off_11 = off `SZ.add` 11sz;
-  (out).(off_11) <- 4uy;
-  SZ.fits_lte (SZ.v off + 12) (SZ.v off + 65);
-  let off_12 = off `SZ.add` 12sz;
-  (out).(off_12) <- 0uy;
-  SZ.fits_lte (SZ.v off + 13) (SZ.v off + 65);
-  let off_13 = off `SZ.add` 13sz;
-  (out).(off_13) <- 2uy;
-  SZ.fits_lte (SZ.v off + 14) (SZ.v off + 65);
-  let off_14 = off `SZ.add` 14sz;
-  (out).(off_14) <- 0x08uy;
-  SZ.fits_lte (SZ.v off + 15) (SZ.v off + 65);
-  let off_15 = off `SZ.add` 15sz;
-  (out).(off_15) <- 0x04uy;
-  with out_after_signature_algorithms. assert (pts_to out out_after_signature_algorithms);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_signature_algorithms 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off))));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_signature_algorithms (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_signature_algorithms (SZ.v off + 8) (SZ.v off + 16))
-    (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])));
-
-  SZ.fits_lte (SZ.v off + 16) (SZ.v off + 65);
-  let off_16 = off `SZ.add` 16sz;
-  (out).(off_16) <- 0uy;
-  SZ.fits_lte (SZ.v off + 17) (SZ.v off + 65);
-  let off_17 = off `SZ.add` 17sz;
-  (out).(off_17) <- 0x33uy;
-  SZ.fits_lte (SZ.v off + 18) (SZ.v off + 65);
-  let off_18 = off `SZ.add` 18sz;
-  (out).(off_18) <- 0uy;
-  SZ.fits_lte (SZ.v off + 19) (SZ.v off + 65);
-  let off_19 = off `SZ.add` 19sz;
-  pts_to_len out;
-  (out).(off_19) <- 38uy;
-  SZ.fits_lte (SZ.v off + 20) (SZ.v off + 65);
-  let off_20 = off `SZ.add` 20sz;
-  (out).(off_20) <- 0uy;
-  SZ.fits_lte (SZ.v off + 21) (SZ.v off + 65);
-  let off_21 = off `SZ.add` 21sz;
-  (out).(off_21) <- 36uy;
-  SZ.fits_lte (SZ.v off + 22) (SZ.v off + 65);
-  let off_22 = off `SZ.add` 22sz;
-  (out).(off_22) <- 0uy;
-  SZ.fits_lte (SZ.v off + 23) (SZ.v off + 65);
-  let off_23 = off `SZ.add` 23sz;
-  (out).(off_23) <- 0x1duy;
-  SZ.fits_lte (SZ.v off + 24) (SZ.v off + 65);
-  let off_24 = off `SZ.add` 24sz;
-  (out).(off_24) <- 0uy;
-  SZ.fits_lte (SZ.v off + 25) (SZ.v off + 65);
-  let off_25 = off `SZ.add` 25sz;
-  (out).(off_25) <- 32uy;
-  with out_after_key_share_header. assert (pts_to out out_after_key_share_header);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_key_share_header 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off))));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_key_share_header (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_key_share_header (SZ.v off + 8) (SZ.v off + 16))
-    (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_after_key_share_header (SZ.v off + 16) (SZ.v off + 26))
-    (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])));
-  SZ.fits_lte (SZ.v off + 26) (SZ.v off + 65);
-  let key_share_off = off `SZ.add` 26sz;
-
-  SZ.fits_lte (SZ.v off + 58) (SZ.v off + 65);
-  let off_58 = off `SZ.add` 58sz;
-  (out).(off_58) <- 0uy;
-  SZ.fits_lte (SZ.v off + 59) (SZ.v off + 65);
-  let off_59 = off `SZ.add` 59sz;
-  (out).(off_59) <- 0x2buy;
-  SZ.fits_lte (SZ.v off + 60) (SZ.v off + 65);
-  let off_60 = off `SZ.add` 60sz;
-  (out).(off_60) <- 0uy;
-  SZ.fits_lte (SZ.v off + 61) (SZ.v off + 65);
-  let off_61 = off `SZ.add` 61sz;
-  (out).(off_61) <- 3uy;
-  SZ.fits_lte (SZ.v off + 62) (SZ.v off + 65);
-  let off_62 = off `SZ.add` 62sz;
-  (out).(off_62) <- 2uy;
-  SZ.fits_lte (SZ.v off + 63) (SZ.v off + 65);
-  let off_63 = off `SZ.add` 63sz;
-  (out).(off_63) <- 0x03uy;
-  SZ.fits_lte (SZ.v off + 64) (SZ.v off + 65);
-  let off_64 = off `SZ.add` 64sz;
-  assert (pure (SZ.v off_64 < SZ.v out_len));
-  (out).(off_64) <- 0x04uy;
-  assert (pure (SZ.v off_64 == SZ.v off + 64));
-  with out_before_key_share_copy. assert (pts_to out out_before_key_share_copy);
-  pts_to_len out;
-  assert (pure (B.length out_before_key_share_copy == SZ.v out_len));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_16) == 0uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_17) == 0x33uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_18) == 0uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_19) == 38uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_20) == 0uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_21) == 36uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_22) == 0uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_23) == 0x1duy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_24) == 0uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_25) == 32uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_58) == 0uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_59) == 0x2buy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_60) == 0uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_61) == 3uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_62) == 2uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_63) == 0x03uy));
-  assert (pure (Seq.index out_before_key_share_copy (SZ.v off_64) == 0x04uy));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_key_share_copy (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_key_share_copy (SZ.v off + 8) (SZ.v off + 16))
-    (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_key_share_copy (SZ.v off + 16) (SZ.v off + 26))
-    (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_key_share_copy 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off))));
-  let frozen_out_before_key_share_copy = Ghost.hide out_before_key_share_copy;
-  assert (pure (B.length (Ghost.reveal frozen_out_before_key_share_copy) == SZ.v out_len));
-  copy_array_slice_to_array
-    key_share_src
-    32sz
-    0sz
-    32sz
-    out
-    out_len
-    key_share_off;
-  with out_bytes. assert (pts_to out out_bytes);
-  pts_to_len out;
-  WSR.lemma_client_hello_common_extensions_len (Ghost.reveal 'key_share);
-  assert (pure (B.length out_bytes == SZ.v out_len));
-  assert (pure (B.length (CL.raw_slice (Ghost.reveal 'key_share) 0 32) == 32));
-  assert (pure (B.length (Ghost.reveal frozen_out_before_key_share_copy) == SZ.v out_len));
-  lemma_copy_expr_preserves_prefix_slice
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    0
-    (SZ.v off);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) 0 (SZ.v off));
-  assert (pure (Seq.equal
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off))));
-  Seq.lemma_eq_elim
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes 0 (SZ.v off))
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 (SZ.v off))));
-  lemma_copy_expr_preserves_prefix_slice
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off)
-    (SZ.v off + 8);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 8))
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off) (SZ.v off + 8));
-  assert (pure (Seq.equal
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])));
-  Seq.lemma_eq_elim
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy]);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])));
-  lemma_copy_expr_preserves_prefix_slice
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off + 8)
-    (SZ.v off + 16);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 8) (SZ.v off + 16))
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 8) (SZ.v off + 16));
-  assert (pure (Seq.equal
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 8) (SZ.v off + 16))
-    (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])));
-  Seq.lemma_eq_elim
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 8) (SZ.v off + 16))
-    (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy]);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off + 8) (SZ.v off + 16))
-    (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])));
-  assert (pure (B.length (CL.raw_slice (Ghost.reveal 'key_share) 0 32) == 32));
-  assert (pure (B.length (Ghost.reveal frozen_out_before_key_share_copy) == SZ.v out_len));
-  lemma_copy_expr_preserves_prefix_slice
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off + 16)
-    (SZ.v off + 26);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 26))
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_16) == 0uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_17) == 0x33uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_18) == 0uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_19) == 38uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_20) == 0uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_21) == 36uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_22) == 0uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_23) == 0x1duy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_24) == 0uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_25) == 32uy));
-  assert (pure (Seq.length (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26)) == 10));
-  assert (pure (SZ.v off_16 == SZ.v off + 16));
-  assert (pure (SZ.v off_17 == (SZ.v off + 16) + 1));
-  assert (pure (SZ.v off_18 == (SZ.v off + 16) + 2));
-  assert (pure (SZ.v off_19 == (SZ.v off + 16) + 3));
-  assert (pure (SZ.v off_20 == (SZ.v off + 16) + 4));
-  assert (pure (SZ.v off_21 == (SZ.v off + 16) + 5));
-  assert (pure (SZ.v off_22 == (SZ.v off + 16) + 6));
-  assert (pure (SZ.v off_23 == (SZ.v off + 16) + 7));
-  assert (pure (SZ.v off_24 == (SZ.v off + 16) + 8));
-  assert (pure (SZ.v off_25 == (SZ.v off + 16) + 9));
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 0;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 1;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 2;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 3;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 4;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 5;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 6;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 7;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 8;
-  lemma_raw_slice_index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26) 9;
-  lemma_eq_key_share_header_bytes
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26));
-  Seq.lemma_eq_elim
-    (CL.raw_slice (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off + 16) (SZ.v off + 26))
-    (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy]);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 26))
-    (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])));
-  assert (pure (SZ.v key_share_off == SZ.v off + 26));
-  assert (pure (SZ.v key_share_off + 32 == SZ.v off + 58));
-  lemma_copy_expr_copied_slice
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 26) (SZ.v off + 58))
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32);
-  lemma_raw_slice_all (Ghost.reveal 'key_share);
-  Seq.lemma_eq_elim
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (Ghost.reveal 'key_share);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off + 26) (SZ.v off + 58))
-    (Ghost.reveal 'key_share)));
-  SeqP.append_slices
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 26))
-    (CL.raw_slice out_bytes (SZ.v off + 26) (SZ.v off + 58));
-  CL.lemma_raw_slice_split out_bytes (SZ.v off + 16) (SZ.v off + 26) (SZ.v off + 58);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 26))
-    (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy]);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 26) (SZ.v off + 58))
-    (Ghost.reveal 'key_share);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 58))
-    (B.append
-      (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-      (Ghost.reveal 'key_share))));
-  assert (pure (SZ.v off + 65 <= B.length out_bytes));
-  assert (pure (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65) ==
-                Seq.slice out_bytes (SZ.v off + 58) (SZ.v off + 65)));
-  Seq.lemma_len_slice out_bytes (SZ.v off + 58) (SZ.v off + 65);
-  assert (pure (Seq.length (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) == 7));
-  assert (pure (B.length (CL.raw_slice (Ghost.reveal 'key_share) 0 32) == 32));
-  assert (pure (B.length (Ghost.reveal frozen_out_before_key_share_copy) == SZ.v out_len));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_58) == 0uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_59) == 0x2buy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_60) == 0uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_61) == 3uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_62) == 2uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_63) == 0x03uy));
-  assert (pure (Seq.index (Ghost.reveal frozen_out_before_key_share_copy) (SZ.v off_64) == 0x04uy));
-  lemma_copy_expr_preserves_suffix_index
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off_58);
-  lemma_copy_expr_preserves_suffix_index
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off_59);
-  lemma_copy_expr_preserves_suffix_index
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off_60);
-  lemma_copy_expr_preserves_suffix_index
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off_61);
-  lemma_copy_expr_preserves_suffix_index
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off_62);
-  lemma_copy_expr_preserves_suffix_index
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off_63);
-  lemma_copy_expr_preserves_suffix_index
-    (Ghost.reveal frozen_out_before_key_share_copy)
-    (CL.raw_slice (Ghost.reveal 'key_share) 0 32)
-    (SZ.v key_share_off)
-    32
-    (SZ.v out_len)
-    (SZ.v off_64);
-  assert (pure (Seq.index out_bytes (SZ.v off_58) == 0uy));
-  assert (pure (Seq.index out_bytes (SZ.v off_59) == 0x2buy));
-  assert (pure (Seq.index out_bytes (SZ.v off_60) == 0uy));
-  assert (pure (Seq.index out_bytes (SZ.v off_61) == 3uy));
-  assert (pure (Seq.index out_bytes (SZ.v off_62) == 2uy));
-  assert (pure (Seq.index out_bytes (SZ.v off_63) == 0x03uy));
-  assert (pure (Seq.index out_bytes (SZ.v off_64) == 0x04uy));
-  assert (pure (SZ.v off_58 == SZ.v off + 58));
-  assert (pure (SZ.v off_59 == (SZ.v off + 58) + 1));
-  assert (pure (SZ.v off_60 == (SZ.v off + 58) + 2));
-  assert (pure (SZ.v off_61 == (SZ.v off + 58) + 3));
-  assert (pure (SZ.v off_62 == (SZ.v off + 58) + 4));
-  assert (pure (SZ.v off_63 == (SZ.v off + 58) + 5));
-  assert (pure (SZ.v off_64 == (SZ.v off + 58) + 6));
-  lemma_raw_slice_index out_bytes (SZ.v off + 58) (SZ.v off + 65) 0;
-  lemma_raw_slice_index out_bytes (SZ.v off + 58) (SZ.v off + 65) 1;
-  lemma_raw_slice_index out_bytes (SZ.v off + 58) (SZ.v off + 65) 2;
-  lemma_raw_slice_index out_bytes (SZ.v off + 58) (SZ.v off + 65) 3;
-  lemma_raw_slice_index out_bytes (SZ.v off + 58) (SZ.v off + 65) 4;
-  lemma_raw_slice_index out_bytes (SZ.v off + 58) (SZ.v off + 65) 5;
-  lemma_raw_slice_index out_bytes (SZ.v off + 58) (SZ.v off + 65) 6;
-  assert (pure (Seq.index (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) 0 == 0uy));
-  assert (pure (Seq.index (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) 1 == 0x2buy));
-  assert (pure (Seq.index (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) 2 == 0uy));
-  assert (pure (Seq.index (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) 3 == 3uy));
-  assert (pure (Seq.index (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) 4 == 2uy));
-  assert (pure (Seq.index (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) 5 == 0x03uy));
-  assert (pure (Seq.index (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65)) 6 == 0x04uy));
-  lemma_eq_supported_versions_bytes (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65));
-  let versions_bytes = SeqP.createL [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy];
-  assert (pure (versions_bytes == B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]));
-  assert (pure (B.length versions_bytes == 7));
-  assert (pure (Seq.index versions_bytes 0 == 0uy));
-  assert (pure (Seq.index versions_bytes 1 == 0x2buy));
-  assert (pure (Seq.index versions_bytes 2 == 0uy));
-  assert (pure (Seq.index versions_bytes 3 == 3uy));
-  assert (pure (Seq.index versions_bytes 4 == 2uy));
-  assert (pure (Seq.index versions_bytes 5 == 0x03uy));
-  assert (pure (Seq.index versions_bytes 6 == 0x04uy));
-  Seq.lemma_eq_elim
-    versions_bytes
-    (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65))
-    (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy])));
-  SeqP.append_slices
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 58))
-    (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65));
-  CL.lemma_raw_slice_split out_bytes (SZ.v off + 16) (SZ.v off + 58) (SZ.v off + 65);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 58))
-    (B.append
-      (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-      (Ghost.reveal 'key_share));
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 58) (SZ.v off + 65))
-    (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 65))
-    (B.append
-      (B.append
-        (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-        (Ghost.reveal 'key_share))
-      (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]))));
-  SeqP.append_slices
-    (CL.raw_slice out_bytes (SZ.v off + 8) (SZ.v off + 16))
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 65));
-  CL.lemma_raw_slice_split out_bytes (SZ.v off + 8) (SZ.v off + 16) (SZ.v off + 65);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 8) (SZ.v off + 16))
-    (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy]);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 16) (SZ.v off + 65))
-    (B.append
-      (B.append
-        (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-        (Ghost.reveal 'key_share))
-      (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off + 8) (SZ.v off + 65))
-    (B.append
-      (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
-      (B.append
-        (B.append
-          (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-          (Ghost.reveal 'key_share))
-        (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy])))));
-  SeqP.append_slices
-    (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 8))
-    (CL.raw_slice out_bytes (SZ.v off + 8) (SZ.v off + 65));
-  CL.lemma_raw_slice_split out_bytes (SZ.v off) (SZ.v off + 8) (SZ.v off + 65);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 8))
-    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy]);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v off + 8) (SZ.v off + 65))
-    (B.append
-      (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
-      (B.append
-        (B.append
-          (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-          (Ghost.reveal 'key_share))
-        (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy])));
-  WSR.lemma_client_hello_common_extensions_bytes_reveal (Ghost.reveal 'key_share);
-  assert (pure (Seq.equal
-    (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share))
-    (B.append
-      (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])
-      (B.append
-        (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
-        (B.append
-          (B.append
-            (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-            (Ghost.reveal 'key_share))
-          (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]))))));
-  Seq.lemma_eq_elim
-    (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share))
-    (B.append
-      (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])
-      (B.append
-        (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
-        (B.append
-          (B.append
-            (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-            (Ghost.reveal 'key_share))
-          (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy]))));
-  assert (pure (Seq.length (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 65)) == 65));
-  assert (pure (forall (i:nat). i < 65 ==>
-    Seq.index (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 65)) i ==
-    Seq.index (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share)) i));
-  Seq.lemma_eq_intro
-    (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 65))
-    (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v off) (SZ.v off + 65))
-    (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share))))
-}
+let lemma_ch_handshake_len (rnd sni ks: B.bytes)
+  (cs: GCH.clientHello_cipher_suites)
+  (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+                    1 <= Seq.length sni /\ Seq.length sni <= 255 /\
+                    FStar.List.Tot.length cs <= 16 /\ FStar.List.Tot.length sa <= 16)
+          (ensures B.length (WS.serialize_handshake (M.ClientHello (SerH.poc_canonical_ch rnd sni ks cs sa)))
+                   == 117 + Seq.length sni
+                          + 2 * FStar.List.Tot.length cs
+                          + 2 * FStar.List.Tot.length sa)
+  = let ch = SerH.poc_canonical_ch rnd sni ks cs sa in
+    let exts = [ SerH.ch_sn_high sni; SerH.ch_sg_high; SerH.ch_sa_high sa; SerH.ch_ks_high ks; SerH.ch_sv_high ] in
+    assert (ch.GCH.extensions == exts);
+    Rev.lemma_serialize_handshake_client_hello ch;
+    GHS.handshake_bytesize_eq (GHS.Body_client_hello (ch <: GHS.handshake_body_client_hello));
+    GCH.clientHello_extensions_list_bytesize_nil;
+    GCH.clientHello_extensions_list_bytesize_cons SerH.ch_sv_high [];
+    GCH.clientHello_extensions_list_bytesize_cons (SerH.ch_ks_high ks) [SerH.ch_sv_high];
+    GCH.clientHello_extensions_list_bytesize_cons (SerH.ch_sa_high sa) [SerH.ch_ks_high ks; SerH.ch_sv_high];
+    GCH.clientHello_extensions_list_bytesize_cons SerH.ch_sg_high [SerH.ch_sa_high sa; SerH.ch_ks_high ks; SerH.ch_sv_high];
+    GCH.clientHello_extensions_list_bytesize_cons (SerH.ch_sn_high sni) [SerH.ch_sg_high; SerH.ch_sa_high sa; SerH.ch_ks_high ks; SerH.ch_sv_high];
+    ()
 #pop-options
-
-fn write_client_hello_sni_and_common_extensions
-  (server_name_src: array U8.t)
-  (key_share_src: array U8.t)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (hostname_len: SZ.t)
-  requires pts_to server_name_src 'server_name **
-           pts_to key_share_src 'key_share **
-           pts_to out 'old_out **
-           pure (B.length 'server_name == 255 /\
-                 B.length 'key_share == 32 /\
-                 B.length 'old_out == SZ.v out_len /\
-                 SZ.v out_len == 512 /\
-                 0 < SZ.v hostname_len /\
-                 SZ.v hostname_len <= 255)
-  ensures exists* out_bytes.
-          pts_to server_name_src 'server_name **
-          pts_to key_share_src 'key_share **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                Seq.equal
-                  (CL.raw_slice out_bytes 0 47)
-                  (CL.raw_slice (Ghost.reveal 'old_out) 0 47) /\
-                Seq.equal
-                  (CL.raw_slice out_bytes 47 (SZ.v hostname_len + 121))
-                  (WSR.client_hello_extensions_bytes
-                    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
-                    (Ghost.reveal 'key_share)))
-{
-  assert (pure (SZ.v hostname_len + 5 <= 260));
-  SZ.fits_lte (SZ.v hostname_len + 5) 260;
-  assert (pure (SZ.v hostname_len + 3 <= 258));
-  SZ.fits_lte (SZ.v hostname_len + 3) 258;
-  pts_to_len out;
-  (out).(47sz) <- 0uy;
-  (out).(48sz) <- 0uy;
-  let sni_data_len = hostname_len `SZ.add` 5sz;
-  (out).(49sz) <- u8_of_sizet (SZ.div sni_data_len 256sz);
-  (out).(50sz) <- u8_of_sizet sni_data_len;
-  let sni_list_len = hostname_len `SZ.add` 3sz;
-  (out).(51sz) <- u8_of_sizet (SZ.div sni_list_len 256sz);
-  (out).(52sz) <- u8_of_sizet sni_list_len;
-  pts_to_len out;
-  (out).(53sz) <- 0uy;
-  (out).(54sz) <- u8_of_sizet (SZ.div hostname_len 256sz);
-  (out).(55sz) <- u8_of_sizet hostname_len;
-  copy_array_slice_to_array
-    server_name_src
-    255sz
-    0sz
-    hostname_len
-    out
-    out_len
-    56sz;
-  assert (pure (SZ.v hostname_len + 56 <= 311));
-  SZ.fits_lte (SZ.v hostname_len + 56) 311;
-  let common_extensions_off = hostname_len `SZ.add` 56sz;
-  assert (pure (SZ.v common_extensions_off + 65 <= 512));
-  assert (pure (SZ.v common_extensions_off == SZ.v hostname_len + 56));
-  with out_before_common_extensions. assert (pts_to out out_before_common_extensions);
-  assert (pure (B.length out_before_common_extensions == SZ.v out_len));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_common_extensions 0 47)
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 47)));
-  assert (pure (B.length (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len)) ==
-    SZ.v hostname_len));
-  lemma_client_hello_byte_eq ((5 + SZ.v hostname_len) / 256);
-  lemma_client_hello_byte_eq (5 + SZ.v hostname_len);
-  lemma_client_hello_byte_eq ((3 + SZ.v hostname_len) / 256);
-  lemma_client_hello_byte_eq (3 + SZ.v hostname_len);
-  lemma_client_hello_byte_eq (SZ.v hostname_len / 256);
-  lemma_client_hello_byte_eq (SZ.v hostname_len);
-  WSR.lemma_client_hello_byte_v ((5 + SZ.v hostname_len) / 256);
-  WSR.lemma_client_hello_byte_v (5 + SZ.v hostname_len);
-  WSR.lemma_client_hello_byte_v ((3 + SZ.v hostname_len) / 256);
-  WSR.lemma_client_hello_byte_v (3 + SZ.v hostname_len);
-  WSR.lemma_client_hello_byte_v (SZ.v hostname_len / 256);
-  WSR.lemma_client_hello_byte_v (SZ.v hostname_len);
-  assert (pure (u8_of_sizet (SZ.div sni_data_len 256sz) ==
-    WSR.client_hello_byte ((5 + SZ.v hostname_len) / 256)));
-  assert (pure (u8_of_sizet sni_data_len ==
-    WSR.client_hello_byte (5 + SZ.v hostname_len)));
-  assert (pure (u8_of_sizet (SZ.div sni_list_len 256sz) ==
-    WSR.client_hello_byte ((3 + SZ.v hostname_len) / 256)));
-  assert (pure (u8_of_sizet sni_list_len ==
-    WSR.client_hello_byte (3 + SZ.v hostname_len)));
-  assert (pure (u8_of_sizet (SZ.div hostname_len 256sz) ==
-    WSR.client_hello_byte (SZ.v hostname_len / 256)));
-  assert (pure (u8_of_sizet hostname_len ==
-    WSR.client_hello_byte (SZ.v hostname_len)));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_common_extensions 47 56)
-    (B.of_list [
-      0uy; 0uy;
-      WSR.client_hello_byte ((5 + SZ.v hostname_len) / 256);
-      WSR.client_hello_byte (5 + SZ.v hostname_len);
-      WSR.client_hello_byte ((3 + SZ.v hostname_len) / 256);
-      WSR.client_hello_byte (3 + SZ.v hostname_len);
-      0uy;
-      WSR.client_hello_byte (SZ.v hostname_len / 256);
-      WSR.client_hello_byte (SZ.v hostname_len)])));
-  lemma_copy_expr_copied_slice
-    (Ghost.reveal 'old_out)
-    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
-    56
-    (SZ.v hostname_len)
-    (SZ.v out_len);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_common_extensions 56 (SZ.v common_extensions_off))
-    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))));
-  SeqP.append_slices
-    (CL.raw_slice out_before_common_extensions 47 56)
-    (CL.raw_slice out_before_common_extensions 56 (SZ.v common_extensions_off));
-  CL.lemma_raw_slice_split out_before_common_extensions 47 56 (SZ.v common_extensions_off);
-  WSR.lemma_client_hello_server_name_extension_bytes_reveal
-    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len));
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_before_common_extensions 47 56)
-    (B.of_list [
-      0uy; 0uy;
-      WSR.client_hello_byte ((5 + SZ.v hostname_len) / 256);
-      WSR.client_hello_byte (5 + SZ.v hostname_len);
-      WSR.client_hello_byte ((3 + SZ.v hostname_len) / 256);
-      WSR.client_hello_byte (3 + SZ.v hostname_len);
-      0uy;
-      WSR.client_hello_byte (SZ.v hostname_len / 256);
-      WSR.client_hello_byte (SZ.v hostname_len)]);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_before_common_extensions 56 (SZ.v common_extensions_off))
-    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_before_common_extensions 47 (SZ.v common_extensions_off))
-    (WSR.client_hello_server_name_extension_bytes
-      (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len)))));
-  write_client_hello_common_extensions
-    key_share_src
-    out
-    out_len
-    common_extensions_off;
-  with out_bytes. assert (pts_to out out_bytes);
-  pts_to_len out;
-  WSR.lemma_client_hello_server_name_extension_len
-    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len));
-  WSR.lemma_client_hello_common_extensions_len (Ghost.reveal 'key_share);
-  WSR.lemma_client_hello_extensions_len
-    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
-    (Ghost.reveal 'key_share);
-  assert (pure (B.length out_bytes == SZ.v out_len));
-  lemma_equal_prefix_raw_slice
-    out_bytes
-    out_before_common_extensions
-    (SZ.v common_extensions_off)
-    0
-    47;
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes 0 47)
-    (CL.raw_slice out_before_common_extensions 0 47);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_before_common_extensions 0 47)
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 47);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes 0 47)
-    (CL.raw_slice (Ghost.reveal 'old_out) 0 47)));
-  lemma_equal_prefix_raw_slice
-    out_bytes
-    out_before_common_extensions
-    (SZ.v common_extensions_off)
-    47
-    (SZ.v common_extensions_off);
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes 47 (SZ.v hostname_len + 56))
-    (WSR.client_hello_server_name_extension_bytes
-      (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len)))));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes (SZ.v hostname_len + 56) (SZ.v hostname_len + 121))
-    (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share))));
-  SeqP.append_slices
-    (CL.raw_slice out_bytes 47 (SZ.v hostname_len + 56))
-    (CL.raw_slice out_bytes (SZ.v hostname_len + 56) (SZ.v hostname_len + 121));
-  CL.lemma_raw_slice_split out_bytes 47 (SZ.v hostname_len + 56) (SZ.v hostname_len + 121);
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes 47 (SZ.v hostname_len + 56))
-    (WSR.client_hello_server_name_extension_bytes
-      (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len)));
-  Seq.lemma_eq_elim
-    (CL.raw_slice out_bytes (SZ.v hostname_len + 56) (SZ.v hostname_len + 121))
-    (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share));
-  WSR.lemma_client_hello_extensions_bytes_shape
-    (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
-    (Ghost.reveal 'key_share);
-  assert (pure (Seq.equal
-    (WSR.client_hello_extensions_bytes
-      (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
-      (Ghost.reveal 'key_share))
-    (B.append
-      (WSR.client_hello_server_name_extension_bytes
-        (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len)))
-      (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share)))));
-  Seq.lemma_eq_elim
-    (WSR.client_hello_extensions_bytes
-      (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
-      (Ghost.reveal 'key_share))
-    (B.append
-      (WSR.client_hello_server_name_extension_bytes
-        (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len)))
-      (WSR.client_hello_common_extensions_bytes (Ghost.reveal 'key_share)));
-  assert (pure (Seq.equal
-    (CL.raw_slice out_bytes 47 (SZ.v hostname_len + 121))
-    (WSR.client_hello_extensions_bytes
-      (CL.raw_slice (Ghost.reveal 'server_name) 0 (SZ.v hostname_len))
-      (Ghost.reveal 'key_share))))
-}
 
 #push-options "--z3rlimit 100"
 fn serialize_client_hello_from_start
   (#start: erased CS.handshake_start)
-  (#ch: erased M.client_hello)
+  (#ch: erased GCH.clientHello)
+  (#rnd: erased B.bytes)
+  (#sni: erased B.bytes)
+  (#ks: erased B.bytes)
+  (#cs: erased GCH.clientHello_cipher_suites)
+  (#sa: erased GECH.extensionClientHello_extension_data_signature_algorithms)
   (start_random: V.vec U8.t)
   (start_server_name: V.vec U8.t)
   (start_server_name_len: box SZ.t)
@@ -2767,14 +2016,16 @@ fn serialize_client_hello_from_start
                   signature_schemes
                   (SZ.v signature_schemes_len)
                   (Ghost.reveal start).CS.start_signature_schemes /\
-                Ghost.reveal ch == {
-                  M.random = (Ghost.reveal start).CS.start_client_random;
-                  M.server_name = Some (Ghost.reveal start).CS.start_server_name;
-                  M.key_share = (Ghost.reveal start).CS.start_client_key_share_public;
-                  M.cipher_suites = (Ghost.reveal start).CS.start_cipher_suites;
-                  M.signature_schemes = (Ghost.reveal start).CS.start_signature_schemes;
-                  M.body = B.empty;
-                })
+                CS.client_hello_matches_start (Ghost.reveal start) (Ghost.reveal ch) /\
+                Seq.length (Ghost.reveal rnd) == 32 /\
+                Seq.length (Ghost.reveal ks) == 32 /\
+                1 <= Seq.length (Ghost.reveal sni) /\
+                Seq.length (Ghost.reveal sni) <= 255 /\
+                FStar.List.Tot.length (Ghost.reveal cs) <= 16 /\
+                FStar.List.Tot.length (Ghost.reveal sa) <= 16 /\
+                Ghost.reveal ch ==
+                  SerH.poc_canonical_ch (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks)
+                    (Ghost.reveal cs) (Ghost.reveal sa))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* random server_name server_name_len key_share
                  cipher_suites cipher_suites_len
@@ -2841,21 +2092,26 @@ fn serialize_client_hello_from_start
                  signature_schemes
                  (SZ.v signature_schemes_len)
                  (Ghost.reveal start).CS.start_signature_schemes /\
-               Seq.equal random (Ghost.reveal ch).M.random /\
+               Seq.equal random (Sem.clientHello_random (Ghost.reveal ch)) /\
                L.optional_byte_prefix_matches
                  true
                  server_name
                  server_name_len
-                 (Ghost.reveal ch).M.server_name /\
-               Seq.equal key_share (Ghost.reveal ch).M.key_share /\
+                 (Sem.clientHello_server_name (Ghost.reveal ch)) /\
+               (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
+                | Some k -> B.length k == 32 /\ Seq.equal key_share k
+                | None -> False) /\
                L.cipher_suites_match
                  cipher_suites
                  (SZ.v cipher_suites_len)
-                 (Ghost.reveal ch).M.cipher_suites /\
-               L.signature_schemes_match
-                 signature_schemes
-                 (SZ.v signature_schemes_len)
-                 (Ghost.reveal ch).M.signature_schemes /\
+                 (Sem.clientHello_cipher_suites (Ghost.reveal ch)) /\
+               (match Sem.clientHello_sig_algs (Ghost.reveal ch) with
+                | Some sas ->
+                  L.signature_schemes_match
+                    signature_schemes
+                    (SZ.v signature_schemes_len)
+                    sas
+                | None -> False) /\
                SZ.v handshake_len == B.length (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))) /\
                SZ.v handshake_len <= B.length handshake_bytes /\
                Seq.equal
@@ -2886,15 +2142,21 @@ fn serialize_client_hello_from_start
   with cipher_suites_len. assert (Box.pts_to start_cipher_suites_len cipher_suites_len);
   with signature_schemes. assert (V.pts_to start_signature_schemes signature_schemes);
   with signature_schemes_len. assert (Box.pts_to start_signature_schemes_len signature_schemes_len);
-  with old_present. assert (Box.pts_to client_hello_present old_present);
   with old_l_random. assert (V.pts_to l.L.client_hello_random old_l_random);
   with old_l_server_name. assert (V.pts_to l.L.client_hello_server_name old_l_server_name);
   with old_l_key_share. assert (V.pts_to l.L.client_hello_key_share old_l_key_share);
   with old_l_cipher_suites. assert (V.pts_to l.L.client_hello_cipher_suites old_l_cipher_suites);
   with old_l_signature_schemes. assert (V.pts_to l.L.client_hello_signature_schemes old_l_signature_schemes);
-  with old_client_hello_bytes_len. assert (Box.pts_to client_hello_bytes_len old_client_hello_bytes_len);
   with old_client_hello_bytes. assert (V.pts_to client_hello_bytes old_client_hello_bytes);
-  with old_network_out. assert (pts_to network_out old_network_out);
+
+  (* establish ch-semantic facts and the SNI length bound (<= 255) *)
+  SerH.lemma_ch_random (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks) (Ghost.reveal cs) (Ghost.reveal sa);
+  SerH.lemma_ch_server_name (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks) (Ghost.reveal cs) (Ghost.reveal sa);
+  SerH.lemma_ch_key_share (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks) (Ghost.reveal cs) (Ghost.reveal sa);
+  assert (pure (Ghost.reveal sni == (Ghost.reveal start).CS.start_server_name));
+  assert (pure (Seq.length (Ghost.reveal sni) == SZ.v server_name_len));
+  assert (pure (Seq.length (Ghost.reveal sni) <= 255));
+  lemma_ch_handshake_len (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks) (Ghost.reveal cs) (Ghost.reveal sa);
 
   let hostname_len = !start_server_name_len;
   let cipher_suites_len_runtime = !start_cipher_suites_len;
@@ -2902,686 +2164,277 @@ fn serialize_client_hello_from_start
   assert (pure (hostname_len == server_name_len));
   assert (pure (cipher_suites_len_runtime == cipher_suites_len));
   assert (pure (signature_schemes_len_runtime == signature_schemes_len));
-  assert (pure (SZ.v hostname_len <= 255));
+  assert (pure (1 <= SZ.v hostname_len /\ SZ.v hostname_len <= 255));
 
-  assert (pure (SZ.v hostname_len + 9 <= 264));
-  SZ.fits_lte (SZ.v hostname_len + 9) 264;
-  let sni_extension_len =
-    (if hostname_len = 0sz then 0sz else hostname_len `SZ.add` 9sz);
-  assert (pure (SZ.v sni_extension_len ==
-    (if SZ.v hostname_len == 0 then 0 else 9 + SZ.v hostname_len)));
-  assert (pure (SZ.v sni_extension_len <= 264));
-  assert (pure (SZ.v sni_extension_len + 65 <= 329));
-  SZ.fits_lte (SZ.v sni_extension_len + 65) 329;
-  let extensions_len = sni_extension_len `SZ.add` 65sz;
-  assert (pure (SZ.v extensions_len == 65 + SZ.v sni_extension_len));
-  assert (pure (SZ.v extensions_len <= 329));
-  assert (pure (SZ.v extensions_len + 43 <= 372));
-  SZ.fits_lte (SZ.v extensions_len + 43) 372;
-  let body_len = extensions_len `SZ.add` 43sz;
-  assert (pure (SZ.v body_len == 43 + SZ.v extensions_len));
-  assert (pure (SZ.v body_len <= 372));
-  assert (pure (SZ.v body_len + 4 <= 376));
-  SZ.fits_lte (SZ.v body_len + 4) 376;
-  let handshake_len = body_len `SZ.add` 4sz;
-  assert (pure (SZ.v handshake_len == 4 + SZ.v body_len));
-  assert (pure (SZ.v handshake_len <= 376));
-  assert (pure (SZ.v handshake_len <= 512));
-  assert (pure (SZ.v handshake_len + 5 <= 381));
-  SZ.fits_lte (SZ.v handshake_len + 5) 381;
+  (* relate the runtime cipher_suites/signature_schemes lengths to the
+     high-level list lengths in cs/sa: matches_start ties ch's semantics to
+     start's lists, lemma_ch_cipher_suites/sig_algs tie them to cs/sa, and the
+     *_match_length lemmas give the list-length == runtime-len equalities *)
+  SerH.lemma_ch_cipher_suites (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks) (Ghost.reveal cs) (Ghost.reveal sa);
+  SerH.lemma_ch_sig_algs (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks) (Ghost.reveal cs) (Ghost.reveal sa);
+  assert (pure (Ghost.reveal cs == (Ghost.reveal start).CS.start_cipher_suites));
+  assert (pure (Ghost.reveal sa == (Ghost.reveal start).CS.start_signature_schemes));
+  lemma_cipher_suites_match_length cipher_suites (SZ.v cipher_suites_len) (Ghost.reveal start).CS.start_cipher_suites;
+  lemma_signature_schemes_match_length signature_schemes (SZ.v signature_schemes_len) (Ghost.reveal start).CS.start_signature_schemes;
+  assert (pure (FStar.List.Tot.length (Ghost.reveal cs) == SZ.v cipher_suites_len_runtime));
+  assert (pure (FStar.List.Tot.length (Ghost.reveal sa) == SZ.v signature_schemes_len_runtime));
+  assert (pure (SZ.v cipher_suites_len_runtime <= 16));
+  assert (pure (SZ.v signature_schemes_len_runtime <= 16));
+
+  (* handshake_len = 117 + sni + 2*len_cs + 2*len_sa  (max 117+255+32+32 = 436) *)
+  SZ.fits_lte (117 + SZ.v hostname_len) 372;
+  let hl1 = 117sz `SZ.add` hostname_len;
+  SZ.fits_lte (SZ.v hl1 + SZ.v cipher_suites_len_runtime) 388;
+  let hl2 = hl1 `SZ.add` cipher_suites_len_runtime;
+  SZ.fits_lte (SZ.v hl2 + SZ.v cipher_suites_len_runtime) 404;
+  let hl3 = hl2 `SZ.add` cipher_suites_len_runtime;
+  SZ.fits_lte (SZ.v hl3 + SZ.v signature_schemes_len_runtime) 420;
+  let hl4 = hl3 `SZ.add` signature_schemes_len_runtime;
+  SZ.fits_lte (SZ.v hl4 + SZ.v signature_schemes_len_runtime) 436;
+  let handshake_len = hl4 `SZ.add` signature_schemes_len_runtime;
+  assert (pure (SZ.v handshake_len ==
+    117 + SZ.v hostname_len + 2 * SZ.v cipher_suites_len_runtime + 2 * SZ.v signature_schemes_len_runtime));
+  assert (pure (SZ.v handshake_len <= 436));
+  assert (pure (SZ.v handshake_len ==
+    B.length (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
+  assert (pure (SZ.v handshake_len + 5 <= 441));
+  SZ.fits_lte (SZ.v handshake_len + 5) 441;
   let record_len = handshake_len `SZ.add` 5sz;
   assert (pure (SZ.v record_len == 5 + SZ.v handshake_len));
   assert (pure (SZ.v record_len <= SZ.v network_out_len));
 
+  (* first copy: start vecs -> l vecs, so l's content matches ch's semantics *)
   copy_vec_to_vec_u8 start_random l.L.client_hello_random 32sz;
   copy_vec_to_vec_u8 start_server_name l.L.client_hello_server_name 255sz;
   copy_vec_to_vec_u8 start_key_share l.L.client_hello_key_share 32sz;
   copy_vec_to_vec_u16 start_cipher_suites l.L.client_hello_cipher_suites 16sz;
   copy_vec_to_vec_u16 start_signature_schemes l.L.client_hello_signature_schemes 16sz;
 
-  V.to_array_pts_to client_hello_bytes;
-  V.to_array_pts_to start_random;
-  V.to_array_pts_to start_server_name;
-  V.to_array_pts_to start_key_share;
+  (* build canonical-pinned structure sharing l's vecs (only scalars differ) *)
+  let l_poc : L.client_hello = {
+    L.client_hello_random = l.L.client_hello_random;
+    L.client_hello_server_name = l.L.client_hello_server_name;
+    L.client_hello_server_name_len = hostname_len;
+    L.client_hello_has_server_name = true;
+    L.client_hello_key_share = l.L.client_hello_key_share;
+    L.client_hello_cipher_suites = l.L.client_hello_cipher_suites;
+    L.client_hello_cipher_suites_len = cipher_suites_len_runtime;
+    L.client_hello_signature_schemes = l.L.client_hello_signature_schemes;
+    L.client_hello_signature_schemes_len = signature_schemes_len_runtime;
+  };
+  assert (pure (Seq.equal random (Sem.clientHello_random (Ghost.reveal ch))));
+  assert (pure (L.optional_byte_prefix_matches
+    true server_name hostname_len (Sem.clientHello_server_name (Ghost.reveal ch))));
+  assert (pure (L.cipher_suites_match
+    cipher_suites (SZ.v cipher_suites_len_runtime) (Sem.clientHello_cipher_suites (Ghost.reveal ch))));
+  rewrite (V.pts_to l.L.client_hello_random random)
+       as (V.pts_to l_poc.L.client_hello_random random);
+  rewrite (V.pts_to l.L.client_hello_server_name server_name)
+       as (V.pts_to l_poc.L.client_hello_server_name server_name);
+  rewrite (V.pts_to l.L.client_hello_key_share key_share)
+       as (V.pts_to l_poc.L.client_hello_key_share key_share);
+  rewrite (V.pts_to l.L.client_hello_cipher_suites cipher_suites)
+       as (V.pts_to l_poc.L.client_hello_cipher_suites cipher_suites);
+  rewrite (V.pts_to l.L.client_hello_signature_schemes signature_schemes)
+       as (V.pts_to l_poc.L.client_hello_signature_schemes signature_schemes);
+  fold (L.is_valid_client_hello l_poc (Ghost.reveal ch));
 
-  (V.vec_to_array client_hello_bytes).(0sz) <- 1uy;
-  u8_of_sizet_div2_byte body_len;
-  (V.vec_to_array client_hello_bytes).(1sz) <- u8_of_sizet (SZ.div (SZ.div body_len 256sz) 256sz);
-  (V.vec_to_array client_hello_bytes).(2sz) <- u8_of_sizet (SZ.div body_len 256sz);
-  (V.vec_to_array client_hello_bytes).(3sz) <- u8_of_sizet body_len;
-  (V.vec_to_array client_hello_bytes).(4sz) <- 0x03uy;
-  (V.vec_to_array client_hello_bytes).(5sz) <- 0x03uy;
+  (* allocate an exact-length scratch buffer, run the verified POC serializer *)
+  let tmp = V.alloc 0uy handshake_len;
+  V.to_array_pts_to tmp;
+  let written_poc = SerH.serialize_client_hello_handshake_poc
+    #ch #rnd #sni #ks #cs #sa l_poc (V.vec_to_array tmp) handshake_len;
+  with ob. assert (pts_to (V.vec_to_array tmp) ob);
+  assert (pure (Seq.equal ob (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
+
+  (* copy POC output into client_hello_bytes[0..handshake_len) *)
+  V.to_array_pts_to client_hello_bytes;
   copy_array_slice_to_array
-    (V.vec_to_array start_random)
-    32sz
-    0sz
-    32sz
+    (V.vec_to_array tmp) handshake_len 0sz handshake_len
+    (V.vec_to_array client_hello_bytes) 512sz 0sz;
+  with out_common. assert (pts_to (V.vec_to_array client_hello_bytes) out_common);
+  pts_to_len (V.vec_to_array client_hello_bytes);
+  assert (pure (B.length out_common == 512));
+  lemma_copy_expr_copied_slice
+    old_client_hello_bytes (CL.raw_slice ob 0 (SZ.v handshake_len)) 0 (SZ.v handshake_len) 512;
+  Seq.lemma_eq_elim (CL.raw_slice ob 0 (SZ.v handshake_len)) ob;
+  assert (pure (Seq.equal
+    (CL.raw_slice out_common 0 (SZ.v handshake_len))
+    (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
+  V.to_vec_pts_to tmp;
+  V.free tmp;
+
+  (* recover l's vec ownership; second copy re-pins l's content to the start values *)
+  unfold (L.is_valid_client_hello l_poc (Ghost.reveal ch));
+  with w_rnd. assert (V.pts_to l_poc.L.client_hello_random w_rnd);
+  rewrite (V.pts_to l_poc.L.client_hello_random w_rnd)
+       as (V.pts_to l.L.client_hello_random w_rnd);
+  with w_sn. assert (V.pts_to l_poc.L.client_hello_server_name w_sn);
+  rewrite (V.pts_to l_poc.L.client_hello_server_name w_sn)
+       as (V.pts_to l.L.client_hello_server_name w_sn);
+  with w_ks. assert (V.pts_to l_poc.L.client_hello_key_share w_ks);
+  rewrite (V.pts_to l_poc.L.client_hello_key_share w_ks)
+       as (V.pts_to l.L.client_hello_key_share w_ks);
+  with w_cs. assert (V.pts_to l_poc.L.client_hello_cipher_suites w_cs);
+  rewrite (V.pts_to l_poc.L.client_hello_cipher_suites w_cs)
+       as (V.pts_to l.L.client_hello_cipher_suites w_cs);
+  with w_ss. assert (V.pts_to l_poc.L.client_hello_signature_schemes w_ss);
+  rewrite (V.pts_to l_poc.L.client_hello_signature_schemes w_ss)
+       as (V.pts_to l.L.client_hello_signature_schemes w_ss);
+  copy_vec_to_vec_u8 start_random l.L.client_hello_random 32sz;
+  copy_vec_to_vec_u8 start_server_name l.L.client_hello_server_name 255sz;
+  copy_vec_to_vec_u8 start_key_share l.L.client_hello_key_share 32sz;
+  copy_vec_to_vec_u16 start_cipher_suites l.L.client_hello_cipher_suites 16sz;
+  copy_vec_to_vec_u16 start_signature_schemes l.L.client_hello_signature_schemes 16sz;
+
+  (* ---- write the 5-byte record header into network_out ---- *)
+  client_hello_bytes_len := handshake_len;
+  network_out.(0sz) <- 22uy;
+  network_out.(1sz) <- 0x03uy;
+  network_out.(2sz) <- 0x03uy;
+  with network_after_record_version. assert (pts_to network_out network_after_record_version);
+  assert (pure (Seq.index network_after_record_version 0 == 22uy));
+  assert (pure (Seq.index network_after_record_version 1 == 0x03uy));
+  assert (pure (Seq.index network_after_record_version 2 == 0x03uy));
+  network_out.(3sz) <- u8_of_sizet (SZ.div handshake_len 256sz);
+  with network_after_len_hi. assert (pts_to network_out network_after_len_hi);
+  Seq.lemma_index_upd1 network_after_record_version 3 (byte (SZ.v handshake_len / 256));
+  Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 0;
+  Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 1;
+  Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 2;
+  assert (pure (Seq.index network_after_len_hi 0 == 22uy));
+  assert (pure (Seq.index network_after_len_hi 1 == 0x03uy));
+  assert (pure (Seq.index network_after_len_hi 2 == 0x03uy));
+  assert (pure (Seq.index network_after_len_hi 3 == byte (SZ.v handshake_len / 256)));
+  network_out.(4sz) <- u8_of_sizet handshake_len;
+  with network_header_bytes. assert (pts_to network_out network_header_bytes);
+  Seq.lemma_index_upd1 network_after_len_hi 4 (byte (SZ.v handshake_len));
+  Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 0;
+  Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 1;
+  Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 2;
+  Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 3;
+  assert (pure (B.length network_header_bytes == SZ.v network_out_len));
+  lemma_handshake_record_header_bytes (SZ.v handshake_len);
+  Seq.lemma_len_slice network_header_bytes 0 5;
+  assert (pure (Seq.length (CL.raw_slice network_header_bytes 0 5) == 5));
+  assert (pure (B.length (handshake_record_header_bytes (SZ.v handshake_len)) == 5));
+  lemma_handshake_record_header_indices (SZ.v handshake_len);
+  lemma_raw_slice_index network_header_bytes 0 5 0;
+  lemma_raw_slice_index network_header_bytes 0 5 1;
+  lemma_raw_slice_index network_header_bytes 0 5 2;
+  lemma_raw_slice_index network_header_bytes 0 5 3;
+  lemma_raw_slice_index network_header_bytes 0 5 4;
+  assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 0 == 22uy));
+  assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 1 == 0x03uy));
+  assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 2 == 0x03uy));
+  assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 3 == byte (SZ.v handshake_len / 256)));
+  assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 4 == byte (SZ.v handshake_len)));
+  assert (pure (Seq.index network_header_bytes 0 == 22uy));
+  assert (pure (Seq.index network_header_bytes 1 == 0x03uy));
+  assert (pure (Seq.index network_header_bytes 2 == 0x03uy));
+  assert (pure (Seq.index network_header_bytes 3 == byte (SZ.v handshake_len / 256)));
+  assert (pure (Seq.index network_header_bytes 4 == byte (SZ.v handshake_len)));
+  assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 0 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 0));
+  assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 1 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 1));
+  assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 2 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 2));
+  assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 3 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 3));
+  assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 4 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 4));
+  lemma_eq_handshake_record_header_from_indices
+    (CL.raw_slice network_header_bytes 0 5)
+    (SZ.v handshake_len);
+  copy_array_slice_to_array
     (V.vec_to_array client_hello_bytes)
     512sz
-    6sz;
-  (V.vec_to_array client_hello_bytes).(38sz) <- 0uy;
-  (V.vec_to_array client_hello_bytes).(39sz) <- 0uy;
-  (V.vec_to_array client_hello_bytes).(40sz) <- 2uy;
-  (V.vec_to_array client_hello_bytes).(41sz) <- 0x13uy;
-  (V.vec_to_array client_hello_bytes).(42sz) <- 0x03uy;
-  (V.vec_to_array client_hello_bytes).(43sz) <- 1uy;
-  (V.vec_to_array client_hello_bytes).(44sz) <- 0uy;
-  (V.vec_to_array client_hello_bytes).(45sz) <- u8_of_sizet (SZ.div extensions_len 256sz);
-  (V.vec_to_array client_hello_bytes).(46sz) <- u8_of_sizet extensions_len;
-  with client_hello_prefix. assert (pts_to (V.vec_to_array client_hello_bytes) client_hello_prefix);
-  pts_to_len (V.vec_to_array client_hello_bytes);
-  assert (pure (B.length client_hello_prefix == 512));
-  WSR.lemma_client_hello_prefix_bytes_reveal
-    (SZ.v body_len)
-    (SZ.v extensions_len)
-    random;
-  u8_of_sizet_v_byte (SZ.div body_len 256sz);
-  u8_of_sizet_v_byte body_len;
-  u8_of_sizet_v_byte (SZ.div extensions_len 256sz);
-  u8_of_sizet_v_byte extensions_len;
-  assert (pure (SZ.v (SZ.div body_len 256sz) == SZ.v body_len / 256));
-  assert (pure (SZ.v (SZ.div extensions_len 256sz) == SZ.v extensions_len / 256));
-  lemma_client_hello_byte_eq (SZ.v body_len / 65536);
-  lemma_client_hello_byte_eq (SZ.v body_len / 256);
-  lemma_client_hello_byte_eq (SZ.v body_len);
-  lemma_client_hello_byte_eq (SZ.v extensions_len / 256);
-  lemma_client_hello_byte_eq (SZ.v extensions_len);
+    0sz
+    handshake_len
+    network_out
+    network_out_len
+    5sz;
+  client_hello_present := true;
+  V.to_vec_pts_to client_hello_bytes;
+
+  with handshake_bytes. assert (V.pts_to client_hello_bytes handshake_bytes);
+  with network_out_bytes. assert (pts_to network_out network_out_bytes);
+  V.pts_to_len client_hello_bytes;
+  pts_to_len network_out;
+  assert (pure (B.length handshake_bytes == 512));
+  assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+
+  (* ---- prove the record-level postconditions ---- *)
+  WS.lemma_serialize_tls_message_handshake (M.ClientHello (Ghost.reveal ch));
+  WSR.lemma_serialize_record_reveal
+    T.Handshake
+    (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
+  assert (pure (SZ.v record_len ==
+    B.length (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch))))));
+  SeqP.append_slices
+    (CL.raw_slice network_header_bytes 0 5)
+    (B.append
+      (CL.raw_slice out_common 0 (SZ.v handshake_len))
+      (CL.raw_slice network_header_bytes (5 + SZ.v handshake_len) (SZ.v network_out_len)));
+  SeqP.append_slices
+    (CL.raw_slice out_common 0 (SZ.v handshake_len))
+    (CL.raw_slice network_header_bytes (5 + SZ.v handshake_len) (SZ.v network_out_len));
+  assert (pure (B.length (CL.raw_slice out_common 0 (SZ.v handshake_len)) == SZ.v handshake_len));
+  lemma_copy_expr_preserves_prefix_slice
+    network_header_bytes
+    (CL.raw_slice out_common 0 (SZ.v handshake_len))
+    5
+    (SZ.v handshake_len)
+    (SZ.v network_out_len)
+    0
+    5;
+  Seq.lemma_eq_elim
+    (CL.raw_slice network_out_bytes 0 5)
+    (CL.raw_slice network_header_bytes 0 5);
+  lemma_copy_expr_copied_slice
+    network_header_bytes
+    (CL.raw_slice out_common 0 (SZ.v handshake_len))
+    5
+    (SZ.v handshake_len)
+    (SZ.v network_out_len);
+  Seq.lemma_eq_elim
+    (CL.raw_slice network_out_bytes 5 (SZ.v record_len))
+    (CL.raw_slice out_common 0 (SZ.v handshake_len));
+  CL.lemma_raw_slice_split network_out_bytes 0 5 (SZ.v record_len);
   assert (pure (Seq.equal
-    (CL.raw_slice client_hello_prefix 0 47)
-    (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)));
-
-  let hostname_is_empty = hostname_len = 0sz;
-  if hostname_is_empty {
-    write_client_hello_common_extensions
-      (V.vec_to_array start_key_share)
-      (V.vec_to_array client_hello_bytes)
-      512sz
-      47sz;
-    with out_common. assert (pts_to (V.vec_to_array client_hello_bytes) out_common);
-    assert (pure (B.length out_common == 512));
-    assert (pure (SZ.v extensions_len == 65));
-    assert (pure (SZ.v body_len == 108));
-    assert (pure (SZ.v handshake_len == 112));
-    WSR.lemma_client_hello_common_extensions_len key_share;
-    WSR.lemma_client_hello_extensions_len
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share;
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 0 47)
-      (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)));
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 47 (SZ.v handshake_len))
-      (WSR.client_hello_common_extensions_bytes key_share)));
-    SeqP.append_slices
-      (CL.raw_slice out_common 0 47)
-      (CL.raw_slice out_common 47 (SZ.v handshake_len));
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (B.append
-        (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)
-        (WSR.client_hello_common_extensions_bytes key_share))));
-    assert (pure (B.length (CL.raw_slice server_name 0 (SZ.v server_name_len)) == 0));
-    WSR.lemma_client_hello_server_name_extension_bytes_empty
-      (CL.raw_slice server_name 0 (SZ.v server_name_len));
-    WSR.lemma_client_hello_extensions_bytes_shape
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share;
-    Seq.lemma_eq_elim
-      (WSR.client_hello_server_name_extension_bytes
-        (CL.raw_slice server_name 0 (SZ.v server_name_len)))
-      B.empty;
-    assert (pure (Seq.equal
-      (WSR.client_hello_extensions_bytes
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)
-      (WSR.client_hello_common_extensions_bytes key_share)));
-    WSR.lemma_client_hello_handshake_bytes_prefix
-      random
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share;
-    Seq.lemma_eq_elim
-      (WSR.client_hello_extensions_bytes
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)
-      (WSR.client_hello_common_extensions_bytes key_share);
-    assert (pure (B.length (WSR.client_hello_extensions_bytes
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share) == SZ.v extensions_len));
-    assert (pure (43 + B.length (WSR.client_hello_extensions_bytes
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share) == SZ.v body_len));
-    Seq.lemma_eq_elim
-      (WSR.client_hello_handshake_bytes
-        random
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)
-      (B.append
-        (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)
-        (WSR.client_hello_common_extensions_bytes key_share));
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (WSR.client_hello_handshake_bytes
-        random
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)));
-
-    client_hello_bytes_len := handshake_len;
-    network_out.(0sz) <- 22uy;
-    network_out.(1sz) <- 0x03uy;
-    network_out.(2sz) <- 0x03uy;
-    with network_after_record_version. assert (pts_to network_out network_after_record_version);
-    assert (pure (Seq.index network_after_record_version 0 == 22uy));
-    assert (pure (Seq.index network_after_record_version 1 == 0x03uy));
-    assert (pure (Seq.index network_after_record_version 2 == 0x03uy));
-    network_out.(3sz) <- u8_of_sizet (SZ.div handshake_len 256sz);
-    with network_after_len_hi. assert (pts_to network_out network_after_len_hi);
-    Seq.lemma_index_upd1 network_after_record_version 3 (byte (SZ.v handshake_len / 256));
-    Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 0;
-    Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 1;
-    Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 2;
-    assert (pure (Seq.index network_after_len_hi 0 == 22uy));
-    assert (pure (Seq.index network_after_len_hi 1 == 0x03uy));
-    assert (pure (Seq.index network_after_len_hi 2 == 0x03uy));
-    assert (pure (Seq.index network_after_len_hi 3 == byte (SZ.v handshake_len / 256)));
-    network_out.(4sz) <- u8_of_sizet handshake_len;
-    with network_header_bytes. assert (pts_to network_out network_header_bytes);
-    Seq.lemma_index_upd1 network_after_len_hi 4 (byte (SZ.v handshake_len));
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 0;
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 1;
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 2;
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 3;
-    assert (pure (B.length network_header_bytes == SZ.v network_out_len));
-    lemma_handshake_record_header_bytes (SZ.v handshake_len);
-    Seq.lemma_len_slice network_header_bytes 0 5;
-    assert (pure (Seq.length (CL.raw_slice network_header_bytes 0 5) == 5));
-    assert (pure (B.length (handshake_record_header_bytes (SZ.v handshake_len)) == 5));
-    lemma_handshake_record_header_indices (SZ.v handshake_len);
-    lemma_raw_slice_index network_header_bytes 0 5 0;
-    lemma_raw_slice_index network_header_bytes 0 5 1;
-    lemma_raw_slice_index network_header_bytes 0 5 2;
-    lemma_raw_slice_index network_header_bytes 0 5 3;
-    lemma_raw_slice_index network_header_bytes 0 5 4;
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 3 == byte (SZ.v handshake_len / 256)));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 4 == byte (SZ.v handshake_len)));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 0 == 22uy));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 1 == 0x03uy));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 2 == 0x03uy));
-    assert (pure (Seq.index network_header_bytes 0 == 22uy));
-    assert (pure (Seq.index network_header_bytes 1 == 0x03uy));
-    assert (pure (Seq.index network_header_bytes 2 == 0x03uy));
-    assert (pure (Seq.index network_header_bytes 3 == byte (SZ.v handshake_len / 256)));
-    assert (pure (Seq.index network_header_bytes 4 == byte (SZ.v handshake_len)));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 0 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 0));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 1 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 1));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 2 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 2));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 3 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 3));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 4 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 4));
-    lemma_eq_handshake_record_header_from_indices
+    (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
+    (B.append
       (CL.raw_slice network_header_bytes 0 5)
-      (SZ.v handshake_len);
-    copy_array_slice_to_array
-      (V.vec_to_array client_hello_bytes)
-      512sz
-      0sz
-      handshake_len
-      network_out
-      network_out_len
-      5sz;
-    client_hello_present := true;
+      (CL.raw_slice out_common 0 (SZ.v handshake_len)))));
+  Seq.lemma_eq_elim
+    (CL.raw_slice network_header_bytes 0 5)
+    (WSR.serialize_record_header T.Handshake (SZ.v handshake_len));
+  Seq.lemma_eq_elim
+    (CL.raw_slice out_common 0 (SZ.v handshake_len))
+    (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
+  assert (pure (Seq.equal
+    (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
+    (B.append
+      (WSR.serialize_record_header T.Handshake (SZ.v handshake_len))
+      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))))));
+  assert (pure (Seq.equal
+    (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
+    (WS.serialize_record T.Handshake (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))))));
+  assert (pure (Seq.equal
+    (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
+    (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch))))));
+  WS.lemma_parse_record_serialize_record
+    T.Handshake
+    (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
+  CSL.lemma_parse_record_full_raw_records_exactly
+    (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
+    T.Handshake
+    (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
+  assert (pure (CS.raw_records_exactly
+    (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
+    T.Handshake
+    1));
 
-    V.to_vec_pts_to start_random;
-    V.to_vec_pts_to start_server_name;
-    V.to_vec_pts_to start_key_share;
-    V.to_vec_pts_to client_hello_bytes;
-
-    with handshake_bytes. assert (V.pts_to client_hello_bytes handshake_bytes);
-    with network_out_bytes. assert (pts_to network_out network_out_bytes);
-    V.pts_to_len client_hello_bytes;
-    pts_to_len network_out;
-    assert (pure (B.length handshake_bytes == 512));
-    assert (pure (B.length network_out_bytes == SZ.v network_out_len));
-    assert (pure (SZ.v handshake_len <= B.length handshake_bytes));
-    assert (pure (SZ.v record_len == B.length (Seq.slice network_out_bytes 0 (SZ.v record_len))));
-    assert (pure (Seq.equal random (Ghost.reveal ch).M.random));
-    assert (pure (Seq.equal key_share (Ghost.reveal ch).M.key_share));
-    assert (pure (CL.raw_slice server_name 0 (SZ.v server_name_len) ==
-      Seq.slice server_name 0 (SZ.v server_name_len)));
-    assert (pure (L.optional_byte_prefix_matches
-      true
-      server_name
-      server_name_len
-      (Ghost.reveal ch).M.server_name));
-    assert (pure (V.is_full_vec start_random));
-    assert (pure (V.is_full_vec start_server_name));
-    assert (pure (V.is_full_vec start_key_share));
-    assert (pure (V.is_full_vec start_cipher_suites));
-    assert (pure (V.is_full_vec start_signature_schemes));
-    assert (pure (V.is_full_vec l.L.client_hello_random));
-    assert (pure (V.is_full_vec l.L.client_hello_server_name));
-    assert (pure (V.is_full_vec l.L.client_hello_key_share));
-    assert (pure (V.is_full_vec l.L.client_hello_cipher_suites));
-    assert (pure (V.is_full_vec l.L.client_hello_signature_schemes));
-    assert (pure (V.is_full_vec client_hello_bytes));
-    assert (pure (V.length start_random == 32));
-    assert (pure (V.length start_server_name == L.max_server_name_len));
-    assert (pure (V.length start_key_share == 32));
-    assert (pure (V.length start_cipher_suites == L.max_cipher_suites));
-    assert (pure (V.length start_signature_schemes == L.max_signature_schemes));
-    assert (pure (V.length l.L.client_hello_random == 32));
-    assert (pure (V.length l.L.client_hello_server_name == L.max_server_name_len));
-    assert (pure (V.length l.L.client_hello_key_share == 32));
-    assert (pure (V.length l.L.client_hello_cipher_suites == L.max_cipher_suites));
-    assert (pure (V.length l.L.client_hello_signature_schemes == L.max_signature_schemes));
-    assert (pure (V.length client_hello_bytes == 512));
-    assert (pure (B.length random == 32));
-    assert (pure (B.length server_name == L.max_server_name_len));
-    assert (pure (B.length key_share == 32));
-    assert (pure (Seq.length cipher_suites == L.max_cipher_suites));
-    assert (pure (Seq.length signature_schemes == L.max_signature_schemes));
-    assert (pure (SZ.v server_name_len <= B.length server_name));
-    assert (pure (SZ.v cipher_suites_len <= Seq.length cipher_suites));
-    assert (pure (SZ.v signature_schemes_len <= Seq.length signature_schemes));
-    assert (pure (Seq.equal random (Ghost.reveal start).CS.start_client_random));
-    assert (pure (B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len));
-    assert (pure (Seq.equal
-      (Ghost.reveal start).CS.start_server_name
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))));
-    assert (pure (Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public));
-    assert (pure (L.cipher_suites_match cipher_suites (SZ.v cipher_suites_len) (Ghost.reveal start).CS.start_cipher_suites));
-    assert (pure (L.signature_schemes_match signature_schemes (SZ.v signature_schemes_len) (Ghost.reveal start).CS.start_signature_schemes));
-    assert (pure (L.cipher_suites_match cipher_suites (SZ.v cipher_suites_len) (Ghost.reveal ch).M.cipher_suites));
-    assert (pure (L.signature_schemes_match signature_schemes (SZ.v signature_schemes_len) (Ghost.reveal ch).M.signature_schemes));
-    assert (pure (Seq.equal
-      (CL.raw_slice handshake_bytes 0 (SZ.v handshake_len))
-      (WSR.client_hello_handshake_bytes
-        random
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)));
-    Seq.lemma_eq_elim random (Ghost.reveal ch).M.random;
-    Seq.lemma_eq_elim key_share (Ghost.reveal ch).M.key_share;
-    Seq.lemma_eq_elim
-      (Ghost.reveal start).CS.start_server_name
-      (CL.raw_slice server_name 0 (SZ.v server_name_len));
-    assert (pure ((Ghost.reveal ch).M.server_name ==
-      Some (CL.raw_slice server_name 0 (SZ.v server_name_len))));
-    WSR.lemma_client_hello_handshake_bytes_reveal (Ghost.reveal ch);
-    WSR.lemma_serialize_client_hello_reveal (Ghost.reveal ch);
-    assert (pure (SZ.v handshake_len ==
-      B.length (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
-    assert (pure (Seq.equal
-      (CL.raw_slice handshake_bytes 0 (SZ.v handshake_len))
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
-    WSRD.lemma_serialize_tls_message_handshake (M.ClientHello (Ghost.reveal ch));
-    WSR.lemma_serialize_record_reveal
-      T.Handshake
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (SZ.v record_len ==
-      B.length (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch))))));
-    SeqP.append_slices
-      (CL.raw_slice network_header_bytes 0 5)
-      (B.append
-        (CL.raw_slice out_common 0 (SZ.v handshake_len))
-        (CL.raw_slice network_header_bytes (5 + SZ.v handshake_len) (SZ.v network_out_len)));
-    SeqP.append_slices
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (CL.raw_slice network_header_bytes (5 + SZ.v handshake_len) (SZ.v network_out_len));
-    assert (pure (B.length (CL.raw_slice out_common 0 (SZ.v handshake_len)) == SZ.v handshake_len));
-    lemma_copy_expr_preserves_prefix_slice
-      network_header_bytes
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      5
-      (SZ.v handshake_len)
-      (SZ.v network_out_len)
-      0
-      5;
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 0 5)
-      (CL.raw_slice network_header_bytes 0 5);
-    lemma_copy_expr_copied_slice
-      network_header_bytes
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      5
-      (SZ.v handshake_len)
-      (SZ.v network_out_len);
-    assert (pure (SZ.v record_len == 5 + SZ.v handshake_len));
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 5 (SZ.v record_len))
-      (CL.raw_slice out_common 0 (SZ.v handshake_len));
-    CL.lemma_raw_slice_split network_out_bytes 0 5 (SZ.v record_len);
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 0 5)
-      (CL.raw_slice network_header_bytes 0 5);
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 5 (SZ.v record_len))
-      (CL.raw_slice out_common 0 (SZ.v handshake_len));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (B.append
-        (CL.raw_slice network_header_bytes 0 5)
-        (CL.raw_slice out_common 0 (SZ.v handshake_len)))));
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_header_bytes 0 5)
-      (WSR.serialize_record_header T.Handshake (SZ.v handshake_len));
-    Seq.lemma_eq_elim
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (B.append
-        (WSR.serialize_record_header T.Handshake (SZ.v handshake_len))
-        (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))))));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (WS.serialize_record T.Handshake (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))))));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch))))));
-    WS.lemma_parse_record_serialize_record
-      T.Handshake
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (WS.parse_record (CL.raw_slice network_out_bytes 0 (SZ.v record_len)) ==
-      Some
-        (T.Handshake,
-         WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)),
-         SZ.v record_len)));
-    CSL.lemma_parse_record_full_raw_records_exactly
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      T.Handshake
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (CS.raw_records_exactly
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      T.Handshake
-      1));
-    record_len
-  } else {
-    assert (pure (0 < SZ.v hostname_len));
-    write_client_hello_sni_and_common_extensions
-      (V.vec_to_array start_server_name)
-      (V.vec_to_array start_key_share)
-      (V.vec_to_array client_hello_bytes)
-      512sz
-      hostname_len;
-    with out_common. assert (pts_to (V.vec_to_array client_hello_bytes) out_common);
-    assert (pure (B.length out_common == 512));
-    assert (pure (SZ.v extensions_len == 74 + SZ.v hostname_len));
-    assert (pure (SZ.v body_len == 117 + SZ.v hostname_len));
-    assert (pure (SZ.v handshake_len == 121 + SZ.v hostname_len));
-    WSR.lemma_client_hello_extensions_len
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share;
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 0 47)
-      (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)));
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 47 (SZ.v handshake_len))
-      (WSR.client_hello_extensions_bytes
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)));
-    SeqP.append_slices
-      (CL.raw_slice out_common 0 47)
-      (CL.raw_slice out_common 47 (SZ.v handshake_len));
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (B.append
-        (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)
-        (WSR.client_hello_extensions_bytes
-          (CL.raw_slice server_name 0 (SZ.v server_name_len))
-          key_share))));
-    WSR.lemma_client_hello_handshake_bytes_prefix
-      random
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share;
-    assert (pure (B.length (WSR.client_hello_extensions_bytes
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share) == SZ.v extensions_len));
-    assert (pure (43 + B.length (WSR.client_hello_extensions_bytes
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))
-      key_share) == SZ.v body_len));
-    Seq.lemma_eq_elim
-      (WSR.client_hello_handshake_bytes
-        random
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)
-      (B.append
-        (WSR.client_hello_prefix_bytes (SZ.v body_len) (SZ.v extensions_len) random)
-        (WSR.client_hello_extensions_bytes
-          (CL.raw_slice server_name 0 (SZ.v server_name_len))
-          key_share));
-    assert (pure (Seq.equal
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (WSR.client_hello_handshake_bytes
-        random
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)));
-
-    client_hello_bytes_len := handshake_len;
-    network_out.(0sz) <- 22uy;
-    network_out.(1sz) <- 0x03uy;
-    network_out.(2sz) <- 0x03uy;
-    with network_after_record_version. assert (pts_to network_out network_after_record_version);
-    assert (pure (Seq.index network_after_record_version 0 == 22uy));
-    assert (pure (Seq.index network_after_record_version 1 == 0x03uy));
-    assert (pure (Seq.index network_after_record_version 2 == 0x03uy));
-    network_out.(3sz) <- u8_of_sizet (SZ.div handshake_len 256sz);
-    with network_after_len_hi. assert (pts_to network_out network_after_len_hi);
-    Seq.lemma_index_upd1 network_after_record_version 3 (byte (SZ.v handshake_len / 256));
-    Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 0;
-    Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 1;
-    Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 2;
-    assert (pure (Seq.index network_after_len_hi 0 == 22uy));
-    assert (pure (Seq.index network_after_len_hi 1 == 0x03uy));
-    assert (pure (Seq.index network_after_len_hi 2 == 0x03uy));
-    assert (pure (Seq.index network_after_len_hi 3 == byte (SZ.v handshake_len / 256)));
-    network_out.(4sz) <- u8_of_sizet handshake_len;
-    with network_header_bytes. assert (pts_to network_out network_header_bytes);
-    Seq.lemma_index_upd1 network_after_len_hi 4 (byte (SZ.v handshake_len));
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 0;
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 1;
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 2;
-    Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 3;
-    assert (pure (B.length network_header_bytes == SZ.v network_out_len));
-    lemma_handshake_record_header_bytes (SZ.v handshake_len);
-    Seq.lemma_len_slice network_header_bytes 0 5;
-    assert (pure (Seq.length (CL.raw_slice network_header_bytes 0 5) == 5));
-    assert (pure (B.length (handshake_record_header_bytes (SZ.v handshake_len)) == 5));
-    lemma_handshake_record_header_indices (SZ.v handshake_len);
-    lemma_raw_slice_index network_header_bytes 0 5 0;
-    lemma_raw_slice_index network_header_bytes 0 5 1;
-    lemma_raw_slice_index network_header_bytes 0 5 2;
-    lemma_raw_slice_index network_header_bytes 0 5 3;
-    lemma_raw_slice_index network_header_bytes 0 5 4;
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 3 == byte (SZ.v handshake_len / 256)));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 4 == byte (SZ.v handshake_len)));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 0 == 22uy));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 1 == 0x03uy));
-    assert (pure (Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 2 == 0x03uy));
-    assert (pure (Seq.index network_header_bytes 0 == 22uy));
-    assert (pure (Seq.index network_header_bytes 1 == 0x03uy));
-    assert (pure (Seq.index network_header_bytes 2 == 0x03uy));
-    assert (pure (Seq.index network_header_bytes 3 == byte (SZ.v handshake_len / 256)));
-    assert (pure (Seq.index network_header_bytes 4 == byte (SZ.v handshake_len)));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 0 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 0));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 1 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 1));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 2 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 2));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 3 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 3));
-    assert (pure (Seq.index (CL.raw_slice network_header_bytes 0 5) 4 == Seq.index (handshake_record_header_bytes (SZ.v handshake_len)) 4));
-    lemma_eq_handshake_record_header_from_indices
-      (CL.raw_slice network_header_bytes 0 5)
-      (SZ.v handshake_len);
-    copy_array_slice_to_array
-      (V.vec_to_array client_hello_bytes)
-      512sz
-      0sz
-      handshake_len
-      network_out
-      network_out_len
-      5sz;
-    client_hello_present := true;
-
-    V.to_vec_pts_to start_random;
-    V.to_vec_pts_to start_server_name;
-    V.to_vec_pts_to start_key_share;
-    V.to_vec_pts_to client_hello_bytes;
-
-    with handshake_bytes. assert (V.pts_to client_hello_bytes handshake_bytes);
-    with network_out_bytes. assert (pts_to network_out network_out_bytes);
-    V.pts_to_len client_hello_bytes;
-    pts_to_len network_out;
-    assert (pure (B.length handshake_bytes == 512));
-    assert (pure (B.length network_out_bytes == SZ.v network_out_len));
-    assert (pure (SZ.v handshake_len <= B.length handshake_bytes));
-    assert (pure (SZ.v record_len == B.length (Seq.slice network_out_bytes 0 (SZ.v record_len))));
-    assert (pure (Seq.equal random (Ghost.reveal ch).M.random));
-    assert (pure (Seq.equal key_share (Ghost.reveal ch).M.key_share));
-    assert (pure (CL.raw_slice server_name 0 (SZ.v server_name_len) ==
-      Seq.slice server_name 0 (SZ.v server_name_len)));
-    assert (pure (L.optional_byte_prefix_matches
-      true
-      server_name
-      server_name_len
-      (Ghost.reveal ch).M.server_name));
-    assert (pure (V.is_full_vec start_random));
-    assert (pure (V.is_full_vec start_server_name));
-    assert (pure (V.is_full_vec start_key_share));
-    assert (pure (V.is_full_vec start_cipher_suites));
-    assert (pure (V.is_full_vec start_signature_schemes));
-    assert (pure (V.is_full_vec l.L.client_hello_random));
-    assert (pure (V.is_full_vec l.L.client_hello_server_name));
-    assert (pure (V.is_full_vec l.L.client_hello_key_share));
-    assert (pure (V.is_full_vec l.L.client_hello_cipher_suites));
-    assert (pure (V.is_full_vec l.L.client_hello_signature_schemes));
-    assert (pure (V.is_full_vec client_hello_bytes));
-    assert (pure (V.length start_random == 32));
-    assert (pure (V.length start_server_name == L.max_server_name_len));
-    assert (pure (V.length start_key_share == 32));
-    assert (pure (V.length start_cipher_suites == L.max_cipher_suites));
-    assert (pure (V.length start_signature_schemes == L.max_signature_schemes));
-    assert (pure (V.length l.L.client_hello_random == 32));
-    assert (pure (V.length l.L.client_hello_server_name == L.max_server_name_len));
-    assert (pure (V.length l.L.client_hello_key_share == 32));
-    assert (pure (V.length l.L.client_hello_cipher_suites == L.max_cipher_suites));
-    assert (pure (V.length l.L.client_hello_signature_schemes == L.max_signature_schemes));
-    assert (pure (V.length client_hello_bytes == 512));
-    assert (pure (B.length random == 32));
-    assert (pure (B.length server_name == L.max_server_name_len));
-    assert (pure (B.length key_share == 32));
-    assert (pure (Seq.length cipher_suites == L.max_cipher_suites));
-    assert (pure (Seq.length signature_schemes == L.max_signature_schemes));
-    assert (pure (SZ.v server_name_len <= B.length server_name));
-    assert (pure (SZ.v cipher_suites_len <= Seq.length cipher_suites));
-    assert (pure (SZ.v signature_schemes_len <= Seq.length signature_schemes));
-    assert (pure (Seq.equal random (Ghost.reveal start).CS.start_client_random));
-    assert (pure (B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len));
-    assert (pure (Seq.equal
-      (Ghost.reveal start).CS.start_server_name
-      (CL.raw_slice server_name 0 (SZ.v server_name_len))));
-    assert (pure (Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public));
-    assert (pure (L.cipher_suites_match cipher_suites (SZ.v cipher_suites_len) (Ghost.reveal start).CS.start_cipher_suites));
-    assert (pure (L.signature_schemes_match signature_schemes (SZ.v signature_schemes_len) (Ghost.reveal start).CS.start_signature_schemes));
-    assert (pure (L.cipher_suites_match cipher_suites (SZ.v cipher_suites_len) (Ghost.reveal ch).M.cipher_suites));
-    assert (pure (L.signature_schemes_match signature_schemes (SZ.v signature_schemes_len) (Ghost.reveal ch).M.signature_schemes));
-    assert (pure (Seq.equal
-      (CL.raw_slice handshake_bytes 0 (SZ.v handshake_len))
-      (WSR.client_hello_handshake_bytes
-        random
-        (CL.raw_slice server_name 0 (SZ.v server_name_len))
-        key_share)));
-    Seq.lemma_eq_elim random (Ghost.reveal ch).M.random;
-    Seq.lemma_eq_elim key_share (Ghost.reveal ch).M.key_share;
-    Seq.lemma_eq_elim
-      (Ghost.reveal start).CS.start_server_name
-      (CL.raw_slice server_name 0 (SZ.v server_name_len));
-    assert (pure ((Ghost.reveal ch).M.server_name ==
-      Some (CL.raw_slice server_name 0 (SZ.v server_name_len))));
-    WSR.lemma_client_hello_handshake_bytes_reveal (Ghost.reveal ch);
-    WSR.lemma_serialize_client_hello_reveal (Ghost.reveal ch);
-    assert (pure (SZ.v handshake_len ==
-      B.length (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
-    assert (pure (Seq.equal
-      (CL.raw_slice handshake_bytes 0 (SZ.v handshake_len))
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)))));
-    WSRD.lemma_serialize_tls_message_handshake (M.ClientHello (Ghost.reveal ch));
-    WSR.lemma_serialize_record_reveal
-      T.Handshake
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (SZ.v record_len ==
-      B.length (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch))))));
-    SeqP.append_slices
-      (CL.raw_slice network_header_bytes 0 5)
-      (B.append
-        (CL.raw_slice out_common 0 (SZ.v handshake_len))
-        (CL.raw_slice network_header_bytes (5 + SZ.v handshake_len) (SZ.v network_out_len)));
-    SeqP.append_slices
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (CL.raw_slice network_header_bytes (5 + SZ.v handshake_len) (SZ.v network_out_len));
-    assert (pure (B.length (CL.raw_slice out_common 0 (SZ.v handshake_len)) == SZ.v handshake_len));
-    lemma_copy_expr_preserves_prefix_slice
-      network_header_bytes
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      5
-      (SZ.v handshake_len)
-      (SZ.v network_out_len)
-      0
-      5;
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 0 5)
-      (CL.raw_slice network_header_bytes 0 5);
-    lemma_copy_expr_copied_slice
-      network_header_bytes
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      5
-      (SZ.v handshake_len)
-      (SZ.v network_out_len);
-    assert (pure (SZ.v record_len == 5 + SZ.v handshake_len));
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 5 (SZ.v record_len))
-      (CL.raw_slice out_common 0 (SZ.v handshake_len));
-    CL.lemma_raw_slice_split network_out_bytes 0 5 (SZ.v record_len);
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 0 5)
-      (CL.raw_slice network_header_bytes 0 5);
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_out_bytes 5 (SZ.v record_len))
-      (CL.raw_slice out_common 0 (SZ.v handshake_len));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (B.append
-        (CL.raw_slice network_header_bytes 0 5)
-        (CL.raw_slice out_common 0 (SZ.v handshake_len)))));
-    Seq.lemma_eq_elim
-      (CL.raw_slice network_header_bytes 0 5)
-      (WSR.serialize_record_header T.Handshake (SZ.v handshake_len));
-    Seq.lemma_eq_elim
-      (CL.raw_slice out_common 0 (SZ.v handshake_len))
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (B.append
-        (WSR.serialize_record_header T.Handshake (SZ.v handshake_len))
-        (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))))));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (WS.serialize_record T.Handshake (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))))));
-    assert (pure (Seq.equal
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch))))));
-    WS.lemma_parse_record_serialize_record
-      T.Handshake
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (WS.parse_record (CL.raw_slice network_out_bytes 0 (SZ.v record_len)) ==
-      Some
-        (T.Handshake,
-         WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)),
-         SZ.v record_len)));
-    CSL.lemma_parse_record_full_raw_records_exactly
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      T.Handshake
-      (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)));
-    assert (pure (CS.raw_records_exactly
-      (CL.raw_slice network_out_bytes 0 (SZ.v record_len))
-      T.Handshake
-      1));
-    record_len
-  }
+  (* ---- semantic postconditions via client_hello_matches_start ---- *)
+  assert (pure (Seq.equal random (Sem.clientHello_random (Ghost.reveal ch))));
+  assert (pure (L.optional_byte_prefix_matches
+    true server_name server_name_len (Sem.clientHello_server_name (Ghost.reveal ch))));
+  record_len
 }
 #pop-options
