@@ -24,6 +24,27 @@ module U64 = FStar.UInt64
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
 
+// Phase 5: handshake_msg payloads are the QuackyDucky-generated wire records.
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
+// Generated component modules used to build the canonical wire ClientHello
+// returned by client_hello_of_start.
+module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GSS = TLS13.Wire.Generated.SignatureScheme
+module GCHE = TLS13.Wire.Generated.ClientHello_extensions
+// For the ClientHello record-size bound in client_hello_matches_start: reveal
+// serialize_handshake to the generated handshake serializer and compute the
+// bytesize of the canonical 5-extension ClientHello.
+module GHS = TLS13.Wire.Generated.Handshake
+module Rev = TLS13.Wire.Spec.Reveal.Handshake
+
 open TLS13.Impl.ConnectionState.Bounds
 
 let lemma_sizet_lte_plain (x:SZ.t) (y:SZ.t)
@@ -142,15 +163,53 @@ let lemma_cipher_suites_match_first_chacha_offer
     lemma_cipher_suites_match_length wire len suites;
     assert False
 
+// Phase 5: client_hello_of_start is now a faithful, total transparent `let` in
+// TLS13.Impl.ConnectionState.Model.fsti (it builds the canonical 5-extension
+// ClientHello, clamping invalid/unbounded start fields).  Nothing to define here.
+
+// Under valid_start the clamps in client_hello_of_start are identities, so every
+// TLS13.Wire.Semantics accessor returns the matching `start` field.  Discharged
+// by unfolding client_hello_of_start and the accessors (fuel for the extension
+// list walks).
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 400"
 let lemma_client_hello_of_start_matches
   (start:CS.handshake_start)
-  : Lemma (CS.client_hello_matches_start start (client_hello_of_start start))
+  : Lemma (requires valid_start start)
+          (ensures CS.client_hello_matches_start start (client_hello_of_start start))
 =
+  // The 5 semantic-accessor conjuncts are discharged by unfolding
+  // client_hello_of_start and the TLS13.Wire.Semantics accessors (fuel).
+  // The remaining conjunct is the record-size bound
+  //   B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640.
+  // Reveal serialize_handshake to the generated serializer and compute the
+  // exact bytesize of the canonical 5-extension ClientHello: it equals
+  //   117 + |sni| + 2*|cipher_suites| + 2*|signature_schemes|
+  // which under valid_start is at most 117 + 255 + 32 + 32 = 436 <= 16640.
+  let sni = cho_sni start in
+  let sa = cho_sa_data (cho_sa_list start) in
+  let ks = start.CS.start_client_key_share_public in
+  let sn_ext = cho_sn_ext sni in
+  let sg_ext = cho_sg_ext in
+  let sa_ext = cho_sa_ext sa in
+  let ks_ext = cho_ks_ext ks in
+  let sv_ext = cho_sv_ext in
+  let ch = client_hello_of_start start in
+  Rev.lemma_serialize_handshake_client_hello ch;
+  GHS.handshake_bytesize_eq (GHS.Body_client_hello (ch <: GHS.handshake_body_client_hello));
+  GCH.clientHello_extensions_list_bytesize_nil;
+  GCH.clientHello_extensions_list_bytesize_cons sv_ext [];
+  GCH.clientHello_extensions_list_bytesize_cons ks_ext [sv_ext];
+  GCH.clientHello_extensions_list_bytesize_cons sa_ext [ks_ext; sv_ext];
+  GCH.clientHello_extensions_list_bytesize_cons sg_ext [sa_ext; ks_ext; sv_ext];
+  GCH.clientHello_extensions_list_bytesize_cons sn_ext [sg_ext; sa_ext; ks_ext; sv_ext];
   ()
+#pop-options
 
+// Faithful len-helper bridge (see .fsti).  Off the LocalHandshake hot path.
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_client_hello_len_helpers_from_start
   (start:CS.handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (server_name_storage:B.bytes)
   (server_name_len:SZ.t)
   (cipher_suites:Seq.seq U16.t)
@@ -158,7 +217,8 @@ let lemma_client_hello_len_helpers_from_start
   (signature_schemes:Seq.seq U16.t)
   (signature_schemes_len:SZ.t)
   : Lemma
-      (requires ch == client_hello_of_start start /\
+      (requires valid_start start /\
+                ch == client_hello_of_start start /\
                 B.length server_name_storage == max_hostname_len /\
                 B.length start.CS.start_server_name == SZ.v server_name_len /\
                 SZ.v server_name_len <= B.length server_name_storage /\
@@ -174,35 +234,18 @@ let lemma_client_hello_len_helpers_from_start
                   signature_schemes
                   (SZ.v signature_schemes_len)
                   start.CS.start_signature_schemes)
-      (ensures client_hello_server_name_len_for ch == server_name_len /\
-               client_hello_cipher_suites_len_for ch == cipher_suites_len /\
-               client_hello_signature_schemes_len_for ch == signature_schemes_len)
+      (ensures
+        client_hello_server_name_len_for ch == server_name_len /\
+        client_hello_cipher_suites_len_for ch == cipher_suites_len /\
+        client_hello_signature_schemes_len_for ch == signature_schemes_len)
 =
-  assert (ch.M.server_name == Some start.CS.start_server_name);
-  assert (B.length start.CS.start_server_name < 65536);
-  lemma_bounded_u16_sizet_of_sizet
-    (B.length start.CS.start_server_name)
-    server_name_len;
-
-  lemma_cipher_suites_match_length
-    cipher_suites
-    (SZ.v cipher_suites_len)
-    start.CS.start_cipher_suites;
-  assert (length start.CS.start_cipher_suites == SZ.v cipher_suites_len);
-  assert (length start.CS.start_cipher_suites < 65536);
-  lemma_bounded_u16_sizet_of_sizet
-    (length start.CS.start_cipher_suites)
-    cipher_suites_len;
-
-  lemma_signature_schemes_match_length
-    signature_schemes
-    (SZ.v signature_schemes_len)
-    start.CS.start_signature_schemes;
-  assert (length start.CS.start_signature_schemes == SZ.v signature_schemes_len);
-  assert (length start.CS.start_signature_schemes < 65536);
-  lemma_bounded_u16_sizet_of_sizet
-    (length start.CS.start_signature_schemes)
-    signature_schemes_len
+  lemma_client_hello_of_start_matches start;
+  lemma_cipher_suites_match_length cipher_suites (SZ.v cipher_suites_len) start.CS.start_cipher_suites;
+  lemma_signature_schemes_match_length signature_schemes (SZ.v signature_schemes_len) start.CS.start_signature_schemes;
+  lemma_bounded_u16_sizet_of_sizet (B.length start.CS.start_server_name) server_name_len;
+  lemma_bounded_u16_sizet_of_sizet (length start.CS.start_cipher_suites) cipher_suites_len;
+  lemma_bounded_u16_sizet_of_sizet (length start.CS.start_signature_schemes) signature_schemes_len
+#pop-options
 
 let lemma_application_data_record_count_small
   (bytes:B.bytes)
@@ -394,7 +437,7 @@ let lemma_selected_server_parameters_state_evolves
 
 let lemma_sent_client_hello_state_evolves
   (st:CS.connection_state)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw_sent:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -945,7 +988,7 @@ let lemma_received_change_cipher_spec_state_evolves
 
 let lemma_received_server_hello_state_evolves
   (st:CS.connection_state)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1015,7 +1058,7 @@ let lemma_received_server_hello_state_evolves
 
 let lemma_sent_server_hello_state_evolves
   (st:CS.connection_state)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (raw_sent:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1071,7 +1114,7 @@ let lemma_sent_server_hello_state_evolves
 
 let lemma_sent_encrypted_extensions_state_evolves
   (st:CS.connection_state)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   (raw_sent:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1127,7 +1170,7 @@ let lemma_sent_encrypted_extensions_state_evolves
 
 let lemma_sent_certificate_state_evolves
   (st:CS.connection_state)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   (raw_sent:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1183,7 +1226,7 @@ let lemma_sent_certificate_state_evolves
 
 let lemma_signed_certificate_verify_state_evolves
   (st:CS.connection_state)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   : Lemma
       (requires CS.connection_state_consistent st /\
                 can_sign_certificate_verify st cv)
@@ -1232,7 +1275,7 @@ let lemma_signed_certificate_verify_state_evolves
 
 let lemma_sent_certificate_verify_state_evolves
   (st:CS.connection_state)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (raw_sent:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1288,7 +1331,7 @@ let lemma_sent_certificate_verify_state_evolves
 
 let lemma_sent_server_finished_state_evolves
   (st:CS.connection_state)
-  (fin:M.finished)
+  (fin:GFin.finished)
   (raw_sent:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1344,7 +1387,7 @@ let lemma_sent_server_finished_state_evolves
 
 let lemma_received_client_finished_state_evolves
   (st:CS.connection_state)
-  (fin:M.finished)
+  (fin:GFin.finished)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1400,7 +1443,7 @@ let lemma_received_client_finished_state_evolves
 
 let lemma_verified_client_finished_state_evolves
   (st:CS.connection_state)
-  (fin:M.finished)
+  (fin:GFin.finished)
   : Lemma
       (requires CS.connection_state_consistent st /\
                 can_verify_client_finished st fin)
@@ -1449,7 +1492,7 @@ let lemma_verified_client_finished_state_evolves
 
 let lemma_received_client_hello_state_evolves
   (st:CS.connection_state)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1519,7 +1562,7 @@ let lemma_received_client_hello_state_evolves
 
 let lemma_received_encrypted_extensions_state_evolves
   (st:CS.connection_state)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1587,7 +1630,7 @@ let lemma_received_encrypted_extensions_state_evolves
 
 let lemma_received_certificate_state_evolves
   (st:CS.connection_state)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1595,7 +1638,7 @@ let lemma_received_certificate_state_evolves
                   CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
                   CS.ClientEndpoint /\
-                cert.M.chain <> [] /\
+                (Sem.certificate_entries cert) <> [] /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -1654,7 +1697,7 @@ let lemma_received_certificate_state_evolves
 
 let lemma_received_certificate_verify_state_evolves
   (st:CS.connection_state)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1722,7 +1765,7 @@ let lemma_received_certificate_verify_state_evolves
 
 let lemma_verified_certificate_signature_state_evolves
   (st:CS.connection_state)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   : Lemma
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
@@ -1765,7 +1808,7 @@ let lemma_verified_certificate_signature_state_evolves
 
 let lemma_received_server_finished_state_evolves
   (st:CS.connection_state)
-  (fin:M.finished)
+  (fin:GFin.finished)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
@@ -1825,7 +1868,7 @@ let lemma_received_server_finished_state_evolves
 
 let lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)
-  (fin:M.finished)
+  (fin:GFin.finished)
   : Lemma
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
@@ -1868,7 +1911,7 @@ let lemma_verified_server_finished_state_evolves
 
 let lemma_sent_client_finished_state_evolves
   (st:CS.connection_state)
-  (fin:M.finished)
+  (fin:GFin.finished)
   (raw_sent:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
