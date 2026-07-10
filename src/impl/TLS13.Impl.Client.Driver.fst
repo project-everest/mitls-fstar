@@ -19,6 +19,7 @@ module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
@@ -1896,11 +1897,11 @@ fn driver_copy_certificate_verify_signature
                 SZ.v snapshot.CR.cv_signature_len <= B.length out_bytes /\
                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                  | Some cv ->
-                   L.signature_scheme_matches snapshot.CR.cv_signature_scheme cv.M.scheme /\
-                   SZ.v snapshot.CR.cv_signature_len == B.length cv.M.signature /\
+                   L.signature_scheme_matches snapshot.CR.cv_signature_scheme (Sem.certificateVerify_scheme cv) /\
+                   SZ.v snapshot.CR.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv) /\
                    Seq.equal
                      (Seq.slice out_bytes 0 (SZ.v snapshot.CR.cv_signature_len))
-                     cv.M.signature
+                     (Sem.certificateVerify_signature_bytes cv)
                  | None -> False))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));

@@ -129,6 +129,10 @@ fn process_verify_client_finished
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+                 // TODO-A1: transcript+36 bound (was derived from the deleted
+                 // W.lemma_serialize_finished_len) threaded as explicit precondition.
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   Bounds.max_transcript_len /\
                  CM.can_verify_client_finished
                    'st0
                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))

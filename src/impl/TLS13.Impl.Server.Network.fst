@@ -28,6 +28,9 @@ module K = TLS13.Keys
 module KS = TLS13.KeySchedule
 module List = FStar.List.Tot
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GFin = TLS13.Wire.Generated.Finished
 module O = TLS13.OpenSSL
 module P = TLS13.Impl.Parser
 module R = TLS13.Record.Spec
@@ -47,13 +50,13 @@ module W = TLS13.Wire.Spec
 let lemma_client_hello_sni_len_for
   (storage:B.bytes)
   (len:SZ.t)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   : Lemma
-      (requires IM.optional_byte_prefix_matches true storage len ch.M.server_name /\
+      (requires IM.optional_byte_prefix_matches true storage len (Sem.clientHello_server_name ch) /\
                 B.length storage < 65536)
       (ensures CM.client_hello_server_name_len_for ch == len)
 =
-  match ch.M.server_name with
+  match Sem.clientHello_server_name ch with
   | Some sn ->
     assert (IM.byte_prefix_matches storage len sn);
     assert (Seq.equal sn (Seq.slice storage 0 (SZ.v len)));
@@ -73,7 +76,7 @@ fn process_client_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lch:IM.client_hello)
-  (#ch:erased M.client_hello)
+  (#ch:erased GCH.clientHello)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -255,7 +258,7 @@ fn process_client_finished
   (raw:array U8.t)
   (raw_len:SZ.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -1452,24 +1455,24 @@ fn process_network_bytes
               CM.lemma_cipher_suites_match_length
                 cipher_suites
                 (SZ.v lch.IM.client_hello_cipher_suites_len)
-                ch.M.cipher_suites;
-              assert (pure (List.length ch.M.cipher_suites ==
+                (Sem.clientHello_cipher_suites ch);
+              assert (pure (List.length (Sem.clientHello_cipher_suites ch) ==
                 SZ.v lch.IM.client_hello_cipher_suites_len));
-              assert (pure (List.length ch.M.cipher_suites < 65536));
+              assert (pure (List.length (Sem.clientHello_cipher_suites ch) < 65536));
               CM.lemma_bounded_u16_sizet_of_sizet
-                (List.length ch.M.cipher_suites)
+                (List.length (Sem.clientHello_cipher_suites ch))
                 lch.IM.client_hello_cipher_suites_len;
               assert (pure (CM.client_hello_cipher_suites_len_for ch ==
                 lch.IM.client_hello_cipher_suites_len));
               CM.lemma_signature_schemes_match_length
                 signature_schemes
                 (SZ.v lch.IM.client_hello_signature_schemes_len)
-                ch.M.signature_schemes;
-              assert (pure (List.length ch.M.signature_schemes ==
+                (Some?.v (Sem.clientHello_sig_algs ch));
+              assert (pure (List.length (Some?.v (Sem.clientHello_sig_algs ch)) ==
                 SZ.v lch.IM.client_hello_signature_schemes_len));
-              assert (pure (List.length ch.M.signature_schemes < 65536));
+              assert (pure (List.length (Some?.v (Sem.clientHello_sig_algs ch)) < 65536));
               CM.lemma_bounded_u16_sizet_of_sizet
-                (List.length ch.M.signature_schemes)
+                (List.length (Some?.v (Sem.clientHello_sig_algs ch)))
                 lch.IM.client_hello_signature_schemes_len;
               assert (pure (CM.client_hello_signature_schemes_len_for ch ==
                 lch.IM.client_hello_signature_schemes_len));
@@ -1480,7 +1483,7 @@ fn process_network_bytes
                     true
                     server_name
                     lch.IM.client_hello_server_name_len
-                    ch.M.server_name));
+                    (Sem.clientHello_server_name ch)));
                 assert (pure (B.length server_name == IM.max_server_name_len));
                 assert (pure (B.length server_name < 65536));
                 lemma_client_hello_sni_len_for

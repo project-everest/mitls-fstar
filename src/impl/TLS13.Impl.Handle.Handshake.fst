@@ -20,6 +20,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
+module Sem = TLS13.Wire.Semantics
 
 fn handle_unexpected_handshake_input
   (c:CR.connection_state)
@@ -277,7 +278,7 @@ fn handle_handshake_message
           assert (pure (mhs == M.ServerHello sh));
           assert (pure (m == M.TlsHandshake (M.ServerHello sh)));
           unfold (L.is_valid_server_hello lsh sh);
-          with sh_random sh_key_share. assert (pure (sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256));
+          with sh_random sh_key_share. assert (pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256));
           fold (L.is_valid_server_hello lsh sh);
           assert (pure (CT.parsed_message_wire_success_for
             content_type
@@ -296,8 +297,18 @@ fn handle_handshake_message
             (M.TlsHandshake (M.ServerHello sh))
             (Ghost.reveal 'raw_bytes)));
 
-          let ready = CQ.can_receive_server_hello c #sh;
+          let ready = CQ.can_receive_server_hello c fragment_len #sh;
           if ready {
+            // can_receive_server_hello (with ready==true) established
+            //   SZ.v fragment_len <= max_server_hello_len  and
+            //   B.length hs_transcript + SZ.v fragment_len <= max_transcript_len.
+            // The parse-success equation above gives
+            //   'fragment_bytes == serialize_handshake (M.ServerHello sh),
+            // and the caller's precondition gives
+            //   B.length 'fragment_bytes == SZ.v fragment_len, hence the
+            // serialized-length form required by mark_received_server_hello.
+            assert (pure (B.length (WS.serialize_handshake (M.ServerHello sh)) ==
+              SZ.v fragment_len));
             CN.mark_received_server_hello c raw fragment fragment_len lsh #sh;
             let resp = {
               CT.network_out_len = 0sz;
