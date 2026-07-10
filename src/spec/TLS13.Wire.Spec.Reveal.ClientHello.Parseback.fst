@@ -210,7 +210,7 @@ let lemma_bounded_int_3_u24 (n:nat{n < 16777216})
 #push-options "--split_queries always --fuel 8 --ifuel 2 --z3rlimit 80"
 let lemma_parse_client_hello_serialize_client_hello
   (ch:M.client_hello{ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                    ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                    ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                     B.length ch.M.body == 0 /\
                     (match ch.M.server_name with
                      | None -> True
@@ -375,7 +375,7 @@ let lemma_ghs_serialize_client_hello_eq_ws
 
 let lemma_parse_tls_message_serialize_client_hello
   (ch:M.client_hello{ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                    ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                    ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                     B.length ch.M.body == 0 /\
                     (match ch.M.server_name with
                      | None -> True

@@ -94,7 +94,7 @@ let cleartext_outer_ct_ok (outer_ct:T.content_type) (m:M.tls_message) : prop =
   | M.TlsHandshake (M.ClientHello _) -> outer_ct == T.Handshake
   | M.TlsHandshake (M.ServerHello _) -> outer_ct == T.Handshake
   | M.TlsHandshake M.HelloRetryRequest -> outer_ct == T.Handshake
-  | M.TlsChangeCipherSpec -> outer_ct == T.ChangeCipherSpec
+  | M.TlsChangeCipherSpec -> outer_ct == T.Change_cipher_spec
   | _ -> True
 
 (* Runtime-decidable gate on the L-level message and the outer content-type
@@ -194,7 +194,7 @@ let lemma_cleartext_tls_message_raw_of_parse
     assert (WS.parse_record raw == Some (outer_ct, fragment, B.length raw));
     CSL.lemma_parse_record_full_raw_records_exactly raw outer_ct fragment
   | M.TlsChangeCipherSpec ->
-    assert (outer_ct == T.ChangeCipherSpec);
+    assert (outer_ct == T.Change_cipher_spec);
     assert (WS.parse_record raw == Some (outer_ct, fragment, B.length raw));
     lemma_parse_record_full_eq_serialize raw outer_ct fragment;
     assert (CT.wire_parse_success content_type fragment m);
@@ -206,7 +206,7 @@ let lemma_cleartext_tls_message_raw_of_parse
         (fun ct -> L.content_type_matches content_type ct /\
                    WS.parse_tls_message ct fragment == Some m) in
     lemma_content_type_matches_injective content_type ct outer_ct;
-    assert (ct == T.ChangeCipherSpec);
+    assert (ct == T.Change_cipher_spec);
     RV.lemma_parse_tls_message_change_cipher_spec fragment;
     Seq.lemma_eq_elim fragment (snd (WS.serialize_tls_message M.TlsChangeCipherSpec));
     RV.lemma_serialize_tls_message_change_cipher_spec ();
@@ -235,7 +235,7 @@ let lemma_mk_cleartext_decoder_fragment_relation
   : Lemma
     (requires
       WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
-      ~(outer_ct == T.ApplicationData) /\
+      ~(outer_ct == T.Application_data) /\
       L.content_type_matches content_type outer_ct)
     (ensures CT.decoder_fragment_relation st0 content_type fragment raw)
 =
@@ -250,7 +250,7 @@ let lemma_mk_cleartext_network_input_wf
     (requires
       WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
       received_cleartext_record_compatible raw outer_ct fragment m /\
-      ~(outer_ct == T.ApplicationData) /\
+      ~(outer_ct == T.Application_data) /\
       L.content_type_matches content_type outer_ct /\
       CT.parsed_message_wire_success_for content_type fragment l m /\
       l_is_received_cleartext l /\
@@ -279,7 +279,7 @@ let lemma_mk_cleartext_network_input_wf_consistent
     (requires
       WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
       received_cleartext_record_compatible raw outer_ct fragment m /\
-      ~(outer_ct == T.ApplicationData) /\
+      ~(outer_ct == T.Application_data) /\
       L.content_type_matches content_type outer_ct /\
       CT.parsed_message_wire_success_for content_type fragment l m /\
       cleartext_consistent content_type l)
@@ -295,7 +295,7 @@ let lemma_mk_cleartext_network_input_wf_none
   : Lemma
     (requires
       WS.parse_record_wire raw == Some (outer_ct, fragment, B.length raw) /\
-      ~(outer_ct == T.ApplicationData) /\
+      ~(outer_ct == T.Application_data) /\
       L.content_type_matches content_type outer_ct /\
       CT.wire_parse_failure content_type fragment)
     (ensures CT.network_input_wf st0 content_type fragment raw)
@@ -323,7 +323,7 @@ let lemma_mk_protected_decoder_fragment_relation
   (outer_fragment:B.bytes) (opened:B.bytes) (plaintext:M.plaintext)
   : Lemma
     (requires
-      WS.parse_record raw == Some (T.ApplicationData, outer_fragment, B.length raw) /\
+      WS.parse_record raw == Some (T.Application_data, outer_fragment, B.length raw) /\
       (exists read_state'.
         R.open_record
           st0.CS.cs_model.CS.model_record.CS.record_read
@@ -342,7 +342,7 @@ let lemma_mk_protected_network_input_wf
   (outer_fragment:B.bytes) (l:L.tls_message) (m:M.tls_message)
   : Lemma
     (requires
-      WS.parse_record raw == Some (T.ApplicationData, outer_fragment, B.length raw) /\
+      WS.parse_record raw == Some (T.Application_data, outer_fragment, B.length raw) /\
       CT.protected_decoder_fragment_relation st0 content_type fragment raw /\
       CT.parsed_message_wire_success_for content_type fragment l m /\
       ~(l_is_received_cleartext l))
@@ -356,7 +356,7 @@ let lemma_mk_protected_network_input_wf
   with _hyp. (
     lemma_wire_parse_unique content_type fragment msg m;
     lemma_l_received_cleartext_matches content_type fragment l m;
-    CSL.lemma_parse_record_full_raw_records_exactly raw T.ApplicationData outer_fragment
+    CSL.lemma_parse_record_full_raw_records_exactly raw T.Application_data outer_fragment
   )
 
 (* network_input_wf for a protected record whose inner plaintext fails to parse. *)
@@ -408,10 +408,10 @@ let lemma_parse_record_buffer_prefix
        | Some (ct, frag, consumed) ->
          consumed == 5 + flen /\
          Seq.equal frag (Seq.slice prefix 5 (5 + flen)) /\
-         (U8.v (Seq.index raw 0) = 0x14 ==> ct == T.ChangeCipherSpec) /\
+         (U8.v (Seq.index raw 0) = 0x14 ==> ct == T.Change_cipher_spec) /\
          (U8.v (Seq.index raw 0) = 0x15 ==> ct == T.Alert) /\
          (U8.v (Seq.index raw 0) = 0x16 ==> ct == T.Handshake) /\
-         (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.ApplicationData)))
+         (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.Application_data)))
 =
   Seq.lemma_index_slice raw 0 (5 + flen) 0;
   Seq.lemma_index_slice raw 0 (5 + flen) 1;
@@ -441,10 +441,10 @@ let lemma_parse_record_wire_buffer_prefix
        | Some (ct, frag, consumed) ->
          consumed == 5 + flen /\
          Seq.equal frag (Seq.slice prefix 5 (5 + flen)) /\
-         (U8.v (Seq.index raw 0) = 0x14 ==> ct == T.ChangeCipherSpec) /\
+         (U8.v (Seq.index raw 0) = 0x14 ==> ct == T.Change_cipher_spec) /\
          (U8.v (Seq.index raw 0) = 0x15 ==> ct == T.Alert) /\
          (U8.v (Seq.index raw 0) = 0x16 ==> ct == T.Handshake) /\
-         (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.ApplicationData)))
+         (U8.v (Seq.index raw 0) = 0x17 ==> ct == T.Application_data)))
 =
   Seq.lemma_index_slice raw 0 (5 + flen) 0;
   Seq.lemma_index_slice raw 0 (5 + flen) 1;

@@ -817,10 +817,10 @@ let server_sent_cleartext_and_server_flight_raw_slices
     CS.cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello sh))
       server_sh_raw /\
-    CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly sf_raw T.ApplicationData 1
+    CS.raw_records_exactly ee_raw T.Application_data 1 /\
+    CS.raw_records_exactly cert_raw T.Application_data 1 /\
+    CS.raw_records_exactly cv_raw T.Application_data 1 /\
+    CS.raw_records_exactly sf_raw T.Application_data 1
 
 noextract
 let server_received_cleartext_and_client_finished_raw_slices
@@ -833,7 +833,7 @@ let server_received_cleartext_and_client_finished_raw_slices
     CS.cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello ch))
       client_ch_raw /\
-    CS.raw_records_exactly client_finished_raw T.ApplicationData 1
+    CS.raw_records_exactly client_finished_raw T.Application_data 1
 
 val lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_flight_raw_slices
   (client_initial:CS.connection_state)

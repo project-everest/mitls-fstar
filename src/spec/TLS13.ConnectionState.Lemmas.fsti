@@ -479,14 +479,14 @@ val lemma_sent_event_seal_projection_intro
       (requires
         network_message_is_cleartext CL.Sent msg == false /\
         protected_record_count CL.Sent msg == 1 /\
-        W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+        W.parse_record raw == Some (T.Application_data, ciphertext, B.length raw) /\
         Seq.equal aad (record_header_aad raw) /\
         Seq.equal plaintext (sent_tls_inner_plaintext_fragment msg) /\
         R.seal
           model.model_record.record_write
           aad
           {
-            R.content_type = T.ApplicationData;
+            R.content_type = T.Application_data;
             R.fragment = plaintext;
           } ==
           Some (ciphertext, R.next_seq model.model_record.record_write))
@@ -510,7 +510,7 @@ val lemma_received_record_opened_from_sent_single_protected_message_seal
       (ensures
         exists outer_fragment.
           W.parse_record raw ==
-            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+            Some (T.Application_data, outer_fragment, B.length raw) /\
           received_record_opened
             receiver
             raw
@@ -551,7 +551,7 @@ val lemma_received_record_opened_from_sent_single_protected_message_seal_peer
       (ensures
         exists outer_fragment.
           W.parse_record raw ==
-            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+            Some (T.Application_data, outer_fragment, B.length raw) /\
           received_record_opened
             receiver
             raw

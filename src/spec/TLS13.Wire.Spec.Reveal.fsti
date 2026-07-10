@@ -64,13 +64,13 @@ val lemma_byte_value:
   Lemma (U8.v (byte n) == n % 256)
 
 val lemma_ptm_change_cipher_spec (fragment:B.bytes)
-  : Lemma (ensures WS.parse_tls_message T.ChangeCipherSpec fragment ==
+  : Lemma (ensures WS.parse_tls_message T.Change_cipher_spec fragment ==
                    (if B.length fragment = 1 && U8.v (Seq.index fragment 0) = 1
                     then Some M.TlsChangeCipherSpec
                     else None))
 
 val lemma_ptm_application_data (fragment:B.bytes)
-  : Lemma (ensures WS.parse_tls_message T.ApplicationData fragment ==
+  : Lemma (ensures WS.parse_tls_message T.Application_data fragment ==
                    Some (M.TlsApplicationData fragment))
 
 (* parse_plaintext strips the trailing content-type byte, so the recovered
@@ -107,10 +107,11 @@ val content_type_byte:
 val lemma_content_type_byte_value:
   ct:T.content_type ->
   Lemma (match ct with
-         | T.ChangeCipherSpec -> U8.v (content_type_byte ct) == 0x14
+         | T.Invalid -> U8.v (content_type_byte ct) == 0x00
+         | T.Change_cipher_spec -> U8.v (content_type_byte ct) == 0x14
          | T.Alert -> U8.v (content_type_byte ct) == 0x15
          | T.Handshake -> U8.v (content_type_byte ct) == 0x16
-         | T.ApplicationData -> U8.v (content_type_byte ct) == 0x17)
+         | T.Application_data -> U8.v (content_type_byte ct) == 0x17)
 
 val serialize_record_header:
   content_type:T.content_type ->
@@ -127,7 +128,7 @@ val lemma_serialize_record_reveal:
 val lemma_serialize_application_data_header_reveal:
   fragment_len:nat ->
   Lemma (Seq.equal
-    (serialize_record_header T.ApplicationData fragment_len)
+    (serialize_record_header T.Application_data fragment_len)
     (CS.application_data_record_header fragment_len))
 
 val lemma_serialize_handshake_record_header_reveal:
@@ -143,20 +144,20 @@ val lemma_serialize_handshake_record_header_reveal:
 val lemma_application_data_record_aad:
   fragment:B.bytes{B.length fragment <= 16640} ->
   Lemma (Seq.equal
-    (CS.record_header_aad (WS.serialize_record T.ApplicationData fragment))
+    (CS.record_header_aad (WS.serialize_record T.Application_data fragment))
     (CS.application_data_record_header (B.length fragment)))
 
 val lemma_serialize_application_data_record_reveal:
   fragment:B.bytes ->
   Lemma (Seq.equal
-    (WS.serialize_record T.ApplicationData fragment)
+    (WS.serialize_record T.Application_data fragment)
     (B.append (CS.application_data_record_header (B.length fragment)) fragment))
 
 val lemma_application_data_record_header:
   fragment_len:nat{fragment_len <= 16640} ->
   Lemma (Seq.equal
     (CS.application_data_record_header fragment_len)
-    (serialize_record_header T.ApplicationData fragment_len))
+    (serialize_record_header T.Application_data fragment_len))
 
 val application_data_record_header_bytes:
   fragment_len:nat ->
@@ -183,7 +184,7 @@ val lemma_application_data_record_header_bytes_reveal:
 val lemma_parse_application_data_record_header_bytes:
   fragment_len:nat{fragment_len <= 16640} ->
   Lemma (WS.parse_record_header (application_data_record_header_bytes fragment_len) ==
-         Some (T.ApplicationData, fragment_len))
+         Some (T.Application_data, fragment_len))
 
 val lemma_serialize_plaintext_reveal:
   pt:M.plaintext ->
@@ -450,16 +451,16 @@ val lemma_ptm_alert (fragment:B.bytes)
       then
         WS.parse_tls_message T.Alert fragment ==
           (match U8.v (Seq.index fragment 1) with
-           | 0   -> Some (M.TlsAlert T.CloseNotify)
-           | 10  -> Some (M.TlsAlert T.UnexpectedMessage)
-           | 20  -> Some (M.TlsAlert T.BadRecordMac)
-           | 40  -> Some (M.TlsAlert T.HandshakeFailure)
-           | 46  -> Some (M.TlsAlert T.CertificateUnknown)
-           | 47  -> Some (M.TlsAlert T.IllegalParameter)
-           | 50  -> Some (M.TlsAlert T.DecodeError)
-           | 51  -> Some (M.TlsAlert T.DecryptError)
-           | 70  -> Some (M.TlsAlert T.ProtocolVersion)
-           | 110 -> Some (M.TlsAlert T.UnsupportedExtension)
+           | 0   -> Some (M.TlsAlert T.Close_notify)
+           | 10  -> Some (M.TlsAlert T.Unexpected_message)
+           | 20  -> Some (M.TlsAlert T.Bad_record_mac)
+           | 40  -> Some (M.TlsAlert T.Handshake_failure)
+           | 46  -> Some (M.TlsAlert T.Certificate_unknown)
+           | 47  -> Some (M.TlsAlert T.Illegal_parameter)
+           | 50  -> Some (M.TlsAlert T.Decode_error)
+           | 51  -> Some (M.TlsAlert T.Decrypt_error)
+           | 70  -> Some (M.TlsAlert T.Protocol_version)
+           | 110 -> Some (M.TlsAlert T.Unsupported_extension)
            | _   -> None)
       else WS.parse_tls_message T.Alert fragment == None))
 
@@ -485,10 +486,10 @@ let synth_signature_scheme (s:GSS.signatureScheme) : GTot T.signature_scheme =
 val lemma_synth_signature_scheme (s:GSS.signatureScheme)
   : Lemma (ensures synth_signature_scheme s ==
                    (match s with
-                    | GSS.Ecdsa_secp256r1_sha256 -> T.EcdsaSecp256r1Sha256
-                    | GSS.Rsa_pss_rsae_sha256 -> T.RsaPssRsaeSha256
+                    | GSS.Ecdsa_secp256r1_sha256 -> T.Ecdsa_secp256r1_sha256
+                    | GSS.Rsa_pss_rsae_sha256 -> T.Rsa_pss_rsae_sha256
                     | GSS.Ed25519 -> T.Ed25519
-                    | GSS.Unknown_signatureScheme v -> T.UnsupportedSignatureScheme (U16.v v)))
+                    | GSS.Unknown_signatureScheme v -> T.Unknown_signatureScheme v))
 
 (* If the generated handshake parser yields [v] consuming the whole fragment
    and [handshake_synth v == Some m], then [parse_tls_message] of a Handshake

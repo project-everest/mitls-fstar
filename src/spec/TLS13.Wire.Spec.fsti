@@ -53,7 +53,7 @@ type parse_error = T.tls_error
 val read_u16:
   input:B.bytes ->
   pos:nat{pos + 2 <= B.length input} ->
-  GTot nat
+  GTot (n:nat{n < 65536})
 
 val lemma_read_u16_definition:
   input:B.bytes ->
@@ -83,7 +83,7 @@ val lemma_synth_cipher_suite:
   Lemma (synth_cipher_suite c ==
     (match c with
      | GCS.TLS_CHACHA20_POLY1305_SHA256 -> T.TLS_CHACHA20_POLY1305_SHA256
-     | GCS.Unknown_cipherSuite v -> T.UnknownCipherSuite (U16.v v)))
+     | GCS.Unknown_cipherSuite v -> T.Unknown_cipherSuite v))
 
 val synth_cipher_suites:
   l:list GCS.cipherSuite ->
@@ -723,7 +723,8 @@ val parse_record_header:
 val lemma_parse_record_header_some_iff:
   input:B.bytes{B.length input == 5} ->
   Lemma (Some? (parse_record_header input) <==>
-    ((Seq.index input 0 = 0x14uy ||
+    ((Seq.index input 0 = 0x00uy ||
+      Seq.index input 0 = 0x14uy ||
       Seq.index input 0 = 0x15uy ||
       Seq.index input 0 = 0x16uy ||
       Seq.index input 0 = 0x17uy) &&
@@ -770,6 +771,13 @@ val parse_tls_message:
   fragment:B.bytes ->
   GTot (option M.tls_message)
 
+(* The generated [Invalid] content type (wire byte 0) never carries a TLS
+   message: the spec parser rejects it.  Exposed so consumers can discharge the
+   "no content type matches" obligation for an unknown record content type. *)
+val lemma_parse_tls_message_invalid_none:
+  fragment:B.bytes ->
+  Lemma (parse_tls_message T.Invalid fragment == None)
+
 val lemma_parse_handshake_none_of_lp_none:
   fragment:B.bytes ->
   Lemma
@@ -807,17 +815,17 @@ val lemma_serialize_tls_message_handshake:
 
 val lemma_serialize_tls_message_application_data:
   data:B.bytes ->
-  Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.ApplicationData, data))
+  Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.Application_data, data))
 
 val lemma_serialize_tls_message_close_notify:
   unit ->
-  Lemma (serialize_tls_message (M.TlsAlert T.CloseNotify) ==
+  Lemma (serialize_tls_message (M.TlsAlert T.Close_notify) ==
     (T.Alert, B.of_list [2uy; 0uy]))
 
 val lemma_serialize_tls_message_change_cipher_spec:
   unit ->
   Lemma (serialize_tls_message M.TlsChangeCipherSpec ==
-    (T.ChangeCipherSpec, B.singleton 1uy))
+    (T.Change_cipher_spec, B.singleton 1uy))
 
 val lemma_serialize_tls_message_key_update_not_requested:
   unit ->

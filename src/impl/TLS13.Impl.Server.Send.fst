@@ -50,7 +50,7 @@ let lemma_server_handshake_write_seal_some
         st.CS.cs_model.CS.model_record.CS.record_write
         aad
         {
-          R.content_type = T.ApplicationData;
+          R.content_type = T.Application_data;
           R.fragment = CS.sent_tls_inner_plaintext_fragment msg;
         }))
 =
@@ -91,7 +91,7 @@ let lemma_server_handshake_write_seal_some
     st.CS.cs_model.CS.model_record.CS.record_write
     aad
     {
-      R.content_type = T.ApplicationData;
+      R.content_type = T.Application_data;
       R.fragment = CS.sent_tls_inner_plaintext_fragment msg;
     }
 
@@ -818,7 +818,7 @@ fn process_send_encrypted_extensions_serialized
   };
   let dummy_cert : erased M.certificate_msg = Ghost.hide { M.chain = []; M.body = B.empty };
   let dummy_cv : erased M.certificate_verify = Ghost.hide {
-    M.scheme = T.RsaPssRsaeSha256;
+    M.scheme = T.Rsa_pss_rsae_sha256;
     M.signature = B.empty;
     M.body = B.empty;
   };
@@ -862,7 +862,7 @@ fn process_send_encrypted_extensions_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1236,7 +1236,7 @@ fn process_send_certificate_serialized
       M.body = B.empty;
     }
     (Ghost.reveal cert)
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
+    { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
     { M.verify_data = Seq.create 32 0uy };
   assert (pure (Seq.equal
     (W.serialize_certificate_from_credential (Ghost.reveal cert))
@@ -1275,7 +1275,7 @@ fn process_send_certificate_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1699,7 +1699,7 @@ fn process_send_certificate_verify_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1998,7 +1998,7 @@ fn process_send_stored_certificate_verify_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -2338,7 +2338,7 @@ fn process_send_server_finished_serialized
       M.body = B.empty;
     }
     { M.chain = []; M.body = B.empty }
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
+    { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
     (Ghost.reveal fin);
   assert (pure (Seq.equal
     (W.serialize_server_finished (Ghost.reveal fin))
@@ -2374,7 +2374,7 @@ fn process_send_server_finished_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {

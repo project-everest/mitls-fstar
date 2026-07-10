@@ -200,7 +200,7 @@ let server_supported_profile_selection
   : prop =
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-    T.RsaPssRsaeSha256 /\
+    T.Rsa_pss_rsae_sha256 /\
   (match st.CS.cs_model.CS.model_config.CS.config_server with
    | Some cfg ->
      CS.cipher_suite_offered
@@ -211,7 +211,7 @@ let server_supported_profile_selection
        T.X25519 /\
      CS.signature_scheme_offered
        cfg.CS.server_allowed_signature_schemes
-       T.RsaPssRsaeSha256 /\
+       T.Rsa_pss_rsae_sha256 /\
      (match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
         CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
@@ -222,7 +222,7 @@ let server_supported_profile_selection
   server_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->
-     selection.CS.server_selected_signature_scheme == T.RsaPssRsaeSha256 /\
+     selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
      selection.CS.server_selected_credential == credential_identity
    | None ->
      True)
@@ -467,7 +467,7 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
           Some (outer_ct', outer_fragment', B.length raw_received))
     | M.TlsChangeCipherSpec ->
       assert (CS.cleartext_tls_message_raw msg raw_received);
-      let outer_ct = T.ChangeCipherSpec in
+      let outer_ct = T.Change_cipher_spec in
       let outer_fragment = B.singleton 1uy in
       WS.lemma_serialize_tls_message_change_cipher_spec ();
       assert (Seq.equal
@@ -491,20 +491,20 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
   ) else (
     assert (CS.raw_records_exactly
       raw_received
-      T.ApplicationData
+      T.Application_data
       (CS.protected_record_count CL.Received msg));
     assert (CS.protected_record_count CL.Received msg == 1);
-    CSL.lemma_raw_records_exactly_one_parse_record raw_received T.ApplicationData;
+    CSL.lemma_raw_records_exactly_one_parse_record raw_received T.Application_data;
     assert (exists fragment.
-      WS.parse_record raw_received == Some (T.ApplicationData, fragment, B.length raw_received));
+      WS.parse_record raw_received == Some (T.Application_data, fragment, B.length raw_received));
     let fragment =
       ID.indefinite_description_ghost
         B.bytes
         (fun fragment ->
-          WS.parse_record raw_received == Some (T.ApplicationData, fragment, B.length raw_received)) in
+          WS.parse_record raw_received == Some (T.Application_data, fragment, B.length raw_received)) in
     WS.lemma_parse_record_implies_parse_record_wire raw_received;
     assert (WS.parse_record_wire raw_received ==
-      Some (T.ApplicationData, fragment, B.length raw_received));
+      Some (T.Application_data, fragment, B.length raw_received));
     assert (exists outer_ct outer_fragment.
       WS.parse_record_wire raw_received ==
         Some (outer_ct, outer_fragment, B.length raw_received))
@@ -2404,7 +2404,7 @@ let lemma_server_network_nonstep_canonical_step
   if resp.ST.status = ST.DecodeError then (
     // DecodeError → LocalFail (tls_decode_error)
     assert (ST.decode_error_response st0 st1 resp network_out app_out);
-    let decode_err : T.tls_error = T.AlertError T.DecodeError in
+    let decode_err : T.tls_error = T.AlertError T.Decode_error in
     let conn_ev = CS.ConnLocalEvent (CS.LocalFail decode_err) in
     assert (CS.legal_connection_delta st0 {
       CS.delta_event = conn_ev;
@@ -2663,7 +2663,7 @@ let lemma_server_local_progress
     // So unexpected_message_response holds.
     assert (resp.ST.status <> ST.StepOk);
     assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
-    let err : T.tls_error = T.AlertError T.UnexpectedMessage in
+    let err : T.tls_error = T.AlertError T.Unexpected_message in
     let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
     assert (CS.legal_connection_delta st0 {
       CS.delta_event = conn_ev;

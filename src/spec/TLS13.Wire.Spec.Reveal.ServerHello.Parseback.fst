@@ -618,6 +618,19 @@ let canonical_server_hello_low
     GSH.body = GSHB.serverHello_body_synth sh.M.random body;
   }
 
+(* Pure associativity bridge, proved over abstract sequences so that the big
+   nested [Seq.append ten w] term is never spelled out at the call site (which
+   otherwise makes F*'s normalizer blow up).  [ten] and [w] are passed
+   separately, keeping every call-site argument small. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
+let lemma_reassoc_header (ab c ten w: Seq.seq U8.t)
+  : Lemma (Seq.append ab (Seq.append c (Seq.append ten w)) ==
+           Seq.append (Seq.append (Seq.append ab c) ten) w)
+=
+  Seq.append_assoc ab c (Seq.append ten w);
+  Seq.append_assoc (Seq.append ab c) ten w
+#pop-options
+
 #restart-solver
 
 #push-options "--split_queries always --fuel 8 --ifuel 8 --z3rlimit 120"
@@ -749,10 +762,12 @@ let lemma_lp_server_hello_body_payload
   lemma_of_list_append_raw [0uy] [0x13uy; 0x03uy];
   lemma_of_list_append_raw [0uy; 0x13uy; 0x03uy] [0uy];
   lemma_of_list_append_raw [0uy; 0x13uy; 0x03uy; 0uy] [0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy];
-  Seq.append_assoc
-    (B.of_list [0uy; 0x13uy; 0x03uy; 0uy])
+  let w = Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]) in
+  lemma_reassoc_header
+    (B.of_list [0uy; 0x13uy; 0x03uy])
+    (B.of_list [0uy])
     (B.of_list [0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
-    (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))
+    w
 #pop-options
 
 #restart-solver

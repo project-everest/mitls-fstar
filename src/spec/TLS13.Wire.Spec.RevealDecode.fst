@@ -18,10 +18,11 @@ let lemma_parse_record_from_header raw =
   assert (WS.read_u16 raw 3 == flen);
   assert (WS.content_type_of_byte (Seq.index raw 0) ==
     (match U8.v (Seq.index raw 0) with
-     | 0x14 -> Some T.ChangeCipherSpec
+     | 0x00 -> Some T.Invalid
+     | 0x14 -> Some T.Change_cipher_spec
      | 0x15 -> Some T.Alert
      | 0x16 -> Some T.Handshake
-     | 0x17 -> Some T.ApplicationData
+     | 0x17 -> Some T.Application_data
      | _ -> None));
   ()
 
@@ -30,10 +31,10 @@ let lemma_parse_record_wire_from_header raw =
   assert (WS.read_u16 raw 3 == flen);
   assert (WS.content_type_of_byte (Seq.index raw 0) ==
     (match U8.v (Seq.index raw 0) with
-     | 0x14 -> Some T.ChangeCipherSpec
+     | 0x14 -> Some T.Change_cipher_spec
      | 0x15 -> Some T.Alert
      | 0x16 -> Some T.Handshake
-     | 0x17 -> Some T.ApplicationData
+     | 0x17 -> Some T.Application_data
      | _ -> None));
   if U8.v (Seq.index raw 2) == 0x03 then (
     assert (WS.read_u16 raw 1 == 0x0303);
@@ -192,10 +193,10 @@ let lemma_parse_plaintext_some input =
   let cpos = B.length input - 1 in
   assert (WS.content_type_of_byte (Seq.index input cpos) ==
     (match U8.v (Seq.index input cpos) with
-     | 0x14 -> Some T.ChangeCipherSpec
+     | 0x14 -> Some T.Change_cipher_spec
      | 0x15 -> Some T.Alert
      | 0x16 -> Some T.Handshake
-     | 0x17 -> Some T.ApplicationData
+     | 0x17 -> Some T.Application_data
      | _ -> None));
   ()
 

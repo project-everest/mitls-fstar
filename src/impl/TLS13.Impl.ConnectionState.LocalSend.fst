@@ -384,7 +384,7 @@ fn try_send_client_finished
                     can_send_client_finished st0 fin raw_sent /\
                     (exists outer_fragment.
                        W.parse_record (Seq.slice network_out_bytes 0 58) ==
-                         Some (T.ApplicationData, outer_fragment, 58)) /\
+                         Some (T.Application_data, outer_fragment, 58)) /\
                     Seq.equal raw_sent (Seq.slice network_out_bytes 0 58))
           else
             connection_exactly c st0 **
@@ -501,7 +501,7 @@ fn try_send_client_finished
       st0.CS.cs_model.CS.model_record.CS.record_write
       (CS.application_data_record_header 53)
       {
-        R.content_type = T.ApplicationData;
+        R.content_type = T.Application_data;
         R.fragment =
           CS.sent_tls_inner_plaintext_fragment
             (M.TlsHandshake (M.Finished (Ghost.reveal fin)));
@@ -510,7 +510,7 @@ fn try_send_client_finished
       st0.CS.cs_model.CS.model_record.CS.record_write
       (CS.application_data_record_header 53)
       {
-        R.content_type = T.ApplicationData;
+        R.content_type = T.Application_data;
         R.fragment =
           CS.sent_tls_inner_plaintext_fragment
             (M.TlsHandshake (M.Finished (Ghost.reveal fin)));
@@ -543,7 +543,7 @@ fn try_send_client_finished
     assert (pure (Seq.equal
       (Ghost.reveal raw_sent)
       (Seq.slice network_out_bytes 0 58)));
-    assert (pure (CS.raw_records_exactly (Ghost.reveal raw_sent) T.ApplicationData 1));
+    assert (pure (CS.raw_records_exactly (Ghost.reveal raw_sent) T.Application_data 1));
 
     assert (pure (CS.legal_event
       st0.CS.cs_model
@@ -909,7 +909,7 @@ fn try_send_application_data
                        W.parse_record
                          (Seq.slice network_out_bytes 0 (SZ.v payload_len + 22)) ==
                          Some
-                           (T.ApplicationData,
+                           (T.Application_data,
                             outer_fragment,
                             SZ.v payload_len + 22)) /\
                     Seq.equal
@@ -990,7 +990,7 @@ fn try_send_application_data
       assert (pure (R.seal
         st0.CS.cs_model.CS.model_record.CS.record_write
         aad_bytes
-        { R.content_type = T.ApplicationData;
+        { R.content_type = T.Application_data;
           R.fragment = inner_plaintext_bytes } ==
         Some (ciphertext_bytes, sealed_write)));
       lemma_seal_application_success_next_seq
@@ -1030,7 +1030,7 @@ fn try_send_application_data
         (Seq.slice network_out_bytes 0 (SZ.v written))));
       assert (pure (CS.raw_records_exactly
         (Ghost.reveal raw_sent)
-        T.ApplicationData
+        T.Application_data
         1));
       assert (pure (CS.legal_event
         st0.CS.cs_model
@@ -1057,7 +1057,7 @@ fn try_send_application_data
         })
         (Ghost.reveal raw_sent)
         B.empty));
-      assert (pure (IM.content_type_matches 23uy T.ApplicationData));
+      assert (pure (IM.content_type_matches 23uy T.Application_data));
       Seq.lemma_len_slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len);
       assert (pure (Seq.equal
         (Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len))
@@ -1065,7 +1065,7 @@ fn try_send_application_data
       assert (pure (Seq.equal
         inner_plaintext_bytes
         (W.serialize_plaintext {
-          M.content_type = T.ApplicationData;
+          M.content_type = T.Application_data;
           M.fragment =
             Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len);
         })));
@@ -1075,7 +1075,7 @@ fn try_send_application_data
       assert (pure (Seq.equal
         inner_plaintext_bytes
         (W.serialize_plaintext {
-          M.content_type = T.ApplicationData;
+          M.content_type = T.Application_data;
           M.fragment = Ghost.reveal 'payload_bytes;
         })));
       W.lemma_serialize_tls_message_application_data (Ghost.reveal 'payload_bytes);
@@ -1083,7 +1083,7 @@ fn try_send_application_data
         CS.sent_tls_inner_plaintext_fragment
           (M.TlsApplicationData (Ghost.reveal 'payload_bytes)) ==
         W.serialize_plaintext {
-          M.content_type = T.ApplicationData;
+          M.content_type = T.Application_data;
           M.fragment = Ghost.reveal 'payload_bytes;
         }));
       assert (pure (Seq.equal
@@ -1193,7 +1193,7 @@ fn try_send_close_notify
                       raw_sent /\
                     (exists outer_fragment.
                        W.parse_record (Seq.slice network_out_bytes 0 24) ==
-                         Some (T.ApplicationData, outer_fragment, 24)) /\
+                         Some (T.Application_data, outer_fragment, 24)) /\
                     Seq.equal
                       raw_sent
                       (Seq.slice network_out_bytes 0 24))
@@ -1274,7 +1274,7 @@ fn try_send_close_notify
       assert (pure (R.seal
         st0.CS.cs_model.CS.model_record.CS.record_write
         aad_bytes
-        { R.content_type = T.ApplicationData;
+        { R.content_type = T.Application_data;
           R.fragment = inner_plaintext_bytes } ==
         Some (ciphertext_bytes, sealed_write)));
       lemma_seal_application_success_next_seq
@@ -1314,22 +1314,22 @@ fn try_send_close_notify
         (Seq.slice network_out_bytes 0 (SZ.v written))));
       assert (pure (CS.raw_records_exactly
         (Ghost.reveal raw_sent)
-        T.ApplicationData
+        T.Application_data
         1));
       assert (pure (CS.legal_event
         st0.CS.cs_model
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsAlert T.CloseNotify;
+          CL.message_value = M.TlsAlert T.Close_notify;
         })));
       assert (pure (CS.protected_record_count
         CL.Sent
-        (M.TlsAlert T.CloseNotify) == 1));
+        (M.TlsAlert T.Close_notify) == 1));
       assert (pure (CS.network_message_raw_delta_legal
         st0.CS.cs_model
         {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsAlert T.CloseNotify;
+          CL.message_value = M.TlsAlert T.Close_notify;
         }
         (Ghost.reveal raw_sent)));
       Seq.lemma_eq_intro B.empty B.empty;
@@ -1337,7 +1337,7 @@ fn try_send_close_notify
         st0.CS.cs_model
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsAlert T.CloseNotify;
+          CL.message_value = M.TlsAlert T.Close_notify;
         })
         (Ghost.reveal raw_sent)
         B.empty));
@@ -1365,14 +1365,14 @@ fn try_send_close_notify
         })));
       W.lemma_serialize_tls_message_close_notify ();
       assert (pure (
-        CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.CloseNotify) ==
+        CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.Close_notify) ==
         W.serialize_plaintext {
           M.content_type = T.Alert;
           M.fragment = B.of_list [2uy; 0uy];
         }));
       assert (pure (Seq.equal
         inner_plaintext_bytes
-        (CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.CloseNotify))));
+        (CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.Close_notify))));
       assert (pure (Seq.equal
         aad_bytes
         (CS.application_data_record_header (SZ.v ciphertext_len))));
@@ -1396,7 +1396,7 @@ fn try_send_close_notify
         (CS.record_header_aad (Ghost.reveal raw_sent))));
       CSL.lemma_sent_event_seal_projection_intro
         st0.CS.cs_model
-        (M.TlsAlert T.CloseNotify)
+        (M.TlsAlert T.Close_notify)
         (Ghost.reveal raw_sent)
         aad_bytes
         inner_plaintext_bytes
@@ -1405,7 +1405,7 @@ fn try_send_close_notify
         st0.CS.cs_model
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsAlert T.CloseNotify;
+          CL.message_value = M.TlsAlert T.Close_notify;
         })
         (Ghost.reveal raw_sent)));
       assert (pure (can_send_close_notify
@@ -1473,7 +1473,7 @@ fn try_send_key_update
                       raw_sent /\
                     (exists outer_fragment.
                        W.parse_record (Seq.slice network_out_bytes 0 27) ==
-                         Some (T.ApplicationData, outer_fragment, 27)) /\
+                         Some (T.Application_data, outer_fragment, 27)) /\
                     Seq.equal
                       raw_sent
                       (Seq.slice network_out_bytes 0 27))
@@ -1553,7 +1553,7 @@ fn try_send_key_update
       assert (pure (R.seal
         st0.CS.cs_model.CS.model_record.CS.record_write
         aad_bytes
-        { R.content_type = T.ApplicationData;
+        { R.content_type = T.Application_data;
           R.fragment = inner_plaintext_bytes } ==
         Some (ciphertext_bytes, sealed_write)));
       lemma_seal_application_success_next_seq
@@ -1588,7 +1588,7 @@ fn try_send_key_update
         (Seq.slice network_out_bytes 0 (SZ.v written))));
       assert (pure (CS.raw_records_exactly
         (Ghost.reveal raw_sent)
-        T.ApplicationData
+        T.Application_data
         1));
       assert (pure (CS.legal_event
         st0.CS.cs_model

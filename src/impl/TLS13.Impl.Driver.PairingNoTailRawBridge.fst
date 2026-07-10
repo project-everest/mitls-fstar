@@ -163,7 +163,7 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
     eliminate exists (outer_ct:T.content_type) (outer_fragment:B.bytes).
       W.parse_record_wire client_sh_raw ==
         Some (outer_ct, outer_fragment, B.length client_sh_raw) /\
-      (if outer_ct == T.ApplicationData
+      (if outer_ct == T.Application_data
        then CT.protected_decoder_fragment_relation st0 content_type fragment client_sh_raw
        else
          TLS13.Impl.Messages.content_type_matches content_type outer_ct /\
@@ -222,18 +222,18 @@ let lemma_cleartext_change_cipher_spec_parse_record
           raw)
       (ensures
         W.parse_record_wire raw ==
-          Some (T.ChangeCipherSpec, B.singleton 1uy, B.length raw))
+          Some (T.Change_cipher_spec, B.singleton 1uy, B.length raw))
 =
   let fragment = B.singleton 1uy in
   W.lemma_serialize_tls_message_change_cipher_spec();
   assert (CS.serialized_cleartext_tls_message M.TlsChangeCipherSpec ==
-    W.serialize_record T.ChangeCipherSpec fragment);
+    W.serialize_record T.Change_cipher_spec fragment);
   assert (B.length fragment <= 16640);
-  WFL.lemma_parse_record_wire_serialize_record T.ChangeCipherSpec fragment;
-  assert (Seq.equal raw (W.serialize_record T.ChangeCipherSpec fragment));
-  Seq.lemma_eq_elim raw (W.serialize_record T.ChangeCipherSpec fragment);
+  WFL.lemma_parse_record_wire_serialize_record T.Change_cipher_spec fragment;
+  assert (Seq.equal raw (W.serialize_record T.Change_cipher_spec fragment));
+  Seq.lemma_eq_elim raw (W.serialize_record T.Change_cipher_spec fragment);
   assert (W.parse_record_wire raw ==
-    Some (T.ChangeCipherSpec, fragment, B.length raw))
+    Some (T.Change_cipher_spec, fragment, B.length raw))
 
 let lemma_sent_supported_client_hello_raw_not_change_cipher_spec
   (ch:M.client_hello)
@@ -261,10 +261,10 @@ let lemma_sent_supported_client_hello_raw_not_change_cipher_spec
   (
     Seq.lemma_eq_elim client_hello_raw ccs_raw;
     assert (W.parse_record_wire client_hello_raw ==
-      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+      Some (T.Change_cipher_spec, B.singleton 1uy, B.length ccs_raw));
     assert (
       Some (T.Handshake, fragment, B.length client_hello_raw) ==
-      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+      Some (T.Change_cipher_spec, B.singleton 1uy, B.length ccs_raw));
     assert False
   )
 
@@ -293,10 +293,10 @@ let lemma_received_server_hello_raw_not_change_cipher_spec
   (
     Seq.lemma_eq_elim server_hello_raw ccs_raw;
     assert (W.parse_record_wire server_hello_raw ==
-      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+      Some (T.Change_cipher_spec, B.singleton 1uy, B.length ccs_raw));
     assert (
       Some (T.Handshake, fragment, B.length server_hello_raw) ==
-      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+      Some (T.Change_cipher_spec, B.singleton 1uy, B.length ccs_raw));
     assert False
   )
 
@@ -305,7 +305,7 @@ let lemma_application_data_raw_not_change_cipher_spec
   (ccs_raw:B.bytes)
   : Lemma
       (requires
-        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.raw_records_exactly application_raw T.Application_data 1 /\
         CS.cleartext_tls_message_raw
           M.TlsChangeCipherSpec
           ccs_raw /\
@@ -314,23 +314,23 @@ let lemma_application_data_raw_not_change_cipher_spec
 =
   CSL.lemma_raw_records_exactly_one_parse_record
     application_raw
-    T.ApplicationData;
+    T.Application_data;
   lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
   eliminate exists (fragment:B.bytes).
     W.parse_record application_raw ==
-      Some (T.ApplicationData, fragment, B.length application_raw)
+      Some (T.Application_data, fragment, B.length application_raw)
   returns False
   with _.
   (
     W.lemma_parse_record_implies_parse_record_wire application_raw;
     assert (W.parse_record_wire application_raw ==
-      Some (T.ApplicationData, fragment, B.length application_raw));
+      Some (T.Application_data, fragment, B.length application_raw));
     Seq.lemma_eq_elim application_raw ccs_raw;
     assert (W.parse_record_wire application_raw ==
-      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+      Some (T.Change_cipher_spec, B.singleton 1uy, B.length ccs_raw));
     assert (
-      Some (T.ApplicationData, fragment, B.length application_raw) ==
-      Some (T.ChangeCipherSpec, B.singleton 1uy, B.length ccs_raw));
+      Some (T.Application_data, fragment, B.length application_raw) ==
+      Some (T.Change_cipher_spec, B.singleton 1uy, B.length ccs_raw));
     assert False
   )
 
@@ -373,7 +373,7 @@ let lemma_equal_stream_head_sent_supported_client_hello_not_change_cipher_spec
       ccs_tail
       T.Handshake
       client_fragment
-      T.ChangeCipherSpec
+      T.Change_cipher_spec
       (B.singleton 1uy);
     assert (B.length client_hello_raw == B.length ccs_raw);
     Seq.lemma_eq_elim left_stream right_stream;
@@ -406,7 +406,7 @@ let lemma_equal_stream_head_application_data_not_change_cipher_spec
         Seq.equal left_stream right_stream /\
         Seq.equal left_stream (B.append application_raw application_tail) /\
         Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
-        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.raw_records_exactly application_raw T.Application_data 1 /\
         CS.cleartext_tls_message_raw
           M.TlsChangeCipherSpec
           ccs_raw)
@@ -414,17 +414,17 @@ let lemma_equal_stream_head_application_data_not_change_cipher_spec
 =
   CSL.lemma_raw_records_exactly_one_parse_record
     application_raw
-    T.ApplicationData;
+    T.Application_data;
   lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
   eliminate exists (application_fragment:B.bytes).
     W.parse_record application_raw ==
-      Some (T.ApplicationData, application_fragment, B.length application_raw)
+      Some (T.Application_data, application_fragment, B.length application_raw)
   returns False
   with _.
   (
     W.lemma_parse_record_implies_parse_record_wire application_raw;
     assert (W.parse_record_wire application_raw ==
-      Some (T.ApplicationData, application_fragment, B.length application_raw));
+      Some (T.Application_data, application_fragment, B.length application_raw));
     PWS.lemma_equal_stream_record_head_lengths
       left_stream
       right_stream
@@ -432,9 +432,9 @@ let lemma_equal_stream_head_application_data_not_change_cipher_spec
       application_tail
       ccs_raw
       ccs_tail
-      T.ApplicationData
+      T.Application_data
       application_fragment
-      T.ChangeCipherSpec
+      T.Change_cipher_spec
       (B.singleton 1uy);
     assert (B.length application_raw == B.length ccs_raw);
     Seq.lemma_eq_elim left_stream right_stream;
@@ -478,7 +478,7 @@ let lemma_equal_stream_after_client_hello_application_data_not_change_cipher_spe
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ClientHello received_ch))
           received_ch_raw /\
-        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.raw_records_exactly application_raw T.Application_data 1 /\
         CS.cleartext_tls_message_raw
           M.TlsChangeCipherSpec
           ccs_raw)
@@ -574,7 +574,7 @@ let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
       ccs_tail
       T.Handshake
       server_fragment
-      T.ChangeCipherSpec
+      T.Change_cipher_spec
       (B.singleton 1uy);
     assert (B.length server_hello_raw == B.length ccs_raw);
     Seq.lemma_eq_elim left_stream right_stream;

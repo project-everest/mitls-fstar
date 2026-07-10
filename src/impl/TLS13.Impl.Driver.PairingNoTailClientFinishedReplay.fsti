@@ -405,7 +405,7 @@ let client_finished_exact_suffix_sent_seal_raw_record_slice
       suffix_sent
       suffix_received
       client.CS.cs_model /\
-    CS.raw_records_exactly suffix_sent T.ApplicationData 1
+    CS.raw_records_exactly suffix_sent T.Application_data 1
 
 noextract
 let client_finished_sent_seal_suffix_head_steps
@@ -464,7 +464,7 @@ let client_finished_exact_suffix_sent_seal_head_step_slice
       e14
       cf
       client.CS.cs_model /\
-    CS.raw_records_exactly suffix_sent T.ApplicationData 1
+    CS.raw_records_exactly suffix_sent T.Application_data 1
 
 noextract
 let client_finished_canonical_sent_seal_replay_slice
@@ -529,7 +529,7 @@ let client_finished_canonical_sent_seal_replay_slice
        CL.message_direction = CL.Sent;
        CL.message_value = M.TlsHandshake (M.Finished cf);
      })) == Some      client.CS.cs_model /\
-    CS.raw_records_exactly suffix_sent T.ApplicationData 1
+    CS.raw_records_exactly suffix_sent T.Application_data 1
 
 val lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milestone
   (client:CS.connection_state)

@@ -317,7 +317,7 @@ let server_local_event_input_ready
        CS.server_selected_client_hello = ch;
        CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
        CS.server_selected_group = T.X25519;
-       CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
        CS.server_random = server_random;
        CS.server_key_share_private = Some server_private_key;
        CS.server_key_share_public =
@@ -393,12 +393,12 @@ let server_local_event_input_ready
          st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some cfg, Some selection ->
      selection.CS.server_selected_signature_scheme ==
-         T.RsaPssRsaeSha256 /\
+         T.Rsa_pss_rsae_sha256 /\
      selection.CS.server_selected_credential ==
          cfg.CS.server_credential_identity /\
      CS.signature_scheme_offered
          st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-         T.RsaPssRsaeSha256
+         T.Rsa_pss_rsae_sha256
      | _, _ -> False)
   | LocalSendEncryptedExtensions ->
     Seq.equal payload B.empty /\
@@ -528,11 +528,11 @@ let server_local_event_input_ready_with_credentials
     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some selection ->
        selection.CS.server_selected_signature_scheme ==
-         T.RsaPssRsaeSha256 /\
+         T.Rsa_pss_rsae_sha256 /\
        selection.CS.server_selected_credential == credential_identity /\
        CS.signature_scheme_offered
          st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-         T.RsaPssRsaeSha256
+         T.Rsa_pss_rsae_sha256
      | None -> False)
   | _ ->
     server_local_event_input_ready st kind payload
@@ -599,14 +599,14 @@ let server_local_event_input_ready_with_state_credentials
     assert (st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None);
     assert (Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
-      .CS.server_selected_signature_scheme == T.RsaPssRsaeSha256);
+      .CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
       .CS.server_selected_credential == cfg.CS.server_credential_identity);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
       .CS.server_selected_credential == credential_identity);
     assert (CS.signature_scheme_offered
       st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-      T.RsaPssRsaeSha256)
+      T.Rsa_pss_rsae_sha256)
   | _ ->
     ()
 
@@ -833,7 +833,7 @@ let local_event_kind_matches
      | _ -> False)
   | LocalSendCloseNotify, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
-    msg.CL.message_value == M.TlsAlert T.CloseNotify
+    msg.CL.message_value == M.TlsAlert T.Close_notify
   | LocalStartServer, CS.ConnLocalEvent CS.LocalStartServer ->
     True
   | LocalSelectServerParameters, CS.ConnLocalEvent (CS.LocalSelectServerParameters _) ->
@@ -933,7 +933,7 @@ let unexpected_message_response
     st0
     st1
     resp
-    (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+    (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
     B.empty
     B.empty
     network_out
@@ -1069,7 +1069,7 @@ let legal_network_response
   (resp.status == IllegalTransition ==> False) /\
   (resp.status == OutputBufferTooSmall ==> False) /\
   (match msg with
-   | M.TlsAlert T.CloseNotify ->
+   | M.TlsAlert T.Close_notify ->
      resp.status == StepOk
    | M.TlsAlert _ ->
      resp.status == ConnectionFailed
@@ -1420,7 +1420,7 @@ let server_protected_record_decode_uses_scheduled_read_key
   : prop =
   exists outer_fragment opened.
     WS.parse_record_wire raw_received ==
-      Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
     CT.protected_record_opened st0 raw_received outer_fragment opened /\
     CS.record_read_key_schedule_projection_for_role
       CS.ServerEndpoint
@@ -2336,7 +2336,7 @@ let lemma_legal_handled_local_response_preserves_config
         st0
         st1
         resp
-        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
         B.empty
         B.empty
         network_out

@@ -110,7 +110,7 @@ let client_finished_model12_exact_suffix_raw_record_slice
       tail_received
       client.CS.cs_model /\
     Seq.equal tail_sent finished_raw /\
-    CS.raw_records_exactly finished_raw T.ApplicationData 1
+    CS.raw_records_exactly finished_raw T.Application_data 1
 
 val lemma_client_finished_model12_exact_suffix_raw_record_slice
   (client:CS.connection_state)
