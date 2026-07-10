@@ -9,10 +9,21 @@ module L = FStar.List.Tot
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module Sem = TLS13.Wire.Semantics
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module V = Pulse.Lib.Vec
+
+// Phase 5: handshake_msg payloads are now the QuackyDucky-generated wire
+// records; profile-relevant fields are read through the TLS13.Wire.Semantics
+// accessors instead of the deleted M.<record> projection fields.
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 
 (**
   Extraction-oriented low-level message layer.
@@ -412,7 +423,7 @@ let rec certificate_chain_matches
     | [] -> False
   else False
 
-let is_valid_client_hello ([@@@mkey] l:client_hello) (m:M.client_hello) : slprop =
+let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slprop =
   exists* random server_name key_share cipher_suites signature_schemes.
     V.pts_to l.client_hello_random random **
     V.pts_to l.client_hello_server_name server_name **
@@ -438,23 +449,28 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:M.client_hello) : slprop
       SZ.v l.client_hello_server_name_len <= B.length server_name /\
       SZ.v l.client_hello_cipher_suites_len <= Seq.length cipher_suites /\
       SZ.v l.client_hello_signature_schemes_len <= Seq.length signature_schemes /\
-      Seq.equal random m.M.random /\
+      Seq.equal random (Sem.clientHello_random m) /\
       optional_byte_prefix_matches
         l.client_hello_has_server_name
         server_name
         l.client_hello_server_name_len
-        m.M.server_name /\
-      Seq.equal key_share m.M.key_share /\
+        (Sem.clientHello_server_name m) /\
+      (match Sem.clientHello_key_share_x25519 m with
+       | Some k -> B.length k == 32 /\ Seq.equal key_share k
+       | None -> False) /\
       cipher_suites_match
         cipher_suites
         (SZ.v l.client_hello_cipher_suites_len)
-        m.M.cipher_suites /\
-      signature_schemes_match
-        signature_schemes
-        (SZ.v l.client_hello_signature_schemes_len)
-        m.M.signature_schemes)
+        (Sem.clientHello_cipher_suites m) /\
+      (match Sem.clientHello_sig_algs m with
+       | Some sas ->
+         signature_schemes_match
+           signature_schemes
+           (SZ.v l.client_hello_signature_schemes_len)
+           sas
+       | None -> False))
 
-let is_valid_server_hello ([@@@mkey] l:server_hello) (m:M.server_hello) : slprop =
+let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slprop =
   exists* random key_share.
     V.pts_to l.server_hello_random random **
     V.pts_to l.server_hello_key_share key_share **
@@ -463,14 +479,21 @@ let is_valid_server_hello ([@@@mkey] l:server_hello) (m:M.server_hello) : slprop
       V.is_full_vec l.server_hello_key_share /\
       V.length l.server_hello_random == 32 /\
       V.length l.server_hello_key_share == 32 /\
-      Seq.equal random m.M.random /\
-      Seq.equal key_share m.M.key_share /\
-      cipher_suite_matches l.server_hello_cipher_suite m.M.cipher_suite /\
-      m.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+      (match Sem.serverHello_random m with
+       | Some r -> Seq.equal random r
+       | None -> False) /\
+      (match Sem.serverHello_key_share_x25519 m with
+       | Some k -> B.length k == 32 /\ Seq.equal key_share k
+       | None -> False) /\
+      (match Sem.serverHello_cipher_suite m with
+       | Some cs ->
+         cipher_suite_matches l.server_hello_cipher_suite cs /\
+         cs == T.TLS_CHACHA20_POLY1305_SHA256
+       | None -> False))
 
 let is_valid_encrypted_extensions
   ([@@@mkey] l:encrypted_extensions)
-  (m:M.encrypted_extensions)
+  (m:GEE.encryptedExtensions)
   : slprop =
   exists* alpn.
     V.pts_to l.encrypted_extensions_alpn alpn **
@@ -482,9 +505,9 @@ let is_valid_encrypted_extensions
         l.encrypted_extensions_has_alpn
         alpn
         l.encrypted_extensions_alpn_len
-        m.M.negotiated_alpn)
+        (Sem.encryptedExtensions_alpn m))
 
-let is_valid_certificate_msg ([@@@mkey] l:certificate_msg) (m:M.certificate_msg) : slprop =
+let is_valid_certificate_msg ([@@@mkey] l:certificate_msg) (m:GCert.certificate) : slprop =
   exists* chain_bytes offsets lens.
     V.pts_to l.certificate_msg_chain_bytes chain_bytes **
     V.pts_to l.certificate_msg_cert_offsets offsets **
@@ -505,11 +528,11 @@ let is_valid_certificate_msg ([@@@mkey] l:certificate_msg) (m:M.certificate_msg)
         offsets
         lens
         (SZ.v l.certificate_msg_cert_count)
-        m.M.chain)
+        (Sem.certificate_entries m))
 
 let is_valid_certificate_verify
   ([@@@mkey] l:certificate_verify)
-  (m:M.certificate_verify)
+  (m:GCV.certificateVerify)
   : slprop =
   exists* signature.
     V.pts_to l.certificate_verify_signature signature **
@@ -519,31 +542,31 @@ let is_valid_certificate_verify
       byte_prefix_matches
         signature
         l.certificate_verify_signature_len
-        m.M.signature /\
-      signature_scheme_matches l.certificate_verify_scheme m.M.scheme)
+        (Sem.certificateVerify_signature_bytes m) /\
+      signature_scheme_matches l.certificate_verify_scheme (Sem.certificateVerify_scheme m))
 
-let is_valid_finished ([@@@mkey] l:finished) (m:M.finished) : slprop =
+let is_valid_finished ([@@@mkey] l:finished) (m:GFin.finished) : slprop =
   exists* verify_data.
     V.pts_to l.finished_verify_data verify_data **
     pure (
       V.is_full_vec l.finished_verify_data /\
       V.length l.finished_verify_data == 32 /\
-      Seq.equal verify_data m.M.verify_data)
+      Seq.equal verify_data (Sem.finished_verify_data m))
 
 let is_valid_handshake_msg ([@@@mkey] l:handshake_msg) (m:M.handshake_msg) : slprop =
   match l with
   | LClientHello lch ->
-    exists* mch. is_valid_client_hello lch mch ** pure (m == M.ClientHello mch)
+    exists* (mch:GCH.clientHello). is_valid_client_hello lch mch ** pure (m == M.ClientHello mch)
   | LServerHello lsh ->
-    exists* msh. is_valid_server_hello lsh msh ** pure (m == M.ServerHello msh)
+    exists* (msh:GSH.serverHello). is_valid_server_hello lsh msh ** pure (m == M.ServerHello msh)
   | LEncryptedExtensions lee ->
-    exists* mee. is_valid_encrypted_extensions lee mee ** pure (m == M.EncryptedExtensions mee)
+    exists* (mee:GEE.encryptedExtensions). is_valid_encrypted_extensions lee mee ** pure (m == M.EncryptedExtensions mee)
   | LCertificate lcert ->
-    exists* mcert. is_valid_certificate_msg lcert mcert ** pure (m == M.Certificate mcert)
+    exists* (mcert:GCert.certificate). is_valid_certificate_msg lcert mcert ** pure (m == M.Certificate mcert)
   | LCertificateVerify lcv ->
-    exists* mcv. is_valid_certificate_verify lcv mcv ** pure (m == M.CertificateVerify mcv)
+    exists* (mcv:GCV.certificateVerify). is_valid_certificate_verify lcv mcv ** pure (m == M.CertificateVerify mcv)
   | LFinished lfin ->
-    exists* mfin. is_valid_finished lfin mfin ** pure (m == M.Finished mfin)
+    exists* (mfin:GFin.finished). is_valid_finished lfin mfin ** pure (m == M.Finished mfin)
   | LHelloRetryRequest ->
     pure (m == M.HelloRetryRequest)
 
