@@ -29,6 +29,9 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
+module Sem = TLS13.Wire.Semantics
+module SS = TLS13.Impl.Server.Send
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
 open TLS13.Impl.Server.Driver.State
 open TLS13.Impl.Server.Driver.Transport
@@ -89,7 +92,7 @@ let lemma_select_server_parameters_ready_payload_irrelevant
     cfg.CS.server_supported_cipher_suites
     T.TLS_CHACHA20_POLY1305_SHA256);
   assert (CS.cipher_suite_offered
-    ch.M.cipher_suites
+    (Sem.clientHello_cipher_suites ch)
     T.TLS_CHACHA20_POLY1305_SHA256);
   assert (CS.named_group_offered
     cfg.CS.server_supported_groups
@@ -97,10 +100,10 @@ let lemma_select_server_parameters_ready_payload_irrelevant
   assert (CS.signature_scheme_offered
     cfg.CS.server_allowed_signature_schemes
     T.Rsa_pss_rsae_sha256);
-  assert (CS.signature_scheme_offered
-    ch.M.signature_schemes
-    T.Rsa_pss_rsae_sha256);
-  assert (CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name);
+  assert (match Sem.clientHello_sig_algs ch with
+    | Some sas -> CS.signature_scheme_offered sas T.Rsa_pss_rsae_sha256
+    | None -> False);
+  assert (CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch));
   assert (CS.server_selection_key_share_consistent selection1);
   assert (CS.server_selection_acceptable cfg selection1);
   assert (CS.legal_event
@@ -169,20 +172,18 @@ let lemma_select_derive_success_server_hello_ready
   assert (B.length (CL.raw_slice payload 32 64) == 32);
   let server_random = CL.raw_slice payload 0 32 in
   let server_private_key = CL.raw_slice payload 32 64 in
-  let sh = {
-    M.random = server_random;
-    M.key_share = CryptoSpec.x25519_public_from_private server_private_key;
-    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-    M.body = B.empty;
-  } in
+  let sh = SS.mk_server_hello_witness
+             server_random
+             (CryptoSpec.x25519_public_from_private server_private_key)
+             T.TLS_CHACHA20_POLY1305_SHA256 in
   assert (exists st1 shared.
     server_driver_selection_from_payload_correct st0 st1 payload /\
     st2 == CM.derived_shared_secret_state st1 shared /\
     (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
      | Some ch ->
-      CryptoSpec.x25519_shared
-        server_private_key
-        ch.M.key_share == Some shared
+      (match CS.client_hello_key_share ch with
+       | Some k -> CryptoSpec.x25519_shared server_private_key k == Some shared
+       | None -> False)
      | None -> False));
   let st1 =
     ID.indefinite_description_ghost
@@ -192,9 +193,9 @@ let lemma_select_derive_success_server_hello_ready
        st2 == CM.derived_shared_secret_state st1 shared /\
        (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
         | Some ch ->
-          CryptoSpec.x25519_shared
-            server_private_key
-            ch.M.key_share == Some shared
+          (match CS.client_hello_key_share ch with
+           | Some k -> CryptoSpec.x25519_shared server_private_key k == Some shared
+           | None -> False)
         | None -> False)) in
   let shared =
     ID.indefinite_description_ghost
@@ -204,9 +205,9 @@ let lemma_select_derive_success_server_hello_ready
        st2 == CM.derived_shared_secret_state st1 shared /\
        (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
         | Some ch ->
-          CryptoSpec.x25519_shared
-            server_private_key
-            ch.M.key_share == Some shared
+          (match CS.client_hello_key_share ch with
+           | Some k -> CryptoSpec.x25519_shared server_private_key k == Some shared
+           | None -> False)
         | None -> False)) in
   assert (server_driver_selection_from_payload_correct st0 st1 payload);
   assert (st2 == CM.derived_shared_secret_state st1 shared);
@@ -250,27 +251,73 @@ let lemma_select_derive_success_server_hello_ready
   assert (Some? selection.CS.server_key_share_private);
   assert (Seq.equal (Some?.v selection.CS.server_key_share_private) server_private_key);
   assert (CS.server_selection_key_share_consistent selection);
+  assert (ST.server_local_event_input_ready
+    st2
+    ST.LocalSendServerHello
+    payload);
+  assert (selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256);
+  assert ((Some?.v st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection).CS.server_selected_cipher_suite ==
+    T.TLS_CHACHA20_POLY1305_SHA256)
+
+// Helper lemma: assembles can_send_server_hello from individual runtime facts,
+// cst-guard, and serialize-length. Used by select_derive_send_server_hello_from_payload_once
+// to satisfy send_server_hello_from_payload_once's TODO-A1 precondition.
+let lemma_assemble_can_send_server_hello
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  : Lemma
+      (requires
+       B.length payload == 64 /\
+       st.CS.cs_model.CS.model_control ==
+         CS.ControlHandshaking CS.HsClientHelloReceived /\
+       st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+       Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+       st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+       Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+       (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection).CS.server_selected_cipher_suite ==
+         T.TLS_CHACHA20_POLY1305_SHA256 /\
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+         Bounds.max_transcript_len /\
+       ST.server_local_event_input_ready st ST.LocalSendServerHello payload /\
+       (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
+        (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst) /\
+       (let sh = SS.mk_server_hello_witness
+                  (CL.raw_slice payload 0 32)
+                  (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                  T.TLS_CHACHA20_POLY1305_SHA256 in
+        B.length (W.serialize_handshake (M.ServerHello sh)) == 90))
+      (ensures
+       (let sh = SS.mk_server_hello_witness
+                  (CL.raw_slice payload 0 32)
+                  (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                  T.TLS_CHACHA20_POLY1305_SHA256 in
+        CM.can_send_server_hello st sh
+          (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sh)))))
+=
+  let server_random = CL.raw_slice payload 0 32 in
+  let server_private_key = CL.raw_slice payload 32 64 in
+  Seq.lemma_len_slice payload 0 32;
+  Seq.lemma_len_slice payload 32 64;
+  let key_share = CryptoSpec.x25519_public_from_private server_private_key in
+  let sh = SS.mk_server_hello_witness server_random key_share
+             T.TLS_CHACHA20_POLY1305_SHA256 in
+  let selection = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
+  assert (Seq.equal selection.CS.server_random server_random);
+  assert (Some? selection.CS.server_key_share_private);
+  assert (Seq.equal (Some?.v selection.CS.server_key_share_private) server_private_key);
+  assert (CS.server_selection_key_share_consistent selection);
+  assert (Seq.equal selection.CS.server_key_share_public key_share);
   assert (CS.server_hello_matches_selection selection sh);
-  W.lemma_serialize_server_hello_from_selection_len sh;
-  W.lemma_fixed_server_handshake_serializers
-    sh
-    { M.chain = []; M.body = B.empty }
-    { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
-    { M.verify_data = Seq.create 32 0uy };
-  W.lemma_serialize_server_hello_len sh;
-  assert (B.length (W.serialize_handshake (M.ServerHello sh)) == 90);
-  assert (
-    B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-      B.length (W.serialize_handshake (M.ServerHello sh)) <=
-      Bounds.max_transcript_len);
   assert (CS.legal_event
-    st2.CS.cs_model
+    st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.ServerHello sh);
     }));
   assert (CS.event_raw_delta_legal
-    st2.CS.cs_model
+    st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.ServerHello sh);
@@ -278,15 +325,9 @@ let lemma_select_derive_success_server_hello_ready
     (CS.serialized_cleartext_tls_message
       (M.TlsHandshake (M.ServerHello sh)))
     B.empty);
-  assert (CM.can_send_server_hello
-    st2
-    sh
+  assert (CM.can_send_server_hello st sh
     (CS.serialized_cleartext_tls_message
-      (M.TlsHandshake (M.ServerHello sh))));
-  assert (ST.server_local_event_input_ready
-    st2
-    ST.LocalSendServerHello
-    payload)
+      (M.TlsHandshake (M.ServerHello sh))))
 
 fn generate_server_material_once
   (d:server_driver)
@@ -1137,7 +1178,7 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
                       T.Rsa_pss_rsae_sha256 /\
-                    CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                    CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                   | _, _ -> True))
   returns status:server_driver_local_status
   ensures (match status with
@@ -1437,7 +1478,22 @@ fn send_server_hello_from_payload_once
                  ST.server_local_event_input_ready
                    'st0
                    ST.LocalSendServerHello
-                   (Ghost.reveal 'payload_bytes))
+                   (Ghost.reveal 'payload_bytes) /\
+                 // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                 // sentinel (serverHello_body_cst); unprovable for a symbolic payload slice.
+                 // Plus can_send_server_hello needs the build-direction SH witness (deleted
+                 // Reveal layer). Both become explicit caller obligations.
+                 (Seq.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 ==>
+                  (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32)
+                    <> GSHbody.serverHello_body_cst) /\
+                 (let sh = SS.mk_server_hello_witness
+                            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+                            (CryptoSpec.x25519_public_from_private
+                              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                            T.TLS_CHACHA20_POLY1305_SHA256 in
+                  CM.can_send_server_hello 'st0 sh
+                    (CS.serialized_cleartext_tls_message
+                      (M.TlsHandshake (M.ServerHello sh)))))
  returns resp:ST.server_response
  ensures exists* st1 sent'.
          server_driver_connected
@@ -1524,13 +1580,10 @@ fn send_server_hello_from_payload_once
  Seq.lemma_eq_elim
    server_private_key_bytes
    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64);
- assert (pure (let sh = {
-     M.random = server_random_bytes;
-     M.key_share =
-       CryptoSpec.x25519_public_from_private server_private_key_bytes;
-     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-     M.body = B.empty;
-   } in
+ assert (pure (let sh = SS.mk_server_hello_witness
+     server_random_bytes
+     (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+     T.TLS_CHACHA20_POLY1305_SHA256 in
    CM.can_send_server_hello
      'st0
      sh
@@ -1778,7 +1831,20 @@ fn select_derive_send_server_hello_from_payload_once
                 ST.server_local_event_input_ready
                   'st0
                   ST.LocalSelectServerParameters
-                  (Ghost.reveal 'payload_bytes))
+                  (Ghost.reveal 'payload_bytes) /\
+                // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                // sentinel (serverHello_body_cst); unprovable for a symbolic payload slice.
+                // Plus the serialized ServerHello length equation (deleted
+                // lemma_serialize_server_hello_len). Both become explicit caller obligations.
+                (Seq.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 ==>
+                 (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32)
+                   <> GSHbody.serverHello_body_cst) /\
+                (let sh = SS.mk_server_hello_witness
+                           (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+                           (CryptoSpec.x25519_public_from_private
+                             (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                           T.TLS_CHACHA20_POLY1305_SHA256 in
+                 B.length (W.serialize_handshake (M.ServerHello sh)) == 90))
  returns result:server_driver_select_derive_server_hello_result
  ensures (match result with
           | ServerDriverSelectDeriveServerHelloOk ->
@@ -1893,6 +1959,26 @@ fn select_derive_send_server_hello_from_payload_once
        st2
        ST.LocalSendServerHello
        (Ghost.reveal 'payload_bytes)));
+     assert (pure ((Some?.v st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection).CS.server_selected_cipher_suite ==
+       T.TLS_CHACHA20_POLY1305_SHA256));
+     assert (pure (Seq.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 ==>
+       (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32)
+         <> GSHbody.serverHello_body_cst));
+     assert (pure (let sh = SS.mk_server_hello_witness
+                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+                     (CryptoSpec.x25519_public_from_private
+                       (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                     T.TLS_CHACHA20_POLY1305_SHA256 in
+       B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
+     lemma_assemble_can_send_server_hello st2 (Ghost.reveal 'payload_bytes);
+     assert (pure (let sh = SS.mk_server_hello_witness
+                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+                     (CryptoSpec.x25519_public_from_private
+                       (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                     T.TLS_CHACHA20_POLY1305_SHA256 in
+       CM.can_send_server_hello st2 sh
+         (CS.serialized_cleartext_tls_message
+           (M.TlsHandshake (M.ServerHello sh)))));
      let send_resp =
        send_server_hello_from_payload_once
          d
@@ -2223,7 +2309,7 @@ fn select_and_derive_shared_secret_if_ready_once
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
                       T.Rsa_pss_rsae_sha256 /\
-                    CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                    CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                   | _, _ -> True))
   returns status:server_driver_local_status
   ensures (match status with
@@ -2656,7 +2742,7 @@ fn accept_start_read_client_hello_select_derive_once
             CS.signature_scheme_offered
               cfg.CS.server_allowed_signature_schemes
               T.Rsa_pss_rsae_sha256 /\
-            CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+            CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
           | _, _ -> True));
         let material_ok = generate_server_material_once d;
         assert (server_driver_connected
@@ -2681,7 +2767,7 @@ fn accept_start_read_client_hello_select_derive_once
                CS.signature_scheme_offered
                  cfg.CS.server_allowed_signature_schemes
                  T.Rsa_pss_rsae_sha256 /\
-               CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+               CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
              | _, _ -> True)));
           let status = select_and_derive_shared_secret_if_ready_once d;
           match status {
@@ -2874,7 +2960,7 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                       CS.signature_scheme_offered
                         cfg.CS.server_allowed_signature_schemes
                         T.Rsa_pss_rsae_sha256 /\
-                      CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                      CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                     | _, _ -> True));
 
                   let mut material_payload = [| 0uy; 64sz |];
@@ -2968,20 +3054,60 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         st_ch
                         ST.LocalSelectServerParameters
                         material_bytes));
-                      let server_hello_result =
-                        select_derive_send_server_hello_from_payload_once
+                      // TODO-A1 cst-guard: discharge via a RUNTIME comparison of the
+                      // freshly-generated random against the HRR sentinel, instead of
+                      // the (unsatisfiable) universal caller precondition.
+                      assert (pure (B.length material_bytes == 64));
+                      let differs =
+                        SS.server_random_differs_from_cst material_payload;
+                      if not differs {
+                        // Runtime sentinel collision (cryptographically impossible):
+                        // bail out, re-establishing the connected predicate.
+                        assert (server_driver_connected
                           d
-                          material_payload
-                          64sz;
-                      match server_hello_result {
-                        ServerDriverSelectDeriveServerHelloOk -> {
-                          ServerDriverAcceptServerHelloOk
-                        }
-                        ServerDriverSelectDeriveServerHelloDeriveFailed -> {
-                          ServerDriverAcceptServerHelloDeriveFailed
-                        }
-                        ServerDriverSelectDeriveServerHelloSendNotReady -> {
-                          ServerDriverAcceptServerHelloSendNotReady
+                          st_ch
+                          'certificate_chain
+                          'credential_identity
+                          received
+                          sent);
+                        assert (pure (st_ch.CS.cs_model.CS.model_control ==
+                          CS.ControlHandshaking CS.HsClientHelloReceived));
+                        assert (pure (st_ch.CS.cs_model.CS.model_config ==
+                          'st0.CS.cs_model.CS.model_config));
+                        ServerDriverAcceptServerHelloMaterialFailed
+                      } else {
+                        // [differs] establishes the cst-guard for material_bytes; the
+                        // ==90 serialized-length follows from the existing lemma.
+                        SS.lemma_mk_server_hello_witness_bytesize
+                          (CL.raw_slice material_bytes 0 32)
+                          (CryptoSpec.x25519_public_from_private
+                            (CL.raw_slice material_bytes 32 64))
+                          T.TLS_CHACHA20_POLY1305_SHA256;
+                        assert (pure (
+                          (Seq.length (CL.raw_slice material_bytes 0 32) == 32 ==>
+                           (CL.raw_slice material_bytes 0 32 <: Seq.lseq U8.t 32) <>
+                             GSHbody.serverHello_body_cst) /\
+                          (let sh = SS.mk_server_hello_witness
+                                     (CL.raw_slice material_bytes 0 32)
+                                     (CryptoSpec.x25519_public_from_private
+                                       (CL.raw_slice material_bytes 32 64))
+                                     T.TLS_CHACHA20_POLY1305_SHA256 in
+                           B.length (W.serialize_handshake (M.ServerHello sh)) == 90)));
+                        let server_hello_result =
+                          select_derive_send_server_hello_from_payload_once
+                            d
+                            material_payload
+                            64sz;
+                        match server_hello_result {
+                          ServerDriverSelectDeriveServerHelloOk -> {
+                            ServerDriverAcceptServerHelloOk
+                          }
+                          ServerDriverSelectDeriveServerHelloDeriveFailed -> {
+                            ServerDriverAcceptServerHelloDeriveFailed
+                          }
+                          ServerDriverSelectDeriveServerHelloSendNotReady -> {
+                            ServerDriverAcceptServerHelloSendNotReady
+                          }
                         }
                       }
                     } else {
