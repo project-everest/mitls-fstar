@@ -5752,7 +5752,7 @@ fn parse_tls_message
       let b0 = input.(0sz);
       if (b0 = 1uy) {
         fold (L.is_valid_tls_message L.LTlsChangeCipherSpec M.TlsChangeCipherSpec);
-        lemma_wire_exists content_type T.ChangeCipherSpec M.TlsChangeCipherSpec 'input_bytes;
+        lemma_wire_exists content_type T.Change_cipher_spec M.TlsChangeCipherSpec 'input_bytes;
         Some L.LTlsChangeCipherSpec
       } else {
         None #L.tls_message
@@ -5797,16 +5797,18 @@ fn parse_tls_message
             (L.LTlsApplicationData
               ({ L.application_data_bytes = buf; L.application_data_len = input_len }))
             (M.TlsApplicationData 'input_bytes));
-    assert (pure (L.content_type_matches content_type T.ApplicationData /\
-                  WS.parse_tls_message T.ApplicationData 'input_bytes ==
+    assert (pure (L.content_type_matches content_type T.Application_data /\
+                  WS.parse_tls_message T.Application_data 'input_bytes ==
                   Some (M.TlsApplicationData 'input_bytes)));
-    lemma_wire_exists content_type T.ApplicationData
+    lemma_wire_exists content_type T.Application_data
       (M.TlsApplicationData 'input_bytes) 'input_bytes;
     Some (L.LTlsApplicationData
             ({ L.application_data_bytes = buf; L.application_data_len = input_len }))
   } else {
     (* Unknown content type: no T.content_type matches, so the spec parser is
-       vacuously None for every matching content type. *)
+       vacuously None for every matching content type.  (The generated [Invalid]
+       content type, wire byte 0, also yields [None].) *)
+    WS.lemma_parse_tls_message_invalid_none 'input_bytes;
     None #L.tls_message
   }
 }
@@ -5897,7 +5899,7 @@ fn peek_decrypt_record
       SZ.v raw_len == 5 + SZ.v flen /\
       SZ.v flen <= 16640 /\
       WS.parse_record (Ghost.reveal raw_bytes) ==
-        Some (T.ApplicationData,
+        Some (T.Application_data,
               Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen),
               SZ.v raw_len))
   returns r: option decoded_fragment
@@ -6157,21 +6159,21 @@ fn decode_network_record
       if (raw_len = rec_len) {
       RVD.lemma_parse_record_wire_from_header 'raw_bytes;
       let outer_ct : T.content_type =
-        (if b0 = 0x14uy then T.ChangeCipherSpec
+        (if b0 = 0x14uy then T.Change_cipher_spec
          else if b0 = 0x15uy then T.Alert
          else if b0 = 0x16uy then T.Handshake
-         else T.ApplicationData);
+         else T.Application_data);
       if (b0 = 0x17uy) {
         assert (pure (b2 = 0x03uy));
         RVD.lemma_parse_record_from_header 'raw_bytes;
         WS.lemma_parse_record_implies_parse_record_wire (Ghost.reveal 'raw_bytes);
-        assert (pure (outer_ct == T.ApplicationData));
+        assert (pure (outer_ct == T.Application_data));
         assert (pure (WS.parse_record (Ghost.reveal 'raw_bytes) ==
-                      Some (T.ApplicationData,
+                      Some (T.Application_data,
                             Seq.slice (Ghost.reveal 'raw_bytes) 5 (5 + SZ.v flen),
                             SZ.v raw_len)));
         assert (pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) ==
-                      Some (T.ApplicationData,
+                      Some (T.Application_data,
                             Seq.slice (Ghost.reveal 'raw_bytes) 5 (5 + SZ.v flen),
                             SZ.v raw_len)));
         (* PROTECTED path (ApplicationData): decrypt + strip inner plaintext. *)
@@ -6487,22 +6489,22 @@ fn decode_network_buffer
         DW.lemma_parse_record_wire_buffer_prefix (Ghost.reveal 'raw_bytes)
           (Ghost.reveal raw_record_bytes) (SZ.v flen);
         let outer_ct : T.content_type =
-          (if b0 = 0x14uy then T.ChangeCipherSpec
+          (if b0 = 0x14uy then T.Change_cipher_spec
            else if b0 = 0x15uy then T.Alert
            else if b0 = 0x16uy then T.Handshake
-           else T.ApplicationData);
+           else T.Application_data);
         if (b0 = 0x17uy) {
           assert (pure (b2 = 0x03uy));
           DW.lemma_parse_record_buffer_prefix (Ghost.reveal 'raw_bytes)
             (Ghost.reveal raw_record_bytes) (SZ.v flen);
           WS.lemma_parse_record_implies_parse_record_wire (Ghost.reveal raw_record_bytes);
-          assert (pure (outer_ct == T.ApplicationData));
+          assert (pure (outer_ct == T.Application_data));
           assert (pure (WS.parse_record (Ghost.reveal raw_record_bytes) ==
-                        Some (T.ApplicationData,
+                        Some (T.Application_data,
                               Seq.slice (Ghost.reveal raw_record_bytes) 5 (5 + SZ.v flen),
                               SZ.v consumed_len)));
           assert (pure (WS.parse_record_wire (Ghost.reveal raw_record_bytes) ==
-                        Some (T.ApplicationData,
+                        Some (T.Application_data,
                               Seq.slice (Ghost.reveal raw_record_bytes) 5 (5 + SZ.v flen),
                               SZ.v consumed_len)));
           (* PROTECTED path: decrypt the prefix + strip inner plaintext. *)

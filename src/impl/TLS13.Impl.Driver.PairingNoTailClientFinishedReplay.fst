@@ -1330,7 +1330,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           raw_sent
           raw_received
           final_model)
-      (ensures CS.raw_records_exactly raw_sent T.ApplicationData 1)
+      (ensures CS.raw_records_exactly raw_sent T.Application_data 1)
 =
   let verify_ev = CS.ConnLocalEvent (CS.LocalVerifyFinished sf) in
   let sent_ev =
@@ -1363,7 +1363,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
       tail0_sent
       tail0_received
       final_model
-  returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+  returns CS.raw_records_exactly raw_sent T.Application_data 1
   with _.
   (
     PWR.lemma_conn_events_sent_seal_replay_head
@@ -1391,7 +1391,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
         tail1_sent
         tail1_received
         final_model
-    returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+    returns CS.raw_records_exactly raw_sent T.Application_data 1
     with _.
     (
       PWR.lemma_conn_events_sent_seal_replay_head
@@ -1419,7 +1419,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           tail2_sent
           tail2_received
           final_model
-      returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+      returns CS.raw_records_exactly raw_sent T.Application_data 1
       with _.
       (
         PWR.lemma_conn_events_sent_seal_replay_head
@@ -1447,7 +1447,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
             tail3_sent
             tail3_received
             final_model
-        returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+        returns CS.raw_records_exactly raw_sent T.Application_data 1
         with _.
         (
           PNTCAS.lemma_client_no_tail_application_install_cover_cases e13 e14;
@@ -1474,7 +1474,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           assert_norm (CS.protected_record_count
             CL.Sent
             (M.TlsHandshake (M.Finished cf)) == 1);
-          assert (CS.raw_records_exactly delta3_sent T.ApplicationData 1);
+          assert (CS.raw_records_exactly delta3_sent T.Application_data 1);
           assert (Seq.equal tail3_sent B.empty);
           Seq.lemma_eq_elim tail3_sent B.empty;
           Seq.append_empty_r delta3_sent;
@@ -2157,7 +2157,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
         suffix_sent
         suffix_received
         client.CS.cs_model /\
-      CS.raw_records_exactly suffix_sent T.ApplicationData 1
+      CS.raw_records_exactly suffix_sent T.Application_data 1
     with
       start
       ch
@@ -2545,7 +2545,7 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
         e14'
         cf'
         client.CS.cs_model /\
-      CS.raw_records_exactly suffix_sent' T.ApplicationData 1
+      CS.raw_records_exactly suffix_sent' T.Application_data 1
     with sf e13 e14 cf model12 suffix_sent suffix_received and ()
   )
 
@@ -2697,7 +2697,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
       e14
       cf
       client.CS.cs_model /\
-    CS.raw_records_exactly suffix_sent T.ApplicationData 1
+    CS.raw_records_exactly suffix_sent T.Application_data 1
   returns client_finished_canonical_sent_seal_replay_slice client
   with _.
   (
@@ -2827,7 +2827,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
             CL.message_direction = CL.Sent;
             CL.message_value = M.TlsHandshake (M.Finished cf');
           })) == Some client.CS.cs_model /\
-        CS.raw_records_exactly suffix_sent' T.ApplicationData 1
+        CS.raw_records_exactly suffix_sent' T.Application_data 1
       with
         sf
         cf

@@ -1686,7 +1686,7 @@ let step_tls_message
        | None -> None)
     | CL.Sent, M.UpdateRequested ->
       None)
-  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+  | M.TlsAlert T.Close_notify, ControlApplicationData ->
     (match dir with
      | CL.Sent ->
        Some {
@@ -1706,7 +1706,7 @@ let step_tls_message
                record_read = R.next_seq model.model_record.record_read;
            };
        })
-  | M.TlsAlert T.CloseNotify, ControlClosing ->
+  | M.TlsAlert T.Close_notify, ControlClosing ->
     (match dir with
      | CL.Received ->
        Some {
@@ -2508,9 +2508,9 @@ let legal_tls_message
        model.model_application.app_key_update_response_pending
      | CL.Sent, M.UpdateRequested ->
        False)
-  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+  | M.TlsAlert T.Close_notify, ControlApplicationData ->
     True
-  | M.TlsAlert T.CloseNotify, ControlClosing ->
+  | M.TlsAlert T.Close_notify, ControlClosing ->
     dir == CL.Received
   | M.TlsAlert _, _ ->
     True
@@ -2589,8 +2589,8 @@ let state_event_of_conn_event (ev:conn_event) : GTot (option S.event) =
      | CL.Sent, M.TlsHandshake (M.Finished fin) -> Some (S.SendClientFinished fin)
      | CL.Sent, M.TlsApplicationData bytes -> Some (S.SendApplicationData bytes)
      | CL.Received, M.TlsApplicationData bytes -> Some (S.RecvApplicationData bytes)
-     | CL.Sent, M.TlsAlert T.CloseNotify -> Some S.SendCloseNotify
-     | CL.Received, M.TlsAlert T.CloseNotify -> Some S.RecvCloseNotify
+     | CL.Sent, M.TlsAlert T.Close_notify -> Some S.SendCloseNotify
+     | CL.Received, M.TlsAlert T.Close_notify -> Some S.RecvCloseNotify
      | _, M.TlsAlert alert -> Some (S.Fail (T.AlertError alert))
      | _, M.TlsChangeCipherSpec -> None
      | _, _ -> None)
@@ -2835,7 +2835,7 @@ let projected_record_layer_step_for_role
      | CL.Received, M.TlsHandshake (M.Finished _)
      | CL.Received, M.TlsApplicationData _
      | CL.Received, M.TlsIgnoredPostHandshake _
-     | CL.Received, M.TlsAlert T.CloseNotify ->
+     | CL.Received, M.TlsAlert T.Close_notify ->
        { record with projected_read = projected_next_seq record.projected_read }
      | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Sent, M.TlsHandshake (M.Certificate _)
@@ -2855,7 +2855,7 @@ let projected_record_layer_step_for_role
        { record with projected_read = projected_install_keys R.Application }
      | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested ->
        { record with projected_write = projected_install_keys R.Application }
-     | CL.Sent, M.TlsAlert T.CloseNotify ->
+     | CL.Sent, M.TlsAlert T.Close_notify ->
        { record with projected_write = projected_next_seq record.projected_write }
      | _, _ ->
        record)
@@ -3217,7 +3217,7 @@ let record_header_aad (raw:B.bytes) : GTot B.bytes =
 
 let application_data_record_header (fragment_len:nat) : GTot B.bytes =
   record_header_aad
-    (W.serialize_record T.ApplicationData (Seq.create fragment_len 0uy))
+    (W.serialize_record T.Application_data (Seq.create fragment_len 0uy))
 
 let sent_tls_inner_plaintext_fragment (msg:M.tls_message) : GTot B.bytes =
   let (content_type, fragment) = W.serialize_tls_message msg in
@@ -3232,12 +3232,12 @@ let sent_single_protected_message_seal
   (raw:B.bytes)
   : prop =
   exists ciphertext.
-    W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+    W.parse_record raw == Some (T.Application_data, ciphertext, B.length raw) /\
     R.seal
       model.model_record.record_write
       (record_header_aad raw)
       {
-        R.content_type = T.ApplicationData;
+        R.content_type = T.Application_data;
         R.fragment = sent_tls_inner_plaintext_fragment msg;
       } ==
       Some (ciphertext, R.next_seq model.model_record.record_write)
@@ -3316,7 +3316,7 @@ let received_single_protected_message_decode
   : prop =
   exists outer_fragment opened plaintext.
     W.parse_record_wire raw_received ==
-      Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
     received_record_opened model raw_received outer_fragment opened /\
     W.parse_plaintext opened == Some plaintext /\
     W.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
@@ -3357,7 +3357,7 @@ let network_message_raw_delta_legal
   else
     raw_records_exactly
       raw
-      T.ApplicationData
+      T.Application_data
       (protected_record_count msg.CL.message_direction msg.CL.message_value)
 
 let event_raw_delta_legal
@@ -3394,11 +3394,11 @@ let event_protected_single_raw_parse_success
       | CL.Sent ->
         exists fragment.
           W.parse_record raw_sent ==
-            Some (T.ApplicationData, fragment, B.length raw_sent)
+            Some (T.Application_data, fragment, B.length raw_sent)
       | CL.Received ->
         exists fragment.
          W.parse_record_wire raw_received ==
-            Some (T.ApplicationData, fragment, B.length raw_received)
+            Some (T.Application_data, fragment, B.length raw_received)
     else True
   | ConnLocalEvent _ -> True
 
@@ -3416,13 +3416,13 @@ let event_protected_raw_parse_prefix_success
       | CL.Sent ->
         (exists fragment. exists (consumed:nat).
           W.parse_record raw_sent ==
-            Some (T.ApplicationData, fragment, consumed) /\
+            Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_sent)
       | CL.Received ->
         (exists fragment. exists (consumed:nat).
          W.parse_record_wire raw_received ==
-            Some (T.ApplicationData, fragment, consumed) /\
+            Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received))
   | ConnLocalEvent _ -> True
@@ -3441,22 +3441,22 @@ let event_protected_raw_decompose_prefix_success
       | CL.Sent ->
         (exists fragment. exists (consumed:nat).
           W.parse_record raw_sent ==
-            Some (T.ApplicationData, fragment, consumed) /\
+            Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_sent /\
           raw_records_exactly
             (Seq.slice raw_sent consumed (B.length raw_sent))
-            T.ApplicationData
+            T.Application_data
             (protected_record_count msg.CL.message_direction msg.CL.message_value - 1))
       | CL.Received ->
         (exists fragment. exists (consumed:nat).
          W.parse_record_wire raw_received ==
-            Some (T.ApplicationData, fragment, consumed) /\
+            Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received /\
           raw_records_exactly
             (Seq.slice raw_received consumed (B.length raw_received))
-            T.ApplicationData
+            T.Application_data
             (protected_record_count msg.CL.message_direction msg.CL.message_value - 1)))
   | ConnLocalEvent _ -> True
 
@@ -3474,12 +3474,12 @@ let event_protected_raw_segmented_success
       | CL.Sent ->
         raw_records_segmented
           raw_sent
-          T.ApplicationData
+          T.Application_data
           (protected_record_count msg.CL.message_direction msg.CL.message_value)
       | CL.Received ->
         raw_records_segmented
           raw_received
-          T.ApplicationData
+          T.Application_data
           (protected_record_count msg.CL.message_direction msg.CL.message_value))
   | ConnLocalEvent _ -> True
 

@@ -153,7 +153,7 @@ val lemma_application_data_raw_not_change_cipher_spec
   (ccs_raw:B.bytes)
   : Lemma
       (requires
-        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.raw_records_exactly application_raw T.Application_data 1 /\
         CS.cleartext_tls_message_raw
           M.TlsChangeCipherSpec
           ccs_raw /\
@@ -194,7 +194,7 @@ val lemma_equal_stream_head_application_data_not_change_cipher_spec
         Seq.equal left_stream right_stream /\
         Seq.equal left_stream (B.append application_raw application_tail) /\
         Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
-        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.raw_records_exactly application_raw T.Application_data 1 /\
         CS.cleartext_tls_message_raw
           M.TlsChangeCipherSpec
           ccs_raw)
@@ -224,7 +224,7 @@ val lemma_equal_stream_after_client_hello_application_data_not_change_cipher_spe
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ClientHello received_ch))
           received_ch_raw /\
-        CS.raw_records_exactly application_raw T.ApplicationData 1 /\
+        CS.raw_records_exactly application_raw T.Application_data 1 /\
         CS.cleartext_tls_message_raw
           M.TlsChangeCipherSpec
           ccs_raw)

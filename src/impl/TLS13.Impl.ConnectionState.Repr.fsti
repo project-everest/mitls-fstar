@@ -1186,7 +1186,7 @@ let default_connection_config : CS.connection_config = {
   CS.config_trust_store = { X.anchors = B.empty };
   CS.config_validation_time = { X.seconds_since_epoch = 0 };
   CS.config_cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256];
-  CS.config_signature_schemes = [T.RsaPssRsaeSha256];
+  CS.config_signature_schemes = [T.Rsa_pss_rsae_sha256];
   CS.config_server = None;
 }
 

@@ -863,9 +863,9 @@ let lemma_step_model_handshake_fields
      | M.TlsIgnoredPostHandshake _, CL.Received, CS.ControlApplicationData
      | M.TlsKeyUpdate _, CL.Received, CS.ControlApplicationData
      | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent, CS.ControlApplicationData
-     | M.TlsAlert T.CloseNotify, CL.Sent, CS.ControlApplicationData
-     | M.TlsAlert T.CloseNotify, CL.Received, CS.ControlApplicationData
-     | M.TlsAlert T.CloseNotify, CL.Received, CS.ControlClosing
+     | M.TlsAlert T.Close_notify, CL.Sent, CS.ControlApplicationData
+     | M.TlsAlert T.Close_notify, CL.Received, CS.ControlApplicationData
+     | M.TlsAlert T.Close_notify, CL.Received, CS.ControlClosing
      | M.TlsAlert _, _, _
      | M.TlsChangeCipherSpec, _, CS.ControlHandshaking _ -> ()
      | _, _, _ -> ())

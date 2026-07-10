@@ -690,10 +690,10 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello sh))
       server_sh_raw /\
-    CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly sf_raw T.ApplicationData 1
+    CS.raw_records_exactly ee_raw T.Application_data 1 /\
+    CS.raw_records_exactly cert_raw T.Application_data 1 /\
+    CS.raw_records_exactly cv_raw T.Application_data 1 /\
+    CS.raw_records_exactly sf_raw T.Application_data 1
   returns server_sent_cleartext_and_server_flight_raw_slices server
   with _.
   (
@@ -728,10 +728,10 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
       CS.cleartext_tls_message_raw
         (M.TlsHandshake (M.ServerHello sh0))
         server_sh_raw0 /\
-      CS.raw_records_exactly ee_raw0 T.ApplicationData 1 /\
-      CS.raw_records_exactly cert_raw0 T.ApplicationData 1 /\
-      CS.raw_records_exactly cv_raw0 T.ApplicationData 1 /\
-      CS.raw_records_exactly sf_raw0 T.ApplicationData 1)
+      CS.raw_records_exactly ee_raw0 T.Application_data 1 /\
+      CS.raw_records_exactly cert_raw0 T.Application_data 1 /\
+      CS.raw_records_exactly cv_raw0 T.Application_data 1 /\
+      CS.raw_records_exactly sf_raw0 T.Application_data 1)
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client_finished_raw_slices
@@ -784,7 +784,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client
     CS.cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello ch))
       client_ch_raw /\
-    CS.raw_records_exactly client_finished_raw T.ApplicationData 1
+    CS.raw_records_exactly client_finished_raw T.Application_data 1
   returns server_received_cleartext_and_client_finished_raw_slices server
   with _.
   (
@@ -801,7 +801,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client
       CS.cleartext_tls_message_raw
         (M.TlsHandshake (M.ClientHello ch0))
         client_ch_raw0 /\
-      CS.raw_records_exactly client_finished_raw0 T.ApplicationData 1)
+      CS.raw_records_exactly client_finished_raw0 T.Application_data 1)
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
@@ -2414,7 +2414,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
     CS.cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello client_ch))
       client_ch_raw /\
-    CS.raw_records_exactly client_finished_raw T.ApplicationData 1
+    CS.raw_records_exactly client_finished_raw T.Application_data 1
   returns False
   with _.
   (
@@ -2766,7 +2766,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello_sele
     CS.cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello client_ch))
       client_ch_raw /\
-    CS.raw_records_exactly client_finished_raw T.ApplicationData 1
+    CS.raw_records_exactly client_finished_raw T.Application_data 1
   returns False
   with _.
   (
@@ -3581,7 +3581,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                 CS.cleartext_tls_message_raw
                   (M.TlsHandshake (M.ClientHello client_ch))
                   client_ch_raw /\
-                CS.raw_records_exactly client_finished_raw T.ApplicationData 1
+                CS.raw_records_exactly client_finished_raw T.Application_data 1
               returns False
               with _.
               (

@@ -520,7 +520,7 @@ let rec lemma_closing_or_closed_never_returns_to_application_data
               msg.CL.message_direction
               msg.CL.message_value);
             (match msg.CL.message_value with
-            | M.TlsAlert T.CloseNotify ->
+            | M.TlsAlert T.Close_notify ->
               assert (msg.CL.message_direction == CL.Received);
               assert (model1.CS.model_control == CS.ControlClosed);
               lemma_closing_or_closed_never_returns_to_application_data

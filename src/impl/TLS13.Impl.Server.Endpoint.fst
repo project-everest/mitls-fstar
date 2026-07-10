@@ -547,7 +547,7 @@ ensures
                 T.X25519 /\
               CS.signature_scheme_offered
                 server_cfg.CS.server_allowed_signature_schemes
-                T.RsaPssRsaeSha256 /\
+                T.Rsa_pss_rsae_sha256 /\
               CS.sni_policy_accepts
                 server_cfg.CS.server_sni_policy
                 ch.M.server_name
@@ -847,7 +847,7 @@ ensures
             W.lemma_fixed_server_handshake_serializers
               (Ghost.reveal sh)
               { M.chain = []; M.body = B.empty }
-              { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
+              { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
               { M.verify_data = Seq.create 32 0uy };
             W.lemma_serialize_server_hello_len (Ghost.reveal sh);
             assert (pure (B.length (W.serialize_handshake (M.ServerHello (Ghost.reveal sh))) == 90));
@@ -1005,7 +1005,7 @@ ensures
           assert (pure (
             (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection)
               .CS.server_selected_signature_scheme ==
-            T.RsaPssRsaeSha256));
+            T.Rsa_pss_rsae_sha256));
           assert (pure (
             (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection)
               .CS.server_selected_credential == credential_identity));
@@ -1019,7 +1019,7 @@ ensures
               .CS.server_credential_identity));
           assert (pure (CS.signature_scheme_offered
             (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_signature_schemes
-            T.RsaPssRsaeSha256));
+            T.Rsa_pss_rsae_sha256));
           assert (pure (ST.server_local_event_input_ready
             (Ghost.reveal st)
             ST.LocalSignCertificateVerify

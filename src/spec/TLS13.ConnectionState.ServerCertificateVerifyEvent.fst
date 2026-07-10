@@ -343,8 +343,8 @@ let lemma_step_tls_message_server_certificate_verify_sent_event_log
   | M.TlsApplicationData _, ControlApplicationData
   | M.TlsIgnoredPostHandshake _, ControlApplicationData
   | M.TlsKeyUpdate _, ControlApplicationData
-  | M.TlsAlert T.CloseNotify, ControlApplicationData
-  | M.TlsAlert T.CloseNotify, ControlClosing
+  | M.TlsAlert T.Close_notify, ControlApplicationData
+  | M.TlsAlert T.Close_notify, ControlClosing
   | M.TlsChangeCipherSpec, ControlHandshaking _ ->
     assert (model'.model_config == model.model_config);
     if model'.model_config.config_role == ServerEndpoint /\

@@ -21,7 +21,7 @@ module W = TLS13.Wire.Spec
 noextract
 let supported_client_hello_fields_profile (ch:M.client_hello) : prop =
   ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-  ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+  ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
   (match ch.M.server_name with
    | None -> True
    | Some hostname -> B.length hostname <= 255)
@@ -57,7 +57,7 @@ let supported_client_config_wire_profile (cfg:CS.connection_config) : prop =
   cfg.CS.config_role == CS.ClientEndpoint /\
   B.length cfg.CS.config_server_name <= 255 /\
   cfg.CS.config_cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-  cfg.CS.config_signature_schemes == [T.RsaPssRsaeSha256]
+  cfg.CS.config_signature_schemes == [T.Rsa_pss_rsae_sha256]
 
 noextract
 let client_hello_server_name_wire_equivalent

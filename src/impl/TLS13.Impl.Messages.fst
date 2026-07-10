@@ -227,24 +227,25 @@ type decoded_network_buffer_result =
 noextract
 let content_type_matches (wire:U8.t) (ct:T.content_type) : prop =
   match ct with
-  | T.ChangeCipherSpec -> U8.v wire == 0x14
+  | T.Invalid -> U8.v wire == 0x00
+  | T.Change_cipher_spec -> U8.v wire == 0x14
   | T.Alert -> U8.v wire == 0x15
   | T.Handshake -> U8.v wire == 0x16
-  | T.ApplicationData -> U8.v wire == 0x17
+  | T.Application_data -> U8.v wire == 0x17
 
 noextract
 let alert_description_matches (wire:U8.t) (alert:T.alert_description) : prop =
   match alert with
-  | T.CloseNotify -> U8.v wire == 0
-  | T.UnexpectedMessage -> U8.v wire == 10
-  | T.BadRecordMac -> U8.v wire == 20
-  | T.HandshakeFailure -> U8.v wire == 40
-  | T.DecodeError -> U8.v wire == 50
-  | T.DecryptError -> U8.v wire == 51
-  | T.ProtocolVersion -> U8.v wire == 70
-  | T.UnsupportedExtension -> U8.v wire == 110
-  | T.CertificateUnknown -> U8.v wire == 46
-  | T.IllegalParameter -> U8.v wire == 47
+  | T.Close_notify -> U8.v wire == 0
+  | T.Unexpected_message -> U8.v wire == 10
+  | T.Bad_record_mac -> U8.v wire == 20
+  | T.Handshake_failure -> U8.v wire == 40
+  | T.Decode_error -> U8.v wire == 50
+  | T.Decrypt_error -> U8.v wire == 51
+  | T.Protocol_version -> U8.v wire == 70
+  | T.Unsupported_extension -> U8.v wire == 110
+  | T.Certificate_unknown -> U8.v wire == 46
+  | T.Illegal_parameter -> U8.v wire == 47
 
 noextract
 let key_update_request_matches (wire:U8.t) (req:M.key_update_request) : prop =
@@ -255,17 +256,17 @@ let key_update_request_matches (wire:U8.t) (req:M.key_update_request) : prop =
 let alert_description_of_wire_or_unexpected
   (wire:U8.t)
   : T.alert_description =
-  if wire = 0uy then T.CloseNotify
-  else if wire = 10uy then T.UnexpectedMessage
-  else if wire = 20uy then T.BadRecordMac
-  else if wire = 40uy then T.HandshakeFailure
-  else if wire = 46uy then T.CertificateUnknown
-  else if wire = 47uy then T.IllegalParameter
-  else if wire = 50uy then T.DecodeError
-  else if wire = 51uy then T.DecryptError
-  else if wire = 70uy then T.ProtocolVersion
-  else if wire = 110uy then T.UnsupportedExtension
-  else T.UnexpectedMessage
+  if wire = 0uy then T.Close_notify
+  else if wire = 10uy then T.Unexpected_message
+  else if wire = 20uy then T.Bad_record_mac
+  else if wire = 40uy then T.Handshake_failure
+  else if wire = 46uy then T.Certificate_unknown
+  else if wire = 47uy then T.Illegal_parameter
+  else if wire = 50uy then T.Decode_error
+  else if wire = 51uy then T.Decrypt_error
+  else if wire = 70uy then T.Protocol_version
+  else if wire = 110uy then T.Unsupported_extension
+  else T.Unexpected_message
 
 let lemma_alert_description_of_wire_matches
   (wire:U8.t)
@@ -276,53 +277,53 @@ let lemma_alert_description_of_wire_matches
                alert_description_matches wire (alert_description_of_wire_or_unexpected wire))
 =
   match alert with
-  | T.CloseNotify -> ()
-  | T.UnexpectedMessage -> ()
-  | T.BadRecordMac -> ()
-  | T.HandshakeFailure -> ()
-  | T.DecodeError -> ()
-  | T.DecryptError -> ()
-  | T.ProtocolVersion -> ()
-  | T.UnsupportedExtension -> ()
-  | T.CertificateUnknown -> ()
-  | T.IllegalParameter -> ()
+  | T.Close_notify -> ()
+  | T.Unexpected_message -> ()
+  | T.Bad_record_mac -> ()
+  | T.Handshake_failure -> ()
+  | T.Decode_error -> ()
+  | T.Decrypt_error -> ()
+  | T.Protocol_version -> ()
+  | T.Unsupported_extension -> ()
+  | T.Certificate_unknown -> ()
+  | T.Illegal_parameter -> ()
 
 let lemma_alert_description_nonzero_not_close_notify
   (wire:U8.t)
   (alert:T.alert_description)
   : Lemma
       (requires alert_description_matches wire alert /\ U8.v wire <> 0)
-      (ensures alert <> T.CloseNotify)
+      (ensures alert <> T.Close_notify)
 =
   match alert with
-  | T.CloseNotify -> ()
-  | T.UnexpectedMessage -> ()
-  | T.BadRecordMac -> ()
-  | T.HandshakeFailure -> ()
-  | T.DecodeError -> ()
-  | T.DecryptError -> ()
-  | T.ProtocolVersion -> ()
-  | T.UnsupportedExtension -> ()
-  | T.CertificateUnknown -> ()
-  | T.IllegalParameter -> ()
+  | T.Close_notify -> ()
+  | T.Unexpected_message -> ()
+  | T.Bad_record_mac -> ()
+  | T.Handshake_failure -> ()
+  | T.Decode_error -> ()
+  | T.Decrypt_error -> ()
+  | T.Protocol_version -> ()
+  | T.Unsupported_extension -> ()
+  | T.Certificate_unknown -> ()
+  | T.Illegal_parameter -> ()
 
 noextract
 let cipher_suite_matches (wire:U16.t) (suite:T.cipher_suite) : prop =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> U16.v wire == 0x1303
-  | T.UnknownCipherSuite n -> U16.v wire == n /\ n <> 0x1303
+  | T.Unknown_cipherSuite n -> U16.v wire == U16.v n /\ U16.v n <> 0x1303
 
 noextract
 let signature_scheme_matches (wire:U16.t) (scheme:T.signature_scheme) : prop =
   match scheme with
-  | T.RsaPssRsaeSha256 -> U16.v wire == 0x0804
-  | T.EcdsaSecp256r1Sha256 -> U16.v wire == 0x0403
+  | T.Rsa_pss_rsae_sha256 -> U16.v wire == 0x0804
+  | T.Ecdsa_secp256r1_sha256 -> U16.v wire == 0x0403
   | T.Ed25519 -> U16.v wire == 0x0807
-  | T.UnsupportedSignatureScheme n ->
-    U16.v wire == n /\
-    n <> 0x0804 /\
-    n <> 0x0403 /\
-    n <> 0x0807
+  | T.Unknown_signatureScheme n ->
+    U16.v wire == U16.v n /\
+    U16.v n <> 0x0804 /\
+    U16.v n <> 0x0403 /\
+    U16.v n <> 0x0807
 
 noextract
 let byte_prefix_matches

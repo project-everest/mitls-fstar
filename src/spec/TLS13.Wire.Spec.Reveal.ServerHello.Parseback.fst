@@ -711,6 +711,8 @@ let lemma_lp_server_hello_extensions
       (B.of_list [0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
       (Seq.append key (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))))
 
+#restart-solver
+#push-options "--split_queries always --fuel 8 --ifuel 8 --z3rlimit 400 --z3refresh --z3seed 1"
 let lemma_lp_server_hello_body_payload
   (sh:M.server_hello{sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256})
   : Lemma (Seq.equal
@@ -753,6 +755,7 @@ let lemma_lp_server_hello_body_payload
     (B.of_list [0uy; 0x13uy; 0x03uy; 0uy])
     (B.of_list [0uy; 46uy; 0uy; 0x33uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
     (Seq.append sh.M.key_share (B.of_list [0uy; 0x2buy; 0uy; 2uy; 0x03uy; 0x04uy]))
+#pop-options
 #pop-options
 
 #restart-solver

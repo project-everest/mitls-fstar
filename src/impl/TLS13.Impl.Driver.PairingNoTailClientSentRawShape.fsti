@@ -26,7 +26,7 @@ let client_sent_cleartext_and_finished_raw_slices
     CS.cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello ch))
       client_ch_raw /\
-    CS.raw_records_exactly client_finished_raw T.ApplicationData 1
+    CS.raw_records_exactly client_finished_raw T.Application_data 1
 
 (**
   Reusable raw-suffix fact for the exact ClientFinished tail:
@@ -62,7 +62,7 @@ val lemma_client_finished_exact_suffix_raw_slice
       (ensures
         exists finished_raw.
           Seq.equal raw_sent finished_raw /\
-          CS.raw_records_exactly finished_raw T.ApplicationData 1)
+          CS.raw_records_exactly finished_raw T.Application_data 1)
 
 val lemma_client_no_tail_finished_sent_raw_slices_for_shape
   (client:CS.connection_state)
@@ -130,7 +130,7 @@ val lemma_client_no_tail_finished_sent_raw_slices_for_shape
           CS.cleartext_tls_message_raw
             (M.TlsHandshake (M.ClientHello ch))
             client_ch_raw /\
-          CS.raw_records_exactly client_finished_raw T.ApplicationData 1)
+          CS.raw_records_exactly client_finished_raw T.Application_data 1)
 
 val lemma_client_no_tail_finished_sent_raw_slices
   (client:CS.connection_state)

@@ -82,7 +82,7 @@ fn mark_received_alert_failure
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
-           pure (Ghost.reveal alert <> T.CloseNotify /\
+           pure (Ghost.reveal alert <> T.Close_notify /\
                  Tags.alert_tag_matches alert_wire (Ghost.reveal alert) /\
                  CS.event_raw_delta_legal
                    st0.CS.cs_model
@@ -97,7 +97,7 @@ fn mark_received_alert_failure
             (received_alert_failure_state st0 (Ghost.reveal alert) (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
 {
-  assert (pure (Ghost.reveal alert <> T.CloseNotify));
+  assert (pure (Ghost.reveal alert <> T.Close_notify));
   assert (pure (Tags.alert_tag_matches alert_wire (Ghost.reveal alert)));
   assert (pure (CS.event_raw_delta_legal
     st0.CS.cs_model
@@ -154,7 +154,7 @@ fn mark_received_close_notify_for_role
                    st0.CS.cs_model
                    (CS.ConnNetworkEvent {
                      CL.message_direction = CL.Received;
-                     CL.message_value = M.TlsAlert T.CloseNotify;
+                     CL.message_value = M.TlsAlert T.Close_notify;
                    })
                    B.empty
                    (Ghost.reveal 'raw_bytes))
@@ -170,7 +170,7 @@ fn mark_received_close_notify_for_role
     st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Received;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     })
     B.empty
     (Ghost.reveal 'raw_bytes)));
@@ -234,7 +234,7 @@ fn mark_received_close_notify
                    st0.CS.cs_model
                    (CS.ConnNetworkEvent {
                      CL.message_direction = CL.Received;
-                     CL.message_value = M.TlsAlert T.CloseNotify;
+                     CL.message_value = M.TlsAlert T.Close_notify;
                    })
                    B.empty
                    (Ghost.reveal 'raw_bytes))

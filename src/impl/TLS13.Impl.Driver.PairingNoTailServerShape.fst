@@ -826,13 +826,13 @@ let lemma_server_application_progress_rank_step
       (match msg.CL.message_value with
       | M.TlsAlert alert ->
         (match alert, model.CS.model_control, msg.CL.message_direction with
-        | T.CloseNotify, CS.ControlApplicationData, CL.Sent ->
+        | T.Close_notify, CS.ControlApplicationData, CL.Sent ->
           assert (server_application_progress_rank model <=
             server_application_progress_rank model' + 1)
-        | T.CloseNotify, CS.ControlApplicationData, CL.Received ->
+        | T.Close_notify, CS.ControlApplicationData, CL.Received ->
           assert (server_application_progress_rank model <=
             server_application_progress_rank model' + 1)
-        | T.CloseNotify, CS.ControlClosing, CL.Received ->
+        | T.Close_notify, CS.ControlClosing, CL.Received ->
           assert (server_application_progress_rank model <=
             server_application_progress_rank model' + 1)
         | _, _, _ ->

@@ -56,7 +56,7 @@ val lemma_lp_ch_ext_ser_none
 val lemma_lp_ch_low_bytes_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
@@ -81,7 +81,7 @@ val lemma_lp_ch_low_bytes_some
 val lemma_lp_ch_low_bytes_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                        ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                       ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                       ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                        ch.M.server_name == None /\
                        B.length ch.M.body == 0})
   : Lemma
@@ -106,7 +106,7 @@ val lemma_lp_ch_low_bytes_none
 val lemma_lp_ch_low_body_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                      ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                      ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                       B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
@@ -122,7 +122,7 @@ val lemma_lp_ch_low_body_some
 val lemma_lp_ch_low_body_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                      ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                      ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                       ch.M.server_name == None /\
                       B.length ch.M.body == 0})
   : Lemma
@@ -138,7 +138,7 @@ val lemma_lp_ch_low_body_none
 val lemma_lp_ch_low_synth_some
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                      ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                      ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                       B.length ch.M.body == 0})
   (hostname: B.bytes{B.length hostname <= 255 /\ B.length hostname > 0 /\ ch.M.server_name == Some hostname})
   : Lemma
@@ -148,7 +148,7 @@ val lemma_lp_ch_low_synth_some
 val lemma_lp_ch_low_synth_none
   (ch: M.client_hello{B.length ch.M.random == 32 /\ B.length ch.M.key_share == 32 /\
                       ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-                      ch.M.signature_schemes == [T.RsaPssRsaeSha256] /\
+                      ch.M.signature_schemes == [T.Rsa_pss_rsae_sha256] /\
                       ch.M.server_name == None /\
                       B.length ch.M.body == 0})
   : Lemma

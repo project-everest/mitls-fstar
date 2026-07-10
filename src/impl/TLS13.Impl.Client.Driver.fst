@@ -2335,6 +2335,8 @@ fn driver_process_buffered_network_bytes_once
      (0 <= i /\ i < SZ.v buffered_len /\ True))));
   assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
     Some? (Seq.index raw_joined_mask i)));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Seq.index raw_joined_mask i == Some (Seq.index (Ghost.reveal 'old_raw) i)));
   A.from_mask raw;
   with raw_bytes.
     assert (pts_to raw raw_bytes);

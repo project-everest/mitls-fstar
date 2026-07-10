@@ -107,16 +107,16 @@ let lemma_signature_schemes_match_first_rsa_offer
                 0 < len /\
                 len <= Seq.length wire /\
                 U16.v (Seq.index wire 0) == 0x0804)
-      (ensures CS.signature_scheme_offered schemes T.RsaPssRsaeSha256)
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
 =
   match schemes with
   | scheme :: _ ->
     assert (IM.signature_scheme_matches (Seq.index wire 0) scheme);
     (match scheme with
-    | T.RsaPssRsaeSha256 -> ()
-    | T.EcdsaSecp256r1Sha256 -> assert False
+    | T.Rsa_pss_rsae_sha256 -> ()
+    | T.Ecdsa_secp256r1_sha256 -> assert False
     | T.Ed25519 -> assert False
-    | T.UnsupportedSignatureScheme _ -> assert False)
+    | T.Unknown_signatureScheme _ -> assert False)
   | [] ->
     lemma_signature_schemes_match_length wire len schemes;
     assert False
@@ -137,7 +137,7 @@ let lemma_cipher_suites_match_first_chacha_offer
     assert (IM.cipher_suite_matches (Seq.index wire 0) suite);
     (match suite with
     | T.TLS_CHACHA20_POLY1305_SHA256 -> ()
-    | T.UnknownCipherSuite _ -> assert False)
+    | T.Unknown_cipherSuite _ -> assert False)
   | [] ->
     lemma_cipher_suites_match_length wire len suites;
     assert False
@@ -227,7 +227,7 @@ let lemma_seal_application_success_next_seq
       (requires R.seal
                   s
                   aad
-                  { R.content_type = T.ApplicationData;
+                  { R.content_type = T.Application_data;
                     R.fragment = payload } == Some (ciphertext, s'))
       (ensures s' == R.next_seq s)
 =
@@ -1920,7 +1920,7 @@ let lemma_received_alert_failure_state_evolves
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
-                alert <> T.CloseNotify /\
+                alert <> T.Close_notify /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -1983,7 +1983,7 @@ let lemma_received_close_notify_state_evolves_for_role
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
                     CL.message_direction = CL.Received;
-                    CL.message_value = M.TlsAlert T.CloseNotify;
+                    CL.message_value = M.TlsAlert T.Close_notify;
                   })
                   B.empty
                   raw_received)
@@ -1998,7 +1998,7 @@ let lemma_received_close_notify_state_evolves_for_role
                    CS.delta_event =
                      CS.ConnNetworkEvent {
                        CL.message_direction = CL.Received;
-                       CL.message_value = M.TlsAlert T.CloseNotify;
+                       CL.message_value = M.TlsAlert T.Close_notify;
                      };
                    CS.delta_raw_sent = B.empty;
                    CS.delta_raw_received = raw_received;
@@ -2008,7 +2008,7 @@ let lemma_received_close_notify_state_evolves_for_role
   let ev =
     CS.ConnNetworkEvent {
       CL.message_direction = CL.Received;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     } in
   let delta = {
     CS.delta_event = ev;
@@ -2048,7 +2048,7 @@ let lemma_received_close_notify_state_evolves
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
                     CL.message_direction = CL.Received;
-                    CL.message_value = M.TlsAlert T.CloseNotify;
+                    CL.message_value = M.TlsAlert T.Close_notify;
                   })
                   B.empty
                   raw_received)
@@ -2063,7 +2063,7 @@ let lemma_received_close_notify_state_evolves
                    CS.delta_event =
                      CS.ConnNetworkEvent {
                        CL.message_direction = CL.Received;
-                       CL.message_value = M.TlsAlert T.CloseNotify;
+                       CL.message_value = M.TlsAlert T.Close_notify;
                      };
                    CS.delta_raw_sent = B.empty;
                    CS.delta_raw_received = raw_received;
@@ -2092,7 +2092,7 @@ let lemma_sent_close_notify_state_evolves
                    CS.delta_event =
                      CS.ConnNetworkEvent {
                        CL.message_direction = CL.Sent;
-                       CL.message_value = M.TlsAlert T.CloseNotify;
+                       CL.message_value = M.TlsAlert T.Close_notify;
                      };
                    CS.delta_raw_sent = raw_sent;
                    CS.delta_raw_received = B.empty;
@@ -2102,7 +2102,7 @@ let lemma_sent_close_notify_state_evolves
   let ev =
     CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     } in
   let delta = {
     CS.delta_event = ev;

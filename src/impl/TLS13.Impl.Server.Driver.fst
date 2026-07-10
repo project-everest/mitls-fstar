@@ -352,7 +352,7 @@ fn accept
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns status:server_workflow_status

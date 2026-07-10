@@ -38,10 +38,10 @@ let client_received_cleartext_and_server_flight_raw_slices
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello sh))
       server_sh_raw /\
-    CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly sf_raw T.ApplicationData 1
+    CS.raw_records_exactly ee_raw T.Application_data 1 /\
+    CS.raw_records_exactly cert_raw T.Application_data 1 /\
+    CS.raw_records_exactly cv_raw T.Application_data 1 /\
+    CS.raw_records_exactly sf_raw T.Application_data 1
 
 val lemma_client_no_tail_server_flight_received_raw_slices_for_shape
   (client:CS.connection_state)
@@ -111,10 +111,10 @@ val lemma_client_no_tail_server_flight_received_raw_slices_for_shape
           CS.received_cleartext_tls_message_raw
             (M.TlsHandshake (M.ServerHello sh))
             server_sh_raw /\
-          CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly sf_raw T.ApplicationData 1)
+          CS.raw_records_exactly ee_raw T.Application_data 1 /\
+          CS.raw_records_exactly cert_raw T.Application_data 1 /\
+          CS.raw_records_exactly cv_raw T.Application_data 1 /\
+          CS.raw_records_exactly sf_raw T.Application_data 1)
 
 val lemma_client_no_tail_server_flight_received_raw_slices
   (client:CS.connection_state)

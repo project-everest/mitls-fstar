@@ -58,10 +58,10 @@ let signature_scheme_matches_to_u16 (wire:U16.t) (scheme:T.signature_scheme)
       (ensures U16.v wire == WS.signature_scheme_to_u16 scheme)
 =
   match scheme with
-  | T.RsaPssRsaeSha256 -> ()
-  | T.EcdsaSecp256r1Sha256 -> ()
+  | T.Rsa_pss_rsae_sha256 -> ()
+  | T.Ecdsa_secp256r1_sha256 -> ()
   | T.Ed25519 -> ()
-  | T.UnsupportedSignatureScheme _ -> ()
+  | T.Unknown_signatureScheme _ -> ()
 
 let serialize_cv_shape (cv:M.certificate_verify)
   : Lemma (Seq.equal
