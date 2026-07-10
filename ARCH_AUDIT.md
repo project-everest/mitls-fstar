@@ -30,9 +30,13 @@ The first cleanup stages are complete:
    `CPI.local_process_correct` fact, so proof-facing driver wrappers can reason
    about endpoint local actions without re-entering the legacy direct-driver
    local-write proofs.
-7. Client/server proof-facing `send_endpoint` wrappers now consume and restore
-   the endpoint-owned connected predicates around endpoint local actions.
-8. Endpoint frame construction now uses distinct network and local application
+7. Client/server proof-facing `send_endpoint`, `receive_endpoint`, and
+   `close_endpoint` wrappers now consume and restore the endpoint-owned
+   connected predicates around endpoint local actions and endpoint workflow runs.
+8. Client `connect_endpoint` and server `accept_endpoint` proof-facing wrappers
+   now establish endpoint-owned connected states after the endpoint handshake
+   workflow.
+9. Endpoint frame construction now uses distinct network and local application
    output buffers, matching the separate ownership required by the canonical
    query resources.
 
@@ -60,9 +64,9 @@ server endpoint frame deliberately takes a distinct private-key vec because the
 Pulse vec library has no subview ownership that would let the proof split the
 64-byte material payload into a 32-byte private-key alias.  The remaining routing
 gap is that the public direct `accept`/`send`/`receive`/`close` workflows do not
-yet thread or advance that canonical progress resource; the next server stage
-must replace those direct workflow predicates with endpoint-owned predicates
-before calling `server_endpoint_run_workflow` from verified F*.
+yet expose endpoint-owned predicates as the public driver surface; the next stage
+is to make those public APIs use the verified endpoint bridge wrappers instead of
+returning to legacy direct-workflow ownership.
 
 ## What remains for a single verified and executable path
 
@@ -87,10 +91,10 @@ The remaining implementation milestones are:
 
 | Milestone | Current status | Done when |
 | --- | --- | --- |
-| Endpoint-owned `send` wrappers | Done as proof-facing wrappers.  Public `send` still returns the legacy connected predicate. | Becomes part of the final public surface once `connect`/`accept` produce endpoint-owned connected states. |
-| Endpoint-owned `connect`/`accept` | Not started.  Public `connect`/`accept` still produce legacy `*_driver_connected`. | Public handshake APIs call the monomorphic endpoint workflow and return endpoint-owned connected predicates. |
-| Endpoint-owned `receive` | Not started.  Public `receive` still uses direct network/local loops. | Public receive calls the monomorphic endpoint workflow from endpoint-owned connected state and restores it with updated transport/canonical histories. |
-| Endpoint-owned `close` | Not started.  Public close still uses direct local close logic. | Public close is an endpoint local action/workflow step over endpoint-owned state. |
+| Endpoint-owned `send` wrappers | Done as proof-facing wrappers.  Public `send` still returns the legacy connected predicate. | Becomes part of the final public surface once the public connection state is endpoint-owned. |
+| Endpoint-owned `connect`/`accept` | Done as proof-facing wrappers: client connect and server accept call the monomorphic endpoint workflow and return endpoint-owned connected predicates. | Public handshake APIs expose these endpoint-owned connected predicates instead of legacy `*_driver_connected`. |
+| Endpoint-owned `receive` | Done as proof-facing wrappers over the monomorphic endpoint workflow.  Public `receive` still uses direct network/local loops. | Public receive calls the verified endpoint wrapper and restores endpoint-owned state with updated transport/canonical histories. |
+| Endpoint-owned `close` | Done as proof-facing wrappers for the endpoint close-notify local action.  Public close still uses direct local close logic. | Public close is an endpoint local action/workflow step over endpoint-owned state. |
 | Public audit lemmas | Not started.  Canonical invariants internally prove valid byte traces, but the public driver theorem boundary does not yet export the clean endpoint-owned bridge. | Connected endpoint-owned driver states imply the canonical `WFSM.valid_byte_trace` facts and transport-history facts needed by the trace pairing theorem. |
 | Retire legacy public workflow surface | Not started.  Legacy direct helpers remain necessary for current public specs. | Direct workflow predicates are hidden or internal; the exported API has one proof/executable path through endpoint wrappers. |
 | Final gates | Pending after routing. | `make -j128`, `make extract-tls13-driver-krml`, `make extract-tls13-bundle`, and extracted OpenSSL tests pass. |

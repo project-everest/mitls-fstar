@@ -7296,6 +7296,516 @@ fn send_endpoint
   result
 }
 
+noextract
+fn receive_endpoint
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (fuel:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0)
+  returns result:EP.client_endpoint_run_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                 (canonical_sent1:Ghost.erased B.bytes)
+                 (st1:Ghost.erased CS.connection_state).
+           client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1)
+{
+  unfold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st0)
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0));
+  with ch buffered_len. _;
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0))
+    as
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0));
+  let result =
+    EP.client_endpoint_run_workflow
+      (client_driver_canonical d)
+      cfg
+      frame
+      concrete_ch
+      d.client_driver_buffered_len
+      true
+      false
+      false
+      fuel
+      canonical_received0
+      canonical_sent0
+      st0;
+  with received1 sent1 st1 buffered_len1. _;
+  rewrite
+    (Box.pts_to d.client_driver_channel (Some ch))
+    as
+    (Box.pts_to d.client_driver_channel (Some concrete_ch));
+  with concrete_ch buffered_len1.
+  fold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st1)
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1));
+  result
+}
+
+noextract
+fn prepare_endpoint_close_api_ready
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (ch:IO.channel)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (transport_received0:Ghost.erased B.bytes)
+  (transport_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires EP.client_endpoint_frame_ready
+             (client_driver_canonical d)
+             cfg
+             frame
+             (Ghost.reveal st0) **
+           EP.client_endpoint_io_ready
+             (client_driver_canonical d)
+             ch
+             frame
+             (Ghost.reveal transport_received0)
+             (Ghost.reveal transport_sent0)
+             (Ghost.reveal st0) **
+           pts_to payload B.empty **
+           pure (SZ.v payload_len == 0 /\
+                 Seq.equal (Ghost.reveal canonical_sent0) (Ghost.reveal transport_sent0) /\
+                 CT.local_input_wf
+                   (Ghost.reveal st0)
+                   CT.LocalSendCloseNotify
+                   B.empty)
+  returns local_frame:CP.tls_client_local_frame
+  ensures EP.client_api_local_action_ready
+            (client_driver_canonical d)
+            ch
+            frame
+            (Ghost.reveal canonical_received0)
+            (Ghost.reveal canonical_sent0)
+            (Ghost.reveal st0)
+            client_driver_endpoint_close_event
+            local_frame **
+          client_endpoint_send_frame_remainder cfg frame **
+          pure (
+            local_frame.CP.tls_client_local_payload == payload /\
+            local_frame.CP.tls_client_local_payload_len == payload_len /\
+            local_frame.CP.tls_client_local_app_out ==
+              frame.EP.client_ep_query.CQueries.client_query_local_app_out /\
+            local_frame.CP.tls_client_local_app_out_len ==
+              frame.EP.client_ep_query.CQueries.client_query_local_app_out_len)
+{
+  let ev = client_driver_endpoint_close_event;
+  assert (pure (B.length B.empty == SZ.v payload_len));
+  unfold (EP.client_endpoint_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame
+    (Ghost.reveal st0));
+  unfold (CQueries.client_next_local_action_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame.EP.client_ep_query
+    (Ghost.reveal st0));
+  unfold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  with network_current. _;
+  unfold (CQueries.client_local_persistent_resource
+    frame.EP.client_ep_query);
+  with local_current. _;
+  let old_local_out = Ghost.hide local_current;
+  let local_frame : CP.tls_client_local_frame = {
+    CP.tls_client_local_payload = payload;
+    CP.tls_client_local_payload_len = payload_len;
+    CP.tls_client_local_app_out =
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out;
+    CP.tls_client_local_app_out_len =
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out_len;
+    CP.tls_client_local_old_app_out = old_local_out;
+  };
+  unfold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    ch
+    frame
+    (Ghost.reveal transport_received0)
+    (Ghost.reveal transport_sent0)
+    (Ghost.reveal st0));
+  with raw_received raw_bytes network_out_bytes. _;
+  rewrite
+    (IO.is_channel ch raw_received (Ghost.reveal transport_sent0))
+    as
+    (IO.is_channel ch raw_received (Ghost.reveal canonical_sent0));
+  rewrite
+    (pts_to payload B.empty)
+    as
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      B.empty);
+  rewrite
+    (pts_to
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out
+      local_current)
+    as
+    (pts_to
+      local_frame.CP.tls_client_local_app_out
+      (Ghost.reveal old_local_out));
+  fold (CP.client_local_frame_pre
+    ev
+    local_frame
+    (Ghost.reveal st0)
+    (V.vec_to_array frame.EP.client_ep_network_out)
+    frame.EP.client_ep_network_out_len
+    network_out_bytes);
+  fold (EP.client_api_local_action_ready
+    (client_driver_canonical d)
+    ch
+    frame
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0)
+    (Ghost.reveal st0)
+    ev
+    local_frame);
+  fold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  fold (client_endpoint_send_frame_remainder cfg frame);
+  rewrite
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      ev
+      local_frame)
+    as
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      client_driver_endpoint_close_event
+      local_frame);
+  local_frame
+}
+
+noextract
+fn close_endpoint
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0) **
+           pts_to payload B.empty **
+           pure (SZ.v payload_len == 0 /\
+                 CT.connection_control_not_failed (Ghost.reveal st0) /\
+                 CT.local_input_wf
+                   (Ghost.reveal st0)
+                   CT.LocalSendCloseNotify
+                   B.empty)
+  returns result:CPI.process_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                 (canonical_sent1:Ghost.erased B.bytes)
+                 (st1:Ghost.erased CS.connection_state).
+           client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1) **
+           pts_to payload B.empty **
+           pure (exists (old_out:B.bytes)
+                        (out_contents:B.bytes)
+                        (wire_outputs:list CW.wire_message)
+                        (local_outputs:list CTypes.local_output).
+             CPI.local_process_correct
+               (CP.client_system
+                 (Ghost.reveal
+                  (client_driver_canonical d).CP.canonical_client_initial))
+               client_driver_endpoint_close_event
+               old_out
+               out_contents
+               frame.EP.client_ep_network_out_len
+               (Ghost.reveal canonical_received0)
+               (Ghost.reveal canonical_sent0)
+               (Ghost.reveal st0)
+               result
+               (Ghost.reveal canonical_received1)
+               (Ghost.reveal canonical_sent1)
+               (Ghost.reveal st1)
+               wire_outputs
+               local_outputs)
+{
+  let ev = client_driver_endpoint_close_event;
+  unfold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st0)
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0));
+  with ch buffered_len. _;
+  expose_client_invariant_pure
+    (client_driver_canonical d)
+    canonical_received0
+    canonical_sent0
+    st0;
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0))
+    as
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0));
+  let local_frame =
+    prepare_endpoint_close_api_ready
+      d
+      cfg
+      frame
+      concrete_ch
+      payload
+      payload_len
+      canonical_received0
+      canonical_sent0
+      canonical_received0
+      canonical_sent0
+      st0;
+  rewrite
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      client_driver_endpoint_close_event
+      local_frame)
+    as
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      ev
+      local_frame);
+  let result =
+    EP.client_run_api_local_action
+      (client_driver_canonical d)
+      frame
+      concrete_ch
+      ev
+      local_frame
+      canonical_received0
+      canonical_sent0
+      st0;
+  with received1 sent1 st1 old_out out_contents wire_outputs local_outputs.
+    assert (
+      CP.client_invariant
+        (client_driver_canonical d)
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1) **
+      EP.client_endpoint_io_ready
+        (client_driver_canonical d)
+        concrete_ch
+        frame
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1) **
+      CP.client_local_frame_post
+        ev
+        local_frame
+        result
+        (Ghost.reveal old_out)
+        (Ghost.reveal out_contents)
+        (Ghost.reveal st0)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputs)
+        (Ghost.reveal local_outputs));
+  assert (pure (ev == client_driver_endpoint_close_event));
+  assert (pure (CPI.local_process_correct
+    (CP.client_system
+      (Ghost.reveal
+        (client_driver_canonical d).CP.canonical_client_initial))
+    client_driver_endpoint_close_event
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    frame.EP.client_ep_network_out_len
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0)
+    (Ghost.reveal st0)
+    result
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs)));
+  expose_client_invariant_pure
+    (client_driver_canonical d)
+    received1
+    sent1
+    st1;
+  unfold (CP.client_local_frame_post
+    ev
+    local_frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs));
+  with app_out. _;
+  rewrite
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      B.empty)
+    as
+    (pts_to payload B.empty);
+  rewrite
+    (pts_to
+      local_frame.CP.tls_client_local_app_out
+      app_out)
+    as
+    (pts_to
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out
+      app_out);
+  unfold (client_endpoint_send_frame_remainder cfg frame);
+  fold (CQueries.client_local_persistent_resource
+    frame.EP.client_ep_query);
+  fold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  fold (CQueries.client_next_local_action_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame.EP.client_ep_query
+    (Ghost.reveal st1));
+  fold (EP.client_endpoint_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame
+    (Ghost.reveal st1));
+  unfold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    concrete_ch
+    frame
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1));
+  with raw_received1 raw_bytes1 network_out_bytes1. _;
+  fold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    concrete_ch
+    frame
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1));
+  rewrite
+    (Box.pts_to d.client_driver_channel (Some ch))
+    as
+    (Box.pts_to d.client_driver_channel (Some concrete_ch));
+  with concrete_ch buffered_len.
+  fold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st1)
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1));
+  assert (pure (exists (old_out0:B.bytes)
+                       (out_contents0:B.bytes)
+                       (wire_outputs0:list CW.wire_message)
+                       (local_outputs0:list CTypes.local_output).
+    CPI.local_process_correct
+      (CP.client_system
+        (Ghost.reveal
+          (client_driver_canonical d).CP.canonical_client_initial))
+      client_driver_endpoint_close_event
+      old_out0
+      out_contents0
+      frame.EP.client_ep_network_out_len
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      wire_outputs0
+      local_outputs0));
+  result
+}
+
 fn receive
   (d:client_driver)
   (out:array U8.t)

@@ -216,6 +216,14 @@ let server_driver_endpoint_send_event
   }
 
 noextract
+let server_driver_endpoint_close_event
+  : CTypes.server_local_event =
+  CTypes.ServerAPI {
+    CTypes.server_local_kind = ST.LocalSendCloseNotify;
+    CTypes.server_local_payload = B.empty;
+  }
+
+noextract
 let server_driver_receive_status_correct
   (result:server_receive_result)
   (loop:DN.server_driver_network_loop_result)
@@ -640,6 +648,100 @@ fn send_endpoint
                  (Ghost.reveal
                    (server_driver_canonical d).SP.canonical_server_initial))
                (server_driver_endpoint_send_event payload_bytes)
+               old_out
+               out_contents
+               frame.EP.server_ep_network_out_len
+               (Ghost.reveal canonical_received0)
+               (Ghost.reveal canonical_sent0)
+               (Ghost.reveal st0)
+               result
+               (Ghost.reveal canonical_received1)
+               (Ghost.reveal canonical_sent1)
+               (Ghost.reveal st1)
+               wire_outputs
+               local_outputs)
+
+noextract
+fn receive_endpoint
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (fuel:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires server_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              'certificate_chain
+              'credential_identity
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0)
+  returns result:EP.server_endpoint_run_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                 (canonical_sent1:Ghost.erased B.bytes)
+                 (st1:Ghost.erased CS.connection_state).
+           server_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             'certificate_chain
+             'credential_identity
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1)
+
+noextract
+fn close_endpoint
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires server_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              'certificate_chain
+              'credential_identity
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0) **
+           pts_to payload B.empty **
+           pure (SZ.v payload_len == 0 /\
+                 ST.server_connection_control_not_failed (Ghost.reveal st0) /\
+                 ST.server_local_event_input_ready
+                   (Ghost.reveal st0)
+                   ST.LocalSendCloseNotify
+                   B.empty)
+  returns result:CPI.process_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                  (canonical_sent1:Ghost.erased B.bytes)
+                  (st1:Ghost.erased CS.connection_state).
+           server_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             'certificate_chain
+             'credential_identity
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1) **
+           pts_to payload B.empty **
+           pure (exists (old_out:B.bytes)
+                         (out_contents:B.bytes)
+                         (wire_outputs:list CW.wire_message)
+                         (local_outputs:list CTypes.local_output).
+             CPI.local_process_correct
+               (SP.server_system
+                 (Ghost.reveal
+                   (server_driver_canonical d).SP.canonical_server_initial))
+               server_driver_endpoint_close_event
                old_out
                out_contents
                frame.EP.server_ep_network_out_len

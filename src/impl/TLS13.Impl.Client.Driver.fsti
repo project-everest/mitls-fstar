@@ -253,6 +253,14 @@ let client_driver_endpoint_send_event
   }
 
 noextract
+let client_driver_endpoint_close_event
+  : CTypes.client_local_event =
+  CTypes.ClientAPI {
+    CTypes.client_local_kind = CT.LocalSendCloseNotify;
+    CTypes.client_local_payload = B.empty;
+  }
+
+noextract
 let client_driver_close_status_correct
   (wait_for_peer:bool)
   (status:driver_workflow_status)
@@ -530,6 +538,92 @@ fn send_endpoint
                  (Ghost.reveal
                   (client_driver_canonical d).CP.canonical_client_initial))
                (client_driver_endpoint_send_event payload_bytes)
+               old_out
+               out_contents
+               frame.EP.client_ep_network_out_len
+               (Ghost.reveal canonical_received0)
+               (Ghost.reveal canonical_sent0)
+               (Ghost.reveal st0)
+               result
+               (Ghost.reveal canonical_received1)
+               (Ghost.reveal canonical_sent1)
+               (Ghost.reveal st1)
+               wire_outputs
+               local_outputs)
+
+noextract
+fn receive_endpoint
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (fuel:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0)
+  returns result:EP.client_endpoint_run_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                (canonical_sent1:Ghost.erased B.bytes)
+                (st1:Ghost.erased CS.connection_state).
+           client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1)
+
+noextract
+fn close_endpoint
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0) **
+           pts_to payload B.empty **
+           pure (SZ.v payload_len == 0 /\
+                 CT.connection_control_not_failed (Ghost.reveal st0) /\
+                 CT.local_input_wf
+                   (Ghost.reveal st0)
+                   CT.LocalSendCloseNotify
+                   B.empty)
+  returns result:CPI.process_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                 (canonical_sent1:Ghost.erased B.bytes)
+                 (st1:Ghost.erased CS.connection_state).
+           client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1) **
+           pts_to payload B.empty **
+           pure (exists (old_out:B.bytes)
+                        (out_contents:B.bytes)
+                        (wire_outputs:list CW.wire_message)
+                        (local_outputs:list CTypes.local_output).
+             CPI.local_process_correct
+               (CP.client_system
+                 (Ghost.reveal
+                  (client_driver_canonical d).CP.canonical_client_initial))
+               client_driver_endpoint_close_event
                old_out
                out_contents
                frame.EP.client_ep_network_out_len
