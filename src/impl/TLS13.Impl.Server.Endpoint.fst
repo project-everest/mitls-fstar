@@ -35,6 +35,10 @@ module TCP = Common.TCP
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
+module SS = TLS13.Impl.Server.Send
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
+module Sem = TLS13.Wire.Semantics
 
 let server_endpoint_private_bytes_of_material
   (material:B.bytes)
@@ -550,7 +554,7 @@ ensures
                 T.Rsa_pss_rsae_sha256 /\
               CS.sni_policy_accepts
                 server_cfg.CS.server_sni_policy
-                ch.M.server_name
+                (Sem.clientHello_server_name ch)
             | _, _ -> True));
           rewrite
             (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
@@ -809,7 +813,11 @@ ensures
             (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
             as
             (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
-          if ready {
+          V.to_array_pts_to frame.server_ep_material;
+          let differs =
+            SS.server_random_differs_from_cst (V.vec_to_array frame.server_ep_material);
+          V.to_vec_pts_to frame.server_ep_material;
+          if (ready && differs) {
             assert (pure (ready));
             assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloReceived));
@@ -826,14 +834,13 @@ ensures
                 90 <= Bounds.max_transcript_len));
             assert (pure (B.length (CL.raw_slice material 0 32) == 32));
             assert (pure (B.length (CL.raw_slice material 32 64) == 32));
-            let sh : Ghost.erased M.server_hello =
-              Ghost.hide {
-                M.random = CL.raw_slice material 0 32;
-                M.key_share =
-                  CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64);
-                M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                M.body = B.empty;
-              };
+            let sh : Ghost.erased GSH.serverHello =
+              Ghost.hide (SS.mk_server_hello_witness
+                (CL.raw_slice material 0 32)
+                (CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64))
+                T.TLS_CHACHA20_POLY1305_SHA256);
+            assert (pure (B.length
+              (CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64)) == 32));
             let selection : Ghost.erased CS.server_handshake_selection =
               Ghost.hide (Some?.v
                 (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
@@ -843,13 +850,10 @@ ensures
             assert (pure (CS.server_hello_matches_selection
               (Ghost.reveal selection)
               (Ghost.reveal sh)));
-            W.lemma_serialize_server_hello_from_selection_len (Ghost.reveal sh);
-            W.lemma_fixed_server_handshake_serializers
-              (Ghost.reveal sh)
-              { M.chain = []; M.body = B.empty }
-              { M.scheme = T.Rsa_pss_rsae_sha256; M.signature = B.empty; M.body = B.empty }
-              { M.verify_data = Seq.create 32 0uy };
-            W.lemma_serialize_server_hello_len (Ghost.reveal sh);
+            SS.lemma_mk_server_hello_witness_bytesize
+              (CL.raw_slice material 0 32)
+              (CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64))
+              T.TLS_CHACHA20_POLY1305_SHA256;
             assert (pure (B.length (W.serialize_handshake (M.ServerHello (Ghost.reveal sh))) == 90));
             assert (pure (
               B.length (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_transcript +
