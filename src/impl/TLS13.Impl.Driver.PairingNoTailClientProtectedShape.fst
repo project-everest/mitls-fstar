@@ -153,7 +153,9 @@ let lemma_client_encrypted_extensions_step_model_shape
       CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
     })
     model7;
-  assert_norm (
+  assert (model6.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerHelloReceived);
+  assert (
     CS.step_model
       model6
       (CS.ConnNetworkEvent {
