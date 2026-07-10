@@ -19,7 +19,25 @@ module GSH = TLS13.Wire.Generated.ServerHello
 module LP = LowParse.Spec
 module M = TLS13.Messages
 module Seq = FStar.Seq
+module T = TLS13.Types
 module WS = TLS13.Wire.Spec
+
+(* Parse-direction reveal: the "Some" arm of the handshake correspondence.  When
+   the generated LowParse handshake parser consumes the whole fragment and the
+   structural [synth_handshake_msg_of] dispatch yields [Some msg], the abstract
+   [WS.parse_tls_message T.Handshake] returns exactly [M.TlsHandshake msg].  This
+   is the definitional unfolding of [parse_tls_message] o [parse_handshake]; kept
+   here (friending [TLS13.Wire.Spec]) so the impl parser can relate the copyful
+   reader's generated [handshake] to the spec without unfolding [parse_tls_message]
+   everywhere.  Replaces the pre-migration guarded [lemma_ptm_handshake_some]. *)
+val lemma_ptm_handshake_some
+  (fragment:B.bytes)
+  (v:GHS.handshake)
+  (msg:M.handshake_msg)
+  : Lemma
+    (requires LP.parse GHS.handshake_parser fragment == Some (v, B.length fragment) /\
+              WS.synth_handshake_msg_of v == Some msg)
+    (ensures WS.parse_tls_message T.Handshake fragment == Some (M.TlsHandshake msg))
 
 val lemma_serialize_handshake_client_hello (ch:GCH.clientHello) :
   Lemma (Seq.equal (WS.serialize_handshake (M.ClientHello ch))

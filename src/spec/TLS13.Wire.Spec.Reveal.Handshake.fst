@@ -13,11 +13,14 @@ module GSH = TLS13.Wire.Generated.ServerHello
 module LP = LowParse.Spec
 module M = TLS13.Messages
 module Seq = FStar.Seq
+module T = TLS13.Types
 module WS = TLS13.Wire.Spec
 
 (* All six lemmas are the definitional unfolding of [WS.serialize_handshake]'s
    per-constructor match arm.  With [friend TLS13.Wire.Spec] the definition is
    transparent, so each goal reduces to [Seq.equal x x]. *)
+
+let lemma_ptm_handshake_some fragment v msg = ()
 
 let lemma_serialize_handshake_client_hello ch = ()
 let lemma_serialize_handshake_server_hello sh = ()
