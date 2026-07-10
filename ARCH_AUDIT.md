@@ -1,19 +1,17 @@
 # TLS driver architecture audit
 
-This note describes the current client/server architecture and the remaining
-audit gap between the canonical protocol/endpoint layer and the verified driver
-modules.  The proof-facing story is organized around
+This note describes the current client/server architecture and the cleanup that
+aligns the canonical protocol/endpoint layer with the verified driver modules.
+The proof-facing story is organized around
 `Common.ProtocolImplementation`, `Common.ProtocolEndpoint`, and valid byte traces
 of `Client.CanonicalProtocol.client_system` / `Server.CanonicalProtocol.server_system`.
-The extracted C runtime wrappers now execute through the monomorphic endpoint
-runners, but the verified `Client.Driver` and `Server.Driver` APIs still expose
-role-specific direct workflows.  The cleanest final audit surface would make the
-verified public driver ownership predicates canonical-endpoint ownership
-predicates too.
+The extracted C runtime wrappers execute through the monomorphic endpoint
+runners, and the verified `Client.Driver` / `Server.Driver` interfaces now expose
+the endpoint-owned proof-facing workflow operations as their public audit surface.
 
 ## Implementation status
 
-The first cleanup stages are complete:
+The endpoint-routing cleanup stages are complete:
 
 1. `calc_sample` extraction uses the endpoint canary path.
 2. TLS has `new_canonical_client` and `new_canonical_server` constructors that
@@ -21,8 +19,8 @@ The first cleanup stages are complete:
    reference.
 3. Client and server canonical invariants derive `WFSM.valid_byte_trace`
    internally from canonical progress and wire-log facts.
-4. TLS extraction and the extracted OpenSSL client/server interop tests pass with
-   the endpoint modules in the bundle.
+4. TLS extraction includes the endpoint modules in the driver bundle; final
+   extraction and OpenSSL interop gates should be rerun after each routing change.
 5. Client/server network and server local bridge obligations are now derived
    globally from the role specs; canonical/query/endpoint frames no longer carry
    ad-hoc bridge proof fields.
@@ -40,19 +38,19 @@ The first cleanup stages are complete:
    output buffers, matching the separate ownership required by the canonical
    query resources.
 
-The remaining gap is deliberately narrower: the C-facing runtime wrappers call
-`Client.Endpoint.client_endpoint_run_workflow` /
-`Server.Endpoint.server_endpoint_run_workflow`, while the verified F* driver
-modules still retain the older direct `connect`/`accept` workflows and
-`client_driver_live` / `server_driver_live` predicates.
+The public F* driver interfaces now match the C-facing runtime shape: workflow
+operations route through endpoint-owned `connect_endpoint` / `accept_endpoint`,
+`send_endpoint`, `receive_endpoint`, and `close_endpoint` predicates.  The older
+direct workflows remain in the implementations only as private compatibility and
+proof code.
 
 Client-side verified-driver bridge checkpoint: `Client.Driver` now exports
 `client_driver_endpoint_config`, `client_driver_endpoint_frame`, and
 `client_driver_endpoint_connected`.  The endpoint-owned connected predicate owns
 the canonical client invariant, endpoint frame readiness, endpoint IO readiness,
 driver channel cell, buffered-length cell, and the existing wire-log accounting.
-The legacy public `client_driver_connected` predicate is intentionally unchanged
-until the public workflows are routed through endpoint calls.
+The legacy `client_driver_connected` predicate remains private implementation
+state; exported workflow specs use `client_driver_endpoint_connected`.
 
 Server-side verified-driver bridge checkpoint: `Server.Driver.State.server_driver`
 now also carries erased canonical progress/initial/supported-profile fields and
@@ -62,19 +60,18 @@ fresh driver can be packaged as the canonical server expected by
 `server_driver_endpoint_frame`, and `server_driver_endpoint_connected`.  The
 server endpoint frame deliberately takes a distinct private-key vec because the
 Pulse vec library has no subview ownership that would let the proof split the
-64-byte material payload into a 32-byte private-key alias.  The remaining routing
-gap is that the public direct `accept`/`send`/`receive`/`close` workflows do not
-yet expose endpoint-owned predicates as the public driver surface; the next stage
-is to make those public APIs use the verified endpoint bridge wrappers instead of
-returning to legacy direct-workflow ownership.
+64-byte material payload into a 32-byte private-key alias.  The server public
+workflow surface now uses endpoint-owned predicates; the direct server workflows
+remain private implementation code.
 
 ## What remains for a single verified and executable path
 
-The committed code is not yet at the final one-path audit surface.  It has the
-canonical/endpoint machinery and driver-owned endpoint predicates, but the public
-verified F* driver APIs still expose the legacy direct workflows.  The C runtime
-already calls the endpoint runners, so the remaining work is to make the
-verified public driver surface match that executable path.
+The committed code now has the intended one-path audit surface for the verified
+driver APIs: the exported proof-facing workflow operations consume and restore
+endpoint-owned predicates, and the legacy direct workflows have been demoted to
+implementation-internal helpers.  The C runtime already calls the endpoint
+runners, so the proof-facing public API and executable path now agree on the
+endpoint-centered architecture.
 
 The completion target is:
 
@@ -87,22 +84,22 @@ new_client/new_server
   -> pairing theorem consumes those traces and paired transport histories
 ```
 
-The remaining implementation milestones are:
+The implementation milestones are:
 
 | Milestone | Current status | Done when |
 | --- | --- | --- |
-| Endpoint-owned `send` wrappers | Done as proof-facing wrappers.  Public `send` still returns the legacy connected predicate. | Becomes part of the final public surface once the public connection state is endpoint-owned. |
-| Endpoint-owned `connect`/`accept` | Done as proof-facing wrappers: client connect and server accept call the monomorphic endpoint workflow and return endpoint-owned connected predicates. | Public handshake APIs expose these endpoint-owned connected predicates instead of legacy `*_driver_connected`. |
-| Endpoint-owned `receive` | Done as proof-facing wrappers over the monomorphic endpoint workflow.  Public `receive` still uses direct network/local loops. | Public receive calls the verified endpoint wrapper and restores endpoint-owned state with updated transport/canonical histories. |
-| Endpoint-owned `close` | Done as proof-facing wrappers for the endpoint close-notify local action.  Public close still uses direct local close logic. | Public close is an endpoint local action/workflow step over endpoint-owned state. |
+| Endpoint-owned `send` wrappers | Done; the exported proof-facing send API is `send_endpoint`, which consumes and restores endpoint-owned connected state. | Done. |
+| Endpoint-owned `connect`/`accept` | Done; client connect and server accept call the monomorphic endpoint workflow and return endpoint-owned connected predicates. | Done. |
+| Endpoint-owned `receive` | Done; the exported proof-facing receive API is `receive_endpoint`, which runs the monomorphic endpoint workflow and restores endpoint-owned connected state. | Done. |
+| Endpoint-owned `close` | Done for the endpoint close-notify local action.  The C runtime may optionally follow this with an endpoint workflow wait for the peer close when requested. | Done for the verified close-notify API surface; model the optional wait-for-peer workflow only if the public proof API needs it. |
 | Public audit lemmas | Done for the canonical trace bridge: endpoint-owned connected client/server states now expose `WFSM.valid_byte_trace` for the corresponding canonical systems. | Add any remaining transport-history convenience lemmas only if the pairing theorem needs them at the final call site. |
-| Retire legacy public workflow surface | Not started.  Legacy direct helpers remain necessary for current public specs. | Direct workflow predicates are hidden or internal; the exported API has one proof/executable path through endpoint wrappers. |
-| Final gates | Pending after routing. | `make -j128`, `make extract-tls13-driver-krml`, `make extract-tls13-bundle`, and extracted OpenSSL tests pass. |
+| Retire legacy public workflow surface | Done; direct `connect`/`accept`/`send`/`receive`/`close` specs are no longer exported from the driver interfaces.  Legacy direct helpers remain private implementation code. | Done. |
+| Final gates | Pending. | `make -j128`, `make extract-tls13-driver-krml`, `make extract-tls13-bundle`, and extracted OpenSSL tests pass. |
 
-Do not treat intermediate proof-only wrappers as the final audit surface unless
-they become the ownership predicate used by the exported public APIs.  A wrapper
-that calls an endpoint function but then returns to `*_driver_connected` still
-leaves two stories to audit.
+The important audit distinction is now explicit in the interfaces: endpoint-owned
+predicates are the exported proof-facing workflow state, while the older
+`*_driver_connected` predicates and direct workflows are implementation-internal
+compatibility/proof code rather than the public story to audit.
 
 ## Current client architecture
 
