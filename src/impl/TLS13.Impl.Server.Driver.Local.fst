@@ -270,6 +270,7 @@ let lemma_server_driver_local_write_correct_preserves_config
     network_out_bytes
     app_out_bytes
 
+#push-options "--z3rlimit 40 --fuel 2 --ifuel 2"
 let lemma_legal_response_for_event_preserves_server_selection_except_select
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -309,6 +310,7 @@ let lemma_legal_response_for_event_preserves_server_selection_except_select
   assert (
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+#pop-options
 
 let lemma_legal_local_response_preserves_server_selection_except_select
   (st0:CS.connection_state)
