@@ -9,6 +9,12 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
@@ -61,7 +67,7 @@ let lemma_event_raw_delta_legal_local
 
 let lemma_event_raw_delta_legal_received_server_hello
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -84,7 +90,7 @@ let lemma_event_raw_delta_legal_received_server_hello
 
 let lemma_event_raw_delta_legal_received_encrypted_extensions
   (model:CS.connection_model)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -110,7 +116,7 @@ let lemma_event_raw_delta_legal_received_encrypted_extensions
 
 let lemma_event_raw_delta_legal_received_certificate
   (model:CS.connection_model)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -136,7 +142,7 @@ let lemma_event_raw_delta_legal_received_certificate
 
 let lemma_event_raw_delta_legal_received_certificate_verify
   (model:CS.connection_model)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -162,7 +168,7 @@ let lemma_event_raw_delta_legal_received_certificate_verify
 
 let lemma_event_raw_delta_legal_received_finished
   (model:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -508,7 +514,7 @@ let lemma_raw_replay_step_two_local_install_events
 
 let lemma_raw_replay_step_received_encrypted_extensions
   (model:CS.connection_model)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -558,7 +564,7 @@ let lemma_raw_replay_step_received_encrypted_extensions
 
 let lemma_raw_replay_step_received_certificate
   (model:CS.connection_model)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -608,7 +614,7 @@ let lemma_raw_replay_step_received_certificate
 
 let lemma_raw_replay_step_received_certificate_verify
   (model:CS.connection_model)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -658,7 +664,7 @@ let lemma_raw_replay_step_received_certificate_verify
 
 let lemma_raw_replay_step_received_finished
   (model:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -708,13 +714,13 @@ let lemma_raw_replay_step_received_finished
 
 let lemma_server_flight_message_tail_slices
   (model6:CS.connection_model)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (tail5_sent:B.bytes)
   (tail5_received:B.bytes)
   (final_model:CS.connection_model)
@@ -961,17 +967,17 @@ let lemma_server_flight_message_tail_slices
 let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
   (client:CS.connection_state)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         client.CS.cs_event_log ==
@@ -1446,11 +1452,11 @@ let lemma_client_no_tail_server_flight_received_raw_slices
   with _.
   (
     assert (exists
-      (sh0:M.server_hello)
-      (ee0:M.encrypted_extensions)
-      (cert0:M.certificate_msg)
-      (cv0:M.certificate_verify)
-      (sf0:M.finished)
+      (sh0:GSH.serverHello)
+      (ee0:GEE.encryptedExtensions)
+      (cert0:GCert.certificate)
+      (cv0:GCV.certificateVerify)
+      (sf0:GFin.finished)
       server_sh_raw0
       ee_raw0
       cert_raw0

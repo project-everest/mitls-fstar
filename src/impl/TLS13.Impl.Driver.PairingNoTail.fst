@@ -16,6 +16,12 @@ module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
 module ListP = FStar.List.Tot.Properties
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PTS = TLS13.Impl.Driver.PairingTraceShape
 module PWL = TLS13.ConnectionState.ProtectedWireBase
@@ -964,13 +970,13 @@ let lemma_paired_successful_handshake_complete_event_log_shape_no_tail
         CS.connection_state_no_key_update_trace server)
 =
   eliminate exists
-    (ch:M.client_hello)
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (start:CS.handshake_start)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)

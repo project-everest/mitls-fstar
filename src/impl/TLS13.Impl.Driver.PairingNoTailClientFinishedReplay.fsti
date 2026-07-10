@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin  = TLS13.Wire.Generated.Finished
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
@@ -410,9 +411,9 @@ let client_finished_exact_suffix_sent_seal_raw_record_slice
 noextract
 let client_finished_sent_seal_suffix_head_steps
   (model12:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (final_model:CS.connection_model)
   : prop =
   exists
@@ -437,9 +438,9 @@ let client_finished_exact_suffix_sent_seal_head_step_slice
   (client:CS.connection_state)
   : prop =
   exists
-    (sf:M.finished)
+    (sf:GFin.finished)
     (e13 e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     suffix_sent
     suffix_received.
@@ -471,8 +472,8 @@ let client_finished_canonical_sent_seal_replay_slice
   (client:CS.connection_state)
   : prop =
   exists
-    (sf:M.finished)
-    (cf:M.finished)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     (after_verify:CS.connection_model)
     (after_app_write:CS.connection_model)
@@ -549,9 +550,9 @@ val lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
 
 val lemma_client_finished_sent_seal_suffix_head_steps
   (model12:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (suffix_sent:B.bytes)
   (suffix_received:B.bytes)
   (final_model:CS.connection_model)

@@ -9,6 +9,12 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module Seq = FStar.Seq
@@ -20,11 +26,11 @@ let client_received_cleartext_and_server_flight_raw_slices
   (client:CS.connection_state)
   : prop =
   exists
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     server_sh_raw
     ee_raw
     cert_raw
@@ -46,17 +52,17 @@ let client_received_cleartext_and_server_flight_raw_slices
 val lemma_client_no_tail_server_flight_received_raw_slices_for_shape
   (client:CS.connection_state)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         client.CS.cs_event_log ==

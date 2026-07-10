@@ -8,6 +8,8 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GFin  = TLS13.Wire.Generated.Finished
 module PNTCSR = TLS13.Impl.Driver.PairingNoTailClientSentRawShape
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module Seq = FStar.Seq
@@ -24,7 +26,7 @@ let lemma_paired_no_tail_client_finished_staged_milestone_client_finished_raw_re
 =
   assert (PNTCSR.client_sent_cleartext_and_finished_raw_slices client);
   assert (CS.paired_wire_logs client server);
-  eliminate exists (ch:M.client_hello) (cf:M.finished) client_ch_raw client_finished_raw.
+  eliminate exists (ch:GCH.clientHello) (cf:GFin.finished) client_ch_raw client_finished_raw.
     Seq.equal
       client.CS.cs_wire_log.CL.raw_sent
       (B.append client_ch_raw client_finished_raw) /\

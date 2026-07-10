@@ -10,6 +10,9 @@ module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CVR = TLS13.ConnectionState.ClientCertificateVerifyReachability
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GFin  = TLS13.Wire.Generated.Finished
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
@@ -248,8 +251,8 @@ let lemma_client_no_tail_fifth_event_client_handshake_write_install_clean
 =
   eliminate exists
     (start:CS.handshake_start)
-    (client_ch:M.client_hello)
-    (client_sh:M.server_hello)
+    (client_ch:GCH.clientHello)
+    (client_sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (client_hs_write_material:CS.traffic_key_material)
     (client_material:CS.traffic_key_material)
@@ -259,7 +262,7 @@ let lemma_client_no_tail_fifth_event_client_handshake_write_install_clean
     (received_msg3:M.handshake_msg)
     (client_auth_skip:CS.local_event)
     (client_verify_skip:CS.local_event)
-    (verified_server_finished:M.finished)
+    (verified_server_finished:GFin.finished)
     (client_app_write_material:CS.traffic_key_material)
     (client_app_read_material:CS.traffic_key_material)
     (sent_msg4:M.handshake_msg).
@@ -416,8 +419,8 @@ let lemma_client_no_tail_sixth_event_server_handshake_read_install_clean
 =
   eliminate exists
     (start:CS.handshake_start)
-    (client_ch:M.client_hello)
-    (client_sh:M.server_hello)
+    (client_ch:GCH.clientHello)
+    (client_sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (client_hs_write_material:CS.traffic_key_material)
     (client_material:CS.traffic_key_material)
@@ -427,7 +430,7 @@ let lemma_client_no_tail_sixth_event_server_handshake_read_install_clean
     (received_msg3:M.handshake_msg)
     (client_auth_skip:CS.local_event)
     (client_verify_skip:CS.local_event)
-    (verified_server_finished:M.finished)
+    (verified_server_finished:GFin.finished)
     (client_app_write_material:CS.traffic_key_material)
     (client_app_read_material:CS.traffic_key_material)
     (sent_msg4:M.handshake_msg).
@@ -600,8 +603,8 @@ let lemma_client_no_tail_normalized_shape_start_spine
 =
   eliminate exists
     (start:CS.handshake_start)
-    (client_ch:M.client_hello)
-    (client_sh:M.server_hello)
+    (client_ch:GCH.clientHello)
+    (client_sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (client_hs_write_material:CS.traffic_key_material)
     (client_material:CS.traffic_key_material)
@@ -611,7 +614,7 @@ let lemma_client_no_tail_normalized_shape_start_spine
     (received_msg3:M.handshake_msg)
     (client_auth_skip:CS.local_event)
     (client_verify_skip:CS.local_event)
-    (verified_server_finished:M.finished)
+    (verified_server_finished:GFin.finished)
     (client_app_write_material:CS.traffic_key_material)
     (client_app_read_material:CS.traffic_key_material)
     (sent_msg4:M.handshake_msg).
@@ -753,8 +756,8 @@ let lemma_client_no_tail_normalized_shape_length
 =
   eliminate exists
     (start:CS.handshake_start)
-    (client_ch:M.client_hello)
-    (client_sh:M.server_hello)
+    (client_ch:GCH.clientHello)
+    (client_sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (client_hs_write_material:CS.traffic_key_material)
     (client_material:CS.traffic_key_material)
@@ -764,7 +767,7 @@ let lemma_client_no_tail_normalized_shape_length
     (received_msg3:M.handshake_msg)
     (client_auth_skip:CS.local_event)
     (client_verify_skip:CS.local_event)
-    (verified_server_finished:M.finished)
+    (verified_server_finished:GFin.finished)
     (client_app_write_material:CS.traffic_key_material)
     (client_app_read_material:CS.traffic_key_material)
     (sent_msg4:M.handshake_msg).

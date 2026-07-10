@@ -9,6 +9,12 @@ module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
@@ -25,7 +31,7 @@ let event_has_empty_sent_delta
   | CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Received
 
-let sent_finished_event (cf:M.finished) : CS.conn_event =
+let sent_finished_event (cf:GFin.finished) : CS.conn_event =
   CS.ConnNetworkEvent ({
     CL.message_direction = CL.Sent;
     CL.message_value = M.TlsHandshake (M.Finished cf);
@@ -33,7 +39,7 @@ let sent_finished_event (cf:M.finished) : CS.conn_event =
 
 let rec empty_sent_until_finished
   (events:list CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Tot prop
         (decreases events)
   =
@@ -82,7 +88,7 @@ let lemma_event_raw_delta_legal_local
 
 let lemma_event_raw_delta_legal_sent_client_hello
   (model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -105,7 +111,7 @@ let lemma_event_raw_delta_legal_sent_client_hello
 
 let lemma_finished_event_raw_slice
   (model:CS.connection_model)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
@@ -153,7 +159,7 @@ let lemma_finished_event_raw_slice
 let rec lemma_empty_sent_until_finished_raw_slice
   (model:CS.connection_model)
   (events:list CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
@@ -293,9 +299,9 @@ let lemma_application_install_event_empty_sent
 
 let lemma_client_finished_exact_suffix_raw_slice
   (model:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
@@ -349,16 +355,16 @@ let lemma_client_finished_exact_suffix_raw_slice
     final_model
 
 let lemma_tail_empty_sent_until_finished
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
@@ -449,17 +455,17 @@ let lemma_tail_empty_sent_until_finished
 let lemma_client_no_tail_finished_sent_raw_slices_for_shape
   (client:CS.connection_state)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         client.CS.cs_event_log ==
@@ -756,7 +762,7 @@ let lemma_client_no_tail_finished_sent_raw_slices
   returns client_sent_cleartext_and_finished_raw_slices client
   with _.
   (
-    assert (exists (ch0:M.client_hello) (cf0:M.finished) client_ch_raw0 client_finished_raw0.
+    assert (exists (ch0:GCH.clientHello) (cf0:GFin.finished) client_ch_raw0 client_finished_raw0.
       Seq.equal
         client.CS.cs_wire_log.CL.raw_sent
         (B.append client_ch_raw0 client_finished_raw0) /\

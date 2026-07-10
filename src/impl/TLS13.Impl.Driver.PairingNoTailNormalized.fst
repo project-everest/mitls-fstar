@@ -13,6 +13,12 @@ module CSL = TLS13.ConnectionState.Lemmas
 module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module PBridge = TLS13.Impl.Driver.PairingNormalizedBridge
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNS = TLS13.Impl.Driver.PairingNormalizedShape
@@ -672,11 +678,11 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
     server_sent;
   assert (CS.paired_wire_logs client server);
   eliminate exists
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     server_sh_raw
     ee_raw
     cert_raw
@@ -710,11 +716,11 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
       (M.TlsHandshake (M.ServerHello sh))
       server_sh_raw);
     assert (exists
-      (sh0:M.server_hello)
-      (ee0:M.encrypted_extensions)
-      (cert0:M.certificate_msg)
-      (cv0:M.certificate_verify)
-      (sf0:M.finished)
+      (sh0:GSH.serverHello)
+      (ee0:GEE.encryptedExtensions)
+      (cert0:GCert.certificate)
+      (cv0:GCV.certificateVerify)
+      (sf0:GFin.finished)
       server_sh_raw0
       ee_raw0
       cert_raw0
@@ -777,7 +783,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client
     client_sent
     server_received
     server_sent;
-  eliminate exists (ch:M.client_hello) (cf:M.finished) client_ch_raw client_finished_raw.
+  eliminate exists (ch:GCH.clientHello) (cf:GFin.finished) client_ch_raw client_finished_raw.
     Seq.equal
       client.CS.cs_wire_log.CL.raw_sent
       (B.append client_ch_raw client_finished_raw) /\
@@ -794,7 +800,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client
     Seq.lemma_eq_elim
       server.CS.cs_wire_log.CL.raw_received
       client.CS.cs_wire_log.CL.raw_sent;
-    assert (exists (ch0:M.client_hello) (cf0:M.finished) client_ch_raw0 client_finished_raw0.
+    assert (exists (ch0:GCH.clientHello) (cf0:GFin.finished) client_ch_raw0 client_finished_raw0.
       Seq.equal
         server.CS.cs_wire_log.CL.raw_received
         (B.append client_ch_raw0 client_finished_raw0) /\
@@ -1848,8 +1854,8 @@ let lemma_paired_client_sent_client_hello_not_server_received_ccs
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
   (server_rest:list CS.conn_event)
@@ -1993,8 +1999,8 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
   (server_rest:list CS.conn_event)
@@ -2224,18 +2230,18 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
   (client:CS.connection_state)
   (server:CS.connection_state)
   (start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:TLS13.X509.Spec.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
-  (server_ch:M.client_hello)
+  (cf:GFin.finished)
+  (server_ch:GCH.clientHello)
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
@@ -2477,11 +2483,11 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
@@ -2619,18 +2625,18 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello_sele
   (client:CS.connection_state)
   (server:CS.connection_state)
   (start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:TLS13.X509.Spec.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
-  (server_ch:M.client_hello)
+  (cf:GFin.finished)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_rest:list CS.conn_event)
   : Lemma
@@ -2831,11 +2837,11 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_rest:list CS.conn_event)
   : Lemma
@@ -4009,14 +4015,14 @@ let lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_f
   (server_received:B.bytes)
   (server_sent:B.bytes)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
@@ -4091,14 +4097,14 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
   (server_received:B.bytes)
   (server_sent:B.bytes)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
@@ -5010,18 +5016,18 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
               assert (Seq.equal client_suffix_sent server_suffix_received);
               introduce exists
                 (client_start':CS.handshake_start)
-                (client_ch':M.client_hello)
-                (client_sh':M.server_hello)
+                (client_ch':GCH.clientHello)
+                (client_sh':GSH.serverHello)
                 (client_shared':C.x25519_shared_secret)
                 (client_model1':CS.connection_model)
                 (client_model2':CS.connection_model)
                 (client_model3':CS.connection_model)
                 (client_model4':CS.connection_model)
                 (client_rest':list CS.conn_event)
-                (server_ch':M.client_hello)
+                (server_ch':GCH.clientHello)
                 (selection':CS.server_handshake_selection)
                 (server_shared':C.x25519_shared_secret)
-                (server_sh':M.server_hello)
+                (server_sh':GSH.serverHello)
                 (server_model1':CS.connection_model)
                 (server_model2':CS.connection_model)
                 (server_model3':CS.connection_model)

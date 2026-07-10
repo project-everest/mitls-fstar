@@ -9,6 +9,12 @@ module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
@@ -49,19 +55,19 @@ let client_successful_no_tail_semantic_trace_state_inputs
   (client:CS.connection_state)
   (client_trace:list CS.conn_event)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4:CS.conn_event)
   (e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13:CS.conn_event)
   (e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : prop =
   client.CS.cs_event_log == client_trace /\
   client_trace ==
@@ -134,19 +140,19 @@ let client_successful_no_tail_semantic_trace_state
   : prop =
   exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
     (peer:X.peer_identity)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (e13:CS.conn_event)
     (e14:CS.conn_event)
-    (cf:M.finished).
+    (cf:GFin.finished).
     client_successful_no_tail_semantic_trace_state_inputs
       client
       client_trace
@@ -174,18 +180,18 @@ noextract
 let server_successful_no_tail_semantic_trace_state_inputs
   (server:CS.connection_state)
   (server_trace:list CS.conn_event)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (e5:CS.conn_event)
   (e6:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (server_app_write_material:CS.traffic_key_material)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (server_app_read_material:CS.traffic_key_material)
   : prop =
   server.CS.cs_event_log == server_trace /\
@@ -268,18 +274,18 @@ let server_successful_no_tail_semantic_trace_state
   (server_trace:list CS.conn_event)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (e5:CS.conn_event)
     (e6:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (server_app_write_material:CS.traffic_key_material)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (server_app_read_material:CS.traffic_key_material).
     server_successful_no_tail_semantic_trace_state_inputs
       server

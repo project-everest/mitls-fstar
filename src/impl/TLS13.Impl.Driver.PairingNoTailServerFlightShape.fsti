@@ -8,6 +8,10 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PNTWHR = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
 
 (**
@@ -23,11 +27,11 @@ let server_post_two_handshake_installs_tail_order
   (rest:list CS.conn_event)
   : prop =
   exists
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (server_app_write_material:CS.traffic_key_material)
     (server_app_read_material:CS.traffic_key_material).
     rest ==

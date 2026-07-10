@@ -12,6 +12,9 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module H = TLS13.Handshake.Spec
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module Sem   = TLS13.Wire.Semantics
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
@@ -580,7 +583,7 @@ let lemma_client_late_stuck_step
                           CS.hs_buffers = {
                             model.CS.model_handshake.CS.hs_buffers with
                               CS.hb_certificate_leaf_der =
-                                (match cert.M.chain with
+                                (match (Sem.certificate_entries cert) with
                                  | leaf :: _ -> Some leaf
                                  | [] -> None);
                           };
@@ -1961,8 +1964,8 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
           );
           assert (client_no_tail_two_handshake_install_cover e4 e5);
           introduce exists (start':CS.handshake_start)
-            (ch':M.client_hello)
-            (sh':M.server_hello)
+            (ch':GCH.clientHello)
+            (sh':GSH.serverHello)
             (client_shared':C.x25519_shared_secret)
             (e4':CS.conn_event)
             (e5':CS.conn_event)

@@ -11,6 +11,9 @@ module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module Sem   = TLS13.Wire.Semantics
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module PWS = TLS13.ConnectionState.ProtectedWireStream
 module Seq = FStar.Seq
@@ -22,7 +25,7 @@ module WFL = TLS13.Spec.WireFormatLemmas
 module SHPB = TLS13.Wire.Spec.Reveal.ServerHello.Parseback
 
 let lemma_parse_record_wire_of_sent_supported_client_hello
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw:B.bytes)
   : Lemma
       (requires
@@ -51,7 +54,7 @@ let lemma_parse_record_wire_of_sent_supported_client_hello
       Some (T.Handshake, fragment', B.length raw))
 
 let lemma_parse_record_wire_of_received_client_hello
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw:B.bytes)
   : Lemma
       (requires
@@ -78,7 +81,7 @@ let lemma_parse_record_wire_of_received_client_hello
         Some (T.Handshake, fragment', B.length raw)) )
 
 let lemma_parse_record_wire_of_cleartext_server_hello
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (raw:B.bytes)
   : Lemma
       (requires
@@ -108,7 +111,7 @@ let lemma_parse_record_wire_of_cleartext_server_hello
       Some (T.Handshake, fragment', B.length raw))
 
 let lemma_parse_record_wire_of_received_server_hello
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (raw:B.bytes)
   : Lemma
       (requires
@@ -129,8 +132,8 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
   (st0:CS.connection_state)
   (content_type:U8.t)
   (fragment:B.bytes)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_sh_raw:B.bytes)
   (server_sh_raw:B.bytes)
   : Lemma
@@ -144,9 +147,7 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
         CS.cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello server_sh))
           server_sh_raw /\
-        Seq.equal server_sh_raw client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh)
+        Seq.equal server_sh_raw client_sh_raw)
       (ensures
         CS.server_hello_key_share client_sh ==
         CS.server_hello_key_share server_sh)
@@ -200,14 +201,10 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
       | T.Handshake ->
         assert (W.parse_tls_message T.Handshake sent_fragment ==
           Some (M.TlsHandshake (M.ServerHello client_sh)));
-        W.lemma_parse_supported_server_hello_ok sent_fragment;
-        W.lemma_parse_supported_server_hello_fields sent_fragment;
-        assert (B.length server_sh.M.body == 0);
-        assert (server_sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256);
         SHPB.lemma_parse_tls_message_serialize_server_hello_key_share
           server_sh
           client_sh;
-        assert (Seq.equal client_sh.M.key_share server_sh.M.key_share)
+        assert (client_sh == server_sh)
       | _ ->
         assert False
     )
@@ -236,7 +233,7 @@ let lemma_cleartext_change_cipher_spec_parse_record
     Some (T.Change_cipher_spec, fragment, B.length raw))
 
 let lemma_sent_supported_client_hello_raw_not_change_cipher_spec
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (client_hello_raw:B.bytes)
   (ccs_raw:B.bytes)
   : Lemma
@@ -269,7 +266,7 @@ let lemma_sent_supported_client_hello_raw_not_change_cipher_spec
   )
 
 let lemma_received_server_hello_raw_not_change_cipher_spec
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_hello_raw:B.bytes)
   (ccs_raw:B.bytes)
   : Lemma
@@ -337,7 +334,7 @@ let lemma_application_data_raw_not_change_cipher_spec
 let lemma_equal_stream_head_sent_supported_client_hello_not_change_cipher_spec
   (left_stream:B.bytes)
   (right_stream:B.bytes)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (client_hello_raw:B.bytes)
   (client_tail:B.bytes)
   (ccs_raw:B.bytes)
@@ -457,8 +454,8 @@ let lemma_equal_stream_head_application_data_not_change_cipher_spec
 let lemma_equal_stream_after_client_hello_application_data_not_change_cipher_spec
   (left_stream:B.bytes)
   (right_stream:B.bytes)
-  (sent_ch:M.client_hello)
-  (received_ch:M.client_hello)
+  (sent_ch:GCH.clientHello)
+  (received_ch:GCH.clientHello)
   (sent_ch_raw:B.bytes)
   (application_raw:B.bytes)
   (received_ch_raw:B.bytes)
@@ -539,7 +536,7 @@ let lemma_equal_stream_after_client_hello_application_data_not_change_cipher_spe
 let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
   (left_stream:B.bytes)
   (right_stream:B.bytes)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_hello_raw:B.bytes)
   (server_tail:B.bytes)
   (ccs_raw:B.bytes)
@@ -764,7 +761,7 @@ let lemma_conn_events_raw_replay_sent_change_cipher_spec_head
 
 let lemma_event_raw_delta_legal_sent_client_hello
   (model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -787,7 +784,7 @@ let lemma_event_raw_delta_legal_sent_client_hello
 
 let lemma_event_raw_delta_legal_received_client_hello
   (model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -810,7 +807,7 @@ let lemma_event_raw_delta_legal_received_client_hello
 
 let lemma_event_raw_delta_legal_received_server_hello
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -833,7 +830,7 @@ let lemma_event_raw_delta_legal_received_server_hello
 
 let lemma_event_raw_delta_legal_sent_server_hello
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -857,8 +854,8 @@ let lemma_event_raw_delta_legal_sent_server_hello
 let lemma_client_prefix_sent_client_hello_supported
   (model0:CS.connection_model)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -972,13 +969,12 @@ let lemma_client_prefix_sent_client_hello_supported
       Seq.lemma_eq_elim
         client_start.CS.start_server_name
         model0.CS.model_config.CS.config_server_name;
-      assert (client_ch.M.cipher_suites ==
+      assert (Sem.clientHello_cipher_suites client_ch ==
         model0.CS.model_config.CS.config_cipher_suites);
-      assert (client_ch.M.signature_schemes ==
-        model0.CS.model_config.CS.config_signature_schemes);
-      assert (client_ch.M.server_name ==
+      assert (Sem.clientHello_sig_algs client_ch ==
+        Some model0.CS.model_config.CS.config_signature_schemes);
+      assert (Sem.clientHello_server_name client_ch ==
         Some model0.CS.model_config.CS.config_server_name);
-      assert (B.length client_ch.M.body == 0);
       assert (WFL.supported_client_hello_wire_profile client_ch)
     )
   )
@@ -1175,7 +1171,7 @@ let lemma_server_start_then_sent_change_cipher_spec_raw_slice
 
 let lemma_server_start_client_hello_then_received_change_cipher_spec_raw_slices
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -1337,7 +1333,7 @@ let lemma_server_start_client_hello_then_received_change_cipher_spec_raw_slices
 
 let lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -1471,7 +1467,7 @@ let lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
 
 let lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_slices
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -1683,7 +1679,7 @@ let lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_
 
 let lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slice
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -1861,7 +1857,7 @@ let lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slic
 
 let lemma_server_start_client_hello_select_shared_then_received_change_cipher_spec_raw_slices
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (rest:list CS.conn_event)
@@ -2105,7 +2101,7 @@ let lemma_server_start_client_hello_select_shared_then_received_change_cipher_sp
 
 let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_raw_slice
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (rest:list CS.conn_event)
@@ -2310,8 +2306,8 @@ let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_r
 let lemma_client_prefix_raw_slices
   (model0:CS.connection_model)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -2504,7 +2500,7 @@ let lemma_client_prefix_raw_slices
 
 let lemma_sent_server_hello_head_raw_slice
   (model:CS.connection_model)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -2580,7 +2576,7 @@ let lemma_sent_server_hello_head_raw_slice
 
 let lemma_sent_server_hello_head_step_model_from_raw_replay
   (model:CS.connection_model)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -2663,8 +2659,8 @@ let lemma_sent_server_hello_head_step_model_from_raw_replay
 let lemma_client_cleartext_prefix_step_models_from_raw_replay
   (model0:CS.connection_model)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -2901,8 +2897,8 @@ let lemma_step_model_preserves_frozen_hello_slots
   (model:CS.connection_model)
   (ev:CS.conn_event)
   (model1:CS.connection_model)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   : Lemma
       (requires
         hello_slots_frozen_control model.CS.model_control /\
@@ -2942,8 +2938,8 @@ let rec lemma_conn_events_raw_replay_preserves_frozen_hello_slots
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   : Lemma
       (requires
         hello_slots_frozen_control model.CS.model_control /\
@@ -3006,8 +3002,8 @@ let rec lemma_conn_events_raw_replay_preserves_frozen_hello_slots
 let lemma_client_cleartext_prefix_final_hello_slots_from_raw_replay
   (model0:CS.connection_model)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -3098,10 +3094,10 @@ let lemma_client_cleartext_prefix_final_hello_slots_from_raw_replay
 
 let lemma_server_prefix_raw_slices
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -3372,10 +3368,10 @@ let lemma_server_prefix_raw_slices
 
 let lemma_server_cleartext_prefix_step_models_from_raw_replay
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -3630,10 +3626,10 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
 
 let lemma_server_cleartext_prefix_final_hello_slots_from_raw_replay
   (model0:CS.connection_model)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -3729,14 +3725,14 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   : Lemma
       (requires

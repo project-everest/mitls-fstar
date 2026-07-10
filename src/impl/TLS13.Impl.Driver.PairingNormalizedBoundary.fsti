@@ -9,6 +9,8 @@ module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PR = TLS13.Impl.Driver.PairingProtectedReplay
@@ -23,7 +25,7 @@ module WFL = TLS13.Spec.WireFormatLemmas
   A parser-facing handshake-complete boundary.
 
   Unlike [PairingCleanBoundary.paired_supported_handshake_complete_boundary],
-  this predicate never requires exact [M.client_hello] or [M.server_hello]
+  this predicate never requires exact [GCH.clientHello] or [GSH.serverHello]
   record equality across endpoints.  The cleartext hellos are connected by raw
   bytes (which proves body-insensitive/wire-normalized hello agreement), and the
   protected flight is supplied as a replay view.  The replay view is what the
@@ -69,10 +71,6 @@ let paired_supported_normalized_replay_boundary_inputs
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       w.PCB.hcb_client_sh_raw /\
-    W.parse_supported_server_hello
-      (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-    W.parse_supported_server_hello
-      (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
     Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
       client
       server /\

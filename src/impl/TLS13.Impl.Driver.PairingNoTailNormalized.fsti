@@ -12,6 +12,12 @@ module CSL = TLS13.ConnectionState.Lemmas
 module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module CL = TLS13.ConnectionLog
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNS = TLS13.Impl.Driver.PairingNormalizedShape
@@ -799,11 +805,11 @@ let server_sent_cleartext_and_server_flight_raw_slices
   (server:CS.connection_state)
   : prop =
   exists
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     server_sh_raw
     ee_raw
     cert_raw
@@ -826,7 +832,7 @@ noextract
 let server_received_cleartext_and_client_finished_raw_slices
   (server:CS.connection_state)
   : prop =
-  exists (ch:M.client_hello) (cf:M.finished) client_ch_raw client_finished_raw.
+  exists (ch:GCH.clientHello) (cf:GFin.finished) client_ch_raw client_finished_raw.
     Seq.equal
       server.CS.cs_wire_log.CL.raw_received
       (B.append client_ch_raw client_finished_raw) /\
@@ -1870,14 +1876,14 @@ val lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_f
   (server_received:B.bytes)
   (server_sent:B.bytes)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
@@ -1921,14 +1927,14 @@ val lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
   (server_received:B.bytes)
   (server_sent:B.bytes)
   (client_start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (client_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_rest:list CS.conn_event)
-  (server_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
   (server_rest:list CS.conn_event)
   : Lemma
       (requires

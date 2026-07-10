@@ -9,6 +9,12 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module Seq = FStar.Seq
@@ -19,7 +25,7 @@ noextract
 let client_sent_cleartext_and_finished_raw_slices
   (client:CS.connection_state)
   : prop =
-  exists (ch:M.client_hello) (cf:M.finished) client_ch_raw client_finished_raw.
+  exists (ch:GCH.clientHello) (cf:GFin.finished) client_ch_raw client_finished_raw.
     Seq.equal
       client.CS.cs_wire_log.CL.raw_sent
       (B.append client_ch_raw client_finished_raw) /\
@@ -37,9 +43,9 @@ let client_sent_cleartext_and_finished_raw_slices
 **)
 val lemma_client_finished_exact_suffix_raw_slice
   (model:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
@@ -67,17 +73,17 @@ val lemma_client_finished_exact_suffix_raw_slice
 val lemma_client_no_tail_finished_sent_raw_slices_for_shape
   (client:CS.connection_state)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         client.CS.cs_event_log ==

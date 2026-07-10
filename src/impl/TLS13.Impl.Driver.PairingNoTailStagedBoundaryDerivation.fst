@@ -10,6 +10,7 @@ module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CD = TLS13.Impl.Client.Driver
 module M = TLS13.Messages
+module Sem   = TLS13.Wire.Semantics
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
@@ -881,8 +882,8 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
           server_ch
           client_ch_raw
           server_ch_raw;
-        assert (FStar.Seq.equal client_ch.M.key_share server_ch.M.key_share);
-        FStar.Seq.lemma_eq_elim client_ch.M.key_share server_ch.M.key_share;
+        assert (Sem.clientHello_key_share_x25519 client_ch ==
+          Sem.clientHello_key_share_x25519 server_ch);
         assert (CS.client_hello_key_share client_ch ==
           CS.client_hello_key_share server_ch);
         assert (CS.server_hello_key_share client_sh ==

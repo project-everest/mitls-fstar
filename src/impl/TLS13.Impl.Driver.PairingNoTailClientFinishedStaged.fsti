@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin  = TLS13.Wire.Generated.Finished
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PNTCSR = TLS13.Impl.Driver.PairingNoTailClientSentRawShape
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
@@ -36,9 +37,9 @@ let client_finished_model12_exact_suffix_replay_slice
   (client:CS.connection_state)
   : prop =
   exists
-    (sf:M.finished)
+    (sf:GFin.finished)
     (e13 e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     tail_sent
     tail_received.
@@ -81,9 +82,9 @@ let client_finished_model12_exact_suffix_raw_record_slice
   (client:CS.connection_state)
   : prop =
   exists
-    (sf:M.finished)
+    (sf:GFin.finished)
     (e13 e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     tail_sent
     tail_received

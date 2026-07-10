@@ -12,6 +12,8 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWP = TLS13.ConnectionState.ProtectedWireProjection
 module R = TLS13.Record.Spec
@@ -1456,10 +1458,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_and_ha
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1487,10 +1489,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         paired_handshake_events client server /\
         client_server_driver_first_epoch_no_key_update_state_inputs
           client
@@ -1570,10 +1568,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_handshake_events
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1672,10 +1670,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1708,10 +1706,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         PWL.paired_protected_handshake_event_projection_pairs
           client
           server
@@ -1784,10 +1778,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1815,10 +1809,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         paired_protected_handshake_event_projection_pair_witnesses
           client
           server /\
@@ -1913,10 +1903,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)

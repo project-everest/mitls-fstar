@@ -10,6 +10,9 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GFin  = TLS13.Wire.Generated.Finished
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
@@ -333,7 +336,7 @@ let lemma_server_hs_client_hello_received_local_event_step_none
 
 let lemma_server_hs_client_hello_received_no_selection_sent_server_hello_illegal
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   : Lemma
       (requires
         model.CS.model_control ==
@@ -362,7 +365,7 @@ let lemma_server_hs_client_hello_received_no_selection_sent_server_hello_illegal
 
 let lemma_server_hs_client_hello_received_no_shared_sent_server_hello_illegal
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   : Lemma
       (requires
         model.CS.model_control ==
@@ -3779,10 +3782,10 @@ let lemma_server_no_tail_desired_shape_start_spine
      (ensures server_no_tail_start_spine server)
 =
   eliminate exists
-   (ch:M.client_hello)
+   (ch:GCH.clientHello)
    (selection:CS.server_handshake_selection)
    (server_shared:C.x25519_shared_secret)
-   (sh:M.server_hello)
+   (sh:GSH.serverHello)
    (server_material:CS.traffic_key_material)
    (sent_msg0:M.handshake_msg)
    (sent_msg1:M.handshake_msg)
@@ -3791,7 +3794,7 @@ let lemma_server_no_tail_desired_shape_start_spine
    (sent_msg3:M.handshake_msg)
    (server_app_write_material:CS.traffic_key_material)
    (received_msg4:M.handshake_msg)
-   (cf:M.finished)
+   (cf:GFin.finished)
    (server_app_read_material:CS.traffic_key_material).
    received_msg4 == M.Finished cf /\
    server.CS.cs_event_log ==
@@ -3938,10 +3941,10 @@ let lemma_server_no_tail_desired_shape_length
       (ensures FStar.List.Tot.length server.CS.cs_event_log == 15)
 =
   eliminate exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (server_material:CS.traffic_key_material)
     (sent_msg0:M.handshake_msg)
     (sent_msg1:M.handshake_msg)
@@ -3950,7 +3953,7 @@ let lemma_server_no_tail_desired_shape_length
     (sent_msg3:M.handshake_msg)
     (server_app_write_material:CS.traffic_key_material)
     (received_msg4:M.handshake_msg)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (server_app_read_material:CS.traffic_key_material).
     received_msg4 == M.Finished cf /\
     server.CS.cs_event_log ==
