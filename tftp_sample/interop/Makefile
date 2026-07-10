@@ -38,7 +38,11 @@ SRV_OUR := $(abspath $(EXTRACT_DIR)/tftp_server)
 CLI_OUR := $(abspath $(EXTRACT_DIR)/tftp_client)
 
 DUMMY   := $(abspath $(VERIFIED_DIR)/dummy.txt)
-PORT    ?= 6969
+# Distinct default ports so the two tests can run concurrently
+# (`make -jN test-server test-client`) without a UDP bind collision.  Override
+# either independently (e.g. SRV_PORT=7000).
+SRV_PORT ?= 6969
+CLI_PORT ?= 6970
 TIMEOUT ?= 30
 CC      ?= gcc
 CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
@@ -48,6 +52,8 @@ CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
 
 SRV_DIR := _run_server
 CLI_DIR := _run_client
+SRV_DIR_ABS := $(abspath $(SRV_DIR))
+CLI_DIR_ABS := $(abspath $(CLI_DIR))
 
 .PHONY: all test test-server test-client build-progs clean help
 
@@ -78,19 +84,22 @@ test-server: build-progs
 	@cp $(DUMMY) $(SRV_DIR)/root/payload.bin
 	@echo "  serving payload.bin ($$(wc -c < $(DUMMY)) bytes) with our sender; receiving with tftp-hpa ..."
 	@cd $(SRV_DIR)/recv && \
-	  timeout $(TIMEOUT) bash -c '$(SRV_OUR) $(PORT) ../root & srv=$$!; sleep 0.4; \
-	    tftp 127.0.0.1 $(PORT) -m octet -c get payload.bin; rc=$$?; wait $$srv 2>/dev/null; exit $$rc' \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(SRV_PORT) ../root & srv=$$!; sleep 0.4; \
+	    tftp 127.0.0.1 $(SRV_PORT) -m octet -c get payload.bin; rc=$$?; wait $$srv 2>/dev/null; exit $$rc' \
 	    > ../run.log 2>&1; \
 	  st=$$?; \
 	  if cmp -s payload.bin $(DUMMY); then content=match; else content=differ; fi; \
 	  if [ $$st -eq 0 ] && [ "$$content" = match ]; then \
 	    echo "  RESULT: PASS - clean transfer; tftp-hpa received an identical copy"; \
+	    rm -rf $(SRV_DIR_ABS); \
 	  else \
 	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - session did not terminate cleanly: stalled, killed after $(TIMEOUT)s (content: $$content)"; \
 	    elif [ $$st -ne 0 ]; then echo "  RESULT: FAIL - a transfer program exited non-zero: exit=$$st (content: $$content)"; \
 	    else echo "  RESULT: FAIL - received file missing or differs"; fi; \
 	    echo "  --- recv dir ---"; ls -la . 2>/dev/null; \
 	    echo "  --- run.log (tail) ---"; tail -20 ../run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(SRV_DIR_ABS) for inspection)"; \
 	    exit 1; \
 	  fi
 
@@ -105,19 +114,22 @@ test-client: build-progs
 	@chmod -R a+rX $(CLI_DIR)/root
 	@echo "  serving payload.bin ($$(wc -c < $(DUMMY)) bytes) with in.tftpd; receiving with our client ..."
 	@cd $(CLI_DIR) && \
-	  timeout $(TIMEOUT) bash -c 'in.tftpd -L --secure --address 127.0.0.1:$(PORT) --user $$(id -un) $(abspath $(CLI_DIR)/root) & srv=$$!; sleep 0.4; \
-	    $(CLI_OUR) 127.0.0.1 $(PORT) payload.bin recv/payload.bin; rc=$$?; kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; exit $$rc' \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && { kill -- -$$srv 2>/dev/null; kill $$srv 2>/dev/null; }; }; trap cleanup EXIT INT TERM; \
+	    setsid in.tftpd -L --secure --address 127.0.0.1:$(CLI_PORT) --user $$(id -un) $(CLI_DIR_ABS)/root & srv=$$!; sleep 0.4; \
+	    $(CLI_OUR) 127.0.0.1 $(CLI_PORT) payload.bin recv/payload.bin; rc=$$?; exit $$rc' \
 	    > run.log 2>&1; \
 	  st=$$?; \
 	  if cmp -s recv/payload.bin root/payload.bin; then content=match; else content=differ; fi; \
 	  if [ $$st -eq 0 ] && [ "$$content" = match ]; then \
 	    echo "  RESULT: PASS - clean transfer; our client reconstructed an identical copy"; \
+	    rm -rf $(CLI_DIR_ABS); \
 	  else \
 	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - session did not terminate cleanly: stalled, killed after $(TIMEOUT)s (content: $$content)"; \
 	    elif [ $$st -ne 0 ]; then echo "  RESULT: FAIL - a transfer program exited non-zero: exit=$$st (content: $$content)"; \
 	    else echo "  RESULT: FAIL - received file missing or differs"; fi; \
 	    echo "  --- run dir ---"; ls -la recv 2>/dev/null; \
 	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(CLI_DIR_ABS) for inspection)"; \
 	    exit 1; \
 	  fi
 
@@ -139,6 +151,10 @@ help:
 	@echo "TFTP interop tests (vs tftp-hpa):"
 	@echo "  make test-server  - our tftp_server (sender) vs tftp-hpa tftp (get)"
 	@echo "  make test-client  - tftp-hpa in.tftpd (server) vs our tftp_client (receiver)"
-	@echo "  make test         - run both and report an aggregate result"
+	@echo "  make test         - run both sequentially and report an aggregate result"
 	@echo "  make clean        - remove interop run directories"
-	@echo "  (override the port with PORT=<n>; the stall guard with TIMEOUT=<seconds>, default $(TIMEOUT))"
+	@echo "  Parallel:  make -j2 test-server test-client  (distinct default ports"
+	@echo "             SRV_PORT=$(SRV_PORT) / CLI_PORT=$(CLI_PORT), so no bind collision)."
+	@echo "  Each target self-cleans: background peers are trap-killed on exit/timeout,"
+	@echo "  and the run dir is removed on PASS (kept on FAIL for inspection)."
+	@echo "  Overrides: SRV_PORT=<n> CLI_PORT=<n> TIMEOUT=<seconds> (default $(TIMEOUT))."
