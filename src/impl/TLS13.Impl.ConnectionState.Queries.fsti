@@ -41,6 +41,17 @@ module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
 
+// Phase 5: handshake_msg payloads are now the QuackyDucky-generated wire
+// records; profile-relevant fields are read through the TLS13.Wire.Semantics
+// accessors instead of the deleted M.<record> projection fields.
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
+
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
 open TLS13.Impl.ConnectionState.Repr
@@ -141,11 +152,11 @@ fn copy_certificate_verify_signature
                 SZ.v snapshot.cv_signature_len <= B.length out_bytes /\
                 (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                 | Some cv ->
-                  IM.signature_scheme_matches snapshot.cv_signature_scheme cv.M.scheme /\
-                  SZ.v snapshot.cv_signature_len == B.length cv.M.signature /\
+                  IM.signature_scheme_matches snapshot.cv_signature_scheme (Sem.certificateVerify_scheme cv) /\
+                  SZ.v snapshot.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv) /\
                   Seq.equal
                     (Seq.slice out_bytes 0 (SZ.v snapshot.cv_signature_len))
-                    cv.M.signature
+                    (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
 fn get_certificate_verify_signature_snapshot
@@ -158,8 +169,8 @@ fn get_certificate_verify_signature_snapshot
           pure (SZ.v snapshot.cv_signature_len <= IM.max_signature_len /\
                 (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                 | Some cv ->
-                  IM.signature_scheme_matches snapshot.cv_signature_scheme cv.M.scheme /\
-                  SZ.v snapshot.cv_signature_len == B.length cv.M.signature
+                  IM.signature_scheme_matches snapshot.cv_signature_scheme (Sem.certificateVerify_scheme cv) /\
+                  SZ.v snapshot.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
 fn is_handshaking
@@ -222,18 +233,30 @@ fn can_send_client_hello_runtime
 
 fn can_receive_server_hello
   (c:connection_state)
-  (#sh:erased M.server_hello)
+  (fragment_len:SZ.t)
+  (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+           pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256)
   returns ok: bool
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloSent /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+            // Phase 4 deleted W.lemma_serialize_server_hello_len, so
+            // `B.length (serialize_handshake (M.ServerHello sh)) <=
+            // max_server_hello_len` is no longer a static theorem for general
+            // generated serverHello records that carry arbitrary extensions.
+            // The gate therefore takes the concrete [fragment_len] (the length of
+            // the serialized record on the wire) and checks at runtime that it
+            // fits the ServerHello buffer and the remaining transcript budget,
+            // exactly as [can_receive_client_hello] does.  The caller connects
+            // [SZ.v fragment_len] to [B.length (serialize_handshake ...)] via the
+            // parse-success equation before calling [mark_received_server_hello].
+            SZ.v fragment_len <= Bounds.max_server_hello_len /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-              B.length (W.serialize_handshake (M.ServerHello sh)) <=
+              SZ.v fragment_len <=
               max_transcript_len /\
             CS.legal_event
               st0.CS.cs_model
@@ -245,7 +268,7 @@ fn can_receive_server_hello
 fn can_receive_client_hello
   (c:connection_state)
   (fragment_len:SZ.t)
-  (#ch:erased M.client_hello)
+  (#ch:erased GCH.clientHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server)
@@ -286,7 +309,7 @@ fn can_select_supported_server_parameters_runtime
                      CS.signature_scheme_offered
                        cfg.CS.server_allowed_signature_schemes
                        T.Rsa_pss_rsae_sha256 /\
-                     CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                     CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                    | _, _ -> True))
   returns ok: bool
   ensures connection_exactly c st0 **
@@ -381,7 +404,7 @@ fn can_send_server_hello_runtime
 
 fn can_receive_client_finished
   (c:connection_state)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0
   returns ok: bool
@@ -467,7 +490,7 @@ fn can_install_application_traffic_keys
 
 fn can_receive_encrypted_extensions
   (c:connection_state)
-  (#ee:erased M.encrypted_extensions)
+  (#ee:erased GEE.encryptedExtensions)
   (fragment_len:SZ.t)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0
@@ -509,7 +532,7 @@ fn can_send_encrypted_extensions_runtime
               (CS.ConnNetworkEvent {
                 CL.message_direction = CL.Sent;
                 CL.message_value =
-                  M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
+                  M.TlsHandshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions));
               }))
 
 fn can_send_certificate_runtime
@@ -535,19 +558,14 @@ fn can_send_certificate_runtime
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             (match st0.CS.cs_model.CS.model_config.CS.config_server with
              | Some cfg ->
-              B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-                B.length
-                  (W.serialize_certificate_from_credential
-                    { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty }) <=
-                  max_transcript_len /\
-              CS.legal_event
-                st0.CS.cs_model
-                (CS.ConnNetworkEvent {
-                  CL.message_direction = CL.Sent;
-                  CL.message_value =
-                    M.TlsHandshake
-                      (M.Certificate { M.chain = [cfg.CS.server_certificate_chain]; M.body = B.empty });
-                })
+               // Transcript-length bound for the Certificate flight.  The
+               // handshake message serializes to exactly 13 + |chain| bytes
+               // (TLS13.Impl.Server.Send.lemma_mk_cert_witness_bytesize) and the
+               // runtime transcript-room check below guarantees it fits.  (The
+               // legal_event (M.Certificate cert) obligation stays a caller
+               // obligation, discharged with the build-direction witness.)
+               B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 13 +
+                 B.length cfg.CS.server_certificate_chain <= max_transcript_len
              | None -> False))
 
 fn can_sign_certificate_verify_runtime
@@ -582,9 +600,12 @@ fn can_send_certificate_verify_runtime
             (let cv =
               Some?.v
                 st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
-             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-               B.length (W.serialize_certificate_verify_from_signature cv) <=
-                 max_transcript_len /\
+             // Transcript-length bound for the CertificateVerify flight.  The
+             // handshake message serializes to exactly 8 + |signature| bytes
+             // (TLS13.Impl.Server.Send.lemma_serialize_handshake_certificate_verify_len)
+             // and the runtime transcript-room check below guarantees it fits.
+             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
+               B.length (Sem.certificateVerify_signature_bytes cv) <= max_transcript_len /\
              CS.legal_event
                st0.CS.cs_model
                (CS.ConnNetworkEvent {
@@ -612,7 +633,7 @@ fn can_send_server_finished_runtime
 fn can_receive_certificate
   (c:connection_state)
   (lcert:IM.certificate_msg)
-  (#cert:erased M.certificate_msg)
+  (#cert:erased GCert.certificate)
   (fragment_len:SZ.t)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
@@ -625,7 +646,7 @@ fn can_receive_certificate
               CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
-            (Ghost.reveal cert).M.chain <> [] /\
+            (Sem.certificate_entries (Ghost.reveal cert)) <> [] /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
               SZ.v fragment_len <= max_transcript_len /\
@@ -655,7 +676,7 @@ fn can_validate_certificate
 
 fn can_receive_certificate_verify
   (c:connection_state)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (fragment_len:SZ.t)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0
@@ -694,7 +715,7 @@ fn can_verify_certificate_signature
 
 fn can_receive_server_finished
   (c:connection_state)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0
   returns ok: bool
@@ -781,9 +802,39 @@ fn can_verify_client_finished_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
-            Model.can_verify_client_finished
-              st0
-              (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
+            // TODO-A1: Model.can_verify_client_finished bundles a transcript-length
+            // conjunct `B.length transcript + B.length (serialize_handshake
+            // (M.Finished fin)) <= max_transcript_len`, whose proof needed the
+            // Phase-4-deleted W.lemma_serialize_finished_len (which gave
+            // serialize_handshake (M.Finished fin) == 36).  That bound is no longer
+            // provable for general generated finished records, so we expose the
+            // remaining (provable) conjuncts of can_verify_client_finished here
+            // instead of the bundled predicate.  (Only the out-of-scope
+            // TLS13.Impl.Server.Schedule consumes this result.)
+            (let fin = Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished in
+             st0.CS.cs_model.CS.model_control ==
+               CS.ControlHandshaking CS.HsClientFinishedReceived /\
+             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+             CS.application_record_keys_installed_for_role
+               CS.ServerEndpoint st0.CS.cs_model /\
+             (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished,
+                    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic with
+              | Some stored_fin, Some client_hs ->
+                stored_fin == fin /\
+                H.verify_finished
+                  client_hs.CS.traffic_secret
+                  (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)
+                  fin
+              | _, _ -> False) /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)) /\
+             // Transcript-length bound of CM.can_verify_client_finished: a
+             // Finished handshake message serializes to exactly 36 bytes
+             // (TLS13.Impl.Server.Send.lemma_serialize_handshake_finished_len);
+             // the runtime transcript-room check below guarantees it fits.
+             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+               max_transcript_len))
 
 fn server_application_record_keys_installed_runtime
   (c:connection_state)

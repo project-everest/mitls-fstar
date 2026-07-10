@@ -40,6 +40,13 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -165,7 +172,7 @@ fn mark_received_server_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -174,6 +181,7 @@ fn mark_received_server_hello
            pure (st0.CS.cs_model.CS.model_control ==
                    CS.ControlHandshaking CS.HsClientHelloSent /\
                  B.length 'fragment_bytes == SZ.v fragment_len /\
+                 SZ.v fragment_len <= max_server_hello_len /\
                  Seq.equal
                    (Ghost.reveal 'fragment_bytes)
                    (W.serialize_handshake (M.ServerHello sh)) /\
@@ -207,7 +215,7 @@ fn mark_received_client_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lch:IM.client_hello)
-  (#ch:erased M.client_hello)
+  (#ch:erased GCH.clientHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -260,7 +268,7 @@ fn mark_received_encrypted_extensions
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lee:IM.encrypted_extensions)
-  (#ee:erased M.encrypted_extensions)
+  (#ee:erased GEE.encryptedExtensions)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -299,7 +307,7 @@ fn mark_received_certificate
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lcert:IM.certificate_msg)
-  (#cert:erased M.certificate_msg)
+  (#cert:erased GCert.certificate)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -310,7 +318,7 @@ fn mark_received_certificate
                   st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                   st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
            st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
-           (Ghost.reveal cert).M.chain <> [] /\
+           Sem.certificate_entries (Ghost.reveal cert) <> [] /\
                   U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                   B.length 'fragment_bytes == SZ.v fragment_len /\
                   Seq.equal
@@ -331,7 +339,7 @@ fn mark_received_certificate
             (received_certificate_state st0 (Ghost.reveal cert) (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
-          pure (match (Ghost.reveal cert).M.chain with
+          pure (match Sem.certificate_entries (Ghost.reveal cert) with
                 | leaf :: _ ->
                   (received_certificate_state st0 (Ghost.reveal cert) (Ghost.reveal 'raw_bytes)).
                     CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der ==
@@ -344,7 +352,7 @@ fn mark_received_certificate_verify
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lcv:IM.certificate_verify)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -386,7 +394,7 @@ fn mark_received_server_finished
   (c:connection_state)
   (raw:array U8.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -415,7 +423,7 @@ fn mark_received_client_finished
   (c:connection_state)
   (raw:array U8.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **

@@ -31,6 +31,15 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module X = TLS13.X509.Spec
 
+// Phase 5: generated wire records + their Semantics accessors.
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
+
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
 
@@ -299,15 +308,15 @@ let lemma_optional_fixed_bytes_match_present_iff
   | false, None -> ()
 
 let lemma_server_key_share_option_some
-  (server:option M.server_hello)
+  (server:option GSH.serverHello)
   (storage:TLS13.Crypto.Spec.x25519_public)
   : Lemma
       (requires (match server with
-                 | Some sh -> Some sh.M.key_share
+                 | Some sh -> CS.server_hello_key_share sh
                  | None -> None) == Some storage)
       (ensures Some? server /\
                server == Some (Some?.v server) /\
-               storage == (Some?.v server).M.key_share)
+               CS.server_hello_key_share (Some?.v server) == Some storage)
 =
   match server with
   | Some sh -> ()
@@ -816,7 +825,7 @@ let handshake_start_exactly
 let client_hello_slot_exactly
   (present_box:box bool)
   ([@@@mkey] l:IM.client_hello)
-  (spec:option M.client_hello)
+  (spec:option GCH.clientHello)
   : slprop =
   exists* present random server_name key_share cipher_suites signature_schemes.
     Box.pts_to present_box present **
@@ -843,21 +852,26 @@ let client_hello_slot_exactly
           (if present then
             match spec with
             | Some m ->
-              Seq.equal random m.M.random /\
+              Seq.equal random (Sem.clientHello_random m) /\
               IM.optional_byte_prefix_matches
                 true
                 server_name
                 (client_hello_server_name_len_for m)
-                m.M.server_name /\
-              Seq.equal key_share m.M.key_share /\
+                (Sem.clientHello_server_name m) /\
+              (match Sem.clientHello_key_share_x25519 m with
+               | Some k -> B.length k == 32 /\ Seq.equal key_share k
+               | None -> False) /\
               IM.cipher_suites_match
                 cipher_suites
                 (SZ.v (client_hello_cipher_suites_len_for m))
-                m.M.cipher_suites /\
-              IM.signature_schemes_match
-                signature_schemes
-                (SZ.v (client_hello_signature_schemes_len_for m))
-                m.M.signature_schemes
+                (Sem.clientHello_cipher_suites m) /\
+              (match Sem.clientHello_sig_algs m with
+               | Some sas ->
+                 IM.signature_schemes_match
+                   signature_schemes
+                   (SZ.v (client_hello_signature_schemes_len_for m))
+                   sas
+               | None -> False)
             | None -> False
           else
             spec == None))
@@ -867,7 +881,7 @@ let client_hello_metadata_exactly
   (server_name_len_box:box SZ.t)
   (cipher_suites_len_box:box SZ.t)
   (signature_schemes_len_box:box SZ.t)
-  (spec:option M.client_hello)
+  (spec:option GCH.clientHello)
   : slprop =
   exists* has_server_name server_name_len cipher_suites_len signature_schemes_len.
     Box.pts_to has_server_name_box has_server_name **
@@ -888,7 +902,7 @@ let client_hello_metadata_exactly
 
 let server_hello_slot_exactly
   ([@@@mkey] slot:box (option IM.server_hello))
-  (spec:option M.server_hello)
+  (spec:option GSH.serverHello)
   : slprop =
   exists* stored.
     Box.pts_to slot stored **
@@ -901,7 +915,7 @@ let server_hello_slot_exactly
 
 let encrypted_extensions_slot_exactly
   ([@@@mkey] slot:box (option IM.encrypted_extensions))
-  (spec:option M.encrypted_extensions)
+  (spec:option GEE.encryptedExtensions)
   : slprop =
   exists* stored.
     Box.pts_to slot stored **
@@ -914,7 +928,7 @@ let encrypted_extensions_slot_exactly
 
 let certificate_slot_exactly
   ([@@@mkey] slot:box (option IM.certificate_msg))
-  (spec:option M.certificate_msg)
+  (spec:option GCert.certificate)
   : slprop =
   exists* stored.
     Box.pts_to slot stored **
@@ -927,7 +941,7 @@ let certificate_slot_exactly
 
 let certificate_verify_slot_exactly
   ([@@@mkey] slot:box (option IM.certificate_verify))
-  (spec:option M.certificate_verify)
+  (spec:option GCV.certificateVerify)
   : slprop =
   exists* stored.
     Box.pts_to slot stored **
@@ -940,7 +954,7 @@ let certificate_verify_slot_exactly
 
 let finished_slot_exactly
   ([@@@mkey] slot:box (option IM.finished))
-  (spec:option M.finished)
+  (spec:option GFin.finished)
   : slprop =
   exists* stored.
     Box.pts_to slot stored **
@@ -977,9 +991,19 @@ let server_key_share_exactly
     slot
     32
     (match hs.CS.hs_server_hello with
-     | Some sh -> Some sh.M.key_share
+     | Some sh -> CS.server_hello_key_share sh
      | None -> None)
 
+// [noextract]: pure spec-level projection over the *ghost* connection model
+// state (`CS.handshake_state`) returning spec `B.bytes`.  It is used only in
+// specifications/slprops (it currently has no caller at all) and must never be
+// runtime C.  It was the sole extracted referencer of `CS.handshake_state` /
+// `CS.server_handshake_selection`, which transitively embed the `noextract`
+// generated high records (GCH.clientHello, ...).  Removing it from extraction
+// lets KaRaMeL's dead-code elimination drop those ghost model record types
+// (exactly as it already drops `connection_model`, `connection_state`, ...),
+// so their non-Low* fields never surface as undefined C struct members.
+noextract
 let server_key_share_private_option
   (hs:CS.handshake_state)
   : option (b:B.bytes{B.length b == 32}) =
