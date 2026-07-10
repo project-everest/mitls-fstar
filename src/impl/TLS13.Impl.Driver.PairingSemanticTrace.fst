@@ -3,6 +3,7 @@ module TLS13.Impl.Driver.PairingSemanticTrace
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open FStar.List.Tot
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
@@ -2374,19 +2375,31 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
           M.TlsHandshake (M.Finished s_cf)
         ]);
     assert
-      (CS.sent_tls_messages client_trace ==
-        CS.received_tls_messages server_trace);
+      (CS.tls_messages_correspond
+        (CS.sent_tls_messages client_trace)
+        (CS.received_tls_messages server_trace));
     assert
-      ([
+      (CS.tls_messages_correspond
+       [
         M.TlsHandshake (M.ClientHello c_ch);
         M.TlsHandshake (M.Finished c_cf)
-       ] ==
+       ]
        [
         M.TlsHandshake (M.ClientHello s_ch);
         M.TlsHandshake (M.Finished s_cf)
        ]);
-    assert (c_ch == s_ch);
-    assert (c_cf == s_cf);
+    CS.lemma_tls_messages_correspond_two_handshakes
+      (M.ClientHello c_ch)
+      (M.Finished c_cf)
+      (M.ClientHello s_ch)
+      (M.Finished s_cf);
+    assert (CS.handshake_msg_corresponds
+      (M.ClientHello c_ch)
+      (M.ClientHello s_ch));
+    assert (CS.handshake_msg_corresponds
+      (M.Finished c_cf)
+      (M.Finished s_cf));
+    assert (CS.client_hello_corresponds c_ch s_ch);
     assert
       (CS.sent_tls_messages server_trace ==
         [
@@ -2406,16 +2419,18 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
           M.TlsHandshake (M.Finished c_sf)
         ]);
     assert
-      (CS.sent_tls_messages server_trace ==
-        CS.received_tls_messages client_trace);
+      (CS.tls_messages_correspond
+        (CS.sent_tls_messages server_trace)
+        (CS.received_tls_messages client_trace));
     assert
-      ([
+      (CS.tls_messages_correspond
+       [
         M.TlsHandshake (M.ServerHello s_sh);
         M.TlsHandshake (M.EncryptedExtensions s_ee);
         M.TlsHandshake (M.Certificate s_cert);
         M.TlsHandshake (M.CertificateVerify s_cv);
         M.TlsHandshake (M.Finished s_sf)
-       ] ==
+       ]
        [
         M.TlsHandshake (M.ServerHello c_sh);
         M.TlsHandshake (M.EncryptedExtensions c_ee);
@@ -2423,11 +2438,62 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
         M.TlsHandshake (M.CertificateVerify c_cv);
         M.TlsHandshake (M.Finished c_sf)
        ]);
-    assert (s_sh == c_sh);
-    assert (s_ee == c_ee);
-    assert (s_cert == c_cert);
-    assert (s_cv == c_cv);
-    assert (s_sf == c_sf);
+    CS.lemma_tls_messages_correspond_five_handshakes
+      (M.ServerHello s_sh)
+      (M.EncryptedExtensions s_ee)
+      (M.Certificate s_cert)
+      (M.CertificateVerify s_cv)
+      (M.Finished s_sf)
+      (M.ServerHello c_sh)
+      (M.EncryptedExtensions c_ee)
+      (M.Certificate c_cert)
+      (M.CertificateVerify c_cv)
+      (M.Finished c_sf);
+    assert (CS.handshake_msg_corresponds
+      (M.ServerHello s_sh)
+      (M.ServerHello c_sh));
+    CS.lemma_handshake_msg_corresponds_sym
+      (M.ServerHello s_sh)
+      (M.ServerHello c_sh);
+    assert (CS.handshake_msg_corresponds
+      (M.ServerHello c_sh)
+      (M.ServerHello s_sh));
+    assert (CS.handshake_msg_corresponds
+      (M.EncryptedExtensions s_ee)
+      (M.EncryptedExtensions c_ee));
+    CS.lemma_handshake_msg_corresponds_sym
+      (M.EncryptedExtensions s_ee)
+      (M.EncryptedExtensions c_ee);
+    assert (CS.handshake_msg_corresponds
+      (M.EncryptedExtensions c_ee)
+      (M.EncryptedExtensions s_ee));
+    assert (CS.handshake_msg_corresponds
+      (M.Certificate s_cert)
+      (M.Certificate c_cert));
+    CS.lemma_handshake_msg_corresponds_sym
+      (M.Certificate s_cert)
+      (M.Certificate c_cert);
+    assert (CS.handshake_msg_corresponds
+      (M.Certificate c_cert)
+      (M.Certificate s_cert));
+    assert (CS.handshake_msg_corresponds
+      (M.CertificateVerify s_cv)
+      (M.CertificateVerify c_cv));
+    CS.lemma_handshake_msg_corresponds_sym
+      (M.CertificateVerify s_cv)
+      (M.CertificateVerify c_cv);
+    assert (CS.handshake_msg_corresponds
+      (M.CertificateVerify c_cv)
+      (M.CertificateVerify s_cv));
+    assert (CS.handshake_msg_corresponds
+      (M.Finished s_sf)
+      (M.Finished c_sf));
+    CS.lemma_handshake_msg_corresponds_sym
+      (M.Finished s_sf)
+      (M.Finished c_sf);
+    assert (CS.handshake_msg_corresponds
+      (M.Finished c_sf)
+      (M.Finished s_sf));
     assert
       (client.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
         Some c_ch);
@@ -2543,6 +2609,7 @@ let handshake_message_slots_equal_model
   (model0:CS.connection_model)
   (model1:CS.connection_model)
   : prop =
+  model1.CS.model_handshake == model0.CS.model_handshake /\
   model1.CS.model_handshake.CS.hs_client_hello ==
     model0.CS.model_handshake.CS.hs_client_hello /\
   model1.CS.model_handshake.CS.hs_server_hello ==
@@ -2667,6 +2734,7 @@ let lemma_paired_handshake_message_states_preserved_by_application_suffixes
   : Lemma
       (requires
         Pairing.paired_handshake_message_states client_prefix server_prefix /\
+        Pairing.paired_handshake_events client_prefix server_prefix /\
         application_data_preserving_semantic_suffix
           client_prefix.CS.cs_model
           client_suffix
@@ -2675,7 +2743,9 @@ let lemma_paired_handshake_message_states_preserved_by_application_suffixes
           server_prefix.CS.cs_model
           server_suffix
           server.CS.cs_model)
-      (ensures Pairing.paired_handshake_message_states client server)
+      (ensures
+        Pairing.paired_handshake_message_states client server /\
+        Pairing.paired_handshake_events client server)
 =
   lemma_application_data_preserving_semantic_suffix_preserves_handshake_message_slots
     client_prefix.CS.cs_model
@@ -2687,7 +2757,18 @@ let lemma_paired_handshake_message_states_preserved_by_application_suffixes
     server.CS.cs_model;
   assert (handshake_message_slots_equal_model client_prefix.CS.cs_model client.CS.cs_model);
   assert (handshake_message_slots_equal_model server_prefix.CS.cs_model server.CS.cs_model);
-  assert (Pairing.paired_handshake_message_states client server)
+  assert (client.CS.cs_model.CS.model_handshake ==
+    client_prefix.CS.cs_model.CS.model_handshake);
+  assert (server.CS.cs_model.CS.model_handshake ==
+    server_prefix.CS.cs_model.CS.model_handshake);
+  assert (CS.same_transcript_checkpoint CS.TH_CH client server);
+  assert (CS.same_transcript_checkpoint CS.TH_SH client server);
+  assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
+  assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
+  assert (CS.same_transcript_checkpoint CS.TH_SF client server);
+  assert (CS.same_transcript_checkpoint CS.TH_CF client server);
+  assert (Pairing.paired_handshake_message_states client server);
+  assert (Pairing.paired_handshake_events client server)
 
 let lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
   (client:CS.connection_state)

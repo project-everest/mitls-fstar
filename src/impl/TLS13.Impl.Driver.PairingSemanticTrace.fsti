@@ -32,10 +32,12 @@ let paired_semantic_tls_io_traces
   (client_trace:list CS.conn_event)
   (server_trace:list CS.conn_event)
   : prop =
-  CS.sent_tls_messages client_trace ==
-    CS.received_tls_messages server_trace /\
-  CS.sent_tls_messages server_trace ==
-    CS.received_tls_messages client_trace
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages client_trace)
+    (CS.received_tls_messages server_trace) /\
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages server_trace)
+    (CS.received_tls_messages client_trace)
 
 (**
   Client-side no-tail semantic inversion package.
@@ -335,6 +337,7 @@ let paired_successful_no_tail_semantic_traces
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
+  Pairing.paired_handshake_events client server /\
   PNTCAS.client_no_tail_finished_sent_shape client /\
   PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
   client_successful_no_tail_semantic_trace_state client client_trace /\
@@ -355,7 +358,8 @@ let paired_successful_no_tail_semantic_traces_no_ccs_boundary
   server_trace == server.CS.cs_event_log /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
-    server
+    server /\
+  Pairing.paired_handshake_events client server
 
 noextract
 let paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
@@ -370,7 +374,8 @@ let paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
   PNTPH.server_no_tail_no_ccs_application_ready_boundary server /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
-    server
+    server /\
+  Pairing.paired_handshake_events client server
 
 noextract
 let conn_event_is_ccs
@@ -464,7 +469,8 @@ let paired_first_application_ready_semantic_cut
   : prop =
   CD.client_driver_application_ready client_ready /\
   SD.server_driver_application_ready server_ready /\
-  Pairing.paired_handshake_message_states client_ready server_ready
+  Pairing.paired_handshake_message_states client_ready server_ready /\
+  Pairing.paired_handshake_events client_ready server_ready
 
 noextract
 let paired_successful_semantic_logs_no_ccs_application_suffix_boundary

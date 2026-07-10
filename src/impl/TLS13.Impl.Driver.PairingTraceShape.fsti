@@ -310,10 +310,12 @@ let paired_semantic_tls_io_traces
   (client_trace:list CS.conn_event)
   (server_trace:list CS.conn_event)
   : prop =
-  CS.sent_tls_messages client_trace ==
-    CS.received_tls_messages server_trace /\
-  CS.sent_tls_messages server_trace ==
-    CS.received_tls_messages client_trace
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages client_trace)
+    (CS.received_tls_messages server_trace) /\
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages server_trace)
+    (CS.received_tls_messages client_trace)
 
 noextract
 let paired_application_ready_semantic_traces_with_message_states
@@ -330,7 +332,8 @@ let paired_application_ready_semantic_traces_with_message_states
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
-  Pairing.paired_handshake_message_states client server
+  Pairing.paired_handshake_message_states client server /\
+  Pairing.paired_handshake_events client server
 
 val lemma_client_server_application_record_material_agrees_from_paired_application_ready_semantic_traces
   (client:CS.connection_state)
