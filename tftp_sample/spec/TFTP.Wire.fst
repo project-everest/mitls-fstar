@@ -77,11 +77,11 @@ type tftp_message =
   | Msg_error : code:U16.t -> msg:cstring -> tftp_message
 
 (* Opcodes as 16-bit values (bounds come for free from the U16 type). *)
-let op_rrq   : U16.t = 1us
-let op_wrq   : U16.t = 2us
-let op_data  : U16.t = 3us
-let op_ack   : U16.t = 4us
-let op_error : U16.t = 5us
+inline_for_extraction let op_rrq   : U16.t = 1us
+inline_for_extraction let op_wrq   : U16.t = 2us
+inline_for_extraction let op_data  : U16.t = 3us
+inline_for_extraction let op_ack   : U16.t = 4us
+inline_for_extraction let op_error : U16.t = 5us
 
 (* Encode a 16-bit field big-endian; `n_to_be`'s return type already gives the
    inverse fact `U16.v x == be_to_n (enc16 x)`. *)

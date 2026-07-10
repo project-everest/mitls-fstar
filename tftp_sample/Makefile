@@ -95,6 +95,50 @@ check-admits:
 	@echo "Checking for admits..."
 	@grep -rn "admit *()" $(SPEC_DIR) $(IMPL_DIR) 2>/dev/null || echo "  none"
 
+# ═══════════════════════════════════════════════════════════════════
+# Extraction to C
+# ═══════════════════════════════════════════════════════════════════
+# The verified codec leaf `TFTP.Impl.Codec` is standalone (only Pulse/F* array
+# primitives + the hand-written TFTP.Wire spec it proves against), so KaRaMeL
+# bundles away the FStar/Pulse/Prims support and emits one C file with unprefixed
+# function names — the ABI the interop wrappers (P5) link against.
+IMPL_MODULES = TFTP.Impl.Codec
+
+KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES)))
+
+$(OUTPUT_DIR):
+	@mkdir -p $@
+
+$(EXTRACT_DIR):
+	@mkdir -p $@
+
+# ── Phase 1: F* → .krml ────────────────────────────────────────────
+$(OUTPUT_DIR)/TFTP_Impl_Codec.krml: verify | $(OUTPUT_DIR)
+	@echo "Extracting TFTP.Impl.Codec to .krml"
+	@$(FSTAR) --codegen krml \
+	  --extract_module TFTP.Impl.Codec \
+	  --odir $(OUTPUT_DIR) \
+	  $(IMPL_DIR)/TFTP.Impl.Codec.fst --krmloutput $@
+
+extract-krml: $(KRML_FILES)
+	@echo "All implementation modules extracted to .krml"
+
+# ── Phase 2: .krml → C ─────────────────────────────────────────────
+extract-c: extract-krml | $(EXTRACT_DIR)
+	@echo "Running KaRaMeL to generate C code..."
+	@$(KRML) \
+	  -tmpdir $(EXTRACT_DIR) \
+	  -skip-compilation \
+	  -warn-error -2-9-17 \
+	  -bundle 'TFTP.Impl.Codec=[rename=TFTP_Impl_Codec]' \
+	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
+	  -no-prefix TFTP.Impl.Codec \
+	  $(KRML_FILES)
+	@echo "C code generated in $(EXTRACT_DIR)/"
+	@ls -lh $(EXTRACT_DIR)/TFTP_Impl_Codec.c 2>/dev/null || true
+
+extract: extract-c
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -105,5 +149,8 @@ help:
 	@echo "TFTP sample - Makefile targets:"
 	@echo "  make verify        - Verify all TFTP modules (default)"
 	@echo "  make check-admits  - List admits in spec/ and impl/"
+	@echo "  make extract-krml  - Extract the codec leaf to .krml"
+	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
+	@echo "  make extract       - verify + extract-krml + extract-c"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  (no 'gen' target: the TFTP wire format is hand-written, not QuackyDucky)"
