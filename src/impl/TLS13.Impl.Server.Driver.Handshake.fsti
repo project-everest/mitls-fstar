@@ -80,7 +80,9 @@ val lemma_select_server_parameters_ready_payload_irrelevant :
       ST.server_local_event_input_ready
         st
         ST.LocalSelectServerParameters
-        payload1)
+        payload1 /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+        None)
 
 noextract
 let server_driver_selection_from_payload_correct

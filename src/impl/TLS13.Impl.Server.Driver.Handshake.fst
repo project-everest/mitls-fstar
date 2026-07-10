@@ -51,7 +51,9 @@ let lemma_select_server_parameters_ready_payload_irrelevant
         ST.server_local_event_input_ready
           st
           ST.LocalSelectServerParameters
-          payload1)
+          payload1 /\
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+          None)
 =
   assert (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
   assert (st.CS.cs_model.CS.model_control ==
@@ -84,6 +86,11 @@ let lemma_select_server_parameters_ready_payload_irrelevant
     CS.server_selected_credential = cfg.CS.server_credential_identity;
   } in
   assert (CM.can_select_server_parameters st selection0);
+  assert (CS.legal_event
+    st.CS.cs_model
+    (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection0)));
+  assert (st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+    None);
   assert (CS.server_selection_acceptable cfg selection0);
   assert (CS.cipher_suite_offered
     cfg.CS.server_supported_cipher_suites
@@ -495,6 +502,18 @@ fn select_default_server_parameters_once
     CS.ControlHandshaking CS.HsClientHelloReceived));
   assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
     CS.ServerEndpoint));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys ==
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+  assert (pure (
+    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
   assert (pure (Some?
     st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
   assert (pure (
@@ -503,12 +522,6 @@ fn select_default_server_parameters_once
   assert (pure (
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       Some (Ghost.reveal selection)));
-  assert (pure (
-    st1.CS.cs_model.CS.model_handshake.CS.hs_keys ==
-      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
-  assert (pure (
-    st1.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
-      None));
   assert (pure (Some?
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
   assert (pure (
@@ -2105,6 +2118,18 @@ fn select_and_derive_shared_secret_once
     CS.ControlHandshaking CS.HsClientHelloReceived));
   assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
     CS.ServerEndpoint));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys ==
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+  assert (pure (
+    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+      None));
   assert (pure (Some?
     st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
   assert (pure (
@@ -2141,15 +2166,11 @@ fn select_and_derive_shared_secret_once
       st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
         Some selection1.CS.server_selected_client_hello /\
       Some? selection1.CS.server_key_share_private /\
-      Some?.v selection1.CS.server_key_share_private == CL.raw_slice material_bytes 32 64
+      Some?.v selection1.CS.server_key_share_private == server_private_key_bytes
     | None -> False));
   lemma_server_local_event_input_ready_derive_shared_secret_intro
     st1
-    (CL.raw_slice material_bytes 32 64);
-  assert (pure (ST.server_local_event_input_ready
-    st1
-    ST.LocalDeriveSharedSecret
-    (CL.raw_slice material_bytes 32 64)));
+    server_private_key_bytes;
   assert (pure (ST.server_local_event_input_ready
     st1
     ST.LocalDeriveSharedSecret
@@ -2357,6 +2378,9 @@ fn select_and_derive_shared_secret_if_ready_once
       'st0
       ST.LocalSelectServerParameters
       (Seq.create 64 0uy)));
+    assert (pure (
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
+        None));
     fold (server_driver_buffers d buffered buffered_len);
     fold (server_driver_connected
       d
