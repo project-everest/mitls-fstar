@@ -130,6 +130,29 @@ val server_driver_endpoint_live
   : slprop
 
 noextract
+ghost fn server_driver_live_to_endpoint_live
+  (d:server_driver)
+  (st:Ghost.erased CS.connection_state)
+  (certificate_chain:Ghost.erased B.bytes)
+  (credential_identity:Ghost.erased CS.server_credential_identity)
+  requires server_driver_live
+             d
+             (Ghost.reveal st)
+             (Ghost.reveal certificate_chain)
+             (Ghost.reveal credential_identity) **
+           server_driver_canonical_progress d (Ghost.reveal st)
+           ** pure (Ghost.reveal st ==
+              Ghost.reveal
+                (server_driver_canonical d).SP.canonical_server_initial)
+  ensures exists* material_spec.
+            server_driver_endpoint_live
+              d
+              (Ghost.reveal st)
+              (Ghost.reveal certificate_chain)
+              (Ghost.reveal credential_identity)
+              material_spec
+
+noextract
 (**
   Owns a connected server driver together with the concrete TCP byte histories
   tracked by Common.TCP. The protocol-level processed wire log is in

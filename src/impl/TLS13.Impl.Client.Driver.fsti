@@ -92,6 +92,20 @@ val client_driver_endpoint_live
   : slprop
 
 noextract
+ghost fn client_driver_live_to_endpoint_live
+  (d:client_driver)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_live d (Ghost.reveal st)
+  ensures client_driver_endpoint_live d (Ghost.reveal st)
+
+noextract
+ghost fn client_driver_endpoint_live_to_live
+  (d:client_driver)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_live d (Ghost.reveal st)
+  ensures client_driver_live d (Ghost.reveal st)
+
+noextract
 (**
   Endpoint-owned connected driver state.
 

@@ -540,6 +540,79 @@ open TLS13.Impl.Server.Driver.State
 open TLS13.Impl.Server.Driver.Transport
 open TLS13.Impl.Server.Driver.Network
 open TLS13.Impl.Server.Driver.Local
+
+ghost fn server_driver_live_to_endpoint_live
+  (d:server_driver)
+  (st:Ghost.erased CS.connection_state)
+  (certificate_chain:Ghost.erased B.bytes)
+  (credential_identity:Ghost.erased CS.server_credential_identity)
+  requires server_driver_live
+             d
+             (Ghost.reveal st)
+             (Ghost.reveal certificate_chain)
+             (Ghost.reveal credential_identity) **
+           server_driver_canonical_progress d (Ghost.reveal st)
+           ** pure (Ghost.reveal st ==
+              Ghost.reveal
+                (server_driver_canonical d).SP.canonical_server_initial)
+  ensures exists* material_spec.
+            server_driver_endpoint_live
+              d
+              (Ghost.reveal st)
+              (Ghost.reveal certificate_chain)
+              (Ghost.reveal credential_identity)
+              material_spec
+{
+  unfold (server_driver_live
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity));
+  unfold (server_driver_canonical_progress d (Ghost.reveal st));
+  unfold (server_driver_buffers d B.empty 0sz);
+  with empty_payload raw network_out material cv_input signature app_out local_app_out.
+    assert (V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+            V.pts_to d.server_driver_raw #1.0R raw **
+            V.pts_to d.server_driver_network_out #1.0R network_out **
+            V.pts_to d.server_driver_material_payload #1.0R material **
+            V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+            V.pts_to d.server_driver_signature #1.0R signature **
+            V.pts_to d.server_driver_app_out #1.0R app_out **
+            V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
+            pure (B.length empty_payload == 0 /\
+                  B.length raw == SZ.v driver_rx_capacity /\
+                  B.length network_out == SZ.v driver_network_out_capacity /\
+                  B.length material == SZ.v driver_material_capacity /\
+                  B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
+                  B.length signature == SZ.v driver_signature_capacity /\
+                  B.length app_out == SZ.v driver_app_out_capacity /\
+                  B.length local_app_out == SZ.v driver_app_out_capacity));
+  assert_norm (SZ.v driver_material_capacity == 64);
+  assert (pure (B.length material == 64));
+  let material_spec : Ghost.erased EP.server_endpoint_material_spec = Ghost.hide material;
+  assert (pure (Seq.equal material (Ghost.reveal material_spec)));
+  assert (pure (SP.server_invariant_pure
+    (Ghost.reveal d.server_driver_initial)
+    B.empty
+    B.empty
+    (Ghost.reveal st)));
+  assert (pure (SP.server_config_matches_credentials
+    (Ghost.reveal d.server_driver_initial)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)));
+  fold (SP.server_invariant
+    (server_driver_canonical d)
+    B.empty
+    B.empty
+    (Ghost.reveal st));
+  fold (server_driver_endpoint_live
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)
+    material_spec);
+}
+
 open TLS13.Impl.Server.Driver.Handshake
 
 let lemma_control_snapshot_app_ready
