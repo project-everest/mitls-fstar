@@ -139,6 +139,45 @@ extract-c: extract-krml | $(EXTRACT_DIR)
 
 extract: extract-c
 
+# ═══════════════════════════════════════════════════════════════════
+# Verified driver loops → C + end-to-end (verified-loop) test
+# ═══════════════════════════════════════════════════════════════════
+# Extract the VERIFIED TFTP driver loops (tftp_client_run / tftp_server_run in
+# TFTP.Impl.{Client,Server}.Loop) — which reuse the verified codec leaves and
+# the CanonicalProtocol process_network/process_local — to one self-contained C
+# bundle (_extract/TFTP_Verified.c), then link a socketpair test harness that
+# runs a real file transfer through them (verified sender -> verified receiver)
+# and checks the reconstructed bytes.  Unlike YMODEM, the socketpair is
+# SOCK_DGRAM (each Common_TCP_read returns exactly one datagram), realizing the
+# one-datagram-per-read discipline TFTP's implicit-length DATA relies on.
+# pulse_array_shim.c is the trusted C realization of the Pulse library's verified
+# memcpy_l (as the TCP stub is the trusted realization of read/write).
+VERIFIED_DIR = verified
+STUBS_DIR    = ../c_stubs
+KRML_INCLUDE = $(KRML_HOME)/include
+KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
+INTEROP_DIR  = interop
+CC ?= gcc
+CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
+  -include $(STUBS_DIR)/common_tcp_karamel.h -Wall -Wno-unused-function \
+  -Wno-unused-parameter -Wno-implicit-function-declaration \
+  -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+
+extract-loops: verify
+	@echo "Extracting the verified TFTP driver loops to C ..."
+	@EVERPARSE_HOME=$(EVERPARSE_HOME) bash extract_loops.sh
+
+vloop-test: extract-loops
+	@echo "Building the verified-loop transfer test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
+	  $(VERIFIED_DIR)/vloop_test.c $(VERIFIED_DIR)/pulse_array_shim.c \
+	  $(EXTRACT_DIR)/TFTP_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified server loop  ->  verified client loop  (over a SOCK_DGRAM socketpair)"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/vloop_test $(VERIFIED_DIR)/dummy.txt
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -152,5 +191,7 @@ help:
 	@echo "  make extract-krml  - Extract the codec leaf to .krml"
 	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
 	@echo "  make extract       - verify + extract-krml + extract-c"
+	@echo "  make extract-loops - Extract the verified driver loops (_extract/TFTP_Verified.c)"
+	@echo "  make vloop-test    - Build + run the verified server->client transfer test"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  (no 'gen' target: the TFTP wire format is hand-written, not QuackyDucky)"
