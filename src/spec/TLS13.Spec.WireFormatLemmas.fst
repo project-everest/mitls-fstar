@@ -1,16 +1,32 @@
 module TLS13.Spec.WireFormatLemmas
 
+(** Supported-profile wire-format parseback and injectivity lemmas.
+
+    Re-founded over the QuackyDucky-generated codec.  [W.serialize_handshake] is
+    now the generated serializer, so it is injective and the message records
+    ([GCH.clientHello], [GSH.serverHello], ...) are the canonical wire form.
+    Consequently the old hand-written parseback machinery collapses to:
+
+    * the free record-framing round trip ([lemma_parse_record_wire_serialize_record]),
+    * codec injectivity ([TLS13.Wire.Spec.Reveal.Injective]),
+    * the generated parse/serialize round trip ([W.lemma_parse_tls_message_round_trip]).
+
+    "Same raw wire bytes" now forces "same record", which is strictly stronger
+    than the field-wise equivalence the previous version could establish. *)
+
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
 module Seq = FStar.Seq
 module T = TLS13.Types
 module W = TLS13.Wire.Spec
-module WR = TLS13.Wire.Spec.Reveal
-module WRCP = TLS13.Wire.Spec.Reveal.ClientHello.Parseback
 module WRD = TLS13.Wire.Spec.RevealDecode
+module WRI = TLS13.Wire.Spec.Reveal.Injective
 module ID = FStar.IndefiniteDescription
 module RTC = FStar.ReflexiveTransitiveClosure
 
@@ -30,6 +46,19 @@ let lemma_seq_equal_trans (#a:Type) (x y z:Seq.seq a)
   Seq.lemma_eq_elim x y;
   Seq.lemma_eq_elim y z;
   Seq.lemma_eq_refl x z
+
+let lemma_serialize_handshake_cong
+  (h1 h2:M.handshake_msg)
+  : Lemma
+      (requires h1 == h2)
+      (ensures
+        Seq.equal
+          (W.serialize_handshake h1)
+          (W.serialize_handshake h2))
+=
+  Seq.lemma_eq_intro
+    (W.serialize_handshake h1)
+    (W.serialize_handshake h2)
 
 (* ------------------------------------------------------------------------- *)
 (* #1  record-wire round trip                                                *)
@@ -51,124 +80,33 @@ let lemma_parse_record_wire_serialize_record
     (W.serialize_record content_type fragment)
 
 (* ------------------------------------------------------------------------- *)
-(* #2  client-hello round trip (delegated to the reveal layer)               *)
-(* ------------------------------------------------------------------------- *)
-
-let lemma_parse_client_hello_serialize_client_hello
-  (ch:M.client_hello)
-  : Lemma
-      (requires exact_client_hello_wire_parseback_profile ch)
-      (ensures W.parse_client_hello (W.serialize_client_hello ch) == Some ch)
-=
-  WRCP.lemma_parse_client_hello_serialize_client_hello ch
-
-let lemma_serialize_tls_message_client_hello (ch:M.client_hello)
-  : Lemma
-      (W.serialize_tls_message (M.TlsHandshake (M.ClientHello ch)) ==
-       (T.Handshake, W.serialize_handshake (M.ClientHello ch)))
-=
-  W.lemma_serialize_tls_message_handshake (M.ClientHello ch)
-
-(* ------------------------------------------------------------------------- *)
-(* #8 / #9  relate a sent canonical ClientHello to the same received record.  *)
+(* #2  supported ClientHello record-size bound                               *)
 (* ------------------------------------------------------------------------- *)
 
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_serialize_handshake_client_hello_record_bound
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   : Lemma
       (requires supported_client_hello_wire_profile ch)
       (ensures B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640)
 =
-  let hostname : (h:B.bytes{B.length h <= 255}) =
-    match ch.M.server_name with
-    | Some h -> h
-    | None -> B.empty in
-  let extensions = WR.client_hello_extensions_bytes hostname ch.M.key_share in
-  WR.lemma_client_hello_extensions_len hostname ch.M.key_share;
-  WR.lemma_client_hello_prefix_bytes_reveal
-    (43 + B.length extensions)
-    (B.length extensions)
-    ch.M.random;
-  WR.lemma_client_hello_handshake_bytes_prefix
-    ch.M.random
-    hostname
-    ch.M.key_share;
-  WR.lemma_client_hello_handshake_bytes_reveal ch;
-  let prefix =
-    WR.client_hello_prefix_bytes
-      (43 + B.length extensions)
-      (B.length extensions)
-      ch.M.random in
-  let p1 = B.of_list [
-    1uy;
-    WR.client_hello_byte ((43 + B.length extensions) / 65536);
-    WR.client_hello_byte ((43 + B.length extensions) / 256);
-    WR.client_hello_byte (43 + B.length extensions);
-    0x03uy; 0x03uy] in
-  let p2 = B.of_list [
-    0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
-    WR.client_hello_byte (B.length extensions / 256);
-    WR.client_hello_byte (B.length extensions)] in
-  assert_norm (B.length p1 == 6);
-  assert_norm (B.length p2 == 9);
-  Seq.lemma_len_append ch.M.random p2;
-  Seq.lemma_len_append p1 (B.append ch.M.random p2);
-  Seq.lemma_eq_elim prefix (B.append p1 (B.append ch.M.random p2));
-  assert (B.length prefix == 47);
-  Seq.lemma_len_append prefix extensions;
-  assert (B.length extensions <= 329);
-  assert (B.length (WR.client_hello_handshake_bytes ch.M.random hostname ch.M.key_share) <= 376);
-  assert (B.length (W.serialize_handshake (M.ClientHello ch)) <= 376)
+  ()
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
-let lemma_serialize_handshake_client_hello_empty_sni_eq_none
-  (ch:M.client_hello)
-  (hostname:B.bytes{ch.M.server_name == Some hostname /\ B.length hostname == 0})
-  : Lemma
-      (requires supported_client_hello_wire_profile ch)
-      (ensures
-        Seq.equal
-          (W.serialize_handshake (M.ClientHello ch))
-          (W.serialize_handshake (M.ClientHello ({ ch with M.server_name = None }))))
-=
-  let ch_none = { ch with M.server_name = None } in
-  assert (B.length hostname == B.length B.empty);
-  assert (forall (i:nat{i < B.length hostname}).
-    Seq.index hostname i == Seq.index B.empty i);
-  Seq.lemma_eq_intro hostname B.empty;
-  Seq.lemma_eq_elim hostname B.empty;
-  WR.lemma_client_hello_handshake_bytes_reveal ch;
-  WR.lemma_client_hello_handshake_bytes_reveal ch_none;
-  assert ((match ch.M.server_name with | Some h -> h | None -> B.empty) == B.empty);
-  assert ((match ch_none.M.server_name with | Some h -> h | None -> B.empty) == B.empty);
-  assert (Seq.equal
-    (W.serialize_handshake (M.ClientHello ch))
-    (WR.client_hello_handshake_bytes ch.M.random B.empty ch.M.key_share));
-  assert (Seq.equal
-    (W.serialize_handshake (M.ClientHello ch_none))
-    (WR.client_hello_handshake_bytes ch.M.random B.empty ch.M.key_share));
-  Seq.lemma_eq_elim
-    (W.serialize_handshake (M.ClientHello ch))
-    (WR.client_hello_handshake_bytes ch.M.random B.empty ch.M.key_share);
-  Seq.lemma_eq_elim
-    (W.serialize_handshake (M.ClientHello ch_none))
-    (WR.client_hello_handshake_bytes ch.M.random B.empty ch.M.key_share);
-  Seq.lemma_eq_refl
-    (WR.client_hello_handshake_bytes ch.M.random B.empty ch.M.key_share)
-    (W.serialize_handshake (M.ClientHello ch_none))
-#pop-options
+(* ------------------------------------------------------------------------- *)
+(* Core: a sent (canonical) ClientHello and the ClientHello obtained by       *)
+(* parsing the same raw record are the SAME record (codec injectivity).       *)
+(* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 10"
-let lemma_client_hello_received_body_from_sent_cleartext_and_received_parse
-  (sent_ch:M.client_hello)
-  (received_ch:M.client_hello)
+#push-options "--split_queries always --z3rlimit 20"
+let lemma_client_hello_sent_received_eq
+  (sent_ch:GCH.clientHello)
+  (received_ch:GCH.clientHello)
   (sent_raw:B.bytes)
   (received_raw:B.bytes)
   : Lemma
       (requires
-        exact_client_hello_wire_parseback_profile sent_ch /\
+        supported_client_hello_wire_profile sent_ch /\
         Seq.equal sent_raw received_raw /\
         CS.cleartext_tls_message_raw
           (M.TlsHandshake (M.ClientHello sent_ch))
@@ -176,67 +114,86 @@ let lemma_client_hello_received_body_from_sent_cleartext_and_received_parse
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ClientHello received_ch))
           received_raw)
-      (ensures
-        Seq.equal sent_ch.M.random received_ch.M.random /\
-        sent_ch.M.server_name == received_ch.M.server_name /\
-        Seq.equal sent_ch.M.key_share received_ch.M.key_share /\
-        sent_ch.M.cipher_suites == received_ch.M.cipher_suites /\
-        sent_ch.M.signature_schemes == received_ch.M.signature_schemes /\
-        received_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch))
+      (ensures sent_ch == received_ch)
 =
   let sent_fragment = W.serialize_handshake (M.ClientHello sent_ch) in
   let sent_record = W.serialize_record T.Handshake sent_fragment in
   let sent_msg = M.TlsHandshake (M.ClientHello sent_ch) in
   lemma_serialize_handshake_client_hello_record_bound sent_ch;
-  WR.lemma_serialize_tls_message_handshake (M.ClientHello sent_ch);
+  W.lemma_serialize_tls_message_handshake (M.ClientHello sent_ch);
   assert (CS.serialized_cleartext_tls_message sent_msg == sent_record);
-  assert (Seq.equal sent_raw (CS.serialized_cleartext_tls_message sent_msg));
   assert (Seq.equal sent_raw sent_record);
   Seq.lemma_eq_elim sent_raw sent_record;
   Seq.lemma_eq_elim received_raw sent_record;
   lemma_parse_record_wire_serialize_record T.Handshake sent_fragment;
-  WRCP.lemma_parse_tls_message_serialize_client_hello sent_ch;
-  eliminate exists (parsed_ch:M.client_hello).
-    W.parse_tls_message T.Handshake sent_fragment ==
-     Some (M.TlsHandshake (M.ClientHello parsed_ch)) /\
-    Seq.equal sent_ch.M.random parsed_ch.M.random /\
-    sent_ch.M.server_name == parsed_ch.M.server_name /\
-    Seq.equal sent_ch.M.key_share parsed_ch.M.key_share /\
-    sent_ch.M.cipher_suites == parsed_ch.M.cipher_suites /\
-    sent_ch.M.signature_schemes == parsed_ch.M.signature_schemes /\
-    parsed_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch)
-  returns
-    Seq.equal sent_ch.M.random received_ch.M.random /\
-    sent_ch.M.server_name == received_ch.M.server_name /\
-    Seq.equal sent_ch.M.key_share received_ch.M.key_share /\
-    sent_ch.M.cipher_suites == received_ch.M.cipher_suites /\
-    sent_ch.M.signature_schemes == received_ch.M.signature_schemes /\
-    received_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch)
+  eliminate exists (fragment:B.bytes).
+    W.parse_record_wire received_raw ==
+      Some (T.Handshake, fragment, B.length received_raw) /\
+    W.parse_tls_message T.Handshake fragment ==
+      Some (M.TlsHandshake (M.ClientHello received_ch))
+  returns sent_ch == received_ch
   with _.
-  ( eliminate exists (fragment:B.bytes).
-      W.parse_record_wire sent_record == Some (T.Handshake, fragment, B.length sent_record) /\
-      W.parse_tls_message T.Handshake fragment ==
-        Some (M.TlsHandshake (M.ClientHello received_ch))
-    returns
-      Seq.equal sent_ch.M.random received_ch.M.random /\
-      sent_ch.M.server_name == received_ch.M.server_name /\
-      Seq.equal sent_ch.M.key_share received_ch.M.key_share /\
-      sent_ch.M.cipher_suites == received_ch.M.cipher_suites /\
-      sent_ch.M.signature_schemes == received_ch.M.signature_schemes /\
-      received_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch)
-    with _.
-    ( assert (fragment == sent_fragment);
-      assert (W.parse_tls_message T.Handshake sent_fragment ==
-        Some (M.TlsHandshake (M.ClientHello received_ch)));
-      assert (Some (M.TlsHandshake (M.ClientHello parsed_ch)) ==
-        Some (M.TlsHandshake (M.ClientHello received_ch)));
-      assert (received_ch == parsed_ch);
-      Seq.lemma_eq_refl sent_ch.M.random received_ch.M.random;
-      Seq.lemma_eq_refl sent_ch.M.key_share received_ch.M.key_share ) )
+  ( assert (fragment == sent_fragment);
+    assert (W.parse_tls_message T.Handshake sent_fragment ==
+      Some (M.TlsHandshake (M.ClientHello received_ch)));
+    W.lemma_parse_tls_message_round_trip T.Handshake sent_fragment;
+    assert (Seq.equal
+      (W.serialize_handshake (M.ClientHello sent_ch))
+      (W.serialize_handshake (M.ClientHello received_ch)));
+    WRI.lemma_serialize_handshake_client_hello_injective sent_ch received_ch )
+#pop-options
 
+(* ------------------------------------------------------------------------- *)
+(* Core: a sent (canonical) ServerHello and the ServerHello obtained by       *)
+(* replaying the same raw record are the SAME record (framing + codec inj.).  *)
+(* ------------------------------------------------------------------------- *)
+
+#push-options "--split_queries always --z3rlimit 20"
+let lemma_server_hello_sent_received_eq
+  (sent_sh:GSH.serverHello)
+  (received_sh:GSH.serverHello)
+  (sent_raw:B.bytes)
+  (received_raw:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal sent_raw received_raw /\
+        CS.cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello sent_sh))
+          sent_raw /\
+        CS.received_cleartext_tls_message_raw
+          (M.TlsHandshake (M.ServerHello received_sh))
+          received_raw)
+      (ensures sent_sh == received_sh)
+=
+  let sent_fragment = W.serialize_handshake (M.ServerHello sent_sh) in
+  let received_fragment = W.serialize_handshake (M.ServerHello received_sh) in
+  let sent_record = W.serialize_record T.Handshake sent_fragment in
+  let received_record = W.serialize_record T.Handshake received_fragment in
+  W.lemma_serialize_tls_message_handshake (M.ServerHello sent_sh);
+  W.lemma_serialize_tls_message_handshake (M.ServerHello received_sh);
+  assert (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sent_sh)) == sent_record);
+  assert (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello received_sh)) == received_record);
+  assert (Seq.equal sent_raw sent_record);
+  assert (Seq.equal received_raw received_record);
+  lemma_seq_equal_sym received_raw received_record;
+  lemma_seq_equal_trans sent_raw received_raw received_record;
+  lemma_seq_equal_sym sent_raw sent_record;
+  lemma_seq_equal_trans sent_record sent_raw received_record;
+  assert (Seq.equal sent_record received_record);
+  WRI.lemma_serialize_record_injective T.Handshake sent_fragment received_fragment;
+  WRI.lemma_serialize_handshake_server_hello_injective sent_sh received_sh
+#pop-options
+
+(* ------------------------------------------------------------------------- *)
+(* External: ClientHello wire equivalence from a sent/received raw pair.      *)
+(* ------------------------------------------------------------------------- *)
+
+#push-options "--split_queries always --z3rlimit 20"
 let lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
-  (sent_ch:M.client_hello)
-  (received_ch:M.client_hello)
+  (sent_ch:GCH.clientHello)
+  (received_ch:GCH.clientHello)
   (sent_raw:B.bytes)
   (received_raw:B.bytes)
   : Lemma
@@ -251,101 +208,21 @@ let lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
           received_raw)
       (ensures client_hello_wire_equivalent sent_ch received_ch)
 =
-  match sent_ch.M.server_name with
-  | None ->
-    lemma_client_hello_received_body_from_sent_cleartext_and_received_parse
-      sent_ch received_ch sent_raw received_raw
-  | Some hostname ->
-    if B.length hostname = 0 then
-      let sent_none = { sent_ch with M.server_name = None } in
-      Seq.lemma_eq_intro hostname B.empty;
-      Seq.lemma_eq_elim hostname B.empty;
-      lemma_serialize_handshake_client_hello_empty_sni_eq_none sent_ch hostname;
-      Seq.lemma_eq_elim
-        (W.serialize_handshake (M.ClientHello sent_ch))
-        (W.serialize_handshake (M.ClientHello sent_none));
-      assert (Seq.equal
-        sent_raw
-        (CS.serialized_cleartext_tls_message
-          (M.TlsHandshake (M.ClientHello sent_ch))));
-      WR.lemma_serialize_tls_message_handshake (M.ClientHello sent_ch);
-      WR.lemma_serialize_tls_message_handshake (M.ClientHello sent_none);
-      lemma_serialize_tls_message_client_hello sent_ch;
-      lemma_serialize_tls_message_client_hello sent_none;
-      assert (CS.serialized_cleartext_tls_message
-                (M.TlsHandshake (M.ClientHello sent_ch)) ==
-              CS.serialized_cleartext_tls_message
-                (M.TlsHandshake (M.ClientHello sent_none)));
-      assert (Seq.equal
-        sent_raw
-        (CS.serialized_cleartext_tls_message
-          (M.TlsHandshake (M.ClientHello sent_none))));
-      assert (CS.cleartext_tls_message_raw
-        (M.TlsHandshake (M.ClientHello sent_none))
-        sent_raw);
-      lemma_client_hello_received_body_from_sent_cleartext_and_received_parse
-        sent_none received_ch sent_raw received_raw;
-      assert (received_ch.M.server_name == sent_none.M.server_name);
-      assert (sent_ch.M.server_name == Some B.empty);
-      assert (received_ch.M.server_name == None);
-      assert (client_hello_server_name_wire_equivalent sent_ch received_ch)
-    else
-      lemma_client_hello_received_body_from_sent_cleartext_and_received_parse
-        sent_ch received_ch sent_raw received_raw
+  lemma_client_hello_sent_received_eq sent_ch received_ch sent_raw received_raw;
+  Seq.lemma_eq_intro
+    (Sem.clientHello_random sent_ch)
+    (Sem.clientHello_random received_ch);
+  assert (client_hello_server_name_wire_equivalent sent_ch received_ch);
+  assert (client_hello_wire_equivalent sent_ch received_ch)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
-let lemma_client_hello_serialize_handshake_from_sent_cleartext_and_received_parse
-  (sent_ch:M.client_hello)
-  (received_ch:M.client_hello)
-  (sent_raw:B.bytes)
-  (received_raw:B.bytes)
-  : Lemma
-      (requires
-        supported_client_hello_wire_profile sent_ch /\
-        Seq.equal sent_raw received_raw /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello sent_ch))
-          sent_raw /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello received_ch))
-          received_raw)
-      (ensures
-        Seq.equal
-          (W.serialize_handshake (M.ClientHello sent_ch))
-          (W.serialize_handshake (M.ClientHello received_ch)))
-=
-  let sent_fragment = W.serialize_handshake (M.ClientHello sent_ch) in
-  let sent_record = W.serialize_record T.Handshake sent_fragment in
-  let sent_msg = M.TlsHandshake (M.ClientHello sent_ch) in
-  lemma_serialize_handshake_client_hello_record_bound sent_ch;
-  WR.lemma_serialize_tls_message_handshake (M.ClientHello sent_ch);
-  assert (CS.serialized_cleartext_tls_message sent_msg == sent_record);
-  assert (Seq.equal sent_raw (CS.serialized_cleartext_tls_message sent_msg));
-  assert (Seq.equal sent_raw sent_record);
-  Seq.lemma_eq_elim sent_raw sent_record;
-  Seq.lemma_eq_elim received_raw sent_record;
-  lemma_parse_record_wire_serialize_record T.Handshake sent_fragment;
-  eliminate exists (fragment:B.bytes).
-    W.parse_record_wire sent_record == Some (T.Handshake, fragment, B.length sent_record) /\
-    W.parse_tls_message T.Handshake fragment ==
-      Some (M.TlsHandshake (M.ClientHello received_ch))
-  returns
-    Seq.equal
-      (W.serialize_handshake (M.ClientHello sent_ch))
-      (W.serialize_handshake (M.ClientHello received_ch))
-  with _.
-  ( assert (fragment == sent_fragment);
-    assert (W.parse_tls_message T.Handshake sent_fragment ==
-      Some (M.TlsHandshake (M.ClientHello received_ch)));
-    W.lemma_parse_tls_message_round_trip T.Handshake sent_fragment;
-    assert (Seq.equal sent_fragment
-      (W.serialize_handshake (M.ClientHello received_ch))) )
-#pop-options
+(* ------------------------------------------------------------------------- *)
+(* Received ClientHello raw length agrees with the canonical serialization.   *)
+(* ------------------------------------------------------------------------- *)
 
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_received_client_hello_raw_length
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw:B.bytes)
   : Lemma
       (requires
@@ -389,128 +266,18 @@ let lemma_received_client_hello_raw_length
           (M.TlsHandshake (M.ClientHello ch)))) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
-let lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
-  (sent_sh:M.server_hello)
-  (received_sh:M.server_hello)
-  (sent_raw:B.bytes)
-  (received_raw:B.bytes)
-  : Lemma
-      (requires
-        Seq.equal sent_raw received_raw /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello sent_sh))
-          sent_raw /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello received_sh))
-          received_raw)
-      (ensures server_hello_wire_equivalent sent_sh received_sh)
-=
-  let sent_fragment = W.serialize_handshake (M.ServerHello sent_sh) in
-  let received_fragment = W.serialize_handshake (M.ServerHello received_sh) in
-  let sent_record = W.serialize_record T.Handshake sent_fragment in
-  let received_record = W.serialize_record T.Handshake received_fragment in
-  W.lemma_serialize_server_hello_len sent_sh;
-  W.lemma_serialize_server_hello_len received_sh;
-  WR.lemma_serialize_tls_message_handshake (M.ServerHello sent_sh);
-  WR.lemma_serialize_tls_message_handshake (M.ServerHello received_sh);
-  assert (B.length sent_fragment <= 16640);
-  assert (B.length received_fragment <= 16640);
-  assert (CS.serialized_cleartext_tls_message
-            (M.TlsHandshake (M.ServerHello sent_sh)) == sent_record);
-  assert (CS.serialized_cleartext_tls_message
-            (M.TlsHandshake (M.ServerHello received_sh)) == received_record);
-  assert (Seq.equal sent_raw sent_record);
-  assert (Seq.equal received_raw received_record);
-  lemma_seq_equal_sym received_raw received_record;
-  lemma_seq_equal_trans sent_raw received_raw received_record;
-  lemma_seq_equal_sym sent_raw sent_record;
-  lemma_seq_equal_trans sent_record sent_raw received_record;
-  assert (Seq.equal sent_record received_record);
-  Seq.lemma_eq_elim sent_record received_record;
-  lemma_parse_record_wire_serialize_record T.Handshake sent_fragment;
-  lemma_parse_record_wire_serialize_record T.Handshake received_fragment;
-  assert (Some (T.Handshake, sent_fragment, B.length sent_record) ==
-          Some (T.Handshake, received_fragment, B.length received_record))
-#pop-options
+(* ------------------------------------------------------------------------- *)
+(* Paired cleartext hello: wire equivalence + handshake-traffic checkpoint.   *)
+(* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 10"
-let lemma_parse_supported_server_hello_same_fragment
-  (sent_sh:M.server_hello)
-  (received_sh:M.server_hello)
-  (sent_fragment:B.bytes)
-  (received_fragment:B.bytes)
-  : Lemma
-      (requires
-        Seq.equal sent_fragment received_fragment /\
-        W.parse_supported_server_hello sent_fragment == Some sent_sh /\
-        W.parse_supported_server_hello received_fragment == Some received_sh)
-      (ensures
-        sent_sh == received_sh /\
-        CS.server_hello_key_share sent_sh ==
-          CS.server_hello_key_share received_sh)
-=
-  Seq.lemma_eq_elim sent_fragment received_fragment;
-  assert (W.parse_supported_server_hello sent_fragment ==
-          W.parse_supported_server_hello received_fragment);
-  assert (Some sent_sh == Some received_sh)
-#pop-options
-
-#push-options "--split_queries always --z3rlimit 10"
-let lemma_paired_cleartext_hello_wire_equivalent_from_cleartext_raw
-  (client:CS.connection_state)
-  (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
-  (client_ch_raw:B.bytes)
-  (server_ch_raw:B.bytes)
-  (client_sh_raw:B.bytes)
-  (server_sh_raw:B.bytes)
-  : Lemma
-      (requires
-        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
-        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
-        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
-        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
-        supported_client_hello_wire_profile client_ch /\
-        Seq.equal client_ch_raw server_ch_raw /\
-        Seq.equal server_sh_raw client_sh_raw /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello client_ch))
-          client_ch_raw /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello server_ch))
-          server_ch_raw /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello server_sh))
-          server_sh_raw /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello client_sh))
-          client_sh_raw)
-      (ensures paired_cleartext_hello_wire_equivalent client server)
-=
-  lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
-    client_ch
-    server_ch
-    client_ch_raw
-    server_ch_raw;
-  lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
-    server_sh
-    client_sh
-    server_sh_raw
-    client_sh_raw
-#pop-options
-
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--split_queries always --z3rlimit 20"
 let lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -542,27 +309,20 @@ let lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
         CS.same_transcript_checkpoint CS.TH_SH client server /\
         CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server)
 =
-  lemma_client_hello_serialize_handshake_from_sent_cleartext_and_received_parse
-    client_ch
-    server_ch
-    client_ch_raw
-    server_ch_raw;
-  lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
-    server_sh
-    client_sh
-    server_sh_raw
-    client_sh_raw;
-  lemma_paired_cleartext_hello_wire_equivalent_from_cleartext_raw
-    client
-    server
-    client_ch
-    server_ch
-    client_sh
-    server_sh
-    client_ch_raw
-    server_ch_raw
-    client_sh_raw
-    server_sh_raw;
+  lemma_client_hello_sent_received_eq
+    client_ch server_ch client_ch_raw server_ch_raw;
+  lemma_server_hello_sent_received_eq
+    server_sh client_sh server_sh_raw client_sh_raw;
+  (* records coincide; assemble the wire-equivalence view *)
+  lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
+    client_ch server_ch client_ch_raw server_ch_raw;
+  lemma_serialize_handshake_cong
+    (M.ServerHello server_sh) (M.ServerHello client_sh);
+  assert (server_hello_wire_equivalent server_sh client_sh);
+  assert (paired_cleartext_hello_wire_equivalent client server);
+  (* transcript checkpoints from the (equal) serialized handshake images *)
+  lemma_serialize_handshake_cong
+    (M.ClientHello client_ch) (M.ClientHello server_ch);
   Seq.lemma_eq_elim
     (W.serialize_handshake (M.ClientHello client_ch))
     (W.serialize_handshake (M.ClientHello server_ch));
@@ -574,14 +334,19 @@ let lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
   assert (CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+(* ------------------------------------------------------------------------- *)
+(* Paired handshake events: full transcript agreement through the protected   *)
+(* flight, given byte-replay of the protected handshake records.              *)
+(* ------------------------------------------------------------------------- *)
+
+#push-options "--split_queries always --z3rlimit 20"
 let lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -648,12 +413,6 @@ let lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
     Seq.lemma_eq_elim
-      (W.serialize_handshake (M.ClientHello client_ch))
-      (W.serialize_handshake (M.ClientHello server_ch));
-    Seq.lemma_eq_elim
-      (W.serialize_handshake (M.ServerHello server_sh))
-      (W.serialize_handshake (M.ServerHello client_sh));
-    Seq.lemma_eq_elim
       (W.serialize_handshake (M.EncryptedExtensions server_ee))
       (W.serialize_handshake (M.EncryptedExtensions client_ee));
     Seq.lemma_eq_elim
@@ -683,14 +442,20 @@ let lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+(* ------------------------------------------------------------------------- *)
+(* Paired cleartext hello key shares: X25519 key-share agreement.             *)
+(* With the injective codec this needs no [parse_supported_server_hello]      *)
+(* side conditions -- raw replay already forces record equality.             *)
+(* ------------------------------------------------------------------------- *)
+
+#push-options "--split_queries always --z3rlimit 20"
 let lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -715,37 +480,30 @@ let lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_ser
           server_sh_raw /\
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
-          client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh)
+          client_sh_raw)
       (ensures
         paired_cleartext_hello_wire_equivalent client server /\
         paired_cleartext_hello_key_shares client server)
 =
-  lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
+  lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
+    client
+    server
     client_ch
     server_ch
+    client_sh
+    server_sh
     client_ch_raw
-    server_ch_raw;
-  assert (Seq.equal client_ch.M.key_share server_ch.M.key_share);
-  Seq.lemma_eq_elim client_ch.M.key_share server_ch.M.key_share;
-  lemma_server_hello_wire_equivalent_from_sent_cleartext_and_received_cleartext
-    server_sh
-    client_sh
-    server_sh_raw
-    client_sh_raw;
-  lemma_parse_supported_server_hello_same_fragment
-    server_sh
-    client_sh
-    (W.serialize_handshake (M.ServerHello server_sh))
-    (W.serialize_handshake (M.ServerHello client_sh));
+    server_ch_raw
+    client_sh_raw
+    server_sh_raw;
+  lemma_client_hello_sent_received_eq
+    client_ch server_ch client_ch_raw server_ch_raw;
+  lemma_server_hello_sent_received_eq
+    server_sh client_sh server_sh_raw client_sh_raw;
   assert (CS.client_hello_key_share client_ch ==
           CS.client_hello_key_share server_ch);
   assert (CS.server_hello_key_share client_sh ==
           CS.server_hello_key_share server_sh);
-  assert (paired_cleartext_hello_wire_equivalent client server);
   assert (paired_cleartext_hello_key_shares client server)
 #pop-options
 
@@ -872,78 +630,6 @@ let lemma_step_model_handshake_fields
 #pop-options
 
 (* ------------------------------------------------------------------------- *)
-(* Role invariant of a raw replay: a server selection can only be present on *)
-(* a server.  ClientHello is intentionally not role-exclusive: clients send  *)
-(* it and servers receive it.                                                *)
-(* ------------------------------------------------------------------------- *)
-
-let raw_replay_role_invariant (model:CS.connection_model) : prop =
-  (Some? model.CS.model_handshake.CS.hs_server_selection ==>
-     model.CS.model_config.CS.config_role == CS.ServerEndpoint)
-
-let lemma_step_raw_replay_role_invariant
-  (model:CS.connection_model)
-  (ev:CS.conn_event)
-  (model1:CS.connection_model)
-  (ds:B.bytes)
-  (dr:B.bytes)
-  : Lemma
-      (requires
-        raw_replay_role_invariant model /\
-        CS.legal_event model ev /\
-        CS.step_model model ev == Some model1 /\
-        CS.event_raw_delta_legal model ev ds dr)
-      (ensures raw_replay_role_invariant model1)
-=
-  lemma_step_model_handshake_fields model ev model1 ds dr
-
-let rec lemma_raw_replay_role_invariant_preserved
-  (model:CS.connection_model)
-  (events:list CS.conn_event)
-  (rs:B.bytes)
-  (rr:B.bytes)
-  (final:CS.connection_model)
-  : Lemma
-      (requires
-        CS.conn_events_raw_replay model events rs rr final /\
-        raw_replay_role_invariant model)
-      (ensures raw_replay_role_invariant final)
-      (decreases events)
-=
-  match events with
-  | [] -> ()
-  | ev :: rest ->
-    eliminate exists (model1:CS.connection_model)
-                     (delta_sent:B.bytes)
-                     (delta_received:B.bytes)
-                     (tail_sent:B.bytes)
-                     (tail_received:B.bytes).
-      CS.legal_event model ev /\
-      CS.step_model model ev == Some model1 /\
-      CS.event_raw_delta_legal model ev delta_sent delta_received /\
-      Seq.equal rs (B.append delta_sent tail_sent) /\
-      Seq.equal rr (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final
-    returns raw_replay_role_invariant final
-    with _.
-    ( lemma_step_raw_replay_role_invariant model ev model1 delta_sent delta_received;
-      lemma_raw_replay_role_invariant_preserved
-        model1 rest tail_sent tail_received final )
-
-let lemma_raw_replay_consistent_role_invariant
-  (st:CS.connection_state)
-  : Lemma
-      (requires CS.connection_state_raw_event_replay_consistent st)
-      (ensures raw_replay_role_invariant st.CS.cs_model)
-=
-  lemma_raw_replay_role_invariant_preserved
-    (CS.initial_model st.CS.cs_model.CS.model_config)
-    st.CS.cs_event_log
-    st.CS.cs_wire_log.CL.raw_sent
-    st.CS.cs_wire_log.CL.raw_received
-    st.CS.cs_model
-
-(* ------------------------------------------------------------------------- *)
 (* #10  consumer-critical: a consistent client's ClientHello reflects the     *)
 (* supported configuration profile.  Proved as a reachable-shape invariant.   *)
 (* ------------------------------------------------------------------------- *)
@@ -956,11 +642,13 @@ let client_config_shape (st:CS.connection_state) : prop =
       | None -> True ) /\
     ( match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
-        ch.M.cipher_suites == st.CS.cs_model.CS.model_config.CS.config_cipher_suites /\
-        ch.M.signature_schemes ==
-          st.CS.cs_model.CS.model_config.CS.config_signature_schemes /\
-        ch.M.server_name == Some st.CS.cs_model.CS.model_config.CS.config_server_name /\
-        B.length ch.M.body == 0
+        Sem.clientHello_cipher_suites ch ==
+          st.CS.cs_model.CS.model_config.CS.config_cipher_suites /\
+        Sem.clientHello_sig_algs ch ==
+          Some st.CS.cs_model.CS.model_config.CS.config_signature_schemes /\
+        Sem.clientHello_server_name ch ==
+          Some st.CS.cs_model.CS.model_config.CS.config_server_name /\
+        B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640
       | None -> True ) )
 
 #push-options "--split_queries always --z3rlimit 10"
@@ -1042,6 +730,7 @@ let lemma_connection_state_consistent_client_config_shape
   assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
   assert (p st)
 
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_state_supported_client_hello_wire_profile_from_config
   (st:CS.connection_state)
   : Lemma
@@ -1052,12 +741,4 @@ let lemma_state_supported_client_hello_wire_profile_from_config
       (ensures state_supported_client_hello_wire_profile st)
 =
   lemma_connection_state_consistent_client_config_shape st
-
-(* Raw replay can now relate ClientHello bytes (above).  It still cannot soundly
-   produce exact paired ServerHello messages or ServerHello key-share equality
-   from the previous #12/#13 preconditions: server-sent ServerHello values use
-   [body = B.empty] and canonical serialization, while received values may carry
-   the full wire body.  The sound ServerHello conclusion exposed here is
-   [server_hello_wire_equivalent]: equality of the serialized handshake image,
-   which deliberately does not inspect received structured fields when [body] is
-   non-empty. *)
+#pop-options
