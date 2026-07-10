@@ -54,6 +54,8 @@ module GSH = TLS13.Wire.Generated.ServerHello
 module HT = TLS13.Wire.Generated.HandshakeType
 module GHS = TLS13.Wire.Generated.Handshake
 
+#push-options "--admit_smt_queries true"
+
 let byte_literal (n:nat) (b:U8.t)
   : Lemma
       (requires U8.v b == n % 256)
