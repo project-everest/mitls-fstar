@@ -24,6 +24,7 @@ module SeqP = FStar.Seq.Properties
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module WFSM = Common.WireFormatStateMachine
 
 val client_driver : Type0
 
@@ -110,6 +111,37 @@ val client_driver_endpoint_connected
   (canonical_received:B.bytes)
   (canonical_sent:B.bytes)
   : slprop
+
+noextract
+ghost fn client_driver_endpoint_connected_valid_byte_trace
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (canonical_received:Ghost.erased B.bytes)
+  (canonical_sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st)
+             (Ghost.reveal canonical_received)
+             (Ghost.reveal canonical_sent)
+  ensures client_driver_endpoint_connected
+            d
+            cfg
+            frame
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal canonical_sent) **
+          pure (WFSM.valid_byte_trace
+            (CP.client_system
+              (Ghost.reveal
+                (client_driver_canonical d).CP.canonical_client_initial))
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_sent)
+            Seq.empty)
 
 noextract
 val client_driver_closed

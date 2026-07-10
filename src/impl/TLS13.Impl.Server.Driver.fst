@@ -51,6 +51,7 @@ module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module MR = Pulse.Lib.MonotonicGhostRef
 module SP = TLS13.Impl.Server.CanonicalProtocol
+module WFSM = Common.WireFormatStateMachine
 
 type server_driver = DS.server_driver
 
@@ -184,6 +185,68 @@ let server_driver_connected = DS.server_driver_connected
 
 noextract
 let server_driver_endpoint_connected = DS.server_driver_endpoint_connected
+
+noextract
+ghost fn server_driver_endpoint_connected_valid_byte_trace
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (canonical_received:Ghost.erased B.bytes)
+  (canonical_sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires DS.server_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st)
+              'certificate_chain
+              'credential_identity
+              (Ghost.reveal canonical_received)
+              (Ghost.reveal canonical_sent)
+  ensures DS.server_driver_endpoint_connected
+            d
+            cfg
+            frame
+            (Ghost.reveal st)
+            'certificate_chain
+            'credential_identity
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal canonical_sent) **
+          pure (WFSM.valid_byte_trace
+            (SP.server_system
+              (Ghost.reveal
+                (DS.server_driver_canonical d).SP.canonical_server_initial))
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_sent)
+            Seq.empty)
+{
+  unfold (DS.server_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st)
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal canonical_received)
+    (Ghost.reveal canonical_sent));
+  with ch buffered_len cv_input signature. _;
+  SP.server_invariant_valid
+    (DS.server_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st;
+  with ch buffered_len cv_input signature.
+  fold (DS.server_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st)
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal canonical_received)
+    (Ghost.reveal canonical_sent))
+}
 
 noextract
 let server_driver_closed = DS.server_driver_closed

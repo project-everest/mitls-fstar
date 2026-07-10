@@ -27,6 +27,7 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module SP = TLS13.Impl.Server.CanonicalProtocol
+module WFSM = Common.WireFormatStateMachine
 
 val server_driver : Type0
 
@@ -156,6 +157,41 @@ val server_driver_endpoint_connected
   (canonical_received:B.bytes)
   (canonical_sent:B.bytes)
   : slprop
+
+noextract
+ghost fn server_driver_endpoint_connected_valid_byte_trace
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (canonical_received:Ghost.erased B.bytes)
+  (canonical_sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires server_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st)
+              'certificate_chain
+              'credential_identity
+              (Ghost.reveal canonical_received)
+              (Ghost.reveal canonical_sent)
+  ensures server_driver_endpoint_connected
+            d
+            cfg
+            frame
+            (Ghost.reveal st)
+            'certificate_chain
+            'credential_identity
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal canonical_sent) **
+          pure (WFSM.valid_byte_trace
+            (SP.server_system
+              (Ghost.reveal
+                (server_driver_canonical d).SP.canonical_server_initial))
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_sent)
+            Seq.empty)
 
 noextract
 val server_driver_closed

@@ -35,6 +35,7 @@ module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module WFSM = Common.WireFormatStateMachine
 
 let driver_network_out_capacity : SZ.t = 20000sz
 let driver_app_out_capacity : SZ.t = 16640sz
@@ -545,6 +546,60 @@ let client_driver_endpoint_connected
       canonical_sent
       st **
     pure (SZ.v buffered_len <= SZ.v frame.EP.client_ep_raw_len)
+
+noextract
+ghost fn client_driver_endpoint_connected_valid_byte_trace
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (canonical_received:Ghost.erased B.bytes)
+  (canonical_sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st)
+             (Ghost.reveal canonical_received)
+             (Ghost.reveal canonical_sent)
+  ensures client_driver_endpoint_connected
+            d
+            cfg
+            frame
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal canonical_sent) **
+          pure (WFSM.valid_byte_trace
+            (CP.client_system
+              (Ghost.reveal
+                (client_driver_canonical d).CP.canonical_client_initial))
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_sent)
+            Seq.empty)
+{
+  unfold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st)
+    (Ghost.reveal canonical_received)
+    (Ghost.reveal canonical_sent));
+  with ch buffered_len. _;
+  CP.client_invariant_valid
+    (client_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st;
+  with ch buffered_len.
+  fold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st)
+    (Ghost.reveal canonical_received)
+    (Ghost.reveal canonical_sent))
+}
 
 let lemma_client_local_process_correct_received_unchanged
   (initial:CS.connection_state)
