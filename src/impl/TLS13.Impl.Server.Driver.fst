@@ -699,7 +699,12 @@ fn new_server
                      ST.server_end_to_end_invariant
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
-                         credential_identity))
+                         credential_identity) /\
+                     Ghost.reveal
+                       (server_driver_canonical d).SP.canonical_server_initial ==
+                       CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity)
            | None ->
              emp)
 {

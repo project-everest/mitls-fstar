@@ -489,70 +489,14 @@ fn new_server
                      ST.server_end_to_end_invariant
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
-                         credential_identity))
+                         credential_identity) /\
+                     Ghost.reveal
+                       (server_driver_canonical d).SP.canonical_server_initial ==
+                       CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity)
            | None ->
              emp)
-
-fn accept
-  (d:server_driver)
-  (bind_host:array U8.t)
-  (bind_host_len:SZ.t)
-  (port:U16.t)
-  (local_fuel:SZ.t)
-  (network_fuel:SZ.t)
-  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
-           pts_to bind_host 'bind_host_bytes **
-           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
-                 CM.can_start_server 'st0 /\
-                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
-                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
-                  | Some cfg ->
-                    CS.cipher_suite_offered
-                      cfg.CS.server_supported_cipher_suites
-                      T.TLS_CHACHA20_POLY1305_SHA256 /\
-                    CS.named_group_offered
-                      cfg.CS.server_supported_groups
-                      T.X25519 /\
-                    CS.signature_scheme_offered
-                      cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
-                    cfg.CS.server_sni_policy == None
-                  | None -> False))
-  returns status:server_workflow_status
-  ensures pts_to bind_host 'bind_host_bytes **
-          (match status with
-           | ServerWorkflowClosed ->
-             exists* st1.
-               server_driver_closed d st1 'certificate_chain 'credential_identity **
-               pure (st1.CS.cs_model.CS.model_config ==
-                 'st0.CS.cs_model.CS.model_config)
-           | ServerWorkflowOk ->
-             exists* st1 received sent.
-               server_driver_connected
-                 d
-                 st1
-                 'certificate_chain
-                 'credential_identity
-                 received
-                 sent **
-               pure (server_driver_application_ready st1 /\
-                     st1.CS.cs_model.CS.model_config ==
-                       'st0.CS.cs_model.CS.model_config /\
-                     server_driver_sent_log_exact st1 sent /\
-                     server_driver_received_log_accounted st1 received /\
-                     server_driver_received_log_exact_prefix st1 received /\
-                     server_driver_received_no_read_ahead st1 received)
-           | _ ->
-             exists* st1 received sent.
-               server_driver_connected
-                 d
-                 st1
-                 'certificate_chain
-                 'credential_identity
-                 received
-                 sent **
-               pure (st1.CS.cs_model.CS.model_config ==
-                 'st0.CS.cs_model.CS.model_config))
 
 noextract
 fn accept_endpoint
@@ -614,48 +558,6 @@ fn accept_endpoint
                 'credential_identity
                 received1
                 sent1)
-
-fn send
-  (d:server_driver)
-  (payload:array U8.t)
-  (payload_len:SZ.t)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent **
-           pts_to payload 'payload_bytes **
-           pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 ST.server_local_event_input_ready
-                   'st0
-                   ST.LocalSendApplicationData
-                   (Ghost.reveal 'payload_bytes))
-  returns status:server_workflow_status
-  ensures exists* st1 sent'.
-          server_driver_connected
-            d
-            st1
-            'certificate_chain
-            'credential_identity
-            'received
-            sent' **
-          pts_to payload 'payload_bytes **
-          pure (server_driver_send_correct
-            'st0
-            st1
-            status
-            (Ghost.reveal 'payload_bytes)
-            (Ghost.reveal 'sent)
-            sent' /\
-            st1.CS.cs_model.CS.model_config ==
-              'st0.CS.cs_model.CS.model_config /\
-            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-            server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-            server_driver_sent_log_exact st1 sent' /\
-            server_driver_received_log_accounted st1 (Ghost.reveal 'received))
-
 
 noextract
 fn send_endpoint
@@ -813,72 +715,3 @@ fn close_endpoint
                (Ghost.reveal st1)
                wire_outputs
                local_outputs)
-
-fn receive
-  (d:server_driver)
-  (out:array U8.t)
-  (out_len:SZ.t)
-  (local_fuel:SZ.t)
-  (network_fuel:SZ.t)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent **
-           pts_to out 'out_bytes **
-           pure (B.length 'out_bytes == SZ.v out_len)
-  returns result:server_receive_result
-  ensures exists* st1 received' sent' out_bytes.
-          server_driver_connected
-            d
-            st1
-            'certificate_chain
-            'credential_identity
-            received'
-            sent' **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v result.server_receive_len <= SZ.v out_len /\
-                st1.CS.cs_model.CS.model_config ==
-                  'st0.CS.cs_model.CS.model_config /\
-                server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-                server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-                server_driver_sent_log_exact st1 sent' /\
-                server_driver_received_log_accounted st1 received' /\
-                (exists loop app_out.
-                  server_driver_receive_correct
-                    'st0
-                    st1
-                    result
-                    loop
-                    (Ghost.reveal 'sent)
-                    sent'
-                    app_out
-                    out_bytes))
-
-fn close
-  (d:server_driver)
-  (wait_for_peer:bool)
-  (network_fuel:SZ.t)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent **
-            pure (server_driver_application_ready 'st0)
-  returns status:server_workflow_status
-  ensures exists* st1.
-            server_driver_closed d st1 'certificate_chain 'credential_identity **
-            pure (status == ServerWorkflowClosed /\
-                 st1.CS.cs_model.CS.model_config ==
-                   'st0.CS.cs_model.CS.model_config /\
-                 server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-                 server_driver_close_correct
-                   'st0
-                   st1
-                   (Ghost.reveal 'sent))
