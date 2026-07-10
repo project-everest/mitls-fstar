@@ -704,6 +704,254 @@ let stable_server_x25519_key_share_projection
   server_x25519_key_share_projection_stable_control
     server.cs_model.model_control
 
+let client_hello_corresponds
+  (left:M.client_hello)
+  (right:M.client_hello)
+  : prop =
+  left.M.random == right.M.random /\
+  left.M.server_name == right.M.server_name /\
+  left.M.key_share == right.M.key_share /\
+  left.M.cipher_suites == right.M.cipher_suites /\
+  left.M.signature_schemes == right.M.signature_schemes
+
+let server_hello_corresponds
+  (left:M.server_hello)
+  (right:M.server_hello)
+  : prop =
+  left.M.random == right.M.random /\
+  left.M.key_share == right.M.key_share /\
+  left.M.cipher_suite == right.M.cipher_suite
+
+let encrypted_extensions_corresponds
+  (left:M.encrypted_extensions)
+  (right:M.encrypted_extensions)
+  : prop =
+  left.M.negotiated_alpn == right.M.negotiated_alpn
+
+let certificate_msg_corresponds
+  (left:M.certificate_msg)
+  (right:M.certificate_msg)
+  : prop =
+  left.M.chain == right.M.chain
+
+let certificate_verify_corresponds
+  (left:M.certificate_verify)
+  (right:M.certificate_verify)
+  : prop =
+  left.M.scheme == right.M.scheme /\
+  left.M.signature == right.M.signature
+
+let handshake_msg_corresponds
+  (left:M.handshake_msg)
+  (right:M.handshake_msg)
+  : prop =
+  match left, right with
+  | M.ClientHello l, M.ClientHello r ->
+    client_hello_corresponds l r
+  | M.ServerHello l, M.ServerHello r ->
+    server_hello_corresponds l r
+  | M.EncryptedExtensions l, M.EncryptedExtensions r ->
+    encrypted_extensions_corresponds l r
+  | M.Certificate l, M.Certificate r ->
+    certificate_msg_corresponds l r
+  | M.CertificateVerify l, M.CertificateVerify r ->
+    certificate_verify_corresponds l r
+  | M.Finished l, M.Finished r ->
+    l == r
+  | M.HelloRetryRequest, M.HelloRetryRequest ->
+    True
+  | _, _ ->
+    False
+
+let lemma_handshake_msg_corresponds_sym
+  (left:M.handshake_msg)
+  (right:M.handshake_msg)
+  : Lemma
+      (requires handshake_msg_corresponds left right)
+      (ensures handshake_msg_corresponds right left)
+=
+  match left, right with
+  | M.ClientHello l, M.ClientHello r -> ()
+  | M.ServerHello l, M.ServerHello r -> ()
+  | M.EncryptedExtensions l, M.EncryptedExtensions r -> ()
+  | M.Certificate l, M.Certificate r -> ()
+  | M.CertificateVerify l, M.CertificateVerify r -> ()
+  | M.Finished l, M.Finished r -> ()
+  | M.HelloRetryRequest, M.HelloRetryRequest -> ()
+  | _, _ -> assert False
+
+let tls_message_corresponds
+  (left:M.tls_message)
+  (right:M.tls_message)
+  : prop =
+  match left, right with
+  | M.TlsHandshake l, M.TlsHandshake r ->
+    handshake_msg_corresponds l r
+  | M.TlsApplicationData l, M.TlsApplicationData r ->
+    l == r
+  | M.TlsAlert l, M.TlsAlert r ->
+    l == r
+  | M.TlsChangeCipherSpec, M.TlsChangeCipherSpec ->
+    True
+  | M.TlsKeyUpdate l, M.TlsKeyUpdate r ->
+    l == r
+  | M.TlsIgnoredPostHandshake l, M.TlsIgnoredPostHandshake r ->
+    l == r
+  | _, _ ->
+    False
+
+let lemma_tls_message_corresponds_handshake
+  (left:M.handshake_msg)
+  (right:M.handshake_msg)
+  : Lemma
+      (requires tls_message_corresponds (M.TlsHandshake left) (M.TlsHandshake right))
+      (ensures handshake_msg_corresponds left right)
+=
+  ()
+
+let rec tls_messages_correspond
+  (left:list M.tls_message)
+  (right:list M.tls_message)
+  : Tot prop (decreases left) =
+  match left, right with
+  | [], [] ->
+    True
+  | l :: left_tail, r :: right_tail ->
+    tls_message_corresponds l r /\
+    tls_messages_correspond left_tail right_tail
+  | _, _ ->
+    False
+
+let lemma_tls_messages_correspond_cons
+  (left_head:M.tls_message)
+  (left_tail:list M.tls_message)
+  (right_head:M.tls_message)
+  (right_tail:list M.tls_message)
+  : Lemma
+      (requires tls_messages_correspond (left_head :: left_tail) (right_head :: right_tail))
+      (ensures
+        tls_message_corresponds left_head right_head /\
+        tls_messages_correspond left_tail right_tail)
+=
+  ()
+
+let lemma_tls_messages_correspond_two_handshakes
+  (left0:M.handshake_msg)
+  (left1:M.handshake_msg)
+  (right0:M.handshake_msg)
+  (right1:M.handshake_msg)
+  : Lemma
+      (requires
+        tls_messages_correspond
+          [M.TlsHandshake left0; M.TlsHandshake left1]
+          [M.TlsHandshake right0; M.TlsHandshake right1])
+      (ensures
+        handshake_msg_corresponds left0 right0 /\
+        handshake_msg_corresponds left1 right1)
+=
+  lemma_tls_messages_correspond_cons
+    (M.TlsHandshake left0)
+    [M.TlsHandshake left1]
+    (M.TlsHandshake right0)
+    [M.TlsHandshake right1];
+  lemma_tls_message_corresponds_handshake left0 right0;
+  lemma_tls_messages_correspond_cons
+    (M.TlsHandshake left1)
+    []
+    (M.TlsHandshake right1)
+    [];
+  lemma_tls_message_corresponds_handshake left1 right1
+
+let lemma_tls_messages_correspond_five_handshakes
+  (left0:M.handshake_msg)
+  (left1:M.handshake_msg)
+  (left2:M.handshake_msg)
+  (left3:M.handshake_msg)
+  (left4:M.handshake_msg)
+  (right0:M.handshake_msg)
+  (right1:M.handshake_msg)
+  (right2:M.handshake_msg)
+  (right3:M.handshake_msg)
+  (right4:M.handshake_msg)
+  : Lemma
+      (requires
+        tls_messages_correspond
+          [
+            M.TlsHandshake left0;
+            M.TlsHandshake left1;
+            M.TlsHandshake left2;
+            M.TlsHandshake left3;
+            M.TlsHandshake left4
+          ]
+          [
+            M.TlsHandshake right0;
+            M.TlsHandshake right1;
+            M.TlsHandshake right2;
+            M.TlsHandshake right3;
+            M.TlsHandshake right4
+          ])
+      (ensures
+        handshake_msg_corresponds left0 right0 /\
+        handshake_msg_corresponds left1 right1 /\
+        handshake_msg_corresponds left2 right2 /\
+        handshake_msg_corresponds left3 right3 /\
+        handshake_msg_corresponds left4 right4)
+=
+  lemma_tls_messages_correspond_cons
+    (M.TlsHandshake left0)
+    [
+      M.TlsHandshake left1;
+      M.TlsHandshake left2;
+      M.TlsHandshake left3;
+      M.TlsHandshake left4
+    ]
+    (M.TlsHandshake right0)
+    [
+      M.TlsHandshake right1;
+      M.TlsHandshake right2;
+      M.TlsHandshake right3;
+      M.TlsHandshake right4
+    ];
+  lemma_tls_message_corresponds_handshake left0 right0;
+  lemma_tls_messages_correspond_cons
+    (M.TlsHandshake left1)
+    [
+      M.TlsHandshake left2;
+      M.TlsHandshake left3;
+      M.TlsHandshake left4
+    ]
+    (M.TlsHandshake right1)
+    [
+      M.TlsHandshake right2;
+      M.TlsHandshake right3;
+      M.TlsHandshake right4
+    ];
+  lemma_tls_message_corresponds_handshake left1 right1;
+  lemma_tls_messages_correspond_cons
+    (M.TlsHandshake left2)
+    [
+      M.TlsHandshake left3;
+      M.TlsHandshake left4
+    ]
+    (M.TlsHandshake right2)
+    [
+      M.TlsHandshake right3;
+      M.TlsHandshake right4
+    ];
+  lemma_tls_message_corresponds_handshake left2 right2;
+  lemma_tls_messages_correspond_cons
+    (M.TlsHandshake left3)
+    [M.TlsHandshake left4]
+    (M.TlsHandshake right3)
+    [M.TlsHandshake right4];
+  lemma_tls_message_corresponds_handshake left3 right3;
+  lemma_tls_messages_correspond_cons
+    (M.TlsHandshake left4)
+    []
+    (M.TlsHandshake right4)
+    [];
+  lemma_tls_message_corresponds_handshake left4 right4
+
 let paired_cleartext_hello_messages
   (client:connection_state)
   (server:connection_state)
@@ -717,12 +965,16 @@ let paired_cleartext_hello_messages
     server_hs.hs_server_hello
   with
   | Some client_ch, Some server_ch, Some client_sh, Some server_sh ->
-    client_ch == server_ch /\
-    client_sh == server_sh
+    handshake_msg_corresponds
+      (M.ClientHello client_ch)
+      (M.ClientHello server_ch) /\
+    handshake_msg_corresponds
+      (M.ServerHello client_sh)
+      (M.ServerHello server_sh)
   | _, _, _, _ ->
     False
 
-let paired_handshake_message_states
+let paired_handshake_message_correspondence
   (client:connection_state)
   (server:connection_state)
   : prop =
@@ -751,15 +1003,35 @@ let paired_handshake_message_states
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
-    client_ch == server_ch /\
-    client_sh == server_sh /\
-    client_ee == server_ee /\
-    client_cert == server_cert /\
-    client_cv == server_cv /\
-    client_sf == server_sf /\
-    client_cf == server_cf
+    handshake_msg_corresponds
+      (M.ClientHello client_ch)
+      (M.ClientHello server_ch) /\
+    handshake_msg_corresponds
+      (M.ServerHello client_sh)
+      (M.ServerHello server_sh) /\
+    handshake_msg_corresponds
+      (M.EncryptedExtensions client_ee)
+      (M.EncryptedExtensions server_ee) /\
+    handshake_msg_corresponds
+      (M.Certificate client_cert)
+      (M.Certificate server_cert) /\
+    handshake_msg_corresponds
+      (M.CertificateVerify client_cv)
+      (M.CertificateVerify server_cv) /\
+    handshake_msg_corresponds
+      (M.Finished client_sf)
+      (M.Finished server_sf) /\
+    handshake_msg_corresponds
+      (M.Finished client_cf)
+      (M.Finished server_cf)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     False
+
+let paired_handshake_message_states
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  paired_handshake_message_correspondence client server
 
 let derivation_checkpoint_inputs_agree
   (key_id:derived_key_id)
@@ -2443,6 +2715,7 @@ let legal_handshake_message
   | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate <> None /\
+    hs.hs_certificate_verify_verified == false /\
     B.length cv.M.body == 0 /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
     (match hs.hs_certificate_verify with

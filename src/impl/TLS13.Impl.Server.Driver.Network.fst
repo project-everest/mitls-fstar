@@ -491,14 +491,17 @@ let lemma_legal_response_for_event_preserves_supported_profile_selection
   assert (
     st1.CS.cs_model.CS.model_config ==
       st0.CS.cs_model.CS.model_config);
-  assert (
-    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
-      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
   match ev with
   | CS.ConnLocalEvent (CS.LocalFail _) ->
+    assert (
+      st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+        st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
     assert (server_driver_selection_present_when_required st1)
   | CS.ConnNetworkEvent msg ->
     assert (msg.CL.message_direction == CL.Received);
+    assert (
+      st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+        st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
     (match msg.CL.message_value with
      | M.TlsHandshake hs ->
        (match hs with
@@ -520,6 +523,9 @@ let lemma_legal_response_for_event_preserves_supported_profile_selection
        assert (server_driver_selection_present_when_required st1))
   | _ ->
     assert False;
+  assert (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
   assert (server_driver_selection_present_when_required st1);
   lemma_server_driver_supported_profile_selection_same_config_and_selection
     st0

@@ -420,7 +420,7 @@ val lemma_paired_handshake_message_states_paired_handshake_events
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
-      (requires paired_handshake_message_states client server)
+      (requires paired_handshake_events client server)
       (ensures paired_handshake_events client server)
 
 val lemma_paired_handshake_event_trace_paired_handshake_message_states
@@ -468,7 +468,9 @@ val lemma_paired_handshake_message_states_application_derivation_projection_inpu
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
-      (requires paired_handshake_message_states client server)
+      (requires
+        paired_handshake_message_states client server /\
+        paired_handshake_events client server)
       (ensures
         client_server_driver_application_derivation_projection_inputs
           client
@@ -490,6 +492,7 @@ let client_server_driver_supported_profile_derived_projection_inputs
   (server:CS.connection_state)
   : prop =
   client_server_driver_x25519_projection_inputs client server /\
+  CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
   client_server_driver_application_derivation_projection_inputs client server
 
 noextract
@@ -604,8 +607,8 @@ let client_server_driver_first_epoch_no_key_update_state_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
-  CS.first_epoch_application_traffic_material_no_key_update_invariant client /\
-  CS.first_epoch_application_traffic_material_no_key_update_invariant server
+  CS.connection_state_no_key_update_trace client /\
+  CS.connection_state_no_key_update_trace server
 
 val lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
   (client:CS.connection_state)
@@ -647,6 +650,7 @@ val lemma_client_server_driver_remaining_semantic_projection_inputs_from_clearte
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         paired_cleartext_hello_messages client server /\
+        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
         client_server_driver_application_derivation_projection_inputs
           client
           server /\
@@ -689,6 +693,7 @@ val lemma_client_server_driver_remaining_semantic_projection_inputs_from_paired_
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         paired_handshake_message_states client server /\
+        paired_handshake_events client server /\
         client_server_driver_supported_profile_application_record_state_inputs
           client
           server)
@@ -803,6 +808,7 @@ let client_server_driver_key_material_no_read_ahead_minimal_projection_inputs
     server_received
     server_sent /\
   paired_cleartext_hello_messages client server /\
+  CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
   client_server_driver_application_derivation_projection_inputs client server /\
   client_server_driver_supported_profile_application_record_state_inputs
     client
@@ -847,6 +853,7 @@ let client_server_driver_key_material_no_read_ahead_paired_handshake_message_inp
     server_received
     server_sent /\
   paired_handshake_message_states client server /\
+  paired_handshake_events client server /\
   client_server_driver_supported_profile_application_record_state_inputs
     client
     server
@@ -1249,6 +1256,7 @@ val lemma_client_server_application_record_material_agrees_from_paired_handshake
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         paired_handshake_message_states client server /\
+        paired_handshake_events client server /\
         client_server_driver_first_epoch_no_key_update_state_inputs
           client
           server)

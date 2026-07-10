@@ -8,6 +8,7 @@ module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module CVR = TLS13.ConnectionState.ClientCertificateVerifyReachability
 module M = TLS13.Messages
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
@@ -59,6 +60,7 @@ let lemma_client_no_tail_final_model_witnesses
       (ensures client_no_tail_final_model_witnesses client)
 =
   let hs = client.CS.cs_model.CS.model_handshake in
+  CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
   assert (CS.stable_client_x25519_key_share_projection client);
   assert (CS.client_x25519_key_share_projection client);
   assert (CS.application_record_keys_installed_for_role

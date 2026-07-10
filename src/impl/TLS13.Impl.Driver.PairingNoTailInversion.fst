@@ -916,6 +916,7 @@ let lemma_client_application_ready_progress_rank_zero
      (ensures client_application_progress_rank client.CS.cs_model == 0)
 =
   let keys = client.CS.cs_model.CS.model_handshake.CS.hs_keys in
+  CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
   assert (CS.stable_client_x25519_key_share_projection client);
   assert (CS.client_x25519_key_share_projection client);
   assert (CS.application_record_keys_installed_for_role

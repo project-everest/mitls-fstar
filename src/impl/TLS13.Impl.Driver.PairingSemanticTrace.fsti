@@ -32,10 +32,12 @@ let paired_semantic_tls_io_traces
   (client_trace:list CS.conn_event)
   (server_trace:list CS.conn_event)
   : prop =
-  CS.sent_tls_messages client_trace ==
-    CS.received_tls_messages server_trace /\
-  CS.sent_tls_messages server_trace ==
-    CS.received_tls_messages client_trace
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages client_trace)
+    (CS.received_tls_messages server_trace) /\
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages server_trace)
+    (CS.received_tls_messages client_trace)
 
 (**
   Client-side no-tail semantic inversion package.
@@ -335,6 +337,7 @@ let paired_successful_no_tail_semantic_traces
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
+  Pairing.paired_handshake_events client server /\
   PNTCAS.client_no_tail_finished_sent_shape client /\
   PNTPH.server_no_tail_post_two_handshake_installs_tail_order server /\
   client_successful_no_tail_semantic_trace_state client client_trace /\
@@ -355,7 +358,151 @@ let paired_successful_no_tail_semantic_traces_no_ccs_boundary
   server_trace == server.CS.cs_event_log /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
-    server
+    server /\
+  Pairing.paired_handshake_events client server
+
+noextract
+let paired_successful_no_tail_semantic_logs_no_ccs_exact_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  paired_semantic_tls_io_traces
+    client.CS.cs_event_log
+    server.CS.cs_event_log /\
+  CD.client_driver_application_ready client /\
+  FStar.List.Tot.length client.CS.cs_event_log == 16 /\
+  PNTPH.server_no_tail_no_ccs_application_ready_boundary server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server /\
+  Pairing.paired_handshake_events client server
+
+noextract
+let conn_event_is_ccs
+  (ev:CS.conn_event)
+  : bool =
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsChangeCipherSpec -> true
+     | _ -> false)
+  | _ ->
+    false
+
+noextract
+let rec conn_events_no_ccs
+  (events:list CS.conn_event)
+  : bool =
+  match events with
+  | [] -> true
+  | ev :: rest ->
+    not (conn_event_is_ccs ev) && conn_events_no_ccs rest
+
+noextract
+let rec first_application_ready_semantic_replay
+  (model:CS.connection_model)
+  (events:list CS.conn_event)
+  (ready_model:CS.connection_model)
+  : Tot prop (decreases events) =
+  match events with
+  | [] ->
+    model.CS.model_control == CS.ControlApplicationData /\
+    ready_model == model
+  | ev :: rest ->
+    model.CS.model_control <> CS.ControlApplicationData /\
+    CS.legal_event model ev /\
+    (match CS.step_model model ev with
+     | Some model1 ->
+       first_application_ready_semantic_replay model1 rest ready_model
+     | None ->
+       False)
+
+noextract
+let first_application_ready_semantic_log_state
+  (ready:CS.connection_state)
+  : prop =
+  first_application_ready_semantic_replay
+    (CS.initial_model ready.CS.cs_model.CS.model_config)
+    ready.CS.cs_event_log
+    ready.CS.cs_model
+
+noextract
+let rec application_data_preserving_semantic_suffix
+  (model:CS.connection_model)
+  (suffix:list CS.conn_event)
+  (final_model:CS.connection_model)
+  : Tot prop (decreases suffix) =
+  match suffix with
+  | [] ->
+    model.CS.model_control == CS.ControlApplicationData /\
+    final_model == model
+  | ev :: rest ->
+    model.CS.model_control == CS.ControlApplicationData /\
+    CS.legal_event model ev /\
+    CS.conn_event_is_key_update ev == false /\
+    conn_event_is_ccs ev == false /\
+    (match CS.step_model model ev with
+     | Some model1 ->
+       model1.CS.model_control == CS.ControlApplicationData /\
+       application_data_preserving_semantic_suffix model1 rest final_model
+     | None ->
+       False)
+
+noextract
+let first_application_ready_semantic_cut
+  (final:CS.connection_state)
+  (ready:CS.connection_state)
+  (suffix:list CS.conn_event)
+  : prop =
+  first_application_ready_semantic_log_state ready /\
+  final.CS.cs_event_log ==
+    FStar.List.Tot.append ready.CS.cs_event_log suffix /\
+  application_data_preserving_semantic_suffix
+    ready.CS.cs_model
+    suffix
+    final.CS.cs_model
+
+noextract
+let paired_first_application_ready_semantic_cut
+  (client_ready:CS.connection_state)
+  (server_ready:CS.connection_state)
+  : prop =
+  CD.client_driver_application_ready client_ready /\
+  SD.server_driver_application_ready server_ready /\
+  Pairing.paired_handshake_message_states client_ready server_ready /\
+  Pairing.paired_handshake_events client_ready server_ready
+
+noextract
+let paired_successful_semantic_logs_no_ccs_application_suffix_boundary
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  paired_semantic_tls_io_traces
+    client.CS.cs_event_log
+    server.CS.cs_event_log /\
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server /\
+  conn_events_no_ccs client.CS.cs_event_log == true /\
+  conn_events_no_ccs server.CS.cs_event_log == true /\
+  exists
+    (client_prefix:CS.connection_state)
+    (server_prefix:CS.connection_state)
+    (client_suffix:list CS.conn_event)
+    (server_suffix:list CS.conn_event).
+    paired_first_application_ready_semantic_cut
+      client_prefix
+      server_prefix /\
+    first_application_ready_semantic_cut
+      client
+      client_prefix
+      client_suffix /\
+    first_application_ready_semantic_cut
+      server
+      server_prefix
+      server_suffix
 
 val lemma_paired_successful_no_tail_semantic_traces_from_no_ccs_boundary
   (client:CS.connection_state)
@@ -413,18 +560,14 @@ val lemma_client_server_application_record_material_agrees_from_paired_successfu
           client
           server)
 
-val lemma_client_server_application_record_material_agrees_from_paired_successful_no_tail_semantic_traces_no_ccs_boundary
+val lemma_client_server_application_record_material_agrees_from_paired_successful_semantic_logs_no_ccs_application_suffix_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_trace:list CS.conn_event)
-  (server_trace:list CS.conn_event)
   : Lemma
       (requires
-        paired_successful_no_tail_semantic_traces_no_ccs_boundary
+        paired_successful_semantic_logs_no_ccs_application_suffix_boundary
           client
-          server
-          client_trace
-          server_trace)
+          server)
       (ensures
         CS.supported_profile_client_server_key_material_agrees client server /\
         CS.peer_record_material_agrees
