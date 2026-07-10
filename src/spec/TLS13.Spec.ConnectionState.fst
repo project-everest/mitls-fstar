@@ -1854,7 +1854,13 @@ let client_hello_matches_start (start:handshake_start) (ch:GCH.clientHello) : pr
    | Some k -> B.length k = 32 /\ Seq.equal k start.start_client_key_share_public
    | None -> False) /\
   Sem.clientHello_cipher_suites ch == start.start_cipher_suites /\
-  Sem.clientHello_sig_algs ch == Some start.start_signature_schemes
+  Sem.clientHello_sig_algs ch == Some start.start_signature_schemes /\
+  (* A ClientHello is only ever sent inside a single TLS plaintext record, whose
+     fragment is bounded by 16640 bytes; with the QuackyDucky-generated codec the
+     wire image is no longer canonical-by-construction, so this record-size bound
+     is stated explicitly here (it used to be implied by the hand-written
+     canonical ClientHello serializer). *)
+  B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640
 
 let server_hello_matches_selection
   (selection:server_handshake_selection)
