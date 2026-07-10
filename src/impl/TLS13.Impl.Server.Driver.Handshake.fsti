@@ -24,6 +24,9 @@ module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
+module Sem = TLS13.Wire.Semantics
+module SS = TLS13.Impl.Server.Send
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
 type server_driver_accept_client_hello_result =
   | ServerDriverAcceptClientHelloTransportOk of DN.server_driver_client_hello_wait_result
@@ -118,7 +121,9 @@ let server_driver_derive_shared_secret_success_correct
      st1 == CM.derived_shared_secret_state st0 shared /\
      (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
-        CryptoSpec.x25519_shared payload ch.M.key_share == Some shared
+       (match CS.client_hello_key_share ch with
+        | Some k -> CryptoSpec.x25519_shared payload k == Some shared
+        | None -> False)
       | None -> False))
 
 let server_driver_select_derive_from_payload_success_correct
@@ -133,9 +138,12 @@ let server_driver_select_derive_from_payload_success_correct
      st2 == CM.derived_shared_secret_state st1 shared /\
      (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
-        CryptoSpec.x25519_shared
-          (CL.raw_slice payload 32 64)
-          ch.M.key_share == Some shared
+       (match CS.client_hello_key_share ch with
+        | Some k ->
+          CryptoSpec.x25519_shared
+            (CL.raw_slice payload 32 64)
+            k == Some shared
+        | None -> False)
       | None -> False))
 
 noextract
@@ -147,13 +155,10 @@ let server_driver_send_server_hello_from_payload_success_correct
   : GTot prop =
   resp.ST.status == ST.StepOk ==>
     B.length payload == 64 /\
-    (let sh = {
-      M.random = CL.raw_slice payload 0 32;
-      M.key_share =
-        CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
-      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-      M.body = B.empty;
-     } in
+    (let sh = SS.mk_server_hello_witness
+               (CL.raw_slice payload 0 32)
+               (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+               T.TLS_CHACHA20_POLY1305_SHA256 in
      st1 ==
       CM.sent_server_hello_state
         st0
@@ -185,7 +190,9 @@ val lemma_select_derive_success_server_hello_ready :
      ST.server_local_event_input_ready
        st2
        ST.LocalSendServerHello
-       payload)
+       payload /\
+     (Some?.v st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection).CS.server_selected_cipher_suite ==
+       T.TLS_CHACHA20_POLY1305_SHA256)
 
 fn generate_server_material_once
   (d:DS.server_driver)
@@ -334,7 +341,7 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                       CS.signature_scheme_offered
                         cfg.CS.server_allowed_signature_schemes
                         T.Rsa_pss_rsae_sha256 /\
-                      CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                      CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                     | _, _ -> True))
   returns status:DL.server_driver_local_status
   ensures (match status with
@@ -421,7 +428,22 @@ fn send_server_hello_from_payload_once
                  ST.server_local_event_input_ready
                    'st0
                    ST.LocalSendServerHello
-                   (Ghost.reveal 'payload_bytes))
+                   (Ghost.reveal 'payload_bytes) /\
+                 // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                 // sentinel (serverHello_body_cst); unprovable for a symbolic payload slice.
+                 // Plus can_send_server_hello needs the build-direction SH witness (deleted
+                 // Reveal layer). Both become explicit caller obligations.
+                 (Seq.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 ==>
+                  (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32)
+                    <> GSHbody.serverHello_body_cst) /\
+                 (let sh = SS.mk_server_hello_witness
+                            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+                            (CryptoSpec.x25519_public_from_private
+                              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                            T.TLS_CHACHA20_POLY1305_SHA256 in
+                  CM.can_send_server_hello 'st0 sh
+                    (CS.serialized_cleartext_tls_message
+                      (M.TlsHandshake (M.ServerHello sh)))))
   returns resp:ST.server_response
   ensures exists* st1 sent'.
           DS.server_driver_connected
@@ -465,7 +487,20 @@ fn select_derive_send_server_hello_from_payload_once
                 ST.server_local_event_input_ready
                   'st0
                   ST.LocalSelectServerParameters
-                  (Ghost.reveal 'payload_bytes))
+                  (Ghost.reveal 'payload_bytes) /\
+                // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                // sentinel (serverHello_body_cst); unprovable for a symbolic payload slice.
+                // Plus the serialized ServerHello length equation (deleted
+                // lemma_serialize_server_hello_len). Both become explicit caller obligations.
+                (Seq.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 ==>
+                 (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32)
+                   <> GSHbody.serverHello_body_cst) /\
+                (let sh = SS.mk_server_hello_witness
+                           (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+                           (CryptoSpec.x25519_public_from_private
+                             (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                           T.TLS_CHACHA20_POLY1305_SHA256 in
+                 B.length (W.serialize_handshake (M.ServerHello sh)) == 90))
  returns result:server_driver_select_derive_server_hello_result
  ensures (match result with
           | ServerDriverSelectDeriveServerHelloOk ->
@@ -552,7 +587,7 @@ fn select_and_derive_shared_secret_if_ready_once
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
                       T.Rsa_pss_rsae_sha256 /\
-                    CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                    CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                   | _, _ -> True))
   returns status:DL.server_driver_local_status
   ensures (match status with
