@@ -209,6 +209,7 @@ let lemma_client_server_driver_key_material_agrees_from_prefixes
     server_sent;
   CSL.lemma_supported_profile_client_server_key_material_agrees client server
 
+#push-options "--split_queries always"
 let lemma_paired_handshake_message_states_paired_cleartext_hello_messages
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -239,11 +240,13 @@ let lemma_paired_handshake_message_states_paired_cleartext_hello_messages
     Some _, Some _,
     Some _, Some _,
     Some _, Some _ ->
-    assert (client_ch == server_ch);
-    assert (client_sh == server_sh)
+    assert (CS.client_hello_equiv client_ch server_ch);
+    assert (CS.server_hello_equiv client_sh server_sh)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
+#pop-options
 
+#push-options "--split_queries always"
 let lemma_paired_handshake_message_states_paired_handshake_events
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -274,11 +277,11 @@ let lemma_paired_handshake_message_states_paired_handshake_events
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
-    assert (client_ch == server_ch);
-    assert (client_sh == server_sh);
-    assert (client_ee == server_ee);
-    assert (client_cert == server_cert);
-    assert (client_cv == server_cv);
+    assert (CS.client_hello_equiv client_ch server_ch);
+    assert (CS.server_hello_equiv client_sh server_sh);
+    assert (CS.encrypted_extensions_equiv client_ee server_ee);
+    assert (CS.certificate_msg_equiv client_cert server_cert);
+    assert (CS.certificate_verify_equiv client_cv server_cv);
     assert (client_sf == server_sf);
     assert (client_cf == server_cf);
     assert (CS.same_transcript_checkpoint CS.TH_CH client server);
@@ -289,6 +292,7 @@ let lemma_paired_handshake_message_states_paired_handshake_events
     assert (CS.same_transcript_checkpoint CS.TH_CF client server)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
+#pop-options
 
 let lemma_paired_handshake_event_trace_paired_handshake_message_states
   (client:CS.connection_state)
@@ -320,11 +324,11 @@ let lemma_paired_handshake_event_trace_paired_handshake_message_states
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
-    assert (client_ch == server_ch);
-    assert (client_sh == server_sh);
-    assert (client_ee == server_ee);
-    assert (client_cert == server_cert);
-    assert (client_cv == server_cv);
+    assert (CS.client_hello_equiv client_ch server_ch);
+    assert (CS.server_hello_equiv client_sh server_sh);
+    assert (CS.encrypted_extensions_equiv client_ee server_ee);
+    assert (CS.certificate_msg_equiv client_cert server_cert);
+    assert (CS.certificate_verify_equiv client_cv server_cv);
     assert (client_sf == server_sf);
     assert (client_cf == server_cf)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
@@ -346,6 +350,7 @@ let lemma_paired_handshake_event_trace_paired_handshake_events
     client
     server
 
+#push-options "--split_queries always"
 let lemma_paired_handshake_message_states_application_derivation_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -379,16 +384,17 @@ let lemma_paired_handshake_message_states_application_derivation_projection_inpu
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some _, Some _ ->
-    assert (client_ch == server_ch);
-    assert (client_sh == server_sh);
-    assert (client_ee == server_ee);
-    assert (client_cert == server_cert);
-    assert (client_cv == server_cv);
+    assert (CS.client_hello_equiv client_ch server_ch);
+    assert (CS.server_hello_equiv client_sh server_sh);
+    assert (CS.encrypted_extensions_equiv client_ee server_ee);
+    assert (CS.certificate_msg_equiv client_cert server_cert);
+    assert (CS.certificate_verify_equiv client_cv server_cv);
     assert (client_sf == server_sf);
     assert (CS.same_transcript_checkpoint CS.TH_SF client server);
     assert (CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
+#pop-options
 
 let lemma_paired_handshake_events_application_derivation_projection_inputs
   (client:CS.connection_state)
@@ -439,8 +445,8 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
       selection.CS.server_key_share_private
      with
      | Some client_sk, Some server_sk ->
-       assert (client_ch == server_ch);
-       assert (client_sh == server_sh);
+       assert (CS.client_hello_equiv client_ch server_ch);
+       assert (CS.server_hello_equiv client_sh server_sh);
        assert (CS.client_hello_key_share client_ch ==
          start.CS.start_client_key_share_public);
        assert (CS.client_hello_key_share server_ch ==

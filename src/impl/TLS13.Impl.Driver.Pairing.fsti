@@ -343,11 +343,11 @@ let paired_handshake_event_trace
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
-    client_ch == server_ch /\
-    client_sh == server_sh /\
-    client_ee == server_ee /\
-    client_cert == server_cert /\
-    client_cv == server_cv /\
+    CS.client_hello_equiv client_ch server_ch /\
+    CS.server_hello_equiv client_sh server_sh /\
+    CS.encrypted_extensions_equiv client_ee server_ee /\
+    CS.certificate_msg_equiv client_cert server_cert /\
+    CS.certificate_verify_equiv client_cv server_cv /\
     client_sf == server_sf /\
     client_cf == server_cf /\
     event_trace_has_tls_message

@@ -258,13 +258,18 @@ let server_stage_ok (st:CS.connection_state) : prop =
 let fields_directional_agree (s:tls_system_state) : prop =
   let c = hsf s.client in
   let v = hsf s.server in
-  (Some? v.CS.hs_client_hello ==> v.CS.hs_client_hello == c.CS.hs_client_hello) /\
-  (Some? c.CS.hs_server_hello ==> c.CS.hs_server_hello == v.CS.hs_server_hello) /\
+  (Some? v.CS.hs_client_hello ==>
+     CS.opt_client_hello_equiv v.CS.hs_client_hello c.CS.hs_client_hello) /\
+  (Some? c.CS.hs_server_hello ==>
+     CS.opt_server_hello_equiv c.CS.hs_server_hello v.CS.hs_server_hello) /\
   (Some? c.CS.hs_encrypted_extensions ==>
-     c.CS.hs_encrypted_extensions == v.CS.hs_encrypted_extensions) /\
-  (Some? c.CS.hs_certificate ==> c.CS.hs_certificate == v.CS.hs_certificate) /\
+     CS.opt_encrypted_extensions_equiv
+       c.CS.hs_encrypted_extensions v.CS.hs_encrypted_extensions) /\
+  (Some? c.CS.hs_certificate ==>
+     CS.opt_certificate_msg_equiv c.CS.hs_certificate v.CS.hs_certificate) /\
   (Some? c.CS.hs_certificate_verify ==>
-     c.CS.hs_certificate_verify == v.CS.hs_certificate_verify) /\
+     CS.opt_certificate_verify_equiv
+       c.CS.hs_certificate_verify v.CS.hs_certificate_verify) /\
   (Some? c.CS.hs_server_finished ==>
      c.CS.hs_server_finished == v.CS.hs_server_finished) /\
   (Some? v.CS.hs_client_finished ==> v.CS.hs_client_finished == c.CS.hs_client_finished)
@@ -284,7 +289,7 @@ let channel_consistent (s:tls_system_state) : prop =
   | TlsInFlight CS.ServerEndpoint m ->
     (match m with
      | M.TlsHandshake (M.ClientHello ch) ->
-       (hsf s.client).CS.hs_client_hello == Some ch
+       CS.opt_client_hello_equiv (hsf s.client).CS.hs_client_hello (Some ch)
      | M.TlsHandshake (M.Finished cf) ->
        (hsf s.client).CS.hs_client_finished == Some cf
      | M.TlsHandshake _ -> False
@@ -293,13 +298,15 @@ let channel_consistent (s:tls_system_state) : prop =
   | TlsInFlight CS.ClientEndpoint m ->
     (match m with
      | M.TlsHandshake (M.ServerHello sh) ->
-       (hsf s.server).CS.hs_server_hello == Some sh
+       CS.opt_server_hello_equiv (hsf s.server).CS.hs_server_hello (Some sh)
      | M.TlsHandshake (M.EncryptedExtensions ee) ->
-       (hsf s.server).CS.hs_encrypted_extensions == Some ee
+       CS.opt_encrypted_extensions_equiv
+         (hsf s.server).CS.hs_encrypted_extensions (Some ee)
      | M.TlsHandshake (M.Certificate cert) ->
-       (hsf s.server).CS.hs_certificate == Some cert
+       CS.opt_certificate_msg_equiv (hsf s.server).CS.hs_certificate (Some cert)
      | M.TlsHandshake (M.CertificateVerify cv) ->
-       (hsf s.server).CS.hs_certificate_verify == Some cv
+       CS.opt_certificate_verify_equiv
+         (hsf s.server).CS.hs_certificate_verify (Some cv)
      | M.TlsHandshake (M.Finished sf) ->
        (hsf s.server).CS.hs_server_finished == Some sf
      | M.TlsHandshake _ -> False

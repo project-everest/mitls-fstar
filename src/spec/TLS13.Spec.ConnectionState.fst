@@ -280,6 +280,96 @@ let client_hello_key_share (ch:M.client_hello) : C.x25519_public =
 let server_hello_key_share (sh:M.server_hello) : C.x25519_public =
   sh.M.key_share
 
+(** ─────────────────────────────────────────────────────────────────────────
+    Body-agnostic handshake-message equivalences.
+
+    A handshake message carries a `body` field holding its verbatim wire bytes.
+    A locally *constructed* message (e.g. a ClientHello the client emits) leaves
+    `body` empty, so `W.serialize_handshake` re-derives the canonical wire bytes;
+    a *received* message carries the full wire fragment in `body`.  The two are
+    the same *on the wire* but differ structurally, so plain `==` is too strong
+    for cross-endpoint agreement.
+
+    These equivalences compare the semantic fields individually (ignoring `body`)
+    and additionally require the wire serialization to match.  The wire-byte
+    conjunct is what keeps transcript checkpoints — and hence key material —
+    provably in agreement, since a transcript checkpoint is a fold of
+    `W.serialize_handshake` over the paired messages.  Finished carries no `body`
+    field, so it is compared with plain `==`. **)
+let client_hello_equiv (a b:M.client_hello) : prop =
+  a.M.random == b.M.random /\
+  a.M.server_name == b.M.server_name /\
+  a.M.key_share == b.M.key_share /\
+  a.M.cipher_suites == b.M.cipher_suites /\
+  a.M.signature_schemes == b.M.signature_schemes /\
+  W.serialize_handshake (M.ClientHello a) == W.serialize_handshake (M.ClientHello b)
+
+let server_hello_equiv (a b:M.server_hello) : prop =
+  a.M.random == b.M.random /\
+  a.M.key_share == b.M.key_share /\
+  a.M.cipher_suite == b.M.cipher_suite /\
+  W.serialize_handshake (M.ServerHello a) == W.serialize_handshake (M.ServerHello b)
+
+let encrypted_extensions_equiv (a b:M.encrypted_extensions) : prop =
+  a.M.negotiated_alpn == b.M.negotiated_alpn /\
+  W.serialize_handshake (M.EncryptedExtensions a) ==
+    W.serialize_handshake (M.EncryptedExtensions b)
+
+let certificate_msg_equiv (a b:M.certificate_msg) : prop =
+  a.M.chain == b.M.chain /\
+  W.serialize_handshake (M.Certificate a) == W.serialize_handshake (M.Certificate b)
+
+let certificate_verify_equiv (a b:M.certificate_verify) : prop =
+  a.M.scheme == b.M.scheme /\
+  a.M.signature == b.M.signature /\
+  W.serialize_handshake (M.CertificateVerify a) ==
+    W.serialize_handshake (M.CertificateVerify b)
+
+(** Symmetry of the equivalences (each is a conjunction of symmetric relations). **)
+let lemma_client_hello_equiv_sym (a b:M.client_hello)
+  : Lemma (requires client_hello_equiv a b) (ensures client_hello_equiv b a) = ()
+let lemma_server_hello_equiv_sym (a b:M.server_hello)
+  : Lemma (requires server_hello_equiv a b) (ensures server_hello_equiv b a) = ()
+let lemma_encrypted_extensions_equiv_sym (a b:M.encrypted_extensions)
+  : Lemma (requires encrypted_extensions_equiv a b)
+          (ensures encrypted_extensions_equiv b a) = ()
+let lemma_certificate_msg_equiv_sym (a b:M.certificate_msg)
+  : Lemma (requires certificate_msg_equiv a b) (ensures certificate_msg_equiv b a) = ()
+let lemma_certificate_verify_equiv_sym (a b:M.certificate_verify)
+  : Lemma (requires certificate_verify_equiv a b)
+          (ensures certificate_verify_equiv b a) = ()
+
+(** Option-lifted equivalences used by the cross-endpoint system invariant. **)
+let opt_client_hello_equiv (a b:option M.client_hello) : prop =
+  match a, b with
+  | None, None -> True
+  | Some x, Some y -> client_hello_equiv x y
+  | _, _ -> False
+
+let opt_server_hello_equiv (a b:option M.server_hello) : prop =
+  match a, b with
+  | None, None -> True
+  | Some x, Some y -> server_hello_equiv x y
+  | _, _ -> False
+
+let opt_encrypted_extensions_equiv (a b:option M.encrypted_extensions) : prop =
+  match a, b with
+  | None, None -> True
+  | Some x, Some y -> encrypted_extensions_equiv x y
+  | _, _ -> False
+
+let opt_certificate_msg_equiv (a b:option M.certificate_msg) : prop =
+  match a, b with
+  | None, None -> True
+  | Some x, Some y -> certificate_msg_equiv x y
+  | _, _ -> False
+
+let opt_certificate_verify_equiv (a b:option M.certificate_verify) : prop =
+  match a, b with
+  | None, None -> True
+  | Some x, Some y -> certificate_verify_equiv x y
+  | _, _ -> False
+
 let append_handshake_bytes (prefix:B.bytes) (msg:M.handshake_msg) : GTot B.bytes =
   B.append prefix (W.serialize_handshake msg)
 
@@ -717,8 +807,8 @@ let paired_cleartext_hello_messages
     server_hs.hs_server_hello
   with
   | Some client_ch, Some server_ch, Some client_sh, Some server_sh ->
-    client_ch == server_ch /\
-    client_sh == server_sh
+    client_hello_equiv client_ch server_ch /\
+    server_hello_equiv client_sh server_sh
   | _, _, _, _ ->
     False
 
@@ -751,11 +841,11 @@ let paired_handshake_message_states
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
-    client_ch == server_ch /\
-    client_sh == server_sh /\
-    client_ee == server_ee /\
-    client_cert == server_cert /\
-    client_cv == server_cv /\
+    client_hello_equiv client_ch server_ch /\
+    server_hello_equiv client_sh server_sh /\
+    encrypted_extensions_equiv client_ee server_ee /\
+    certificate_msg_equiv client_cert server_cert /\
+    certificate_verify_equiv client_cv server_cv /\
     client_sf == server_sf /\
     client_cf == server_cf
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
