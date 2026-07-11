@@ -33,6 +33,7 @@ module U8 = FStar.UInt8
 module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
 module WS = TLS13.Wire.Spec
+module V = Pulse.Lib.Vec
 
 (**
   Canonical Common.ProtocolImplementation boundary for the low-level server.
@@ -3187,6 +3188,118 @@ let server_process_local_post
         wire_outputs
         local_outputs)
 
+// Runtime non-emptiness check for the configured certificate chain, used to
+// discharge the [kind == LocalSendCertificate ==> 1 <= |chain|] obligation of
+// [SS.lemma_server_process_local_obligations] / [process_local_event_with_
+// credentials].  With the (un-weakened) plain [input_ready] carrying a reachable
+// LocalSendCertificate case, this obligation is no longer vacuous, and no state
+// invariant guarantees a non-empty chain; we establish it at runtime by copying
+// the chain into a scratch buffer (O.copy_server_certificate_chain returns the
+// exact chain length).  Mirrors Server.Driver.Local.check_certificate_chain_
+// nonempty.  The None (buffer-too-small) case is impossible for a well-configured
+// server (|chain| <= max_server_certificate_chain_len == 16610 < 32768) but is
+// handled soundly by reporting ok = false.
+fn canonical_check_certificate_chain_nonempty
+  (creds:O.server_credentials)
+  requires O.is_server_credentials creds 'certificate_chain 'credential_identity
+  returns ok:bool
+  ensures O.is_server_credentials creds 'certificate_chain 'credential_identity **
+          pure (ok ==> 1 <= B.length 'certificate_chain)
+{
+  let chain_bytes = V.alloc 0uy 32768sz;
+  with old_chain_bytes. assert (V.pts_to chain_bytes old_chain_bytes);
+  assert (pure (V.is_full_vec chain_bytes));
+  assert (pure (B.length old_chain_bytes == 32768));
+  V.to_array_pts_to chain_bytes;
+  let copy_result =
+    O.copy_server_certificate_chain
+      creds
+      (V.vec_to_array chain_bytes)
+      32768sz;
+  V.to_vec_pts_to chain_bytes;
+  V.free chain_bytes;
+  match copy_result {
+    None -> {
+      false
+    }
+    Some written -> {
+      SZ.gt written 0sz
+    }
+  }
+}
+
+// Credentialed local-event dispatch that first discharges the
+// LocalSendCertificate [1 <= |chain|] obligation via the runtime chain-non-empty
+// check above (routing the degenerate empty-chain case to the plain no-op
+// process_local_event, which treats the Certificate send as an unexpected event
+// and needs no chain bound).  All other kinds go straight through
+// process_local_event_with_credentials after the obligations lemma.  The
+// explicit postcondition lets Pulse push the goal into each branch, so the three
+// leaves converge without an (unprovable) nested-match join.
+fn server_dispatch_local
+  (s:S.server)
+  (creds:O.server_credentials)
+  (kind:ST.local_event_kind)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires S.connection_exactly s 'st0 **
+           O.is_server_credentials creds 'certificate_chain 'credential_identity **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 ST.server_local_event_input_ready 'st0 kind 'payload_bytes /\
+                 ST.server_local_event_input_ready_with_credentials
+                   'st0 kind 'payload_bytes 'certificate_chain 'credential_identity)
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          S.connection_exactly s st1 **
+          O.is_server_credentials creds 'certificate_chain 'credential_identity **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0 st1 resp kind 'payload_bytes network_out_bytes app_out_bytes)
+{
+  if (kind = ST.LocalSendCertificate) {
+    let nonempty = canonical_check_certificate_chain_nonempty creds;
+    if nonempty {
+      SS.lemma_server_process_local_obligations
+        'st0 kind 'payload_bytes 'certificate_chain 'credential_identity
+        (SZ.v network_out_len);
+      S.process_local_event_with_credentials
+        s creds kind
+        payload payload_len
+        network_out network_out_len
+        app_out app_out_len
+    } else {
+      S.process_local_event
+        s kind
+        payload payload_len
+        network_out network_out_len
+        app_out app_out_len
+    }
+  } else {
+    SS.lemma_server_process_local_obligations
+      'st0 kind 'payload_bytes 'certificate_chain 'credential_identity
+      (SZ.v network_out_len);
+    S.process_local_event_with_credentials
+      s creds kind
+      payload payload_len
+      network_out network_out_len
+      app_out app_out_len
+  }
+}
+
 fn server_process_local
   (srv:canonical_server)
   (ev:CTypes.server_local_event)
@@ -3303,20 +3416,16 @@ ensures exists* (received1:Ghost.erased B.bytes)
     (Ghost.reveal api).CTypes.server_local_payload
     certificate_chain
     credential_identity));
-  // Discharge the four conditional obligations threaded through
+  // Discharge the conditional obligations threaded through
   // process_local_event_with_credentials from the (un-weakened) input_ready
-  // facts: VClF/CV transcript bounds via the serializer-length lemmas, the
-  // ServerHello send obligation via the build-direction bridge, and the
-  // vacuous SendCertificate case (plain input_ready has no such case).
-  SS.lemma_server_process_local_obligations
-    (Ghost.reveal st0)
-    kind
-    (Ghost.reveal api).CTypes.server_local_payload
-    certificate_chain
-    credential_identity
-    (SZ.v out_len);
+  // facts.  The LocalSendCertificate case additionally needs [1 <= |chain|]
+  // (the new mk_cert_witness bytesize is conditional and plain input_ready no
+  // longer rules the case out); no state invariant provides it, so
+  // server_dispatch_local branches on a runtime chain-non-emptiness check,
+  // routing the degenerate empty-chain case to the plain no-op
+  // process_local_event.
   let resp =
-    S.process_local_event_with_credentials
+    server_dispatch_local
       srv.canonical_server_state
       srv.canonical_server_credentials
       kind

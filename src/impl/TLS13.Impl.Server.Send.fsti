@@ -154,6 +154,45 @@ val lemma_can_send_server_hello_witness_of_selection
          (CS.serialized_cleartext_tls_message
            (M.TlsHandshake (M.ServerHello sh)))))
 
+(* Build-direction bridge for the server Endpoint's deferred
+   LocalSendServerHello handler.  Given the raw state/material matching facts
+   (the state selection's random and private key equal the payload slices, the
+   public key is x25519 of the private slice, the random is off the HRR sentinel
+   and the cipher suite is CHACHA), the canonical [CM.server_hello_of_selection
+   selection] can be sent, so plain [ST.server_local_event_input_ready]/
+   LocalSendServerHello holds.  Mirrors the inline reasoning in
+   [TLS13.Impl.Server.Driver.Handshake] (valid_selection +
+   [CM.lemma_server_hello_of_selection_matches] +
+   [CM.lemma_server_hello_of_selection_bytesize]); factored into a lemma so the
+   heavy [can_send_server_hello] derivation stays out of the large deferred-action
+   Pulse function (whose whole-function query is otherwise destabilised). *)
+val lemma_input_ready_server_hello_of_selection
+  (st: CS.connection_state)
+  (selection: CS.server_handshake_selection)
+  (material: B.bytes)
+  : Lemma
+    (requires
+      B.length material == 64 /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        90 <= Bounds.max_transcript_len /\
+      Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
+                (CL.raw_slice material 0 32 <: Seq.seq U8.t) /\
+      ((CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+      Some? selection.CS.server_key_share_private /\
+      Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                (CL.raw_slice material 32 64 <: Seq.seq U8.t) /\
+      (selection.CS.server_key_share_public <: B.bytes) ==
+        CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64) /\
+      selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+    (ensures
+      ST.server_local_event_input_ready st ST.LocalSendServerHello material)
+
 (* Aggregate discharge of the four conditional obligations threaded through
    [S.process_local_event_with_credentials], for a symbolic [kind].  Proven
    from the plain and credentialed input_ready facts:
@@ -171,7 +210,14 @@ val lemma_server_process_local_obligations
     (requires
       ST.server_local_event_input_ready st kind payload /\
       ST.server_local_event_input_ready_with_credentials
-        st kind payload certificate_chain credential_identity)
+        st kind payload certificate_chain credential_identity /\
+      // Certificate-chain non-emptiness.  With the (un-weakened) plain
+      // input_ready now carrying a reachable LocalSendCertificate case, this
+      // branch is no longer vacuous; 1 <= |chain| is not a state invariant (no
+      // config guarantees a non-empty chain) so it is established by a runtime
+      // check at the send site and threaded in here (mirroring the analogous
+      // Server.Driver.Local.check_certificate_chain_nonempty pattern).
+      (kind == ST.LocalSendCertificate ==> 1 <= B.length certificate_chain))
     (ensures
       (kind == ST.LocalVerifyClientFinished /\
        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>

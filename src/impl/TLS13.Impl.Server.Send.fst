@@ -387,6 +387,84 @@ let lemma_can_send_server_hello_witness_of_selection
 #pop-options
 
 (* ----------------------------------------------------------------------- *)
+(* Build-direction bridge for the server Endpoint's deferred                *)
+(* LocalSendServerHello handler.  Given the raw state/material matching      *)
+(* facts, the canonical [CM.server_hello_of_selection selection] can be sent, *)
+(* so plain input_ready holds.  Mirrors the inline reasoning in              *)
+(* [Driver.Handshake] (valid_selection + the two Model send lemmas); factored *)
+(* into a lemma so the heavy [can_send_server_hello] derivation stays out of  *)
+(* the large Endpoint deferred-action Pulse function (whose whole-function    *)
+(* query is otherwise destabilised by the added obligations).                *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_input_ready_server_hello_of_selection
+  (st: CS.connection_state)
+  (selection: CS.server_handshake_selection)
+  (material: B.bytes)
+  : Lemma
+    (requires
+      B.length material == 64 /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        90 <= Bounds.max_transcript_len /\
+      Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
+                (CL.raw_slice material 0 32 <: Seq.seq U8.t) /\
+      ((CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+      Some? selection.CS.server_key_share_private /\
+      Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                (CL.raw_slice material 32 64 <: Seq.seq U8.t) /\
+      (selection.CS.server_key_share_public <: B.bytes) ==
+        CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64) /\
+      selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+    (ensures
+      ST.server_local_event_input_ready st ST.LocalSendServerHello material)
+  =
+  // random equalities: selection.server_random == material[0:32], off cst.
+  Seq.lemma_eq_elim (selection.CS.server_random <: Seq.seq U8.t)
+                    (CL.raw_slice material 0 32 <: Seq.seq U8.t);
+  assert ((selection.CS.server_random <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst);
+  // private-key equality => key-share consistency.
+  Seq.lemma_eq_elim (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                    (CL.raw_slice material 32 64 <: Seq.seq U8.t);
+  assert (CS.server_selection_key_share_consistent selection);
+  // valid_selection holds (random off HRR sentinel + CHACHA cipher suite), so
+  // the canonical builder matches the selection and serialises to 90 bytes;
+  // legal_event / event_raw_delta_legal / can_send_server_hello follow, exactly
+  // as in Driver.Handshake's inline discharge.
+  assert (CM.valid_selection selection);
+  let sh_sel = CM.server_hello_of_selection selection in
+  CM.lemma_server_hello_of_selection_matches selection;
+  CM.lemma_server_hello_of_selection_bytesize selection;
+  assert (CS.server_hello_matches_selection selection sh_sel);
+  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 90);
+  assert (CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh_sel);
+    }));
+  assert (CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh_sel);
+    })
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh_sel)))
+    B.empty);
+  assert (CM.can_send_server_hello st sh_sel
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh_sel))));
+  ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
 (* Aggregate discharge of the four conditional obligations threaded through *)
 (* [S.process_local_event_with_credentials].  CanonicalProtocol's           *)
 (* [server_process_local] calls that function with a *symbolic* kind, so it  *)
@@ -416,7 +494,14 @@ let lemma_server_process_local_obligations
     (requires
       ST.server_local_event_input_ready st kind payload /\
       ST.server_local_event_input_ready_with_credentials
-        st kind payload certificate_chain credential_identity)
+        st kind payload certificate_chain credential_identity /\
+      // Certificate-chain non-emptiness.  With the (un-weakened) plain
+      // input_ready now carrying a reachable LocalSendCertificate case, this
+      // branch is no longer vacuous; 1 <= |chain| is not a state invariant (no
+      // config guarantees a non-empty chain) so it is established by a runtime
+      // check at the send site and threaded in here (mirroring the analogous
+      // Server.Driver.Local.check_certificate_chain_nonempty pattern).
+      (kind == ST.LocalSendCertificate ==> 1 <= B.length certificate_chain))
     (ensures
       (kind == ST.LocalVerifyClientFinished /\
        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
@@ -501,10 +586,11 @@ let lemma_server_process_local_obligations
     ( let cv = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
       lemma_serialize_handshake_certificate_verify_len cv )
   | ST.LocalSendCertificate ->
-    // plain input_ready has no LocalSendCertificate case (-> False), so the
-    // requires is contradictory here: this kind is unreachable on this path.
-    assert (ST.server_local_event_input_ready st ST.LocalSendCertificate payload);
-    assert False
+    // 1 <= |chain| comes from the caller obligation (established at the send
+    // site by a runtime chain non-emptiness check); |chain| <= 16610 comes from
+    // server_local_event_input_ready_with_credentials's 13 + |chain| + 17 <=
+    // 16640.  The serialize-length equation is the mk_cert_witness bytesize.
+    lemma_mk_cert_witness_bytesize certificate_chain
   | _ -> ()
 #pop-options
 

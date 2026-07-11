@@ -490,6 +490,60 @@ let server_local_event_input_ready
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
     Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
+  | LocalSendCertificate ->
+    // Plain readiness for the Certificate flight.  Mirrors
+    // next_local_action_sound/LocalSendCertificate exactly (with payload == empty
+    // instead of next_local_payload == None), so
+    // server_internal_ready_implies_kind_ready (CanonicalQueries) derives this
+    // case from next_local_action_sound.  The 1 <= |chain| non-emptiness needed
+    // by build_certificate_from_credentials is NOT a state invariant (no config
+    // guarantees a non-empty chain); it is established by a runtime check at the
+    // send site (see CanonicalProtocol / Driver.Local) and threaded through the
+    // obligations lemma, not restated here.
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+    U64.fits
+      (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+    (match st.CS.cs_model.CS.model_config.CS.config_server with
+     | Some cfg ->
+       B.length cfg.CS.server_certificate_chain <=
+         Bounds.max_server_certificate_chain_len /\
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 13 +
+         B.length cfg.CS.server_certificate_chain <= Bounds.max_transcript_len
+     | None -> False)
+  | LocalSignCertificateVerify ->
+    // Plain readiness for signing the CertificateVerify.  Extends
+    // next_local_action_sound/LocalSignCertificateVerify with the selection's
+    // signature-scheme conditions (as at baseline 3f3f0e894), which
+    // server_local_event_input_ready_with_state_credentials needs to derive the
+    // _with_credentials form.  These are established at the send site by the
+    // runtime sign-readiness query, not by next_local_action_sound;
+    // CanonicalQueries' server_internal_ready_implies_kind_ready excludes
+    // SignCertVerify (a deferred action) so it does not require this case to
+    // follow from next_local_action_sound.
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None /\
+    (match st.CS.cs_model.CS.model_config.CS.config_server,
+           st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+     | Some cfg, Some selection ->
+       selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
+       selection.CS.server_selected_credential == cfg.CS.server_credential_identity /\
+       CS.signature_scheme_offered
+         st.CS.cs_model.CS.model_config.CS.config_signature_schemes
+         T.Rsa_pss_rsae_sha256
+     | _, _ -> False)
   | _ ->
     False
 
