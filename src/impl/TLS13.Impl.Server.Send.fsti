@@ -101,6 +101,59 @@ val lemma_mk_server_hello_witness_bytesize
       B.length (W.serialize_handshake
         (M.ServerHello (mk_server_hello_witness random key_share cs))) == 90)
 
+(* Build-direction bridge (server ServerHello): the Model-level canonical
+   builder [CM.server_hello_of_selection] coincides with the send-path witness
+   [mk_server_hello_witness] applied to the same random / key_share /
+   cipher_suite -- both reduce to the identical generated record. *)
+val lemma_server_hello_of_selection_eq_witness
+  (sel: CS.server_handshake_selection)
+  : Lemma
+    (ensures
+      CM.server_hello_of_selection sel ==
+      mk_server_hello_witness
+        (CM.sho_random sel)
+        sel.CS.server_key_share_public
+        T.TLS_CHACHA20_POLY1305_SHA256)
+
+(* Build-direction bridge for CanonicalProtocol's symbolic LocalSendServerHello
+   arm.  [ST.server_local_event_input_ready]/LocalSendServerHello carries the
+   Model send obligation on the canonical ServerHello built from the state's
+   selection [CM.server_hello_of_selection selection]; the credentialed send
+   path requires the obligation on the witness form
+   [mk_server_hello_witness (payload[0:32]) (x25519 (payload[32:64])) CHACHA]
+   plus the HRR-sentinel guard on the payload random.  Under the input_ready
+   facts (the state selection is [selection], its random and key-share match the
+   payload slices, and key-share consistency) the two builders coincide, so
+   [can_send_server_hello] transfers by congruence and the matches-clause forces
+   the random off the HRR sentinel. *)
+val lemma_can_send_server_hello_witness_of_selection
+  (st: CS.connection_state)
+  (selection: CS.server_handshake_selection)
+  (server_random: B.bytes)
+  (server_private_key: B.bytes)
+  : Lemma
+    (requires
+      Seq.length server_random == 32 /\
+      Seq.length server_private_key == 32 /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
+      Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
+                (server_random <: Seq.seq U8.t) /\
+      Some? selection.CS.server_key_share_private /\
+      Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                (server_private_key <: Seq.seq U8.t) /\
+      CS.server_selection_key_share_consistent selection /\
+      CM.can_send_server_hello st (CM.server_hello_of_selection selection)
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ServerHello (CM.server_hello_of_selection selection)))))
+    (ensures
+      ((server_random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+      (let sh = mk_server_hello_witness server_random
+                  (CryptoSpec.x25519_public_from_private server_private_key)
+                  T.TLS_CHACHA20_POLY1305_SHA256 in
+       CM.can_send_server_hello st sh
+         (CS.serialized_cleartext_tls_message
+           (M.TlsHandshake (M.ServerHello sh)))))
+
 (* Runtime accessor for the [j]-th byte of the HelloRetryRequest sentinel
    [GSHbody.serverHello_body_cst].  (The generated [serverHello_body_get_byte]
    is private to its implementation module, so we re-expose a copy here.) *)

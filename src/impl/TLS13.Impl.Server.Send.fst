@@ -290,6 +290,103 @@ let lemma_mk_server_hello_witness_eq_poc
 #pop-options
 
 (* ----------------------------------------------------------------------- *)
+(* Build-direction bridge (server ServerHello):                            *)
+(* the Model-level canonical builder [CM.server_hello_of_selection]         *)
+(* coincides with the send-path witness [mk_server_hello_witness] applied   *)
+(* to the same random / key_share / cipher_suite.  Both reduce to the       *)
+(* identical generated record (only the local module aliases differ,        *)
+(* exactly as in [lemma_mk_server_hello_witness_eq_poc]).                    *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_server_hello_of_selection_eq_witness
+  (sel: CS.server_handshake_selection)
+  : Lemma
+    (ensures
+      CM.server_hello_of_selection sel ==
+      mk_server_hello_witness
+        (CM.sho_random sel)
+        sel.CS.server_key_share_public
+        T.TLS_CHACHA20_POLY1305_SHA256)
+  = ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
+(* Build-direction bridge for CanonicalProtocol's symbolic                 *)
+(* LocalSendServerHello arm.                                                *)
+(*                                                                          *)
+(* [ST.server_local_event_input_ready]/LocalSendServerHello carries the     *)
+(* Model send obligation on the *canonical* ServerHello                     *)
+(* [CM.server_hello_of_selection selection] built from the state's server   *)
+(* selection; the credentialed send path                                    *)
+(* [S.process_local_event_with_credentials] instead requires the obligation *)
+(* on the *witness* form [mk_server_hello_witness (payload[0:32])           *)
+(* (x25519 (payload[32:64])) CHACHA] plus the HRR-sentinel guard on the     *)
+(* payload random.  Under the input_ready facts (the state selection is     *)
+(* [selection], its random and key-share match the payload slices, and      *)
+(* key-share consistency) the two canonical builders coincide, so           *)
+(* [can_send_server_hello] transfers by congruence, and the matches-clause  *)
+(* forces the random off the HRR sentinel.                                  *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_can_send_server_hello_witness_of_selection
+  (st: CS.connection_state)
+  (selection: CS.server_handshake_selection)
+  (server_random: B.bytes)
+  (server_private_key: B.bytes)
+  : Lemma
+    (requires
+      Seq.length server_random == 32 /\
+      Seq.length server_private_key == 32 /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
+      Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
+                (server_random <: Seq.seq U8.t) /\
+      Some? selection.CS.server_key_share_private /\
+      Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                (server_private_key <: Seq.seq U8.t) /\
+      CS.server_selection_key_share_consistent selection /\
+      CM.can_send_server_hello st (CM.server_hello_of_selection selection)
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ServerHello (CM.server_hello_of_selection selection)))))
+    (ensures
+      ((server_random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+      (let sh = mk_server_hello_witness server_random
+                  (CryptoSpec.x25519_public_from_private server_private_key)
+                  T.TLS_CHACHA20_POLY1305_SHA256 in
+       CM.can_send_server_hello st sh
+         (CS.serialized_cleartext_tls_message
+           (M.TlsHandshake (M.ServerHello sh)))))
+  =
+  let sh0 = CM.server_hello_of_selection selection in
+  // 1. can_send_server_hello st sh0 _ carries, via the state selection,
+  //    server_hello_matches_selection selection sh0.
+  assert (CS.server_hello_matches_selection selection sh0);
+  // 2. serverHello_random sh0 == Some (sho_random selection) (structural).
+  assert (Sem.serverHello_random sh0 == Some (CM.sho_random selection));
+  // matches => Seq.equal (sho_random selection) selection.server_random.
+  Seq.lemma_eq_elim (CM.sho_random selection <: Seq.seq U8.t)
+                    (selection.CS.server_random <: Seq.seq U8.t);
+  Seq.lemma_eq_elim (selection.CS.server_random <: Seq.seq U8.t)
+                    (server_random <: Seq.seq U8.t);
+  // hence sho_random selection == selection.server_random == server_random,
+  // and sho_random selection <> cst (type) => server_random <> cst.
+  assert ((CM.sho_random selection <: Seq.lseq U8.t 32) ==
+          (server_random <: Seq.lseq U8.t 32));
+  assert ((server_random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst);
+  // 3. key-share consistency: x25519 server_private_key == server_key_share_public.
+  Seq.lemma_eq_elim (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                    (server_private_key <: Seq.seq U8.t);
+  assert (CryptoSpec.x25519_public_from_private server_private_key ==
+          (selection.CS.server_key_share_public <: B.bytes));
+  // 4. the canonical builders coincide; congruence with (2)/(3) gives the
+  //    witness equality, and can_send_server_hello transfers.
+  lemma_server_hello_of_selection_eq_witness selection;
+  assert (sh0 == mk_server_hello_witness server_random
+                   (CryptoSpec.x25519_public_from_private server_private_key)
+                   T.TLS_CHACHA20_POLY1305_SHA256);
+  ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
 (* TODO-A1 cst-guard runtime check.                                        *)
 (* The ServerHello random generated by the server must differ from the     *)
 (* HelloRetryRequest sentinel [GSHbody.serverHello_body_cst]; otherwise     *)

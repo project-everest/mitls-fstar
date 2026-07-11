@@ -350,7 +350,16 @@ let server_local_event_input_ready
       | _, _ -> False) /\
      CS.legal_event
        st.CS.cs_model
-       (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)))
+       (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)) /\
+     // Transcript-length bound of CM.can_verify_client_finished: a Finished
+     // handshake message serializes to exactly 36 bytes
+     // (TLS13.Impl.Server.Send.lemma_serialize_handshake_finished_len).  This
+     // matches next_local_action_sound/LocalVerifyClientFinished, from which the
+     // input_ready producer (server_internal_ready_implies_kind_ready) derives
+     // this case; consumers bridge it to CM.can_verify_client_finished via the
+     // serializer-length lemma.
+     B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+       Bounds.max_transcript_len)
   | LocalSelectServerParameters ->
     B.length payload == 64 /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -441,10 +450,13 @@ let server_local_event_input_ready
       (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
     (let cv = Some?.v
        st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
-     // TODO-A1: Phase 4 deleted WS.serialize_certificate_verify_from_signature and the
-     // M.certificate_verify `body` projection; the transcript-length bound is weakened to
-     // True (recoverable from the serializer postcondition once build-direction lands).
-     True /\
+     // Transcript-length bound for the CertificateVerify flight: the handshake
+     // message serializes to exactly 8 + |signature| bytes
+     // (TLS13.Impl.Server.Send.lemma_serialize_handshake_certificate_verify_len).
+     // Matches next_local_action_sound/LocalSendCertificateVerify, from which the
+     // input_ready producer derives this case.
+     B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
+       B.length (Sem.certificateVerify_signature_bytes cv) <= Bounds.max_transcript_len /\
      CS.legal_event
        st.CS.cs_model
        (CS.ConnNetworkEvent {
