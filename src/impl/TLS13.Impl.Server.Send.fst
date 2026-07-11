@@ -661,6 +661,15 @@ let lemma_pointwise_iff_raw_slice_cst (mb: B.bytes)
     introduce (s == cst) ==> (forall (k:nat). k < 32 ==> Seq.index mb k == Seq.index cst k)
     with _. ()
 
+let lemma_range_ext_cst (mb: B.bytes) (n:nat) (ae:bool) (mv cv: U8.t)
+  : Lemma (requires B.length mb >= 32 /\ n < 32 /\
+                    mv == Seq.index mb n /\
+                    cv == Seq.index GSHbody.serverHello_body_cst n /\
+                    (ae <==> (forall (k:nat). k < n ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k)))
+          (ensures ((ae && (mv = cv)) <==>
+                    (forall (k:nat). k < n + 1 ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k)))
+  = ()
+
 fn server_random_differs_from_cst (material: array U8.t) (#p: perm) (#mb: erased (b:B.bytes{B.length b >= 32}))
   requires pts_to material #p mb
   returns b: bool
@@ -684,6 +693,7 @@ fn server_random_differs_from_cst (material: array U8.t) (#p: perm) (#mb: erased
     let mv = material.(jv);
     let cv = hrr_sentinel_byte jv;
     let cur = Ref.read all_equal;
+    lemma_range_ext_cst mb (SZ.v jv) cur mv cv;
     Ref.write all_equal (cur && (mv = cv));
     Ref.write j (jv `SZ.add` 1sz);
   };

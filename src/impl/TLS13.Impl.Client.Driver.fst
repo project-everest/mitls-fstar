@@ -25,6 +25,7 @@ module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module MR = Pulse.Lib.MonotonicGhostRef
 module Sem = TLS13.Wire.Semantics
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box

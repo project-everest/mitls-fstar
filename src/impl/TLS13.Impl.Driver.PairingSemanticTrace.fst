@@ -241,7 +241,7 @@ let lemma_client_semantic_install_event_preserves_slots
 
 let lemma_client_local_verify_finished_step_slots
   (model model1:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   : Lemma
       (requires
         model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedReceived /\
@@ -272,7 +272,7 @@ let lemma_client_local_verify_finished_step_slots
 
 let lemma_client_sent_finished_step_slots
   (model model1:CS.connection_model)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified /\
@@ -310,19 +310,19 @@ let lemma_client_sent_finished_step_slots
 let lemma_client_finished_shape_model_slots_from_event_log
   (client:CS.connection_state)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4:CS.conn_event)
   (e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13:CS.conn_event)
   (e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         CD.client_driver_application_ready client /\
@@ -608,19 +608,19 @@ let lemma_client_finished_shape_model_slots_from_event_log
 let lemma_client_finished_shape_tls_message_projections
   (client_trace:list CS.conn_event)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4:CS.conn_event)
   (e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13:CS.conn_event)
   (e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         client_trace ==
@@ -855,19 +855,19 @@ let lemma_client_successful_no_tail_semantic_trace_state_from_witnesses
   (client:CS.connection_state)
   (client_trace:list CS.conn_event)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4:CS.conn_event)
   (e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13:CS.conn_event)
   (e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         CD.client_driver_application_ready client /\
@@ -970,19 +970,19 @@ let lemma_client_successful_no_tail_semantic_trace_state_from_witnesses
     cf);
   introduce exists
     (start0:CS.handshake_start)
-    (ch0:M.client_hello)
-    (sh0:M.server_hello)
+    (ch0:GCH.clientHello)
+    (sh0:GSH.serverHello)
     (client_shared0:C.x25519_shared_secret)
     (e40:CS.conn_event)
     (e50:CS.conn_event)
-    (ee0:M.encrypted_extensions)
-    (cert0:M.certificate_msg)
+    (ee0:GEE.encryptedExtensions)
+    (cert0:GCert.certificate)
     (peer0:X.peer_identity)
-    (cv0:M.certificate_verify)
-    (sf0:M.finished)
+    (cv0:GCV.certificateVerify)
+    (sf0:GFin.finished)
     (e130:CS.conn_event)
     (e140:CS.conn_event)
-    (cf0:M.finished).
+    (cf0:GFin.finished).
     client_successful_no_tail_semantic_trace_state_inputs
       client
       client_trace
@@ -1033,19 +1033,19 @@ let lemma_client_successful_no_tail_semantic_trace_state_from_boundary
   assert (PNTCAS.client_no_tail_finished_sent_shape client);
   eliminate exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
     (peer:X.peer_identity)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (e13:CS.conn_event)
     (e14:CS.conn_event)
-    (cf:M.finished).
+    (cf:GFin.finished).
     client.CS.cs_event_log ==
       CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
       CS.ConnNetworkEvent ({
@@ -1222,7 +1222,7 @@ let lemma_server_semantic_handshake_install_event_preserves_slots
 
 let lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
   (cfg:CS.connection_config)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -1359,18 +1359,18 @@ let lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
 
 let lemma_server_finished_shape_tls_message_projections
   (server_trace:list CS.conn_event)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (e5:CS.conn_event)
   (e6:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (server_app_write_material:CS.traffic_key_material)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (server_app_read_material:CS.traffic_key_material)
   : Lemma
       (requires
@@ -1645,20 +1645,70 @@ let lemma_server_finished_shape_tls_message_projections
      | _ -> assert False)
   | _ -> assert False
 
-let lemma_server_finished_shape_model_slots_from_event_log
-  (server:CS.connection_state)
-  (ch:M.client_hello)
+let lemma_server_cleartext_prefix_append
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
+  (rest:list CS.conn_event)
+  : Lemma
+      (ensures
+        FStar.List.Tot.append
+          (PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh)
+          rest
+        ==
+          CS.ConnLocalEvent CS.LocalStartServer
+          :: CS.ConnNetworkEvent ({
+               CL.message_direction = CL.Received;
+               CL.message_value = M.TlsHandshake (M.ClientHello ch);
+             })
+          :: CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)
+          :: CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared)
+          :: CS.ConnNetworkEvent ({
+               CL.message_direction = CL.Sent;
+               CL.message_value = M.TlsHandshake (M.ServerHello sh);
+             })
+          :: rest)
+=
+  assert_norm (
+    FStar.List.Tot.append
+      (PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh)
+      rest
+    ==
+      CS.ConnLocalEvent CS.LocalStartServer
+      :: CS.ConnNetworkEvent ({
+           CL.message_direction = CL.Received;
+           CL.message_value = M.TlsHandshake (M.ClientHello ch);
+         })
+      :: CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)
+      :: CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared)
+      :: CS.ConnNetworkEvent ({
+           CL.message_direction = CL.Sent;
+           CL.message_value = M.TlsHandshake (M.ServerHello sh);
+         })
+      :: rest)
+
+// This full server-handshake model replay (16 events over the generated wire
+// records) trips a Z3 4.13.3 internal assertion violation in lp/lar_solver.cpp
+// under the default arithmetic solver (smt.arith.solver 6). Pin the legacy
+// arithmetic solver (2) for just this lemma to avoid the crash; the reasoning
+// here is datatype/list structural (no nonlinear arithmetic), so the legacy
+// solver discharges it fine.
+#push-options "--z3rlimit 20 --z3smtopt '(set-option :smt.arith.solver 2)'"
+let lemma_server_finished_shape_model_slots_from_event_log
+  (server:CS.connection_state)
+  (ch:GCH.clientHello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (sh:GSH.serverHello)
   (e5:CS.conn_event)
   (e6:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (server_app_write_material:CS.traffic_key_material)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (server_app_read_material:CS.traffic_key_material)
   : Lemma
       (requires
@@ -1814,6 +1864,7 @@ let lemma_server_finished_shape_model_slots_from_event_log
   let tail2 = ev3 :: tail3 in
   let tail1 = ev2 :: tail2 in
   let tail0 = ev1 :: tail1 in
+  lemma_server_cleartext_prefix_append ch selection server_shared sh tail4;
   assert (server.CS.cs_event_log == ev0 :: tail0);
   assert (CS.step_model_many m0 (ev0 :: tail0) == Some final_model);
   assert
@@ -1972,22 +2023,23 @@ let lemma_server_finished_shape_model_slots_from_event_log
   assert (m16.CS.model_handshake.CS.hs_client_finished == Some cf);
   assert_norm (CS.step_model_many m16 [] == Some m16);
   assert (m16 == final_model)
+#pop-options
 
 let lemma_server_successful_no_tail_semantic_trace_state_from_witnesses
   (server:CS.connection_state)
   (server_trace:list CS.conn_event)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (e5:CS.conn_event)
   (e6:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (server_app_write_material:CS.traffic_key_material)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (server_app_read_material:CS.traffic_key_material)
   : Lemma
       (requires
@@ -2095,18 +2147,18 @@ let lemma_server_successful_no_tail_semantic_trace_state_from_witnesses
     cf
     server_app_read_material);
   introduce exists
-    (ch0:M.client_hello)
+    (ch0:GCH.clientHello)
     (selection0:CS.server_handshake_selection)
     (server_shared0:C.x25519_shared_secret)
-    (sh0:M.server_hello)
+    (sh0:GSH.serverHello)
     (e50:CS.conn_event)
     (e60:CS.conn_event)
-    (ee0:M.encrypted_extensions)
-    (cert0:M.certificate_msg)
-    (cv0:M.certificate_verify)
-    (sf0:M.finished)
+    (ee0:GEE.encryptedExtensions)
+    (cert0:GCert.certificate)
+    (cv0:GCV.certificateVerify)
+    (sf0:GFin.finished)
     (server_app_write_material0:CS.traffic_key_material)
-    (cf0:M.finished)
+    (cf0:GFin.finished)
     (server_app_read_material0:CS.traffic_key_material).
     server_successful_no_tail_semantic_trace_state_inputs
       server
@@ -2153,10 +2205,10 @@ let lemma_server_successful_no_tail_semantic_trace_state_from_no_ccs_boundary
 =
   PNTPH.lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order server;
   eliminate exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (e5:CS.conn_event)
     (e6:CS.conn_event)
     (rest:list CS.conn_event).
@@ -2176,11 +2228,11 @@ let lemma_server_successful_no_tail_semantic_trace_state_from_no_ccs_boundary
   with _.
   (
     eliminate exists
-      (ee:M.encrypted_extensions)
-      (cert:M.certificate_msg)
-      (cv:M.certificate_verify)
-      (sf:M.finished)
-      (cf:M.finished)
+      (ee:GEE.encryptedExtensions)
+      (cert:GCert.certificate)
+      (cv:GCV.certificateVerify)
+      (sf:GFin.finished)
+      (cf:GFin.finished)
       (server_app_write_material:CS.traffic_key_material)
       (server_app_read_material:CS.traffic_key_material).
       rest ==
@@ -2673,7 +2725,7 @@ let lemma_application_data_step_preserves_handshake_message_slots
        assert False
      | M.TlsAlert alert ->
        (match alert with
-        | T.CloseNotify ->
+        | T.Close_notify ->
           (match msg.CL.message_direction with
            | CL.Sent ->
              assert_norm (CS.step_model model ev == Some model1);

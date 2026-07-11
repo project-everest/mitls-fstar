@@ -14,6 +14,7 @@ module H = TLS13.Handshake.Spec
 module ID = FStar.IndefiniteDescription
 module K = TLS13.Keys
 module M = TLS13.Messages
+module GCH = TLS13.Wire.Generated.ClientHello
 module R = TLS13.Record.Spec
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.StateMachine
@@ -4618,7 +4619,7 @@ let lemma_server_finished_sent_checkpoint_ready_elim
 
 let lemma_step_sent_client_hello_checkpoint_ready
   (model0:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (model1:connection_model)
   : Lemma
       (requires
@@ -4644,7 +4645,7 @@ let lemma_step_sent_client_hello_checkpoint_ready
 
 let lemma_step_received_client_hello_checkpoint_ready
   (model0:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (model1:connection_model)
   : Lemma
       (requires

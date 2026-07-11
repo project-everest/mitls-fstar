@@ -430,7 +430,8 @@ val lemma_paired_handshake_event_trace_paired_handshake_message_states
   (server:CS.connection_state)
   : Lemma
       (requires paired_handshake_event_trace client server)
-      (ensures paired_handshake_message_states client server)
+      (ensures paired_handshake_message_states client server /\
+               paired_handshake_events client server)
 
 val lemma_paired_handshake_event_trace_paired_handshake_events
   (client:CS.connection_state)

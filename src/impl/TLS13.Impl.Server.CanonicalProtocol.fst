@@ -3511,7 +3511,7 @@ let lemma_server_network_decode_error_bridge_result
   let consumed = ST.server_network_consumed_prefix buffer_resp input_contents in
   let wire_outputs = server_response_wire_outputs resp network_out in
   let local_outputs = server_response_local_outputs resp app_out in
-  let decode_err = T.AlertError T.DecodeError in
+  let decode_err = T.AlertError T.Decode_error in
   let conn_ev = CS.ConnLocalEvent (CS.LocalFail decode_err) in
   assert (resp.ST.status == ST.DecodeError);
   assert (ST.decode_error_response st0 st1 resp network_out app_out);
@@ -4547,7 +4547,17 @@ let lemma_server_local_raw_sent_parse_success
         let (content_type, fragment) =
           WS.serialize_tls_message msg.CL.message_value in
         WS.lemma_serialize_tls_message_handshake (M.ServerHello sh);
-        WS.lemma_serialize_server_hello_len sh;
+        // The record-size bound on a sent ServerHello now comes from message
+        // legality: legal_handshake_message only admits a Sent ServerHello in the
+        // HsClientHelloReceived stage via [server_hello_matches_selection], whose
+        // final conjunct is exactly [B.length (serialize_handshake (ServerHello sh)) <= 16640].
+        // (Previously supplied by the now-removed WS.lemma_serialize_server_hello_len,
+        // which relied on the fixed-layout hand-written ServerHello serializer.)
+        assert (CS.legal_event st0.CS.cs_model ev);
+        assert (CS.legal_tls_message st0.CS.cs_model CL.Sent
+          (M.TlsHandshake (M.ServerHello sh)));
+        assert (CS.legal_handshake_message st0.CS.cs_model CL.Sent (M.ServerHello sh));
+        assert (B.length (WS.serialize_handshake (M.ServerHello sh)) <= 16640);
         assert (Seq.equal
           raw_sent
           (CS.serialized_cleartext_tls_message msg.CL.message_value));
@@ -4586,22 +4596,22 @@ let lemma_server_local_raw_sent_parse_success
       assert (CS.network_message_raw_delta_legal st0.CS.cs_model msg raw_sent);
       assert (CS.raw_records_exactly
         raw_sent
-        T.ApplicationData
+        T.Application_data
         (CS.protected_record_count
           msg.CL.message_direction
           msg.CL.message_value));
       assert (CS.protected_record_count
         msg.CL.message_direction
         msg.CL.message_value == 1);
-      CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.ApplicationData;
+      CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.Application_data;
       let fragment =
         ID.indefinite_description_ghost
           B.bytes
           (fun fragment ->
             WS.parse_record raw_sent ==
-              Some (T.ApplicationData, fragment, B.length raw_sent)) in
+              Some (T.Application_data, fragment, B.length raw_sent)) in
       assert (WS.parse_record raw_sent ==
-        Some (T.ApplicationData, fragment, B.length raw_sent));
+        Some (T.Application_data, fragment, B.length raw_sent));
       WS.lemma_parse_record_implies_parse_record_wire raw_sent;
       assert (exists content_type fragment'.
         WS.parse_record_wire raw_sent ==
@@ -4956,7 +4966,7 @@ let lemma_server_local_process_correct
       local_outputs)
   ) else (
     assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
-    let err : T.tls_error = T.AlertError T.UnexpectedMessage in
+    let err : T.tls_error = T.AlertError T.Unexpected_message in
     let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
     let api_fail : CTypes.server_api_event = {
       CTypes.server_local_kind = ST.LocalFail;

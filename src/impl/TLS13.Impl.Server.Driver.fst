@@ -41,6 +41,7 @@ module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
+module MR = Pulse.Lib.MonotonicGhostRef
 module RS = TLS13.Record.Spec
 module SZ = FStar.SizeT
 module T = TLS13.Types

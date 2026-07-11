@@ -531,22 +531,11 @@ fn accept_endpoint
            pts_to bind_host 'bind_host_bytes **
            V.pts_to private_key #1.0R 'private_key_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
-                 CM.can_start_server 'st0 /\
-                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
-                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
-                  | Some cfg ->
-                    CS.cipher_suite_offered
-                      cfg.CS.server_supported_cipher_suites
-                      T.TLS_CHACHA20_POLY1305_SHA256 /\
-                    CS.named_group_offered
-                      cfg.CS.server_supported_groups
-                      T.X25519 /\
-                    CS.signature_scheme_offered
-                      cfg.CS.server_allowed_signature_schemes
-                      T.Rsa_pss_rsae_sha256 /\
-                    cfg.CS.server_sni_policy == None
-                  | None -> False))
-  returns status:server_workflow_status
+                 B.length 'private_key_bytes == 32 /\
+                 Seq.equal 'private_key_bytes
+                   (EP.server_endpoint_private_bytes_of_material
+                     (Ghost.reveal material_spec)))
+  returns result:option EP.server_endpoint_run_result
   ensures pts_to bind_host 'bind_host_bytes **
           (let cfg = server_driver_endpoint_config d in
            let frame =

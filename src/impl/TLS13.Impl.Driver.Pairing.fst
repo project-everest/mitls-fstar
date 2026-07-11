@@ -266,7 +266,8 @@ let lemma_paired_handshake_event_trace_paired_handshake_message_states
   (server:CS.connection_state)
   : Lemma
       (requires paired_handshake_event_trace client server)
-      (ensures paired_handshake_message_states client server)
+      (ensures paired_handshake_message_states client server /\
+               paired_handshake_events client server)
 =
   match
     client.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
@@ -441,8 +442,14 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
       selection.CS.server_key_share_private
      with
      | Some client_sk, Some server_sk ->
-       assert (client_ch == server_ch);
-       assert (client_sh == server_sh);
+       assert (CS.handshake_msg_corresponds
+         (M.ClientHello client_ch) (M.ClientHello server_ch));
+       assert (CS.handshake_msg_corresponds
+         (M.ServerHello client_sh) (M.ServerHello server_sh));
+       assert (CS.client_hello_key_share client_ch ==
+         CS.client_hello_key_share server_ch);
+       assert (CS.server_hello_key_share client_sh ==
+         CS.server_hello_key_share server_sh);
        (match
           CS.client_hello_key_share server_ch,
           CS.server_hello_key_share client_sh

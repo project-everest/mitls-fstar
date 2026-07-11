@@ -752,41 +752,41 @@ let stable_server_x25519_key_share_projection
     server.cs_model.model_control
 
 let client_hello_corresponds
-  (left:M.client_hello)
-  (right:M.client_hello)
+  (left:GCH.clientHello)
+  (right:GCH.clientHello)
   : prop =
-  left.M.random == right.M.random /\
-  left.M.server_name == right.M.server_name /\
-  left.M.key_share == right.M.key_share /\
-  left.M.cipher_suites == right.M.cipher_suites /\
-  left.M.signature_schemes == right.M.signature_schemes
+  Sem.clientHello_random left == Sem.clientHello_random right /\
+  Sem.clientHello_server_name left == Sem.clientHello_server_name right /\
+  Sem.clientHello_key_share_x25519 left == Sem.clientHello_key_share_x25519 right /\
+  Sem.clientHello_cipher_suites left == Sem.clientHello_cipher_suites right /\
+  Sem.clientHello_sig_algs left == Sem.clientHello_sig_algs right
 
 let server_hello_corresponds
-  (left:M.server_hello)
-  (right:M.server_hello)
+  (left:GSH.serverHello)
+  (right:GSH.serverHello)
   : prop =
-  left.M.random == right.M.random /\
-  left.M.key_share == right.M.key_share /\
-  left.M.cipher_suite == right.M.cipher_suite
+  Sem.serverHello_random left == Sem.serverHello_random right /\
+  Sem.serverHello_key_share_x25519 left == Sem.serverHello_key_share_x25519 right /\
+  Sem.serverHello_cipher_suite left == Sem.serverHello_cipher_suite right
 
 let encrypted_extensions_corresponds
-  (left:M.encrypted_extensions)
-  (right:M.encrypted_extensions)
+  (left:GEE.encryptedExtensions)
+  (right:GEE.encryptedExtensions)
   : prop =
-  left.M.negotiated_alpn == right.M.negotiated_alpn
+  Sem.encryptedExtensions_alpn left == Sem.encryptedExtensions_alpn right
 
 let certificate_msg_corresponds
-  (left:M.certificate_msg)
-  (right:M.certificate_msg)
+  (left:GCert.certificate)
+  (right:GCert.certificate)
   : prop =
-  left.M.chain == right.M.chain
+  Sem.certificate_entries left == Sem.certificate_entries right
 
 let certificate_verify_corresponds
-  (left:M.certificate_verify)
-  (right:M.certificate_verify)
+  (left:GCV.certificateVerify)
+  (right:GCV.certificateVerify)
   : prop =
-  left.M.scheme == right.M.scheme /\
-  left.M.signature == right.M.signature
+  Sem.certificateVerify_scheme left == Sem.certificateVerify_scheme right /\
+  Sem.certificateVerify_signature_bytes left == Sem.certificateVerify_signature_bytes right
 
 let handshake_msg_corresponds
   (left:M.handshake_msg)
@@ -2781,6 +2781,7 @@ let legal_handshake_message
   | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate <> None /\
+    hs.hs_certificate_verify_verified == false /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv
