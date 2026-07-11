@@ -61,10 +61,6 @@ let normalized_replay_boundary_raw_inputs
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       w.PCB.hcb_client_sh_raw /\
-    W.parse_supported_server_hello
-      (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-    W.parse_supported_server_hello
-      (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
     Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
       client
       server /\

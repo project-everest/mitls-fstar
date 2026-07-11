@@ -9,6 +9,8 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTSFShape = TLS13.Impl.Driver.PairingNoTailServerFlightShape
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
@@ -141,10 +143,10 @@ val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shap
 
 val lemma_server_no_tail_post_two_handshake_installs_tail_order_for_split
   (server:CS.connection_state)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (e5:CS.conn_event)
   (e6:CS.conn_event)
   (rest:list CS.conn_event)

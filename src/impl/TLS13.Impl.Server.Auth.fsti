@@ -92,12 +92,12 @@ fn process_sign_certificate_verify
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     selection.CS.server_selected_signature_scheme ==
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     selection.CS.server_selected_credential ==
                       Ghost.reveal 'credential_identity /\
                     CS.signature_scheme_offered
                       'st0.CS.cs_model.CS.model_config.CS.config_signature_schemes
-                      T.RsaPssRsaeSha256
+                      T.Rsa_pss_rsae_sha256
                   | None -> False))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -129,6 +129,10 @@ fn process_verify_client_finished
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+                 // TODO-A1: transcript+36 bound (was derived from the deleted
+                 // W.lemma_serialize_finished_len) threaded as explicit precondition.
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   Bounds.max_transcript_len /\
                  CM.can_verify_client_finished
                    'st0
                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))

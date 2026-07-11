@@ -9,6 +9,12 @@ module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
@@ -697,9 +703,9 @@ let lemma_client_application_install_cover_step_model_canonical_write_read
 
 let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
   (model12:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (suffix_sent:B.bytes)
   (suffix_received:B.bytes)
   (final_model:CS.connection_model)
@@ -1308,9 +1314,9 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
   )
 let lemma_client_finished_exact_suffix_sent_seal_raw_slice
   (model:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
@@ -1330,7 +1336,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           raw_sent
           raw_received
           final_model)
-      (ensures CS.raw_records_exactly raw_sent T.ApplicationData 1)
+      (ensures CS.raw_records_exactly raw_sent T.Application_data 1)
 =
   let verify_ev = CS.ConnLocalEvent (CS.LocalVerifyFinished sf) in
   let sent_ev =
@@ -1363,7 +1369,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
       tail0_sent
       tail0_received
       final_model
-  returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+  returns CS.raw_records_exactly raw_sent T.Application_data 1
   with _.
   (
     PWR.lemma_conn_events_sent_seal_replay_head
@@ -1391,7 +1397,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
         tail1_sent
         tail1_received
         final_model
-    returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+    returns CS.raw_records_exactly raw_sent T.Application_data 1
     with _.
     (
       PWR.lemma_conn_events_sent_seal_replay_head
@@ -1419,7 +1425,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           tail2_sent
           tail2_received
           final_model
-      returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+      returns CS.raw_records_exactly raw_sent T.Application_data 1
       with _.
       (
         PWR.lemma_conn_events_sent_seal_replay_head
@@ -1447,7 +1453,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
             tail3_sent
             tail3_received
             final_model
-        returns CS.raw_records_exactly raw_sent T.ApplicationData 1
+        returns CS.raw_records_exactly raw_sent T.Application_data 1
         with _.
         (
           PNTCAS.lemma_client_no_tail_application_install_cover_cases e13 e14;
@@ -1474,7 +1480,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           assert_norm (CS.protected_record_count
             CL.Sent
             (M.TlsHandshake (M.Finished cf)) == 1);
-          assert (CS.raw_records_exactly delta3_sent T.ApplicationData 1);
+          assert (CS.raw_records_exactly delta3_sent T.Application_data 1);
           assert (Seq.equal tail3_sent B.empty);
           Seq.lemma_eq_elim tail3_sent B.empty;
           Seq.append_empty_r delta3_sent;
@@ -1512,19 +1518,19 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
   assert (PNTCAS.client_no_tail_finished_sent_shape client);
   eliminate exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
     (peer:X.peer_identity)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (e13:CS.conn_event)
     (e14:CS.conn_event)
-    (cf:M.finished).
+    (cf:GFin.finished).
     client.CS.cs_event_log ==
       CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
       CS.ConnNetworkEvent ({
@@ -1762,19 +1768,19 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
     (
       introduce exists
         (start':CS.handshake_start)
-        (ch':M.client_hello)
-        (sh':M.server_hello)
+        (ch':GCH.clientHello)
+        (sh':GSH.serverHello)
         (client_shared':C.x25519_shared_secret)
         (e4':CS.conn_event)
         (e5':CS.conn_event)
-        (ee':M.encrypted_extensions)
-        (cert':M.certificate_msg)
+        (ee':GEE.encryptedExtensions)
+        (cert':GCert.certificate)
         (peer':X.peer_identity)
-        (cv':M.certificate_verify)
-        (sf':M.finished)
+        (cv':GCV.certificateVerify)
+        (sf':GFin.finished)
         (e13':CS.conn_event)
         (e14':CS.conn_event)
-        (cf':M.finished)
+        (cf':GFin.finished)
         (model12':CS.connection_model)
         (prefix_sent':B.bytes)
         (prefix_received':B.bytes)
@@ -1910,19 +1916,19 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
 =
   eliminate exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
     (peer:X.peer_identity)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (e13:CS.conn_event)
     (e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     (prefix_sent:B.bytes)
     (prefix_received:B.bytes)
@@ -2157,7 +2163,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
         suffix_sent
         suffix_received
         client.CS.cs_model /\
-      CS.raw_records_exactly suffix_sent T.ApplicationData 1
+      CS.raw_records_exactly suffix_sent T.Application_data 1
     with
       start
       ch
@@ -2183,9 +2189,9 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
 
 let lemma_client_finished_sent_seal_suffix_head_steps
   (model12:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (suffix_sent:B.bytes)
   (suffix_received:B.bytes)
   (final_model:CS.connection_model)
@@ -2378,19 +2384,19 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
 =
   eliminate exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
     (peer:X.peer_identity)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (e13:CS.conn_event)
     (e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     (prefix_sent:B.bytes)
     (prefix_received:B.bytes)
@@ -2517,10 +2523,10 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
       suffix_received
       client.CS.cs_model;
     introduce exists
-      (sf':M.finished)
+      (sf':GFin.finished)
       (e13':CS.conn_event)
       (e14':CS.conn_event)
-      (cf':M.finished)
+      (cf':GFin.finished)
       (model12':CS.connection_model)
       (suffix_sent':B.bytes)
       (suffix_received':B.bytes).
@@ -2545,7 +2551,7 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
         e14'
         cf'
         client.CS.cs_model /\
-      CS.raw_records_exactly suffix_sent' T.ApplicationData 1
+      CS.raw_records_exactly suffix_sent' T.Application_data 1
     with sf e13 e14 cf model12 suffix_sent suffix_received and ()
   )
 
@@ -2670,9 +2676,9 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
       (ensures client_finished_canonical_sent_seal_replay_slice client)
 =
   eliminate exists
-    (sf:M.finished)
+    (sf:GFin.finished)
     (e13 e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     suffix_sent
     suffix_received.
@@ -2697,7 +2703,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
       e14
       cf
       client.CS.cs_model /\
-    CS.raw_records_exactly suffix_sent T.ApplicationData 1
+    CS.raw_records_exactly suffix_sent T.Application_data 1
   returns client_finished_canonical_sent_seal_replay_slice client
   with _.
   (
@@ -2769,8 +2775,8 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
     with _.
     (
       introduce exists
-        (sf':M.finished)
-        (cf':M.finished)
+        (sf':GFin.finished)
+        (cf':GFin.finished)
         (model12':CS.connection_model)
         (after_verify':CS.connection_model)
         (after_app_write':CS.connection_model)
@@ -2827,7 +2833,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
             CL.message_direction = CL.Sent;
             CL.message_value = M.TlsHandshake (M.Finished cf');
           })) == Some client.CS.cs_model /\
-        CS.raw_records_exactly suffix_sent' T.ApplicationData 1
+        CS.raw_records_exactly suffix_sent' T.Application_data 1
       with
         sf
         cf

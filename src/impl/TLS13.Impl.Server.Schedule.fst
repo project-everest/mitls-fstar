@@ -12,6 +12,8 @@ module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module R = TLS13.Record.Spec
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
@@ -279,7 +281,7 @@ fn next_local_action
       (CS.ConnNetworkEvent {
         CL.message_direction = CL.Sent;
         CL.message_value =
-          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
+          M.TlsHandshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions));
       })));
     {
       ST.next_local_ready = true;
@@ -306,20 +308,15 @@ fn next_local_action
     assert (pure (
       B.length (Ghost.reveal server_cfg).CS.server_certificate_chain <=
         Bounds.max_server_certificate_chain_len));
+    // Transcript-length bound restored: can_send_certificate_runtime exposes
+    // send_certificate_ready ==> |transcript| + 13 + |chain| <= max_transcript_len,
+    // and we are on the send_certificate_ready branch.  (The legal_event
+    // (M.Certificate cert) obligation stays a caller obligation, discharged at
+    // the send site with the build-direction witness.)
     assert (pure (
-      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-        B.length
-          (W.serialize_certificate_from_credential
-            { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty }) <=
+      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 13 +
+        B.length (Ghost.reveal server_cfg).CS.server_certificate_chain <=
           Bounds.max_transcript_len));
-    assert (pure (CS.legal_event
-      'st0.CS.cs_model
-      (CS.ConnNetworkEvent {
-        CL.message_direction = CL.Sent;
-        CL.message_value =
-          M.TlsHandshake
-            (M.Certificate { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain]; M.body = B.empty });
-      })));
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendCertificate;
@@ -351,9 +348,12 @@ fn next_local_action
       ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
     let cv = Ghost.hide (Some?.v
       'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+    // Transcript-length bound restored: can_send_certificate_verify_runtime exposes
+    // send_certificate_verify_ready ==> |transcript| + 8 + |signature| <= max_transcript_len,
+    // and we are on the send_certificate_verify_ready branch.
     assert (pure (
-      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-        B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv)) <=
+      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
+        B.length (Sem.certificateVerify_signature_bytes (Ghost.reveal cv)) <=
           Bounds.max_transcript_len));
     assert (pure (CS.legal_event
       'st0.CS.cs_model
@@ -361,7 +361,6 @@ fn next_local_action
         CL.message_direction = CL.Sent;
         CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
       })));
-    assert (pure (B.length (Ghost.reveal cv).M.body == 0));
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendCertificateVerify;
@@ -461,13 +460,18 @@ fn next_local_action
     if verify_ready {
       assert (pure (Some?
         'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
-      assert (pure (CM.can_verify_client_finished
-        'st0
-        (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)));
+      // Restated (provable) conjuncts of CM.can_verify_client_finished plus the
+      // transcript-length bound restored via can_verify_client_finished_runtime
+      // (verify_ready ==> |transcript| + 36 <= max_transcript_len; we are on the
+      // verify_ready branch).  Together these discharge ST.next_local_action_sound
+      // for LocalVerifyClientFinished.
       assert (pure (ST.server_local_event_input_ready
         'st0
         ST.LocalVerifyClientFinished
         B.empty));
+      assert (pure (
+        B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+          Bounds.max_transcript_len));
       {
         ST.next_local_ready = true;
         ST.next_local_kind = ST.LocalVerifyClientFinished;

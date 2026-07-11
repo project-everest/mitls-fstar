@@ -6,13 +6,16 @@ module K = TLS13.Keys
 module Seq = FStar.Seq
 module T = TLS13.Types
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 include TLS13.Messages
 
 let is_supported_cipher_suite (suite:T.cipher_suite) : bool =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> true
-  | T.UnknownCipherSuite _ -> false
+  | T.Unknown_cipherSuite _ -> false
 
 let is_supported_group (group:T.named_group) : bool =
   match group with
@@ -35,20 +38,20 @@ let certificate_verify_input (transcript_hash:C.digest32) : B.bytes =
 let verify_certificate_verify
   (peer:X.peer_identity)
   (transcript_hash:C.digest32)
-  (cv:certificate_verify)
+  (cv:GCV.certificateVerify)
   : bool =
   C.verify_signature
-    cv.scheme
+    (Sem.certificateVerify_scheme cv)
     peer.X.leaf_public_key
     (certificate_verify_input transcript_hash)
-    cv.signature
+    (Sem.certificateVerify_signature_bytes cv)
 
-let expected_finished (base_key:C.secret) (transcript_hash:C.digest32) : finished =
-  { verify_data = K.finished_verify_data base_key transcript_hash }
+let expected_finished (base_key:C.secret) (transcript_hash:C.digest32) : GFin.finished =
+  K.finished_verify_data base_key transcript_hash
 
 let verify_finished
   (base_key:C.secret)
   (transcript_hash:C.digest32)
-  (fin:finished)
+  (fin:GFin.finished)
   : GTot bool =
-  Seq.equal fin.verify_data (K.finished_verify_data base_key transcript_hash)
+  Seq.equal (Sem.finished_verify_data fin) (K.finished_verify_data base_key transcript_hash)

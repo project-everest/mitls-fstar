@@ -5,6 +5,9 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module PWS = TLS13.ConnectionState.ProtectedWireStream
@@ -43,7 +46,7 @@ let lemma_bytes_append_assoc
 
 let lemma_sent_client_hello_raw_from_sent_replay_single
   (model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:connection_model)
@@ -118,7 +121,7 @@ let lemma_sent_client_hello_raw_from_sent_replay_single
 
 let lemma_sent_server_hello_raw_from_sent_replay_single
   (model:connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:connection_model)
@@ -193,7 +196,7 @@ let lemma_sent_server_hello_raw_from_sent_replay_single
 
 let lemma_received_server_hello_raw_from_received_replay_single
   (model:connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:connection_model)
@@ -271,7 +274,7 @@ let lemma_received_server_hello_raw_from_received_replay_single
 
 let lemma_received_client_hello_raw_from_sent_replay_single
   (model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:connection_model)
@@ -343,7 +346,7 @@ let lemma_received_client_hello_raw_from_sent_replay_single
 
 let lemma_received_client_hello_raw_from_received_replay_single
   (model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:connection_model)
@@ -1473,7 +1476,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_sent_cleartext
 
 let lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
   (model:connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (suffix:list conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -1557,7 +1560,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
 
 let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server_hello
   (model:connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (tail:list conn_event)
   (suffix:list conn_event)
   (post_model:connection_model)
@@ -1801,7 +1804,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
 
 let lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
   (model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (suffix:list conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -1905,7 +1908,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
 
 let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_client_hello
   (model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (tail:list conn_event)
   (suffix:list conn_event)
   (post_model:connection_model)
@@ -2583,7 +2586,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_server_local
 let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
   (server_model:connection_model)
   (client_model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (server_tail:list conn_event)
   (server_suffix:list conn_event)
   (client_tail:list conn_event)
@@ -3362,7 +3365,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
 let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
   (server_model:connection_model)
   (client_model:connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_tail:list conn_event)
   (server_suffix:list conn_event)
   (client_tail:list conn_event)
@@ -3757,11 +3760,11 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
   (server_model0:connection_model)
   (client_model0:connection_model)
   (start:handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_suffix:list conn_event)
   (client_suffix:list conn_event)
   (server_model1:connection_model)
@@ -3940,8 +3943,8 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
 let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalized
   (server_model:connection_model)
   (client_model:connection_model)
-  (server_sh:M.server_hello)
-  (client_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
+  (client_sh:GSH.serverHello)
   (server_tail:list conn_event)
   (server_suffix:list conn_event)
   (client_tail:list conn_event)
@@ -4346,8 +4349,8 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalize
 let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalized
   (server_model:connection_model)
   (client_model:connection_model)
-  (server_ch:M.client_hello)
-  (client_ch:M.client_hello)
+  (server_ch:GCH.clientHello)
+  (client_ch:GCH.clientHello)
   (server_tail:list conn_event)
   (server_suffix:list conn_event)
   (client_tail:list conn_event)
@@ -4754,13 +4757,13 @@ let lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handsh
   (server_model0:connection_model)
   (client_model0:connection_model)
   (start:handshake_start)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
   (selection:server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
-  (client_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
+  (client_sh:GSH.serverHello)
   (server_suffix:list conn_event)
   (client_suffix:list conn_event)
   (server_model1:connection_model)
@@ -4962,10 +4965,10 @@ let lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handsh
 
 let lemma_same_endpoint_replay_split_prefixes_equal_uniform_server_cleartext_handshake_prefix
   (server_model0:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_suffix:list conn_event)
   (server_model1:connection_model)
   (server_model2:connection_model)
@@ -5060,8 +5063,8 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_server_cleartext_han
 let lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_handshake_prefix
   (client_model0:connection_model)
   (start:handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_suffix:list conn_event)
   (client_model1:connection_model)
@@ -5145,10 +5148,10 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_han
 
 let lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_model
   (server_model0:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:connection_model)
   (server_model2:connection_model)
   (server_model3:connection_model)
@@ -5331,8 +5334,8 @@ let lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_m
 let lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_model
   (client_model0:connection_model)
   (start:handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_model1:connection_model)
   (client_model2:connection_model)
@@ -5488,7 +5491,7 @@ let lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_m
 let lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_model:connection_model)
   (client_model:connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_suffix:list conn_event)
   (client_suffix:list conn_event)
   (server_full_sent:B.bytes)
@@ -5617,7 +5620,7 @@ let lemma_paired_replay_split_prefixes_equal_single_server_hello
 let lemma_paired_replay_split_prefixes_equal_single_client_hello_with_full_streams
   (server_model:connection_model)
   (client_model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (server_suffix:list conn_event)
   (client_suffix:list conn_event)
   (server_full_sent:B.bytes)
@@ -5767,7 +5770,7 @@ let lemma_paired_replay_split_prefixes_equal_single_client_hello_with_full_strea
 let lemma_paired_replay_split_prefixes_equal_single_client_hello
   (server_model:connection_model)
   (client_model:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (server_suffix:list conn_event)
   (client_suffix:list conn_event)
   (server_full_sent:B.bytes)
@@ -6180,7 +6183,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_w
   (client_verify_skip:local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)
@@ -6502,11 +6505,11 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (server_model0:connection_model)
   (client_model0:connection_model)
   (start:handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:connection_model)
   (server_model2:connection_model)
   (server_model3:connection_model)
@@ -6529,7 +6532,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (client_verify_skip:local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)

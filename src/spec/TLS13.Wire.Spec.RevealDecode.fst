@@ -12,16 +12,37 @@ module WS = TLS13.Wire.Spec
 module GHS = TLS13.Wire.Generated.Handshake
 module LP = LowParse.Spec
 
+(* [RevealDecode] friends [TLS13.Wire.Spec], so it can unfold [parse_record_wire]
+   here.  When [parse_record] fails but [parse_record_wire] succeeds, the wire
+   result must come from the Handshake fallback arm (first byte 0x16, legacy
+   version 0x0301), so the parsed content type is [T.Handshake].  This local
+   reveal packages that fact so the (borderline) case analysis in
+   [lemma_parse_record_wire_from_prefix] stays within default resource limits
+   once the generated [Invalid] content type widens the byte-0 codec. *)
+let lemma_parse_record_wire_fallback (input:B.bytes)
+  : Lemma
+    (requires WS.parse_record input == None /\ Some? (WS.parse_record_wire input))
+    (ensures (
+      B.length input >= 5 /\
+      Seq.index input 0 == 0x16uy /\
+      WS.read_u16 input 1 == 0x0301 /\
+      (let flen = WS.read_u16 input 3 in
+       flen <= 16640 /\ 5 + flen <= B.length input /\
+       WS.parse_record_wire input ==
+         Some (T.Handshake, Seq.slice input 5 (5 + flen), 5 + flen))))
+= ()
+
 let lemma_parse_record_from_header raw =
   let flen = U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) in
   assert (WS.read_u16 raw 1 == 0x0303);
   assert (WS.read_u16 raw 3 == flen);
   assert (WS.content_type_of_byte (Seq.index raw 0) ==
     (match U8.v (Seq.index raw 0) with
-     | 0x14 -> Some T.ChangeCipherSpec
+     | 0x00 -> Some T.Invalid
+     | 0x14 -> Some T.Change_cipher_spec
      | 0x15 -> Some T.Alert
      | 0x16 -> Some T.Handshake
-     | 0x17 -> Some T.ApplicationData
+     | 0x17 -> Some T.Application_data
      | _ -> None));
   ()
 
@@ -30,10 +51,10 @@ let lemma_parse_record_wire_from_header raw =
   assert (WS.read_u16 raw 3 == flen);
   assert (WS.content_type_of_byte (Seq.index raw 0) ==
     (match U8.v (Seq.index raw 0) with
-     | 0x14 -> Some T.ChangeCipherSpec
+     | 0x14 -> Some T.Change_cipher_spec
      | 0x15 -> Some T.Alert
      | 0x16 -> Some T.Handshake
-     | 0x17 -> Some T.ApplicationData
+     | 0x17 -> Some T.Application_data
      | _ -> None));
   if U8.v (Seq.index raw 2) == 0x03 then (
     assert (WS.read_u16 raw 1 == 0x0303);
@@ -143,6 +164,7 @@ let lemma_parse_record_wire_from_prefix input content_type fragment consumed =
        WS.lemma_parse_record_implies_parse_record_wire input
      | None -> assert False
     ) else (
+     lemma_parse_record_wire_fallback prefix;
      let flen = U8.v (Seq.index prefix 3) * 256 + U8.v (Seq.index prefix 4) in
      assert (Seq.index prefix 0 == 0x16uy);
      assert (WS.read_u16 prefix 1 == 0x0301);
@@ -201,10 +223,10 @@ let lemma_parse_plaintext_some input =
   let cpos = B.length input - 1 in
   assert (WS.content_type_of_byte (Seq.index input cpos) ==
     (match U8.v (Seq.index input cpos) with
-     | 0x14 -> Some T.ChangeCipherSpec
+     | 0x14 -> Some T.Change_cipher_spec
      | 0x15 -> Some T.Alert
      | 0x16 -> Some T.Handshake
-     | 0x17 -> Some T.ApplicationData
+     | 0x17 -> Some T.Application_data
      | _ -> None));
   ()
 

@@ -19,6 +19,13 @@ module RTC = FStar.ReflexiveTransitiveClosure
 module T = TLS13.Types
 module Tr = TLS13.Transcript
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 type role =
   | Client
@@ -49,14 +56,14 @@ type conn_state = {
 }
 
 type event =
-  | SendClientHello of M.client_hello
-  | RecvServerHello of M.server_hello
-  | RecvEncryptedExtensions of M.encrypted_extensions
-  | RecvCertificate of M.certificate_msg
+  | SendClientHello of GCH.clientHello
+  | RecvServerHello of GSH.serverHello
+  | RecvEncryptedExtensions of GEE.encryptedExtensions
+  | RecvCertificate of GCert.certificate
   | ValidateCertificate of X.peer_identity
-  | RecvCertificateVerify of M.certificate_verify
-  | RecvServerFinished of M.finished
-  | SendClientFinished of M.finished
+  | RecvCertificateVerify of GCV.certificateVerify
+  | RecvServerFinished of GFin.finished
+  | SendClientFinished of GFin.finished
   | SendApplicationData of B.bytes
   | RecvApplicationData of B.bytes
   | SendCloseNotify
@@ -226,9 +233,12 @@ let step (s:conn_state) (e:event) : option conn_state =
   | Start, SendClientHello _ ->
     Some { s with phase = ClientHelloSent }
   | ClientHelloSent, RecvServerHello sh ->
-    if H.is_supported_cipher_suite sh.M.cipher_suite
-    then Some { s with phase = ServerHelloReceived }
-    else Some (fail s T.UnsupportedCipherSuite)
+    (match Sem.serverHello_cipher_suite sh with
+     | Some cs ->
+       if H.is_supported_cipher_suite cs
+       then Some { s with phase = ServerHelloReceived }
+       else Some (fail s T.UnsupportedCipherSuite)
+     | None -> Some (fail s T.UnsupportedCipherSuite))
   | ServerHelloReceived, RecvEncryptedExtensions _ ->
     Some { s with phase = EncryptedExtensionsReceived }
   | EncryptedExtensionsReceived, RecvCertificate _ ->

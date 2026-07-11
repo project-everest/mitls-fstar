@@ -9,6 +9,7 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
+module GSH   = TLS13.Wire.Generated.ServerHello
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module Seq = FStar.Seq
@@ -1323,7 +1324,7 @@ let lemma_server_no_tail_fifth_event_server_hello_if_not_ccs16
              tail3_sent
              tail3_received
              server.CS.cs_model;
-           eliminate exists (sh:M.server_hello).
+           eliminate exists (sh:GSH.serverHello).
              e4 == CS.ConnNetworkEvent ({
                CL.message_direction = CL.Sent;
                CL.message_value = M.TlsHandshake (M.ServerHello sh);

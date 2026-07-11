@@ -11,6 +11,7 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module ST = TLS13.Impl.Server.Types
@@ -771,7 +772,7 @@ let lemma_client_hs_server_hello_received_non_encrypted_extensions_network_step_
 
 let lemma_client_hs_server_hello_received_empty_keys_encrypted_extensions_illegal
   (model:CS.connection_model)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   : Lemma
       (requires
         model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
@@ -1109,13 +1110,13 @@ let lemma_client_application_progress_rank_step
        (match msg.CL.message_value with
         | M.TlsAlert alert ->
           (match alert, model.CS.model_control, msg.CL.message_direction with
-           | T.CloseNotify, CS.ControlApplicationData, CL.Sent ->
+           | T.Close_notify, CS.ControlApplicationData, CL.Sent ->
              assert (client_application_progress_rank model <=
                client_application_progress_rank model' + 1)
-           | T.CloseNotify, CS.ControlApplicationData, CL.Received ->
+           | T.Close_notify, CS.ControlApplicationData, CL.Received ->
              assert (client_application_progress_rank model <=
                client_application_progress_rank model' + 1)
-           | T.CloseNotify, CS.ControlClosing, CL.Received ->
+           | T.Close_notify, CS.ControlClosing, CL.Received ->
              assert (client_application_progress_rank model <=
                client_application_progress_rank model' + 1)
            | _, _, _ ->

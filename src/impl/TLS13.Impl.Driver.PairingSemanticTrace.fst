@@ -11,6 +11,12 @@ module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
@@ -2296,19 +2302,19 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
 =
   eliminate exists
     (c_start:CS.handshake_start)
-    (c_ch:M.client_hello)
-    (c_sh:M.server_hello)
+    (c_ch:GCH.clientHello)
+    (c_sh:GSH.serverHello)
     (c_shared:C.x25519_shared_secret)
     (c_e4:CS.conn_event)
     (c_e5:CS.conn_event)
-    (c_ee:M.encrypted_extensions)
-    (c_cert:M.certificate_msg)
+    (c_ee:GEE.encryptedExtensions)
+    (c_cert:GCert.certificate)
     (c_peer:X.peer_identity)
-    (c_cv:M.certificate_verify)
-    (c_sf:M.finished)
+    (c_cv:GCV.certificateVerify)
+    (c_sf:GFin.finished)
     (c_e13:CS.conn_event)
     (c_e14:CS.conn_event)
-    (c_cf:M.finished).
+    (c_cf:GFin.finished).
     client_successful_no_tail_semantic_trace_state_inputs
       client
       client_trace
@@ -2330,18 +2336,18 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
     Pairing.paired_handshake_message_states client server
   with _.
   eliminate exists
-    (s_ch:M.client_hello)
+    (s_ch:GCH.clientHello)
     (s_selection:CS.server_handshake_selection)
     (s_shared:C.x25519_shared_secret)
-    (s_sh:M.server_hello)
+    (s_sh:GSH.serverHello)
     (s_e5:CS.conn_event)
     (s_e6:CS.conn_event)
-    (s_ee:M.encrypted_extensions)
-    (s_cert:M.certificate_msg)
-    (s_cv:M.certificate_verify)
-    (s_sf:M.finished)
+    (s_ee:GEE.encryptedExtensions)
+    (s_cert:GCert.certificate)
+    (s_cv:GCV.certificateVerify)
+    (s_sf:GFin.finished)
     (s_app_write:CS.traffic_key_material)
-    (s_cf:M.finished)
+    (s_cf:GFin.finished)
     (s_app_read:CS.traffic_key_material).
     server_successful_no_tail_semantic_trace_state_inputs
       server

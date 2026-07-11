@@ -113,10 +113,10 @@ fn handle_alert
   let close_notify = alert_wire = 0uy;
   if close_notify {
     assert (pure (U8.v alert_wire == 0));
-    assert (pure (Ghost.reveal parsed_alert == T.CloseNotify));
+    assert (pure (Ghost.reveal parsed_alert == T.Close_notify));
     assert (pure (CT.received_tls_raw_delta_legal
       'st0
-      (M.TlsAlert T.CloseNotify)
+      (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes)));
     let ready = CQ.can_receive_close_notify c;
     if ready {
@@ -134,7 +134,7 @@ fn handle_alert
         'st0
         (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
         resp
-        (M.TlsAlert T.CloseNotify)
+        (M.TlsAlert T.Close_notify)
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out));
@@ -142,7 +142,7 @@ fn handle_alert
         'st0
         (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
         resp
-        (M.TlsAlert T.CloseNotify)
+        (M.TlsAlert T.Close_notify)
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out));
@@ -152,7 +152,7 @@ fn handle_alert
         resp
         content_type
         (Ghost.reveal 'fragment_bytes)
-        (M.TlsAlert T.CloseNotify)
+        (M.TlsAlert T.Close_notify)
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out;

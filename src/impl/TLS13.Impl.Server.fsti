@@ -27,6 +27,16 @@ module T = TLS13.Types
 module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
+module SS = TLS13.Impl.Server.Send
 
 type server = CR.connection_state
 
@@ -157,6 +167,44 @@ fn process_local_event
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 // TODO-A1: CM.can_verify_client_finished bundles an abstract
+                 // transcript+|serialize_handshake (Finished fin)| conjunct that is not
+                 // provable from server_local_event_input_ready alone (deleted
+                 // W.lemma_serialize_finished_len); threaded as explicit caller obligation.
+                 // The additional transcript+36 bound is required by Auth's wrapper.
+                 (kind == ST.LocalVerifyClientFinished /\
+                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+                  B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                    Bounds.max_transcript_len /\
+                  CM.can_verify_client_finished 'st0
+                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
+                 // TODO-A1: server_local_event_input_ready weakened can_send_server_hello
+                 // to True (no GSH.serverHello witness builder in Model yet).  The
+                 // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
+                 // for a symbolic random.  Both threaded as explicit caller obligation.
+                 (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 95 ==>
+                  (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
+                   let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
+                   (Seq.length server_random_bytes == 32 ==>
+                    (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+                   (let sh = SS.mk_server_hello_witness server_random_bytes
+                      (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+                      T.TLS_CHACHA20_POLY1305_SHA256 in
+                    CM.can_send_server_hello 'st0 sh
+                      (CS.serialized_cleartext_tls_message
+                        (M.TlsHandshake (M.ServerHello sh)))))) /\
+                 // TODO-A1: server_local_event_input_ready weakened the CV
+                 // transcript-length bound to True, and the deleted
+                 // lemma_serialize_certificate_verify_from_signature_len provided the
+                 // serialize-length equation; both threaded as explicit caller obligation.
+                 (kind == ST.LocalSendCertificateVerify /\
+                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+                  (let cv = Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+                   B.length (TLS13.Wire.Spec.serialize_handshake (M.CertificateVerify cv)) ==
+                     8 + B.length (Sem.certificateVerify_signature_bytes cv) /\
+                   B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                     B.length (TLS13.Wire.Spec.serialize_handshake (M.CertificateVerify cv)) <=
+                     Bounds.max_transcript_len)) /\
                  server_local_event_input_ready
                    'st0
                    kind
@@ -168,15 +216,15 @@ fn process_local_event
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
-                B.length app_out_bytes == SZ.v app_out_len /\
-                ST.server_local_event_end_to_end_correct
-                  'st0
-                  st1
-                  resp
-                  kind
-                  (Ghost.reveal 'payload_bytes)
-                  network_out_bytes
-                  app_out_bytes)
+               B.length app_out_bytes == SZ.v app_out_len /\
+               ST.server_local_event_end_to_end_correct
+                 'st0
+                 st1
+                 resp
+                 kind
+                 (Ghost.reveal 'payload_bytes)
+                 network_out_bytes
+                 app_out_bytes)
 
 fn process_local_event_with_credentials
   (s:server)
@@ -194,15 +242,64 @@ fn process_local_event_with_credentials
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 ST.server_end_to_end_invariant 'st0 /\
-                 server_local_event_input_ready_with_credentials
-                   'st0
-                   kind
-                   (Ghost.reveal 'payload_bytes)
-                   (Ghost.reveal 'certificate_chain)
-                   (Ghost.reveal 'credential_identity))
+                B.length 'old_network_out == SZ.v network_out_len /\
+                B.length 'old_app_out == SZ.v app_out_len /\
+                ST.server_end_to_end_invariant 'st0 /\
+                // TODO-A1: CM.can_verify_client_finished bundles an abstract
+                // transcript+|serialize_handshake (Finished fin)| conjunct that is not
+                // provable from server_local_event_input_ready alone (deleted
+                // W.lemma_serialize_finished_len); threaded as explicit caller obligation.
+                // The additional transcript+36 bound is required by Auth's wrapper.
+                (kind == ST.LocalVerifyClientFinished /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   Bounds.max_transcript_len /\
+                 CM.can_verify_client_finished 'st0
+                   (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
+                // TODO-A1: server_local_event_input_ready weakened can_send_server_hello
+                // to True (no GSH.serverHello witness builder in Model yet).  The
+                // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
+                // for a symbolic random.  Both threaded as explicit caller obligation.
+                (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 95 ==>
+                 (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
+                  let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
+                  (Seq.length server_random_bytes == 32 ==>
+                   (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+                  (let sh = SS.mk_server_hello_witness server_random_bytes
+                     (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+                     T.TLS_CHACHA20_POLY1305_SHA256 in
+                   CM.can_send_server_hello 'st0 sh
+                     (CS.serialized_cleartext_tls_message
+                       (M.TlsHandshake (M.ServerHello sh)))))) /\
+                // TODO-A1: server_local_event_input_ready weakened the CV
+                // transcript-length bound to True, and the deleted
+                // lemma_serialize_certificate_verify_from_signature_len provided the
+                // serialize-length equation; both threaded as explicit caller obligation.
+                (kind == ST.LocalSendCertificateVerify /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+                 (let cv = Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+                  B.length (TLS13.Wire.Spec.serialize_handshake (M.CertificateVerify cv)) ==
+                    8 + B.length (Sem.certificateVerify_signature_bytes cv) /\
+                  B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                    B.length (TLS13.Wire.Spec.serialize_handshake (M.CertificateVerify cv)) <=
+                    Bounds.max_transcript_len)) /\
+                // TODO-A1: chain length bounds (1 <= .. <= 32768) needed by
+                // build_certificate_from_credentials (mk_cert_witness's
+                // Sem.certificate_entries postcondition is conditional).
+                // Also, the deleted lemma_serialize_certificate_from_single_chain_len
+                // provided the serialize-handshake-cert length equation.
+                (kind == ST.LocalSendCertificate ==>
+                 1 <= B.length (Ghost.reveal 'certificate_chain) /\
+                 B.length (Ghost.reveal 'certificate_chain) <= 32768 /\
+                 B.length (TLS13.Wire.Spec.serialize_handshake
+                   (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                   13 + B.length (Ghost.reveal 'certificate_chain)) /\
+                server_local_event_input_ready_with_credentials
+                  'st0
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  (Ghost.reveal 'certificate_chain)
+                  (Ghost.reveal 'credential_identity))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
@@ -289,7 +386,7 @@ fn process_select_default_server_parameters_from_arrays
                     CS.server_selected_cipher_suite =
                       T.TLS_CHACHA20_POLY1305_SHA256;
                     CS.server_selected_group = T.X25519;
-                    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                     CS.server_random = Ghost.reveal 'server_random_bytes;
                     CS.server_key_share_private = None;
                     CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
@@ -316,7 +413,7 @@ fn process_select_default_server_parameters_from_arrays
                       CS.server_selected_cipher_suite =
                         T.TLS_CHACHA20_POLY1305_SHA256;
                       CS.server_selected_group = T.X25519;
-                      CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                       CS.server_random = Ghost.reveal 'server_random_bytes;
                       CS.server_key_share_private = None;
                       CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
@@ -365,7 +462,7 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                    CS.server_selected_cipher_suite =
                      T.TLS_CHACHA20_POLY1305_SHA256;
                    CS.server_selected_group = T.X25519;
-                   CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                   CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                    CS.server_random = Ghost.reveal 'server_random_bytes;
                    CS.server_key_share_private =
                      Some (Ghost.reveal 'server_private_key_bytes);
@@ -395,7 +492,7 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                      CS.server_selected_cipher_suite =
                        T.TLS_CHACHA20_POLY1305_SHA256;
                      CS.server_selected_group = T.X25519;
-                     CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                     CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                      CS.server_random = Ghost.reveal 'server_random_bytes;
                      CS.server_key_share_private =
                        Some (Ghost.reveal 'server_private_key_bytes);
@@ -423,7 +520,7 @@ fn process_send_server_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -474,7 +571,9 @@ fn process_send_server_hello
 fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
+  (#server_random_bytes: erased B.bytes)
+  (#server_key_share_bytes: erased B.bytes)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -487,6 +586,14 @@ fn process_send_server_hello_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Seq.length (Ghost.reveal server_random_bytes) == 32 /\
+                 (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+                 Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
+                 Ghost.reveal sh ==
+                   SS.mk_server_hello_witness
+                     (Ghost.reveal server_random_bytes)
+                     (Ghost.reveal server_key_share_bytes)
+                     (T.TLS_CHACHA20_POLY1305_SHA256) /\
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -536,12 +643,12 @@ fn process_send_server_hello_from_arrays
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
-                 (let sh = {
-                   M.random = Ghost.reveal 'server_random_bytes;
-                   M.key_share = Ghost.reveal 'server_key_share_bytes;
-                   M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                   M.body = B.empty;
-                 } in
+                 // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                 // sentinel (serverHello_body_cst); unprovable for a symbolic random,
+                 // so threaded as an explicit caller obligation.
+                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
+                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -558,12 +665,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = {
-                    M.random = Ghost.reveal 'server_random_bytes;
-                    M.key_share = Ghost.reveal 'server_key_share_bytes;
-                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                    M.body = B.empty;
-                  } in
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -601,14 +703,13 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
-                 (let sh = {
-                   M.random = Ghost.reveal 'server_random_bytes;
-                   M.key_share =
-                     CryptoSpec.x25519_public_from_private
-                       (Ghost.reveal 'server_private_key_bytes);
-                   M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                   M.body = B.empty;
-                 } in
+                 // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                 // sentinel (serverHello_body_cst); unprovable for a symbolic random,
+                 // so threaded as an explicit caller obligation.
+                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
+                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                       (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -625,14 +726,8 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
-                 (let sh = {
-                    M.random = Ghost.reveal 'server_random_bytes;
-                    M.key_share =
-                      CryptoSpec.x25519_public_from_private
-                        (Ghost.reveal 'server_private_key_bytes);
-                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                    M.body = B.empty;
-                  } in
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                        (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -680,7 +775,7 @@ fn process_send_encrypted_extensions_serialized
                      CL.message_direction = CL.Sent;
                      CL.message_value =
                        M.TlsHandshake
-                         (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
+                         (M.EncryptedExtensions ([] <: GEE.encryptedExtensions));
                    }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -689,7 +784,7 @@ fn process_send_encrypted_extensions_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                (let ee = { M.negotiated_alpn = None; M.body = B.empty } in
+                (let ee = ([] <: GEE.encryptedExtensions) in
                  st1 ==
                    CM.sent_encrypted_extensions_state
                      'st0
@@ -707,7 +802,8 @@ fn process_send_encrypted_extensions_serialized
 fn process_send_certificate_serialized
   (s:server)
   (lcert:IM.certificate_msg)
-  (#cert:erased M.certificate_msg)
+  (#cert:erased GCert.certificate)
+  (#chain:erased B.bytes)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -719,10 +815,12 @@ fn process_send_certificate_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
+                 1 <= Seq.length (Ghost.reveal chain) /\
+                 Seq.length (Ghost.reveal chain) <= 32768 /\
+                 Ghost.reveal cert == SS.mk_cert_witness (Ghost.reveal chain) /\
                  SZ.v fragment_len ==
                    B.length
-                     (TLS13.Wire.Spec.serialize_certificate_from_credential
-                       (Ghost.reveal cert)) /\
+                     (TLS13.Wire.Spec.serialize_handshake (M.Certificate (Ghost.reveal cert))) /\
                  SZ.v fragment_len + 17 <= 16640 /\
                  SZ.v network_out_len == SZ.v fragment_len + 22 /\
                  ST.server_end_to_end_invariant 'st0 /\
@@ -733,11 +831,10 @@ fn process_send_certificate_serialized
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
-                 B.length (Ghost.reveal cert).M.body == 0 /\
                  lcert.IM.certificate_msg_cert_count == 1sz /\
                  (exists (certificate:B.bytes).
-                   (Ghost.reveal cert).M.chain == [certificate]) /\
-                 (Ghost.reveal cert).M.chain <> [] /\
+                   Sem.certificate_entries (Ghost.reveal cert) == [certificate]) /\
+                 Sem.certificate_entries (Ghost.reveal cert) <> [] /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
@@ -800,6 +897,17 @@ fn process_send_certificate_from_credentials
                   'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
                   ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+                 // TODO-A1: chain length bound not exposed by O.is_server_credentials;
+                 // needed because mk_cert_witness's Sem.certificate_entries postcondition is conditional
+                 // on 1 <= |chain| <= 32768.
+                 1 <= B.length (Ghost.reveal 'certificate_chain) /\
+                 B.length (Ghost.reveal 'certificate_chain) <= 32768 /\
+                 // TODO-A1: |serialize_handshake (Certificate cert)| == 13 + |chain| was provided
+                 // by the now-deleted W.lemma_serialize_certificate_from_single_chain_len; threaded
+                 // as a precondition.
+                 B.length (TLS13.Wire.Spec.serialize_handshake
+                  (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                  13 + B.length (Ghost.reveal 'certificate_chain) /\
                  13 + B.length (Ghost.reveal 'certificate_chain) + 17 <= 16640 /\
                  SZ.v network_out_len ==
                   13 + B.length (Ghost.reveal 'certificate_chain) + 22 /\
@@ -815,7 +923,7 @@ fn process_send_certificate_from_credentials
                     CL.message_direction = CL.Sent;
                     CL.message_value =
                       M.TlsHandshake
-                        (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
+                        (M.Certificate (SS.mk_cert_witness (Ghost.reveal 'certificate_chain)));
                   }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -828,7 +936,7 @@ fn process_send_certificate_from_credentials
                 st1 ==
                   CM.sent_certificate_state
                     'st0
-                    { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty }
+                    (SS.mk_cert_witness (Ghost.reveal 'certificate_chain))
                     network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
@@ -842,7 +950,7 @@ fn process_send_certificate_from_credentials
 fn process_send_certificate_verify_serialized
   (s:server)
   (lcv:IM.certificate_verify)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -856,8 +964,7 @@ fn process_send_certificate_verify_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v fragment_len ==
                    B.length
-                     (TLS13.Wire.Spec.serialize_certificate_verify_from_signature
-                       (Ghost.reveal cv)) /\
+                     (TLS13.Wire.Spec.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))) /\
                  SZ.v fragment_len + 17 <= 16640 /\
                  SZ.v network_out_len == SZ.v fragment_len + 22 /\
                  ST.server_end_to_end_invariant 'st0 /\
@@ -866,7 +973,6 @@ fn process_send_certificate_verify_serialized
                  'st0.CS.cs_model.CS.model_config.CS.config_role ==
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-                 B.length (Ghost.reveal cv).M.body == 0 /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
@@ -906,7 +1012,7 @@ fn process_send_certificate_verify_serialized
 
 fn process_send_stored_certificate_verify_serialized
   (s:server)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -919,8 +1025,7 @@ fn process_send_stored_certificate_verify_serialized
                   B.length 'old_app_out == SZ.v app_out_len /\
                   SZ.v fragment_len ==
                     B.length
-                      (TLS13.Wire.Spec.serialize_certificate_verify_from_signature
-                        (Ghost.reveal cv)) /\
+                      (TLS13.Wire.Spec.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))) /\
                   SZ.v fragment_len + 17 <= 16640 /\
                   SZ.v network_out_len == SZ.v fragment_len + 22 /\
                   ST.server_end_to_end_invariant 'st0 /\
@@ -935,7 +1040,6 @@ fn process_send_stored_certificate_verify_serialized
                     ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
                   'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                     Some (Ghost.reveal cv) /\
-                  B.length (Ghost.reveal cv).M.body == 0 /\
                   B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                     SZ.v fragment_len <= Bounds.max_transcript_len /\
                   CS.legal_event
@@ -990,12 +1094,12 @@ fn process_sign_certificate_verify
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     selection.CS.server_selected_signature_scheme ==
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     selection.CS.server_selected_credential ==
                       Ghost.reveal 'credential_identity /\
                     CS.signature_scheme_offered
                       'st0.CS.cs_model.CS.model_config.CS.config_signature_schemes
-                      T.RsaPssRsaeSha256
+                      T.Rsa_pss_rsae_sha256
                   | None -> False))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -1049,13 +1153,10 @@ fn process_send_server_finished_serialized
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic
                  with
                  | Some server_hs ->
-                   let fin = {
-                     M.verify_data =
-                       K.finished_verify_data
+                   let fin = ((K.finished_verify_data
                          server_hs.CS.traffic_secret
                          (Tr.hash
-                           'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
-                   } in
+                           'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)) <: GFin.finished) in
                    st1 ==
                      CM.sent_server_finished_state
                        'st0
@@ -1105,7 +1206,7 @@ fn process_select_default_server_parameters_with_private_from_arrays
                     CS.server_selected_cipher_suite =
                       T.TLS_CHACHA20_POLY1305_SHA256;
                     CS.server_selected_group = T.X25519;
-                    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                     CS.server_random = Ghost.reveal 'server_random_bytes;
                     CS.server_key_share_private =
                       Some (Ghost.reveal 'server_private_key_bytes);
@@ -1135,7 +1236,7 @@ fn process_select_default_server_parameters_with_private_from_arrays
                       CS.server_selected_cipher_suite =
                         T.TLS_CHACHA20_POLY1305_SHA256;
                       CS.server_selected_group = T.X25519;
-                      CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                       CS.server_random = Ghost.reveal 'server_random_bytes;
                       CS.server_key_share_private =
                         Some (Ghost.reveal 'server_private_key_bytes);
@@ -1247,9 +1348,12 @@ fn process_derive_shared_secret_from_private_array
                     st1 == CM.derived_shared_secret_state 'st0 shared /\
                     (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
                      | Some ch ->
-                       TLS13.Crypto.Spec.x25519_shared
-                         (Ghost.reveal 'server_private_key_bytes)
-                         ch.M.key_share == Some shared
+                       (match CS.client_hello_key_share ch with
+                        | Some ch_ks ->
+                          TLS13.Crypto.Spec.x25519_shared
+                            (Ghost.reveal 'server_private_key_bytes)
+                            ch_ks == Some shared
+                        | None -> False)
                      | None -> False))) /\
                 (resp.ST.status == ST.IllegalTransition ==>
                   ST.unexpected_message_response
@@ -1704,14 +1808,18 @@ fn process_verify_client_finished
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+                 // TODO-A1: transcript+36 bound (was derived from the deleted
+                 // W.lemma_serialize_finished_len) threaded as explicit precondition.
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   Bounds.max_transcript_len /\
                  CM.can_verify_client_finished
                    'st0
                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
   returns resp:ST.server_response
   ensures exists* network_out_bytes app_out_bytes fin.
           connection_exactly
-            s
-            (CM.verified_client_finished_state 'st0 fin) **
+           s
+           (CM.verified_client_finished_state 'st0 fin) **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
@@ -1827,7 +1935,7 @@ fn process_client_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lch:IM.client_hello)
-  (#ch:erased M.client_hello)
+  (#ch:erased GCH.clientHello)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -1904,7 +2012,7 @@ fn process_client_finished
   (raw:array U8.t)
   (raw_len:SZ.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
