@@ -531,7 +531,9 @@ let lemma_client_late_stuck_step
         | CS.LocalVerifyFinished fin ->
           (match stage with
            | CS.HsServerFinishedReceived ->
-             assert_norm (
+             assert (model.CS.model_control ==
+               CS.ControlHandshaking CS.HsServerFinishedReceived);
+             assert (
                CS.step_model model ev ==
                Some (CS.with_handshake_stage
                  model
@@ -619,7 +621,9 @@ let lemma_client_late_stuck_step
            | CL.Received, M.Finished fin ->
              (match stage with
               | CS.HsCertificateVerifyVerified ->
-                assert_norm (
+                assert (model.CS.model_control ==
+                  CS.ControlHandshaking CS.HsCertificateVerifyVerified);
+                assert (
                   CS.step_model model ev ==
                   Some (CS.with_handshake_stage
                     { model with
@@ -946,7 +950,7 @@ let lemma_client_post_first_install_next_event_handshake_traffic_install
          assert (final_model.CS.model_control == CS.ControlApplicationData);
          assert False
        | M.TlsChangeCipherSpec ->
-         assert_norm (CS.step_model model (CS.ConnNetworkEvent msg) == Some model);
+         assert (CS.step_model model (CS.ConnNetworkEvent msg) == Some model);
          assert (model1 == model);
          PNI.lemma_client_application_progress_rank_replay_lower_bound
            model1
@@ -969,7 +973,7 @@ let lemma_client_post_first_install_next_event_handshake_traffic_install
                  ee;
                assert False
              | Some _ ->
-               assert_norm (
+               assert (
                  CS.step_model model (CS.ConnNetworkEvent msg) ==
                  Some (CS.with_handshake_stage
                    { model with
@@ -1767,7 +1771,7 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--split_queries always --z3rlimit 30"
 let lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
   (client:CS.connection_state)
   : Lemma
@@ -1963,6 +1967,21 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
             assert False
           );
           assert (client_no_tail_two_handshake_install_cover e4 e5);
+          assert (rest == e5 :: rest2);
+          assert (client.CS.cs_event_log ==
+            CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
+            CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake (M.ClientHello ch);
+            }) ::
+            CS.ConnNetworkEvent ({
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ServerHello sh);
+            }) ::
+            CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+            e4 ::
+            e5 ::
+            rest2);
           introduce exists (start':CS.handshake_start)
             (ch':GCH.clientHello)
             (sh':GSH.serverHello)
