@@ -2509,7 +2509,6 @@ let legal_handshake_message
   | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate <> None /\
-    hs.hs_certificate_verify_verified /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv

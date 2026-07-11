@@ -4475,6 +4475,7 @@ fn rec driver_handshake
   }
 }
 
+#push-options "--z3refresh --z3rlimit 40 --split_queries always --z3seed 17"
 fn rec driver_receive_application_data
   (d:top_driver)
   (empty_payload:array U8.t)
@@ -4915,6 +4916,7 @@ fn rec driver_receive_application_data
     }
   }
 }
+#pop-options
 
 fn rec driver_await_peer_close_notify
   (d:driver)

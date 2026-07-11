@@ -3297,7 +3297,6 @@ fn can_send_certificate_verify_runtime
       tag_ok &&
       stage_ok &&
       has_certificate &&
-      already_verified &&
       has_server_handshake_keys &&
       seq_ok &&
       certificate_verify_seq_slot &&

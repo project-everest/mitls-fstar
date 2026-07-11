@@ -265,6 +265,7 @@ BUNDLE_API_MODULE = TLS13.Impl.Client
 
 SERIALIZER_MODULES = \
   TLS13.Impl.Serializer.Common \
+  TLS13.Impl.Serializer.Handshake \
   TLS13.Impl.Serializer.Finished \
   TLS13.Impl.Serializer.EncryptedExtensions \
   TLS13.Impl.Serializer.CertificateVerify \
@@ -274,7 +275,8 @@ SERIALIZER_MODULES = \
   TLS13.Impl.Serializer
 
 SERIALIZER_INTERNAL_MODULES = \
-  TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Finished,\
+  TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Handshake,\
+  TLS13.Impl.Serializer.Finished,\
   TLS13.Impl.Serializer.EncryptedExtensions,\
   TLS13.Impl.Serializer.CertificateVerify,TLS13.Impl.Serializer.ServerHello,\
   TLS13.Impl.Serializer.Certificate,TLS13.Impl.Serializer.ProtectedRecord,\
@@ -676,6 +678,7 @@ test/test_extracted_client_openssl_echo: \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
 	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-extracted-client-openssl-echo: test-openssl-echo
@@ -724,6 +727,7 @@ test/test_extracted_server_openssl_client: \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_server_openssl_client.c \
 	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-openssl-sclient: test/test_extracted_server_openssl_client \
