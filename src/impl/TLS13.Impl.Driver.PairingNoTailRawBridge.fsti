@@ -103,6 +103,7 @@ val lemma_server_hello_key_share_from_sent_supported_and_received_projection
   (server_sh_raw:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile server_sh /\
         CT.network_input_message_projection
           st0
           content_type
@@ -139,6 +140,7 @@ val lemma_received_server_hello_raw_not_change_cipher_spec
   (ccs_raw:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile sh /\
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello sh))
           server_hello_raw /\
@@ -240,6 +242,7 @@ val lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
   (ccs_tail:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile sh /\
         Seq.equal left_stream right_stream /\
         Seq.equal left_stream (B.append server_hello_raw server_tail) /\
         Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
@@ -826,6 +829,8 @@ val lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
           server_sh
           server_rest /\
         WFL.supported_client_hello_wire_profile client_ch /\
+        WFL.supported_server_hello_wire_profile server_sh /\
+        WFL.supported_server_hello_wire_profile client_sh /\
         CS.connection_state_raw_event_replay_consistent client /\
         CS.connection_state_raw_event_replay_consistent server /\
         CS.paired_wire_logs client server)

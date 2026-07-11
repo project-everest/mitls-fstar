@@ -85,6 +85,7 @@ let lemma_parse_record_wire_of_cleartext_server_hello
   (raw:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile sh /\
         CS.cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello sh))
           raw)
@@ -94,9 +95,8 @@ let lemma_parse_record_wire_of_cleartext_server_hello
             Some (T.Handshake, fragment, B.length raw))
 =
   let fragment = W.serialize_handshake (M.ServerHello sh) in
-  W.lemma_serialize_server_hello_len sh;
+  WFL.lemma_serialize_handshake_server_hello_record_bound sh;
   W.lemma_serialize_tls_message_handshake (M.ServerHello sh);
-  assert (M.server_hello_max_len <= 16640);
   assert (B.length fragment <= 16640);
   WFL.lemma_parse_record_wire_serialize_record T.Handshake fragment;
   assert (CS.serialized_cleartext_tls_message
@@ -115,6 +115,7 @@ let lemma_parse_record_wire_of_received_server_hello
   (raw:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile sh /\
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello sh))
           raw)
@@ -138,6 +139,7 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
   (server_sh_raw:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile server_sh /\
         CT.network_input_message_projection
           st0
           content_type
@@ -176,8 +178,7 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
     (
       let sent_fragment = W.serialize_handshake (M.ServerHello server_sh) in
       lemma_parse_record_wire_of_cleartext_server_hello server_sh server_sh_raw;
-      W.lemma_serialize_server_hello_len server_sh;
-      assert (M.server_hello_max_len <= 16640);
+      WFL.lemma_serialize_handshake_server_hello_record_bound server_sh;
       assert (B.length sent_fragment <= 16640);
       W.lemma_serialize_tls_message_handshake (M.ServerHello server_sh);
       assert (CS.serialized_cleartext_tls_message
@@ -271,6 +272,7 @@ let lemma_received_server_hello_raw_not_change_cipher_spec
   (ccs_raw:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile sh /\
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello sh))
           server_hello_raw /\
@@ -543,6 +545,7 @@ let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
   (ccs_tail:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile sh /\
         Seq.equal left_stream right_stream /\
         Seq.equal left_stream (B.append server_hello_raw server_tail) /\
         Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
@@ -851,6 +854,7 @@ let lemma_event_raw_delta_legal_sent_server_hello
 =
   ()
 
+#push-options "--z3rlimit 20 --fuel 2 --ifuel 2"
 let lemma_client_prefix_sent_client_hello_supported
   (model0:CS.connection_model)
   (client_start:CS.handshake_start)
@@ -961,6 +965,7 @@ let lemma_client_prefix_sent_client_hello_supported
           CS.HsStarted);
       assert (model1.CS.model_config == model0.CS.model_config);
       assert (model1.CS.model_handshake.CS.hs_start == Some client_start);
+      assert (model0.CS.model_control == CS.ControlNew);
       assert (CS.start_matches_config model0.CS.model_config client_start);
       assert (CS.client_hello_matches_start client_start client_ch);
       assert (Seq.equal
@@ -978,6 +983,7 @@ let lemma_client_prefix_sent_client_hello_supported
       assert (WFL.supported_client_hello_wire_profile client_ch)
     )
   )
+#pop-options
 
 let lemma_server_start_then_received_change_cipher_spec_raw_slice
   (model0:CS.connection_model)
@@ -3750,6 +3756,8 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
           server_sh
           server_rest /\
         WFL.supported_client_hello_wire_profile client_ch /\
+        WFL.supported_server_hello_wire_profile server_sh /\
+        WFL.supported_server_hello_wire_profile client_sh /\
         CS.connection_state_raw_event_replay_consistent client /\
         CS.connection_state_raw_event_replay_consistent server /\
         CS.paired_wire_logs client server)
