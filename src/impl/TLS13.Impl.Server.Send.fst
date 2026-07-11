@@ -387,6 +387,128 @@ let lemma_can_send_server_hello_witness_of_selection
 #pop-options
 
 (* ----------------------------------------------------------------------- *)
+(* Aggregate discharge of the four conditional obligations threaded through *)
+(* [S.process_local_event_with_credentials].  CanonicalProtocol's           *)
+(* [server_process_local] calls that function with a *symbolic* kind, so it  *)
+(* must establish the whole implication conjunction at once.  We prove it    *)
+(* from the input_ready facts (both the plain and credentialed forms):       *)
+(*  - VClF: input_ready (site 2) restates can_verify_client_finished's       *)
+(*    conjuncts + [transcript+36]; the finished-length lemma bridges the     *)
+(*    transcript bound (a Finished serializes to 36 bytes).                  *)
+(*  - SendServerHello: input_ready (site 3) carries the send obligation on   *)
+(*    the canonical [CM.server_hello_of_selection selection]; the SH build   *)
+(*    bridge transfers it to the witness form + the HRR-sentinel guard.      *)
+(*  - SendCertificateVerify: input_ready (site 4) carries [transcript+8+     *)
+(*    |sig|]; the certificate-verify-length lemma bridges the serialized     *)
+(*    length ([8+|sig|]).                                                    *)
+(*  - SendCertificate: plain input_ready is [False] for this kind (it has no *)
+(*    LocalSendCertificate case), so the obligation is vacuous.              *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 200"
+let lemma_server_process_local_obligations
+  (st: CS.connection_state)
+  (kind: ST.local_event_kind)
+  (payload: B.bytes)
+  (certificate_chain: B.bytes)
+  (credential_identity: CS.server_credential_identity)
+  (out_len_v: nat)
+  : Lemma
+    (requires
+      ST.server_local_event_input_ready st kind payload /\
+      ST.server_local_event_input_ready_with_credentials
+        st kind payload certificate_chain credential_identity)
+    (ensures
+      (kind == ST.LocalVerifyClientFinished /\
+       Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+         Bounds.max_transcript_len /\
+       CM.can_verify_client_finished st
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
+      (kind == ST.LocalSendServerHello /\ out_len_v == 95 ==>
+       (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
+        (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst) /\
+       (let sh = mk_server_hello_witness
+                   (CL.raw_slice payload 0 32)
+                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                   T.TLS_CHACHA20_POLY1305_SHA256 in
+        CM.can_send_server_hello st sh
+          (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sh))))) /\
+      (kind == ST.LocalSendCertificateVerify /\
+       Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+       B.length (W.serialize_handshake (M.CertificateVerify
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) ==
+         8 + B.length (Sem.certificateVerify_signature_bytes
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)) /\
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+         B.length (W.serialize_handshake (M.CertificateVerify
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) <=
+         Bounds.max_transcript_len) /\
+      (kind == ST.LocalSendCertificate ==>
+       1 <= B.length certificate_chain /\ B.length certificate_chain <= 32768 /\
+       B.length (W.serialize_handshake
+         (M.Certificate (mk_cert_witness certificate_chain))) ==
+         13 + B.length certificate_chain))
+  =
+  match kind with
+  | ST.LocalVerifyClientFinished ->
+    introduce
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+      (B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+         Bounds.max_transcript_len /\
+       CM.can_verify_client_finished st
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
+    with _h.
+    ( let fin = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished in
+      lemma_serialize_handshake_finished_len fin;
+      assert (CM.can_verify_client_finished st fin) )
+  | ST.LocalSendServerHello ->
+    introduce
+      out_len_v == 95 ==>
+      ((Seq.length (CL.raw_slice payload 0 32) == 32 ==>
+        (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst) /\
+       (let sh = mk_server_hello_witness
+                   (CL.raw_slice payload 0 32)
+                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                   T.TLS_CHACHA20_POLY1305_SHA256 in
+        CM.can_send_server_hello st sh
+          (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sh)))))
+    with _h.
+    ( let server_random = CL.raw_slice payload 0 32 in
+      let server_private_key = CL.raw_slice payload 32 64 in
+      assert (B.length payload == 64);
+      assert (Seq.length server_random == 32);
+      assert (Seq.length server_private_key == 32);
+      match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+      | Some selection ->
+        lemma_can_send_server_hello_witness_of_selection
+          st selection server_random server_private_key )
+  | ST.LocalSendCertificateVerify ->
+    introduce
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+      (B.length (W.serialize_handshake (M.CertificateVerify
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) ==
+         8 + B.length (Sem.certificateVerify_signature_bytes
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)) /\
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+         B.length (W.serialize_handshake (M.CertificateVerify
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) <=
+         Bounds.max_transcript_len)
+    with _h.
+    ( let cv = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+      lemma_serialize_handshake_certificate_verify_len cv )
+  | ST.LocalSendCertificate ->
+    // plain input_ready has no LocalSendCertificate case (-> False), so the
+    // requires is contradictory here: this kind is unreachable on this path.
+    assert (ST.server_local_event_input_ready st ST.LocalSendCertificate payload);
+    assert False
+  | _ -> ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
 (* TODO-A1 cst-guard runtime check.                                        *)
 (* The ServerHello random generated by the server must differ from the     *)
 (* HelloRetryRequest sentinel [GSHbody.serverHello_body_cst]; otherwise     *)
