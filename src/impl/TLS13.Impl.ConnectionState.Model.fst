@@ -37,6 +37,9 @@ module GFin = TLS13.Wire.Generated.Finished
 module GPV = TLS13.Wire.Generated.ProtocolVersion
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GSHBody = TLS13.Wire.Generated.ServerHelloBody
+module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSS = TLS13.Wire.Generated.SignatureScheme
 module GCHE = TLS13.Wire.Generated.ClientHello_extensions
 // For the ClientHello record-size bound in client_hello_matches_start: reveal
@@ -203,6 +206,20 @@ let lemma_client_hello_of_start_matches
   GCH.clientHello_extensions_list_bytesize_cons sg_ext [sa_ext; ks_ext; sv_ext];
   GCH.clientHello_extensions_list_bytesize_cons sn_ext [sg_ext; sa_ext; ks_ext; sv_ext];
   ()
+#pop-options
+
+// Server mirror of lemma_client_hello_of_start_matches.  Under valid_selection
+// the clamp (sho_random) is an identity, so every TLS13.Wire.Semantics accessor
+// on the canonical server_hello_of_selection returns the matching `selection`
+// field.  Discharged (like the reference lemma_canonical_* in
+// TLS13.Impl.Serializer.Handshake) by unfolding server_hello_of_selection and
+// the accessors (fuel for the 2-extension list walk).
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
+let lemma_server_hello_of_selection_matches
+  (sel:CS.server_handshake_selection)
+  : Lemma (requires valid_selection sel)
+          (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
+= ()
 #pop-options
 
 // Faithful len-helper bridge (see .fsti).  Off the LocalHandshake hot path.

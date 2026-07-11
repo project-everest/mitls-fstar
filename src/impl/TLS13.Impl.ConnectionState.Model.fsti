@@ -47,6 +47,12 @@ module GCS = TLS13.Wire.Generated.CipherSuite
 module GSS = TLS13.Wire.Generated.SignatureScheme
 module GSSL = TLS13.Wire.Generated.SignatureSchemeList
 module GECH = TLS13.Wire.Generated.ExtensionClientHello
+// Generated component modules used to build the canonical wire ServerHello
+// returned by server_hello_of_selection (mirrors
+// TLS13.Impl.Serializer.Handshake.poc_canonical_sh).
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GSHBody = TLS13.Wire.Generated.ServerHelloBody
+module GSHB = TLS13.Wire.Generated.ServerHello_body
 
 open TLS13.Impl.ConnectionState.Bounds
 
@@ -262,6 +268,69 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
       GCH.legacy_compression_methods = comp;
       GCH.extensions = exts; }
 
+// Phase 5 (server build direction): server_hello_of_selection builds the
+// faithful canonical ServerHello (X25519 32-byte key_share + supported_versions,
+// legacy_version TLS 1.2, empty session-id echo, CHACHA cipher suite) from a
+// server_handshake_selection.  It is the server mirror of client_hello_of_start
+// and is structurally identical to the verified reference
+// TLS13.Impl.Serializer.Handshake.poc_canonical_sh applied to
+//   (selection.server_random, selection.server_key_share_public, CHACHA).
+// It is TOTAL: the (unbounded/unconstrained) selection random is CLAMPED to a
+// value differing from the HelloRetryRequest sentinel (serverHello_body_cst).
+// Under `valid_selection sel` the clamp is the identity, so every
+// TLS13.Wire.Semantics accessor returns the matching selection field (see
+// lemma_server_hello_of_selection_matches).
+
+// valid-selection predicate: the selection random differs from the HRR sentinel
+// and the selected cipher suite is the single supported one, so the clamp in
+// server_hello_of_selection is an identity and the record matches the selection.
+let valid_selection (sel:CS.server_handshake_selection) : prop =
+  (sel.CS.server_random <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
+  sel.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256
+
+// clamp: a 32-byte server random differing from the HRR sentinel (identity under
+// valid_selection).  The all-zero fallback differs from serverHello_body_cst at
+// index 0 (0uy <> 0xcfuy).
+noextract
+let sho_random (sel:CS.server_handshake_selection)
+  : (r:Seq.lseq U8.t 32 { r <> GSHB.serverHello_body_cst })
+  = if (sel.CS.server_random <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst
+    then (sel.CS.server_random <: Seq.lseq U8.t 32)
+    else (Seq.lemma_index_create 32 0uy 0;
+          assert_norm (Seq.index GSHB.serverHello_body_cst 0 == 0xcfuy);
+          Seq.create 32 0uy)
+
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
+noextract
+let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHello
+  = let rnd : Seq.lseq U8.t 32 = sho_random sel in
+    let ks : B.bytes = sel.CS.server_key_share_public in
+    let cs : GCS.cipherSuite = T.TLS_CHACHA20_POLY1305_SHA256 in
+    let ke : GKSE.keyShareEntry_key_exchange = ks in
+    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
+    GNG.namedGroup_bytesize_eq GNG.X25519;
+    GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
+    let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
+    let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
+    let sv_ext : GESH.extensionServerHello =
+      GESH.Extension_data_supported_versions
+        (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
+    GSHBody.serverHelloBody_extensions_list_bytesize_nil;
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
+    GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+    let exts : GSHBody.serverHelloBody_extensions = [ks_ext; sv_ext] in
+    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = B.empty in
+    let body : GSHBody.serverHelloBody = {
+      GSHBody.legacy_session_id_echo = sid;
+      GSHBody.cipher_suite = cs;
+      GSHBody.legacy_compression_method = 0uy;
+      GSHBody.extensions = exts;
+    } in
+    let bf : GSHB.serverHello_body_false = { GSHB.tag = rnd; GSHB.value = body } in
+    { GSH.legacy_version = GPV.TLS_1p2; GSH.body = GSHB.ServerHello_body_false bf }
+#pop-options
+
 noextract
 let started_handshake_state
   (st:CS.connection_state)
@@ -430,6 +499,15 @@ val lemma_client_hello_of_start_matches
   (start:CS.handshake_start)
   : Lemma (requires valid_start start)
           (ensures CS.client_hello_matches_start start (client_hello_of_start start))
+
+// Server mirror: under valid_selection, the canonical server_hello_of_selection
+// satisfies the spec's server_hello_matches_selection: every
+// TLS13.Wire.Semantics accessor returns the corresponding `selection` field (the
+// clamp in server_hello_of_selection is an identity under valid_selection).
+val lemma_server_hello_of_selection_matches
+  (sel:CS.server_handshake_selection)
+  : Lemma (requires valid_selection sel)
+          (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
 
 // Faithful len-helper bridge: under valid_start the canonical
 // client_hello_of_start's TLS13.Wire.Semantics accessor lengths agree with the
