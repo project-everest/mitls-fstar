@@ -15,11 +15,14 @@ module CW = TLS13.Impl.CanonicalWire
 module CTypes = TLS13.Impl.CanonicalTypes
 module ID = FStar.IndefiniteDescription
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
+module GSH = TLS13.Wire.Generated.ServerHello
 module MR = Pulse.Lib.MonotonicGhostRef
 module O = TLS13.OpenSSL
 module RVD = TLS13.Wire.Spec.RevealDecode
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.Impl.Server
+module SS = TLS13.Impl.Server.Send
 module Seq = FStar.Seq
 module SM = Common.StateMachine
 module ST = TLS13.Impl.Server.Types
@@ -214,7 +217,7 @@ let server_supported_profile_selection
        T.Rsa_pss_rsae_sha256 /\
      (match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
-        CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+        CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
       | None ->
         True)
    | None ->
@@ -391,7 +394,11 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
   (msg:M.tls_message)
   (raw_received:B.bytes)
   : Lemma
-      (requires CT.received_tls_raw_delta_legal st0 msg raw_received)
+      (requires CT.received_tls_raw_delta_legal st0 msg raw_received /\
+                (match msg with
+                 | M.TlsHandshake (M.ServerHello sh) ->
+                   B.length (WS.serialize_handshake (M.ServerHello sh)) <= 16640
+                 | _ -> True))
       (ensures CT.raw_record_parse_success raw_received)
 =
   let received_msg = {
@@ -451,8 +458,6 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
       WS.lemma_serialize_tls_message_handshake (M.ServerHello sh);
       assert (outer_ct == T.Handshake);
       assert (outer_fragment == WS.serialize_handshake (M.ServerHello sh));
-      WS.lemma_serialize_server_hello_len sh;
-      assert (M.server_hello_max_len <= 16640);
       assert (B.length outer_fragment <= 16640);
       WS.lemma_parse_record_serialize_record outer_ct outer_fragment;
       WS.lemma_parse_record_implies_parse_record_wire
@@ -762,6 +767,55 @@ let lemma_server_network_step_ok_received_decode_legal_response
     assert False
   )
 
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
+(* A well-formed server (server_end_to_end_invariant ==> config_role ==
+   ServerEndpoint) never legally receives a ServerHello: legal_handshake_message
+   only permits a Received ServerHello for a ClientEndpoint.  Hence for any msg
+   admitted by legal_response_for_event on a server, the ServerHello case is
+   vacuous, discharging the serialize-length bound of
+   [lemma_received_tls_raw_delta_legal_raw_record_parse_success]. *)
+let lemma_server_received_msg_bound_server_hello
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (msg:M.tls_message)
+  (consumed:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.server_end_to_end_invariant st0 /\
+        ST.legal_response_for_event
+          st0 st1 resp (ST.received_message_event msg)
+          B.empty consumed network_out app_out)
+      (ensures
+        (match msg with
+         | M.TlsHandshake (M.ServerHello sh) ->
+           B.length (WS.serialize_handshake (M.ServerHello sh)) <= 16640
+         | _ -> True))
+=
+  match msg with
+  | M.TlsHandshake (M.ServerHello sh) ->
+    assert_norm (ST.server_end_to_end_invariant st0 ==
+      (ST.server_state_correct st0 /\ ST.server_raw_to_message_replay_consistent st0));
+    assert_norm (ST.server_state_correct st0 ==
+      (ST.server_state_core_correct st0 /\
+       CS.connection_state_sent_seal_replay_consistent st0 /\
+       CS.connection_state_received_decode_replay_consistent st0));
+    assert (ST.server_state_core_correct st0);
+    assert (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+    assert (CS.legal_connection_delta st0
+      { CS.delta_event = ST.received_message_event msg;
+        CS.delta_raw_sent = B.empty;
+        CS.delta_raw_received = consumed } st1);
+    assert (CS.legal_event st0.CS.cs_model (ST.received_message_event msg));
+    assert (CS.legal_tls_message st0.CS.cs_model CL.Received msg);
+    assert (CS.legal_handshake_message st0.CS.cs_model CL.Received (M.ServerHello sh));
+    assert (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+    assert False
+  | _ -> ()
+#pop-options
+
 let lemma_server_network_step_ok_process_correct
   (initial:CS.connection_state)
   (st0:CS.connection_state)
@@ -894,6 +948,9 @@ let lemma_server_network_step_ok_process_correct
     network_out
     app_out);
   assert (CT.received_tls_raw_delta_legal st0 msg consumed);
+  assert (ST.server_end_to_end_invariant st0);
+  lemma_server_received_msg_bound_server_hello
+    st0 st1 resp msg consumed network_out app_out;
   lemma_received_tls_raw_delta_legal_raw_record_parse_success
     st0
     msg
@@ -3246,6 +3303,18 @@ ensures exists* (received1:Ghost.erased B.bytes)
     (Ghost.reveal api).CTypes.server_local_payload
     certificate_chain
     credential_identity));
+  // Discharge the four conditional obligations threaded through
+  // process_local_event_with_credentials from the (un-weakened) input_ready
+  // facts: VClF/CV transcript bounds via the serializer-length lemmas, the
+  // ServerHello send obligation via the build-direction bridge, and the
+  // vacuous SendCertificate case (plain input_ready has no such case).
+  SS.lemma_server_process_local_obligations
+    (Ghost.reveal st0)
+    kind
+    (Ghost.reveal api).CTypes.server_local_payload
+    certificate_chain
+    credential_identity
+    (SZ.v out_len);
   let resp =
     S.process_local_event_with_credentials
       srv.canonical_server_state
