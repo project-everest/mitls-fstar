@@ -2062,6 +2062,7 @@ let lemma_server_no_tail_second_event_client_hello_clean
   lemma_server_no_tail_second_event_not_ccs server;
   lemma_server_no_tail_second_event_client_hello_if_not_ccs server
 
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_server_no_tail_third_event_select_parameters_clean
   (server:CS.connection_state)
   : Lemma
@@ -2269,7 +2270,7 @@ let lemma_server_no_tail_third_event_select_parameters_clean
               rest
         with _.
         (
-          assert_norm (
+          assert (
             CS.step_model
               model1
               (CS.ConnNetworkEvent ({
@@ -2729,7 +2730,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
               rest
         with _.
         (
-          assert_norm (
+          assert (
             CS.step_model
               model1
               (CS.ConnNetworkEvent ({
@@ -3145,7 +3146,8 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
   proof obligation in this lemma but not quite enough at that final depth;
   bump it locally rather than growing it project-wide.
 **)
-#push-options "--z3rlimit 10"
+#pop-options
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_server_no_tail_fifth_event_server_hello_clean
   (server:CS.connection_state)
   : Lemma
@@ -3351,7 +3353,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
              rest
        with _.
        (
-         assert_norm (
+         assert (
            CS.step_model
              model1
              (CS.ConnNetworkEvent ({

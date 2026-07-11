@@ -216,7 +216,9 @@ let lemma_client_server_finished_received_step_model_shape
         client_after_server_finished_model model12 /\
         model12.CS.model_handshake.CS.hs_server_finished == Some sf)
 =
-  assert_norm (
+  assert (model11.CS.model_control ==
+    CS.ControlHandshaking CS.HsCertificateVerifyVerified);
+  assert (
     CS.step_model
       model11
       (CS.ConnNetworkEvent {
@@ -252,7 +254,9 @@ let lemma_client_verify_finished_step_model_shape
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf)) == Some model13)
       (ensures client_after_server_finished_verified_model model13)
 =
-  assert_norm (
+  assert (model12.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerFinishedReceived);
+  assert (
     CS.step_model
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf)) ==
