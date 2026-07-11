@@ -185,7 +185,16 @@ val lemma_select_derive_success_server_hello_ready :
      st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
      Some? st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
      B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
-       Bounds.max_transcript_len)
+       Bounds.max_transcript_len /\
+     // cst-guard: the sampled 32-byte ServerHello random differs from the
+     // HelloRetryRequest sentinel (serverHello_body_cst).  This is a runtime
+     // fact (established by the caller's SS.server_random_differs_from_cst
+     // check); it is required for CM.valid_selection of the derived selection,
+     // hence for the build-direction can_send_server_hello obligation now
+     // carried by input_ready LocalSendServerHello.
+     (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
+      (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
+        GSHbody.serverHello_body_cst))
     (ensures
      ST.server_local_event_input_ready
        st2

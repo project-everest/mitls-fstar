@@ -509,6 +509,20 @@ val lemma_server_hello_of_selection_matches
   : Lemma (requires valid_selection sel)
           (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
 
+// Server mirror of the client bound (see lemma_client_hello_of_start_matches's
+// record-size reasoning): the canonical server_hello_of_selection serializes to
+// exactly 90 bytes (legacy_version TLS_1p2 + 32-byte random + empty session-id +
+// CHACHA cipher suite + null compression + [X25519 key_share; supported_versions]).
+// Reveals serialize_handshake to the generated serializer and computes the
+// bytesize; used to discharge the transcript-length obligation inside
+// can_send_server_hello for the server build direction.
+val lemma_server_hello_of_selection_bytesize
+  (sel:CS.server_handshake_selection)
+  : Lemma (requires valid_selection sel)
+          (ensures
+            B.length (W.serialize_handshake
+              (M.ServerHello (server_hello_of_selection sel))) == 90)
+
 // Faithful len-helper bridge: under valid_start the canonical
 // client_hello_of_start's TLS13.Wire.Semantics accessor lengths agree with the
 // runtime *_len values implied by the structure-match predicates.  (Not on the

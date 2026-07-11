@@ -387,12 +387,17 @@ let server_local_event_input_ready
         Seq.equal
           (Some?.v selection.CS.server_key_share_private)
           server_private_key /\
-        CS.server_selection_key_share_consistent selection
-      | None -> False) /\
-     // TODO-A1: build-direction can_send_server_hello needs a GSH.serverHello witness
-     // (Model has no server_hello_of_selection builder yet; the deleted Reveal layer
-     // provided it).  Weakened to True until build-direction support lands.
-     True)
+        CS.server_selection_key_share_consistent selection /\
+        // build-direction send obligation: the canonical ServerHello built from
+        // the selection (CM.server_hello_of_selection, the server mirror of the
+        // client's client_hello_of_start) can be sent.
+        (let sh = CM.server_hello_of_selection selection in
+         CM.can_send_server_hello
+           st
+           sh
+           (CS.serialized_cleartext_tls_message
+             (M.TlsHandshake (M.ServerHello sh))))
+      | None -> False))
   | LocalSendEncryptedExtensions ->
     Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==

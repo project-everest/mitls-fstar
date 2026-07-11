@@ -139,6 +139,7 @@ let lemma_server_local_event_input_ready_derive_shared_secret_intro
 =
   ()
 
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 60"
 let lemma_select_derive_success_server_hello_ready
   (st0 st2:CS.connection_state)
   (resp:ST.server_response)
@@ -157,7 +158,10 @@ let lemma_select_derive_success_server_hello_ready
        st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
        Some? st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
        B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
-         Bounds.max_transcript_len)
+         Bounds.max_transcript_len /\
+       (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
+        (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst))
       (ensures
        ST.server_local_event_input_ready
          st2
@@ -251,6 +255,42 @@ let lemma_select_derive_success_server_hello_ready
   assert (Some? selection.CS.server_key_share_private);
   assert (Seq.equal (Some?.v selection.CS.server_key_share_private) server_private_key);
   assert (CS.server_selection_key_share_consistent selection);
+  // Build-direction send obligation now carried by input_ready LocalSendServerHello:
+  // the canonical ServerHello built from the selection (CM.server_hello_of_selection,
+  // the server mirror of client_hello_of_start) can be sent.  valid_selection holds:
+  //   - cipher suite is CHACHA (fixed in the selection construction), and
+  //   - the server random differs from the HRR sentinel serverHello_body_cst
+  //     (cst-guard precondition; selection.server_random == server_random ==
+  //      raw_slice payload 0 32).
+  assert (selection.CS.server_random == server_random);
+  assert ((selection.CS.server_random <: Seq.lseq U8.t 32) <>
+    GSHbody.serverHello_body_cst);
+  assert (selection.CS.server_selected_cipher_suite ==
+    T.TLS_CHACHA20_POLY1305_SHA256);
+  assert (CM.valid_selection selection);
+  let sh_sel = CM.server_hello_of_selection selection in
+  CM.lemma_server_hello_of_selection_matches selection;
+  CM.lemma_server_hello_of_selection_bytesize selection;
+  assert (CS.server_hello_matches_selection selection sh_sel);
+  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 90);
+  assert (CS.legal_event
+    st2.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh_sel);
+    }));
+  assert (CS.event_raw_delta_legal
+    st2.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh_sel);
+    })
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh_sel)))
+    B.empty);
+  assert (CM.can_send_server_hello st2 sh_sel
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh_sel))));
   assert (ST.server_local_event_input_ready
     st2
     ST.LocalSendServerHello
@@ -258,6 +298,7 @@ let lemma_select_derive_success_server_hello_ready
   assert (selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256);
   assert ((Some?.v st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection).CS.server_selected_cipher_suite ==
     T.TLS_CHACHA20_POLY1305_SHA256)
+#pop-options
 
 // Helper lemma: assembles can_send_server_hello from individual runtime facts,
 // cst-guard, and serialize-length. Used by select_derive_send_server_hello_from_payload_once

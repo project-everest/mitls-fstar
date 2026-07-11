@@ -46,6 +46,8 @@ module GCHE = TLS13.Wire.Generated.ClientHello_extensions
 // serialize_handshake to the generated handshake serializer and compute the
 // bytesize of the canonical 5-extension ClientHello.
 module GHS = TLS13.Wire.Generated.Handshake
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module Rev = TLS13.Wire.Spec.Reveal.Handshake
 
 open TLS13.Impl.ConnectionState.Bounds
@@ -220,6 +222,33 @@ let lemma_server_hello_of_selection_matches
   : Lemma (requires valid_selection sel)
           (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
 = ()
+#pop-options
+
+// Server mirror of the client record-size reasoning inside
+// lemma_client_hello_of_start_matches: reveal serialize_handshake to the
+// generated serializer and compute the exact bytesize of the canonical
+// ServerHello.  It equals 90 (legacy_version TLS_1p2 + 32-byte random +
+// empty session-id echo + CHACHA cipher suite + null compression +
+// [key_share(X25519, 32 bytes); supported_versions(TLS_1p3)]).  Structurally
+// identical to TLS13.Impl.Server.Send.lemma_mk_server_hello_witness_bytesize.
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_server_hello_of_selection_bytesize
+  (sel:CS.server_handshake_selection)
+  : Lemma (requires valid_selection sel)
+          (ensures
+            B.length (W.serialize_handshake
+              (M.ServerHello (server_hello_of_selection sel))) == 90)
+= let sh = server_hello_of_selection sel in
+  Rev.lemma_serialize_handshake_server_hello sh;
+  GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
+  GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
+  GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+  GCS.cipherSuite_bytesize_eq T.TLS_CHACHA20_POLY1305_SHA256;
+  GNG.namedGroup_bytesize_eq GNG.X25519;
+  GKSE.keyShareEntry_key_exchange_bytesize_eqn
+    (sel.CS.server_key_share_public <: GKSE.keyShareEntry_key_exchange);
+  GSHBody.serverHelloBody_extensions_list_bytesize_nil;
+  ()
 #pop-options
 
 // Faithful len-helper bridge (see .fsti).  Off the LocalHandshake hot path.
