@@ -93,6 +93,16 @@ let lemma_serialize_handshake_client_hello_record_bound
   ()
 #pop-options
 
+#push-options "--split_queries always --z3rlimit 10"
+let lemma_serialize_handshake_server_hello_record_bound
+  (sh:GSH.serverHello)
+  : Lemma
+      (requires supported_server_hello_wire_profile sh)
+      (ensures B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640)
+=
+  ()
+#pop-options
+
 (* ------------------------------------------------------------------------- *)
 (* Core: a sent (canonical) ClientHello and the ClientHello obtained by       *)
 (* parsing the same raw record are the SAME record (codec injectivity).       *)

@@ -49,6 +49,42 @@ let state_supported_client_hello_wire_profile (st:CS.connection_state) : prop =
   | Some ch -> supported_client_hello_wire_profile ch
   | None -> False
 
+(**
+  The supported ServerHello field profile: the canonical TLS 1.3 ServerHello the
+  implementation emits (see [TLS13.Impl.Serializer.Handshake.poc_canonical_sh]).
+  It offers the single supported cipher suite and a 32-byte X25519 key-share.
+  This mirrors [supported_client_hello_fields_profile] on the client side.
+**)
+noextract
+let supported_server_hello_fields_profile (sh:GSH.serverHello) : prop =
+  (match Sem.serverHello_key_share_x25519 sh with
+   | Some k -> B.length k == 32
+   | None -> False) /\
+  (match Sem.serverHello_cipher_suite sh with
+   | Some cs -> cs == T.TLS_CHACHA20_POLY1305_SHA256
+   | None -> False)
+
+(**
+  A supported ServerHello whose wire image fits in a single TLS plaintext record
+  (fragment <= 16640).  With the generated codec the [GSH.serverHello] record is
+  unbounded (extensions up to 65535 bytes), so the record-size bound previously
+  guaranteed by the hand-written [M.server_hello] type (via [server_hello_max_len]
+  and [W.lemma_serialize_server_hello_len]) is now stated explicitly here.  This
+  is the exact server analog of [supported_client_hello_wire_profile] and restores
+  the client/server symmetry: the old bounded type gave the bound for free, the
+  generated one requires it as an explicit profile hypothesis.
+**)
+noextract
+let supported_server_hello_wire_profile (sh:GSH.serverHello) : prop =
+  supported_server_hello_fields_profile sh /\
+  B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640
+
+noextract
+let state_supported_server_hello_wire_profile (st:CS.connection_state) : prop =
+  match st.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+  | Some sh -> supported_server_hello_wire_profile sh
+  | None -> False
+
 noextract
 let supported_client_config_wire_profile (cfg:CS.connection_config) : prop =
   cfg.CS.config_role == CS.ClientEndpoint /\
@@ -201,6 +237,19 @@ val lemma_serialize_handshake_client_hello_record_bound
   : Lemma
       (requires supported_client_hello_wire_profile ch)
       (ensures B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640)
+
+(**
+  For a supported ServerHello the wire image fits in a single TLS plaintext
+  record.  Immediate from [supported_server_hello_wire_profile].  This is the
+  server analog of [lemma_serialize_handshake_client_hello_record_bound] and
+  restores the record-parseability bound the deleted [M.server_hello_max_len] /
+  [W.lemma_serialize_server_hello_len] previously provided.
+**)
+val lemma_serialize_handshake_server_hello_record_bound
+  (sh:GSH.serverHello)
+  : Lemma
+      (requires supported_server_hello_wire_profile sh)
+      (ensures B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640)
 
 (**
   A sent (canonical) supported ClientHello and the ClientHello obtained by
