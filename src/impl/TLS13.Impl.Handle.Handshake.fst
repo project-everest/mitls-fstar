@@ -297,6 +297,12 @@ fn handle_handshake_message
             (M.TlsHandshake (M.ServerHello sh))
             (Ghost.reveal 'raw_bytes)));
 
+          // Discharge can_receive_server_hello's parse-success requires: the
+          // Seq.equal above gives 'fragment_bytes == serialize_handshake(SH sh),
+          // and the caller precondition gives B.length 'fragment_bytes ==
+          // SZ.v fragment_len, hence the serialized-length equation.
+          assert (pure (B.length (WS.serialize_handshake (M.ServerHello sh)) ==
+            SZ.v fragment_len));
           let ready = CQ.can_receive_server_hello c fragment_len #sh;
           if ready {
             // can_receive_server_hello (with ready==true) established

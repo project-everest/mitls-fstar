@@ -210,20 +210,6 @@ let lemma_client_hello_of_start_matches
   ()
 #pop-options
 
-// Server mirror of lemma_client_hello_of_start_matches.  Under valid_selection
-// the clamp (sho_random) is an identity, so every TLS13.Wire.Semantics accessor
-// on the canonical server_hello_of_selection returns the matching `selection`
-// field.  Discharged (like the reference lemma_canonical_* in
-// TLS13.Impl.Serializer.Handshake) by unfolding server_hello_of_selection and
-// the accessors (fuel for the 2-extension list walk).
-#push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-let lemma_server_hello_of_selection_matches
-  (sel:CS.server_handshake_selection)
-  : Lemma (requires valid_selection sel)
-          (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
-= ()
-#pop-options
-
 // Server mirror of the client record-size reasoning inside
 // lemma_client_hello_of_start_matches: reveal serialize_handshake to the
 // generated serializer and compute the exact bytesize of the canonical
@@ -249,6 +235,22 @@ let lemma_server_hello_of_selection_bytesize
     (sel.CS.server_key_share_public <: GKSE.keyShareEntry_key_exchange);
   GSHBody.serverHelloBody_extensions_list_bytesize_nil;
   ()
+#pop-options
+
+// Server mirror of lemma_client_hello_of_start_matches.  Under valid_selection
+// the clamp (sho_random) is an identity, so every TLS13.Wire.Semantics accessor
+// on the canonical server_hello_of_selection returns the matching `selection`
+// field.  Discharged (like the reference lemma_canonical_* in
+// TLS13.Impl.Serializer.Handshake) by unfolding server_hello_of_selection and
+// the accessors (fuel for the 2-extension list walk).  The ServerHello
+// wire-profile bound (serialized handshake <= 16640) in
+// server_hello_matches_selection is discharged from the exact bytesize (90).
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
+let lemma_server_hello_of_selection_matches
+  (sel:CS.server_handshake_selection)
+  : Lemma (requires valid_selection sel)
+          (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
+= lemma_server_hello_of_selection_bytesize sel
 #pop-options
 
 // Faithful len-helper bridge (see .fsti).  Off the LocalHandshake hot path.

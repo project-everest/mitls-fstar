@@ -286,6 +286,30 @@ let client_hello_key_share (ch:GCH.clientHello) : option C.x25519_public =
   | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
   | None -> None
 
+let lemma_client_hello_key_share_equal_from_sem
+  (ch1:GCH.clientHello)
+  (ch2:GCH.clientHello)
+  : Lemma
+      (requires
+        Sem.clientHello_key_share_x25519 ch1 ==
+          Sem.clientHello_key_share_x25519 ch2 /\
+        (match Sem.clientHello_key_share_x25519 ch1 with
+         | Some k -> B.length k == 32
+         | None -> False) /\
+        (match Sem.clientHello_key_share_x25519 ch2 with
+         | Some k -> B.length k == 32
+         | None -> False))
+      (ensures client_hello_key_share ch1 == client_hello_key_share ch2)
+=
+  match
+    Sem.clientHello_key_share_x25519 ch1,
+    Sem.clientHello_key_share_x25519 ch2
+  with
+  | Some k1, Some k2 ->
+    assert (k1 == k2)
+  | _, _ ->
+    assert False
+
 let server_hello_key_share (sh:GSH.serverHello) : option C.x25519_public =
   match Sem.serverHello_key_share_x25519 sh with
   | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
@@ -1872,7 +1896,9 @@ let server_hello_matches_selection
   (match Sem.serverHello_key_share_x25519 sh with
    | Some k -> B.length k = 32 /\ Seq.equal k selection.server_key_share_public
    | None -> False) /\
-  Sem.serverHello_cipher_suite sh == Some selection.server_selected_cipher_suite
+  selection.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
+  Sem.serverHello_cipher_suite sh == Some selection.server_selected_cipher_suite /\
+  B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640
 
 let certificate_msg_matches_server_config
   (cfg:server_config)
@@ -2454,6 +2480,7 @@ let legal_handshake_message
      | None -> False)
   | CL.Received, M.ServerHello sh, ControlHandshaking HsClientHelloSent ->
     model.model_config.config_role == ClientEndpoint /\
+    B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640 /\
     (match Sem.serverHello_cipher_suite sh with
      | Some cs ->
        H.is_supported_cipher_suite cs /\

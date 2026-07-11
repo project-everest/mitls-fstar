@@ -22,6 +22,7 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
+module WRU = TLS13.Wire.Spec.Reveal.Util
 module SHPB = TLS13.Wire.Spec.Reveal.ServerHello.Parseback
 
 let lemma_parse_record_wire_of_sent_supported_client_hello
@@ -545,7 +546,6 @@ let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
   (ccs_tail:B.bytes)
   : Lemma
       (requires
-        WFL.supported_server_hello_wire_profile sh /\
         Seq.equal left_stream right_stream /\
         Seq.equal left_stream (B.append server_hello_raw server_tail) /\
         Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
@@ -557,43 +557,38 @@ let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
           ccs_raw)
       (ensures False)
 =
-  lemma_parse_record_wire_of_received_server_hello sh server_hello_raw;
-  lemma_cleartext_change_cipher_spec_parse_record ccs_raw;
-  eliminate exists (server_fragment:B.bytes).
-    W.parse_record_wire server_hello_raw ==
-      Some (T.Handshake, server_fragment, B.length server_hello_raw)
-  returns False
-  with _.
-  (
-    PWS.lemma_equal_stream_record_head_lengths
-      left_stream
-      right_stream
-      server_hello_raw
-      server_tail
-      ccs_raw
-      ccs_tail
-      T.Handshake
-      server_fragment
-      T.Change_cipher_spec
-      (B.singleton 1uy);
-    assert (B.length server_hello_raw == B.length ccs_raw);
-    Seq.lemma_eq_elim left_stream right_stream;
-    Seq.lemma_eq_elim left_stream (B.append server_hello_raw server_tail);
-    Seq.lemma_eq_elim right_stream (B.append ccs_raw ccs_tail);
-    assert (Seq.equal
-      (B.append server_hello_raw server_tail)
-      (B.append ccs_raw ccs_tail));
-    PWS.lemma_append_heads_equal_same_len
-      server_hello_raw
-      server_tail
-      ccs_raw
-      ccs_tail;
-    assert (Seq.equal server_hello_raw ccs_raw);
-    lemma_received_server_hello_raw_not_change_cipher_spec
-      sh
-      server_hello_raw
-      ccs_raw
-  )
+  let sh_fragment = W.serialize_handshake (M.ServerHello sh) in
+  let sh_wire = W.serialize_record T.Handshake sh_fragment in
+  let ccs_wire = W.serialize_record T.Change_cipher_spec (B.singleton 1uy) in
+  WRU.lemma_content_type_handshake_byte ();
+  WRU.lemma_content_type_change_cipher_spec_byte ();
+  assert (CS.cleartext_tls_message_raw
+    (M.TlsHandshake (M.ServerHello sh))
+    server_hello_raw);
+  W.lemma_serialize_tls_message_handshake (M.ServerHello sh);
+  W.lemma_serialize_tls_message_change_cipher_spec ();
+  assert (CS.serialized_cleartext_tls_message
+    (M.TlsHandshake (M.ServerHello sh)) == sh_wire);
+  assert (CS.serialized_cleartext_tls_message
+    M.TlsChangeCipherSpec == ccs_wire);
+  assert (Seq.equal server_hello_raw sh_wire);
+  assert (Seq.equal ccs_raw ccs_wire);
+  Seq.lemma_eq_elim server_hello_raw sh_wire;
+  Seq.lemma_eq_elim ccs_raw ccs_wire;
+  WRU.lemma_serialize_record_head T.Handshake sh_fragment;
+  WRU.lemma_serialize_record_head T.Change_cipher_spec (B.singleton 1uy);
+  assert (B.length server_hello_raw > 0);
+  assert (B.length ccs_raw > 0);
+  assert (Seq.index server_hello_raw 0 == 0x16uy);
+  assert (Seq.index ccs_raw 0 == 0x14uy);
+  assert (B.length left_stream > 0);
+  assert (B.length right_stream > 0);
+  Seq.lemma_eq_elim left_stream (B.append server_hello_raw server_tail);
+  Seq.lemma_eq_elim right_stream (B.append ccs_raw ccs_tail);
+  assert (Seq.index left_stream 0 == 0x16uy);
+  assert (Seq.index right_stream 0 == 0x14uy);
+  Seq.lemma_eq_elim left_stream right_stream;
+  assert False
 
 let lemma_event_raw_delta_legal_local
   (model:CS.connection_model)
@@ -981,6 +976,203 @@ let lemma_client_prefix_sent_client_hello_supported
       assert (Sem.clientHello_server_name client_ch ==
         Some model0.CS.model_config.CS.config_server_name);
       assert (WFL.supported_client_hello_wire_profile client_ch)
+    )
+  )
+#pop-options
+
+#push-options "--z3rlimit 40 --fuel 2 --ifuel 2"
+let lemma_client_prefix_received_server_hello_supported
+  (model0:CS.connection_model)
+  (client_start:CS.handshake_start)
+  (client_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (client_shared:C.x25519_shared_secret)
+  (client_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        WFL.supported_client_config_wire_profile model0.CS.model_config /\
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+           }) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
+           client_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures WFL.supported_server_hello_wire_profile client_sh)
+=
+  let ev0 = CS.ConnLocalEvent (CS.LocalStartHandshake client_start) in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ClientHello client_ch);
+  }) in
+  let ev2 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ServerHello client_sh);
+  }) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) in
+  PWR.lemma_conn_events_raw_replay_head model0 ev0 (ev1 :: ev2 :: ev3 :: client_rest) raw_sent raw_received final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\
+    CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay model1 (ev1 :: ev2 :: ev3 :: client_rest) tail0_sent tail0_received final_model
+  returns WFL.supported_server_hello_wire_profile client_sh
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head model1 ev1 (ev2 :: ev3 :: client_rest) tail0_sent tail0_received final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\
+      CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay model2 (ev2 :: ev3 :: client_rest) tail1_sent tail1_received final_model
+    returns WFL.supported_server_hello_wire_profile client_sh
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head model2 ev2 (ev3 :: client_rest) tail1_sent tail1_received final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\
+        CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay model3 (ev3 :: client_rest) tail2_sent tail2_received final_model
+      returns WFL.supported_server_hello_wire_profile client_sh
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head model3 ev3 client_rest tail2_sent tail2_received final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\
+          CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay model4 client_rest tail3_sent tail3_received final_model
+        returns WFL.supported_server_hello_wire_profile client_sh
+        with _.
+        (
+          assert (CS.legal_tls_message model2 CL.Received (M.TlsHandshake (M.ServerHello client_sh)));
+          assert (CS.legal_local_event model3 (CS.LocalDeriveSharedSecret client_shared));
+          assert (WFL.supported_server_hello_wire_profile client_sh)
+        )
+      )
+    )
+  )
+#pop-options
+
+#push-options "--z3rlimit 40 --fuel 2 --ifuel 2"
+let lemma_server_prefix_sent_server_hello_supported
+  (model0:CS.connection_model)
+  (server_ch:GCH.clientHello)
+  (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret)
+  (server_sh:GSH.serverHello)
+  (server_rest:list CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:CS.connection_model)
+  : Lemma
+      (requires
+        CS.conn_events_raw_replay
+          model0
+          (CS.ConnLocalEvent CS.LocalStartServer ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+           }) ::
+           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
+           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
+           CS.ConnNetworkEvent ({
+             CL.message_direction = CL.Sent;
+             CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+           }) ::
+           server_rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures WFL.supported_server_hello_wire_profile server_sh)
+=
+  let ev0 = CS.ConnLocalEvent CS.LocalStartServer in
+  let ev1 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
+  }) in
+  let ev2 = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let ev3 = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) in
+  let ev4 = CS.ConnNetworkEvent ({
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
+  }) in
+  PWR.lemma_conn_events_raw_replay_head model0 ev0 (ev1 :: ev2 :: ev3 :: ev4 :: server_rest) raw_sent raw_received final_model;
+  eliminate exists model1 delta0_sent delta0_received tail0_sent tail0_received.
+    CS.legal_event model0 ev0 /\ CS.step_model model0 ev0 == Some model1 /\
+    CS.event_raw_delta_legal model0 ev0 delta0_sent delta0_received /\
+    Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
+    Seq.equal raw_received (B.append delta0_received tail0_received) /\
+    CS.conn_events_raw_replay model1 (ev1 :: ev2 :: ev3 :: ev4 :: server_rest) tail0_sent tail0_received final_model
+  returns WFL.supported_server_hello_wire_profile server_sh
+  with _.
+  (
+    PWR.lemma_conn_events_raw_replay_head model1 ev1 (ev2 :: ev3 :: ev4 :: server_rest) tail0_sent tail0_received final_model;
+    eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
+      CS.legal_event model1 ev1 /\ CS.step_model model1 ev1 == Some model2 /\
+      CS.event_raw_delta_legal model1 ev1 delta1_sent delta1_received /\
+      Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
+      Seq.equal tail0_received (B.append delta1_received tail1_received) /\
+      CS.conn_events_raw_replay model2 (ev2 :: ev3 :: ev4 :: server_rest) tail1_sent tail1_received final_model
+    returns WFL.supported_server_hello_wire_profile server_sh
+    with _.
+    (
+      PWR.lemma_conn_events_raw_replay_head model2 ev2 (ev3 :: ev4 :: server_rest) tail1_sent tail1_received final_model;
+      eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
+        CS.legal_event model2 ev2 /\ CS.step_model model2 ev2 == Some model3 /\
+        CS.event_raw_delta_legal model2 ev2 delta2_sent delta2_received /\
+        Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
+        Seq.equal tail1_received (B.append delta2_received tail2_received) /\
+        CS.conn_events_raw_replay model3 (ev3 :: ev4 :: server_rest) tail2_sent tail2_received final_model
+      returns WFL.supported_server_hello_wire_profile server_sh
+      with _.
+      (
+        PWR.lemma_conn_events_raw_replay_head model3 ev3 (ev4 :: server_rest) tail2_sent tail2_received final_model;
+        eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
+          CS.legal_event model3 ev3 /\ CS.step_model model3 ev3 == Some model4 /\
+          CS.event_raw_delta_legal model3 ev3 delta3_sent delta3_received /\
+          Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
+          Seq.equal tail2_received (B.append delta3_received tail3_received) /\
+          CS.conn_events_raw_replay model4 (ev4 :: server_rest) tail3_sent tail3_received final_model
+        returns WFL.supported_server_hello_wire_profile server_sh
+        with _.
+        (
+          PWR.lemma_conn_events_raw_replay_head model4 ev4 server_rest tail3_sent tail3_received final_model;
+          eliminate exists model5 delta4_sent delta4_received tail4_sent tail4_received.
+            CS.legal_event model4 ev4 /\ CS.step_model model4 ev4 == Some model5 /\
+            CS.event_raw_delta_legal model4 ev4 delta4_sent delta4_received /\
+            Seq.equal tail3_sent (B.append delta4_sent tail4_sent) /\
+            Seq.equal tail3_received (B.append delta4_received tail4_received) /\
+            CS.conn_events_raw_replay model5 server_rest tail4_sent tail4_received final_model
+          returns WFL.supported_server_hello_wire_profile server_sh
+          with _.
+          (
+            assert (CS.legal_tls_message model4 CL.Sent (M.TlsHandshake (M.ServerHello server_sh)));
+            assert (WFL.supported_server_hello_wire_profile server_sh)
+          )
+        )
+      )
     )
   )
 #pop-options
@@ -3756,8 +3948,6 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
           server_sh
           server_rest /\
         WFL.supported_client_hello_wire_profile client_ch /\
-        WFL.supported_server_hello_wire_profile server_sh /\
-        WFL.supported_server_hello_wire_profile client_sh /\
         CS.connection_state_raw_event_replay_consistent client /\
         CS.connection_state_raw_event_replay_consistent server /\
         CS.paired_wire_logs client server)
@@ -3805,6 +3995,26 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
     server.CS.cs_wire_log.CL.raw_sent
     server.CS.cs_wire_log.CL.raw_received
     server.CS.cs_model);
+  lemma_client_prefix_received_server_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
+  lemma_server_prefix_sent_server_hello_supported
+    server_model0
+    server_ch
+    selection
+    server_shared
+    server_sh
+    server_rest
+    server.CS.cs_wire_log.CL.raw_sent
+    server.CS.cs_wire_log.CL.raw_received
+    server.CS.cs_model;
   lemma_client_prefix_raw_slices
     client_model0
     client_start

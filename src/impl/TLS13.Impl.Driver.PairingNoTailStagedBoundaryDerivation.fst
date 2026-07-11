@@ -775,6 +775,7 @@ let lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_compl
         server)
     prove
 
+#push-options "--z3rlimit 30"
 let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_completion
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -877,17 +878,23 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
       returns WFL.paired_cleartext_hello_key_shares client server
       with _.
       (
+        assert (WFL.supported_client_hello_wire_profile client_ch);
         WFL.lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
           client_ch
           server_ch
           client_ch_raw
           server_ch_raw;
-        assert (Sem.clientHello_key_share_x25519 client_ch ==
-          Sem.clientHello_key_share_x25519 server_ch);
-        assert (CS.client_hello_key_share client_ch ==
-          CS.client_hello_key_share server_ch);
-        assert (CS.server_hello_key_share client_sh ==
-          CS.server_hello_key_share server_sh);
+        WFL.lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
+          client
+          server
+          client_ch
+          server_ch
+          client_sh
+          server_sh
+          client_ch_raw
+          server_ch_raw
+          client_sh_raw
+          server_sh_raw;
         assert (WFL.paired_cleartext_hello_key_shares client server)
       )
     ) in
@@ -895,6 +902,7 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
     #(clean16_staged_boundary_derivation_milestones client server)
     #(WFL.paired_cleartext_hello_key_shares client server)
     prove
+#pop-options
 
 let lemma_clean16_protected_projection_witnesses_completion_from_installed_replay_completion
   (client:CS.connection_state)

@@ -82,3 +82,11 @@ val lemma_u16_reveal:
 val lemma_u24_reveal:
   n:nat ->
   Lemma (Seq.equal (u24 n) (B.of_list [byte (n / 65536); byte (n / 256); byte n]))
+
+val lemma_serialize_record_head:
+  content_type:T.content_type ->
+  fragment:B.bytes ->
+  Lemma (ensures
+    B.length (WS.serialize_record content_type fragment) > 0 /\
+    Seq.index (WS.serialize_record content_type fragment) 0 ==
+      content_type_byte content_type)

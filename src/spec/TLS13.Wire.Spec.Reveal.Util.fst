@@ -142,3 +142,24 @@ let lemma_u16_reveal (n:nat)
 let lemma_u24_reveal (n:nat)
   : Lemma (Seq.equal (u24 n) (B.of_list [byte (n / 65536); byte (n / 256); byte n]))
 = ()
+
+let lemma_serialize_record_head
+  (content_type:T.content_type)
+  (fragment:B.bytes)
+  : Lemma (ensures
+    B.length (WS.serialize_record content_type fragment) > 0 /\
+    Seq.index (WS.serialize_record content_type fragment) 0 ==
+      content_type_byte content_type)
+=
+  lemma_u8_reveal (WS.content_type_to_byte content_type);
+  assert (Seq.equal
+    (WS.serialize_record content_type fragment)
+    (B.append
+      (u8 (WS.content_type_to_byte content_type))
+      (B.append (u16 0x0303) (B.append (u16 (B.length fragment)) fragment))));
+  assert (B.length (u8 (WS.content_type_to_byte content_type)) == 1);
+  assert (B.length (WS.serialize_record content_type fragment) > 0);
+  assert (Seq.index (WS.serialize_record content_type fragment) 0 ==
+    Seq.index (u8 (WS.content_type_to_byte content_type)) 0);
+  assert (Seq.index (u8 (WS.content_type_to_byte content_type)) 0 ==
+    content_type_byte content_type)

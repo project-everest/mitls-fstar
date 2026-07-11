@@ -957,7 +957,15 @@ fn can_receive_server_hello
   (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256)
+           pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256 /\
+             // Parse-success equation supplied by the caller (see
+             // TLS13.Impl.Handle.Handshake): the decoded ServerHello serializes
+             // back to the on-the-wire fragment, so its serialized-handshake
+             // length equals the concrete [fragment_len].  Combined with the
+             // runtime [fragment_fits_sh] gate below this discharges the
+             // ServerHello wire-profile bound (<= 16640) in the [legal_event]
+             // obligation without re-proving the deleted static length lemma.
+             B.length (W.serialize_handshake (M.ServerHello sh)) == SZ.v fragment_len)
   returns ok: bool
   ensures connection_exactly c st0 **
           pure (ok ==>
@@ -1097,6 +1105,13 @@ fn can_receive_server_hello
           // transcript_room gives `current_transcript_len <= max_transcript_len -
           // max_server_hello_len`; together they bound the resulting transcript.
           assert (pure (ok ==> SZ.v fragment_len <= max_server_hello_len));
+          // The caller's parse-success equation gives
+          //   B.length (serialize_handshake (ServerHello sh)) == SZ.v fragment_len,
+          // and when [ok] the runtime gate bounds [fragment_len] by
+          // max_server_hello_len (= 4096) <= 16640, discharging the ServerHello
+          // wire-profile bound inside [legal_event].
+          assert (pure (ok ==>
+            B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640));
           assert (pure (ok ==>
             SZ.v current_transcript_len + SZ.v fragment_len <= max_transcript_len));
           assert (pure (ok ==>

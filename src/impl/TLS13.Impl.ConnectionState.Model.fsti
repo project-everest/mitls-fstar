@@ -500,15 +500,6 @@ val lemma_client_hello_of_start_matches
   : Lemma (requires valid_start start)
           (ensures CS.client_hello_matches_start start (client_hello_of_start start))
 
-// Server mirror: under valid_selection, the canonical server_hello_of_selection
-// satisfies the spec's server_hello_matches_selection: every
-// TLS13.Wire.Semantics accessor returns the corresponding `selection` field (the
-// clamp in server_hello_of_selection is an identity under valid_selection).
-val lemma_server_hello_of_selection_matches
-  (sel:CS.server_handshake_selection)
-  : Lemma (requires valid_selection sel)
-          (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
-
 // Server mirror of the client bound (see lemma_client_hello_of_start_matches's
 // record-size reasoning): the canonical server_hello_of_selection serializes to
 // exactly 90 bytes (legacy_version TLS_1p2 + 32-byte random + empty session-id +
@@ -522,6 +513,17 @@ val lemma_server_hello_of_selection_bytesize
           (ensures
             B.length (W.serialize_handshake
               (M.ServerHello (server_hello_of_selection sel))) == 90)
+
+// Server mirror: under valid_selection, the canonical server_hello_of_selection
+// satisfies the spec's server_hello_matches_selection: every
+// TLS13.Wire.Semantics accessor returns the corresponding `selection` field (the
+// clamp in server_hello_of_selection is an identity under valid_selection).
+// The <= 16640 conjunct in server_hello_matches_selection is discharged from the
+// exact 90-byte bytesize above (lemma_server_hello_of_selection_bytesize).
+val lemma_server_hello_of_selection_matches
+  (sel:CS.server_handshake_selection)
+  : Lemma (requires valid_selection sel)
+          (ensures CS.server_hello_matches_selection sel (server_hello_of_selection sel))
 
 // Faithful len-helper bridge: under valid_start the canonical
 // client_hello_of_start's TLS13.Wire.Semantics accessor lengths agree with the
