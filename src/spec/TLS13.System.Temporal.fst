@@ -30,6 +30,7 @@ module R   = FStar.ReflexiveTransitiveClosure
 module CS  = TLS13.Spec.ConnectionState
 module CD  = TLS13.Impl.Client.Driver
 module SD  = TLS13.Impl.Server.Driver
+module WFL = TLS13.Spec.WireFormatLemmas
 
 open TLS13.System
 
@@ -77,7 +78,8 @@ val lemma_flagship_record_material_agreement
   : Lemma
       (requires
         cfg_c.CS.config_role == CS.ClientEndpoint /\
-        cfg_s.CS.config_role == CS.ServerEndpoint)
+        cfg_s.CS.config_role == CS.ServerEndpoint /\
+        WFL.supported_client_config_wire_profile cfg_c)
       (ensures
         T.ag tls_sys_step
           record_material_agrees_when_ready
