@@ -5,6 +5,9 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module Seq = FStar.Seq
 
@@ -286,10 +289,10 @@ let paired_replay_split_prefixes_equal_uniform
 
 noextract
 let server_cleartext_handshake_prefix_events
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   : list CS.conn_event =
   [
     CS.ConnLocalEvent CS.LocalStartServer;
@@ -308,8 +311,8 @@ let server_cleartext_handshake_prefix_events
 noextract
 let client_cleartext_handshake_prefix_events
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   : list CS.conn_event =
   [
@@ -566,7 +569,7 @@ val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_sent_cleartext
 
 val lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (suffix:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -585,7 +588,7 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
 
 val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server_hello
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (tail:list CS.conn_event)
   (suffix:list CS.conn_event)
   (post_model:CS.connection_model)
@@ -612,7 +615,7 @@ val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
 
 val lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
   (model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (suffix:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -631,7 +634,7 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
 
 val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_client_hello
   (model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (tail:list CS.conn_event)
   (suffix:list CS.conn_event)
   (post_model:CS.connection_model)
@@ -760,7 +763,7 @@ val lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_server_local
 val lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (server_tail:list CS.conn_event)
   (server_suffix:list CS.conn_event)
   (client_tail:list CS.conn_event)
@@ -911,7 +914,7 @@ val lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
 val lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_tail:list CS.conn_event)
   (server_suffix:list CS.conn_event)
   (client_tail:list CS.conn_event)
@@ -958,11 +961,11 @@ val lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
   (server_model0:CS.connection_model)
   (client_model0:CS.connection_model)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_suffix:list CS.conn_event)
   (client_suffix:list CS.conn_event)
   (server_model1:CS.connection_model)
@@ -1040,13 +1043,13 @@ val lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handsh
   (server_model0:CS.connection_model)
   (client_model0:CS.connection_model)
   (start:CS.handshake_start)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (server_sh:M.server_hello)
-  (client_sh:M.server_hello)
+  (server_sh:GSH.serverHello)
+  (client_sh:GSH.serverHello)
   (server_suffix:list CS.conn_event)
   (client_suffix:list CS.conn_event)
   (server_model1:CS.connection_model)
@@ -1140,10 +1143,10 @@ val lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handsh
 
 val lemma_same_endpoint_replay_split_prefixes_equal_uniform_server_cleartext_handshake_prefix
   (server_model0:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_suffix:list CS.conn_event)
   (server_model1:CS.connection_model)
   (server_model2:CS.connection_model)
@@ -1188,8 +1191,8 @@ val lemma_same_endpoint_replay_split_prefixes_equal_uniform_server_cleartext_han
 val lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_handshake_prefix
   (client_model0:CS.connection_model)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_suffix:list CS.conn_event)
   (client_model1:CS.connection_model)
@@ -1230,10 +1233,10 @@ val lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_han
 
 val lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_model
   (server_model0:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:CS.connection_model)
   (server_model2:CS.connection_model)
   (server_model3:CS.connection_model)
@@ -1282,8 +1285,8 @@ val lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_m
 val lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_model
   (client_model0:CS.connection_model)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (client_model1:CS.connection_model)
   (client_model2:CS.connection_model)
@@ -1329,7 +1332,7 @@ val lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_m
 val lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_suffix:list CS.conn_event)
   (client_suffix:list CS.conn_event)
   (server_full_sent:B.bytes)
@@ -1362,7 +1365,7 @@ val lemma_paired_replay_split_prefixes_equal_single_server_hello
 val lemma_paired_replay_split_prefixes_equal_single_client_hello_with_full_streams
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (server_suffix:list CS.conn_event)
   (client_suffix:list CS.conn_event)
   (server_full_sent:B.bytes)
@@ -1395,7 +1398,7 @@ val lemma_paired_replay_split_prefixes_equal_single_client_hello_with_full_strea
 val lemma_paired_replay_split_prefixes_equal_single_client_hello
   (server_model:CS.connection_model)
   (client_model:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (server_suffix:list CS.conn_event)
   (client_suffix:list CS.conn_event)
   (server_full_sent:B.bytes)
@@ -1546,7 +1549,7 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_w
   (client_verify_skip:CS.local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
@@ -1681,11 +1684,11 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (server_model0:CS.connection_model)
   (client_model0:CS.connection_model)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:CS.connection_model)
   (server_model2:CS.connection_model)
   (server_model3:CS.connection_model)
@@ -1708,7 +1711,7 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (client_verify_skip:CS.local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)

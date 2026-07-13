@@ -1880,7 +1880,23 @@ ensures
       (Ghost.reveal st)
       (Ghost.reveal st1)
       (Ghost.reveal wire_outputs)
-      (Ghost.reveal local_outputs)
+      (Ghost.reveal local_outputs) **
+    pure (
+      CPI.local_process_correct
+        (CP.client_system (Ghost.reveal cc.CP.canonical_client_initial))
+        ev
+        (Ghost.reveal old_out)
+        (Ghost.reveal out_contents)
+        frame.client_ep_network_out_len
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal st)
+        result
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputs)
+        (Ghost.reveal local_outputs))
 {
   unfold (client_api_local_action_ready
     cc
@@ -1971,6 +1987,22 @@ ensures
       (Ghost.reveal st1)
       (Ghost.reveal wire_outputse)
       (Ghost.reveal local_outputse));
+  assert (pure (
+    CPI.local_process_correct
+      (CP.client_system (Ghost.reveal cc.CP.canonical_client_initial))
+      ev
+      (Ghost.reveal (client_local_old_output lio))
+      (Ghost.reveal out_contentse)
+      frame.client_ep_network_out_len
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal st)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      (Ghost.reveal wire_outputse)
+      (Ghost.reveal local_outputse)));
   client_finish_local_io
     cc
     ch

@@ -9,6 +9,12 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
@@ -216,10 +222,10 @@ let server_post_server_hello_sent_seal_replay_slice
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (e5:CS.conn_event)
     (e6:CS.conn_event)
     (rest:list CS.conn_event)
@@ -271,17 +277,17 @@ let server_post_server_hello_ordered_sent_seal_replay_slice
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (e5:CS.conn_event)
     (e6:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (server_app_write_material:CS.traffic_key_material)
     (server_app_read_material:CS.traffic_key_material)
     (model5:CS.connection_model)
@@ -381,15 +387,15 @@ let server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (server_material:CS.traffic_key_material)
     (server_read_material:CS.traffic_key_material)
     (server_app_write_material:CS.traffic_key_material)
@@ -495,15 +501,15 @@ let server_after_handshake_installs_sent_seal_replay_slice
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (server_material:CS.traffic_key_material)
     (server_read_material:CS.traffic_key_material)
     (server_app_write_material:CS.traffic_key_material)
@@ -672,10 +678,10 @@ let server_post_server_hello_received_decode_replay_slice
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (e5:CS.conn_event)
     (e6:CS.conn_event)
     (rest:list CS.conn_event)
@@ -721,17 +727,17 @@ let server_post_server_hello_ordered_received_decode_replay_slice
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (e5:CS.conn_event)
     (e6:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (server_app_write_material:CS.traffic_key_material)
     (server_app_read_material:CS.traffic_key_material)
     (model5:CS.connection_model)
@@ -888,8 +894,8 @@ let client_post_derive_received_decode_replay_slice
   : prop =
   exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
@@ -944,19 +950,19 @@ let client_post_derive_ordered_received_decode_replay_slice
   : prop =
   exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
     (peer:X.peer_identity)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (e13:CS.conn_event)
     (e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model4:CS.connection_model)
     (prefix_sent:B.bytes)
     (prefix_received:B.bytes)
@@ -1036,19 +1042,19 @@ let client_after_handshake_installs_received_decode_replay_slice
   : prop =
   exists
     (start:CS.handshake_start)
-    (ch:M.client_hello)
-    (sh:M.server_hello)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
     (client_shared:C.x25519_shared_secret)
     (e4:CS.conn_event)
     (e5:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
     (peer:X.peer_identity)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
     (e13:CS.conn_event)
     (e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model4:CS.connection_model)
     (client_after_e4:CS.connection_model)
     (client_after_installs:CS.connection_model)

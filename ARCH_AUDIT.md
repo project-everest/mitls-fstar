@@ -1,13 +1,105 @@
 # TLS driver architecture audit
 
-This note describes the current client/server architecture and the audit gap
-between the canonical protocol/endpoint layer and the exported driver layer.  The
-short version is: the proof-facing story is organized around
+This note describes the current client/server architecture and the cleanup that
+aligns the canonical protocol/endpoint layer with the verified driver modules.
+The proof-facing story is organized around
 `Common.ProtocolImplementation`, `Common.ProtocolEndpoint`, and valid byte traces
-of `Client.CanonicalProtocol.client_system` / `Server.CanonicalProtocol.server_system`,
-but the exported TLS drivers still run through role-specific direct driver
-workflows.  The cleanest audit surface would make the exported drivers construct
-canonical endpoint instances and execute through the endpoint layer.
+of `Client.CanonicalProtocol.client_system` / `Server.CanonicalProtocol.server_system`.
+The extracted C runtime wrappers execute through the monomorphic endpoint
+runners, and the verified `Client.Driver` / `Server.Driver` interfaces now expose
+the endpoint-owned proof-facing workflow operations as their public audit surface.
+
+## Implementation status
+
+The endpoint-routing cleanup stages are complete:
+
+1. `calc_sample` extraction uses the endpoint canary path.
+2. TLS has `new_canonical_client` and `new_canonical_server` constructors that
+   package the concrete role state with the canonical initial state and progress
+   reference.
+3. Client and server canonical invariants derive `WFSM.valid_byte_trace`
+   internally from canonical progress and wire-log facts.
+4. TLS extraction includes the endpoint modules in the driver bundle; final
+   extraction and OpenSSL interop gates should be rerun after each routing change.
+5. Client/server network and server local bridge obligations are now derived
+   globally from the role specs; canonical/query/endpoint frames no longer carry
+   ad-hoc bridge proof fields.
+6. Client/server endpoint API-local wrappers now expose the underlying
+   `CPI.local_process_correct` fact, so proof-facing driver wrappers can reason
+   about endpoint local actions without re-entering the legacy direct-driver
+   local-write proofs.
+7. Client/server proof-facing `send_endpoint`, `receive_endpoint`, and
+   `close_endpoint` wrappers now consume and restore the endpoint-owned
+   connected predicates around endpoint local actions and endpoint workflow runs.
+8. Client `connect_endpoint` and server `accept_endpoint` proof-facing wrappers
+   now establish endpoint-owned connected states after the endpoint handshake
+   workflow.
+9. Endpoint frame construction now uses distinct network and local application
+   output buffers, matching the separate ownership required by the canonical
+   query resources.
+
+The public F* driver interfaces now match the C-facing runtime shape: workflow
+operations route through endpoint-owned `connect_endpoint` / `accept_endpoint`,
+`send_endpoint`, `receive_endpoint`, and `close_endpoint` predicates.  The older
+direct workflows remain in the implementations only as private compatibility and
+proof code.
+
+Client-side verified-driver bridge checkpoint: `Client.Driver` now exports
+`client_driver_endpoint_config`, `client_driver_endpoint_frame`, and
+`client_driver_endpoint_connected`.  The endpoint-owned connected predicate owns
+the canonical client invariant, endpoint frame readiness, endpoint IO readiness,
+driver channel cell, buffered-length cell, and the existing wire-log accounting.
+The legacy `client_driver_connected` predicate remains private implementation
+state; exported workflow specs use `client_driver_endpoint_connected`.
+
+Server-side verified-driver bridge checkpoint: `Server.Driver.State.server_driver`
+now also carries erased canonical progress/initial/supported-profile fields and
+exports `server_driver_canonical` plus `server_driver_canonical_progress`, so a
+fresh driver can be packaged as the canonical server expected by
+`Server.Endpoint`.  It also exposes `server_driver_endpoint_config`,
+`server_driver_endpoint_frame`, and `server_driver_endpoint_connected`.  The
+server endpoint frame deliberately takes a distinct private-key vec because the
+Pulse vec library has no subview ownership that would let the proof split the
+64-byte material payload into a 32-byte private-key alias.  The server public
+workflow surface now uses endpoint-owned predicates; the direct server workflows
+remain private implementation code.
+
+## What remains for a single verified and executable path
+
+The committed code now has the intended one-path audit surface for the verified
+driver APIs: the exported proof-facing workflow operations consume and restore
+endpoint-owned predicates, and the legacy direct workflows have been demoted to
+implementation-internal helpers.  The C runtime already calls the endpoint
+runners, so the proof-facing public API and executable path now agree on the
+endpoint-centered architecture.
+
+The completion target is:
+
+```text
+new_client/new_server
+  -> canonical driver state with role initial state fixed once
+  -> connect/accept produces endpoint-owned connected state
+  -> send/receive/close consume and restore endpoint-owned connected state
+  -> endpoint-owned connected state exposes canonical valid byte traces
+  -> pairing theorem consumes those traces and paired transport histories
+```
+
+The implementation milestones are:
+
+| Milestone | Current status | Done when |
+| --- | --- | --- |
+| Endpoint-owned `send` wrappers | Done; the exported proof-facing send API is `send_endpoint`, which consumes and restores endpoint-owned connected state. | Done. |
+| Endpoint-owned `connect`/`accept` | Done; client connect and server accept call the monomorphic endpoint workflow and return endpoint-owned connected predicates. | Done. |
+| Endpoint-owned `receive` | Done; the exported proof-facing receive API is `receive_endpoint`, which runs the monomorphic endpoint workflow and restores endpoint-owned connected state. | Done. |
+| Endpoint-owned `close` | Done for the endpoint close-notify local action.  The C runtime may optionally follow this with an endpoint workflow wait for the peer close when requested. | Done for the verified close-notify API surface; model the optional wait-for-peer workflow only if the public proof API needs it. |
+| Public audit lemmas | Done for the canonical trace bridge: endpoint-owned connected client/server states now expose `WFSM.valid_byte_trace` for the corresponding canonical systems. | Add any remaining transport-history convenience lemmas only if the pairing theorem needs them at the final call site. |
+| Retire legacy public workflow surface | Done; direct `connect`/`accept`/`send`/`receive`/`close` specs are no longer exported from the driver interfaces.  Legacy direct helpers remain private implementation code. | Done. |
+| Final gates | Pending. | `make -j128`, `make extract-tls13-driver-krml`, `make extract-tls13-bundle`, and extracted OpenSSL tests pass. |
+
+The important audit distinction is now explicit in the interfaces: endpoint-owned
+predicates are the exported proof-facing workflow state, while the older
+`*_driver_connected` predicates and direct workflows are implementation-internal
+compatibility/proof code rather than the public story to audit.
 
 ## Current client architecture
 
@@ -18,8 +110,9 @@ flowchart TD
   LowClient[TLS13.Impl.Client\nC.new_client\nC.next_local_action\nC.process_*]
   Canonical[Client.CanonicalProtocol\nclient_step\nclient_state_machine initial\nclient_system initial\ncanonical_client\nclient_protocol_implementation]
   Endpoint[Client.Endpoint\nclient_protocol_endpoint\nclient_endpoint_run_workflow]
-  DirectDriver[Client.Driver exported API\nnew_client/connect/send/receive/close]
+  DirectDriver[Client.Driver verified API\nnew_client/connect/send/receive/close]
   DirectHelpers[Client.Driver direct workflow\nclient_driver_live/connected\ndriver_open/top_driver_exactly\ndriver_handshake]
+  Runtime[C runtime wrapper\nruntime/tls13_client_driver.c\nendpoint_run + api-local wrappers]
   Proofs[Pairing/NoTail proof modules\nvalid_byte_trace over ClientCP.client_system initial]
 
   Spec --> Repr
@@ -31,6 +124,8 @@ flowchart TD
   Repr --> DirectDriver
   DirectDriver --> DirectHelpers
   DirectHelpers -. parallel to, not routed through .-> Endpoint
+  DirectDriver --> Runtime
+  Runtime --> Endpoint
 ```
 
 ### What is tied together
@@ -56,11 +151,14 @@ flowchart TD
   scheduling frames, auth buffers, TCP I/O buffers, and a fuel-bounded endpoint
   workflow (`src/impl/TLS13.Impl.Client.Endpoint.fst:31-115`,
   `2632-3062`).
+- `Client.CanonicalProtocol.new_canonical_client` now allocates the concrete
+  client, the progress reference, and the canonical initial state in one place
+  (`src/impl/TLS13.Impl.Client.CanonicalProtocol.fst:3038-3188`).
 
-### What the exported client driver does instead
+### What the verified client driver still does directly
 
-The exported client driver starts from the concrete low-level client and its own
-driver resource predicates:
+The verified `Client.Driver` module still starts from the concrete low-level
+client and its own driver resource predicates:
 
 - `CR.configured_initial_state server_name trust_anchors validation_time_seconds`
   is `CS.initial (configured_connection_config ...)`
@@ -76,18 +174,19 @@ driver resource predicates:
   `Client.Endpoint.client_protocol_endpoint`
   (`src/impl/TLS13.Impl.Client.Driver.fst:5744-5950`).
 
-The result is two parallel client paths:
+The C-facing runtime wrapper is already different: after
+`TLS13_Impl_Client_Driver_new_client`, `runtime/tls13_client_driver.c` builds
+endpoint frames and calls `TLS13_Impl_Client_Endpoint_client_endpoint_run_workflow`
+for `connect`/`receive` and endpoint local-action wrappers for `send`/`close`.
+This is extraction-safe because `canonical_client` erases to the same C
+representation as the concrete client state.
+
+The result is still two verified client stories:
 
 1. Proof-facing canonical path:
    `canonical_client -> client_protocol_implementation -> client_protocol_endpoint`.
-2. Exported driver path:
+2. Legacy verified driver path:
    `client_driver -> top_driver_exactly -> driver_handshake -> send/receive`.
-
-I did not find a TLS constructor in `src/impl` analogous to the calc sample's
-`new_canonical_server` (`calc_sample/impl/Calc.Server.CanonicalProtocol.fst:1178-1202`)
-that packages the concrete client plus initial state into a `canonical_client`.
-That makes the canonical client path look like a proof boundary that is not yet
-the path used by the exported driver API.
 
 ## Current server architecture
 
@@ -98,8 +197,9 @@ flowchart TD
   LowServer[TLS13.Impl.Server\nS.new_server...\nS.next_local_action\nS.process_*]
   Canonical[Server.CanonicalProtocol\nserver_step\nserver_state_machine initial\nserver_system initial\ncanonical_server\nserver_protocol_implementation]
   Endpoint[Server.Endpoint\nserver_protocol_endpoint\nserver_endpoint_run_workflow]
-  DirectDriver[Server.Driver exported API\nnew_server/accept/send/receive/close]
+  DirectDriver[Server.Driver verified API\nnew_server/accept/send/receive/close]
   DirectHelpers[Server.Driver direct workflow\nDriver.State predicates\nDriver.Transport/Handshake/Network/Local helpers]
+  Runtime[C runtime wrapper\nruntime/tls13_server_driver.c\nendpoint_run + api-local wrappers]
   Proofs[Pairing/NoTail proof modules\nvalid_byte_trace over ServerCP.server_system initial]
 
   Spec --> Repr
@@ -111,6 +211,8 @@ flowchart TD
   Repr --> DirectDriver
   DirectDriver --> DirectHelpers
   DirectHelpers -. parallel to, not routed through .-> Endpoint
+  DirectDriver --> Runtime
+  Runtime --> Endpoint
 ```
 
 ### What is tied together
@@ -134,12 +236,16 @@ flowchart TD
   `Common.ProtocolEndpoint` for that implementation
   (`src/impl/TLS13.Impl.Server.Endpoint.fst:4102-4135`).  The endpoint frame
   carries query state, raw/network buffers, certificate-chain/material buffers,
-  and bridge obligations for credential-dependent local actions
+  and credential-dependent material facts
   (`src/impl/TLS13.Impl.Server.Endpoint.fst:66-120`).
+- `Server.CanonicalProtocol.new_canonical_server` now allocates the concrete
+  server, credentials, progress reference, supported-profile proof carrier, and
+  canonical initial state in one place
+  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:1856-1984`).
 
-### What the exported server driver does instead
+### What the verified server driver still does directly
 
-The exported server driver also has a separate direct workflow:
+The verified `Server.Driver` module also has a separate direct workflow:
 
 - `CR.server_initial_state certificate_chain credential_identity` is
   `CS.initial (server_connection_config certificate_chain credential_identity)`
@@ -159,16 +265,19 @@ The exported server driver also has a separate direct workflow:
   `DL.drain_ready_empty_local_actions` to reach application data
   (`src/impl/TLS13.Impl.Server.Driver.fst:333-670`).
 
+The C-facing runtime wrapper already constructs a canonical-server-shaped value
+from the extracted server state and credentials, then calls
+`TLS13_Impl_Server_Endpoint_server_endpoint_run_workflow` and endpoint
+local-action wrappers.  Unlike the client, the server canonical value retains the
+credentials as concrete C data, so the runtime wrapper packages both
+`server_driver_server` and `server_driver_credentials`.
+
 So the server has the same split:
 
 1. Proof-facing canonical path:
    `canonical_server -> server_protocol_implementation -> server_protocol_endpoint`.
-2. Exported driver path:
+2. Legacy verified driver path:
    `server_driver -> Driver.State/Transport/Handshake/Network/Local helpers`.
-
-As with the client, I did not find a TLS constructor in `src/impl` that packages
-the concrete server, credentials, progress reference, and initial state into a
-`canonical_server` for use by the exported driver.
 
 ## Current proof-facing pairing path
 
@@ -197,17 +306,18 @@ Examples:
   `CS.initial initial.model_config`
   (`src/impl/TLS13.Impl.Driver.PairingNoTailWireLogs.fsti:216-310`).
 
-This is a good proof architecture in isolation.  The weak point is that the
-exported drivers do not appear to establish their final states by running the
-same canonical endpoint values through the endpoint layer.  Consequently, an
-auditor has to relate the direct driver workflows to the canonical valid-byte
-trace story by additional role-specific reasoning.
+This is a good proof architecture in isolation.  The weak point is now more
+specific: the extracted C runtime follows the endpoint path, but the verified F*
+driver predicates do not expose canonical endpoint ownership.  Consequently, an
+auditor still has to distinguish the endpoint-centered C path from the older
+direct verified driver workflows.
 
 ## Architectural gaps and audit risks
 
-1. **Two executable stories.**  The endpoint layer is a generic, uniform
-   executable story over `Common.ProtocolImplementation`, but the exported driver
-   APIs use separate role-specific workflows.  An audit has to inspect both.
+1. **Two verified stories.**  The endpoint layer is a generic, uniform executable
+   story over `Common.ProtocolImplementation`, but the verified driver APIs still
+   expose separate role-specific workflows.  The C runtime has moved to the
+   endpoint path; the verified F* driver surface has not.
 
 2. **Canonical implementation values are not the public ownership units.**
    `canonical_client` and `canonical_server` contain exactly the ghost initial
@@ -225,11 +335,11 @@ trace story by additional role-specific reasoning.
    client handshake workflow and server accept/local-drain/network-loop workflow,
    so scheduler-sensitive facts have to be audited separately.
 
-5. **Pairing theorems are one layer above the exported drivers.**  The clean
-   valid-byte-trace theorems use canonical systems, while top-level driver
-   theorems use driver-ready predicates and wire-log predicates.  Without an
-   endpoint-centered top-level driver, the audit path from executable code to
-   valid byte traces is indirect.
+5. **Pairing theorems are one layer above the legacy driver predicates.**  The
+   clean valid-byte-trace theorems use canonical systems, while legacy top-level
+   driver theorems use driver-ready predicates and wire-log predicates.  Without
+   endpoint-owned public driver predicates, the audit path from verified driver
+   ownership to valid byte traces is still indirect.
 
 ## Ideal architecture
 
@@ -285,18 +395,17 @@ generic driver.**
   server and `calc_server_protocol_implementation`.
 - `Calc.Server.Endpoint` defines `calc_protocol_endpoint` and a concrete
   endpoint runner.
-- But the extracted public wrapper
-  `Calc.Server.EndpointRunner.run_channel_endpoint` currently calls
-  `Calc.Server.Socket.run_channel`, the direct socket path, not the endpoint path
-  (`calc_sample/impl/Calc.Server.EndpointRunner.fst:12-19`).
+- The extracted public wrapper
+  `Calc.Server.EndpointRunner.run_channel_endpoint` originally called
+  `Calc.Server.Socket.run_channel`, the direct socket path, not the endpoint path.
 
 First cleanup target:
 
 1. Change `Calc.Server.EndpointRunner.run_channel_endpoint` to call the concrete
-   endpoint runner in `Calc.Server.Endpoint`.
+   endpoint runner in `Calc.Server.Endpoint`.  **Done.**
 2. Add the endpoint/canonical modules needed by that path to the calc extraction
-   target.
-3. Run `make -C calc_sample test-c`.
+   target.  **Done.**
+3. Run `make -C calc_sample test-c`.  **Done.**
 4. Inspect the generated C or add a small Makefile check so the public extracted
    symbol is backed by the endpoint module, not `Calc.Server.Socket.run_channel`.
 
@@ -334,18 +443,20 @@ After the calc canary extracts:
 1. Add `new_canonical_client`.
    It should allocate `C.new_client`, allocate the client progress reference at
    `CR.configured_initial_state ...`, store that value in
-   `canonical_client_initial`, and fold `client_invariant`.
+   `canonical_client_initial`, and fold `client_invariant`.  **Done.**
 2. Add `new_canonical_server`.
    It should allocate the concrete server and credentials, allocate the server
    progress reference at `CR.server_initial_state ...`, store that value in
-   `canonical_server_initial`, and fold `server_invariant`.
+   `canonical_server_initial`, and fold `server_invariant`.  **Done.**
 
 These constructors become the single place where the executable initial state is
 connected to `client_system initial` / `server_system initial`.
 
 ### 4. Wrap public driver ownership around canonical endpoints
 
-Introduce bridge predicates for the exported drivers that own:
+The C runtime already performs a first-order endpoint bridge by packaging the
+erased canonical values and endpoint frames in C.  The remaining verified-F*
+cleanup should introduce endpoint-owned driver predicates that own:
 
 1. the canonical client/server value;
 2. the endpoint frame;
@@ -355,18 +466,28 @@ Introduce bridge predicates for the exported drivers that own:
    existing public API.
 
 Do this as a bridge first, not a deletion.  The old direct driver predicates can
-remain internally until the endpoint path passes verification and extraction.
+remain internally until the endpoint-owned predicates pass verification and
+extraction.  Avoid trying to reuse `client_driver_live` /
+`server_driver_live` as-is: those predicates own only `C.connection_exactly` /
+`S.connection_exactly`, while endpoint runners require
+`CP.client_invariant` / `SP.server_invariant` and their progress references.
 
 ### 5. Route client and server public workflows through monomorphic endpoint runners
 
 Port one side at a time:
 
-1. Client `connect` should allocate a canonical client and endpoint frame, then
-   call the monomorphic `client_endpoint_run_workflow`.
-2. Server `accept` should allocate a canonical server and endpoint frame, then
-   call the monomorphic `server_endpoint_run_workflow`.
+1. Client `connect` should allocate or own a canonical client and endpoint frame,
+   then call the monomorphic `client_endpoint_run_workflow`.
+2. Server `accept` should allocate or own a canonical server and endpoint frame,
+   then call the monomorphic `server_endpoint_run_workflow`.
 3. `send` and `receive` should become thin endpoint steps over an already
    connected canonical endpoint state.
+
+The C runtime already follows this shape.  The verified-F* migration should use
+new endpoint-owned driver records or a carefully staged replacement of the
+legacy driver records; simply calling the endpoint runner from the existing
+legacy predicates is not sound because the canonical progress-resource ownership
+is missing.
 
 Do not make this depend on extracting `Common.ProtocolDriver.drive_steps` yet.
 If a common driver is desired later, add a separate monomorphized extraction
@@ -388,7 +509,7 @@ generic runtime call with a concrete monomorphic wrapper.
 
 ### 7. Export endpoint-derived audit lemmas and retire duplicate workflows
 
-Once the public drivers use the endpoint path:
+Once the verified public driver ownership predicates use the endpoint path:
 
 1. Export lemmas that connected endpoint-owned client/server states imply
    `WFSM.valid_byte_trace` over the canonical systems.

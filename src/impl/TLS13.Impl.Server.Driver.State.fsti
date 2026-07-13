@@ -14,12 +14,16 @@ module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
+module SQueries = TLS13.Impl.Server.CanonicalQueries
+module EP = TLS13.Impl.Server.Endpoint
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module MR = Pulse.Lib.MonotonicGhostRef
+module SP = TLS13.Impl.Server.CanonicalProtocol
 
 val driver_network_out_capacity : c:SZ.t { SZ.v c == 20000 }
 val driver_app_out_capacity :
@@ -45,7 +49,82 @@ noeq type server_driver = {
   server_driver_certificate_verify_input: V.vec U8.t;
   server_driver_signature: V.vec U8.t;
   server_driver_app_out: V.vec U8.t;
+  server_driver_local_app_out: V.vec U8.t;
+  // Ghost/erased fields — zero-cost in C extraction
+  server_driver_progress: MR.mref SP.server_progress_preorder;
+  server_driver_initial: Ghost.erased CS.connection_state;
+  server_driver_supported_profile:
+    Ghost.erased
+      (SP.server_supported_profile_proof (Ghost.reveal server_driver_initial));
 }
+
+noextract
+let server_driver_canonical (d: server_driver) : SP.canonical_server = {
+  SP.canonical_server_state = d.server_driver_server;
+  SP.canonical_server_credentials = d.server_driver_credentials;
+  SP.canonical_server_progress = d.server_driver_progress;
+  SP.canonical_server_initial = d.server_driver_initial;
+  SP.canonical_server_supported_profile = d.server_driver_supported_profile;
+}
+
+noextract
+let server_driver_canonical_progress
+  (d: server_driver)
+  (st: CS.connection_state)
+  : slprop =
+  MR.pts_to d.server_driver_progress #1.0R st **
+  MR.snapshot d.server_driver_progress (Ghost.reveal d.server_driver_initial)
+
+noextract
+val server_driver_endpoint_config
+  (d: server_driver)
+  : SQueries.server_next_local_action_config
+
+noextract
+val server_driver_endpoint_frame
+  (d: server_driver)
+  (network_app_out: array U8.t)
+  (network_app_out_len: SZ.t)
+  (local_payload: array U8.t)
+  (local_payload_len: SZ.t)
+  (local_app_out: array U8.t)
+  (local_app_out_len: SZ.t)
+  (certificate_chain_len: SZ.t)
+  (certificate_chain_len_proof:
+    (certificate_chain:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
+  (certificate_chain_len_bound:
+    Ghost.erased
+      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
+  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
+  (private_key: V.vec U8.t)
+  (material_deferred_ready:
+    (st:Ghost.erased CS.connection_state ->
+    action:SQueries.server_deferred_action ->
+      Ghost.erased
+        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
+         EP.server_endpoint_material_bytes_match_state
+           (Ghost.reveal material_spec)
+           (Ghost.reveal st))))
+  : f:EP.server_endpoint_frame{
+      f.EP.server_ep_query.SQueries.server_query_network_app_out == network_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_network_app_out_len ==
+        SZ.v network_app_out_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_payload == local_payload /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_payload_len ==
+        SZ.v local_payload_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_app_out == local_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_app_out_len ==
+        SZ.v local_app_out_len /\
+      f.EP.server_ep_raw == d.server_driver_raw /\
+      SZ.v f.EP.server_ep_raw_len == SZ.v driver_rx_capacity /\
+      f.EP.server_ep_network_out == d.server_driver_network_out /\
+      SZ.v f.EP.server_ep_network_out_len == SZ.v driver_network_out_capacity /\
+      f.EP.server_ep_material == d.server_driver_material_payload /\
+      SZ.v f.EP.server_ep_material_len == SZ.v driver_material_capacity /\
+      f.EP.server_ep_material_spec == material_spec /\
+      f.EP.server_ep_private == private_key}
 
 type server_driver_transport_status =
   | ServerDriverTransportOk
@@ -197,11 +276,11 @@ let server_driver_supported_profile_selection
   : prop =
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-    T.RsaPssRsaeSha256 /\
+    T.Rsa_pss_rsae_sha256 /\
   server_driver_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->
-     selection.CS.server_selected_signature_scheme == T.RsaPssRsaeSha256 /\
+     selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
      selection.CS.server_selected_credential == credential_identity
    | None ->
      True)
@@ -214,7 +293,7 @@ let server_driver_buffers
   : slprop
   =
   Box.pts_to d.server_driver_buffered_len buffered_len **
-  exists* empty_payload raw network_out material cv_input signature app_out.
+  exists* empty_payload raw network_out material cv_input signature app_out local_app_out.
     V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
     V.pts_to d.server_driver_raw #1.0R raw **
     V.pts_to d.server_driver_network_out #1.0R network_out **
@@ -222,6 +301,7 @@ let server_driver_buffers
     V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
     V.pts_to d.server_driver_signature #1.0R signature **
     V.pts_to d.server_driver_app_out #1.0R app_out **
+    V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
     pure (
       B.length empty_payload == 0 /\
       B.length raw == SZ.v driver_rx_capacity /\
@@ -233,6 +313,7 @@ let server_driver_buffers
       B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
       B.length signature == SZ.v driver_signature_capacity /\
       B.length app_out == SZ.v driver_app_out_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
       Bounds.max_certificate_verify_input_len <=
         SZ.v driver_certificate_verify_input_capacity /\
       IM.max_signature_len <= SZ.v driver_signature_capacity /\
@@ -243,7 +324,8 @@ let server_driver_buffers
       V.is_full_vec d.server_driver_material_payload /\
       V.is_full_vec d.server_driver_certificate_verify_input /\
       V.is_full_vec d.server_driver_signature /\
-      V.is_full_vec d.server_driver_app_out)
+      V.is_full_vec d.server_driver_app_out /\
+      V.is_full_vec d.server_driver_local_app_out)
 
 noextract
 let server_driver_buffers_with_app_out
@@ -254,7 +336,7 @@ let server_driver_buffers_with_app_out
   : slprop
   =
   Box.pts_to d.server_driver_buffered_len buffered_len **
-  exists* empty_payload raw network_out material cv_input signature.
+  exists* empty_payload raw network_out material cv_input signature local_app_out.
     V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
     V.pts_to d.server_driver_raw #1.0R raw **
     V.pts_to d.server_driver_network_out #1.0R network_out **
@@ -262,6 +344,7 @@ let server_driver_buffers_with_app_out
     V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
     V.pts_to d.server_driver_signature #1.0R signature **
     V.pts_to d.server_driver_app_out #1.0R app_out **
+    V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
     pure (
       B.length empty_payload == 0 /\
       B.length raw == SZ.v driver_rx_capacity /\
@@ -273,6 +356,7 @@ let server_driver_buffers_with_app_out
       B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
       B.length signature == SZ.v driver_signature_capacity /\
       B.length app_out == SZ.v driver_app_out_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
       Bounds.max_certificate_verify_input_len <=
         SZ.v driver_certificate_verify_input_capacity /\
       IM.max_signature_len <= SZ.v driver_signature_capacity /\
@@ -283,7 +367,8 @@ let server_driver_buffers_with_app_out
       V.is_full_vec d.server_driver_material_payload /\
       V.is_full_vec d.server_driver_certificate_verify_input /\
       V.is_full_vec d.server_driver_signature /\
-      V.is_full_vec d.server_driver_app_out)
+      V.is_full_vec d.server_driver_app_out /\
+      V.is_full_vec d.server_driver_local_app_out)
 
 noextract
 let server_driver_live
@@ -334,6 +419,65 @@ let server_driver_connected
             credential_identity /\
           server_driver_supported_profile_selection st credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
+
+noextract
+(**
+  Endpoint-owned connected server state.
+
+  The endpoint frame owns the resources consumed by [Server.Endpoint], including
+  the canonical progress/current-state resource.  It is separate from the legacy
+  public predicate while the driver workflows are still routed through the direct
+  low-level path.  The server endpoint requires a distinct private-key vec, so
+  callers provide that through [frame] instead of treating the 64-byte material
+  vec as a splittable subview.
+**)
+let server_driver_endpoint_connected
+  (d:server_driver)
+  (cfg:SQueries.server_next_local_action_config)
+  (frame:EP.server_endpoint_frame)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (canonical_received:B.bytes)
+  (canonical_sent:B.bytes)
+  : slprop
+  =
+  SP.server_invariant
+    (server_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st **
+  exists* ch buffered_len cv_input signature.
+    Box.pts_to d.server_driver_channel (Some ch) **
+    Box.pts_to d.server_driver_buffered_len buffered_len **
+    V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+    V.pts_to d.server_driver_signature #1.0R signature **
+    EP.server_endpoint_frame_ready
+      (server_driver_canonical d)
+      cfg
+      frame
+      st **
+    EP.server_endpoint_io_ready
+      (server_driver_canonical d)
+      ch
+      frame
+      canonical_received
+      canonical_sent
+      st **
+    pure (ST.server_end_to_end_invariant st /\
+          server_driver_config_matches_credentials
+            st
+            certificate_chain
+            credential_identity /\
+          server_driver_supported_profile_selection st credential_identity /\
+          SZ.v buffered_len <= SZ.v frame.EP.server_ep_raw_len /\
+          B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
+          B.length signature == SZ.v driver_signature_capacity /\
+          Bounds.max_certificate_verify_input_len <=
+            SZ.v driver_certificate_verify_input_capacity /\
+          IM.max_signature_len <= SZ.v driver_signature_capacity /\
+          V.is_full_vec d.server_driver_certificate_verify_input /\
+          V.is_full_vec d.server_driver_signature)
 
 noextract
 let server_driver_connected_with_app_out

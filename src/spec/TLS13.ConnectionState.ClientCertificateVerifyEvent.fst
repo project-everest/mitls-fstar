@@ -4,6 +4,7 @@ module CL = TLS13.ConnectionLog
 module CVR = TLS13.ConnectionState.ClientCertificateVerifyReachability
 module ID = FStar.IndefiniteDescription
 module M = TLS13.Messages
+module GCV = TLS13.Wire.Generated.CertificateVerify
 module RTC = FStar.ReflexiveTransitiveClosure
 module T = TLS13.Types
 
@@ -48,7 +49,7 @@ let rec lemma_contains_received_certificate_verify_append_snoc
 
 let rec lemma_contains_received_certificate_verify_snoc_intro
   (events:list conn_event)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   : Lemma
       (ensures
         contains_received_certificate_verify
@@ -86,7 +87,7 @@ let rec lemma_contains_received_certificate_verify_split
        (match msg.CL.message_direction, msg.CL.message_value with
         | CL.Received, M.TlsHandshake (M.CertificateVerify cv) ->
           introduce exists (prefix:list conn_event)
-            (cv':M.certificate_verify)
+            (cv':GCV.certificateVerify)
             (suffix:list conn_event).
             events ==
               prefix @
@@ -116,7 +117,7 @@ let rec lemma_contains_received_certificate_verify_split
           with _.
           (
             introduce exists (prefix':list conn_event)
-              (cv':M.certificate_verify)
+              (cv':GCV.certificateVerify)
               (suffix':list conn_event).
               events ==
                 prefix' @
@@ -147,7 +148,7 @@ let rec lemma_contains_received_certificate_verify_split
        with _.
        (
          introduce exists (prefix':list conn_event)
-           (cv':M.certificate_verify)
+           (cv':GCV.certificateVerify)
            (suffix':list conn_event).
            events ==
              prefix' @

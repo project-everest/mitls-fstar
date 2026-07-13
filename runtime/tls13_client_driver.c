@@ -74,7 +74,9 @@ static TLS13_Impl_Client_Endpoint_client_endpoint_frame client_endpoint_frame(
     uint8_t *app_out,
     size_t app_out_len,
     uint8_t *local_payload,
-    size_t local_payload_len) {
+    size_t local_payload_len,
+    uint8_t *local_app_out,
+    size_t local_app_out_len) {
   return (TLS13_Impl_Client_Endpoint_client_endpoint_frame){
       .client_ep_query =
           {
@@ -82,8 +84,8 @@ static TLS13_Impl_Client_Endpoint_client_endpoint_frame client_endpoint_frame(
               .client_query_network_app_out_len = app_out_len,
               .client_query_local_payload = local_payload,
               .client_query_local_payload_len = local_payload_len,
-              .client_query_local_app_out = app_out,
-              .client_query_local_app_out_len = app_out_len,
+              .client_query_local_app_out = local_app_out,
+              .client_query_local_app_out_len = local_app_out_len,
           },
       .client_ep_raw_len = TLS13_CLIENT_RX_CAP,
       .client_ep_raw = d.client_driver_raw,
@@ -138,7 +140,9 @@ static int client_endpoint_do_local(
           app_out,
           app_out_len,
           local_frame.tls_client_local_payload,
-          local_frame.tls_client_local_payload_len);
+      local_frame.tls_client_local_payload_len,
+      driver->verified_driver.client_driver_local_app_out,
+      TLS13_CLIENT_APP_OUT_CAP);
   Common_ProtocolImplementation_process_result result;
   if (scheduled) {
     result =
@@ -191,7 +195,9 @@ static int client_endpoint_run(
           app_out,
           app_out_len,
           driver->verified_driver.client_driver_empty_payload,
-          0u);
+      0u,
+      driver->verified_driver.client_driver_local_app_out,
+      TLS13_CLIENT_APP_OUT_CAP);
   TLS13_Impl_Client_Endpoint_client_endpoint_run_result result =
       TLS13_Impl_Client_Endpoint_client_endpoint_run_workflow(
           driver->verified_driver.client_driver_client,

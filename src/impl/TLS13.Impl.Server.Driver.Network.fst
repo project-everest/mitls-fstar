@@ -1573,6 +1573,10 @@ fn process_buffered_network_bytes_compact_once
     Seq.index (Seq.slice raw 0 (SZ.v current_len)) i));
   assert (pure (Seq.equal raw_prefix
     (Seq.slice raw 0 (SZ.v current_len))));
+  Seq.lemma_eq_elim raw_prefix (Seq.slice raw 0 (SZ.v current_len));
+  Seq.lemma_eq_elim buffered (Seq.slice raw 0 (SZ.v buffered_len));
+  assert (pure (Seq.slice raw 0 (SZ.v current_len) == Seq.slice raw 0 (SZ.v buffered_len)));
+  assert (pure (Seq.equal buffered (Seq.slice raw 0 (SZ.v current_len))));
   assert (pure (Seq.equal raw_prefix buffered));
 
   let buffer_resp =

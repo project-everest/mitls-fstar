@@ -58,6 +58,15 @@ INCLUDES = \
 
 FSTAR_DEP_OPTIONS := --extract '*,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,+Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*'
 
+EXTRACT_DEBUG ?= 0
+ifeq ($(EXTRACT_DEBUG),1)
+FSTAR_EXTRACT_DEBUG_FLAGS = --trace_error --profile '*' --profile_component FStarC.Extraction
+KRML_DEBUG_FLAGS = -verbose -dbacktrace
+else
+FSTAR_EXTRACT_DEBUG_FLAGS =
+KRML_DEBUG_FLAGS =
+endif
+
 FSTAR_FLAGS = \
   $(OTHERFLAGS) \
   --cache_checked_modules \
@@ -265,6 +274,7 @@ BUNDLE_API_MODULE = TLS13.Impl.Client
 
 SERIALIZER_MODULES = \
   TLS13.Impl.Serializer.Common \
+  TLS13.Impl.Serializer.Handshake \
   TLS13.Impl.Serializer.Finished \
   TLS13.Impl.Serializer.EncryptedExtensions \
   TLS13.Impl.Serializer.CertificateVerify \
@@ -274,7 +284,8 @@ SERIALIZER_MODULES = \
   TLS13.Impl.Serializer
 
 SERIALIZER_INTERNAL_MODULES = \
-  TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Finished,\
+  TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Handshake,\
+  TLS13.Impl.Serializer.Finished,\
   TLS13.Impl.Serializer.EncryptedExtensions,\
   TLS13.Impl.Serializer.CertificateVerify,TLS13.Impl.Serializer.ServerHello,\
   TLS13.Impl.Serializer.Certificate,TLS13.Impl.Serializer.ProtectedRecord,\
@@ -476,10 +487,18 @@ TLS13_BUNDLE_KRML_FILES = \
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
-	$(FSTAR_EXE) --codegen krml --extract_module FStar.Pervasives.Native \
+	@start=$$(date +%s); \
+	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
+	  "$@" "FStar.Pervasives.Native" "FStar.Pervasives.Native.fst" "$$(date -Is)"; \
+	$(FSTAR_EXE) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
+	  --codegen krml --extract_module FStar.Pervasives.Native \
 	  --odir $(OUTPUT_DIR) --cache_dir $(CACHE_DIR) \
 	  --already_cached Prims,FStar \
-	  FStar.Pervasives.Native.fst
+	  FStar.Pervasives.Native.fst; \
+	status=$$?; end=$$(date +%s); \
+	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
+	  "$@" "FStar.Pervasives.Native" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	exit $$status
 
 $(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml,$(ALL_KRML_FILES)): | $(OUTPUT_DIR)/FStar_SizeT.krml
 
@@ -491,17 +510,41 @@ $(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
 	@# clobber/restore: the extracted client code calls no FStar.SizeT function
 	@# (v/uint_to_t stay noextract_to "krml"; all SizeT arithmetic/casts are KaRaMeL
 	@# builtins), so the stock module — where v/uint_to_t emit no C — works as-is.
-	$(FSTAR_EXE) --odir $(OUTPUT_DIR) --already_cached 'Prims,FStar' \
+	@start=$$(date +%s); \
+	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
+	  "$@" "FStar.SizeT" "$(FSTAR_ULIB)/FStar.SizeT.fst" "$$(date -Is)"; \
+	$(FSTAR_EXE) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
+	  --odir $(OUTPUT_DIR) --already_cached 'Prims,FStar' \
 	  --codegen krml --extract_module FStar.SizeT \
-	  $(FSTAR_ULIB)/FStar.SizeT.fst --krmloutput $@
+	  $(FSTAR_ULIB)/FStar.SizeT.fst --krmloutput $@; \
+	status=$$?; end=$$(date +%s); \
+	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
+	  "$@" "FStar.SizeT" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	exit $$status
 
 $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Client.Driver.fst Makefile | $(OUTPUT_DIR)
-	$(FSTAR_EXTRACT) --codegen krml --extract '$(DRIVER_EXTRACT_SELECTOR)' \
-	  src/impl/TLS13.Impl.Client.Driver.fst --krmloutput $@
+	@start=$$(date +%s); \
+	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
+	  "$@" "TLS13.Impl.Client.Driver bundle" "src/impl/TLS13.Impl.Client.Driver.fst" "$$(date -Is)"; \
+	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
+	  --codegen krml --extract '$(DRIVER_EXTRACT_SELECTOR)' \
+	  src/impl/TLS13.Impl.Client.Driver.fst --krmloutput $@; \
+	status=$$?; end=$$(date +%s); \
+	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
+	  "$@" "TLS13.Impl.Client.Driver bundle" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	exit $$status
 
 $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Server.Driver.fst Makefile | $(OUTPUT_DIR)
-	$(FSTAR_EXTRACT) --codegen krml --extract '$(SERVER_DRIVER_EXTRACT_SELECTOR)' \
-	  src/impl/TLS13.Impl.Server.Driver.fst --krmloutput $@
+	@start=$$(date +%s); \
+	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
+	  "$@" "TLS13.Impl.Server.Driver bundle" "src/impl/TLS13.Impl.Server.Driver.fst" "$$(date -Is)"; \
+	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
+	  --codegen krml --extract '$(SERVER_DRIVER_EXTRACT_SELECTOR)' \
+	  src/impl/TLS13.Impl.Server.Driver.fst --krmloutput $@; \
+	status=$$?; end=$$(date +%s); \
+	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
+	  "$@" "TLS13.Impl.Server.Driver bundle" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	exit $$status
 
 $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@target_base=$$(basename "$@" .krml); \
@@ -524,7 +567,15 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	  echo "Could not locate F* source for $@"; \
 	  exit 1; \
 	fi; \
-	$(FSTAR) --codegen krml --extract_module "$$module" "$$src" --krmloutput "$@"
+	start=$$(date +%s); \
+	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
+	  "$@" "$$module" "$$src" "$$(date -Is)"; \
+	$(FSTAR) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
+	  --codegen krml --extract_module "$$module" "$$src" --krmloutput "$@"; \
+	status=$$?; end=$$(date +%s); \
+	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
+	  "$@" "$$module" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	exit $$status
 
 extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
@@ -547,7 +598,9 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	@rm -f $(TLS13_BUNDLE_DIR)/*.c $(TLS13_BUNDLE_DIR)/*.h $(TLS13_BUNDLE_DIR)/internal/*.h
 	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
 	@mkdir -p $(TLS13_BUNDLE_DIR)/internal
-	$(KRML_EXE) \
+	@start=$$(date +%s); \
+	printf '[extract] KaRaMeL start target=%s at %s\n' "$@" "$$(date -Is)"; \
+	$(KRML_EXE) $(KRML_DEBUG_FLAGS) \
 	  -tmpdir $(TLS13_BUNDLE_DIR) \
 	  -skip-compilation \
 	  -static-header TLS13.Impl.Serializer \
@@ -565,7 +618,11 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
 	  -warn-error -2-9-17-6 \
-	  $(TLS13_BUNDLE_KRML_FILES)
+	  $(TLS13_BUNDLE_KRML_FILES); \
+	status=$$?; end=$$(date +%s); \
+	printf '[extract] KaRaMeL end target=%s status=%s elapsed=%ss at %s\n' \
+	  "$@" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	exit $$status
 	@touch $@
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
@@ -676,6 +733,7 @@ test/test_extracted_client_openssl_echo: \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
 	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-extracted-client-openssl-echo: test-openssl-echo
@@ -724,6 +782,7 @@ test/test_extracted_server_openssl_client: \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_server_openssl_client.c \
 	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-openssl-sclient: test/test_extracted_server_openssl_client \

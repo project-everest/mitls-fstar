@@ -40,6 +40,13 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -82,7 +89,7 @@ fn mark_received_alert_failure
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
-           pure (Ghost.reveal alert <> T.CloseNotify /\
+           pure (Ghost.reveal alert <> T.Close_notify /\
                  Tags.alert_tag_matches alert_wire (Ghost.reveal alert) /\
                  CS.event_raw_delta_legal
                    st0.CS.cs_model
@@ -97,7 +104,7 @@ fn mark_received_alert_failure
             (received_alert_failure_state st0 (Ghost.reveal alert) (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
 {
-  assert (pure (Ghost.reveal alert <> T.CloseNotify));
+  assert (pure (Ghost.reveal alert <> T.Close_notify));
   assert (pure (Tags.alert_tag_matches alert_wire (Ghost.reveal alert)));
   assert (pure (CS.event_raw_delta_legal
     st0.CS.cs_model
@@ -154,7 +161,7 @@ fn mark_received_close_notify_for_role
                    st0.CS.cs_model
                    (CS.ConnNetworkEvent {
                      CL.message_direction = CL.Received;
-                     CL.message_value = M.TlsAlert T.CloseNotify;
+                     CL.message_value = M.TlsAlert T.Close_notify;
                    })
                    B.empty
                    (Ghost.reveal 'raw_bytes))
@@ -170,7 +177,7 @@ fn mark_received_close_notify_for_role
     st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Received;
-      CL.message_value = M.TlsAlert T.CloseNotify;
+      CL.message_value = M.TlsAlert T.Close_notify;
     })
     B.empty
     (Ghost.reveal 'raw_bytes)));
@@ -234,7 +241,7 @@ fn mark_received_close_notify
                    st0.CS.cs_model
                    (CS.ConnNetworkEvent {
                      CL.message_direction = CL.Received;
-                     CL.message_value = M.TlsAlert T.CloseNotify;
+                     CL.message_value = M.TlsAlert T.Close_notify;
                    })
                    B.empty
                    (Ghost.reveal 'raw_bytes))
@@ -321,13 +328,20 @@ fn mark_received_hello_retry_request_rejected
     (received_hello_retry_request_rejected_state st0 (Ghost.reveal 'raw_bytes)))
 }
 
+let lemma_received_server_hello_state_server_hello
+  (st:CS.connection_state) (sh:GSH.serverHello) (raw:B.bytes)
+  : Lemma
+      (ensures (received_server_hello_state st sh raw).CS.cs_model.CS.model_handshake.CS.hs_server_hello
+               == Some sh)
+  = ()
+
 fn mark_received_server_hello
   (c:connection_state)
   (raw:array U8.t)
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -336,6 +350,7 @@ fn mark_received_server_hello
            pure (st0.CS.cs_model.CS.model_control ==
                    CS.ControlHandshaking CS.HsClientHelloSent /\
                  B.length 'fragment_bytes == SZ.v fragment_len /\
+                 SZ.v fragment_len <= max_server_hello_len /\
                  Seq.equal
                    (Ghost.reveal 'fragment_bytes)
                    (W.serialize_handshake (M.ServerHello sh)) /\
@@ -381,7 +396,12 @@ fn mark_received_server_hello
     B.empty
     (Ghost.reveal 'raw_bytes)));
 
-  W.lemma_serialize_server_hello_len sh;
+  // TODO-A1: Phase 4 deleted W.lemma_serialize_server_hello_len, whose structural
+  // guarantee `B.length (serialize_handshake (M.ServerHello sh)) <= max_server_hello_len`
+  // is no longer a theorem.  The bound `SZ.v fragment_len <= max_server_hello_len`
+  // is now a (caller-discharged) precondition; recover the serialize-length bound
+  // from the precondition's Seq.equal fact.
+  Seq.lemma_eq_elim (Ghost.reveal 'fragment_bytes) (W.serialize_handshake (M.ServerHello sh));
   assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) <= max_server_hello_len));
   assert (pure (SZ.v fragment_len <= max_server_hello_len));
 
@@ -396,7 +416,7 @@ fn mark_received_server_hello
     c.handshake.server_key_share
     32
     (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> Some sh.M.key_share
+     | Some sh -> CS.server_hello_key_share sh
      | None -> None));
   with old_server_key_share_present old_server_key_share_storage. _;
 
@@ -437,12 +457,16 @@ fn mark_received_server_hello
   V.to_vec_pts_to c.handshake.server_key_share.bytes;
   c.handshake.server_key_share.present := true;
   with copied_server_key_share. assert (V.pts_to c.handshake.server_key_share.bytes copied_server_key_share);
-  assert (pure (Seq.equal copied_server_key_share (Ghost.reveal sh).M.key_share));
-  assert (pure (optional_fixed_bytes_match true copied_server_key_share 32 (Some (Ghost.reveal sh).M.key_share)));
+  assert (pure (Some? (CS.server_hello_key_share (Ghost.reveal sh)) /\
+    Seq.equal copied_server_key_share (Some?.v (CS.server_hello_key_share (Ghost.reveal sh)))));
+  assert (pure (optional_fixed_bytes_match true copied_server_key_share 32 (CS.server_hello_key_share (Ghost.reveal sh))));
+  lemma_received_server_hello_state_server_hello st0 sh (Ghost.reveal 'raw_bytes);
   fold (optional_fixed_bytes_exactly
     c.handshake.server_key_share
     32
-    (Some (Ghost.reveal sh).M.key_share));
+    (match (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+     | Some sh -> CS.server_hello_key_share sh
+     | None -> None));
   fold (server_key_share_exactly
     c.handshake.server_key_share
     (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
@@ -544,7 +568,7 @@ fn mark_received_client_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lch:IM.client_hello)
-  (#ch:erased M.client_hello)
+  (#ch:erased GCH.clientHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -714,21 +738,26 @@ fn mark_received_client_hello
   with stored_cipher_suites. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites stored_cipher_suites);
   with stored_signature_schemes. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes stored_signature_schemes);
 
-  assert (pure (Seq.equal stored_random (Ghost.reveal ch).M.random));
+  assert (pure (Seq.equal stored_random (Sem.clientHello_random (Ghost.reveal ch))));
   assert (pure (IM.optional_byte_prefix_matches
     true
     stored_server_name
     (client_hello_server_name_len_for (Ghost.reveal ch))
-    (Ghost.reveal ch).M.server_name));
-  assert (pure (Seq.equal stored_key_share (Ghost.reveal ch).M.key_share));
+    (Sem.clientHello_server_name (Ghost.reveal ch))));
+  assert (pure (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
+    | Some k -> B.length k == 32 /\ Seq.equal stored_key_share k
+    | None -> False));
   assert (pure (IM.cipher_suites_match
     stored_cipher_suites
     (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)))
-    (Ghost.reveal ch).M.cipher_suites));
-  assert (pure (IM.signature_schemes_match
-    stored_signature_schemes
-    (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)))
-    (Ghost.reveal ch).M.signature_schemes));
+    (Sem.clientHello_cipher_suites (Ghost.reveal ch))));
+  assert (pure (match Sem.clientHello_sig_algs (Ghost.reveal ch) with
+    | Some sas ->
+      IM.signature_schemes_match
+        stored_signature_schemes
+        (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)))
+        sas
+    | None -> False));
 
   V.pts_to_len lch.IM.client_hello_random;
   V.pts_to_len lch.IM.client_hello_server_name;
@@ -849,7 +878,7 @@ fn mark_received_encrypted_extensions
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lee:IM.encrypted_extensions)
-  (#ee:erased M.encrypted_extensions)
+  (#ee:erased GEE.encryptedExtensions)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -1058,7 +1087,7 @@ fn mark_received_certificate
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lcert:IM.certificate_msg)
-  (#cert:erased M.certificate_msg)
+  (#cert:erased GCert.certificate)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
@@ -1069,7 +1098,7 @@ fn mark_received_certificate
                   st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                   st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
            st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
-           (Ghost.reveal cert).M.chain <> [] /\
+           Sem.certificate_entries (Ghost.reveal cert) <> [] /\
                   U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                   B.length 'fragment_bytes == SZ.v fragment_len /\
                   Seq.equal
@@ -1090,7 +1119,7 @@ fn mark_received_certificate
             (received_certificate_state st0 (Ghost.reveal cert) (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
-          pure (match (Ghost.reveal cert).M.chain with
+          pure (match Sem.certificate_entries (Ghost.reveal cert) with
                 | leaf :: _ ->
                   (received_certificate_state st0 (Ghost.reveal cert) (Ghost.reveal 'raw_bytes)).
                     CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der ==
@@ -1101,7 +1130,7 @@ fn mark_received_certificate
     CS.ControlHandshaking CS.HsEncryptedExtensionsReceived));
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
-  assert (pure ((Ghost.reveal cert).M.chain <> []));
+  assert (pure (Sem.certificate_entries (Ghost.reveal cert) <> []));
   assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
   assert (pure (CS.event_raw_delta_legal
     st0.CS.cs_model
@@ -1163,7 +1192,7 @@ fn mark_received_certificate
     offsets
     lens
     (SZ.v lcert.IM.certificate_msg_cert_count)
-    (Ghost.reveal cert).M.chain;
+    (Sem.certificate_entries (Ghost.reveal cert));
 
   assert (pure (SZ.v 0sz < IM.max_certificate_chain_entries));
   V.to_array_pts_to lcert.IM.certificate_msg_cert_offsets;
@@ -1177,7 +1206,7 @@ fn mark_received_certificate
 
   let leaf =
     Ghost.hide
-      (match (Ghost.reveal cert).M.chain with
+      (match Sem.certificate_entries (Ghost.reveal cert) with
        | cert_leaf :: _ -> cert_leaf
        | [] -> B.empty);
   assert (pure (Seq.equal
@@ -1339,7 +1368,7 @@ fn mark_received_certificate_verify
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lcv:IM.certificate_verify)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -1628,7 +1657,7 @@ fn mark_received_server_finished
   (c:connection_state)
   (raw:array U8.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -1800,7 +1829,7 @@ fn mark_received_client_finished
   (c:connection_state)
   (raw:array U8.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **

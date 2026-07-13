@@ -12,6 +12,8 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWP = TLS13.ConnectionState.ProtectedWireProjection
 module R = TLS13.Record.Spec
@@ -209,7 +211,6 @@ let lemma_client_server_driver_key_material_agrees_from_prefixes
     server_sent;
   CSL.lemma_supported_profile_client_server_key_material_agrees client server
 
-#push-options "--split_queries always"
 let lemma_paired_handshake_message_states_paired_cleartext_hello_messages
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -240,19 +241,33 @@ let lemma_paired_handshake_message_states_paired_cleartext_hello_messages
     Some _, Some _,
     Some _, Some _,
     Some _, Some _ ->
-    assert (CS.client_hello_equiv client_ch server_ch);
-    assert (CS.server_hello_equiv client_sh server_sh)
+    assert (CS.handshake_msg_corresponds
+      (M.ClientHello client_ch)
+      (M.ClientHello server_ch));
+    assert (CS.handshake_msg_corresponds
+      (M.ServerHello client_sh)
+      (M.ServerHello server_sh));
+    assert (CS.client_hello_corresponds client_ch server_ch);
+    assert (CS.server_hello_corresponds client_sh server_sh)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
-#pop-options
 
-#push-options "--split_queries always"
 let lemma_paired_handshake_message_states_paired_handshake_events
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
-      (requires paired_handshake_message_states client server)
+      (requires paired_handshake_events client server)
       (ensures paired_handshake_events client server)
+=
+  ()
+
+let lemma_paired_handshake_event_trace_paired_handshake_message_states
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_event_trace client server)
+      (ensures paired_handshake_message_states client server /\
+               paired_handshake_events client server)
 =
   match
     client.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
@@ -277,11 +292,32 @@ let lemma_paired_handshake_message_states_paired_handshake_events
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
-    assert (CS.client_hello_equiv client_ch server_ch);
-    assert (CS.server_hello_equiv client_sh server_sh);
-    assert (CS.encrypted_extensions_equiv client_ee server_ee);
-    assert (CS.certificate_msg_equiv client_cert server_cert);
-    assert (CS.certificate_verify_equiv client_cv server_cv);
+    assert (CS.handshake_msg_corresponds
+      (M.ClientHello client_ch)
+      (M.ClientHello server_ch));
+    assert (CS.handshake_msg_corresponds
+      (M.ServerHello client_sh)
+      (M.ServerHello server_sh));
+    assert (CS.handshake_msg_corresponds
+      (M.EncryptedExtensions client_ee)
+      (M.EncryptedExtensions server_ee));
+    assert (CS.handshake_msg_corresponds
+      (M.Certificate client_cert)
+      (M.Certificate server_cert));
+    assert (CS.handshake_msg_corresponds
+      (M.CertificateVerify client_cv)
+      (M.CertificateVerify server_cv));
+    assert (CS.handshake_msg_corresponds
+      (M.Finished client_sf)
+      (M.Finished server_sf));
+    assert (CS.handshake_msg_corresponds
+      (M.Finished client_cf)
+      (M.Finished server_cf));
+    assert (CS.client_hello_corresponds client_ch server_ch);
+    assert (CS.server_hello_corresponds client_sh server_sh);
+    assert (CS.encrypted_extensions_corresponds client_ee server_ee);
+    assert (CS.certificate_msg_corresponds client_cert server_cert);
+    assert (CS.certificate_verify_corresponds client_cv server_cv);
     assert (client_sf == server_sf);
     assert (client_cf == server_cf);
     assert (CS.same_transcript_checkpoint CS.TH_CH client server);
@@ -289,48 +325,8 @@ let lemma_paired_handshake_message_states_paired_handshake_events
     assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
     assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
     assert (CS.same_transcript_checkpoint CS.TH_SF client server);
-    assert (CS.same_transcript_checkpoint CS.TH_CF client server)
-  | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
-    assert False
-#pop-options
-
-let lemma_paired_handshake_event_trace_paired_handshake_message_states
-  (client:CS.connection_state)
-  (server:CS.connection_state)
-  : Lemma
-      (requires paired_handshake_event_trace client server)
-      (ensures paired_handshake_message_states client server)
-=
-  match
-    client.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
-    server.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
-    client.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
-    server.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
-    client.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
-    server.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions,
-    client.CS.cs_model.CS.model_handshake.CS.hs_certificate,
-    server.CS.cs_model.CS.model_handshake.CS.hs_certificate,
-    client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
-    server.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
-    client.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
-    server.CS.cs_model.CS.model_handshake.CS.hs_server_finished,
-    client.CS.cs_model.CS.model_handshake.CS.hs_client_finished,
-    server.CS.cs_model.CS.model_handshake.CS.hs_client_finished
-  with
-  | Some client_ch, Some server_ch,
-    Some client_sh, Some server_sh,
-    Some client_ee, Some server_ee,
-    Some client_cert, Some server_cert,
-    Some client_cv, Some server_cv,
-    Some client_sf, Some server_sf,
-    Some client_cf, Some server_cf ->
-    assert (CS.client_hello_equiv client_ch server_ch);
-    assert (CS.server_hello_equiv client_sh server_sh);
-    assert (CS.encrypted_extensions_equiv client_ee server_ee);
-    assert (CS.certificate_msg_equiv client_cert server_cert);
-    assert (CS.certificate_verify_equiv client_cv server_cv);
-    assert (client_sf == server_sf);
-    assert (client_cf == server_cf)
+    assert (CS.same_transcript_checkpoint CS.TH_CF client server);
+    assert (CS.paired_handshake_events client server)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
 
@@ -346,16 +342,21 @@ let lemma_paired_handshake_event_trace_paired_handshake_events
   lemma_paired_handshake_event_trace_paired_handshake_message_states
     client
     server;
-  lemma_paired_handshake_message_states_paired_handshake_events
-    client
-    server
+  assert (CS.same_transcript_checkpoint CS.TH_CH client server);
+  assert (CS.same_transcript_checkpoint CS.TH_SH client server);
+  assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
+  assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
+  assert (CS.same_transcript_checkpoint CS.TH_SF client server);
+  assert (CS.same_transcript_checkpoint CS.TH_CF client server);
+  assert (CS.paired_handshake_events client server)
 
-#push-options "--split_queries always"
 let lemma_paired_handshake_message_states_application_derivation_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : Lemma
-      (requires paired_handshake_message_states client server)
+      (requires
+        paired_handshake_message_states client server /\
+        paired_handshake_events client server)
       (ensures
         client_server_driver_application_derivation_projection_inputs
           client
@@ -384,17 +385,13 @@ let lemma_paired_handshake_message_states_application_derivation_projection_inpu
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some _, Some _ ->
-    assert (CS.client_hello_equiv client_ch server_ch);
-    assert (CS.server_hello_equiv client_sh server_sh);
-    assert (CS.encrypted_extensions_equiv client_ee server_ee);
-    assert (CS.certificate_msg_equiv client_cert server_cert);
-    assert (CS.certificate_verify_equiv client_cv server_cv);
-    assert (client_sf == server_sf);
+    lemma_paired_handshake_message_states_paired_handshake_events
+      client
+      server;
     assert (CS.same_transcript_checkpoint CS.TH_SF client server);
     assert (CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
-#pop-options
 
 let lemma_paired_handshake_events_application_derivation_projection_inputs
   (client:CS.connection_state)
@@ -445,24 +442,28 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
       selection.CS.server_key_share_private
      with
      | Some client_sk, Some server_sk ->
-       assert (CS.client_hello_equiv client_ch server_ch);
-       assert (CS.server_hello_equiv client_sh server_sh);
+       assert (CS.handshake_msg_corresponds
+         (M.ClientHello client_ch) (M.ClientHello server_ch));
+       assert (CS.handshake_msg_corresponds
+         (M.ServerHello client_sh) (M.ServerHello server_sh));
        assert (CS.client_hello_key_share client_ch ==
-         start.CS.start_client_key_share_public);
-       assert (CS.client_hello_key_share server_ch ==
-         start.CS.start_client_key_share_public);
-       assert (CS.server_hello_key_share server_sh ==
-         selection.CS.server_key_share_public);
+         CS.client_hello_key_share server_ch);
        assert (CS.server_hello_key_share client_sh ==
-         selection.CS.server_key_share_public);
-       assert (C.x25519_public_from_private client_sk ==
-         start.CS.start_client_key_share_public);
-       assert (C.x25519_public_from_private server_sk ==
-         selection.CS.server_key_share_public);
-       assert (C.x25519_shared client_sk (CS.server_hello_key_share client_sh) ==
-         Some client_shared);
-       assert (C.x25519_shared server_sk (CS.client_hello_key_share server_ch) ==
-         Some server_shared)
+         CS.server_hello_key_share server_sh);
+       (match
+          CS.client_hello_key_share server_ch,
+          CS.server_hello_key_share client_sh
+        with
+        | Some ch_ks, Some sh_ks ->
+          assert (ch_ks == start.CS.start_client_key_share_public);
+          assert (sh_ks == selection.CS.server_key_share_public);
+          assert (C.x25519_public_from_private client_sk ==
+            start.CS.start_client_key_share_public);
+          assert (C.x25519_public_from_private server_sk ==
+            selection.CS.server_key_share_public);
+          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+        | _, _ -> assert False)
      | _, _ ->
        assert False)
   | _, _, _, _, _, _, _, _ ->
@@ -506,27 +507,26 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
         CS.client_hello_key_share server_ch);
       assert (CS.server_hello_key_share client_sh ==
         CS.server_hello_key_share server_sh);
-      assert (CS.client_hello_key_share client_ch ==
-        start.CS.start_client_key_share_public);
-      assert (CS.client_hello_key_share server_ch ==
-        start.CS.start_client_key_share_public);
-      assert (CS.server_hello_key_share server_sh ==
-        selection.CS.server_key_share_public);
-      assert (CS.server_hello_key_share client_sh ==
-        selection.CS.server_key_share_public);
-      assert (C.x25519_public_from_private client_sk ==
-        start.CS.start_client_key_share_public);
-      assert (C.x25519_public_from_private server_sk ==
-        selection.CS.server_key_share_public);
-      assert (C.x25519_shared client_sk (CS.server_hello_key_share client_sh) ==
-        Some client_shared);
-      assert (C.x25519_shared server_sk (CS.client_hello_key_share server_ch) ==
-        Some server_shared)
+      (match
+         CS.client_hello_key_share server_ch,
+         CS.server_hello_key_share client_sh
+       with
+       | Some ch_ks, Some sh_ks ->
+         assert (ch_ks == start.CS.start_client_key_share_public);
+         assert (sh_ks == selection.CS.server_key_share_public);
+         assert (C.x25519_public_from_private client_sk ==
+           start.CS.start_client_key_share_public);
+         assert (C.x25519_public_from_private server_sk ==
+           selection.CS.server_key_share_public);
+         assert (C.x25519_shared client_sk sh_ks == Some client_shared);
+         assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+       | _, _ -> assert False)
      | _, _ ->
       assert False)
   | _, _, _, _, _, _, _, _ ->
     assert False
 
+#push-options "--z3refresh --split_queries always"
 let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -539,6 +539,7 @@ let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection
 =
   assert (CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server);
   assert (CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server)
+#pop-options
 
 let lemma_client_server_driver_paired_key_derivation_checkpoints_from_key_share_projection_inputs
   (client:CS.connection_state)
@@ -710,6 +711,7 @@ let lemma_client_server_driver_remaining_semantic_projection_inputs_from_clearte
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         paired_cleartext_hello_messages client server /\
+        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
         client_server_driver_application_derivation_projection_inputs
           client
           server /\
@@ -742,6 +744,7 @@ let lemma_client_server_driver_remaining_semantic_projection_inputs_from_clearte
   lemma_paired_handshake_events_application_derivation_projection_inputs
     client
     server;
+  assert (CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server);
   lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_application_checkpoint
     client
     server
@@ -754,6 +757,7 @@ let lemma_client_server_driver_remaining_semantic_projection_inputs_from_paired_
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         paired_handshake_message_states client server /\
+        paired_handshake_events client server /\
         client_server_driver_supported_profile_application_record_state_inputs
           client
           server)
@@ -1382,6 +1386,7 @@ let lemma_client_server_application_record_material_agrees_from_paired_handshake
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         paired_handshake_message_states client server /\
+        paired_handshake_events client server /\
         client_server_driver_first_epoch_no_key_update_state_inputs
           client
           server)
@@ -1476,10 +1481,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_and_ha
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_handshake_events
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1507,10 +1512,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         paired_handshake_events client server /\
         client_server_driver_first_epoch_no_key_update_state_inputs
           client
@@ -1590,10 +1591,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_handshake_events
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1692,10 +1693,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1728,10 +1729,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         PWL.paired_protected_handshake_event_projection_pairs
           client
           server
@@ -1804,10 +1801,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1835,10 +1832,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         paired_protected_handshake_event_projection_pair_witnesses
           client
           server /\
@@ -1933,10 +1926,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)

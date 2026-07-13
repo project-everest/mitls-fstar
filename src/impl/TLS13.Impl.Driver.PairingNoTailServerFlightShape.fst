@@ -9,6 +9,10 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTWHR = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
 module R = TLS13.Record.Spec
@@ -336,7 +340,7 @@ let get_flight_step0
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
-  : Ghost (M.encrypted_extensions & CS.connection_model & B.bytes & B.bytes)
+  : Ghost (GEE.encryptedExtensions & CS.connection_model & B.bytes & B.bytes)
       (requires
         model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
@@ -439,7 +443,7 @@ let get_flight_step1
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
-  : Ghost (M.certificate_msg & CS.connection_model & B.bytes & B.bytes)
+  : Ghost (GCert.certificate & CS.connection_model & B.bytes & B.bytes)
       (requires
         model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
@@ -538,7 +542,7 @@ let get_flight_step2
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
-  : Ghost (M.certificate_verify & CS.connection_model & B.bytes & B.bytes)
+  : Ghost (GCV.certificateVerify & CS.connection_model & B.bytes & B.bytes)
       (requires
         model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
@@ -627,7 +631,7 @@ private
 let get_flight_step3
   (model:CS.connection_model)
   (ev:CS.conn_event)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (tl:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -728,7 +732,7 @@ let get_flight_step4
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
-  : Ghost (M.finished & CS.connection_model & B.bytes & B.bytes)
+  : Ghost (GFin.finished & CS.connection_model & B.bytes & B.bytes)
       (requires
         model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
@@ -956,7 +960,7 @@ let get_flight_step6
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
-  : Ghost (M.finished & CS.connection_model & B.bytes & B.bytes)
+  : Ghost (GFin.finished & CS.connection_model & B.bytes & B.bytes)
       (requires
         model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
@@ -1044,7 +1048,7 @@ private
 let get_flight_step7
   (model:CS.connection_model)
   (ev:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (tl:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -1151,7 +1155,7 @@ private
 let get_flight_step8
   (model:CS.connection_model)
   (ev:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
@@ -1433,7 +1437,7 @@ let lemma_flight_core
           ])
     server_app_write_material;
   FStar.Classical.exists_intro
-    (fun (cf1:M.finished) ->
+    (fun (cf1:GFin.finished) ->
       exists (write_material:CS.traffic_key_material) (read_material:CS.traffic_key_material).
         rest ==
           [
@@ -1480,8 +1484,8 @@ let lemma_flight_core
           ])
     cf;
   FStar.Classical.exists_intro
-    (fun (sf1:M.finished) ->
-      exists (cf1:M.finished) (write_material:CS.traffic_key_material) (read_material:CS.traffic_key_material).
+    (fun (sf1:GFin.finished) ->
+      exists (cf1:GFin.finished) (write_material:CS.traffic_key_material) (read_material:CS.traffic_key_material).
         rest ==
           [
             CS.ConnNetworkEvent {
@@ -1527,8 +1531,8 @@ let lemma_flight_core
           ])
     sf;
   FStar.Classical.exists_intro
-    (fun (cv1:M.certificate_verify) ->
-      exists (sf1:M.finished) (cf1:M.finished) (write_material:CS.traffic_key_material) (read_material:CS.traffic_key_material).
+    (fun (cv1:GCV.certificateVerify) ->
+      exists (sf1:GFin.finished) (cf1:GFin.finished) (write_material:CS.traffic_key_material) (read_material:CS.traffic_key_material).
         rest ==
           [
             CS.ConnNetworkEvent {
@@ -1574,8 +1578,8 @@ let lemma_flight_core
           ])
     cv;
   FStar.Classical.exists_intro
-    (fun (cert1:M.certificate_msg) ->
-      exists (cv1:M.certificate_verify) (sf1:M.finished) (cf1:M.finished)
+    (fun (cert1:GCert.certificate) ->
+      exists (cv1:GCV.certificateVerify) (sf1:GFin.finished) (cf1:GFin.finished)
         (write_material:CS.traffic_key_material) (read_material:CS.traffic_key_material).
         rest ==
           [
@@ -1622,8 +1626,8 @@ let lemma_flight_core
           ])
     cert;
   FStar.Classical.exists_intro
-    (fun (ee1:M.encrypted_extensions) ->
-      exists (cert1:M.certificate_msg) (cv1:M.certificate_verify) (sf1:M.finished) (cf1:M.finished)
+    (fun (ee1:GEE.encryptedExtensions) ->
+      exists (cert1:GCert.certificate) (cv1:GCV.certificateVerify) (sf1:GFin.finished) (cf1:GFin.finished)
         (write_material:CS.traffic_key_material) (read_material:CS.traffic_key_material).
         rest ==
           [

@@ -91,7 +91,15 @@ fn dispatch_network_event
                   network_out_bytes
                   app_out_bytes /\
                 CT.some_legal_response 'st0 st1 resp network_out_bytes app_out_bytes /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    st1
+                    resp
+                    network_out_bytes
+                    app_out_bytes) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   match parsed {
     None -> {
@@ -113,6 +121,8 @@ fn dispatch_network_event
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out;
+      assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
+      assert (pure (resp.CT.status == CT.OutputBufferTooSmall ==> False));
       resp
     }
     Some l -> {
@@ -264,6 +274,7 @@ fn dispatch_network_event
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             CF.mark_unexpected_message c;
@@ -296,6 +307,13 @@ fn dispatch_network_event
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==>
+              CT.unexpected_message_response
+                'st0
+                (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
             resp
           }
         }
@@ -365,6 +383,7 @@ fn dispatch_network_event
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
             resp
           } else {
             L.free_application_data lignored;
@@ -398,6 +417,13 @@ fn dispatch_network_event
               resp
               'old_network_out
               'old_app_out));
+            assert (pure (resp.CT.status == CT.IllegalTransition ==>
+              CT.unexpected_message_response
+                'st0
+                (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
             resp
           }
         }

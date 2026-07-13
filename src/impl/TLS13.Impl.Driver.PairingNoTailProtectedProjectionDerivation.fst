@@ -9,6 +9,7 @@ module CS = TLS13.Spec.ConnectionState
 module Pairing = TLS13.Impl.Driver.Pairing
 module PWS = TLS13.ConnectionState.ProtectedWireStaged
 module Tac = FStar.Tactics
+module GFin = TLS13.Wire.Generated.Finished
 
 #push-options "--split_queries always --z3rlimit 10"
 
@@ -55,7 +56,7 @@ let lemma_pairing_protected_projection_witnesses_from_installed_replay_inputs
   (cf_server_after_app_write:CS.connection_model)
   (cf_client_after_finished:CS.connection_model)
   (cf_server_after_finished:CS.connection_model)
-  (verified_server_finished:TLS13.Messages.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)

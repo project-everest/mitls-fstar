@@ -1,0 +1,81 @@
+/*
+ * ymodem.qd.rfc
+ *
+ * QuackyDucky data-format description for the YMODEM wire messages, as a single
+ * leading-byte-discriminated union covering BOTH directions of the transfer.
+ *
+ * YMODEM (Chuck Forsberg's batch XMODEM-CRC extension) is a stop-and-wait ARQ
+ * protocol.  The sender -> receiver direction carries fixed 128-byte data
+ * packets and an end-of-file marker; the receiver -> sender direction carries
+ * single-byte control acknowledgements that drive retransmission and flow:
+ *
+ *   sender -> receiver:
+ *     +-----+-----+--------+------------+-----------+
+ *     | SOH | blk | ~blk   |  data[128] |  CRC-16   |   (0x01, a 133-byte packet)
+ *     | 0x01| (1) |  (1)   |  (128)     |   (2)     |
+ *     +-----+-----+--------+------------+-----------+
+ *     | EOT |                                           (0x04, a 1-byte marker)
+ *     +-----+
+ *
+ *   receiver -> sender (each a single byte):
+ *     | ACK |  (0x06)  positive acknowledgement, advances the transfer
+ *     | NAK |  (0x15)  negative acknowledgement, requests retransmission
+ *     | CAN |  (0x18)  cancel / abort
+ *     |  C  |  (0x43)  'C', requests CRC mode / solicits the next block
+ *
+ *   - The block number blk is 0 for the header block (which carries the
+ *     NUL-terminated file name and ASCII decimal length in its 128-byte data
+ *     field), then 1, 2, 3, ... for the data blocks.  blk_complement is 255-blk.
+ *   - data is exactly 128 bytes (the final data block padded, traditionally with
+ *     0x1A, up to 128).  CRC-16 is over the 128 data bytes.  (YMODEM also permits
+ *     STX (0x02) for 1024-byte packets; that variant is not modelled here.)
+ *
+ * As a single message type, the union is discriminated by its first byte (the
+ * tag): SOH introduces the 132-byte packet body, every control byte is the whole
+ * (1-byte) message.  This is exactly what an instance of Common.WireFormat needs
+ * for a protocol whose state machine both CONSUMES control bytes (as WireEvents)
+ * and EMITS data packets / EOT (as wire outputs).  The union is variable-size
+ * (1 or 133 bytes) but still strong (leading-byte discriminated), so the
+ * strong-prefix stream law of Common.WireFormat holds.  The tag enum is closed:
+ * an unrecognised leading byte fails parsing.
+ *
+ * Modeling notes (see YModem.Protocol.fst):
+ *   - block_payload projects the 128-byte data field of an SOH packet.
+ *   - The header block's internal structure (NUL-terminated name + ASCII length)
+ *     is opaque here and interpreted at the protocol layer; the declared length
+ *     lets the receiver recover the exact file by truncating the padding.
+ *
+ * Generate with:
+ *     qd.exe -pulse -prefix "YModem.Wire.Generated." -odir spec ymodem.qd.rfc
+ */
+
+struct {} ymodem_empty;
+
+enum {
+    soh(0x01),    /* introduces a 128-byte data/header packet */
+    eot(0x04),    /* end of file */
+    ack(0x06),    /* positive acknowledgement */
+    nak(0x15),    /* negative acknowledgement (retransmit) */
+    can(0x18),    /* cancel / abort */
+    crc_c(0x43),  /* 'C': request CRC mode / solicit next block */
+    (255)
+} ymodem_tag;
+
+struct {
+    uint8   blk;              /* block number: 0 = header, 1.. = data blocks */
+    uint8   blk_complement;   /* 255 - blk */
+    opaque  data[128];        /* 128-byte payload (file content, padded, or header) */
+    uint16  crc;              /* CRC-16 over the 128 data bytes */
+} ymodem_soh_body;
+
+struct {
+    ymodem_tag tag;
+    select (tag) {
+        case soh:   ymodem_soh_body;
+        case eot:   ymodem_empty;
+        case ack:   ymodem_empty;
+        case nak:   ymodem_empty;
+        case can:   ymodem_empty;
+        case crc_c: ymodem_empty;
+    } body;
+} ymodem_message;

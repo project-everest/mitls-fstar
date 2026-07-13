@@ -5,6 +5,8 @@ module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
 module K = TLS13.Keys
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
+module GCV = TLS13.Wire.Generated.CertificateVerify
 module R = TLS13.Record.Spec
 module RD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
@@ -60,7 +62,7 @@ let lemma_protected_handshake_wire_equal_from_sent_seal_peer
     sent_tls_msg
     raw;
   eliminate exists (sent_outer:B.bytes).
-    W.parse_record raw == Some (T.ApplicationData, sent_outer, B.length raw) /\
+    W.parse_record raw == Some (T.Application_data, sent_outer, B.length raw) /\
     received_record_opened
       receiver
       raw
@@ -76,7 +78,7 @@ let lemma_protected_handshake_wire_equal_from_sent_seal_peer
       (opened:B.bytes)
       (plaintext:M.plaintext).
       W.parse_record_wire raw ==
-        Some (T.ApplicationData, received_outer, B.length raw) /\
+        Some (T.Application_data, received_outer, B.length raw) /\
       received_record_opened receiver raw received_outer opened /\
       W.parse_plaintext opened == Some plaintext /\
       W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
@@ -232,8 +234,8 @@ let lemma_protected_handshake_wire_equal_from_event_projections_peer
 let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
   (sender:connection_model)
   (receiver:connection_model)
-  (fin:M.finished)
-  (cv:M.certificate_verify)
+  (fin:GFin.finished)
+  (cv:GCV.certificateVerify)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
   : Lemma
@@ -289,7 +291,7 @@ let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
     sent_tls_msg
     raw_sent;
   eliminate exists (sent_outer:B.bytes).
-    W.parse_record raw_sent == Some (T.ApplicationData, sent_outer, B.length raw_sent) /\
+    W.parse_record raw_sent == Some (T.Application_data, sent_outer, B.length raw_sent) /\
     received_record_opened
       receiver
       raw_sent
@@ -303,7 +305,7 @@ let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
       (opened:B.bytes)
       (plaintext:M.plaintext).
       W.parse_record_wire raw_sent ==
-        Some (T.ApplicationData, received_outer, B.length raw_sent) /\
+        Some (T.Application_data, received_outer, B.length raw_sent) /\
       received_record_opened receiver raw_sent received_outer opened /\
       W.parse_plaintext opened == Some plaintext /\
       W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==

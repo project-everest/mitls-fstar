@@ -2,52 +2,30 @@ module TLS13.Types
 
 module B = TLS13.Bytes
 
-type protocol_version =
-  | TLS12
-  | TLS13
+(* The QuackyDucky-generated wire enums are the single source of truth for the
+   TLS leaf/enum types.  This module re-exports them (so consumers keep using the
+   `TLS13.Types` qualifier) and keeps the two semantic types that have no wire
+   counterpart: [tls_error] (the implementation's failure vocabulary) and
+   [hostname] (an unparsed server-name blob). *)
 
-type content_type =
-  | ChangeCipherSpec
-  | Alert
-  | Handshake
-  | ApplicationData
+include TLS13.Wire.Generated.ProtocolVersion
+include TLS13.Wire.Generated.ContentType
+include TLS13.Wire.Generated.AlertDescription
+include TLS13.Wire.Generated.CipherSuite
+include TLS13.Wire.Generated.NamedGroup
+include TLS13.Wire.Generated.SignatureScheme
 
-type alert_description =
-  | CloseNotify
-  | UnexpectedMessage
-  | BadRecordMac
-  | HandshakeFailure
-  | DecodeError
-  | DecryptError
-  | ProtocolVersion
-  | UnsupportedExtension
-  | CertificateUnknown
-  | IllegalParameter
-
-type cipher_suite =
-  | TLS_CHACHA20_POLY1305_SHA256
-  | UnknownCipherSuite of nat
-
-type named_group =
-  | X25519
-  | UnsupportedGroup of nat
-
-type signature_scheme =
-  | RsaPssRsaeSha256
-  | EcdsaSecp256r1Sha256
-  | Ed25519
-  | UnsupportedSignatureScheme of nat
-
-type extension_type =
-  | SupportedVersions
-  | SupportedGroups
-  | SignatureAlgorithms
-  | KeyShare
-  | ServerName
-  | ALPN
-  | EarlyData
-  | PSK
-  | UnknownExtension of nat
+(* Backwards-compatible snake_case abbreviations for the generated enums.  The
+   generated [contentType] includes an [Invalid] constructor (wire byte 0) that
+   is not a valid TLS record content type in this profile; the codec
+   ([content_type_of_byte]/[parse_tls_message]) maps it to/from byte 0 and
+   rejects it as carrying no message. *)
+let protocol_version = protocolVersion
+let content_type = contentType
+let alert_description = alertDescription
+let cipher_suite = cipherSuite
+let named_group = namedGroup
+let signature_scheme = signatureScheme
 
 type tls_error =
   | AlertError of alert_description

@@ -109,6 +109,7 @@ val lemma_agrees_from_ready_paired
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         P.paired_handshake_message_states client server /\
+        P.paired_handshake_events client server /\
         CS.connection_state_no_key_update_trace client /\
         CS.connection_state_no_key_update_trace server)
       (ensures
@@ -258,18 +259,13 @@ let server_stage_ok (st:CS.connection_state) : prop =
 let fields_directional_agree (s:tls_system_state) : prop =
   let c = hsf s.client in
   let v = hsf s.server in
-  (Some? v.CS.hs_client_hello ==>
-     CS.opt_client_hello_equiv v.CS.hs_client_hello c.CS.hs_client_hello) /\
-  (Some? c.CS.hs_server_hello ==>
-     CS.opt_server_hello_equiv c.CS.hs_server_hello v.CS.hs_server_hello) /\
+  (Some? v.CS.hs_client_hello ==> v.CS.hs_client_hello == c.CS.hs_client_hello) /\
+  (Some? c.CS.hs_server_hello ==> c.CS.hs_server_hello == v.CS.hs_server_hello) /\
   (Some? c.CS.hs_encrypted_extensions ==>
-     CS.opt_encrypted_extensions_equiv
-       c.CS.hs_encrypted_extensions v.CS.hs_encrypted_extensions) /\
-  (Some? c.CS.hs_certificate ==>
-     CS.opt_certificate_msg_equiv c.CS.hs_certificate v.CS.hs_certificate) /\
+     c.CS.hs_encrypted_extensions == v.CS.hs_encrypted_extensions) /\
+  (Some? c.CS.hs_certificate ==> c.CS.hs_certificate == v.CS.hs_certificate) /\
   (Some? c.CS.hs_certificate_verify ==>
-     CS.opt_certificate_verify_equiv
-       c.CS.hs_certificate_verify v.CS.hs_certificate_verify) /\
+     c.CS.hs_certificate_verify == v.CS.hs_certificate_verify) /\
   (Some? c.CS.hs_server_finished ==>
      c.CS.hs_server_finished == v.CS.hs_server_finished) /\
   (Some? v.CS.hs_client_finished ==> v.CS.hs_client_finished == c.CS.hs_client_finished)
@@ -289,7 +285,7 @@ let channel_consistent (s:tls_system_state) : prop =
   | TlsInFlight CS.ServerEndpoint m ->
     (match m with
      | M.TlsHandshake (M.ClientHello ch) ->
-       CS.opt_client_hello_equiv (hsf s.client).CS.hs_client_hello (Some ch)
+       (hsf s.client).CS.hs_client_hello == Some ch
      | M.TlsHandshake (M.Finished cf) ->
        (hsf s.client).CS.hs_client_finished == Some cf
      | M.TlsHandshake _ -> False
@@ -298,15 +294,13 @@ let channel_consistent (s:tls_system_state) : prop =
   | TlsInFlight CS.ClientEndpoint m ->
     (match m with
      | M.TlsHandshake (M.ServerHello sh) ->
-       CS.opt_server_hello_equiv (hsf s.server).CS.hs_server_hello (Some sh)
+       (hsf s.server).CS.hs_server_hello == Some sh
      | M.TlsHandshake (M.EncryptedExtensions ee) ->
-       CS.opt_encrypted_extensions_equiv
-         (hsf s.server).CS.hs_encrypted_extensions (Some ee)
+       (hsf s.server).CS.hs_encrypted_extensions == Some ee
      | M.TlsHandshake (M.Certificate cert) ->
-       CS.opt_certificate_msg_equiv (hsf s.server).CS.hs_certificate (Some cert)
+       (hsf s.server).CS.hs_certificate == Some cert
      | M.TlsHandshake (M.CertificateVerify cv) ->
-       CS.opt_certificate_verify_equiv
-         (hsf s.server).CS.hs_certificate_verify (Some cv)
+       (hsf s.server).CS.hs_certificate_verify == Some cv
      | M.TlsHandshake (M.Finished sf) ->
        (hsf s.server).CS.hs_server_finished == Some sf
      | M.TlsHandshake _ -> False
@@ -612,6 +606,73 @@ let lemma_reachable_inv cfg_c cfg_s s =
     (FStar.Classical.move_requires_2 lemma_inv_preserved);
   RTC.stable_on_closure tls_sys_step tls_system_inv ()
 
+(**
+  When every populated handshake field is `==` across the two endpoints (which
+  the `==` structural invariant guarantees at a completed state), the semantic
+  handshake-message pairing and the transcript-checkpoint pairing both hold.
+  Field equality subsumes the branch's field-wise `handshake_msg_corresponds`
+  (by congruence of the `Sem.*` accessors) and makes the two endpoints compute
+  byte-identical transcript checkpoints (each a pure fold of `serialize_handshake`
+  over these fields).  This mirrors the branch's own
+  `lemma_paired_handshake_event_trace_paired_handshake_message_states`, but takes
+  the field equalities directly (our channel delivers the same semantic message
+  value) rather than routing through the raw event-log trace.
+**)
+val lemma_eq_fields_give_pairing (client server:CS.connection_state)
+  : Lemma
+      (requires
+        (let c = hsf client in let v = hsf server in
+         Some? c.CS.hs_client_hello /\ Some? v.CS.hs_client_hello /\
+         Some? c.CS.hs_server_hello /\ Some? v.CS.hs_server_hello /\
+         Some? c.CS.hs_encrypted_extensions /\ Some? v.CS.hs_encrypted_extensions /\
+         Some? c.CS.hs_certificate /\ Some? v.CS.hs_certificate /\
+         Some? c.CS.hs_certificate_verify /\ Some? v.CS.hs_certificate_verify /\
+         Some? c.CS.hs_server_finished /\ Some? v.CS.hs_server_finished /\
+         Some? c.CS.hs_client_finished /\ Some? v.CS.hs_client_finished /\
+         c.CS.hs_client_hello == v.CS.hs_client_hello /\
+         c.CS.hs_server_hello == v.CS.hs_server_hello /\
+         c.CS.hs_encrypted_extensions == v.CS.hs_encrypted_extensions /\
+         c.CS.hs_certificate == v.CS.hs_certificate /\
+         c.CS.hs_certificate_verify == v.CS.hs_certificate_verify /\
+         c.CS.hs_server_finished == v.CS.hs_server_finished /\
+         c.CS.hs_client_finished == v.CS.hs_client_finished))
+      (ensures
+        P.paired_handshake_message_states client server /\
+        P.paired_handshake_events client server)
+let lemma_eq_fields_give_pairing client server =
+  match
+    (hsf client).CS.hs_client_hello, (hsf server).CS.hs_client_hello,
+    (hsf client).CS.hs_server_hello, (hsf server).CS.hs_server_hello,
+    (hsf client).CS.hs_encrypted_extensions, (hsf server).CS.hs_encrypted_extensions,
+    (hsf client).CS.hs_certificate, (hsf server).CS.hs_certificate,
+    (hsf client).CS.hs_certificate_verify, (hsf server).CS.hs_certificate_verify,
+    (hsf client).CS.hs_server_finished, (hsf server).CS.hs_server_finished,
+    (hsf client).CS.hs_client_finished, (hsf server).CS.hs_client_finished
+  with
+  | Some client_ch, Some server_ch,
+    Some client_sh, Some server_sh,
+    Some client_ee, Some server_ee,
+    Some client_cert, Some server_cert,
+    Some client_cv, Some server_cv,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    assert (CS.handshake_msg_corresponds (M.ClientHello client_ch) (M.ClientHello server_ch));
+    assert (CS.handshake_msg_corresponds (M.ServerHello client_sh) (M.ServerHello server_sh));
+    assert (CS.handshake_msg_corresponds
+      (M.EncryptedExtensions client_ee) (M.EncryptedExtensions server_ee));
+    assert (CS.handshake_msg_corresponds (M.Certificate client_cert) (M.Certificate server_cert));
+    assert (CS.handshake_msg_corresponds
+      (M.CertificateVerify client_cv) (M.CertificateVerify server_cv));
+    assert (CS.handshake_msg_corresponds (M.Finished client_sf) (M.Finished server_sf));
+    assert (CS.handshake_msg_corresponds (M.Finished client_cf) (M.Finished server_cf));
+    assert (CS.same_transcript_checkpoint CS.TH_CH client server);
+    assert (CS.same_transcript_checkpoint CS.TH_SH client server);
+    assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
+    assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
+    assert (CS.same_transcript_checkpoint CS.TH_SF client server);
+    assert (CS.same_transcript_checkpoint CS.TH_CF client server)
+  | _, _, _, _, _, _, _, _, _, _, _, _, _, _ -> ()
+
 (** ─────────────────────────────────────────────────────────────────────────
     The payoff at a completed, quiescent state.
     ───────────────────────────────────────────────────────────────────────── **)
@@ -625,5 +686,8 @@ let lemma_ready_quiescent_agrees s =
   // agreement upgrades to full pairing.
   assert (ctrl s.client == CS.ControlApplicationData);
   assert (ctrl s.server == CS.ControlApplicationData);
-  assert (P.paired_handshake_message_states s.client s.server);
+  // Every populated handshake field is `==` across endpoints (structural
+  // invariant), which upgrades to both the semantic message pairing and the
+  // transcript-checkpoint pairing the payoff needs.
+  lemma_eq_fields_give_pairing s.client s.server;
   lemma_agrees_from_ready_paired s.client s.server

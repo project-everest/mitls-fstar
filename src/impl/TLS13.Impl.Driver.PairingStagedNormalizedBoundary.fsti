@@ -9,6 +9,8 @@ module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PR = TLS13.Impl.Driver.PairingProtectedReplay
@@ -89,10 +91,6 @@ let paired_supported_normalized_staged_replay_boundary_inputs
   CS.received_cleartext_tls_message_raw
     (M.TlsHandshake (M.ServerHello client_sh))
     w.PCB.hcb_client_sh_raw /\
-  W.parse_supported_server_hello
-    (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-  W.parse_supported_server_hello
-    (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
@@ -431,10 +429,10 @@ let paired_supported_normalized_staged_replay_boundary
 **)
 noeq
 type normalized_projection_boundary_witnesses = {
-  npb_client_ch: M.client_hello;
-  npb_server_ch: M.client_hello;
-  npb_client_sh: M.server_hello;
-  npb_server_sh: M.server_hello;
+  npb_client_ch: GCH.clientHello;
+  npb_server_ch: GCH.clientHello;
+  npb_client_sh: GSH.serverHello;
+  npb_server_sh: GSH.serverHello;
   npb_client_ch_raw: B.bytes;
   npb_server_ch_raw: B.bytes;
   npb_client_sh_raw: B.bytes;

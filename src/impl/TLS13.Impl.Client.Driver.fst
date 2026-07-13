@@ -8,6 +8,9 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
+module CPI = Common.ProtocolImplementation
+module CP = TLS13.Impl.Client.CanonicalProtocol
+module CQueries = TLS13.Impl.Client.CanonicalQueries
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -15,10 +18,15 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
+module CTypes = TLS13.Impl.CanonicalTypes
+module CW = TLS13.Impl.CanonicalWire
+module EP = TLS13.Impl.Client.Endpoint
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module MR = Pulse.Lib.MonotonicGhostRef
+module Sem = TLS13.Wire.Semantics
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
@@ -28,6 +36,7 @@ module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module WFSM = Common.WireFormatStateMachine
 
 let driver_network_out_capacity : SZ.t = 20000sz
 let driver_app_out_capacity : SZ.t = 16640sz
@@ -45,6 +54,8 @@ let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
 
 noeq type client_driver = {
   client_driver_client: C.client;
+  client_driver_progress: MR.mref CP.client_progress_preorder;
+  client_driver_initial: Ghost.erased CS.connection_state;
   client_driver_auth: O.auth_context;
   client_driver_channel: Box.box (option IO.channel);
   client_driver_buffered_len: Box.box SZ.t;
@@ -56,7 +67,78 @@ noeq type client_driver = {
   client_driver_auth_cv_input: V.vec U8.t;
   client_driver_auth_signature: V.vec U8.t;
   client_driver_app_out: V.vec U8.t;
+  client_driver_local_app_out: V.vec U8.t;
 }
+
+noextract
+let client_driver_canonical
+  (d:client_driver)
+  : CP.canonical_client =
+  {
+    CP.canonical_client_state = d.client_driver_client;
+    CP.canonical_client_progress = d.client_driver_progress;
+    CP.canonical_client_initial = d.client_driver_initial;
+  }
+
+noextract
+let client_driver_endpoint_config
+  (_d:client_driver)
+  : CQueries.client_next_local_action_config =
+  {
+    CQueries.client_query_network_out_len = driver_network_out_capacity;
+    CQueries.client_query_certificate_public_key_len =
+      driver_public_key_payload_capacity;
+    CQueries.client_query_server_finished_payload_len =
+      driver_server_finished_payload_len;
+  }
+
+noextract
+let client_driver_endpoint_frame
+  (d:client_driver)
+  (network_app_out:array U8.t)
+  (network_app_out_len:SZ.t)
+  (local_payload:array U8.t)
+  (local_payload_len:SZ.t)
+  (local_app_out:array U8.t)
+  (local_app_out_len:SZ.t)
+  : EP.client_endpoint_frame =
+  {
+    EP.client_ep_query = {
+      CQueries.client_query_network_app_out = network_app_out;
+      CQueries.client_query_network_app_out_len = network_app_out_len;
+      CQueries.client_query_local_payload = local_payload;
+      CQueries.client_query_local_payload_len = local_payload_len;
+      CQueries.client_query_local_app_out = local_app_out;
+      CQueries.client_query_local_app_out_len = local_app_out_len;
+    };
+    EP.client_ep_raw_len = driver_rx_capacity;
+    EP.client_ep_raw = d.client_driver_raw;
+    EP.client_ep_network_out_len = driver_network_out_capacity;
+    EP.client_ep_network_out = d.client_driver_network_out;
+    EP.client_ep_auth = d.client_driver_auth;
+    EP.client_ep_auth_leaf_der_len = driver_auth_leaf_der_capacity;
+    EP.client_ep_auth_leaf_der = d.client_driver_auth_leaf_der;
+    EP.client_ep_auth_payload_len = driver_public_key_payload_capacity;
+    EP.client_ep_auth_payload = d.client_driver_auth_payload;
+    EP.client_ep_auth_cv_input_len =
+      driver_certificate_verify_input_capacity;
+    EP.client_ep_auth_cv_input = d.client_driver_auth_cv_input;
+    EP.client_ep_auth_signature_len = driver_signature_capacity;
+    EP.client_ep_auth_signature = d.client_driver_auth_signature;
+  }
+
+noextract
+let client_driver_endpoint_workflow_frame
+  (d:client_driver)
+  : EP.client_endpoint_frame =
+  client_driver_endpoint_frame
+    d
+    (V.vec_to_array d.client_driver_app_out)
+    driver_app_out_capacity
+    (V.vec_to_array d.client_driver_empty_payload)
+    0sz
+    (V.vec_to_array d.client_driver_local_app_out)
+    driver_app_out_capacity
 
 noeq type driver = {
   driver_client: C.client;
@@ -326,7 +408,7 @@ let client_driver_buffers
   (buffered_len:SZ.t)
   : slprop =
   Box.pts_to d.client_driver_buffered_len buffered_len **
-  exists* empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+  exists* empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
     V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
     V.pts_to d.client_driver_raw #1.0R raw **
     V.pts_to d.client_driver_network_out #1.0R network_out **
@@ -335,6 +417,7 @@ let client_driver_buffers
     V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
     V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
     V.pts_to d.client_driver_app_out #1.0R app_out **
+    V.pts_to d.client_driver_local_app_out #1.0R local_app_out **
     pure (
       B.length empty_payload == 0 /\
       B.length raw == SZ.v driver_rx_capacity /\
@@ -347,6 +430,7 @@ let client_driver_buffers
       B.length auth_cv_input == SZ.v driver_certificate_verify_input_capacity /\
       B.length auth_signature == SZ.v driver_signature_capacity /\
       B.length app_out == SZ.v driver_app_out_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
       Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity /\
       SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len /\
       Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity /\
@@ -359,7 +443,32 @@ let client_driver_buffers
       V.is_full_vec d.client_driver_auth_payload /\
       V.is_full_vec d.client_driver_auth_cv_input /\
       V.is_full_vec d.client_driver_auth_signature /\
-      V.is_full_vec d.client_driver_app_out)
+      V.is_full_vec d.client_driver_app_out /\
+      V.is_full_vec d.client_driver_local_app_out)
+
+(**
+  Canonical seed carried by every public driver ownership predicate.
+
+  This is deliberately only the initial canonical progress token/snapshot.  The
+  existing public driver workflow below still calls the legacy low-level client
+  operations directly, so it cannot soundly claim that the monotonic reference is
+  at each post-state without routing that step through
+  [TLS13.Impl.Client.Endpoint] (or proving the corresponding canonical progress
+  lemma at the call site).  Keeping this seed in the public predicates preserves
+  the current API resources while making the canonical client identity available
+  for the endpoint-owned helpers below.
+**)
+noextract
+let client_driver_canonical_seed
+  (d:client_driver)
+  : slprop =
+  MR.pts_to
+    d.client_driver_progress
+    #1.0R
+    (Ghost.reveal d.client_driver_initial) **
+  MR.snapshot
+    d.client_driver_progress
+    (Ghost.reveal d.client_driver_initial)
 
 noextract
 let client_driver_live
@@ -367,10 +476,17 @@ let client_driver_live
   (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
+  client_driver_canonical_seed d **
   O.is_auth_context d.client_driver_auth **
   Box.pts_to d.client_driver_channel no_channel **
   client_driver_buffers d B.empty 0sz **
   pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
+        st == Ghost.reveal d.client_driver_initial /\
+        CP.client_invariant_pure
+          (Ghost.reveal d.client_driver_initial)
+          B.empty
+          B.empty
+          st /\
         CT.client_end_to_end_invariant st)
 
 noextract
@@ -381,6 +497,7 @@ let client_driver_connected
   (sent:B.bytes)
   : slprop =
   C.connection_exactly d.client_driver_client st **
+  client_driver_canonical_seed d **
   O.is_auth_context d.client_driver_auth **
   exists* ch buffered buffered_len.
     Box.pts_to d.client_driver_channel (Some ch) **
@@ -389,11 +506,387 @@ let client_driver_connected
     pure (client_driver_wire_logs_match st received sent buffered buffered_len)
 
 noextract
+let client_driver_endpoint_live
+  (d:client_driver)
+  (st:CS.connection_state)
+  : slprop =
+  CP.client_invariant (client_driver_canonical d) B.empty B.empty st **
+  O.is_auth_context d.client_driver_auth **
+  Box.pts_to d.client_driver_channel no_channel **
+  client_driver_buffers d B.empty 0sz **
+  pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
+        st == Ghost.reveal d.client_driver_initial)
+
+noextract
+let client_driver_endpoint_connected
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  (canonical_received:B.bytes)
+  (canonical_sent:B.bytes)
+  : slprop =
+  CP.client_invariant
+    (client_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st **
+  exists* ch buffered_len.
+    Box.pts_to d.client_driver_channel (Some ch) **
+    Box.pts_to d.client_driver_buffered_len buffered_len **
+    EP.client_endpoint_frame_ready
+      (client_driver_canonical d)
+      cfg
+      frame
+      st **
+    EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      canonical_received
+      canonical_sent
+      st **
+    pure (SZ.v buffered_len <= SZ.v frame.EP.client_ep_raw_len)
+
+noextract
+ghost fn client_driver_endpoint_connected_valid_byte_trace
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (canonical_received:Ghost.erased B.bytes)
+  (canonical_sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st)
+             (Ghost.reveal canonical_received)
+             (Ghost.reveal canonical_sent)
+  ensures client_driver_endpoint_connected
+            d
+            cfg
+            frame
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal canonical_sent) **
+          pure (WFSM.valid_byte_trace
+            (CP.client_system
+              (Ghost.reveal
+                (client_driver_canonical d).CP.canonical_client_initial))
+            (Ghost.reveal canonical_received)
+            (Ghost.reveal st)
+            (Ghost.reveal canonical_sent)
+            Seq.empty)
+{
+  unfold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st)
+    (Ghost.reveal canonical_received)
+    (Ghost.reveal canonical_sent));
+  with ch buffered_len. _;
+  CP.client_invariant_valid
+    (client_driver_canonical d)
+    canonical_received
+    canonical_sent
+    st;
+  with ch buffered_len.
+  fold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st)
+    (Ghost.reveal canonical_received)
+    (Ghost.reveal canonical_sent))
+}
+
+let lemma_client_local_process_correct_received_unchanged
+  (initial:CS.connection_state)
+  (ev:CTypes.client_local_event)
+  (old_out:B.bytes)
+  (out_contents:B.bytes)
+  (out_len:SZ.t)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (result:CPI.process_result)
+  (received1:B.bytes)
+  (sent1:B.bytes)
+  (st1:CS.connection_state)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        CPI.local_process_correct
+          (CP.client_system initial)
+          ev
+          old_out
+          out_contents
+          out_len
+          received0
+          sent0
+          st0
+          result
+          received1
+          sent1
+          st1
+          wire_outputs
+          local_outputs)
+      (ensures Seq.equal received1 received0)
+=
+  match result.CPI.process_status with
+  | CPI.StepOk -> ()
+  | CPI.NeedMoreInput
+  | CPI.ParseFailed ->
+    assert False
+  | CPI.OutputBufferTooSmall -> ()
+  | CPI.DecodeError
+  | CPI.IllegalTransition
+  | CPI.ConnectionFailed -> ()
+
+let lemma_client_driver_endpoint_local_wire_logs_match
+  (initial:CS.connection_state)
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (canonical_received0:B.bytes)
+  (canonical_sent0:B.bytes)
+  (canonical_received1:B.bytes)
+  (canonical_sent1:B.bytes)
+  (transport_received:B.bytes)
+  (transport_sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  (ev:CTypes.client_local_event)
+  (old_out:B.bytes)
+  (out_contents:B.bytes)
+  (out_len:SZ.t)
+  (result:CPI.process_result)
+  (wire_outputs:list CW.wire_message)
+  (local_outputs:list CTypes.local_output)
+  : Lemma
+      (requires
+        CP.client_invariant_pure
+          initial
+          canonical_received0
+          canonical_sent0
+          st0 /\
+        CP.client_invariant_pure
+          initial
+          canonical_received1
+          canonical_sent1
+          st1 /\
+        CT.connection_control_not_failed st0 /\
+        client_driver_wire_logs_match
+          st0
+          transport_received
+          transport_sent
+          buffered
+          buffered_len /\
+        CPI.local_process_correct
+          (CP.client_system initial)
+          ev
+          old_out
+          out_contents
+          out_len
+          canonical_received0
+          canonical_sent0
+          st0
+          result
+          canonical_received1
+          canonical_sent1
+          st1
+          wire_outputs
+          local_outputs)
+      (ensures
+        client_driver_wire_logs_match
+          st1
+          transport_received
+          canonical_sent1
+          buffered
+          buffered_len)
+=
+  let consumed =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        client_driver_wire_logs_match_witness
+          st0
+          transport_received
+          transport_sent
+          consumed
+          buffered
+          buffered_len) in
+  assert (client_driver_wire_logs_match_witness
+    st0
+    transport_received
+    transport_sent
+    (Ghost.reveal consumed)
+    buffered
+    buffered_len);
+  assert (Seq.equal
+    st0.CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal consumed));
+  lemma_client_local_process_correct_received_unchanged
+    initial
+    ev
+    old_out
+    out_contents
+    out_len
+    canonical_received0
+    canonical_sent0
+    st0
+    result
+    canonical_received1
+    canonical_sent1
+    st1
+    wire_outputs
+    local_outputs;
+  assert (Seq.equal canonical_received1 canonical_received0);
+  assert (Seq.equal canonical_received0 st0.CS.cs_wire_log.CL.raw_received);
+  assert (Seq.equal canonical_received1 st1.CS.cs_wire_log.CL.raw_received);
+  assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received canonical_received1);
+  assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received st0.CS.cs_wire_log.CL.raw_received);
+  Seq.lemma_eq_elim
+    st1.CS.cs_wire_log.CL.raw_received
+    st0.CS.cs_wire_log.CL.raw_received;
+  assert (logged_received_bytes_accounted
+    st1.CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal consumed));
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal consumed));
+  assert (client_driver_wire_logs_match_witness
+    st1
+    transport_received
+    canonical_sent1
+    (Ghost.reveal consumed)
+    buffered
+    buffered_len);
+  assert (exists consumed1.
+    client_driver_wire_logs_match_witness
+      st1
+      transport_received
+      canonical_sent1
+      consumed1
+      buffered
+      buffered_len)
+
+let lemma_client_driver_wire_logs_match_exists
+  (st:CS.connection_state)
+  (transport_received:B.bytes)
+  (transport_sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        client_driver_wire_logs_match
+          st
+          transport_received
+          transport_sent
+          buffered
+          buffered_len)
+      (ensures
+        exists buffered'.
+          client_driver_wire_logs_match
+            st
+            transport_received
+            transport_sent
+            buffered'
+            buffered_len)
+=
+  introduce exists (buffered':B.bytes).
+    client_driver_wire_logs_match
+      st
+      transport_received
+      transport_sent
+      buffered'
+      buffered_len
+  with buffered
+  and ()
+
+ghost fn expose_client_invariant_pure
+  (cc:CP.canonical_client)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (st:Ghost.erased CS.connection_state)
+requires
+  CP.client_invariant
+    cc
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)
+ensures
+  CP.client_invariant
+    cc
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st) **
+  pure (CP.client_invariant_pure
+    (Ghost.reveal cc.CP.canonical_client_initial)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st))
+{
+  unfold (CP.client_invariant
+    cc
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st));
+  assert (pure (CP.client_invariant_pure
+    (Ghost.reveal cc.CP.canonical_client_initial)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st)));
+  fold (CP.client_invariant
+    cc
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal st))
+}
+
+noextract
 let client_driver_closed
   (d:client_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop =
-  C.connection_exactly d.client_driver_client st
+  C.connection_exactly d.client_driver_client st **
+  client_driver_canonical_seed d
+
+ghost fn client_driver_live_to_endpoint_live
+  (d:client_driver)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_live d (Ghost.reveal st)
+  ensures client_driver_endpoint_live d (Ghost.reveal st)
+{
+  unfold (client_driver_live d (Ghost.reveal st));
+  unfold (client_driver_canonical_seed d);
+  assert (pure (Ghost.reveal st == Ghost.reveal d.client_driver_initial));
+  fold (CP.client_invariant
+    (client_driver_canonical d)
+    B.empty
+    B.empty
+    (Ghost.reveal st));
+  fold (client_driver_endpoint_live d (Ghost.reveal st))
+}
+
+ghost fn client_driver_endpoint_live_to_live
+  (d:client_driver)
+  (st:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_live d (Ghost.reveal st)
+  ensures client_driver_live d (Ghost.reveal st)
+{
+  unfold (client_driver_endpoint_live d (Ghost.reveal st));
+  unfold (CP.client_invariant
+    (client_driver_canonical d)
+    B.empty
+    B.empty
+    (Ghost.reveal st));
+  assert (pure (Ghost.reveal st == Ghost.reveal d.client_driver_initial));
+  fold (client_driver_canonical_seed d);
+  fold (client_driver_live d (Ghost.reveal st))
+}
 
 let lemma_client_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
@@ -1459,6 +1952,11 @@ fn new_client
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds))
 {
+  let initial = Ghost.hide (
+    CR.configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
   let auth =
     O.auth_context_new
       server_name
@@ -1466,6 +1964,9 @@ fn new_client
       trust_anchors
       trust_anchors_len
       validation_time_seconds;
+  let progress =
+    MR.alloc #_ #CP.client_progress_preorder (Ghost.reveal initial);
+  MR.take_snapshot progress (Ghost.reveal initial);
   let c =
     C.new_client
       server_name
@@ -1476,17 +1977,11 @@ fn new_client
   rewrite
     (CR.connection_exactly
       c
-      (CR.configured_initial_state
-        (Ghost.reveal 'server_name_bytes)
-        (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds))
+      (Ghost.reveal initial))
     as
     (C.connection_exactly
       c
-      (CR.configured_initial_state
-        (Ghost.reveal 'server_name_bytes)
-        (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds));
+      (Ghost.reveal initial));
   let channel = Box.alloc no_channel;
   let buffered_len = Box.alloc 0sz;
   let empty_payload = V.alloc 0uy 0sz;
@@ -1497,6 +1992,7 @@ fn new_client
   let auth_cv_input = V.alloc 0uy driver_certificate_verify_input_capacity;
   let auth_signature = V.alloc 0uy driver_signature_capacity;
   let app_out = V.alloc 0uy driver_app_out_capacity;
+  let local_app_out = V.alloc 0uy driver_app_out_capacity;
   assert (pure (Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity));
   assert (pure (SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len));
   assert (pure (Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity));
@@ -1504,6 +2000,8 @@ fn new_client
   assert (pure (L.max_record_fragment_len <= SZ.v driver_app_out_capacity));
   let d = {
     client_driver_client = c;
+    client_driver_progress = progress;
+    client_driver_initial = initial;
     client_driver_auth = auth;
     client_driver_channel = channel;
     client_driver_buffered_len = buffered_len;
@@ -1515,9 +2013,33 @@ fn new_client
         client_driver_auth_cv_input = auth_cv_input;
         client_driver_auth_signature = auth_signature;
         client_driver_app_out = app_out;
+        client_driver_local_app_out = local_app_out;
       };
+      rewrite
+         (MR.pts_to progress #1.0R (Ghost.reveal initial))
+         as
+         (MR.pts_to d.client_driver_progress #1.0R (Ghost.reveal initial));
+      rewrite
+         (MR.snapshot progress (Ghost.reveal initial))
+         as
+         (MR.snapshot d.client_driver_progress (Ghost.reveal initial));
+      assert (pure (Ghost.reveal d.client_driver_initial == Ghost.reveal initial));
+      rewrite
+         (MR.pts_to d.client_driver_progress #1.0R (Ghost.reveal initial))
+         as
+         (MR.pts_to
+           d.client_driver_progress
+           #1.0R
+           (Ghost.reveal d.client_driver_initial));
+      rewrite
+         (MR.snapshot d.client_driver_progress (Ghost.reveal initial))
+         as
+         (MR.snapshot
+           d.client_driver_progress
+           (Ghost.reveal d.client_driver_initial));
+      fold (client_driver_canonical_seed d);
       rewrite (Box.pts_to channel no_channel) as
-        (Box.pts_to d.client_driver_channel no_channel);
+         (Box.pts_to d.client_driver_channel no_channel);
       rewrite (Box.pts_to buffered_len 0sz) as
         (Box.pts_to d.client_driver_buffered_len 0sz);
       rewrite (V.pts_to empty_payload #1.0R (Seq.create 0 0uy)) as
@@ -1551,31 +2073,39 @@ fn new_client
         as
         (V.pts_to d.client_driver_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy));
       rewrite
+        (V.pts_to local_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_local_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy));
+      rewrite
         (C.connection_exactly
           c
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds))
+          (Ghost.reveal initial))
         as
         (C.connection_exactly
           d.client_driver_client
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds));
+          (Ghost.reveal initial));
       rewrite (O.is_auth_context auth) as (O.is_auth_context d.client_driver_auth);
       fold (client_driver_buffers d B.empty 0sz);
       assert (pure (client_driver_wire_logs_match
-        (CR.configured_initial_state
-          (Ghost.reveal 'server_name_bytes)
-          (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds)
+        (Ghost.reveal initial)
         B.empty
         B.empty
         B.empty
         0sz));
+      assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_received));
+      assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_sent));
+      assert (pure (CP.client_invariant_pure
+        (Ghost.reveal initial)
+        B.empty
+        B.empty
+        (Ghost.reveal initial)));
       fold
+        (client_driver_live
+          d
+          (Ghost.reveal initial));
+      rewrite
+        (client_driver_live d (Ghost.reveal initial))
+        as
         (client_driver_live
           d
           (CR.configured_initial_state
@@ -1896,11 +2426,11 @@ fn driver_copy_certificate_verify_signature
                 SZ.v snapshot.CR.cv_signature_len <= B.length out_bytes /\
                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                  | Some cv ->
-                   L.signature_scheme_matches snapshot.CR.cv_signature_scheme cv.M.scheme /\
-                   SZ.v snapshot.CR.cv_signature_len == B.length cv.M.signature /\
+                   L.signature_scheme_matches snapshot.CR.cv_signature_scheme (Sem.certificateVerify_scheme cv) /\
+                   SZ.v snapshot.CR.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv) /\
                    Seq.equal
                      (Seq.slice out_bytes 0 (SZ.v snapshot.CR.cv_signature_len))
-                     cv.M.signature
+                     (Sem.certificateVerify_signature_bytes cv)
                  | None -> False))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
@@ -2335,6 +2865,8 @@ fn driver_process_buffered_network_bytes_once
      (0 <= i /\ i < SZ.v buffered_len /\ True))));
   assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
     Some? (Seq.index raw_joined_mask i)));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Seq.index raw_joined_mask i == Some (Seq.index (Ghost.reveal 'old_raw) i)));
   A.from_mask raw;
   with raw_bytes.
     assert (pts_to raw raw_bytes);
@@ -4472,6 +5004,7 @@ fn rec driver_handshake
   }
 }
 
+#push-options "--z3refresh --z3rlimit 40 --split_queries always --z3seed 17"
 fn rec driver_receive_application_data
   (d:top_driver)
   (empty_payload:array U8.t)
@@ -4912,6 +5445,7 @@ fn rec driver_receive_application_data
     }
   }
 }
+#pop-options
 
 fn rec driver_await_peer_close_notify
   (d:driver)
@@ -5684,7 +6218,7 @@ fn free_client_driver_buffers
   with buffered.
     assert (client_driver_buffers d buffered buffered_len);
   unfold (client_driver_buffers d buffered buffered_len);
-  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
     assert (Box.pts_to d.client_driver_buffered_len buffered_len **
             V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
             V.pts_to d.client_driver_raw #1.0R raw **
@@ -5693,7 +6227,8 @@ fn free_client_driver_buffers
             V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
             V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
             V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-            V.pts_to d.client_driver_app_out #1.0R app_out);
+            V.pts_to d.client_driver_app_out #1.0R app_out **
+            V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
   V.free d.client_driver_empty_payload;
   V.free d.client_driver_raw;
   V.free d.client_driver_network_out;
@@ -5702,6 +6237,7 @@ fn free_client_driver_buffers
   V.free d.client_driver_auth_cv_input;
   V.free d.client_driver_auth_signature;
   V.free d.client_driver_app_out;
+  V.free d.client_driver_local_app_out;
   Box.free d.client_driver_buffered_len;
 }
 
@@ -5710,6 +6246,7 @@ fn free_disconnected_client_driver
   (d:client_driver)
   (buffered_len:SZ.t)
   requires C.connection_exactly d.client_driver_client 'st0 **
+           client_driver_canonical_seed d **
            O.is_auth_context d.client_driver_auth **
            Box.pts_to d.client_driver_channel no_channel **
            (exists* buffered. client_driver_buffers d buffered buffered_len)
@@ -5727,6 +6264,7 @@ fn close_failed_connect
   (ch:IO.channel)
   (buffered_len:SZ.t)
   requires C.connection_exactly d.client_driver_client 'st0 **
+           client_driver_canonical_seed d **
            O.is_auth_context d.client_driver_auth **
            channel_open ch 'st0 'buffered buffered_len **
            Box.pts_to d.client_driver_channel no_channel **
@@ -5739,6 +6277,210 @@ fn close_failed_connect
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
   IO.close ch;
   free_disconnected_client_driver d buffered_len;
+}
+
+noextract
+fn connect_endpoint
+  (d:client_driver)
+  (connect_host:array U8.t)
+  (connect_host_len:SZ.t)
+  (port:U16.t)
+  (fuel:SZ.t)
+  requires client_driver_endpoint_live d 'st0 **
+           pts_to connect_host 'connect_host_bytes **
+           pure (B.length 'connect_host_bytes == SZ.v connect_host_len)
+  returns result:option EP.client_endpoint_run_result
+  ensures pts_to connect_host 'connect_host_bytes **
+          (let cfg = client_driver_endpoint_config d in
+           let frame = client_driver_endpoint_workflow_frame d in
+           match result with
+           | None ->
+             client_driver_endpoint_live d 'st0
+           | Some _ ->
+             exists* st1 received1 sent1.
+               client_driver_endpoint_connected d cfg frame st1 received1 sent1)
+{
+  let cfg = client_driver_endpoint_config d;
+  let frame = client_driver_endpoint_workflow_frame d;
+  unfold (client_driver_endpoint_live d 'st0);
+  let ch_opt = IO.connect_tcp connect_host connect_host_len port;
+  match ch_opt {
+    None -> {
+      fold (client_driver_endpoint_live d 'st0);
+      None
+    }
+    Some ch -> {
+      Box.(d.client_driver_channel := Some ch);
+      unfold (client_driver_buffers d B.empty 0sz);
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
+        assert (
+          Box.pts_to d.client_driver_buffered_len 0sz **
+          V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
+          V.pts_to d.client_driver_raw #1.0R raw **
+          V.pts_to d.client_driver_network_out #1.0R network_out **
+          V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
+          V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
+          V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
+          V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
+          V.pts_to d.client_driver_app_out #1.0R app_out **
+          V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
+      V.to_array_pts_to d.client_driver_empty_payload;
+      V.to_array_pts_to d.client_driver_app_out;
+      V.to_array_pts_to d.client_driver_local_app_out;
+      assert (pure (forall (i:nat{i < B.length empty_payload}).
+        Seq.index empty_payload i == Seq.index B.empty i));
+      Seq.lemma_eq_intro empty_payload B.empty;
+      Seq.lemma_eq_elim empty_payload B.empty;
+      rewrite
+        (pts_to (V.vec_to_array d.client_driver_empty_payload) empty_payload)
+        as
+        (pts_to (V.vec_to_array d.client_driver_empty_payload) B.empty);
+      assert (pure (EP.client_endpoint_config_wf cfg frame));
+      rewrite
+        (pts_to (V.vec_to_array d.client_driver_app_out) app_out)
+        as
+        (pts_to
+          frame.EP.client_ep_query.CQueries.client_query_network_app_out
+          app_out);
+      rewrite
+        (pts_to (V.vec_to_array d.client_driver_empty_payload) B.empty)
+        as
+        (pts_to
+          frame.EP.client_ep_query.CQueries.client_query_local_payload
+          B.empty);
+      rewrite
+        (pts_to (V.vec_to_array d.client_driver_local_app_out) local_app_out)
+        as
+        (pts_to
+          frame.EP.client_ep_query.CQueries.client_query_local_app_out
+          local_app_out);
+      with app_out.
+      fold (CQueries.client_network_persistent_resource frame.EP.client_ep_query);
+      with local_app_out.
+      fold (CQueries.client_local_persistent_resource frame.EP.client_ep_query);
+      fold (CQueries.client_next_local_action_frame_ready
+        (client_driver_canonical d)
+        cfg
+        frame.EP.client_ep_query
+        'st0);
+      rewrite (O.is_auth_context d.client_driver_auth)
+        as (O.is_auth_context frame.EP.client_ep_auth);
+      rewrite
+        (V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der)
+        as
+        (V.pts_to frame.EP.client_ep_auth_leaf_der #1.0R auth_leaf_der);
+      rewrite
+        (V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input)
+        as
+        (V.pts_to frame.EP.client_ep_auth_cv_input #1.0R auth_cv_input);
+      rewrite
+        (V.pts_to d.client_driver_auth_signature #1.0R auth_signature)
+        as
+        (V.pts_to frame.EP.client_ep_auth_signature #1.0R auth_signature);
+      rewrite
+        (V.pts_to d.client_driver_auth_payload #1.0R auth_payload)
+        as
+        (V.pts_to frame.EP.client_ep_auth_payload #1.0R auth_payload);
+      with auth_leaf_der auth_cv_input auth_signature.
+      fold (EP.client_endpoint_auth_static_ready frame);
+      with auth_payload.
+      fold (EP.client_endpoint_auth_payload_ready frame);
+      fold (EP.client_endpoint_auth_ready frame);
+      fold (EP.client_endpoint_frame_ready
+        (client_driver_canonical d)
+        cfg
+        frame
+        'st0);
+      rewrite
+        (V.pts_to d.client_driver_raw #1.0R raw)
+        as
+        (V.pts_to frame.EP.client_ep_raw #1.0R raw);
+      rewrite
+        (V.pts_to d.client_driver_network_out #1.0R network_out)
+        as
+        (V.pts_to frame.EP.client_ep_network_out #1.0R network_out);
+      let empty_received = B.empty;
+      with empty_received raw network_out.
+      fold (EP.client_endpoint_io_ready
+        (client_driver_canonical d)
+        ch
+        frame
+        B.empty
+        B.empty
+        'st0);
+      let run_result =
+        EP.client_endpoint_run_workflow
+          (client_driver_canonical d)
+          cfg
+          frame
+          ch
+          d.client_driver_buffered_len
+          false
+          true
+          false
+          fuel
+          (Ghost.hide B.empty)
+          (Ghost.hide B.empty)
+          'st0;
+      with received1 sent1 st1 buffered_len1.
+        assert (
+          CP.client_invariant
+            (client_driver_canonical d)
+            (Ghost.reveal received1)
+            (Ghost.reveal sent1)
+            (Ghost.reveal st1) **
+          EP.client_endpoint_frame_ready
+            (client_driver_canonical d)
+            cfg
+            frame
+            (Ghost.reveal st1) **
+          EP.client_endpoint_io_ready
+            (client_driver_canonical d)
+            ch
+            frame
+            (Ghost.reveal received1)
+            (Ghost.reveal sent1)
+            (Ghost.reveal st1) **
+          Box.pts_to d.client_driver_buffered_len buffered_len1);
+      rewrite
+        (EP.client_endpoint_frame_ready
+          (client_driver_canonical d)
+          cfg
+          frame
+          (Ghost.reveal st1))
+        as
+        (EP.client_endpoint_frame_ready
+          (client_driver_canonical d)
+          (client_driver_endpoint_config d)
+          (client_driver_endpoint_workflow_frame d)
+          (Ghost.reveal st1));
+      rewrite
+        (EP.client_endpoint_io_ready
+          (client_driver_canonical d)
+          ch
+          frame
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal st1))
+        as
+        (EP.client_endpoint_io_ready
+          (client_driver_canonical d)
+          ch
+          (client_driver_endpoint_workflow_frame d)
+          (Ghost.reveal received1)
+          (Ghost.reveal sent1)
+          (Ghost.reveal st1));
+      with ch buffered_len1.
+      fold (client_driver_endpoint_connected
+        d
+        (client_driver_endpoint_config d)
+        (client_driver_endpoint_workflow_frame d)
+        (Ghost.reveal st1)
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1));
+      Some run_result
+    }
+  }
 }
 
 fn connect
@@ -5790,7 +6532,7 @@ fn connect
       assert (pure (client_driver_wire_logs_match 'st0 B.empty B.empty B.empty current_buffered_len));
       fold (channel_open ch 'st0 B.empty current_buffered_len);
       unfold (client_driver_buffers d B.empty buffered_len);
-      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
                 V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
                 V.pts_to d.client_driver_raw #1.0R raw **
@@ -5799,7 +6541,8 @@ fn connect
                 V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
                 V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
                 V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-                V.pts_to d.client_driver_app_out #1.0R app_out);
+                V.pts_to d.client_driver_app_out #1.0R app_out **
+                V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
       V.to_array_pts_to d.client_driver_empty_payload;
       V.to_array_pts_to d.client_driver_raw;
       V.to_array_pts_to d.client_driver_network_out;
@@ -6024,7 +6767,7 @@ fn send
       DriverWorkflowStepFailed
     }
     Some concrete_ch -> {
-      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
                 V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
                 V.pts_to d.client_driver_raw #1.0R raw **
@@ -6033,7 +6776,8 @@ fn send
                 V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
                 V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
                 V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-                V.pts_to d.client_driver_app_out #1.0R app_out);
+                V.pts_to d.client_driver_app_out #1.0R app_out **
+                V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
       V.to_array_pts_to d.client_driver_network_out;
       V.to_array_pts_to d.client_driver_app_out;
       let core = {
@@ -6177,6 +6921,951 @@ fn send
   }
 }
 
+noextract
+let client_endpoint_send_frame_remainder
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  : slprop =
+  CQueries.client_network_persistent_resource frame.EP.client_ep_query **
+  pts_to frame.EP.client_ep_query.CQueries.client_query_local_payload B.empty **
+  EP.client_endpoint_auth_ready frame **
+  pure (SZ.v frame.EP.client_ep_query.CQueries.client_query_local_payload_len == 0 /\
+        EP.client_endpoint_config_wf cfg frame)
+
+noextract
+fn prepare_endpoint_send_api_ready
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (ch:IO.channel)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (payload_bytes:B.bytes)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (transport_received0:Ghost.erased B.bytes)
+  (transport_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires EP.client_endpoint_frame_ready
+             (client_driver_canonical d)
+             cfg
+             frame
+             (Ghost.reveal st0) **
+           EP.client_endpoint_io_ready
+             (client_driver_canonical d)
+             ch
+             frame
+             (Ghost.reveal transport_received0)
+             (Ghost.reveal transport_sent0)
+             (Ghost.reveal st0) **
+           pts_to payload payload_bytes **
+           pure (B.length payload_bytes == SZ.v payload_len /\
+                 Seq.equal (Ghost.reveal canonical_sent0) (Ghost.reveal transport_sent0) /\
+                 CT.local_input_wf
+                   (Ghost.reveal st0)
+                   CT.LocalSendApplicationData
+                   payload_bytes)
+  returns local_frame:CP.tls_client_local_frame
+  ensures EP.client_api_local_action_ready
+            (client_driver_canonical d)
+            ch
+            frame
+            (Ghost.reveal canonical_received0)
+            (Ghost.reveal canonical_sent0)
+            (Ghost.reveal st0)
+            (client_driver_endpoint_send_event payload_bytes)
+            local_frame **
+          client_endpoint_send_frame_remainder cfg frame **
+          pure (
+            local_frame.CP.tls_client_local_payload == payload /\
+            local_frame.CP.tls_client_local_payload_len == payload_len /\
+            local_frame.CP.tls_client_local_app_out ==
+              frame.EP.client_ep_query.CQueries.client_query_local_app_out /\
+            local_frame.CP.tls_client_local_app_out_len ==
+              frame.EP.client_ep_query.CQueries.client_query_local_app_out_len)
+{
+  let ev = client_driver_endpoint_send_event payload_bytes;
+  unfold (EP.client_endpoint_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame
+    (Ghost.reveal st0));
+  unfold (CQueries.client_next_local_action_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame.EP.client_ep_query
+    (Ghost.reveal st0));
+  unfold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  with network_current. _;
+  unfold (CQueries.client_local_persistent_resource
+    frame.EP.client_ep_query);
+  with local_current. _;
+  let old_local_out = Ghost.hide local_current;
+  let local_frame : CP.tls_client_local_frame = {
+    CP.tls_client_local_payload = payload;
+    CP.tls_client_local_payload_len = payload_len;
+    CP.tls_client_local_app_out =
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out;
+    CP.tls_client_local_app_out_len =
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out_len;
+    CP.tls_client_local_old_app_out = old_local_out;
+  };
+  unfold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    ch
+    frame
+    (Ghost.reveal transport_received0)
+    (Ghost.reveal transport_sent0)
+    (Ghost.reveal st0));
+  with raw_received raw_bytes network_out_bytes. _;
+  rewrite
+    (IO.is_channel ch raw_received (Ghost.reveal transport_sent0))
+    as
+    (IO.is_channel ch raw_received (Ghost.reveal canonical_sent0));
+  rewrite
+    (pts_to payload payload_bytes)
+    as
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      payload_bytes);
+  rewrite
+    (pts_to
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out
+      local_current)
+    as
+    (pts_to
+      local_frame.CP.tls_client_local_app_out
+      (Ghost.reveal old_local_out));
+  fold (CP.client_local_frame_pre
+    ev
+    local_frame
+    (Ghost.reveal st0)
+    (V.vec_to_array frame.EP.client_ep_network_out)
+    frame.EP.client_ep_network_out_len
+    network_out_bytes);
+  fold (EP.client_api_local_action_ready
+    (client_driver_canonical d)
+    ch
+    frame
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0)
+    (Ghost.reveal st0)
+    ev
+    local_frame);
+  fold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  fold (client_endpoint_send_frame_remainder cfg frame);
+  rewrite
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      ev
+      local_frame)
+    as
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      (client_driver_endpoint_send_event payload_bytes)
+      local_frame);
+  local_frame
+}
+
+noextract
+fn send_endpoint
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (payload_bytes:B.bytes)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0) **
+           pts_to payload payload_bytes **
+           pure (B.length payload_bytes == SZ.v payload_len /\
+                 CT.connection_control_not_failed (Ghost.reveal st0) /\
+                 CT.local_input_wf
+                   (Ghost.reveal st0)
+                   CT.LocalSendApplicationData
+                   payload_bytes)
+  returns result:CPI.process_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                  (canonical_sent1:Ghost.erased B.bytes)
+                  (st1:Ghost.erased CS.connection_state).
+           client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1) **
+           pts_to payload payload_bytes **
+           pure (exists (old_out:B.bytes)
+                        (out_contents:B.bytes)
+                        (wire_outputs:list CW.wire_message)
+                        (local_outputs:list CTypes.local_output).
+             CPI.local_process_correct
+               (CP.client_system
+                 (Ghost.reveal
+                   (client_driver_canonical d).CP.canonical_client_initial))
+               (client_driver_endpoint_send_event payload_bytes)
+               old_out
+               out_contents
+               frame.EP.client_ep_network_out_len
+               (Ghost.reveal canonical_received0)
+               (Ghost.reveal canonical_sent0)
+               (Ghost.reveal st0)
+               result
+               (Ghost.reveal canonical_received1)
+               (Ghost.reveal canonical_sent1)
+               (Ghost.reveal st1)
+               wire_outputs
+               local_outputs)
+{
+  let ev = client_driver_endpoint_send_event payload_bytes;
+  unfold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st0)
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0));
+  with ch buffered_len. _;
+  expose_client_invariant_pure
+    (client_driver_canonical d)
+    canonical_received0
+    canonical_sent0
+    st0;
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0))
+    as
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0));
+  let local_frame =
+    prepare_endpoint_send_api_ready
+      d
+      cfg
+      frame
+      concrete_ch
+      payload
+      payload_len
+      payload_bytes
+      canonical_received0
+      canonical_sent0
+      canonical_received0
+      canonical_sent0
+      st0;
+  rewrite
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      (client_driver_endpoint_send_event payload_bytes)
+      local_frame)
+    as
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      ev
+      local_frame);
+  let result =
+    EP.client_run_api_local_action
+      (client_driver_canonical d)
+      frame
+      concrete_ch
+      ev
+      local_frame
+      canonical_received0
+      canonical_sent0
+      st0;
+  with received1 sent1 st1 old_out out_contents wire_outputs local_outputs.
+    assert (
+      CP.client_invariant
+        (client_driver_canonical d)
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1) **
+      EP.client_endpoint_io_ready
+        (client_driver_canonical d)
+        concrete_ch
+        frame
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1) **
+      CP.client_local_frame_post
+        ev
+        local_frame
+        result
+        (Ghost.reveal old_out)
+        (Ghost.reveal out_contents)
+        (Ghost.reveal st0)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputs)
+        (Ghost.reveal local_outputs));
+  assert (pure (ev == client_driver_endpoint_send_event payload_bytes));
+  assert (pure (CPI.local_process_correct
+    (CP.client_system
+      (Ghost.reveal
+        (client_driver_canonical d).CP.canonical_client_initial))
+    (client_driver_endpoint_send_event payload_bytes)
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    frame.EP.client_ep_network_out_len
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0)
+    (Ghost.reveal st0)
+    result
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs)));
+  expose_client_invariant_pure
+    (client_driver_canonical d)
+    received1
+    sent1
+    st1;
+  unfold (CP.client_local_frame_post
+    ev
+    local_frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs));
+  with app_out. _;
+  rewrite
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      payload_bytes)
+    as
+    (pts_to payload payload_bytes);
+  rewrite
+    (pts_to
+      local_frame.CP.tls_client_local_app_out
+      app_out)
+    as
+    (pts_to
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out
+      app_out);
+  unfold (client_endpoint_send_frame_remainder cfg frame);
+  fold (CQueries.client_local_persistent_resource
+    frame.EP.client_ep_query);
+  fold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  fold (CQueries.client_next_local_action_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame.EP.client_ep_query
+    (Ghost.reveal st1));
+  fold (EP.client_endpoint_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame
+    (Ghost.reveal st1));
+  unfold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    concrete_ch
+    frame
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1));
+  with raw_received1 raw_bytes1 network_out_bytes1. _;
+  fold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    concrete_ch
+    frame
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1));
+  rewrite
+    (Box.pts_to d.client_driver_channel (Some ch))
+    as
+    (Box.pts_to d.client_driver_channel (Some concrete_ch));
+  with concrete_ch buffered_len.
+  fold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st1)
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1));
+  assert (pure (exists (old_out0:B.bytes)
+                       (out_contents0:B.bytes)
+                       (wire_outputs0:list CW.wire_message)
+                       (local_outputs0:list CTypes.local_output).
+    CPI.local_process_correct
+      (CP.client_system
+        (Ghost.reveal
+          (client_driver_canonical d).CP.canonical_client_initial))
+      (client_driver_endpoint_send_event payload_bytes)
+      old_out0
+      out_contents0
+      frame.EP.client_ep_network_out_len
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      wire_outputs0
+      local_outputs0));
+  result
+}
+
+noextract
+fn receive_endpoint
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (fuel:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0)
+  returns result:EP.client_endpoint_run_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                 (canonical_sent1:Ghost.erased B.bytes)
+                 (st1:Ghost.erased CS.connection_state).
+           client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1)
+{
+  unfold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st0)
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0));
+  with ch buffered_len. _;
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0))
+    as
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0));
+  let result =
+    EP.client_endpoint_run_workflow
+      (client_driver_canonical d)
+      cfg
+      frame
+      concrete_ch
+      d.client_driver_buffered_len
+      true
+      false
+      false
+      fuel
+      canonical_received0
+      canonical_sent0
+      st0;
+  with received1 sent1 st1 buffered_len1. _;
+  rewrite
+    (Box.pts_to d.client_driver_channel (Some ch))
+    as
+    (Box.pts_to d.client_driver_channel (Some concrete_ch));
+  with concrete_ch buffered_len1.
+  fold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st1)
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1));
+  result
+}
+
+noextract
+fn prepare_endpoint_close_api_ready
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (ch:IO.channel)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (transport_received0:Ghost.erased B.bytes)
+  (transport_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires EP.client_endpoint_frame_ready
+             (client_driver_canonical d)
+             cfg
+             frame
+             (Ghost.reveal st0) **
+           EP.client_endpoint_io_ready
+             (client_driver_canonical d)
+             ch
+             frame
+             (Ghost.reveal transport_received0)
+             (Ghost.reveal transport_sent0)
+             (Ghost.reveal st0) **
+           pts_to payload B.empty **
+           pure (SZ.v payload_len == 0 /\
+                 Seq.equal (Ghost.reveal canonical_sent0) (Ghost.reveal transport_sent0) /\
+                 CT.local_input_wf
+                   (Ghost.reveal st0)
+                   CT.LocalSendCloseNotify
+                   B.empty)
+  returns local_frame:CP.tls_client_local_frame
+  ensures EP.client_api_local_action_ready
+            (client_driver_canonical d)
+            ch
+            frame
+            (Ghost.reveal canonical_received0)
+            (Ghost.reveal canonical_sent0)
+            (Ghost.reveal st0)
+            client_driver_endpoint_close_event
+            local_frame **
+          client_endpoint_send_frame_remainder cfg frame **
+          pure (
+            local_frame.CP.tls_client_local_payload == payload /\
+            local_frame.CP.tls_client_local_payload_len == payload_len /\
+            local_frame.CP.tls_client_local_app_out ==
+              frame.EP.client_ep_query.CQueries.client_query_local_app_out /\
+            local_frame.CP.tls_client_local_app_out_len ==
+              frame.EP.client_ep_query.CQueries.client_query_local_app_out_len)
+{
+  let ev = client_driver_endpoint_close_event;
+  assert (pure (B.length B.empty == SZ.v payload_len));
+  unfold (EP.client_endpoint_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame
+    (Ghost.reveal st0));
+  unfold (CQueries.client_next_local_action_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame.EP.client_ep_query
+    (Ghost.reveal st0));
+  unfold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  with network_current. _;
+  unfold (CQueries.client_local_persistent_resource
+    frame.EP.client_ep_query);
+  with local_current. _;
+  let old_local_out = Ghost.hide local_current;
+  let local_frame : CP.tls_client_local_frame = {
+    CP.tls_client_local_payload = payload;
+    CP.tls_client_local_payload_len = payload_len;
+    CP.tls_client_local_app_out =
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out;
+    CP.tls_client_local_app_out_len =
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out_len;
+    CP.tls_client_local_old_app_out = old_local_out;
+  };
+  unfold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    ch
+    frame
+    (Ghost.reveal transport_received0)
+    (Ghost.reveal transport_sent0)
+    (Ghost.reveal st0));
+  with raw_received raw_bytes network_out_bytes. _;
+  rewrite
+    (IO.is_channel ch raw_received (Ghost.reveal transport_sent0))
+    as
+    (IO.is_channel ch raw_received (Ghost.reveal canonical_sent0));
+  rewrite
+    (pts_to payload B.empty)
+    as
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      B.empty);
+  rewrite
+    (pts_to
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out
+      local_current)
+    as
+    (pts_to
+      local_frame.CP.tls_client_local_app_out
+      (Ghost.reveal old_local_out));
+  fold (CP.client_local_frame_pre
+    ev
+    local_frame
+    (Ghost.reveal st0)
+    (V.vec_to_array frame.EP.client_ep_network_out)
+    frame.EP.client_ep_network_out_len
+    network_out_bytes);
+  fold (EP.client_api_local_action_ready
+    (client_driver_canonical d)
+    ch
+    frame
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0)
+    (Ghost.reveal st0)
+    ev
+    local_frame);
+  fold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  fold (client_endpoint_send_frame_remainder cfg frame);
+  rewrite
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      ev
+      local_frame)
+    as
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      client_driver_endpoint_close_event
+      local_frame);
+  local_frame
+}
+
+noextract
+fn close_endpoint
+  (d:client_driver)
+  (cfg:CQueries.client_next_local_action_config)
+  (frame:EP.client_endpoint_frame)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (canonical_received0:Ghost.erased B.bytes)
+  (canonical_sent0:Ghost.erased B.bytes)
+  (st0:Ghost.erased CS.connection_state)
+  requires client_driver_endpoint_connected
+              d
+              cfg
+              frame
+              (Ghost.reveal st0)
+              (Ghost.reveal canonical_received0)
+              (Ghost.reveal canonical_sent0) **
+           pts_to payload B.empty **
+           pure (SZ.v payload_len == 0 /\
+                 CT.connection_control_not_failed (Ghost.reveal st0) /\
+                 CT.local_input_wf
+                   (Ghost.reveal st0)
+                   CT.LocalSendCloseNotify
+                   B.empty)
+  returns result:CPI.process_result
+  ensures exists* (canonical_received1:Ghost.erased B.bytes)
+                 (canonical_sent1:Ghost.erased B.bytes)
+                 (st1:Ghost.erased CS.connection_state).
+           client_driver_endpoint_connected
+             d
+             cfg
+             frame
+             (Ghost.reveal st1)
+             (Ghost.reveal canonical_received1)
+             (Ghost.reveal canonical_sent1) **
+           pts_to payload B.empty **
+           pure (exists (old_out:B.bytes)
+                        (out_contents:B.bytes)
+                        (wire_outputs:list CW.wire_message)
+                        (local_outputs:list CTypes.local_output).
+             CPI.local_process_correct
+               (CP.client_system
+                 (Ghost.reveal
+                  (client_driver_canonical d).CP.canonical_client_initial))
+               client_driver_endpoint_close_event
+               old_out
+               out_contents
+               frame.EP.client_ep_network_out_len
+               (Ghost.reveal canonical_received0)
+               (Ghost.reveal canonical_sent0)
+               (Ghost.reveal st0)
+               result
+               (Ghost.reveal canonical_received1)
+               (Ghost.reveal canonical_sent1)
+               (Ghost.reveal st1)
+               wire_outputs
+               local_outputs)
+{
+  let ev = client_driver_endpoint_close_event;
+  unfold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st0)
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0));
+  with ch buffered_len. _;
+  expose_client_invariant_pure
+    (client_driver_canonical d)
+    canonical_received0
+    canonical_sent0
+    st0;
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0))
+    as
+    (EP.client_endpoint_io_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0));
+  let local_frame =
+    prepare_endpoint_close_api_ready
+      d
+      cfg
+      frame
+      concrete_ch
+      payload
+      payload_len
+      canonical_received0
+      canonical_sent0
+      canonical_received0
+      canonical_sent0
+      st0;
+  rewrite
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      client_driver_endpoint_close_event
+      local_frame)
+    as
+    (EP.client_api_local_action_ready
+      (client_driver_canonical d)
+      concrete_ch
+      frame
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      ev
+      local_frame);
+  let result =
+    EP.client_run_api_local_action
+      (client_driver_canonical d)
+      frame
+      concrete_ch
+      ev
+      local_frame
+      canonical_received0
+      canonical_sent0
+      st0;
+  with received1 sent1 st1 old_out out_contents wire_outputs local_outputs.
+    assert (
+      CP.client_invariant
+        (client_driver_canonical d)
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1) **
+      EP.client_endpoint_io_ready
+        (client_driver_canonical d)
+        concrete_ch
+        frame
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1) **
+      CP.client_local_frame_post
+        ev
+        local_frame
+        result
+        (Ghost.reveal old_out)
+        (Ghost.reveal out_contents)
+        (Ghost.reveal st0)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputs)
+        (Ghost.reveal local_outputs));
+  assert (pure (ev == client_driver_endpoint_close_event));
+  assert (pure (CPI.local_process_correct
+    (CP.client_system
+      (Ghost.reveal
+        (client_driver_canonical d).CP.canonical_client_initial))
+    client_driver_endpoint_close_event
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    frame.EP.client_ep_network_out_len
+    (Ghost.reveal canonical_received0)
+    (Ghost.reveal canonical_sent0)
+    (Ghost.reveal st0)
+    result
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs)));
+  expose_client_invariant_pure
+    (client_driver_canonical d)
+    received1
+    sent1
+    st1;
+  unfold (CP.client_local_frame_post
+    ev
+    local_frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal out_contents)
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    (Ghost.reveal wire_outputs)
+    (Ghost.reveal local_outputs));
+  with app_out. _;
+  rewrite
+    (pts_to
+      local_frame.CP.tls_client_local_payload
+      B.empty)
+    as
+    (pts_to payload B.empty);
+  rewrite
+    (pts_to
+      local_frame.CP.tls_client_local_app_out
+      app_out)
+    as
+    (pts_to
+      frame.EP.client_ep_query.CQueries.client_query_local_app_out
+      app_out);
+  unfold (client_endpoint_send_frame_remainder cfg frame);
+  fold (CQueries.client_local_persistent_resource
+    frame.EP.client_ep_query);
+  fold (CQueries.client_network_persistent_resource
+    frame.EP.client_ep_query);
+  fold (CQueries.client_next_local_action_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame.EP.client_ep_query
+    (Ghost.reveal st1));
+  fold (EP.client_endpoint_frame_ready
+    (client_driver_canonical d)
+    cfg
+    frame
+    (Ghost.reveal st1));
+  unfold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    concrete_ch
+    frame
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1));
+  with raw_received1 raw_bytes1 network_out_bytes1. _;
+  fold (EP.client_endpoint_io_ready
+    (client_driver_canonical d)
+    concrete_ch
+    frame
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1));
+  rewrite
+    (Box.pts_to d.client_driver_channel (Some ch))
+    as
+    (Box.pts_to d.client_driver_channel (Some concrete_ch));
+  with concrete_ch buffered_len.
+  fold (client_driver_endpoint_connected
+    d
+    cfg
+    frame
+    (Ghost.reveal st1)
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1));
+  assert (pure (exists (old_out0:B.bytes)
+                       (out_contents0:B.bytes)
+                       (wire_outputs0:list CW.wire_message)
+                       (local_outputs0:list CTypes.local_output).
+    CPI.local_process_correct
+      (CP.client_system
+        (Ghost.reveal
+          (client_driver_canonical d).CP.canonical_client_initial))
+      client_driver_endpoint_close_event
+      old_out0
+      out_contents0
+      frame.EP.client_ep_network_out_len
+      (Ghost.reveal canonical_received0)
+      (Ghost.reveal canonical_sent0)
+      (Ghost.reveal st0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      wire_outputs0
+      local_outputs0));
+  result
+}
+
 fn receive
   (d:client_driver)
   (out:array U8.t)
@@ -6244,7 +7933,7 @@ fn receive
       }
     }
     Some concrete_ch -> {
-      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
                 V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
                 V.pts_to d.client_driver_raw #1.0R raw **
@@ -6253,7 +7942,8 @@ fn receive
                 V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
                 V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
                 V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-                V.pts_to d.client_driver_app_out #1.0R app_out);
+                V.pts_to d.client_driver_app_out #1.0R app_out **
+                V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
       V.to_array_pts_to d.client_driver_empty_payload;
       V.to_array_pts_to d.client_driver_raw;
       V.to_array_pts_to d.client_driver_network_out;
@@ -6531,7 +8221,7 @@ fn close
   unfold (client_driver_buffers d buffered buffered_len);
   let current_buffered_len = Box.(!d.client_driver_buffered_len);
   assert (pure (current_buffered_len == buffered_len));
-  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
     assert (Box.pts_to d.client_driver_buffered_len buffered_len **
             V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
             V.pts_to d.client_driver_raw #1.0R raw **
@@ -6540,7 +8230,8 @@ fn close
             V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
             V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
             V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
-            V.pts_to d.client_driver_app_out #1.0R app_out);
+            V.pts_to d.client_driver_app_out #1.0R app_out **
+            V.pts_to d.client_driver_local_app_out #1.0R local_app_out);
   V.to_array_pts_to d.client_driver_empty_payload;
   V.to_array_pts_to d.client_driver_raw;
   V.to_array_pts_to d.client_driver_network_out;

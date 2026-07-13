@@ -9,6 +9,12 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
@@ -61,7 +67,7 @@ let lemma_event_raw_delta_legal_local
 
 let lemma_event_raw_delta_legal_received_server_hello
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -84,7 +90,7 @@ let lemma_event_raw_delta_legal_received_server_hello
 
 let lemma_event_raw_delta_legal_received_encrypted_extensions
   (model:CS.connection_model)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -99,7 +105,7 @@ let lemma_event_raw_delta_legal_received_encrypted_extensions
           delta_received)
       (ensures
         Seq.equal delta_sent B.empty /\
-        CS.raw_records_exactly delta_received T.ApplicationData 1)
+        CS.raw_records_exactly delta_received T.Application_data 1)
 =
   assert_norm (CS.network_message_is_cleartext
     CL.Received
@@ -110,7 +116,7 @@ let lemma_event_raw_delta_legal_received_encrypted_extensions
 
 let lemma_event_raw_delta_legal_received_certificate
   (model:CS.connection_model)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -125,7 +131,7 @@ let lemma_event_raw_delta_legal_received_certificate
           delta_received)
       (ensures
         Seq.equal delta_sent B.empty /\
-        CS.raw_records_exactly delta_received T.ApplicationData 1)
+        CS.raw_records_exactly delta_received T.Application_data 1)
 =
   assert_norm (CS.network_message_is_cleartext
     CL.Received
@@ -136,7 +142,7 @@ let lemma_event_raw_delta_legal_received_certificate
 
 let lemma_event_raw_delta_legal_received_certificate_verify
   (model:CS.connection_model)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -151,7 +157,7 @@ let lemma_event_raw_delta_legal_received_certificate_verify
           delta_received)
       (ensures
         Seq.equal delta_sent B.empty /\
-        CS.raw_records_exactly delta_received T.ApplicationData 1)
+        CS.raw_records_exactly delta_received T.Application_data 1)
 =
   assert_norm (CS.network_message_is_cleartext
     CL.Received
@@ -162,7 +168,7 @@ let lemma_event_raw_delta_legal_received_certificate_verify
 
 let lemma_event_raw_delta_legal_received_finished
   (model:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (delta_sent:B.bytes)
   (delta_received:B.bytes)
   : Lemma
@@ -177,7 +183,7 @@ let lemma_event_raw_delta_legal_received_finished
           delta_received)
       (ensures
         Seq.equal delta_sent B.empty /\
-        CS.raw_records_exactly delta_received T.ApplicationData 1)
+        CS.raw_records_exactly delta_received T.Application_data 1)
 =
   assert_norm (CS.network_message_is_cleartext
     CL.Received
@@ -508,7 +514,7 @@ let lemma_raw_replay_step_two_local_install_events
 
 let lemma_raw_replay_step_received_encrypted_extensions
   (model:CS.connection_model)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -527,7 +533,7 @@ let lemma_raw_replay_step_received_encrypted_extensions
       (ensures
         exists model' chunk tail_sent tail_received.
           Seq.equal raw_received (B.append chunk tail_received) /\
-          CS.raw_records_exactly chunk T.ApplicationData 1 /\
+          CS.raw_records_exactly chunk T.Application_data 1 /\
           CS.conn_events_raw_replay model' rest tail_sent tail_received final_model)
 =
   let ev = CS.ConnNetworkEvent ({
@@ -545,20 +551,20 @@ let lemma_raw_replay_step_received_encrypted_extensions
   returns
     exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model
   with _.
   (
     lemma_event_raw_delta_legal_received_encrypted_extensions model ee delta_sent delta_received;
     assert (exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model)
   )
 
 let lemma_raw_replay_step_received_certificate
   (model:CS.connection_model)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -577,7 +583,7 @@ let lemma_raw_replay_step_received_certificate
       (ensures
         exists model' chunk tail_sent tail_received.
           Seq.equal raw_received (B.append chunk tail_received) /\
-          CS.raw_records_exactly chunk T.ApplicationData 1 /\
+          CS.raw_records_exactly chunk T.Application_data 1 /\
           CS.conn_events_raw_replay model' rest tail_sent tail_received final_model)
 =
   let ev = CS.ConnNetworkEvent ({
@@ -595,20 +601,20 @@ let lemma_raw_replay_step_received_certificate
   returns
     exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model
   with _.
   (
     lemma_event_raw_delta_legal_received_certificate model cert delta_sent delta_received;
     assert (exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model)
   )
 
 let lemma_raw_replay_step_received_certificate_verify
   (model:CS.connection_model)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -627,7 +633,7 @@ let lemma_raw_replay_step_received_certificate_verify
       (ensures
         exists model' chunk tail_sent tail_received.
           Seq.equal raw_received (B.append chunk tail_received) /\
-          CS.raw_records_exactly chunk T.ApplicationData 1 /\
+          CS.raw_records_exactly chunk T.Application_data 1 /\
           CS.conn_events_raw_replay model' rest tail_sent tail_received final_model)
 =
   let ev = CS.ConnNetworkEvent ({
@@ -645,20 +651,20 @@ let lemma_raw_replay_step_received_certificate_verify
   returns
     exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model
   with _.
   (
     lemma_event_raw_delta_legal_received_certificate_verify model cv delta_sent delta_received;
     assert (exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model)
   )
 
 let lemma_raw_replay_step_received_finished
   (model:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
   (raw_received:B.bytes)
@@ -677,7 +683,7 @@ let lemma_raw_replay_step_received_finished
       (ensures
         exists model' chunk tail_sent tail_received.
           Seq.equal raw_received (B.append chunk tail_received) /\
-          CS.raw_records_exactly chunk T.ApplicationData 1 /\
+          CS.raw_records_exactly chunk T.Application_data 1 /\
           CS.conn_events_raw_replay model' rest tail_sent tail_received final_model)
 =
   let ev = CS.ConnNetworkEvent ({
@@ -695,26 +701,26 @@ let lemma_raw_replay_step_received_finished
   returns
     exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model
   with _.
   (
     lemma_event_raw_delta_legal_received_finished model sf delta_sent delta_received;
     assert (exists model'' chunk tail_sent' tail_received'.
       Seq.equal raw_received (B.append chunk tail_received') /\
-      CS.raw_records_exactly chunk T.ApplicationData 1 /\
+      CS.raw_records_exactly chunk T.Application_data 1 /\
       CS.conn_events_raw_replay model'' rest tail_sent' tail_received' final_model)
   )
 
 let lemma_server_flight_message_tail_slices
   (model6:CS.connection_model)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (tail5_sent:B.bytes)
   (tail5_received:B.bytes)
   (final_model:CS.connection_model)
@@ -757,10 +763,10 @@ let lemma_server_flight_message_tail_slices
           Seq.equal
             tail5_received
             (B.append ee_raw (B.append cert_raw (B.append cv_raw sf_raw))) /\
-          CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly sf_raw T.ApplicationData 1)
+          CS.raw_records_exactly ee_raw T.Application_data 1 /\
+          CS.raw_records_exactly cert_raw T.Application_data 1 /\
+          CS.raw_records_exactly cv_raw T.Application_data 1 /\
+          CS.raw_records_exactly sf_raw T.Application_data 1)
 =
   let ev7 = CS.ConnNetworkEvent ({
     CL.message_direction = CL.Received;
@@ -790,7 +796,7 @@ let lemma_server_flight_message_tail_slices
     final_model;
   eliminate exists model7 ee_raw tail6_sent tail6_received.
     Seq.equal tail5_received (B.append ee_raw tail6_received) /\
-    CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
+    CS.raw_records_exactly ee_raw T.Application_data 1 /\
     CS.conn_events_raw_replay
       model7
       (ev7 :: CS.ConnLocalEvent (CS.LocalValidateCertificate peer) :: ev9 ::
@@ -803,10 +809,10 @@ let lemma_server_flight_message_tail_slices
       Seq.equal
         tail5_received
         (B.append ee_raw' (B.append cert_raw (B.append cv_raw sf_raw))) /\
-      CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-      CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-      CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-      CS.raw_records_exactly sf_raw T.ApplicationData 1
+      CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+      CS.raw_records_exactly cert_raw T.Application_data 1 /\
+      CS.raw_records_exactly cv_raw T.Application_data 1 /\
+      CS.raw_records_exactly sf_raw T.Application_data 1
   with _.
   (
     lemma_raw_replay_step_received_certificate
@@ -819,7 +825,7 @@ let lemma_server_flight_message_tail_slices
       final_model;
     eliminate exists model8 cert_raw tail7_sent tail7_received.
       Seq.equal tail6_received (B.append cert_raw tail7_received) /\
-      CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
+      CS.raw_records_exactly cert_raw T.Application_data 1 /\
       CS.conn_events_raw_replay
         model8
         (CS.ConnLocalEvent (CS.LocalValidateCertificate peer) :: ev9 ::
@@ -832,10 +838,10 @@ let lemma_server_flight_message_tail_slices
         Seq.equal
           tail5_received
           (B.append ee_raw' (B.append cert_raw' (B.append cv_raw sf_raw))) /\
-        CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-        CS.raw_records_exactly cert_raw' T.ApplicationData 1 /\
-        CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-        CS.raw_records_exactly sf_raw T.ApplicationData 1
+        CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+        CS.raw_records_exactly cert_raw' T.Application_data 1 /\
+        CS.raw_records_exactly cv_raw T.Application_data 1 /\
+        CS.raw_records_exactly sf_raw T.Application_data 1
     with _.
     (
       lemma_raw_replay_step_local_event
@@ -857,10 +863,10 @@ let lemma_server_flight_message_tail_slices
           Seq.equal
             tail5_received
             (B.append ee_raw' (B.append cert_raw' (B.append cv_raw sf_raw))) /\
-          CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-          CS.raw_records_exactly cert_raw' T.ApplicationData 1 /\
-          CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly sf_raw T.ApplicationData 1
+          CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+          CS.raw_records_exactly cert_raw' T.Application_data 1 /\
+          CS.raw_records_exactly cv_raw T.Application_data 1 /\
+          CS.raw_records_exactly sf_raw T.Application_data 1
       with _.
       (
         lemma_raw_replay_step_received_certificate_verify
@@ -872,7 +878,7 @@ let lemma_server_flight_message_tail_slices
           final_model;
         eliminate exists model10 cv_raw tail9_sent tail9_received.
           Seq.equal tail7_received (B.append cv_raw tail9_received) /\
-          CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
+          CS.raw_records_exactly cv_raw T.Application_data 1 /\
           CS.conn_events_raw_replay
             model10
             (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) :: ev11 :: suffix)
@@ -884,10 +890,10 @@ let lemma_server_flight_message_tail_slices
             Seq.equal
               tail5_received
               (B.append ee_raw' (B.append cert_raw' (B.append cv_raw' sf_raw))) /\
-            CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-            CS.raw_records_exactly cert_raw' T.ApplicationData 1 /\
-            CS.raw_records_exactly cv_raw' T.ApplicationData 1 /\
-            CS.raw_records_exactly sf_raw T.ApplicationData 1
+            CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+            CS.raw_records_exactly cert_raw' T.Application_data 1 /\
+            CS.raw_records_exactly cv_raw' T.Application_data 1 /\
+            CS.raw_records_exactly sf_raw T.Application_data 1
         with _.
         (
           lemma_raw_replay_step_local_event
@@ -909,10 +915,10 @@ let lemma_server_flight_message_tail_slices
               Seq.equal
                 tail5_received
                 (B.append ee_raw' (B.append cert_raw' (B.append cv_raw' sf_raw))) /\
-              CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-              CS.raw_records_exactly cert_raw' T.ApplicationData 1 /\
-              CS.raw_records_exactly cv_raw' T.ApplicationData 1 /\
-              CS.raw_records_exactly sf_raw T.ApplicationData 1
+              CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+              CS.raw_records_exactly cert_raw' T.Application_data 1 /\
+              CS.raw_records_exactly cv_raw' T.Application_data 1 /\
+              CS.raw_records_exactly sf_raw T.Application_data 1
           with _.
           (
             lemma_raw_replay_step_received_finished
@@ -924,17 +930,17 @@ let lemma_server_flight_message_tail_slices
               final_model;
             eliminate exists model12 sf_raw tail11_sent tail11_received.
               Seq.equal tail9_received (B.append sf_raw tail11_received) /\
-              CS.raw_records_exactly sf_raw T.ApplicationData 1 /\
+              CS.raw_records_exactly sf_raw T.Application_data 1 /\
               CS.conn_events_raw_replay model12 suffix tail11_sent tail11_received final_model
             returns
               exists ee_raw' cert_raw' cv_raw' sf_raw'.
                 Seq.equal
                   tail5_received
                   (B.append ee_raw' (B.append cert_raw' (B.append cv_raw' sf_raw'))) /\
-                CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly cert_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly cv_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly sf_raw' T.ApplicationData 1
+                CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+                CS.raw_records_exactly cert_raw' T.Application_data 1 /\
+                CS.raw_records_exactly cv_raw' T.Application_data 1 /\
+                CS.raw_records_exactly sf_raw' T.Application_data 1
             with _.
             (
               lemma_local_event_empty_received (CS.LocalVerifyFinished sf);
@@ -961,17 +967,17 @@ let lemma_server_flight_message_tail_slices
 let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
   (client:CS.connection_state)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
   (peer:X.peer_identity)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   : Lemma
       (requires
         client.CS.cs_event_log ==
@@ -1026,10 +1032,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
           CS.received_cleartext_tls_message_raw
             (M.TlsHandshake (M.ServerHello sh))
             server_sh_raw /\
-          CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly sf_raw T.ApplicationData 1)
+          CS.raw_records_exactly ee_raw T.Application_data 1 /\
+          CS.raw_records_exactly cert_raw T.Application_data 1 /\
+          CS.raw_records_exactly cv_raw T.Application_data 1 /\
+          CS.raw_records_exactly sf_raw T.Application_data 1)
  =
   lemma_handshake_install_cover_empty_received e4 e5;
   lemma_application_install_cover_empty_received e13 e14;
@@ -1119,10 +1125,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
       CS.received_cleartext_tls_message_raw
         (M.TlsHandshake (M.ServerHello sh))
         server_sh_raw /\
-      CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-      CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-      CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-      CS.raw_records_exactly sf_raw T.ApplicationData 1
+      CS.raw_records_exactly ee_raw T.Application_data 1 /\
+      CS.raw_records_exactly cert_raw T.Application_data 1 /\
+      CS.raw_records_exactly cv_raw T.Application_data 1 /\
+      CS.raw_records_exactly sf_raw T.Application_data 1
   with _.
   (
     lemma_conn_events_raw_replay_head_direct
@@ -1154,10 +1160,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello sh))
           server_sh_raw /\
-        CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-        CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-        CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-        CS.raw_records_exactly sf_raw T.ApplicationData 1
+        CS.raw_records_exactly ee_raw T.Application_data 1 /\
+        CS.raw_records_exactly cert_raw T.Application_data 1 /\
+        CS.raw_records_exactly cv_raw T.Application_data 1 /\
+        CS.raw_records_exactly sf_raw T.Application_data 1
     with _.
     (
       lemma_conn_events_raw_replay_head_direct
@@ -1189,10 +1195,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
           CS.received_cleartext_tls_message_raw
             (M.TlsHandshake (M.ServerHello sh))
             server_sh_raw /\
-          CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-          CS.raw_records_exactly sf_raw T.ApplicationData 1
+          CS.raw_records_exactly ee_raw T.Application_data 1 /\
+          CS.raw_records_exactly cert_raw T.Application_data 1 /\
+          CS.raw_records_exactly cv_raw T.Application_data 1 /\
+          CS.raw_records_exactly sf_raw T.Application_data 1
       with _.
       (
         lemma_conn_events_raw_replay_head_direct
@@ -1224,10 +1230,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
             CS.received_cleartext_tls_message_raw
               (M.TlsHandshake (M.ServerHello sh))
               server_sh_raw /\
-            CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-            CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-            CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-            CS.raw_records_exactly sf_raw T.ApplicationData 1
+            CS.raw_records_exactly ee_raw T.Application_data 1 /\
+            CS.raw_records_exactly cert_raw T.Application_data 1 /\
+            CS.raw_records_exactly cv_raw T.Application_data 1 /\
+            CS.raw_records_exactly sf_raw T.Application_data 1
         with _.
         (
           lemma_event_raw_delta_legal_local
@@ -1275,10 +1281,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
               CS.received_cleartext_tls_message_raw
                 (M.TlsHandshake (M.ServerHello sh))
                 server_sh_raw /\
-              CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-              CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-              CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-              CS.raw_records_exactly sf_raw T.ApplicationData 1
+              CS.raw_records_exactly ee_raw T.Application_data 1 /\
+              CS.raw_records_exactly cert_raw T.Application_data 1 /\
+              CS.raw_records_exactly cv_raw T.Application_data 1 /\
+              CS.raw_records_exactly sf_raw T.Application_data 1
           with _.
           (
             lemma_server_flight_message_tail_slices
@@ -1298,10 +1304,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
               Seq.equal
                 tail3_received
                 (B.append ee_raw (B.append cert_raw (B.append cv_raw sf_raw))) /\
-              CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-              CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-              CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-              CS.raw_records_exactly sf_raw T.ApplicationData 1
+              CS.raw_records_exactly ee_raw T.Application_data 1 /\
+              CS.raw_records_exactly cert_raw T.Application_data 1 /\
+              CS.raw_records_exactly cv_raw T.Application_data 1 /\
+              CS.raw_records_exactly sf_raw T.Application_data 1
             returns
               exists server_sh_raw ee_raw' cert_raw' cv_raw' sf_raw'.
                 Seq.equal
@@ -1312,10 +1318,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
                 CS.received_cleartext_tls_message_raw
                   (M.TlsHandshake (M.ServerHello sh))
                   server_sh_raw /\
-                CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly cert_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly cv_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly sf_raw' T.ApplicationData 1
+                CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+                CS.raw_records_exactly cert_raw' T.Application_data 1 /\
+                CS.raw_records_exactly cv_raw' T.Application_data 1 /\
+                CS.raw_records_exactly sf_raw' T.Application_data 1
             with _.
             (
               Seq.lemma_eq_elim delta0_received B.empty;
@@ -1350,10 +1356,10 @@ let lemma_client_no_tail_server_flight_received_raw_slices_for_shape
                 CS.received_cleartext_tls_message_raw
                   (M.TlsHandshake (M.ServerHello sh))
                   server_sh_raw /\
-                CS.raw_records_exactly ee_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly cert_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly cv_raw' T.ApplicationData 1 /\
-                CS.raw_records_exactly sf_raw' T.ApplicationData 1)
+                CS.raw_records_exactly ee_raw' T.Application_data 1 /\
+                CS.raw_records_exactly cert_raw' T.Application_data 1 /\
+                CS.raw_records_exactly cv_raw' T.Application_data 1 /\
+                CS.raw_records_exactly sf_raw' T.Application_data 1)
             )
           )
         )
@@ -1438,19 +1444,19 @@ let lemma_client_no_tail_server_flight_received_raw_slices
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello sh))
       server_sh_raw /\
-    CS.raw_records_exactly ee_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cert_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly cv_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly sf_raw T.ApplicationData 1
+    CS.raw_records_exactly ee_raw T.Application_data 1 /\
+    CS.raw_records_exactly cert_raw T.Application_data 1 /\
+    CS.raw_records_exactly cv_raw T.Application_data 1 /\
+    CS.raw_records_exactly sf_raw T.Application_data 1
   returns client_received_cleartext_and_server_flight_raw_slices client
   with _.
   (
     assert (exists
-      (sh0:M.server_hello)
-      (ee0:M.encrypted_extensions)
-      (cert0:M.certificate_msg)
-      (cv0:M.certificate_verify)
-      (sf0:M.finished)
+      (sh0:GSH.serverHello)
+      (ee0:GEE.encryptedExtensions)
+      (cert0:GCert.certificate)
+      (cv0:GCV.certificateVerify)
+      (sf0:GFin.finished)
       server_sh_raw0
       ee_raw0
       cert_raw0
@@ -1464,9 +1470,9 @@ let lemma_client_no_tail_server_flight_received_raw_slices
       CS.received_cleartext_tls_message_raw
         (M.TlsHandshake (M.ServerHello sh0))
         server_sh_raw0 /\
-      CS.raw_records_exactly ee_raw0 T.ApplicationData 1 /\
-      CS.raw_records_exactly cert_raw0 T.ApplicationData 1 /\
-      CS.raw_records_exactly cv_raw0 T.ApplicationData 1 /\
-      CS.raw_records_exactly sf_raw0 T.ApplicationData 1)
+      CS.raw_records_exactly ee_raw0 T.Application_data 1 /\
+      CS.raw_records_exactly cert_raw0 T.Application_data 1 /\
+      CS.raw_records_exactly cv_raw0 T.Application_data 1 /\
+      CS.raw_records_exactly sf_raw0 T.Application_data 1)
   )
   )

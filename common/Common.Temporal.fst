@@ -65,15 +65,15 @@ let holds_U (#a:Type) (spa:sprop a) (spb:sprop a) (p:path a) : prop =
     ───────────────────────────────────────────────────────────────────────── **)
 
 (** `A G sp` at `s`: on every run starting at `s`, `sp` holds always. **)
-let ag (#a:Type) (step:binrel a) (sp:sprop a) : sprop a = fun s ->
+let ag (#a:Type) (step:binrel a) (sp:sprop a) (s:a) : prop =
   forall (p:path a). (is_run step p /\ p 0 == s) ==> holds_G sp p
 
 (** `E F sp` at `s`: some run starting at `s` eventually satisfies `sp`. **)
-let ef (#a:Type) (step:binrel a) (sp:sprop a) : sprop a = fun s ->
+let ef (#a:Type) (step:binrel a) (sp:sprop a) (s:a) : prop =
   exists (p:path a). is_run step p /\ p 0 == s /\ holds_F sp p
 
 (** `A F sp` at `s`: every run starting at `s` eventually satisfies `sp`. **)
-let af (#a:Type) (step:binrel a) (sp:sprop a) : sprop a = fun s ->
+let af (#a:Type) (step:binrel a) (sp:sprop a) (s:a) : prop =
   forall (p:path a). (is_run step p /\ p 0 == s) ==> holds_F sp p
 
 (** ─────────────────────────────────────────────────────────────────────────

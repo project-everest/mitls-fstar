@@ -40,6 +40,13 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -154,7 +161,7 @@ fn mark_sent_server_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -178,7 +185,7 @@ fn mark_sent_encrypted_extensions
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lee:IM.encrypted_extensions)
-  (#ee:erased M.encrypted_extensions)
+  (#ee:erased GEE.encryptedExtensions)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
           ArrPts.pts_to raw 'raw_bytes **
@@ -201,7 +208,7 @@ fn mark_sent_certificate
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lcert:IM.certificate_msg)
-  (#cert:erased M.certificate_msg)
+  (#cert:erased GCert.certificate)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -212,14 +219,14 @@ fn mark_sent_certificate
                    (Ghost.reveal 'fragment_bytes)
                    (W.serialize_handshake (M.Certificate cert)) /\
                  st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
-                 (Ghost.reveal cert).M.chain <> [] /\
+                 Sem.certificate_entries (Ghost.reveal cert) <> [] /\
                  can_send_certificate st0 cert (Ghost.reveal 'raw_bytes))
   ensures connection_exactly
             c
             (sent_certificate_state st0 cert (Ghost.reveal 'raw_bytes)) **
           ArrPts.pts_to raw 'raw_bytes **
           ArrPts.pts_to fragment 'fragment_bytes **
-          pure (match (Ghost.reveal cert).M.chain with
+          pure (match Sem.certificate_entries (Ghost.reveal cert) with
                 | leaf :: _ ->
                   (sent_certificate_state st0 cert (Ghost.reveal 'raw_bytes)).
                     CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der ==
@@ -229,7 +236,7 @@ fn mark_sent_certificate
 fn mark_signed_certificate_verify
   (c:connection_state)
   (lcv:IM.certificate_verify)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            IM.is_valid_certificate_verify lcv cv **
@@ -248,7 +255,7 @@ fn mark_sent_certificate_verify
   (raw:array U8.t)
   (fragment:array U8.t)
   (fragment_len:SZ.t)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -266,7 +273,7 @@ fn mark_sent_certificate_verify
 
 fn serialize_stored_certificate_verify_fragment
   (c:connection_state)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (#st0:erased CS.connection_state)
@@ -275,20 +282,15 @@ fn serialize_stored_certificate_verify_fragment
           pure (B.length 'old_fragment_bytes == SZ.v fragment_len /\
                 st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                   Some (Ghost.reveal cv) /\
-                B.length (Ghost.reveal cv).M.body == 0 /\
                 SZ.v fragment_len ==
-                  B.length (W.serialize_certificate_verify_from_signature
-                    (Ghost.reveal cv)))
+                  B.length (W.serialize_handshake
+                    (M.CertificateVerify (Ghost.reveal cv))))
   returns written_fragment:(n:SZ.t{SZ.v n <= SZ.v fragment_len})
   ensures exists* fragment_bytes.
           connection_exactly c st0 **
           ArrPts.pts_to fragment fragment_bytes **
           pure (B.length fragment_bytes == SZ.v fragment_len /\
                 SZ.v written_fragment == SZ.v fragment_len /\
-                Seq.equal
-                  fragment_bytes
-                  (W.serialize_certificate_verify_from_signature
-                    (Ghost.reveal cv)) /\
                 Seq.equal
                   fragment_bytes
                   (W.serialize_handshake
@@ -300,7 +302,7 @@ fn mark_sent_server_finished
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lfin:IM.finished)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
@@ -394,9 +396,12 @@ fn try_derive_server_shared_secret_from_private_array
                ArrPts.pts_to server_private_key 'server_private_key_bytes **
                pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
                       | Some ch ->
-                        TLS13.Crypto.Spec.x25519_shared
-                          (Ghost.reveal 'server_private_key_bytes)
-                          ch.M.key_share == Some shared
+                        (match CS.client_hello_key_share ch with
+                         | Some k ->
+                           TLS13.Crypto.Spec.x25519_shared
+                             (Ghost.reveal 'server_private_key_bytes)
+                             k == Some shared
+                         | None -> False)
                       | None -> False) /\
                      CS.legal_connection_delta
                        st0

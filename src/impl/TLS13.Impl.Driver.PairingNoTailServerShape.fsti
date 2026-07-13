@@ -8,6 +8,9 @@ module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GFin  = TLS13.Wire.Generated.Finished
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
@@ -34,10 +37,10 @@ let server_no_tail_final_model_witnesses
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (server_app_write_material:CS.traffic_key_material)
     (server_app_read_material:CS.traffic_key_material).
     server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some ch /\
@@ -67,10 +70,10 @@ let server_no_tail_desired_shape
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (server_material:CS.traffic_key_material)
     (sent_msg0:M.handshake_msg)
     (sent_msg1:M.handshake_msg)
@@ -79,7 +82,7 @@ let server_no_tail_desired_shape
     (sent_msg3:M.handshake_msg)
     (server_app_write_material:CS.traffic_key_material)
     (received_msg4:M.handshake_msg)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (server_app_read_material:CS.traffic_key_material).
     received_msg4 == M.Finished cf /\
     server.CS.cs_event_log ==

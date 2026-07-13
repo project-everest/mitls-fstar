@@ -80,4 +80,12 @@ fn handle_handshake_message
                  resp
                  'old_network_out
                  'old_app_out /\
-               (resp.CT.status == CT.NeedMoreInput ==> False))
+               (resp.CT.status == CT.NeedMoreInput ==> False) /\
+               (resp.CT.status == CT.IllegalTransition ==>
+                 CT.unexpected_message_response
+                   'st0
+                   st1
+                   resp
+                   'old_network_out
+                   'old_app_out) /\
+               (resp.CT.status == CT.OutputBufferTooSmall ==> False))

@@ -124,7 +124,7 @@ fn seal_application
           pure ((ok ==> R.seal
                            's
                            (Ghost.reveal 'aad_bytes)
-                           { R.content_type = T.ApplicationData;
+                           { R.content_type = T.Application_data;
                              R.fragment = Ghost.reveal 'plain_bytes } == Some (out_bytes, s') /\
                          B.length out_bytes == B.length 'old) /\
                 (not ok ==> s' == 's /\
@@ -132,7 +132,7 @@ fn seal_application
                             R.seal
                               's
                               (Ghost.reveal 'aad_bytes)
-                              { R.content_type = T.ApplicationData;
+                              { R.content_type = T.Application_data;
                                 R.fragment = Ghost.reveal 'plain_bytes } == None))
 
 fn seal_application_no_update
@@ -158,7 +158,7 @@ fn seal_application_no_update
           pure ((ok ==> R.seal
                            's
                            (Ghost.reveal 'aad_bytes)
-                           { R.content_type = T.ApplicationData;
+                           { R.content_type = T.Application_data;
                             R.fragment = Ghost.reveal 'plain_bytes } ==
                            Some (out_bytes, R.next_seq 's) /\
                          B.length out_bytes == B.length 'old) /\
@@ -166,7 +166,7 @@ fn seal_application_no_update
                             R.seal
                              's
                              (Ghost.reveal 'aad_bytes)
-                             { R.content_type = T.ApplicationData;
+                             { R.content_type = T.Application_data;
                                R.fragment = Ghost.reveal 'plain_bytes } == None))
 
 fn seal_application_runtime

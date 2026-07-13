@@ -12,9 +12,10 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
+module GCV = TLS13.Wire.Generated.CertificateVerify
 
 fn serialize_certificate_verify_from_signature
-  (#cv: erased M.certificate_verify)
+  (#cv: erased GCV.certificateVerify)
   (lcv: L.certificate_verify)
   (out: array U8.t)
   (out_len: SZ.t)
@@ -22,7 +23,8 @@ fn serialize_certificate_verify_from_signature
   requires L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                 SZ.v out_len == B.length (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
+                 SZ.v out_len ==
+                   B.length (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
@@ -30,4 +32,4 @@ fn serialize_certificate_verify_from_signature
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes
-                  (WS.serialize_certificate_verify_from_signature (Ghost.reveal cv)))
+                  (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))

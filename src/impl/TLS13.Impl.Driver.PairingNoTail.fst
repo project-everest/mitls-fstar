@@ -16,6 +16,12 @@ module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
 module ListP = FStar.List.Tot.Properties
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PTS = TLS13.Impl.Driver.PairingTraceShape
 module PWL = TLS13.ConnectionState.ProtectedWireBase
@@ -718,11 +724,19 @@ let lemma_valid_byte_trace_inverts_to_state_trace
       system.WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       st1 /\
-    Common.WireFormat.parses_as
+    (Common.WireFormat.parses_as
       system.WFSM.wfsm_wire_format
       input_bytes
       (WFSM.trace_input_messages trace)
-      residual_input /\
+      residual_input
+     \/
+     Seq.equal
+       input_bytes
+       (Seq.append
+         (Common.WireFormat.serialize_all
+           system.WFSM.wfsm_wire_format
+           (WFSM.trace_input_messages trace))
+         residual_input)) /\
     Seq.equal
       output_bytes
       (Common.WireFormat.serialize_all
@@ -772,11 +786,19 @@ let lemma_client_valid_byte_trace_preserves_connection_state_consistent
       (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       client /\
-    Common.WireFormat.parses_as
+    (Common.WireFormat.parses_as
       (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
       client_received
       (WFSM.trace_input_messages trace)
-      residual_input /\
+      residual_input
+     \/
+     Seq.equal
+       client_received
+       (Seq.append
+         (Common.WireFormat.serialize_all
+           (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+           (WFSM.trace_input_messages trace))
+         residual_input)) /\
     Seq.equal
       client_sent
       (Common.WireFormat.serialize_all
@@ -822,11 +844,19 @@ let lemma_server_valid_byte_trace_preserves_connection_state_consistent
       (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       server /\
-    Common.WireFormat.parses_as
+    (Common.WireFormat.parses_as
       (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
       server_received
       (WFSM.trace_input_messages trace)
-      residual_input /\
+      residual_input
+     \/
+     Seq.equal
+       server_received
+       (Seq.append
+         (Common.WireFormat.serialize_all
+           (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+           (WFSM.trace_input_messages trace))
+         residual_input)) /\
     Seq.equal
       server_sent
       (Common.WireFormat.serialize_all
@@ -875,11 +905,19 @@ let lemma_client_valid_byte_trace_preserves_connection_state_replay_consistent
       (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       client /\
-    Common.WireFormat.parses_as
+    (Common.WireFormat.parses_as
       (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
       client_received
       (WFSM.trace_input_messages trace)
-      residual_input /\
+      residual_input
+     \/
+     Seq.equal
+       client_received
+       (Seq.append
+         (Common.WireFormat.serialize_all
+           (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+           (WFSM.trace_input_messages trace))
+         residual_input)) /\
     Seq.equal
       client_sent
       (Common.WireFormat.serialize_all
@@ -929,11 +967,19 @@ let lemma_server_valid_byte_trace_preserves_connection_state_replay_consistent
       (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       server /\
-    Common.WireFormat.parses_as
+    (Common.WireFormat.parses_as
       (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
       server_received
       (WFSM.trace_input_messages trace)
-      residual_input /\
+      residual_input
+     \/
+     Seq.equal
+       server_received
+       (Seq.append
+         (Common.WireFormat.serialize_all
+           (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+           (WFSM.trace_input_messages trace))
+         residual_input)) /\
     Seq.equal
       server_sent
       (Common.WireFormat.serialize_all
@@ -964,13 +1010,13 @@ let lemma_paired_successful_handshake_complete_event_log_shape_no_tail
         CS.connection_state_no_key_update_trace server)
 =
   eliminate exists
-    (ch:M.client_hello)
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (start:CS.handshake_start)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)

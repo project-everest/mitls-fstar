@@ -61,11 +61,40 @@ let valid_byte_trace
       system.wfsm_state_machine.SM.sm_initial_state
       trace
       st1 /\
-    WF.parses_as
-      system.wfsm_wire_format
-      input_bytes
-      (trace_input_messages trace)
-      residual_input /\
+    (* The received bytes refine the trace's input messages.  Two refinements are
+       accepted, so the class serves BOTH stream and datagram transports:
+
+         * STREAM (strong-prefix wire formats, e.g. YMODEM/FTP-block): the byte
+           stream greedily re-parses, message by message, into the trace inputs
+           (`parses_as`).  This recovers the message boundaries from the bytes
+           alone — available only when every consumed message is a strong-prefix
+           parser.
+
+         * DATAGRAM (datagram-delimited wire formats, e.g. IETF TFTP): the byte
+           stream is exactly the serialization of the trace inputs.  Here the
+           message boundaries come from the transport framing (one datagram per
+           `read`), NOT from the bytes, so a non-strong-prefix message (TFTP's
+           implicit-length DATA payload) is admissible.  This is the faithful
+           refinement for a datagram protocol whose payload length is supplied by
+           the UDP datagram boundary.
+
+       The output side is always a serialize-equality (below); making the input
+       side a disjunction is a WEAKENING, so every existing strong-prefix instance
+       that proved the `parses_as` disjunct still satisfies this predicate
+       unchanged. *)
+    (WF.parses_as
+       system.wfsm_wire_format
+       input_bytes
+       (trace_input_messages trace)
+       residual_input
+     \/
+     Seq.equal
+       input_bytes
+       (Seq.append
+         (WF.serialize_all
+           system.wfsm_wire_format
+           (trace_input_messages trace))
+         residual_input)) /\
     Seq.equal
       output_bytes
       (WF.serialize_all

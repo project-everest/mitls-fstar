@@ -80,4 +80,12 @@ fn handle_application_data
                      'old_network_out
                      app_out_bytes /\
                    Seq.equal bytes (CT.response_app_out resp app_out_bytes)) /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                 CT.unexpected_message_response
+                   'st0
+                   st1
+                   resp
+                   'old_network_out
+                   app_out_bytes) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))

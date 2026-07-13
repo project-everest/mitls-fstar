@@ -11,6 +11,12 @@ module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
@@ -23,13 +29,13 @@ noextract
 let paired_successful_handshake_complete_event_log_shape_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (ch:M.client_hello)
-  (sh:M.server_hello)
-  (ee:M.encrypted_extensions)
-  (cert:M.certificate_msg)
-  (cv:M.certificate_verify)
-  (sf:M.finished)
-  (cf:M.finished)
+  (ch:GCH.clientHello)
+  (sh:GSH.serverHello)
+  (ee:GEE.encryptedExtensions)
+  (cert:GCert.certificate)
+  (cv:GCV.certificateVerify)
+  (sf:GFin.finished)
+  (cf:GFin.finished)
   (start:CS.handshake_start)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
@@ -180,13 +186,13 @@ let paired_successful_handshake_complete_event_log_shape
   (server:CS.connection_state)
   : prop =
   exists
-    (ch:M.client_hello)
-    (sh:M.server_hello)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (ch:GCH.clientHello)
+    (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (start:CS.handshake_start)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
@@ -310,10 +316,12 @@ let paired_semantic_tls_io_traces
   (client_trace:list CS.conn_event)
   (server_trace:list CS.conn_event)
   : prop =
-  CS.sent_tls_messages client_trace ==
-    CS.received_tls_messages server_trace /\
-  CS.sent_tls_messages server_trace ==
-    CS.received_tls_messages client_trace
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages client_trace)
+    (CS.received_tls_messages server_trace) /\
+  CS.tls_messages_correspond
+    (CS.sent_tls_messages server_trace)
+    (CS.received_tls_messages client_trace)
 
 noextract
 let paired_application_ready_semantic_traces_with_message_states
@@ -330,7 +338,8 @@ let paired_application_ready_semantic_traces_with_message_states
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
-  Pairing.paired_handshake_message_states client server
+  Pairing.paired_handshake_message_states client server /\
+  Pairing.paired_handshake_events client server
 
 val lemma_client_server_application_record_material_agrees_from_paired_application_ready_semantic_traces
   (client:CS.connection_state)

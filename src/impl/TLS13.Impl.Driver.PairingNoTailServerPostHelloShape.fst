@@ -11,6 +11,8 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module ListP = FStar.List.Tot.Properties
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTRB = TLS13.Impl.Driver.PairingNoTailRawBridge
@@ -655,10 +657,10 @@ let lemma_server_post_two_install_cover_model_shape
 
 let lemma_intro_server_no_tail_post_two_handshake_installs_tail_order
   (server:CS.connection_state)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (e5:CS.conn_event)
   (e6:CS.conn_event)
   (rest:list CS.conn_event)
@@ -691,10 +693,10 @@ let lemma_intro_server_no_tail_post_two_handshake_installs_tail_order
   and ()
 
 let lemma_server_cleartext_prefix_append_expand
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (suffix:list CS.conn_event)
   : Lemma
       (ensures
@@ -747,10 +749,10 @@ let lemma_server_cleartext_prefix_append_expand
 
 let lemma_server_no_tail_post_two_handshake_installs_tail_order_for_split
   (server:CS.connection_state)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (e5:CS.conn_event)
   (e6:CS.conn_event)
   (rest:list CS.conn_event)
@@ -916,10 +918,10 @@ let lemma_server_duplicate_second_install_window_rank
 
 let lemma_server_tail_order_from_two_step_replay
   (server:CS.connection_state)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (e5 e6:CS.conn_event)
   (rest:list CS.conn_event)
   (model5 model6 model7:CS.connection_model)

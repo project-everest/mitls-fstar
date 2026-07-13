@@ -9,6 +9,8 @@ module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 
 (**
@@ -175,10 +177,10 @@ val lemma_server_hello_window_rank_application_data_installed_zero
 
 val lemma_server_hello_window_after_server_cleartext_prefix_fresh
   (model0:CS.connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (model1:CS.connection_model)
   (model2:CS.connection_model)
   (model3:CS.connection_model)

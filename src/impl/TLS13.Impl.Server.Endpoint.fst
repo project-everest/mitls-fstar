@@ -35,6 +35,13 @@ module TCP = Common.TCP
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
+module SS = TLS13.Impl.Server.Send
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
+module Sem = TLS13.Wire.Semantics
+
+noextract
+type server_endpoint_material_spec = b:B.bytes{B.length b == 64}
 
 let server_endpoint_private_bytes_of_material
   (material:B.bytes)
@@ -82,33 +89,9 @@ type server_endpoint_frame = {
        Bounds.max_server_certificate_chain_len);
   server_ep_material_len: SZ.t;
   server_ep_material: V.vec U8.t;
-  server_ep_material_spec: Ghost.erased (b:B.bytes{B.length b == 64});
-  server_ep_material_bridge_proof:
-    old:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SP.server_local_bridge_obligation {
-          SP.tls_server_local_payload = V.vec_to_array server_ep_material;
-          SP.tls_server_local_payload_len = server_ep_material_len;
-          SP.tls_server_local_app_out =
-            server_ep_query.SQueries.server_query_local_app_out;
-          SP.tls_server_local_app_out_len =
-            server_ep_query.SQueries.server_query_local_app_out_len;
-          SP.tls_server_local_old_app_out = old;
-        });
-  server_ep_private_len: SZ.t;
+  server_ep_material_spec: Ghost.erased server_endpoint_material_spec;
+  server_ep_private_len: l:SZ.t{SZ.v l == 32};
   server_ep_private: V.vec U8.t;
-  server_ep_private_bridge_proof:
-    old:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SP.server_local_bridge_obligation {
-          SP.tls_server_local_payload = V.vec_to_array server_ep_private;
-          SP.tls_server_local_payload_len = server_ep_private_len;
-          SP.tls_server_local_app_out =
-            server_ep_query.SQueries.server_query_local_app_out;
-          SP.tls_server_local_app_out_len =
-            server_ep_query.SQueries.server_query_local_app_out_len;
-          SP.tls_server_local_old_app_out = old;
-        });
   server_ep_material_deferred_ready:
     st:Ghost.erased CS.connection_state ->
     action:SQueries.server_deferred_action ->
@@ -167,8 +150,6 @@ let server_endpoint_material_local_frame
   } in
   {
     SP.tls_server_local_bridge_base = base;
-    SP.tls_server_local_bridge_proof =
-      frame.server_ep_material_bridge_proof old;
   }
 
 let server_endpoint_private_local_frame
@@ -186,8 +167,6 @@ let server_endpoint_private_local_frame
   } in
   {
     SP.tls_server_local_bridge_base = base;
-    SP.tls_server_local_bridge_proof =
-      frame.server_ep_private_bridge_proof old;
   }
 
 let server_endpoint_payload_remainder_ready
@@ -416,6 +395,7 @@ let server_endpoint_local_continuation
       local_frame **
     server_endpoint_payloads_ready frame
 
+#push-options "--z3rlimit 40 --fuel 2 --ifuel 2"
 fn server_endpoint_next_action
   (srv:SP.canonical_server)
   (cfg:SQueries.server_next_local_action_config)
@@ -519,7 +499,7 @@ ensures
             (Ghost.reveal sent)
             (Ghost.reveal st));
           with certificate_chain credential_identity. _;
-          srv.SP.canonical_server_supported_profile
+          (Ghost.reveal srv.SP.canonical_server_supported_profile)
             (Ghost.reveal received)
             (Ghost.reveal sent)
             (Ghost.reveal st)
@@ -547,10 +527,10 @@ ensures
                 T.X25519 /\
               CS.signature_scheme_offered
                 server_cfg.CS.server_allowed_signature_schemes
-                T.RsaPssRsaeSha256 /\
+                T.Rsa_pss_rsae_sha256 /\
               CS.sni_policy_accepts
                 server_cfg.CS.server_sni_policy
-                ch.M.server_name
+                (Sem.clientHello_server_name ch)
             | _, _ -> True));
           rewrite
             (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
@@ -809,7 +789,11 @@ ensures
             (CR.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st))
             as
             (S.connection_exactly srv.SP.canonical_server_state (Ghost.reveal st));
-          if ready {
+          V.to_array_pts_to frame.server_ep_material;
+          let differs =
+            SS.server_random_differs_from_cst (V.vec_to_array frame.server_ep_material);
+          V.to_vec_pts_to frame.server_ep_material;
+          if (ready && differs) {
             assert (pure (ready));
             assert (pure ((Ghost.reveal st).CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloReceived));
@@ -826,55 +810,31 @@ ensures
                 90 <= Bounds.max_transcript_len));
             assert (pure (B.length (CL.raw_slice material 0 32) == 32));
             assert (pure (B.length (CL.raw_slice material 32 64) == 32));
-            let sh : Ghost.erased M.server_hello =
-              Ghost.hide {
-                M.random = CL.raw_slice material 0 32;
-                M.key_share =
-                  CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64);
-                M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                M.body = B.empty;
-              };
+            assert (pure (B.length
+              (CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64)) == 32));
             let selection : Ghost.erased CS.server_handshake_selection =
               Ghost.hide (Some?.v
                 (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
             Seq.lemma_eq_elim
               material
               (server_endpoint_material_bytes frame);
-            assert (pure (CS.server_hello_matches_selection
-              (Ghost.reveal selection)
-              (Ghost.reveal sh)));
-            W.lemma_serialize_server_hello_from_selection_len (Ghost.reveal sh);
-            W.lemma_fixed_server_handshake_serializers
-              (Ghost.reveal sh)
-              { M.chain = []; M.body = B.empty }
-              { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
-              { M.verify_data = Seq.create 32 0uy };
-            W.lemma_serialize_server_hello_len (Ghost.reveal sh);
-            assert (pure (B.length (W.serialize_handshake (M.ServerHello (Ghost.reveal sh))) == 90));
+            // the material/selection matching facts (random, private key, public
+            // key = x25519(private), cipher suite) now hold on [material]; feed
+            // them plus the state facts to the build-direction bridge, which
+            // discharges the whole [can_send_server_hello] obligation in
+            // isolation (keeping this large Pulse function's query stable).
+            assert (pure (server_endpoint_material_bytes_match_state
+              material (Ghost.reveal st)));
             assert (pure (
-              B.length (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_transcript +
-                B.length (W.serialize_handshake (M.ServerHello (Ghost.reveal sh))) <=
-                Bounds.max_transcript_len));
-            assert (pure (CS.legal_event
-              (Ghost.reveal st).CS.cs_model
-              (CS.ConnNetworkEvent {
-                CL.message_direction = CL.Sent;
-                CL.message_value = M.TlsHandshake (M.ServerHello (Ghost.reveal sh));
-              })));
-            assert (pure (CS.event_raw_delta_legal
-              (Ghost.reveal st).CS.cs_model
-              (CS.ConnNetworkEvent {
-                CL.message_direction = CL.Sent;
-                CL.message_value = M.TlsHandshake (M.ServerHello (Ghost.reveal sh));
-              })
-              (CS.serialized_cleartext_tls_message
-                (M.TlsHandshake (M.ServerHello (Ghost.reveal sh))))
-              B.empty));
-            assert (pure (CM.can_send_server_hello
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+                Some (Ghost.reveal selection)));
+            assert (pure (B.length material == 64));
+            assert (pure ((CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <>
+              GSHbody.serverHello_body_cst));
+            SS.lemma_input_ready_server_hello_of_selection
               (Ghost.reveal st)
-              (Ghost.reveal sh)
-              (CS.serialized_cleartext_tls_message
-                (M.TlsHandshake (M.ServerHello (Ghost.reveal sh))))));
+              (Ghost.reveal selection)
+              material;
             assert (pure (ST.server_local_event_input_ready
               (Ghost.reveal st)
               ST.LocalSendServerHello
@@ -977,7 +937,7 @@ ensures
             (Ghost.reveal sent)
             (Ghost.reveal st));
           with certificate_chain credential_identity. _;
-          srv.SP.canonical_server_supported_profile
+          (Ghost.reveal srv.SP.canonical_server_supported_profile)
             (Ghost.reveal received)
             (Ghost.reveal sent)
             (Ghost.reveal st)
@@ -1005,7 +965,7 @@ ensures
           assert (pure (
             (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection)
               .CS.server_selected_signature_scheme ==
-            T.RsaPssRsaeSha256));
+            T.Rsa_pss_rsae_sha256));
           assert (pure (
             (Some?.v (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_server_selection)
               .CS.server_selected_credential == credential_identity));
@@ -1019,7 +979,7 @@ ensures
               .CS.server_credential_identity));
           assert (pure (CS.signature_scheme_offered
             (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_signature_schemes
-            T.RsaPssRsaeSha256));
+            T.Rsa_pss_rsae_sha256));
           assert (pure (ST.server_local_event_input_ready
             (Ghost.reveal st)
             ST.LocalSignCertificateVerify
@@ -1096,6 +1056,7 @@ ensures
     }
   }
 }
+#pop-options
 
 fn server_endpoint_cancel_action
   (srv:SP.canonical_server)
@@ -2848,7 +2809,23 @@ ensures
       (Ghost.reveal st)
       (Ghost.reveal st1)
       (Ghost.reveal wire_outputs)
-      (Ghost.reveal local_outputs)
+      (Ghost.reveal local_outputs) **
+    pure (
+      CPI.local_process_correct
+        (SP.server_system (Ghost.reveal srv.SP.canonical_server_initial))
+        ev
+        (Ghost.reveal old_out)
+        (Ghost.reveal out_contents)
+        frame.server_ep_network_out_len
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        (Ghost.reveal st)
+        result
+        (Ghost.reveal received1)
+        (Ghost.reveal sent1)
+        (Ghost.reveal st1)
+        (Ghost.reveal wire_outputs)
+        (Ghost.reveal local_outputs))
 {
   unfold (server_api_local_action_ready
     srv
@@ -2939,6 +2916,22 @@ ensures
       (Ghost.reveal st1)
       (Ghost.reveal wire_outputse)
       (Ghost.reveal local_outputse));
+  assert (pure (
+    CPI.local_process_correct
+      (SP.server_system (Ghost.reveal srv.SP.canonical_server_initial))
+      ev
+      (Ghost.reveal (server_local_old_output lio))
+      (Ghost.reveal out_contentse)
+      frame.server_ep_network_out_len
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal st)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      (Ghost.reveal wire_outputse)
+      (Ghost.reveal local_outputse)));
   server_finish_local_io
     srv
     ch

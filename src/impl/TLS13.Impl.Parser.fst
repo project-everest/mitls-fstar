@@ -33,6 +33,7 @@ module LSeqB = LowParse.Pulse.SeqBytes
 
 module GHS = TLS13.Wire.Generated.Handshake
 module GHST = TLS13.Wire.Generated.HandshakeType
+module GFin = TLS13.Wire.Generated.Finished
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GSS = TLS13.Wire.Generated.SignatureScheme
 module LPC = LowParse.Pulse.Combinators
@@ -705,9 +706,10 @@ let lemma_ch_extensions_nil sn ks sv ss
 let lemma_ch_extensions_cons_sn snl tl sn ks sv ss
   : Lemma (ensures WS.ch_extensions
              (GECH.Extension_data_server_name snl :: tl) sn ks sv ss ==
-             (match WS.ch_server_name snl with
-              | Some name -> WS.ch_extensions tl (Some name) ks sv ss
-              | None -> None))
+             (if Some? sn then WS.ch_extensions tl sn ks sv ss
+              else (match WS.ch_server_name snl with
+                    | Some name -> WS.ch_extensions tl (Some name) ks sv ss
+                    | None -> None)))
   = WS.lemma_ch_extensions_cons_sn snl tl sn ks sv ss
 
 let lemma_ch_extensions_cons_sg sgl tl sn ks sv ss
@@ -719,15 +721,16 @@ let lemma_ch_extensions_cons_sg sgl tl sn ks sv ss
 let lemma_ch_extensions_cons_sa ssl tl sn ks sv ss
   : Lemma (ensures WS.ch_extensions
              (GECH.Extension_data_signature_algorithms ssl :: tl) sn ks sv ss ==
-             WS.ch_extensions tl sn ks sv (WS.synth_sig_schemes ssl))
+             WS.ch_extensions tl sn ks sv (if Nil? ss then WS.synth_sig_schemes ssl else ss))
   = WS.lemma_ch_extensions_cons_sa ssl tl sn ks sv ss
 
 let lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
   : Lemma (ensures WS.ch_extensions
              (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
-             (match WS.ch_find_key_share kscl with
-              | Some k -> WS.ch_extensions tl sn (Some k) sv ss
-              | None -> None))
+             (if Some? ks then WS.ch_extensions tl sn ks sv ss
+              else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
+                    | Some raw -> if B.length raw = 32 then WS.ch_extensions tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else None
+                    | None -> None)))
   = WS.lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
 
 let lemma_ch_extensions_cons_sv svl tl sn ks sv ss
@@ -1061,13 +1064,13 @@ let lemma_synth_client_hello_none_of_ok_flags
   (c:GCH.clientHello) (cipher_ok ext_ok:bool)
   : Lemma
     (requires
-      GPV.TLS_1p2? c.GCH.legacy_version /\
       (cipher_ok <==>
         FStar.List.Tot.length (RV.reveal_synth_cipher_suites c.GCH.cipher_suites) <=
           M.client_hello_max_cipher_suites) /\
       (ext_ok <==>
         (match RV.reveal_ch_extensions c.GCH.extensions None None false [] with
          | Some (server_name, Some key_share, _, sig_schemes) ->
+           Cons? sig_schemes /\
            FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes /\
            (match server_name with
             | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
@@ -1077,25 +1080,20 @@ let lemma_synth_client_hello_none_of_ok_flags
     (ensures WS.synth_client_hello c == None)
 =
   RV.lemma_synth_client_hello_reveal c;
-  let cipher_suites = RV.reveal_synth_cipher_suites c.GCH.cipher_suites in
-  match RV.reveal_ch_extensions c.GCH.extensions None None false [] with
-  | Some (server_name, Some key_share, _, sig_schemes) ->
-    if FStar.List.Tot.length cipher_suites <= M.client_hello_max_cipher_suites then
-      if FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes then
-        match server_name with
-        | Some hostname ->
-          if B.length hostname <= M.client_hello_server_name_max_len then (
-            assert (cipher_ok);
-            assert (ext_ok);
-            assert False
-          ) else ()
-        | None ->
-          assert (cipher_ok);
-          assert (ext_ok);
-          assert False
-      else ()
-    else ()
-  | _ -> ()
+  RV.lemma_reveal_clientHello_representable_scan c;
+  lemma_length_reveal_synth_cipher_suites c.GCH.cipher_suites;
+  assert (TLS13.Wire.Semantics.clientHello_cipher_suites c ==
+          (c.GCH.cipher_suites <: list GCS.cipherSuite));
+  (match RV.reveal_ch_extensions c.GCH.extensions None None false [] with
+   | Some (server_name, Some key_share, _, sig_schemes) ->
+     assert (ext_ok ==
+       (Cons? sig_schemes &&
+        FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes &&
+        (match server_name with
+         | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
+         | None -> true)))
+   | _ -> assert (ext_ok == false));
+  assert (WS.clientHello_representable c == false)
 
 ghost
 fn elim_vmatch_serverName_host
@@ -2616,7 +2614,7 @@ fn scan_ee_alpn
               Some? (RV.reveal_synth_encrypted_extensions cee) /\
               L.optional_byte_prefix_matches
                 (Mktuple3?._3 res) bytes (Mktuple3?._2 res)
-                (Some?.v (RV.reveal_synth_encrypted_extensions cee)).M.negotiated_alpn))
+                (Some?.v (RV.reveal_synth_encrypted_extensions cee))))
 {
   let alpn_vec = V.alloc 0uy 255sz;
   match xee {
@@ -2680,7 +2678,7 @@ fn scan_ee_alpn
           (fnd ==> (Some? (RV.reveal_synth_encrypted_extensions cee) /\
                     SZ.v al <= 255 /\
                     L.optional_byte_prefix_matches true abytes al
-                      (Some?.v (RV.reveal_synth_encrypted_extensions cee)).M.negotiated_alpn)))
+                      (Some?.v (RV.reveal_synth_encrypted_extensions cee)))))
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cee));
@@ -2768,7 +2766,7 @@ fn scan_ee_alpn
                     RV.list_drop (SZ.v iv) cee == RV.list_drop (FStar.List.Tot.length cee) cee));
       assert (pure ((not fnd) ==>
                     RV.reveal_synth_encrypted_extensions cee ==
-                    Some ({ M.negotiated_alpn = None; M.body = B.empty })));
+                    Some None));
       assert (pure (Some? (RV.reveal_synth_encrypted_extensions cee)));
       fold (PPVCL.vmatch_vclist
                 (PPB.vmatch_conv GEEE.extensionEncryptedExtensions_vmatch
@@ -3430,6 +3428,53 @@ fn try_copy_x25519_key
   }
 }
 
+(* Like [try_copy_x25519_key] but additionally reports whether the entry's group
+   is X25519 (independent of key length).  Used by the commit-first ClientHello
+   key_share scan, which must STOP at the first X25519 entry and reject it if the
+   key is not exactly 32 bytes (mirroring [Sem.kse_list_find_x25519]).  Returns
+   [(is_x25519, ok)] where [ok <==> (is_x25519 /\ 32-byte key)]. *)
+fn probe_copy_x25519_key
+  (key_vec: V.vec U8.t)
+  (v0: GKSE.keyShareEntry_lowtype)
+  (#cm: Ghost.erased GKSE.keyShareEntry_mid)
+  requires V.pts_to key_vec 'kv ** GKSE.keyShareEntry_vmatch v0 cm **
+           pure (V.is_full_vec key_vec /\ V.length key_vec == 32)
+  returns res: (bool & bool)
+  ensures GKSE.keyShareEntry_vmatch v0 cm **
+          (exists* kbytes. V.pts_to key_vec kbytes **
+            pure (V.is_full_vec key_vec /\ V.length key_vec == 32 /\
+                  Seq.length kbytes == 32 /\
+                  (fst res <==> GNG.X25519? (fst (Ghost.reveal cm))) /\
+                  (snd res <==> (GNG.X25519? (fst (Ghost.reveal cm)) /\
+                            Seq.length (snd (Ghost.reveal cm)) == 32)) /\
+                  (snd res ==> Seq.equal kbytes (snd (Ghost.reveal cm))) /\
+                  ((not (snd res)) ==> Seq.equal kbytes (Ghost.reveal 'kv))))
+{
+  V.pts_to_len key_vec;
+  rewrite (GKSE.keyShareEntry_vmatch v0 cm)
+      as (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm);
+  unfold (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm);
+  rewrite (GNG.namedGroup_vmatch (fst v0) (fst cm))
+      as (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm));
+  unfold (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm));
+  rewrite (GKSE.keyShareEntry_key_exchange_vmatch (snd v0) (snd cm))
+      as (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm));
+  unfold (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm));
+  V.pts_to_len (snd v0).PPBY.lvec_vec;
+  let group_lo = fst v0;
+  let key_len = (snd v0).PPBY.lvec_len;
+  let is_x = GNG.X25519? group_lo;
+  let len_ok = SZ.eq key_len 32sz;
+  if (is_x && len_ok) {
+    copy_vec_32_into key_vec (snd v0).PPBY.lvec_vec;
+    repack_kse v0;
+    (is_x, true)
+  } else {
+    repack_kse v0;
+    (is_x, false)
+  }
+}
+
 (* Scan the ServerHello extension list for the x25519 key_share, mirroring the
    spec [sh_key_share ext false None].  Tracks a [saw_supported_versions] flag and
    a copied 32-byte key in [key_vec].  Returns [(key_vec, found)] where [found]
@@ -3511,6 +3556,7 @@ fn scan_sh_key_share
           V.is_full_vec (snd nv) /\
           V.is_full_vec key_vec /\ V.length key_vec == 32 /\ Seq.length kbytes == 32 /\
           (hkb <==> Some? kacc) /\
+          ((not svb) ==> kacc == None) /\
           (Some? kacc ==> Seq.equal kbytes (Ghost.reveal (Some?.v kacc) <: Seq.seq U8.t)) /\
           (fl ==> RV.reveal_sh_key_share cext false None == None) /\
           ((not fl) ==>
@@ -3544,22 +3590,19 @@ fn scan_sh_key_share
           (FStar.List.Tot.index cext (SZ.v iv))
           (RV.list_drop (SZ.v iv + 1) cext)
           svb0 (Ghost.reveal kacc_g);
-        if (GESH.Extension_data_supported_versions_low? el) {
-          let v = GESH.Extension_data_supported_versions_low?._0 el;
-          elim_extSH_sv v el;
+        if (svb0) {
+          (* Already decided (first-wins): skip all remaining extensions. *)
+          RV.lemma_sh_key_share_decided (RV.list_drop (SZ.v iv + 1) cext) (Ghost.reveal kacc_g);
           Trade.elim
             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
                el (FStar.List.Tot.index cext (SZ.v iv)))
             (SM.seq_list_match s cext
                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
-          if (GPV.TLS_1p3? v) {
-            saw_sv := true;
-            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
-            i := iv `SZ.add` 1sz;
-          } else {
-            failed := true;
-          }
+          SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+          i := iv `SZ.add` 1sz;
         } else if (GESH.Extension_data_key_share_low? el) {
+          (* First key_share extension: commit its result ([Some k] iff x25519 with
+             a 32-byte key, else [None]).  Mirrors [Sem.sh_find_key_share]. *)
           let v0 = GESH.Extension_data_key_share_low?._0 el;
           elim_vmatch_extSH_key_share v0 el #(FStar.List.Tot.index cext (SZ.v iv));
           with cm_ks. assert (GKSE.keyShareEntry_vmatch v0 cm_ks);
@@ -3585,12 +3628,17 @@ fn scan_sh_key_share
                 ((GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv))
                     <: GKSE.keyShareEntry).GKSE.key_exchange)));
             have_key := true;
+            saw_sv := true;
             SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
             i := iv `SZ.add` 1sz;
           } else {
-            failed := true;
+            GR.write kacc_ref (Ghost.hide (None #(B.bytes_of_len 32)));
+            saw_sv := true;
+            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+            i := iv `SZ.add` 1sz;
           }
         } else {
+          (* Non-key_share extension, still undecided: skip and keep scanning. *)
           Trade.elim
             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
                el (FStar.List.Tot.index cext (SZ.v iv)))
@@ -3948,8 +3996,10 @@ fn scan_ch_key_share
           (exists* kbytes. V.pts_to key_vec kbytes **
             pure (V.is_full_vec key_vec /\ V.length key_vec == 32 /\
                   Seq.length kbytes == 32 /\
-                  (match RV.reveal_ch_find_key_share (Ghost.reveal cm) with
-                   | Some k -> found == true /\ Seq.equal kbytes (Ghost.reveal k <: Seq.seq U8.t)
+                  (match TLS13.Wire.Semantics.kse_list_find_x25519 (Ghost.reveal cm) with
+                   | Some raw -> (if Seq.length raw = 32
+                                  then found == true /\ Seq.equal kbytes raw
+                                  else found == false)
                    | None -> found == false)))
 {
   V.pts_to_len key_vec;
@@ -3959,7 +4009,7 @@ fn scan_ch_key_share
                 (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
                 None cm);
       assert (pure (Ghost.reveal cm == []));
-      RV.lemma_reveal_ch_find_key_share_nil ();
+      RV.lemma_reveal_kse_list_find_x25519_nil ();
       fold (PPVCL.vmatch_vclist
               (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
               None cm);
@@ -3981,18 +4031,18 @@ fn scan_ch_key_share
       V.pts_to_len (snd nv);
       let count = fst nv;
       let mut i = 0sz;
+      let mut done_ref = false;
       let mut found_ref = false;
-      let kacc_ref = GR.alloc (None #(B.bytes_of_len 32));
       RV.lemma_list_drop_zero (Ghost.reveal cm);
       while (
-        let f = !found_ref;
+        let d = !done_ref;
         let iv = !i;
-        (not f) && (iv `SZ.lt` count)
+        (not d) && (iv `SZ.lt` count)
       )
-      invariant exists* iv f kacc kbytes.
+      invariant exists* iv d found kbytes.
         R.pts_to i iv **
-        R.pts_to found_ref f **
-        GR.pts_to kacc_ref kacc **
+        R.pts_to done_ref d **
+        R.pts_to found_ref found **
         V.pts_to (snd nv) s **
         SM.seq_list_match s cm
           (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv) **
@@ -4003,12 +4053,15 @@ fn scan_ch_key_share
           Seq.length s == FStar.List.Tot.length (Ghost.reveal cm) /\
           V.is_full_vec (snd nv) /\
           V.is_full_vec key_vec /\ V.length key_vec == 32 /\ Seq.length kbytes == 32 /\
-          (f <==> Some? kacc) /\
-          (Some? kacc ==> Seq.equal kbytes (Ghost.reveal (Some?.v kacc) <: Seq.seq U8.t)) /\
-          (f ==> RV.reveal_ch_find_key_share (Ghost.reveal cm) == kacc) /\
-          ((not f) ==>
-            RV.reveal_ch_find_key_share (Ghost.reveal cm) ==
-            RV.reveal_ch_find_key_share (RV.list_drop (SZ.v iv) (Ghost.reveal cm))))
+          (d ==>
+            (match TLS13.Wire.Semantics.kse_list_find_x25519 (Ghost.reveal cm) with
+             | Some raw -> (if Seq.length raw = 32
+                            then found == true /\ Seq.equal kbytes raw
+                            else found == false)
+             | None -> False)) /\
+          ((not d) ==> found == false /\
+            TLS13.Wire.Semantics.kse_list_find_x25519 (Ghost.reveal cm) ==
+            TLS13.Wire.Semantics.kse_list_find_x25519 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))))
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
@@ -4034,13 +4087,13 @@ fn scan_ch_key_share
                          pure (GKSE.keyShareEntry_conv em ==
                                Some (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv))));
         lemma_keyShareEntry_conv_fields em (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
-        RV.lemma_reveal_key_exchange_to_key32
-          ((FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)).GKSE.key_exchange);
         RV.lemma_list_drop_index (Ghost.reveal cm) (SZ.v iv);
-        RV.lemma_reveal_ch_find_key_share_cons
+        RV.lemma_reveal_kse_list_find_x25519_cons
           (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv))
           (RV.list_drop (SZ.v iv + 1) (Ghost.reveal cm));
-        let ok = try_copy_x25519_key key_vec el #em;
+        let res = probe_copy_x25519_key key_vec el #em;
+        let is_x = fst res;
+        let ok = snd res;
         PPB.intro_vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv
           el em (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
         Trade.elim
@@ -4048,22 +4101,24 @@ fn scan_ch_key_share
              el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
           (SM.seq_list_match s (Ghost.reveal cm)
              (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv));
-        if ok {
-          GR.write kacc_ref
-            (Ghost.hide (RV.reveal_key_exchange_to_key32
-              ((FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)).GKSE.key_exchange)));
-          found_ref := true;
+        if is_x {
+          if ok {
+            found_ref := true;
+            done_ref := true;
+          } else {
+            done_ref := true;
+          }
         } else {
           SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
           i := iv `SZ.add` 1sz;
         }
       };
       let f = !found_ref;
+      let d = !done_ref;
       let iv = !i;
-      let kacc_final = GR.read kacc_ref;
       RV.lemma_list_drop_length (Ghost.reveal cm);
-      RV.lemma_reveal_ch_find_key_share_nil ();
-      assert (pure ((not f) ==> SZ.v iv == FStar.List.Tot.length (Ghost.reveal cm)));
+      RV.lemma_reveal_kse_list_find_x25519_nil ();
+      assert (pure ((not d) ==> SZ.v iv == FStar.List.Tot.length (Ghost.reveal cm)));
       fold (PPVCL.vmatch_vclist
               (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
               (Some nv) cm);
@@ -4073,7 +4128,6 @@ fn scan_ch_key_share
           as (PPVCL.vmatch_vclist
                 (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
                 v0 cm);
-      GR.free kacc_ref;
       f
     }
   }
@@ -4111,6 +4165,7 @@ fn scan_ch_extensions
               (Mktuple8?._8 res <==>
                 (match RV.reveal_ch_extensions (Ghost.reveal cext) None None false [] with
                  | Some (server_name, Some key_share, _, sig_schemes) ->
+                   Cons? sig_schemes /\
                    FStar.List.Tot.length sig_schemes <= L.max_signature_schemes /\
                    (match server_name with
                     | Some hostname -> B.length hostname <= L.max_server_name_len
@@ -4267,6 +4322,8 @@ fn scan_ch_extensions
             (GECH.Extension_data_server_name?._0 (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
             (RV.list_drop (SZ.v iv + 1) (Ghost.reveal cext))
             (Ghost.reveal sn_acc0) (Ghost.reveal key_acc0) sv0 (Ghost.reveal sig_acc0);
+          let hsn0 = !has_sn;
+          if not hsn0 {
           let rr = copy_ch_server_name_into sn_vec v #cm_sn;
           let has = Mktuple3?._2 rr;
           let fit = Mktuple3?._3 rr;
@@ -4323,6 +4380,24 @@ fn scan_ch_extensions
             assert (pure (
               RV.reveal_ch_extensions (Ghost.reveal cext) None None false [] == None));
           }
+          } else {
+            (* server_name already committed (commit-on-first): skip this later
+               occurrence.  cons_sn with [Some? sn_acc0] threads the accumulator
+               unchanged, so has_sn/sn_ref/sn_vec/sn_len/sn_too_long are untouched. *)
+            intro_vmatch_extCH_sn v cm_sn #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
+            rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       (GECH.Extension_data_server_name_low v)
+                       (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+                as (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)));
+            Trade.elim
+              (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                 el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+              (SM.seq_list_match s (Ghost.reveal cext)
+                 (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
+            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+            i := iv `SZ.add` 1sz;
+          }
         } else if (GECH.Extension_data_signature_algorithms_low? el) {
           let v = GECH.Extension_data_signature_algorithms_low?._0 el;
           elim_vmatch_extCH_sa v el #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
@@ -4334,6 +4409,12 @@ fn scan_ch_extensions
               (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
             (RV.list_drop (SZ.v iv + 1) (Ghost.reveal cext))
             (Ghost.reveal sn_acc0) (Ghost.reveal key_acc0) sv0 (Ghost.reveal sig_acc0);
+          let slg0 = !sig_len;
+          let stl_sig0 = !sig_too_long;
+          (* [Cons? sig_acc0]: a sig_algs ext was already committed.  From the
+             invariant, [Nil? sig_acc0 <==> (not sig_too_long /\ sig_len == 0)]. *)
+          let already_sig = stl_sig0 || not (SZ.eq slg0 0sz);
+          if not already_sig {
           let rr = copy_ch_signature_schemes_into sig_vec v #cm_sa;
           lemma_length_reveal_synth_sig_schemes
             (GECH.Extension_data_signature_algorithms?._0
@@ -4368,6 +4449,23 @@ fn scan_ch_extensions
                (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
           SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
           i := iv `SZ.add` 1sz;
+          } else {
+            (* signature_algorithms already committed (commit-on-first): skip.
+               cons_sa with [Cons? sig_acc0] threads the accumulator unchanged. *)
+            intro_vmatch_extCH_sa v cm_sa #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
+            rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       (GECH.Extension_data_signature_algorithms_low v)
+                       (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+                as (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)));
+            Trade.elim
+              (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                 el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+              (SM.seq_list_match s (Ghost.reveal cext)
+                 (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
+            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+            i := iv `SZ.add` 1sz;
+          }
         } else if (GECH.Extension_data_key_share_low? el) {
           let v = GECH.Extension_data_key_share_low?._0 el;
           elim_vmatch_extCH_ks v el #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
@@ -4379,12 +4477,18 @@ fn scan_ch_extensions
               (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
             (RV.list_drop (SZ.v iv + 1) (Ghost.reveal cext))
             (Ghost.reveal sn_acc0) (Ghost.reveal key_acc0) sv0 (Ghost.reveal sig_acc0);
+          let hk0 = !has_key;
+          if not hk0 {
           let found = scan_ch_key_share key_vec v #cm_ks;
           if found {
             GR.write key_ref
-              (Ghost.hide (RV.reveal_ch_find_key_share
-                (GECH.Extension_data_key_share?._0
-                  (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))));
+              (Ghost.hide (match TLS13.Wire.Semantics.kse_list_find_x25519
+                                   (GECH.Extension_data_key_share?._0
+                                     (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv))
+                                     <: list GKSE.keyShareEntry) with
+                           | Some raw -> (if Seq.length raw = 32
+                                          then Some (raw <: B.bytes_of_len 32) else None)
+                           | None -> None));
             has_key := true;
             intro_vmatch_extCH_ks v cm_ks #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
             rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
@@ -4412,6 +4516,23 @@ fn scan_ch_extensions
               (SM.seq_list_match s (Ghost.reveal cext)
                  (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
             failed := true;
+          }
+          } else {
+            (* key_share already committed (commit-on-first): skip.  cons_ks with
+               [Some? key_acc0] threads the accumulator unchanged. *)
+            intro_vmatch_extCH_ks v cm_ks #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
+            rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       (GECH.Extension_data_key_share_low v)
+                       (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+                as (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)));
+            Trade.elim
+              (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                 el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+              (SM.seq_list_match s (Ghost.reveal cext)
+                 (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
+            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+            i := iv `SZ.add` 1sz;
           }
         } else if (GECH.Extension_data_supported_versions_low? el) {
           let v = GECH.Extension_data_supported_versions_low?._0 el;
@@ -4500,7 +4621,7 @@ fn scan_ch_extensions
       RV.lemma_reveal_ch_extensions_nil
         (Ghost.reveal sn_acc_final) (Ghost.reveal key_acc_final) sv (Ghost.reveal sig_acc_final);
       assert (pure ((not fl) ==> SZ.v iv == FStar.List.Tot.length (Ghost.reveal cext)));
-      let ok = (not fl) && sv && hk && (not stl) && (not sigtl);
+      let ok = (not fl) && sv && hk && (not stl) && (not sigtl) && (not (SZ.eq slg 0sz));
       fold (PPVCL.vmatch_vclist
               (PPB.vmatch_conv GECH.extensionClientHello_vmatch
                                GECH.extensionClientHello_conv)
@@ -5056,18 +5177,18 @@ fn parse_handshake_message
         S.to_array s;
         RV.lemma_handshake_synth_finished (cm <: GHS.handshake_body_finished);
         RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
-          (M.Finished ({ M.verify_data = (cm <: B.bytes_of_len 32) }));
+          (M.Finished (cm <: GFin.finished));
         let lfin = ({ L.finished_verify_data = xfin.PPBY.lvec_vec });
         rewrite (V.pts_to xfin.PPBY.lvec_vec cm)
              as (V.pts_to lfin.L.finished_verify_data cm);
-        fold (L.is_valid_finished lfin ({ M.verify_data = (cm <: B.bytes_of_len 32) }));
+        fold (L.is_valid_finished lfin (cm <: GFin.finished));
         fold (L.is_valid_handshake_msg (L.LFinished lfin)
-                (M.Finished ({ M.verify_data = (cm <: B.bytes_of_len 32) })));
+                (M.Finished (cm <: GFin.finished)));
         fold (L.is_valid_tls_message
                 (L.LTlsHandshake (L.LFinished lfin))
-                (M.TlsHandshake (M.Finished ({ M.verify_data = (cm <: B.bytes_of_len 32) }))));
+                (M.TlsHandshake (M.Finished (cm <: GFin.finished))));
         lemma_wire_exists content_type T.Handshake
-          (M.TlsHandshake (M.Finished ({ M.verify_data = (cm <: B.bytes_of_len 32) }))) 'input_bytes;
+          (M.TlsHandshake (M.Finished (cm <: GFin.finished))) 'input_bytes;
         Some (L.LTlsHandshake (L.LFinished lfin))
       }
       GHS.Body_key_update_low xku -> {
@@ -5109,6 +5230,9 @@ fn parse_handshake_message
             | GSS.Rsa_pss_rsae_sha256 -> 2052us
             | GSS.Ed25519 -> 2055us
             | GSS.Unknown_signatureScheme v -> v);
+          WS.lemma_certificateVerify_representable
+            ({ GCV.algorithm = fst xcv;
+               GCV.signature = (sig_seq <: GCV.certificateVerify_signature) });
           RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
             (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
           WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
@@ -5133,6 +5257,9 @@ fn parse_handshake_message
           Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
                      (S.pts_to s 'input_bytes);
           S.to_array s;
+          WS.lemma_certificateVerify_representable
+            ({ GCV.algorithm = fst xcv;
+               GCV.signature = (sig_seq <: GCV.certificateVerify_signature) });
           RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
             (Ghost.reveal gv) (SZ.v input_len);
           handshake_fallback content_type input input_len
@@ -5152,6 +5279,8 @@ fn parse_handshake_message
         Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
                    (S.pts_to s 'input_bytes);
         S.to_array s;
+        RV.lemma_reveal_ee_connect (cee <: GEE.encryptedExtensions);
+        WS.lemma_encryptedExtensions_representable (cee <: GEE.encryptedExtensions);
         RV.lemma_handshake_synth_encrypted_extensions
           (cee <: GHS.handshake_body_encrypted_extensions);
         RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
@@ -5183,22 +5312,8 @@ fn parse_handshake_message
                                  Some (Ghost.reveal gv)));
         let cse : Ghost.erased GSH.serverHello = Some?.v (GSH.serverHello_conv cm);
         elim_serverHello_body xsh;
-        lemma_sh_conv_version cm (Ghost.reveal cse);
-        let lv = fst xsh;
-        if (not (GPV.TLS_1p2? lv)) {
-          (* Bad legacy_version: synth lands [None]; fall back. *)
-          intro_serverHello_body xsh;
-          intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
-          PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
-            GHS.free_handshake (GHS.Body_server_hello_low xsh);
-          Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
-                     (S.pts_to s 'input_bytes);
-          S.to_array s;
-          RV.lemma_handshake_synth_server_hello_bad_version (Ghost.reveal cse <: GHS.handshake_body_server_hello);
-          RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
-            (Ghost.reveal gv) (SZ.v input_len);
-          handshake_fallback content_type input input_len
-        } else {
+        (* The validating synth ignores [legacy_version]; HRR vs ServerHello is
+           decided by the ite discriminant [b] (the magic-random tag). *)
           let b = dfst (snd (snd xsh));
           elim_sh_ite_payload xsh b;
           lemma_sh_conv_body cm (Ghost.reveal cse);
@@ -5229,24 +5344,7 @@ fn parse_handshake_message
               GSHB.ServerHello_body_false?._0 (Ghost.reveal cse).GSH.body;
             elim_serverHelloBody (dsnd (snd (snd xsh)));
             lemma_shbody_conv (dsnd (snd (snd cm))) (Ghost.reveal sf).GSHB.value;
-            let comp = fst (snd (dsnd (snd (snd xsh))));
-            if (comp <> 0uy) {
-              (* legacy_compression_method != 0: synth lands [None]; fall back. *)
-              intro_serverHelloBody (dsnd (snd (snd xsh)));
-              intro_sh_ite_payload xsh b;
-              intro_serverHello_body xsh;
-              intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
-              PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
-                GHS.free_handshake (GHS.Body_server_hello_low xsh);
-              Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
-                         (S.pts_to s 'input_bytes);
-              S.to_array s;
-              RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
-              RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
-                (Ghost.reveal gv) (SZ.v input_len);
-              handshake_fallback content_type input input_len
-            } else {
-              let sh_cipher = snd (fst (dsnd (snd (snd xsh))));
+            let sh_cipher = snd (fst (dsnd (snd (snd xsh))));
               assert (pure (sh_cipher == snd (fst (dsnd (snd (snd cm))))));
               assert (pure ((Ghost.reveal sf).GSHB.value.GSHBody.cipher_suite ==
                             snd (fst (dsnd (snd (snd cm))))));
@@ -5264,6 +5362,7 @@ fn parse_handshake_message
                   Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
                              (S.pts_to s 'input_bytes);
                   S.to_array s;
+                  WS.lemma_serverHello_representable (Ghost.reveal cse <: GHS.handshake_body_server_hello);
                   RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
                   RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
                     (Ghost.reveal gv) (SZ.v input_len);
@@ -5287,26 +5386,12 @@ fn parse_handshake_message
                   Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
                              (S.pts_to s 'input_bytes);
                   S.to_array s;
-                  LP.parsed_data_is_serialize GHS.handshake_serializer (Ghost.reveal 'input_bytes);
-                  Seq.lemma_eq_elim
-                    (LP.serialize GHS.handshake_serializer (Ghost.reveal gv) `Seq.append`
-                     Seq.slice (Ghost.reveal 'input_bytes) (SZ.v input_len)
-                       (Seq.length (Ghost.reveal 'input_bytes)))
-                    (Ghost.reveal 'input_bytes);
-                  Seq.lemma_len_append
-                    (LP.serialize GHS.handshake_serializer (Ghost.reveal gv))
-                    (Seq.slice (Ghost.reveal 'input_bytes) (SZ.v input_len)
-                       (Seq.length (Ghost.reveal 'input_bytes)));
-                  assert (pure (Seq.length
-                    (LP.serialize GHS.handshake_serializer (Ghost.reveal gv)) == SZ.v input_len));
+                  RV.lemma_reveal_sh_key_share_connect
+                    ((Ghost.reveal sf).GSHB.value.GSHBody.extensions <: list GESH.extensionServerHello);
+                  WS.lemma_serverHello_representable (Ghost.reveal cse <: GHS.handshake_body_server_hello);
                   RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
-                  assert (pure (B.length
-                    (LP.serialize GHS.handshake_serializer
-                      (GHS.Body_server_hello (Ghost.reveal cse <: GHS.handshake_body_server_hello)))
-                      == SZ.v input_len));
                   let found = snd res;
-                  let fits = SZ.lte input_len 4096sz;
-                  if (found && fits) {
+                  if found {
                     RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
                       (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
                     WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
@@ -5324,8 +5409,8 @@ fn parse_handshake_message
                     fold (L.is_valid_tls_message
                             (L.LTlsHandshake (L.LServerHello lsh))
                             (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
-                    lemma_wire_exists content_type T.Handshake
-                      (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))) 'input_bytes;
+                    lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes)
+                      (Ghost.reveal gv) (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
                     Some (L.LTlsHandshake (L.LServerHello lsh))
                   } else {
                     (* key_share scan found nothing, or the body exceeds
@@ -5338,9 +5423,7 @@ fn parse_handshake_message
                   }
                 }
               }
-            }
           }
-        }
       }
       GHS.Body_certificate_low xcert -> {
         elim_vmatch_certificate xcert;
@@ -5373,6 +5456,8 @@ fn parse_handshake_message
           (* The chain does not fit the fixed-size representation: synth lands
              [None]; free the owned Vecs, re-pack and free the parsed structure,
              and fall back. *)
+          RV.lemma_handshake_synth_certificate_none
+            (Ghost.reveal cert_body <: GHS.handshake_body_certificate);
           rewrite (V.pts_to (Mktuple6?._1 res) cb) as (V.pts_to cbv cb);
           rewrite (V.pts_to (Mktuple6?._2 res) offs) as (V.pts_to ofv offs);
           rewrite (V.pts_to (Mktuple6?._3 res) lns) as (V.pts_to lnv lns);
@@ -5391,6 +5476,8 @@ fn parse_handshake_message
         } else {
           (* The chain fits: synth is [Some (M.Certificate {chain; body})].
              Build the L representation from the owned Vecs and discharge. *)
+          RV.lemma_handshake_synth_certificate_some
+            (Ghost.reveal cert_body <: GHS.handshake_body_certificate);
           intro_vmatch_certificate xcert (Ghost.reveal cm0) #(Ghost.reveal gv);
           PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
             GHS.free_handshake (GHS.Body_certificate_low xcert);
@@ -5418,8 +5505,8 @@ fn parse_handshake_message
           fold (L.is_valid_tls_message
                   (L.LTlsHandshake (L.LCertificate lcert))
                   (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
-          lemma_wire_exists content_type T.Handshake
-            (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))) 'input_bytes;
+          lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes)
+            (Ghost.reveal gv) (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
           Some (L.LTlsHandshake (L.LCertificate lcert))
         }
       }
@@ -5445,21 +5532,11 @@ fn parse_handshake_message
         lemma_client_hello_conv_fields cm (Ghost.reveal gv);
         let ch_body : Ghost.erased GHS.handshake_body_client_hello =
           Ghost.hide (GHS.Body_client_hello?._0 (Ghost.reveal gv));
-        let lv = fst (fst (fst xch));
-        if (not (GPV.TLS_1p2? lv)) {
-          intro_vmatch_client_hello xch cm #(Ghost.reveal gv);
-          PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
-            GHS.free_handshake (GHS.Body_client_hello_low xch);
-          Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
-                     (S.pts_to s 'input_bytes);
-          S.to_array s;
-          RV.lemma_handshake_synth_client_hello (Ghost.reveal ch_body);
-          RV.lemma_synth_client_hello_reveal (Ghost.reveal ch_body);
-          RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
-            (Ghost.reveal gv) (SZ.v input_len);
-          handshake_fallback content_type input input_len
-        } else {
-          let randvec = V.alloc 0uy 32sz;
+        (* [clientHello_representable] does NOT constrain [legacy_version]: the
+           validating [synth_client_hello] accepts/rejects purely on the cipher
+           suite count and the extension scan.  So there is no version gate here;
+           accept/reject is decided by [cipher_ok && ext_ok] below. *)
+        let randvec = V.alloc 0uy 32sz;
           unfold (LSeqB.vmatch_copy_seqbytes
                     (snd (fst (fst xch))) (snd (fst (fst cm))));
           V.pts_to_len (snd (fst (fst xch))).PPBY.lvec_vec;
@@ -5504,6 +5581,7 @@ fn parse_handshake_message
               (Mktuple8?._8 ext_res <==>
                 (match RV.reveal_ch_extensions (Ghost.reveal (snd (snd cm))) None None false [] with
                  | Some (server_name, Some key_share, _, sig_schemes) ->
+                   Cons? sig_schemes /\
                    FStar.List.Tot.length sig_schemes <= L.max_signature_schemes /\
                    (match server_name with
                     | Some hostname -> B.length hostname <= L.max_server_name_len
@@ -5532,7 +5610,6 @@ fn parse_handshake_message
             assert (pure (cipher_ok == true /\ ext_ok == true));
             assert (pure (Ghost.reveal gv ==
                           GHS.Body_client_hello (Ghost.reveal ch_body)));
-            assert (pure (GPV.TLS_1p2? (Ghost.reveal ch_body).GCH.legacy_version));
             assert (pure (((Ghost.reveal ch_body).GCH.cipher_suites <: list GCS.cipherSuite) ==
                           (snd (snd (fst cm)) <: list GCS.cipherSuite)));
             lemma_length_reveal_synth_cipher_suites
@@ -5552,6 +5629,25 @@ fn parse_handshake_message
                  | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
                  | None -> True)
               | _ -> False));
+            (* Unfold [clientHello_representable] and re-derive its exact accept
+               condition from the scan.  The scan's [ext_ok] characterisation
+               (still in the slprop context) carries [Cons? sig_schemes], which
+               representability requires; combined with the cipher-suite bound
+               this pins [clientHello_representable ch_body == true]. *)
+            RV.lemma_reveal_clientHello_representable_scan (Ghost.reveal ch_body);
+            assert (pure (
+              match RV.reveal_ch_extensions
+                      (Ghost.reveal ch_body).GCH.extensions None None false [] with
+              | Some (server_name, Some key_share, _, sig_schemes) ->
+                Cons? sig_schemes /\
+                FStar.List.Tot.length sig_schemes <=
+                  M.client_hello_max_signature_schemes /\
+                (match server_name with
+                 | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
+                 | None -> True)
+              | _ -> False));
+            assert (pure (TLS13.Wire.Semantics.clientHello_cipher_suites (Ghost.reveal ch_body) ==
+                          ((Ghost.reveal ch_body).GCH.cipher_suites <: list GCS.cipherSuite)));
             assert (pure (LP.parse GHS.handshake_parser (Ghost.reveal 'input_bytes) ==
                          Some (Ghost.reveal gv, B.length (Ghost.reveal 'input_bytes))));
             GHS.handshake_bytesize_eq (Ghost.reveal gv);
@@ -5582,42 +5678,37 @@ fn parse_handshake_message
                  as (V.pts_to lch.L.client_hello_cipher_suites csbytes);
             rewrite (V.pts_to (Mktuple8?._6 ext_res) sigbytes)
                  as (V.pts_to lch.L.client_hello_signature_schemes sigbytes);
-            let mch : Ghost.erased M.client_hello =
+            let mch : Ghost.erased GCH.clientHello =
               Ghost.hide (M.ClientHello?._0 (Some?.v (RV.handshake_synth (Ghost.reveal gv))));
-            let bare_mch : Ghost.erased M.client_hello =
-              Ghost.hide ({
-                M.random = (Ghost.reveal mch).M.random;
-                M.server_name = (Ghost.reveal mch).M.server_name;
-                M.key_share = (Ghost.reveal mch).M.key_share;
-                M.cipher_suites = (Ghost.reveal mch).M.cipher_suites;
-                M.signature_schemes = (Ghost.reveal mch).M.signature_schemes;
-                M.body = B.empty;
-              });
-            assert (pure (WS.synth_client_hello (Ghost.reveal ch_body) == Some (Ghost.reveal bare_mch)));
-            assert (pure ((Ghost.reveal mch).M.random == (Ghost.reveal bare_mch).M.random));
-            assert (pure ((Ghost.reveal mch).M.server_name == (Ghost.reveal bare_mch).M.server_name));
-            assert (pure ((Ghost.reveal mch).M.key_share == (Ghost.reveal bare_mch).M.key_share));
-            assert (pure ((Ghost.reveal mch).M.cipher_suites == (Ghost.reveal bare_mch).M.cipher_suites));
-            assert (pure ((Ghost.reveal mch).M.signature_schemes == (Ghost.reveal bare_mch).M.signature_schemes));
-            assert (pure ((Ghost.reveal mch).M.random ==
-                          ((Ghost.reveal ch_body).GCH.random <: B.bytes_of_len 32)));
-            assert (pure ((Ghost.reveal mch).M.cipher_suites ==
-                          RV.reveal_synth_cipher_suites (Ghost.reveal ch_body).GCH.cipher_suites));
-            assert (pure (Seq.equal rbytes (Ghost.reveal mch).M.random));
+            assert (pure (Some?.v (RV.handshake_synth (Ghost.reveal gv)) ==
+                          M.ClientHello (Ghost.reveal ch_body)));
+            assert (pure (Ghost.reveal mch == Ghost.reveal ch_body));
+            assert (pure (((Ghost.reveal mch).GCH.extensions <: list GECH.extensionClientHello) ==
+                          (snd (snd cm) <: list GECH.extensionClientHello)));
+            RV.lemma_reveal_ch_extensions_connect_valid (Ghost.reveal mch);
+            RV.lemma_reveal_synth_cipher_suites_id
+              (snd (snd (fst cm)) <: list GCS.cipherSuite);
+            assert (pure (Seq.equal rbytes
+                          (TLS13.Wire.Semantics.clientHello_random (Ghost.reveal mch))));
             assert (pure (L.cipher_suites_match csbytes
                           (SZ.v lch.L.client_hello_cipher_suites_len)
-                          (Ghost.reveal mch).M.cipher_suites));
+                          (TLS13.Wire.Semantics.clientHello_cipher_suites (Ghost.reveal mch))));
             assert (pure (
               L.optional_byte_prefix_matches
                 lch.L.client_hello_has_server_name
                 snbytes
                 lch.L.client_hello_server_name_len
-                (Ghost.reveal mch).M.server_name));
-            assert (pure (Seq.equal kbytes ((Ghost.reveal mch).M.key_share <: Seq.seq U8.t)));
+                (TLS13.Wire.Semantics.clientHello_server_name (Ghost.reveal mch))));
             assert (pure (
-              L.signature_schemes_match sigbytes
-                (SZ.v lch.L.client_hello_signature_schemes_len)
-                (Ghost.reveal mch).M.signature_schemes));
+              match TLS13.Wire.Semantics.clientHello_key_share_x25519 (Ghost.reveal mch) with
+              | Some k -> B.length k == 32 /\ Seq.equal kbytes (k <: Seq.seq U8.t)
+              | None -> False));
+            assert (pure (
+              match TLS13.Wire.Semantics.clientHello_sig_algs (Ghost.reveal mch) with
+              | Some sas ->
+                L.signature_schemes_match sigbytes
+                  (SZ.v lch.L.client_hello_signature_schemes_len) sas
+              | None -> False));
             assert (pure (Some?.v (RV.handshake_synth (Ghost.reveal gv)) ==
                           M.ClientHello (Ghost.reveal mch)));
             assert (pure (V.is_full_vec lch.L.client_hello_random));
@@ -5655,7 +5746,6 @@ fn parse_handshake_message
             assert (pure (not (cipher_ok && ext_ok)));
             assert (pure (Ghost.reveal gv ==
                           GHS.Body_client_hello (Ghost.reveal ch_body)));
-            assert (pure (GPV.TLS_1p2? (Ghost.reveal ch_body).GCH.legacy_version));
             assert (pure (((Ghost.reveal ch_body).GCH.cipher_suites <: list GCS.cipherSuite) ==
                           (snd (snd (fst cm)) <: list GCS.cipherSuite)));
             assert (pure (((Ghost.reveal ch_body).GCH.extensions <: list GECH.extensionClientHello) ==
@@ -5672,6 +5762,7 @@ fn parse_handshake_message
                 (match RV.reveal_ch_extensions
                         (Ghost.reveal ch_body).GCH.extensions None None false [] with
                  | Some (server_name, Some key_share, _, sig_schemes) ->
+                   Cons? sig_schemes /\
                    FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes /\
                    (match server_name with
                     | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
@@ -5684,7 +5775,6 @@ fn parse_handshake_message
               (Ghost.reveal gv) (SZ.v input_len);
             handshake_fallback content_type input input_len
           }
-        }
       }
     }
   } else {
@@ -5752,7 +5842,7 @@ fn parse_tls_message
       let b0 = input.(0sz);
       if (b0 = 1uy) {
         fold (L.is_valid_tls_message L.LTlsChangeCipherSpec M.TlsChangeCipherSpec);
-        lemma_wire_exists content_type T.ChangeCipherSpec M.TlsChangeCipherSpec 'input_bytes;
+        lemma_wire_exists content_type T.Change_cipher_spec M.TlsChangeCipherSpec 'input_bytes;
         Some L.LTlsChangeCipherSpec
       } else {
         None #L.tls_message
@@ -5797,16 +5887,18 @@ fn parse_tls_message
             (L.LTlsApplicationData
               ({ L.application_data_bytes = buf; L.application_data_len = input_len }))
             (M.TlsApplicationData 'input_bytes));
-    assert (pure (L.content_type_matches content_type T.ApplicationData /\
-                  WS.parse_tls_message T.ApplicationData 'input_bytes ==
+    assert (pure (L.content_type_matches content_type T.Application_data /\
+                  WS.parse_tls_message T.Application_data 'input_bytes ==
                   Some (M.TlsApplicationData 'input_bytes)));
-    lemma_wire_exists content_type T.ApplicationData
+    lemma_wire_exists content_type T.Application_data
       (M.TlsApplicationData 'input_bytes) 'input_bytes;
     Some (L.LTlsApplicationData
             ({ L.application_data_bytes = buf; L.application_data_len = input_len }))
   } else {
     (* Unknown content type: no T.content_type matches, so the spec parser is
-       vacuously None for every matching content type. *)
+       vacuously None for every matching content type.  (The generated [Invalid]
+       content type, wire byte 0, also yields [None].) *)
+    WS.lemma_parse_tls_message_invalid_none 'input_bytes;
     None #L.tls_message
   }
 }
@@ -5897,7 +5989,7 @@ fn peek_decrypt_record
       SZ.v raw_len == 5 + SZ.v flen /\
       SZ.v flen <= 16640 /\
       WS.parse_record (Ghost.reveal raw_bytes) ==
-        Some (T.ApplicationData,
+        Some (T.Application_data,
               Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen),
               SZ.v raw_len))
   returns r: option decoded_fragment
@@ -6030,7 +6122,8 @@ fn build_decoded_record_ok
   returns r: L.decoded_network_record_result
   ensures
     (match r with
-     | L.NetworkRecordNeedMoreInput -> emp
+     | L.NetworkRecordNeedMoreInput ->
+       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkRecordDecodeError -> emp
      | L.NetworkRecordOk decoded ->
       exists* fragment_bytes2.
@@ -6093,7 +6186,8 @@ fn decode_network_record
   ensures CR.connection_exactly c 'st0 **
           pts_to raw 'raw_bytes **
           (match r with
-           | L.NetworkRecordNeedMoreInput -> emp
+           | L.NetworkRecordNeedMoreInput ->
+             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkRecordDecodeError -> emp
            | L.NetworkRecordOk decoded ->
             exists* fragment_bytes.
@@ -6140,6 +6234,7 @@ fn decode_network_record
 {
   Arr.pts_to_len raw;
   if (SZ.lt raw_len 5sz) {
+    RVD.lemma_parse_record_wire_none_short 'raw_bytes;
     L.NetworkRecordNeedMoreInput
   } else {
     let b0 = raw.(0sz);
@@ -6157,21 +6252,21 @@ fn decode_network_record
       if (raw_len = rec_len) {
       RVD.lemma_parse_record_wire_from_header 'raw_bytes;
       let outer_ct : T.content_type =
-        (if b0 = 0x14uy then T.ChangeCipherSpec
+        (if b0 = 0x14uy then T.Change_cipher_spec
          else if b0 = 0x15uy then T.Alert
          else if b0 = 0x16uy then T.Handshake
-         else T.ApplicationData);
+         else T.Application_data);
       if (b0 = 0x17uy) {
         assert (pure (b2 = 0x03uy));
         RVD.lemma_parse_record_from_header 'raw_bytes;
         WS.lemma_parse_record_implies_parse_record_wire (Ghost.reveal 'raw_bytes);
-        assert (pure (outer_ct == T.ApplicationData));
+        assert (pure (outer_ct == T.Application_data));
         assert (pure (WS.parse_record (Ghost.reveal 'raw_bytes) ==
-                      Some (T.ApplicationData,
+                      Some (T.Application_data,
                             Seq.slice (Ghost.reveal 'raw_bytes) 5 (5 + SZ.v flen),
                             SZ.v raw_len)));
         assert (pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) ==
-                      Some (T.ApplicationData,
+                      Some (T.Application_data,
                             Seq.slice (Ghost.reveal 'raw_bytes) 5 (5 + SZ.v flen),
                             SZ.v raw_len)));
         (* PROTECTED path (ApplicationData): decrypt + strip inner plaintext. *)
@@ -6320,7 +6415,8 @@ fn build_decoded_buffer_ok
   returns r: L.decoded_network_buffer_result
   ensures
     (match r with
-     | L.NetworkBufferNeedMoreInput -> emp
+     | L.NetworkBufferNeedMoreInput ->
+       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkBufferDecodeError -> emp
      | L.NetworkBufferOk decoded ->
       exists* raw_record_bytes2 fragment_bytes2.
@@ -6402,7 +6498,8 @@ fn decode_network_buffer
   ensures CR.connection_exactly c 'st0 **
           pts_to raw 'raw_bytes **
           (match r with
-           | L.NetworkBufferNeedMoreInput -> emp
+           | L.NetworkBufferNeedMoreInput ->
+             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkBufferDecodeError -> emp
            | L.NetworkBufferOk decoded ->
             exists* raw_record_bytes fragment_bytes.
@@ -6466,6 +6563,7 @@ fn decode_network_buffer
   Arr.pts_to_len raw;
   if (SZ.lt raw_len 5sz) {
     (* not even a full record header yet *)
+    RVD.lemma_parse_record_wire_none_short 'raw_bytes;
     L.NetworkBufferNeedMoreInput
   } else {
     let b0 = raw.(0sz);
@@ -6487,22 +6585,22 @@ fn decode_network_buffer
         DW.lemma_parse_record_wire_buffer_prefix (Ghost.reveal 'raw_bytes)
           (Ghost.reveal raw_record_bytes) (SZ.v flen);
         let outer_ct : T.content_type =
-          (if b0 = 0x14uy then T.ChangeCipherSpec
+          (if b0 = 0x14uy then T.Change_cipher_spec
            else if b0 = 0x15uy then T.Alert
            else if b0 = 0x16uy then T.Handshake
-           else T.ApplicationData);
+           else T.Application_data);
         if (b0 = 0x17uy) {
           assert (pure (b2 = 0x03uy));
           DW.lemma_parse_record_buffer_prefix (Ghost.reveal 'raw_bytes)
             (Ghost.reveal raw_record_bytes) (SZ.v flen);
           WS.lemma_parse_record_implies_parse_record_wire (Ghost.reveal raw_record_bytes);
-          assert (pure (outer_ct == T.ApplicationData));
+          assert (pure (outer_ct == T.Application_data));
           assert (pure (WS.parse_record (Ghost.reveal raw_record_bytes) ==
-                        Some (T.ApplicationData,
+                        Some (T.Application_data,
                               Seq.slice (Ghost.reveal raw_record_bytes) 5 (5 + SZ.v flen),
                               SZ.v consumed_len)));
           assert (pure (WS.parse_record_wire (Ghost.reveal raw_record_bytes) ==
-                        Some (T.ApplicationData,
+                        Some (T.Application_data,
                               Seq.slice (Ghost.reveal raw_record_bytes) 5 (5 + SZ.v flen),
                               SZ.v consumed_len)));
           (* PROTECTED path: decrypt the prefix + strip inner plaintext. *)
@@ -6603,6 +6701,7 @@ fn decode_network_buffer
         }
       } else {
         (* header parsed but the full fragment has not arrived yet *)
+        RVD.lemma_parse_record_wire_none_incomplete 'raw_bytes;
         L.NetworkBufferNeedMoreInput
       }
     } else {
