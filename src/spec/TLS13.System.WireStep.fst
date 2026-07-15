@@ -33,6 +33,9 @@ module WFSM = Common.WireFormatStateMachine
 module WF  = Common.WireFormat
 module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
 module CT  = TLS13.Impl.Client.Types
+module L   = FStar.List.Tot
+module RVD = TLS13.Wire.Spec.RevealDecode
+module WU  = TLS13.Wire.Spec.Reveal.Util
 
 (** Hello-field stability predicate: the cleartext-hello fields plus `hs_start`
     are monotone across a step. **)
@@ -625,4 +628,3022 @@ let lemma_ch_deliver_projection_inhabited (sent_ch:M.client_hello)
           B.length sent_ch.M.body == 0
       with raw parsed_ch and ()
     end
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    APPLICATION-DATA RECORD REACHABILITY INVERSION.
+
+    Two single-endpoint facts used by the `client_clean` ready-coupling of
+    `TLS13.System`:
+
+      * a reachable CLIENT at `ControlApplicationData` has sent (in its
+        `raw_sent` byte log) at least one ApplicationData-typed record (its
+        protected Finished);
+      * a reachable SERVER whose `raw_received` byte log contains an
+        ApplicationData-typed record has its control at or after receipt of the
+        client Finished (`HsClientFinishedReceived`).
+
+    Bridged at the System level by `byte_pairing` (client `raw_sent` == server
+    `raw_received` at a quiet channel).
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** A wire-record message list contains an ApplicationData-typed record. **)
+let list_has_appdata (msgs:list CW.wire_message) : prop =
+  exists (m:CW.wire_message).
+    L.memP m msgs /\ m.CW.wm_content_type == T.ApplicationData
+
+(** A raw byte log parses into a wire-record list containing an
+    ApplicationData-typed record.  A pure function of `raw` (hence stable under
+    `Seq.equal`). **)
+let raw_has_appdata_record (raw:B.bytes) : prop =
+  exists (msgs:list CW.wire_message).
+    WF.parses_as CW.tls_record_wire_format raw msgs Seq.empty /\
+    list_has_appdata msgs
+
+(** `raw_has_appdata_record` transports across byte-equal logs. **)
+let lemma_raw_has_appdata_record_seq_equal (raw1 raw2:B.bytes)
+  : Lemma
+      (requires Seq.equal raw1 raw2 /\ raw_has_appdata_record raw1)
+      (ensures raw_has_appdata_record raw2)
+  = Seq.lemma_eq_elim raw1 raw2
+
+(** The `tls_record_wire_format` record parser strictly consumes input: any
+    successful parse leaves a shorter residual. **)
+let lemma_wire_parse_strict_decrease (raw:B.bytes)
+  : Lemma
+      (ensures
+        (match CW.wire_parse raw with
+         | Some (_, after) -> B.length after < B.length raw
+         | None -> True))
+  = match W.parse_record_wire raw with
+    | None -> ()
+    | Some (content_type, fragment, consumed) ->
+      W.lemma_parse_record_wire_some_consumed_positive raw content_type fragment consumed;
+      Seq.lemma_len_slice raw consumed (B.length raw)
+
+(** `parses_as` with empty residual is FUNCTIONAL: the record wire format admits
+    at most one message decomposition of a given byte log (each record consumes
+    a positive prefix). **)
+let rec lemma_parses_as_functional
+  (raw:B.bytes) (msgs1 msgs2:list CW.wire_message)
+  : Lemma
+      (requires
+        WF.parses_as CW.tls_record_wire_format raw msgs1 Seq.empty /\
+        WF.parses_as CW.tls_record_wire_format raw msgs2 Seq.empty)
+      (ensures msgs1 == msgs2)
+      (decreases msgs1)
+  = match msgs1, msgs2 with
+    | [], [] -> ()
+    | [], w2 :: r2 ->
+      // msgs1 = [] forces raw == empty; but msgs2 nonempty forces a positive parse.
+      Seq.lemma_eq_elim raw Seq.empty;
+      (match W.parse_record_wire raw with
+       | None -> ()
+       | Some (ct, frag, consumed) ->
+         W.lemma_parse_record_wire_some_consumed_positive raw ct frag consumed)
+    | w1 :: r1, [] ->
+      Seq.lemma_eq_elim raw Seq.empty;
+      (match W.parse_record_wire raw with
+       | None -> ()
+       | Some (ct, frag, consumed) ->
+         W.lemma_parse_record_wire_some_consumed_positive raw ct frag consumed)
+    | w1 :: r1, w2 :: r2 ->
+      // Both decompositions start by parsing `raw`; `wire_parse` is a function,
+      // so the first message and residual coincide.  Recurse on the residual.
+      eliminate exists parsed1 after1.
+        CW.wire_parse raw == Some (parsed1, after1) /\ parsed1 == w1 /\
+        WF.parses_as CW.tls_record_wire_format after1 r1 Seq.empty
+      returns msgs1 == msgs2
+      with _p1.
+      eliminate exists parsed2 after2.
+        CW.wire_parse raw == Some (parsed2, after2) /\ parsed2 == w2 /\
+        WF.parses_as CW.tls_record_wire_format after2 r2 Seq.empty
+      returns msgs1 == msgs2
+      with _p2.
+      (lemma_parses_as_functional after1 r1 r2)
+
+(** If the FIRST record of `raw` is ApplicationData-typed and `raw` decomposes
+    into `msgs`, then `msgs` contains an ApplicationData-typed record. **)
+let lemma_first_record_appdata (raw:B.bytes) (msgs:list CW.wire_message)
+  : Lemma
+      (requires
+        (match W.parse_record_wire raw with
+         | Some (ct, _, _) -> ct == T.ApplicationData
+         | None -> False) /\
+        WF.parses_as CW.tls_record_wire_format raw msgs Seq.empty)
+      (ensures list_has_appdata msgs)
+  = match msgs with
+    | [] ->
+      // Empty decomposition forces raw == empty, contradicting a positive parse.
+      Seq.lemma_eq_elim raw Seq.empty;
+      (match W.parse_record_wire raw with
+       | Some (ct, frag, consumed) ->
+         W.lemma_parse_record_wire_some_consumed_positive raw ct frag consumed)
+    | w :: rest ->
+      eliminate exists parsed after.
+        CW.wire_parse raw == Some (parsed, after) /\ parsed == w /\
+        WF.parses_as CW.tls_record_wire_format after rest Seq.empty
+      returns list_has_appdata msgs
+      with _p.
+      (assert (w.CW.wm_content_type == T.ApplicationData);
+       assert (L.memP w msgs))
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PART 2 — single-endpoint control predicates and pure `step_model`
+    inversion facts (server role).
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** The controls a reachable SERVER endpoint can occupy. **)
+let server_ctrl_ok (c:CS.connection_control_state) : bool =
+  match c with
+  | CS.ControlNew
+  | CS.ControlHandshaking CS.HsAwaitingClientHello
+  | CS.ControlHandshaking CS.HsClientHelloReceived
+  | CS.ControlHandshaking CS.HsServerHelloSent
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
+  | CS.ControlHandshaking CS.HsServerFinishedSent
+  | CS.ControlHandshaking CS.HsClientFinishedReceived
+  | CS.ControlHandshaking CS.HsClientFinishedVerified
+  | CS.ControlApplicationData
+  | CS.ControlClosing
+  | CS.ControlClosed
+  | CS.ControlFailed _ -> true
+  | _ -> false
+
+(** Server control at or after receipt of the client Finished. **)
+let server_post_cf_ctrl (c:CS.connection_control_state) : bool =
+  match c with
+  | CS.ControlHandshaking CS.HsClientFinishedReceived
+  | CS.ControlHandshaking CS.HsClientFinishedVerified
+  | CS.ControlApplicationData
+  | CS.ControlClosing
+  | CS.ControlClosed
+  | CS.ControlFailed _ -> true
+  | _ -> false
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 30"
+(** `step_model` never changes the (immutable) connection config. **)
+let lemma_step_model_preserves_config
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma (requires CS.step_model m ev == Some m')
+          (ensures m'.CS.model_config == m.CS.model_config)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** SC1 — server control closure: a legal server-role step from a server control
+    lands in a server control. **)
+let lemma_server_ctrl_ok_step
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m ev /\
+            CS.step_model m ev == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_ctrl_ok m.CS.model_control)
+          (ensures server_ctrl_ok m'.CS.model_control)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** SC2 — monotonicity of `post_cf`: once at/after client-Finished receipt, a
+    legal server-role step stays at/after it. **)
+let lemma_server_post_cf_monotone
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m ev /\
+            CS.step_model m ev == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_post_cf_ctrl m.CS.model_control)
+          (ensures server_post_cf_ctrl m'.CS.model_control)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
+(** SC3-core — at a server control that is NOT yet post-CF, the only legal
+    RECEIVED messages that keep the server out of the post-CF region are the
+    cleartext ClientHello and ChangeCipherSpec (every protected receipt either is
+    illegal or moves control into the post-CF region). **)
+let lemma_server_recv_nonpostcf_msg
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m (CS.received_tls_event msg) /\
+            CS.step_model m (CS.received_tls_event msg) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_ctrl_ok m.CS.model_control /\
+            ~(server_post_cf_ctrl m'.CS.model_control))
+          (ensures
+            (M.TlsHandshake? msg /\ M.ClientHello? (M.TlsHandshake?._0 msg)) \/
+            msg == M.TlsChangeCipherSpec)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** A cleartext ClientHello / ChangeCipherSpec received-record has a record
+    content type that is NOT ApplicationData. **)
+let lemma_cleartext_recv_not_appdata
+  (m:CS.connection_model) (msg:M.tls_message) (raw:B.bytes)
+  : Lemma (requires
+            ((M.TlsHandshake? msg /\ M.ClientHello? (M.TlsHandshake?._0 msg)) \/
+             msg == M.TlsChangeCipherSpec) /\
+            CS.network_message_raw_delta_legal m
+              ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw)
+          (ensures
+            (match W.parse_record_wire raw with
+             | Some (ct, _, _) -> ~(ct == T.ApplicationData)
+             | None -> True))
+  = match msg with
+    | M.TlsHandshake (M.ClientHello ch) -> ()
+    | M.TlsChangeCipherSpec ->
+      W.lemma_serialize_tls_message_change_cipher_spec ();
+      WFL.lemma_parse_record_wire_serialize_record T.ChangeCipherSpec (B.singleton 1uy);
+      Seq.lemma_eq_elim raw (CS.serialized_cleartext_tls_message M.TlsChangeCipherSpec)
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** SC3 (server-step level) — a reachable-server WireEvent whose record has
+    content type ApplicationData moves control into the post-CF region. **)
+let lemma_server_step_recv_appdata_post_cf
+  (st0:CS.connection_state)
+  (wire:CW.wire_message)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires
+            ServerCP.server_step st0 (SM.WireEvent wire) st1 out /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_ctrl_ok st0.CS.cs_model.CS.model_control /\
+            wire.CW.wm_content_type == T.ApplicationData)
+          (ensures server_post_cf_ctrl st1.CS.cs_model.CS.model_control)
+  = eliminate exists (msg:M.tls_message).
+      (let conn_ev =
+         CS.ConnNetworkEvent {
+           CL.message_direction = CL.Received;
+           CL.message_value = msg;
+         } in
+       CS.legal_connection_delta
+         st0
+         {
+           CS.delta_event = conn_ev;
+           CS.delta_raw_sent =
+             WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire;
+         }
+         st1 /\
+       CS.sent_event_nonempty_seal_projection
+         st0.CS.cs_model
+         conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection
+         st0.CS.cs_model
+         conn_ev
+         (CW.wire_serialize wire) /\
+       ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns server_post_cf_ctrl st1.CS.cs_model.CS.model_control
+    with _.
+    (
+      let raw = CW.wire_serialize wire in
+      assert (raw == wire.CW.wm_raw);
+      assert (W.parse_record_wire raw ==
+              Some (wire.CW.wm_content_type, wire.CW.wm_fragment, B.length raw));
+      if server_post_cf_ctrl st1.CS.cs_model.CS.model_control then ()
+      else (
+        lemma_server_recv_nonpostcf_msg st0.CS.cs_model msg st1.CS.cs_model;
+        lemma_cleartext_recv_not_appdata st0.CS.cs_model msg raw
+      )
+    )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** Server-step model facts: config immutability, server-control closure (SC1),
+    and post-CF monotonicity (SC2), lifted from `step_model` to `server_step`. **)
+let lemma_server_step_model_facts
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.server_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires
+            ServerCP.server_step st0 ev st1 out /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
+            (server_ctrl_ok st0.CS.cs_model.CS.model_control ==>
+               server_ctrl_ok st1.CS.cs_model.CS.model_control) /\
+            (server_post_cf_ctrl st0.CS.cs_model.CS.model_control ==>
+               server_post_cf_ctrl st1.CS.cs_model.CS.model_control))
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev =
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = msg;
+           } in
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection
+           st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection
+           st0.CS.cs_model conn_ev (CW.wire_serialize wire) /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns
+        (st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
+         (server_ctrl_ok st0.CS.cs_model.CS.model_control ==>
+            server_ctrl_ok st1.CS.cs_model.CS.model_control) /\
+         (server_post_cf_ctrl st0.CS.cs_model.CS.model_control ==>
+            server_post_cf_ctrl st1.CS.cs_model.CS.model_control))
+      with _.
+      (
+        let conn_ev =
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          } in
+        lemma_step_model_preserves_config st0.CS.cs_model conn_ev st1.CS.cs_model;
+        introduce
+          server_ctrl_ok st0.CS.cs_model.CS.model_control ==>
+            server_ctrl_ok st1.CS.cs_model.CS.model_control
+        with _h. lemma_server_ctrl_ok_step st0.CS.cs_model conn_ev st1.CS.cs_model;
+        introduce
+          server_post_cf_ctrl st0.CS.cs_model.CS.model_control ==>
+            server_post_cf_ctrl st1.CS.cs_model.CS.model_control
+        with _h. lemma_server_post_cf_monotone st0.CS.cs_model conn_ev st1.CS.cs_model
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.server_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ServerCP.server_api_event_matches api conn_ev /\
+         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns
+        (st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
+         (server_ctrl_ok st0.CS.cs_model.CS.model_control ==>
+            server_ctrl_ok st1.CS.cs_model.CS.model_control) /\
+         (server_post_cf_ctrl st0.CS.cs_model.CS.model_control ==>
+            server_post_cf_ctrl st1.CS.cs_model.CS.model_control))
+      with _.
+      (
+        lemma_step_model_preserves_config st0.CS.cs_model conn_ev st1.CS.cs_model;
+        introduce
+          server_ctrl_ok st0.CS.cs_model.CS.model_control ==>
+            server_ctrl_ok st1.CS.cs_model.CS.model_control
+        with _h. lemma_server_ctrl_ok_step st0.CS.cs_model conn_ev st1.CS.cs_model;
+        introduce
+          server_post_cf_ctrl st0.CS.cs_model.CS.model_control ==>
+            server_post_cf_ctrl st1.CS.cs_model.CS.model_control
+        with _h. lemma_server_post_cf_monotone st0.CS.cs_model conn_ev st1.CS.cs_model
+      )
+#pop-options
+
+(** `list_has_appdata` distributes over append. **)
+let lemma_list_has_appdata_append (a b:list CW.wire_message)
+  : Lemma (ensures
+            (list_has_appdata (L.append a b) <==>
+             (list_has_appdata a \/ list_has_appdata b)))
+  = introduce
+      list_has_appdata (L.append a b) ==> (list_has_appdata a \/ list_has_appdata b)
+    with _.
+      (eliminate exists (m:CW.wire_message).
+         L.memP m (L.append a b) /\ m.CW.wm_content_type == T.ApplicationData
+       returns (list_has_appdata a \/ list_has_appdata b)
+       with _. L.append_memP a b m);
+    introduce
+      (list_has_appdata a \/ list_has_appdata b) ==> list_has_appdata (L.append a b)
+    with _.
+      (eliminate list_has_appdata a \/ list_has_appdata b
+       returns list_has_appdata (L.append a b)
+       with _la.
+         (eliminate exists (m:CW.wire_message).
+            L.memP m a /\ m.CW.wm_content_type == T.ApplicationData
+          returns list_has_appdata (L.append a b)
+          with _. L.append_memP a b m)
+       and _lb.
+         (eliminate exists (m:CW.wire_message).
+            L.memP m b /\ m.CW.wm_content_type == T.ApplicationData
+          returns list_has_appdata (L.append a b)
+          with _. L.append_memP a b m))
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PHASE 2 — ApplicationData-record COUNTING (cleartext-immune).
+
+    Counts the number of `ApplicationData`-content-type wire records in a raw
+    byte log.  ChangeCipherSpec and cleartext handshake records are NOT
+    ApplicationData-typed, so they contribute 0 — hence these counts (unlike raw
+    event-log length) are immune to stray CCS/cleartext inflation.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** A total, `Seq.equal`-stable count of ApplicationData-typed records in a raw
+    byte log. **)
+let rec raw_appdata_count (raw:B.bytes) : GTot nat (decreases (B.length raw)) =
+  match CW.wire_parse raw with
+  | Some (m, after) ->
+    if B.length after < B.length raw
+    then (if m.CW.wm_content_type = T.ApplicationData then 1 else 0)
+         + raw_appdata_count after
+    else 0
+  | None -> 0
+
+(** The record-list analogue. **)
+let rec list_appdata_count (msgs:list CW.wire_message) : nat =
+  match msgs with
+  | [] -> 0
+  | m :: rest ->
+    (if m.CW.wm_content_type = T.ApplicationData then 1 else 0)
+    + list_appdata_count rest
+
+(** `raw_appdata_count` transports across byte-equal logs. **)
+let lemma_raw_appdata_count_seq_equal (raw1 raw2:B.bytes)
+  : Lemma
+      (requires Seq.equal raw1 raw2)
+      (ensures raw_appdata_count raw1 == raw_appdata_count raw2)
+  = Seq.lemma_eq_elim raw1 raw2
+
+(** The empty byte log has count 0. **)
+let lemma_raw_appdata_count_empty ()
+  : Lemma (ensures raw_appdata_count B.empty == 0)
+  = match CW.wire_parse B.empty with
+    | None -> ()
+    | Some (m, after) ->
+      lemma_wire_parse_strict_decrease B.empty
+
+(** PREFIX-PASSTHROUGH: if `raw` parses its first record as `m` leaving residual
+    `after`, then appending arbitrary `delta` parses the SAME first record `m`
+    and leaves residual `after ++ delta` (the record parser only consumes a
+    fixed positive prefix; trailing bytes pass through untouched).  Proved from
+    the exported `RVD.lemma_parse_record_wire_from_prefix` — no reliance on any
+    non-exported PNTWL helper. **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30 --split_queries always"
+let lemma_wire_parse_append_first
+  (raw after delta:B.bytes) (m:CW.wire_message)
+  : Lemma
+      (requires CW.wire_parse raw == Some (m, after))
+      (ensures
+        CW.wire_parse (B.append raw delta) == Some (m, B.append after delta))
+  = let ct = m.CW.wm_content_type in
+    let frag = m.CW.wm_fragment in
+    let c = B.length m.CW.wm_raw in
+    // Reveal wire_parse's structure by matching on the underlying record parse.
+    match W.parse_record_wire raw with
+    | None -> ()   // then wire_parse raw == None, contradicting the hypothesis
+    | Some (ct0, frag0, consumed0) ->
+      W.lemma_parse_record_wire_fragment_bound raw;
+      W.lemma_parse_record_wire_some_consumed_positive raw ct0 frag0 consumed0;
+      // wire_parse raw == Some(m0, after0); by hypothesis m0==m, after0==after.
+      Seq.lemma_len_slice raw 0 consumed0;
+      // Hence: parse_record_wire raw == Some(ct,frag,c), c == consumed0 <= length raw.
+      assert (ct0 == ct /\ frag0 == frag /\ consumed0 == c);
+      assert (W.parse_record_wire raw == Some (ct, frag, c));
+      assert (m.CW.wm_raw == Seq.slice raw 0 c);
+      assert (after == Seq.slice raw c (B.length raw));
+      // m.wm_parse_ok: parse_record_wire m.wm_raw == Some(ct,frag,c).
+      assert (W.parse_record_wire m.CW.wm_raw == Some (ct, frag, c));
+      // raw == m.wm_raw ++ after
+      Seq.lemma_split raw c;
+      Seq.lemma_eq_elim raw (B.append m.CW.wm_raw after);
+      let full = B.append raw delta in
+      Seq.append_assoc m.CW.wm_raw after delta;
+      Seq.lemma_eq_elim full (B.append m.CW.wm_raw (B.append after delta));
+      Seq.lemma_len_append raw delta;
+      Seq.lemma_len_append m.CW.wm_raw (B.append after delta);
+      // slice full 0 c == m.wm_raw
+      WU.lemma_slice_append_left m.CW.wm_raw (B.append after delta);
+      Seq.lemma_eq_elim (Seq.slice full 0 c) m.CW.wm_raw;
+      assert (W.parse_record_wire (Seq.slice full 0 c) == Some (ct, frag, c));
+      RVD.lemma_parse_record_wire_from_prefix full ct frag c;
+      assert (W.parse_record_wire full == Some (ct, frag, c));
+      // residual of parsing full == slice full c (length full) == after ++ delta
+      Seq.lemma_len_append after delta;
+      Seq.slice_slice full c (B.length full) 0 (B.length full - c);
+      Seq.lemma_eq_elim (Seq.slice full c (B.length full)) (B.append after delta)
+#pop-options
+
+(** A record `raw` whose first parse leaves a shorter residual: appending `delta`
+    keeps the first record and grows the residual by `delta`. **)
+let lemma_raw_appdata_count_append_helper
+  (raw after delta:B.bytes) (m:CW.wire_message)
+  : Lemma
+      (requires
+        CW.wire_parse raw == Some (m, after) /\
+        B.length after < B.length raw)
+      (ensures
+        (let full = B.append raw delta in
+         CW.wire_parse full == Some (m, B.append after delta) /\
+         B.length (B.append after delta) < B.length full))
+  = lemma_wire_parse_append_first raw after delta m;
+    Seq.lemma_len_append raw delta;
+    Seq.lemma_len_append after delta
+
+(** COUNT-APPEND: appending `delta` to a record-aligned prefix `old` (one whose
+    records exactly decompose `old`) splits the count additively at the boundary. **)
+let rec lemma_raw_appdata_count_append
+  (old delta:B.bytes) (msgs:list CW.wire_message)
+  : Lemma
+      (requires WF.parses_as CW.tls_record_wire_format old msgs Seq.empty)
+      (ensures
+        raw_appdata_count (B.append old delta)
+          == raw_appdata_count old + raw_appdata_count delta)
+      (decreases msgs)
+  = match msgs with
+    | [] ->
+      // parses_as old [] empty ==> old is empty.
+      Seq.lemma_eq_elim old Seq.empty;
+      lemma_raw_appdata_count_empty ();
+      Seq.lemma_eq_elim (B.append old delta) delta;
+      lemma_raw_appdata_count_seq_equal (B.append old delta) delta
+    | m :: rest ->
+      eliminate exists parsed after.
+        CW.wire_parse old == Some (parsed, after) /\ parsed == m /\
+        WF.parses_as CW.tls_record_wire_format after rest Seq.empty
+      returns
+        raw_appdata_count (B.append old delta)
+          == raw_appdata_count old + raw_appdata_count delta
+      with _p.
+      (
+        lemma_wire_parse_strict_decrease old;
+        lemma_raw_appdata_count_append_helper old after delta m;
+        lemma_raw_appdata_count_append after delta rest
+      )
+
+(** GENERAL: count of a byte log that cleanly decomposes into `msgs` equals the
+    record-list count.  Pure structural induction on the parse — no append/prefix
+    facts, just the `parses_as` unfolding + strict decrease. **)
+let rec lemma_raw_appdata_count_of_parse
+  (raw:B.bytes) (msgs:list CW.wire_message)
+  : Lemma
+      (requires WF.parses_as CW.tls_record_wire_format raw msgs Seq.empty)
+      (ensures raw_appdata_count raw == list_appdata_count msgs)
+      (decreases msgs)
+  = match msgs with
+    | [] ->
+      Seq.lemma_eq_elim raw Seq.empty;
+      lemma_raw_appdata_count_empty ()
+    | m :: rest ->
+      eliminate exists parsed after.
+        CW.wire_parse raw == Some (parsed, after) /\ parsed == m /\
+        WF.parses_as CW.tls_record_wire_format after rest Seq.empty
+      returns raw_appdata_count raw == list_appdata_count msgs
+      with _p.
+      (
+        lemma_wire_parse_strict_decrease raw;
+        lemma_raw_appdata_count_of_parse after rest
+      )
+
+(** COROLLARY — count of a fully-serialized record list equals the list count. **)
+let lemma_raw_appdata_count_serialize_all
+  (msgs:list CW.wire_message)
+  : Lemma
+      (ensures
+        raw_appdata_count (WF.serialize_all CW.tls_record_wire_format msgs)
+          == list_appdata_count msgs)
+  = PNTWL.lemma_wire_parse_serialize_all_inverse msgs;
+    lemma_raw_appdata_count_of_parse
+      (WF.serialize_all CW.tls_record_wire_format msgs) msgs
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+(** Server trace induction: along any reachability trace from a server-role,
+    server-control start state, the endpoint stays in a server control, keeps its
+    config, and EITHER ends post-CF OR (started pre-CF and received no
+    ApplicationData record along the trace). **)
+let rec lemma_server_trace_appdata_post_cf
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.server_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ServerCP.server_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_ctrl_ok st0.CS.cs_model.CS.model_control)
+          (ensures
+            server_ctrl_ok st1.CS.cs_model.CS.model_control /\
+            st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
+            (server_post_cf_ctrl st1.CS.cs_model.CS.model_control \/
+             (~(server_post_cf_ctrl st0.CS.cs_model.CS.model_control) /\
+              ~(list_has_appdata (WFSM.trace_input_messages trace)))))
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ServerCP.server_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_server_step_model_facts st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_server_trace_appdata_post_cf init s' st1 rest;
+      lemma_list_has_appdata_append
+        (WFSM.event_input_messages tr.SM.tr_event)
+        (WFSM.trace_input_messages rest);
+      introduce
+        ~(server_post_cf_ctrl s'.CS.cs_model.CS.model_control) ==>
+          ~(list_has_appdata (WFSM.event_input_messages tr.SM.tr_event))
+      with _.
+        (match tr.SM.tr_event with
+         | SM.WireEvent wire ->
+           introduce
+             list_has_appdata (WFSM.event_input_messages tr.SM.tr_event) ==> False
+           with _hh.
+             (assert (WFSM.event_input_messages tr.SM.tr_event == [wire]);
+              assert (ServerCP.server_step st0 (SM.WireEvent wire) s' tr.SM.tr_output);
+              eliminate exists (m:CW.wire_message).
+                L.memP m (WFSM.event_input_messages tr.SM.tr_event) /\
+                m.CW.wm_content_type == T.ApplicationData
+              returns False
+              with _.
+                (assert (L.memP m [wire]);
+                 assert (m == wire);
+                 lemma_server_step_recv_appdata_post_cf st0 wire s' tr.SM.tr_output))
+         | SM.LocalEvent _ -> ())
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** SERVER INVERSION — a reachable server whose received byte log contains an
+    ApplicationData-typed record is at or after receipt of the client Finished. **)
+let lemma_server_received_appdata_record_implies_post_cf
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            raw_has_appdata_record server.CS.cs_wire_log.CL.raw_received /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures server_post_cf_ctrl server.CS.cs_model.CS.model_control)
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns server_post_cf_ctrl server.CS.cs_model.CS.model_control
+    with _.
+    (
+      lemma_server_trace_appdata_post_cf init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
+      Seq.lemma_eq_elim server.CS.cs_wire_log.CL.raw_received sm_bytes;
+      PNTWL.lemma_wire_parse_serialize_all_inverse in_msgs;
+      eliminate exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          server.CS.cs_wire_log.CL.raw_received msgs Seq.empty /\
+        list_has_appdata msgs
+      returns server_post_cf_ctrl server.CS.cs_model.CS.model_control
+      with _.
+        lemma_parses_as_functional server.CS.cs_wire_log.CL.raw_received msgs in_msgs
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    CLIENT-side inversion — a ready client has SENT an ApplicationData record.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** The client control that guarantees the protected Finished has been sent. **)
+let client_at_appdata (c:CS.connection_control_state) : bool =
+  match c with
+  | CS.ControlApplicationData -> true
+  | _ -> false
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
+(** A RECEIVED event never moves a client from a non-application control into the
+    application-data control (that transition is the client SENDING its Finished,
+    a local send event). **)
+let lemma_client_recv_not_into_appdata
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m (CS.received_tls_event msg) /\
+            CS.step_model m (CS.received_tls_event msg) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            ~(client_at_appdata m.CS.model_control))
+          (ensures ~(client_at_appdata m'.CS.model_control))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
+(** The ONLY legal client-role event that moves control into the application-data
+    control from outside it is sending the protected Finished — a non-cleartext,
+    single-record Sent event.  Hence its raw byte delta is exactly one
+    ApplicationData record. **)
+let lemma_client_into_appdata_raw_sent_appdata
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent:B.bytes)
+  : Lemma (requires
+            CS.legal_event m conn_ev /\
+            CS.step_model m conn_ev == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            ~(client_at_appdata m.CS.model_control) /\
+            client_at_appdata m'.CS.model_control /\
+            CS.event_raw_delta_legal m conn_ev raw_sent B.empty)
+          (ensures CS.raw_records_exactly raw_sent T.ApplicationData 1)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** Client-step config immutability, lifted from `step_model` to `client_step`. **)
+let lemma_client_step_preserves_config
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires ClientCP.client_step st0 ev st1 out)
+          (ensures st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+           (CW.wire_serialize wire) /\
+         (exists content_type fragment.
+           CT.network_input_message_projection st0 content_type fragment msg
+             (CW.wire_serialize wire)) /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
+      with _.
+        (let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+         lemma_step_model_preserves_config st0.CS.cs_model conn_ev st1.CS.cs_model)
+    | SM.LocalEvent local ->
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches st0 api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
+      with _.
+        lemma_step_model_preserves_config st0.CS.cs_model conn_ev st1.CS.cs_model
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** CLIENT crux — a client step that ENTERS the application-data control emits an
+    ApplicationData-typed wire record (the protected Finished). **)
+let lemma_client_step_into_appdata_emits
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires
+            ClientCP.client_step st0 ev st1 out /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            ~(client_at_appdata st0.CS.cs_model.CS.model_control) /\
+            client_at_appdata st1.CS.cs_model.CS.model_control)
+          (ensures list_has_appdata out.SM.so_wire_outputs)
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+           (CW.wire_serialize wire) /\
+         (exists content_type fragment.
+           CT.network_input_message_projection st0 content_type fragment msg
+             (CW.wire_serialize wire)) /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns list_has_appdata out.SM.so_wire_outputs
+      with _.
+        lemma_client_recv_not_into_appdata st0.CS.cs_model msg st1.CS.cs_model
+    | SM.LocalEvent local ->
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches st0 api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns list_has_appdata out.SM.so_wire_outputs
+      with _.
+      (
+        lemma_client_into_appdata_raw_sent_appdata
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent;
+        CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.ApplicationData;
+        W.lemma_parse_record_implies_parse_record_wire raw_sent;
+        Seq.lemma_eq_elim raw_sent
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs);
+        PNTWL.lemma_wire_parse_serialize_all_inverse out.SM.so_wire_outputs;
+        lemma_first_record_appdata raw_sent out.SM.so_wire_outputs
+      )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+(** Client trace induction: from a client-role start state, along any reachability
+    trace, the config is preserved and EITHER the trace already emitted an
+    ApplicationData record, OR the endpoint is not (yet) at the application-data
+    control, OR it started there. **)
+let rec lemma_client_trace_emits_appdata
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.client_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ClientCP.client_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint)
+          (ensures
+            st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
+            (list_has_appdata (SM.trace_wire_outputs trace) \/
+             ~(client_at_appdata st1.CS.cs_model.CS.model_control) \/
+             client_at_appdata st0.CS.cs_model.CS.model_control))
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ClientCP.client_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_client_step_preserves_config st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_client_trace_emits_appdata init s' st1 rest;
+      lemma_list_has_appdata_append
+        tr.SM.tr_output.SM.so_wire_outputs
+        (SM.trace_wire_outputs rest);
+      introduce
+        (~(client_at_appdata st0.CS.cs_model.CS.model_control) /\
+         client_at_appdata s'.CS.cs_model.CS.model_control) ==>
+          list_has_appdata tr.SM.tr_output.SM.so_wire_outputs
+      with _.
+        lemma_client_step_into_appdata_emits st0 tr.SM.tr_event s' tr.SM.tr_output
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** CLIENT INVERSION — a reachable client at the application-data control has SENT
+    an ApplicationData-typed record on its outgoing byte log. **)
+let lemma_client_ready_sent_has_appdata_record
+  (cfg:CS.connection_config)
+  (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            client.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures raw_has_appdata_record client.CS.cs_wire_log.CL.raw_sent)
+  = let init = CS.initial cfg in
+    let sm = ClientCP.client_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.client_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace client
+    returns raw_has_appdata_record client.CS.cs_wire_log.CL.raw_sent
+    with _.
+    (
+      lemma_client_trace_emits_appdata init init client trace;
+      PNTWL.lemma_client_trace_wire_logs_match init init trace client;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal client.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      Seq.lemma_eq_elim client.CS.cs_wire_log.CL.raw_sent sm_bytes;
+      PNTWL.lemma_wire_parse_serialize_all_inverse out_msgs
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PART 3 — single-endpoint APPLICATION-DATA COUNT BOUNDS.
+
+    Four count-bound lemmas relating a reachable endpoint's control to the
+    number of ApplicationData-typed wire records on its raw byte logs, proved by
+    trace induction with control/marker potentials.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** UNIVERSAL single-record count bridge: a raw byte log whose FIRST record
+    parse consumes the WHOLE log with content type `ct` has appdata-count equal
+    to `1` iff `ct` is ApplicationData, else `0`. **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
+let lemma_single_full_record_count (raw:B.bytes) (ct:T.content_type)
+  : Lemma
+      (requires
+        (exists (frag:M.sealed_record).
+          W.parse_record_wire raw == Some (ct, frag, B.length raw)))
+      (ensures
+        raw_appdata_count raw == (if ct = T.ApplicationData then 1 else 0))
+  = eliminate exists (frag:M.sealed_record).
+      W.parse_record_wire raw == Some (ct, frag, B.length raw)
+    returns raw_appdata_count raw == (if ct = T.ApplicationData then 1 else 0)
+    with _.
+    (
+      W.lemma_parse_record_wire_some_consumed_positive raw ct frag (B.length raw);
+      // wire_parse raw reduces to Some(m, after) with m.wm_content_type == ct.
+      W.lemma_parse_record_wire_fragment_bound raw;
+      let after = Seq.slice raw (B.length raw) (B.length raw) in
+      Seq.lemma_eq_elim after B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal after B.empty
+    )
+#pop-options
+
+(** `list_appdata_count` distributes over append. **)
+let rec lemma_list_appdata_count_append (a b:list CW.wire_message)
+  : Lemma
+      (ensures list_appdata_count (L.append a b)
+                 == list_appdata_count a + list_appdata_count b)
+      (decreases a)
+  = match a with
+    | [] -> ()
+    | _ :: rest -> lemma_list_appdata_count_append rest b
+
+(** A single wire message's appdata count equals the appdata count of its
+    serialized byte log. **)
+let lemma_list_appdata_count_single_wire (w:CW.wire_message)
+  : Lemma
+      (ensures list_appdata_count [w] == raw_appdata_count (CW.wire_serialize w))
+  = lemma_serialize_all_single_wire w;
+    lemma_raw_appdata_count_serialize_all [w];
+    lemma_raw_appdata_count_seq_equal
+      (WF.serialize_all CW.tls_record_wire_format [w])
+      (CW.wire_serialize w)
+
+(** Local pre-application-data control predicate (matches
+    `TLS13.System.ProgressCount.pre_appdata_control`): FALSE exactly at the
+    application-data / closing / closed / failed controls. **)
+let pre_appdata_ctrl (c:CS.connection_control_state) : bool =
+  match c with
+  | CS.ControlApplicationData
+  | CS.ControlClosing
+  | CS.ControlClosed
+  | CS.ControlFailed _ -> false
+  | _ -> true
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+(** FORWARD-CLOSURE (model level): once out of the pre-application-data region, a
+    legal step never returns to it. **)
+let lemma_step_notpreappdata_stable
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m ev /\
+            CS.step_model m ev == Some m' /\
+            ~(pre_appdata_ctrl m.CS.model_control))
+          (ensures ~(pre_appdata_ctrl m'.CS.model_control))
+  = ()
+#pop-options
+
+(** A pure model step underlies any official endpoint step. **)
+let model_stepped (m m':CS.connection_model) : prop =
+  exists (conn_ev:CS.conn_event).
+    CS.legal_event m conn_ev /\ CS.step_model m conn_ev == Some m'
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+(** Extract the underlying legal model step from a server step. **)
+let lemma_server_step_model_stepped
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.server_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires ServerCP.server_step st0 ev st1 out)
+          (ensures model_stepped st0.CS.cs_model st1.CS.cs_model)
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev =
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = msg;
+           } in
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection
+           st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection
+           st0.CS.cs_model conn_ev (CW.wire_serialize wire) /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns model_stepped st0.CS.cs_model st1.CS.cs_model
+      with _.
+      (
+        let conn_ev =
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          } in
+        introduce exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some st1.CS.cs_model
+        with conn_ev and ()
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.server_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ServerCP.server_api_event_matches api conn_ev /\
+         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns model_stepped st0.CS.cs_model st1.CS.cs_model
+      with _.
+      (
+        introduce exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some st1.CS.cs_model
+        with conn_ev and ()
+      )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+(** Extract the underlying legal model step from a client step. **)
+let lemma_client_step_model_stepped
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires ClientCP.client_step st0 ev st1 out)
+          (ensures model_stepped st0.CS.cs_model st1.CS.cs_model)
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+           (CW.wire_serialize wire) /\
+         (exists content_type fragment.
+           CT.network_input_message_projection st0 content_type fragment msg
+             (CW.wire_serialize wire)) /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns model_stepped st0.CS.cs_model st1.CS.cs_model
+      with _.
+      (
+        let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+        introduce exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some st1.CS.cs_model
+        with conn_ev and ()
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches st0 api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns model_stepped st0.CS.cs_model st1.CS.cs_model
+      with _.
+      (
+        introduce exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some st1.CS.cs_model
+        with conn_ev and ()
+      )
+#pop-options
+
+(** A cleartext ServerHello / HelloRetryRequest / ChangeCipherSpec record has
+    appdata-count 0: its outer content type is Handshake or ChangeCipherSpec,
+    never ApplicationData.  (These are the only cleartext records a reachable
+    server sends or a reachable client receives.) **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 30 --split_queries always"
+let lemma_cleartext_raw_count_zero (msg:M.tls_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        ((M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) \/
+         msg == M.TlsHandshake M.HelloRetryRequest \/
+         msg == M.TlsChangeCipherSpec) /\
+        CS.cleartext_tls_message_raw msg raw)
+      (ensures raw_appdata_count raw == 0)
+  = match msg with
+    | M.TlsHandshake (M.ServerHello sh) ->
+      lemma_cleartext_server_hello_parse_record sh raw;
+      lemma_single_full_record_count raw T.Handshake
+    | M.TlsHandshake M.HelloRetryRequest ->
+      CSL.lemma_raw_records_exactly_one_parse_record raw T.Handshake;
+      W.lemma_parse_record_implies_parse_record_wire raw;
+      lemma_single_full_record_count raw T.Handshake
+    | M.TlsChangeCipherSpec ->
+      W.lemma_serialize_tls_message_change_cipher_spec ();
+      WFL.lemma_parse_record_wire_serialize_record T.ChangeCipherSpec (B.singleton 1uy);
+      Seq.lemma_eq_elim raw (CS.serialized_cleartext_tls_message msg);
+      lemma_single_full_record_count raw T.ChangeCipherSpec
+#pop-options
+
+(** A single protected ApplicationData record has appdata-count 1. **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
+let lemma_protected_raw_count_one (raw:B.bytes)
+  : Lemma
+      (requires CS.raw_records_exactly raw T.ApplicationData 1)
+      (ensures raw_appdata_count raw == 1)
+  = CSL.lemma_raw_records_exactly_one_parse_record raw T.ApplicationData;
+    W.lemma_parse_record_implies_parse_record_wire raw;
+    lemma_single_full_record_count raw T.ApplicationData
+#pop-options
+
+(** ── SERVER SENT ≤ 4 : write-once protected-flight markers. ──────────────── **)
+
+(** The number of the four server protected-flight fields that are set. **)
+let server_sent_marker_count (m:CS.connection_model) : nat =
+  let hs = m.CS.model_handshake in
+  (if Some? hs.CS.hs_encrypted_extensions then 1 else 0) +
+  (if Some? hs.CS.hs_certificate then 1 else 0) +
+  (if hs.CS.hs_certificate_verify_verified then 1 else 0) +
+  (if Some? hs.CS.hs_server_finished then 1 else 0)
+
+(** Server controls strictly before the server has sent EncryptedExtensions. **)
+let server_pre_flight_ctrl (c:CS.connection_control_state) : bool =
+  match c with
+  | CS.ControlNew
+  | CS.ControlHandshaking CS.HsAwaitingClientHello
+  | CS.ControlHandshaking CS.HsClientHelloReceived
+  | CS.ControlHandshaking CS.HsServerHelloSent -> true
+  | _ -> false
+
+(** Write-once shape: the four flight fields are all unset before the flight
+    begins, and `hs_server_finished` stays unset until the ServerFinished send. **)
+let server_flight_shape (m:CS.connection_model) : prop =
+  let hs = m.CS.model_handshake in
+  (server_pre_flight_ctrl m.CS.model_control ==>
+     (hs.CS.hs_encrypted_extensions == None /\
+      hs.CS.hs_certificate == None /\
+      hs.CS.hs_certificate_verify_verified == false /\
+      hs.CS.hs_server_finished == None)) /\
+  (m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent ==>
+     hs.CS.hs_server_finished == None)
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+(** Per-step server SEND marker fact: within the pre-application-data region, a
+    legal server step preserves the write-once shape and its appdata SENT-delta
+    count is bounded by the marker increase (each protected flight send flips
+    exactly one fresh marker). **)
+let lemma_server_marker_step
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent raw_received:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event m conn_ev /\
+        CS.step_model m conn_ev == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        server_ctrl_ok m.CS.model_control /\
+        pre_appdata_ctrl m.CS.model_control /\
+        pre_appdata_ctrl m'.CS.model_control /\
+        server_flight_shape m /\
+        CS.event_raw_delta_legal m conn_ev raw_sent raw_received)
+      (ensures
+        server_flight_shape m' /\
+        server_sent_marker_count m + raw_appdata_count raw_sent
+          <= server_sent_marker_count m')
+  = match conn_ev with
+    | CS.ConnLocalEvent _ ->
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    | CS.ConnNetworkEvent dm ->
+      (match dm.CL.message_direction with
+       | CL.Received ->
+         Seq.lemma_eq_elim raw_sent B.empty;
+         lemma_raw_appdata_count_empty ();
+         lemma_raw_appdata_count_seq_equal raw_sent B.empty
+       | CL.Sent ->
+         if CS.network_message_is_cleartext CL.Sent dm.CL.message_value
+         then
+           (match dm.CL.message_value with
+            | M.TlsHandshake (M.ServerHello _) ->
+              lemma_cleartext_raw_count_zero dm.CL.message_value raw_sent
+            | M.TlsChangeCipherSpec ->
+              lemma_cleartext_raw_count_zero dm.CL.message_value raw_sent
+            | _ -> ())
+         else
+           (assert (CS.protected_record_count CL.Sent dm.CL.message_value == 1);
+            lemma_protected_raw_count_one raw_sent))
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+(** Server-step SEND marker fact, lifted to `server_step`: the wire-output
+    appdata count of a step is bounded by the marker increase, and the write-once
+    shape is preserved (within the pre-application-data region). **)
+let lemma_server_step_sent_marker
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.server_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        ServerCP.server_step st0 ev st1 out /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        server_ctrl_ok st0.CS.cs_model.CS.model_control /\
+        pre_appdata_ctrl st0.CS.cs_model.CS.model_control /\
+        pre_appdata_ctrl st1.CS.cs_model.CS.model_control /\
+        server_flight_shape st0.CS.cs_model)
+      (ensures
+        server_flight_shape st1.CS.cs_model /\
+        server_sent_marker_count st0.CS.cs_model
+          + list_appdata_count out.SM.so_wire_outputs
+          <= server_sent_marker_count st1.CS.cs_model)
+  = lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
+    match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev =
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = msg;
+           } in
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection
+           st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection
+           st0.CS.cs_model conn_ev (CW.wire_serialize wire) /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns
+        (server_flight_shape st1.CS.cs_model /\
+         server_sent_marker_count st0.CS.cs_model
+           + list_appdata_count out.SM.so_wire_outputs
+           <= server_sent_marker_count st1.CS.cs_model)
+      with _.
+      (
+        let conn_ev =
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          } in
+        let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
+        lemma_server_marker_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.server_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ServerCP.server_api_event_matches api conn_ev /\
+         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns
+        (server_flight_shape st1.CS.cs_model /\
+         server_sent_marker_count st0.CS.cs_model
+           + list_appdata_count out.SM.so_wire_outputs
+           <= server_sent_marker_count st1.CS.cs_model)
+      with _.
+      (
+        lemma_raw_appdata_count_seq_equal
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+          raw_sent;
+        lemma_server_marker_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent B.empty
+      )
+#pop-options
+
+(** ── SERVER SENT ≤ 4 : trace-level forward closure + marker induction. ────── **)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+(** `~pre_appdata` is forward-closed along a reachable server trace. **)
+let rec lemma_server_trace_notpreappdata_forward
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.server_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ServerCP.server_state_machine init) st0 trace st1 /\
+            ~(pre_appdata_ctrl st0.CS.cs_model.CS.model_control))
+          (ensures ~(pre_appdata_ctrl st1.CS.cs_model.CS.model_control))
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ServerCP.server_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_server_step_model_stepped st0 tr.SM.tr_event s' tr.SM.tr_output;
+      eliminate exists (conn_ev:CS.conn_event).
+        CS.legal_event st0.CS.cs_model conn_ev /\
+        CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model
+      returns ~(pre_appdata_ctrl s'.CS.cs_model.CS.model_control)
+      with _.
+        lemma_step_notpreappdata_stable st0.CS.cs_model conn_ev s'.CS.cs_model;
+      lemma_server_trace_notpreappdata_forward init s' st1 rest
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Trace-level SEND marker telescoping: along any reachable server trace whose
+    endpoint is still in the pre-application-data region, the total appdata SENT
+    output count plus the initial marker count is bounded by the final marker
+    count.  (All intermediate states are pre-application-data by forward
+    closure, so `lemma_server_step_sent_marker` applies at every step.) **)
+let rec lemma_server_trace_sent_marker
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.server_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ServerCP.server_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_ctrl_ok st0.CS.cs_model.CS.model_control /\
+            pre_appdata_ctrl st1.CS.cs_model.CS.model_control /\
+            server_flight_shape st0.CS.cs_model)
+          (ensures
+            server_flight_shape st1.CS.cs_model /\
+            server_sent_marker_count st0.CS.cs_model
+              + list_appdata_count (SM.trace_wire_outputs trace)
+              <= server_sent_marker_count st1.CS.cs_model)
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ServerCP.server_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_server_step_model_facts st0 tr.SM.tr_event s' tr.SM.tr_output;
+      (* s' is pre_appdata: else st1 would be ~pre_appdata by forward closure. *)
+      introduce ~(pre_appdata_ctrl s'.CS.cs_model.CS.model_control) ==> False
+      with _.
+        lemma_server_trace_notpreappdata_forward init s' st1 rest;
+      lemma_server_step_sent_marker st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_server_trace_sent_marker init s' st1 rest;
+      lemma_list_appdata_count_append
+        tr.SM.tr_output.SM.so_wire_outputs
+        (SM.trace_wire_outputs rest)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ TARGET LEMMA 2 : SERVER SENT ≤ 4 in the pre-application-data region. ═══
+    A reachable server that has not yet reached application data has SENT at most
+    four ApplicationData-typed protected records (EncryptedExtensions,
+    Certificate, CertificateVerify, ServerFinished). **)
+let lemma_server_preappdata_sent_le4
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            pre_appdata_ctrl server.CS.cs_model.CS.model_control /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures raw_appdata_count server.CS.cs_wire_log.CL.raw_sent <= 4)
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns raw_appdata_count server.CS.cs_wire_log.CL.raw_sent <= 4
+    with _.
+    (
+      lemma_server_trace_sent_marker init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      lemma_raw_appdata_count_serialize_all out_msgs;
+      lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_sent sm_bytes
+    )
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    CLIENT SENT == 0 : a reachable client that has not yet reached application
+    data has SENT ZERO ApplicationData-typed records.  It has only sent the
+    cleartext ClientHello (which, under `supported_client_config_wire_profile`,
+    serializes to a single non-wrapping cleartext record) and possibly a
+    cleartext ChangeCipherSpec.  The first ApplicationData record a client sends
+    is its protected Finished, whose send is exactly the transition INTO
+    ControlApplicationData (hence excluded here).
+    ═══════════════════════════════════════════════════════════════════════════ **)
+
+(** The record-parse image of a cleartext ClientHello raw byte string equals its
+    canonical handshake serialization — provided the supported wire profile,
+    which (via `lemma_serialize_handshake_client_hello_record_bound`) bounds the
+    ClientHello handshake fragment so it fits a single non-wrapping record. **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_cleartext_client_hello_parse_record
+  (ch:M.client_hello) (raw:B.bytes)
+  : Lemma
+      (requires
+        WFL.supported_client_hello_wire_profile ch /\
+        CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello ch)) raw)
+      (ensures
+        W.parse_record_wire raw ==
+          Some (T.Handshake, W.serialize_handshake (M.ClientHello ch), B.length raw))
+=
+  let fragment = W.serialize_handshake (M.ClientHello ch) in
+  WFL.lemma_serialize_handshake_client_hello_record_bound ch;
+  W.lemma_serialize_tls_message_handshake (M.ClientHello ch);
+  WFL.lemma_parse_record_wire_serialize_record T.Handshake fragment;
+  assert (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello ch)) ==
+          W.serialize_record T.Handshake fragment);
+  assert (Seq.equal raw (W.serialize_record T.Handshake fragment));
+  Seq.lemma_eq_elim raw (W.serialize_record T.Handshake fragment)
+#pop-options
+
+(** A cleartext (supported-profile) ClientHello record has appdata-count 0: its
+    outer content type is Handshake, never ApplicationData. **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
+let lemma_cleartext_client_hello_raw_count_zero (ch:M.client_hello) (raw:B.bytes)
+  : Lemma
+      (requires
+        WFL.supported_client_hello_wire_profile ch /\
+        CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello ch)) raw)
+      (ensures raw_appdata_count raw == 0)
+  = lemma_cleartext_client_hello_parse_record ch raw;
+    lemma_single_full_record_count raw T.Handshake
+#pop-options
+
+(** Client start/config coherence: whenever a client model has stored its
+    handshake-start parameters, they match the (immutable) config.  Set exactly
+    at `LocalStartHandshake` whose legality forces `start_matches_config`, and
+    preserved elsewhere (config is immutable). **)
+let client_start_shape (m:CS.connection_model) : prop =
+  m.CS.model_config.CS.config_role == CS.ClientEndpoint ==>
+  (match m.CS.model_handshake.CS.hs_start with
+   | Some start -> CS.start_matches_config m.CS.model_config start
+   | None -> True)
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+(** A single legal step preserves `client_start_shape`. **)
+let lemma_step_model_preserves_client_start_shape
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_event m ev /\ CS.step_model m ev == Some m' /\ client_start_shape m)
+      (ensures client_start_shape m')
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+(** A client that STAYS pre-application-data can only have SENT a cleartext
+    message (ClientHello or ChangeCipherSpec).  The only protected Sent message a
+    client emits before application data is its Finished, whose send transitions
+    control INTO ControlApplicationData (so `m'` would not be pre-appdata); all
+    other protected Sent messages are legal only at ControlApplicationData (so
+    `m` would not be pre-appdata) or move to a terminal control. **)
+let lemma_client_preappdata_sent_cleartext
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m (CS.sent_tls_event msg) /\
+            CS.step_model m (CS.sent_tls_event msg) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            pre_appdata_ctrl m.CS.model_control /\
+            pre_appdata_ctrl m'.CS.model_control)
+          (ensures CS.network_message_is_cleartext CL.Sent msg == true)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+(** Per-step client SEND count fact: within the pre-application-data region, a
+    legal client step (whose config is a supported client wire profile and whose
+    start parameters match that config) preserves `client_start_shape` and emits
+    ZERO ApplicationData-typed bytes on its SENT delta.  A cleartext ClientHello
+    send serializes to a single non-wrapping cleartext (Handshake) record and a
+    cleartext ChangeCipherSpec to a single ChangeCipherSpec record — both
+    appdata-count 0; any protected Sent message is ruled out by
+    `lemma_client_preappdata_sent_cleartext`. **)
+let lemma_client_marker_step
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent raw_received:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event m conn_ev /\
+        CS.step_model m conn_ev == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        WFL.supported_client_config_wire_profile m.CS.model_config /\
+        client_start_shape m /\
+        pre_appdata_ctrl m.CS.model_control /\
+        pre_appdata_ctrl m'.CS.model_control /\
+        CS.event_raw_delta_legal m conn_ev raw_sent raw_received)
+      (ensures
+        client_start_shape m' /\ raw_appdata_count raw_sent == 0)
+  = lemma_step_model_preserves_client_start_shape m conn_ev m';
+    match conn_ev with
+    | CS.ConnLocalEvent _ ->
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    | CS.ConnNetworkEvent dm ->
+      let msg = dm.CL.message_value in
+      (match dm.CL.message_direction with
+       | CL.Received ->
+         Seq.lemma_eq_elim raw_sent B.empty;
+         lemma_raw_appdata_count_empty ();
+         lemma_raw_appdata_count_seq_equal raw_sent B.empty
+       | CL.Sent ->
+         assert (conn_ev == CS.sent_tls_event msg);
+         if CS.network_message_is_cleartext CL.Sent msg
+         then
+           (match msg with
+            | M.TlsHandshake (M.ClientHello ch) ->
+              (match m.CS.model_handshake.CS.hs_start with
+               | Some start ->
+                 lemma_ch_profile_from_start_config m.CS.model_config start ch;
+                 lemma_cleartext_client_hello_raw_count_zero ch raw_sent
+               | None -> ())
+            | M.TlsHandshake (M.ServerHello _) ->
+              lemma_cleartext_raw_count_zero msg raw_sent
+            | M.TlsChangeCipherSpec ->
+              lemma_cleartext_raw_count_zero msg raw_sent
+            | _ -> ())
+         else
+           lemma_client_preappdata_sent_cleartext m msg m')
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+(** Client-step SEND count fact, lifted to `client_step`: the wire-output appdata
+    count of a pre-application-data client step is 0, and `client_start_shape` is
+    preserved. **)
+let lemma_client_step_sent_zero
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        ClientCP.client_step st0 ev st1 out /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        WFL.supported_client_config_wire_profile st0.CS.cs_model.CS.model_config /\
+        client_start_shape st0.CS.cs_model /\
+        pre_appdata_ctrl st0.CS.cs_model.CS.model_control /\
+        pre_appdata_ctrl st1.CS.cs_model.CS.model_control)
+      (ensures
+        client_start_shape st1.CS.cs_model /\
+        list_appdata_count out.SM.so_wire_outputs == 0)
+  = lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
+    match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+           (CW.wire_serialize wire) /\
+         (exists content_type fragment.
+           CT.network_input_message_projection st0 content_type fragment msg
+             (CW.wire_serialize wire)) /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns
+        (client_start_shape st1.CS.cs_model /\
+         list_appdata_count out.SM.so_wire_outputs == 0)
+      with _.
+      (
+        let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+        let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
+        lemma_client_marker_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches st0 api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns
+        (client_start_shape st1.CS.cs_model /\
+         list_appdata_count out.SM.so_wire_outputs == 0)
+      with _.
+      (
+        lemma_raw_appdata_count_seq_equal
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+          raw_sent;
+        lemma_client_marker_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent B.empty
+      )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+(** `~pre_appdata` is forward-closed along a reachable client trace. **)
+let rec lemma_client_trace_notpreappdata_forward
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.client_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ClientCP.client_state_machine init) st0 trace st1 /\
+            ~(pre_appdata_ctrl st0.CS.cs_model.CS.model_control))
+          (ensures ~(pre_appdata_ctrl st1.CS.cs_model.CS.model_control))
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ClientCP.client_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_client_step_model_stepped st0 tr.SM.tr_event s' tr.SM.tr_output;
+      eliminate exists (conn_ev:CS.conn_event).
+        CS.legal_event st0.CS.cs_model conn_ev /\
+        CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model
+      returns ~(pre_appdata_ctrl s'.CS.cs_model.CS.model_control)
+      with _.
+        lemma_step_notpreappdata_stable st0.CS.cs_model conn_ev s'.CS.cs_model;
+      lemma_client_trace_notpreappdata_forward init s' st1 rest
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Trace-level SEND count telescoping: along any reachable client trace whose
+    endpoint is still in the pre-application-data region, the total appdata SENT
+    output count is 0 and `client_start_shape` is preserved.  (All intermediate
+    states are pre-application-data by forward closure, so
+    `lemma_client_step_sent_zero` applies at every step; config immutability
+    threads the supported wire profile through the trace.) **)
+let rec lemma_client_trace_sent_zero
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.client_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ClientCP.client_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            WFL.supported_client_config_wire_profile st0.CS.cs_model.CS.model_config /\
+            client_start_shape st0.CS.cs_model /\
+            pre_appdata_ctrl st1.CS.cs_model.CS.model_control)
+          (ensures
+            client_start_shape st1.CS.cs_model /\
+            list_appdata_count (SM.trace_wire_outputs trace) == 0)
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ClientCP.client_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_client_step_preserves_config st0 tr.SM.tr_event s' tr.SM.tr_output;
+      (* st0 is pre_appdata: else st1 would be ~pre_appdata by forward closure. *)
+      introduce ~(pre_appdata_ctrl st0.CS.cs_model.CS.model_control) ==> False
+      with _.
+        lemma_client_trace_notpreappdata_forward init st0 st1 trace;
+      (* s' is pre_appdata: else st1 would be ~pre_appdata by forward closure. *)
+      introduce ~(pre_appdata_ctrl s'.CS.cs_model.CS.model_control) ==> False
+      with _.
+        lemma_client_trace_notpreappdata_forward init s' st1 rest;
+      lemma_client_step_sent_zero st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_client_trace_sent_zero init s' st1 rest;
+      lemma_list_appdata_count_append
+        tr.SM.tr_output.SM.so_wire_outputs
+        (SM.trace_wire_outputs rest)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ TARGET LEMMA : CLIENT SENT == 0 in the pre-application-data region. ═══
+    A reachable client with a SUPPORTED (bounded) config wire profile that has
+    not yet reached application data has SENT ZERO ApplicationData-typed records:
+    it has only sent the cleartext ClientHello (a single non-wrapping cleartext
+    record under `supported_client_config_wire_profile`) and possibly a cleartext
+    ChangeCipherSpec.  The first ApplicationData record a client sends is its
+    protected Finished, whose send is exactly the transition INTO
+    ControlApplicationData. **)
+let lemma_client_preappdata_sent_no_appdata
+  (cfg:CS.connection_config) (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            pre_appdata_ctrl client.CS.cs_model.CS.model_control /\
+            cfg.CS.config_role == CS.ClientEndpoint /\
+            WFL.supported_client_config_wire_profile cfg)
+          (ensures raw_appdata_count client.CS.cs_wire_log.CL.raw_sent == 0)
+  = let init = CS.initial cfg in
+    let sm = ClientCP.client_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.client_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace client
+    returns raw_appdata_count client.CS.cs_wire_log.CL.raw_sent == 0
+    with _.
+    (
+      lemma_client_trace_sent_zero init init client trace;
+      PNTWL.lemma_client_trace_wire_logs_match init init trace client;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal client.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      lemma_raw_appdata_count_serialize_all out_msgs;
+      lemma_raw_appdata_count_seq_equal client.CS.cs_wire_log.CL.raw_sent sm_bytes
+    )
+#pop-options
+
+(** ── SERVER RECV ≤ 1 : post-CF potential. ──────────────────────────────────
+    The server RECEIVES an ApplicationData record only once — the client
+    Finished — after which it is in the post-CF region where no further receive
+    keeps it in the pre-application-data region except a (cleartext, count-0)
+    ChangeCipherSpec. **)
+
+(** Post-CF potential: 1 iff the server is at or past receipt of client Finished. **)
+let server_recv_prior (m:CS.connection_model) : nat =
+  if server_post_cf_ctrl m.CS.model_control then 1 else 0
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+(** At a post-CF server control that is still pre-application-data
+    (HsClientFinishedReceived / HsClientFinishedVerified), the ONLY legal
+    RECEIVED message that keeps the server pre-application-data is a
+    ChangeCipherSpec (a cleartext, count-0 record).  Any handshake/appdata
+    receive is illegal there, and an Alert leaves the pre-application-data
+    region. **)
+let lemma_server_recv_postcf_preappdata_is_ccs
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m (CS.received_tls_event msg) /\
+            CS.step_model m (CS.received_tls_event msg) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_post_cf_ctrl m.CS.model_control /\
+            pre_appdata_ctrl m.CS.model_control /\
+            pre_appdata_ctrl m'.CS.model_control)
+          (ensures msg == M.TlsChangeCipherSpec)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 50 --split_queries always"
+(** Per-step server RECV potential fact: within the pre-application-data region, a
+    legal server step's appdata RECV-input count plus the pre-step post-CF
+    potential is bounded by the post-step potential.  (An ApplicationData receive
+    lands in the post-CF region and can only happen from the ~post-CF side, since
+    a post-CF receive keeping pre-application-data must be a count-0
+    ChangeCipherSpec.) **)
+let lemma_server_step_recv_potential
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.server_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        ServerCP.server_step st0 ev st1 out /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        server_ctrl_ok st0.CS.cs_model.CS.model_control /\
+        pre_appdata_ctrl st0.CS.cs_model.CS.model_control /\
+        pre_appdata_ctrl st1.CS.cs_model.CS.model_control)
+      (ensures
+        list_appdata_count (WFSM.event_input_messages ev)
+          + server_recv_prior st0.CS.cs_model
+          <= server_recv_prior st1.CS.cs_model)
+  = lemma_server_step_model_facts st0 ev st1 out;
+    match ev with
+    | SM.LocalEvent _ -> ()
+    | SM.WireEvent wire ->
+      if wire.CW.wm_content_type = T.ApplicationData
+      then
+        (lemma_server_step_recv_appdata_post_cf st0 wire st1 out;
+         (* Show ~post_cf(st0): otherwise the receive would be a CCS whose wire
+            content type is not ApplicationData, contradicting `wire` appdata. *)
+         if server_post_cf_ctrl st0.CS.cs_model.CS.model_control
+         then
+           eliminate exists (msg:M.tls_message).
+             (let conn_ev =
+                CS.ConnNetworkEvent {
+                  CL.message_direction = CL.Received;
+                  CL.message_value = msg;
+                } in
+              CS.legal_connection_delta
+                st0
+                {
+                  CS.delta_event = conn_ev;
+                  CS.delta_raw_sent =
+                    WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+                  CS.delta_raw_received = CW.wire_serialize wire;
+                }
+                st1 /\
+              CS.sent_event_nonempty_seal_projection
+                st0.CS.cs_model conn_ev
+                (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+              CS.received_event_nonempty_decode_projection
+                st0.CS.cs_model conn_ev (CW.wire_serialize wire) /\
+              ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+           returns False
+           with _.
+           (
+             let raw = CW.wire_serialize wire in
+             assert (raw == wire.CW.wm_raw);
+             assert (W.parse_record_wire raw ==
+                     Some (wire.CW.wm_content_type, wire.CW.wm_fragment, B.length raw));
+             lemma_server_recv_postcf_preappdata_is_ccs
+               st0.CS.cs_model msg st1.CS.cs_model;
+             lemma_cleartext_recv_not_appdata st0.CS.cs_model msg raw
+           )
+         else ())
+      else ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Trace-level RECV potential telescoping: along any reachable server trace whose
+    endpoint is still pre-application-data, the total appdata RECV-input count
+    plus the initial post-CF potential is bounded by the final post-CF potential.
+    (All intermediate states are pre-application-data by forward closure.) **)
+let rec lemma_server_trace_recv_potential
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.server_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ServerCP.server_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_ctrl_ok st0.CS.cs_model.CS.model_control /\
+            pre_appdata_ctrl st1.CS.cs_model.CS.model_control)
+          (ensures
+            list_appdata_count (WFSM.trace_input_messages trace)
+              + server_recv_prior st0.CS.cs_model
+              <= server_recv_prior st1.CS.cs_model)
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ServerCP.server_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_server_step_model_facts st0 tr.SM.tr_event s' tr.SM.tr_output;
+      introduce ~(pre_appdata_ctrl s'.CS.cs_model.CS.model_control) ==> False
+      with _.
+        lemma_server_trace_notpreappdata_forward init s' st1 rest;
+      lemma_server_step_recv_potential st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_server_trace_recv_potential init s' st1 rest;
+      lemma_list_appdata_count_append
+        (WFSM.event_input_messages tr.SM.tr_event)
+        (WFSM.trace_input_messages rest)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ TARGET LEMMA 1 : SERVER RECV ≤ 1 in the pre-application-data region. ═══
+    A reachable server that has not yet reached application data has RECEIVED at
+    most one ApplicationData-typed record (the client Finished). **)
+let lemma_server_preappdata_recv_le1
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            pre_appdata_ctrl server.CS.cs_model.CS.model_control /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures raw_appdata_count server.CS.cs_wire_log.CL.raw_received <= 1)
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns raw_appdata_count server.CS.cs_wire_log.CL.raw_received <= 1
+    with _.
+    (
+      lemma_server_trace_recv_potential init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
+      lemma_raw_appdata_count_serialize_all in_msgs;
+      lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_received sm_bytes
+    )
+#pop-options
+
+(** ── CLIENT RECV ≥ 4 : control-based receive potential. ─────────────────────
+    A client advances its handshake control by exactly one stage per received
+    protected record (EncryptedExtensions, Certificate, CertificateVerify,
+    ServerFinished), each an ApplicationData-typed record. **)
+
+(** A received cleartext record (ServerHello / HelloRetryRequest /
+    ChangeCipherSpec / ClientHello) has appdata-count 0. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 30 --split_queries always"
+let lemma_received_cleartext_count_zero (msg:M.tls_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.network_message_is_cleartext CL.Received msg /\
+        CS.received_cleartext_tls_message_raw msg raw)
+      (ensures raw_appdata_count raw == 0)
+  = match msg with
+    | M.TlsHandshake (M.ClientHello _) ->
+      eliminate exists (fragment:M.sealed_record).
+        W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+        W.parse_tls_message T.Handshake fragment == Some msg
+      returns raw_appdata_count raw == 0
+      with _.
+        lemma_single_full_record_count raw T.Handshake
+    | M.TlsHandshake (M.ServerHello _) ->
+      lemma_cleartext_raw_count_zero msg raw
+    | M.TlsHandshake M.HelloRetryRequest ->
+      lemma_cleartext_raw_count_zero msg raw
+    | M.TlsChangeCipherSpec ->
+      lemma_cleartext_raw_count_zero msg raw
+    | _ -> ()
+#pop-options
+
+(** Control-based receive potential: the number of protected server-flight records
+    (EncryptedExtensions, Certificate, CertificateVerify, ServerFinished) a client
+    must have received to reach the given control.  `ControlFailed` is assigned 0
+    (a safe lower bound). **)
+let client_recv_potential (c:CS.connection_control_state) : nat =
+  match c with
+  | CS.ControlHandshaking CS.HsEncryptedExtensionsReceived -> 1
+  | CS.ControlHandshaking CS.HsCertificateReceived -> 2
+  | CS.ControlHandshaking CS.HsCertificateValidated -> 2
+  | CS.ControlHandshaking CS.HsCertificateVerifyReceived -> 3
+  | CS.ControlHandshaking CS.HsCertificateVerifyVerified -> 3
+  | CS.ControlHandshaking CS.HsServerFinishedReceived -> 4
+  | CS.ControlHandshaking CS.HsServerFinishedVerified -> 4
+  | CS.ControlApplicationData -> 4
+  | CS.ControlClosing -> 4
+  | CS.ControlClosed -> 4
+  | _ -> 0
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+(** Per-step client RECV potential fact: a legal client model step's appdata
+    RECV-delta count plus the pre-step control potential is at least the post-step
+    control potential.  (Each unit of potential increase corresponds to a received
+    protected ApplicationData record; sends, local events and cleartext receives
+    never increase the potential.) **)
+let lemma_client_recv_potential_step
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent raw_received:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event m conn_ev /\
+        CS.step_model m conn_ev == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        CS.event_raw_delta_legal m conn_ev raw_sent raw_received)
+      (ensures
+        raw_appdata_count raw_received + client_recv_potential m.CS.model_control
+          >= client_recv_potential m'.CS.model_control)
+  = match conn_ev with
+    | CS.ConnLocalEvent _ ->
+      Seq.lemma_eq_elim raw_received B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_received B.empty
+    | CS.ConnNetworkEvent dm ->
+      (match dm.CL.message_direction with
+       | CL.Sent ->
+         Seq.lemma_eq_elim raw_received B.empty;
+         lemma_raw_appdata_count_empty ();
+         lemma_raw_appdata_count_seq_equal raw_received B.empty
+       | CL.Received ->
+         if CS.network_message_is_cleartext CL.Received dm.CL.message_value
+         then lemma_received_cleartext_count_zero dm.CL.message_value raw_received
+         else
+           (assert (CS.protected_record_count CL.Received dm.CL.message_value == 1);
+            lemma_protected_raw_count_one raw_received))
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+(** Client-step RECV potential fact, lifted to `client_step`. **)
+let lemma_client_step_recv_potential
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        ClientCP.client_step st0 ev st1 out /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint)
+      (ensures
+        list_appdata_count (WFSM.event_input_messages ev)
+          + client_recv_potential st0.CS.cs_model.CS.model_control
+          >= client_recv_potential st1.CS.cs_model.CS.model_control)
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+           (CW.wire_serialize wire) /\
+         (exists content_type fragment.
+           CT.network_input_message_projection st0 content_type fragment msg
+             (CW.wire_serialize wire)) /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns
+        (list_appdata_count (WFSM.event_input_messages ev)
+          + client_recv_potential st0.CS.cs_model.CS.model_control
+          >= client_recv_potential st1.CS.cs_model.CS.model_control)
+      with _.
+      (
+        let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+        let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
+        lemma_list_appdata_count_single_wire wire;
+        lemma_client_recv_potential_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches st0 api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns
+        (list_appdata_count (WFSM.event_input_messages ev)
+          + client_recv_potential st0.CS.cs_model.CS.model_control
+          >= client_recv_potential st1.CS.cs_model.CS.model_control)
+      with _.
+        lemma_client_recv_potential_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent B.empty
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Trace-level client RECV potential telescoping: along any reachable client
+    trace, the total appdata RECV-input count plus the initial control potential
+    is at least the final control potential. **)
+let rec lemma_client_trace_recv_potential
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.client_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ClientCP.client_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint)
+          (ensures
+            list_appdata_count (WFSM.trace_input_messages trace)
+              + client_recv_potential st0.CS.cs_model.CS.model_control
+              >= client_recv_potential st1.CS.cs_model.CS.model_control)
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ClientCP.client_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_client_step_preserves_config st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_client_step_recv_potential st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_client_trace_recv_potential init s' st1 rest;
+      lemma_list_appdata_count_append
+        (WFSM.event_input_messages tr.SM.tr_event)
+        (WFSM.trace_input_messages rest)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Shared bridge: a reachable client whose control has receive-potential ≥ 4 has
+    RECEIVED at least four ApplicationData-typed records. **)
+let lemma_client_recv_potential_ge4_implies_recv_ge4
+  (cfg:CS.connection_config)
+  (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            client_recv_potential client.CS.cs_model.CS.model_control >= 4 /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 4)
+  = let init = CS.initial cfg in
+    let sm = ClientCP.client_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.client_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace client
+    returns raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 4
+    with _.
+    (
+      lemma_client_trace_recv_potential init init client trace;
+      PNTWL.lemma_client_trace_wire_logs_match init init trace client;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (client_recv_potential init.CS.cs_model.CS.model_control == 0);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal client.CS.cs_wire_log.CL.raw_received sm_bytes);
+      lemma_raw_appdata_count_serialize_all in_msgs;
+      lemma_raw_appdata_count_seq_equal client.CS.cs_wire_log.CL.raw_received sm_bytes
+    )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+(** ═══ TARGET LEMMA 4 : CLIENT at HsServerFinishedVerified ⇒ RECV ≥ 4. ═══
+    A reachable client that has verified the server Finished has RECEIVED at least
+    four ApplicationData-typed records (EncryptedExtensions, Certificate,
+    CertificateVerify, ServerFinished). **)
+let lemma_client_hs_server_finished_verified_recv_ge4
+  (cfg:CS.connection_config)
+  (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            client.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerFinishedVerified /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 4)
+  = lemma_client_recv_potential_ge4_implies_recv_ge4 cfg client
+#pop-options
+
+(** ── CLIENT SENT ≥ 1 : control-based send potential. ────────────────────────
+    A client that has reached the application-data region (ControlApplicationData
+    / ControlClosing / ControlClosed) has SENT its protected Finished — one
+    ApplicationData-typed record.  `ControlFailed` is assigned 0 (a client may
+    fail before ever sending its Finished). **)
+let client_sent_potential (c:CS.connection_control_state) : nat =
+  match c with
+  | CS.ControlApplicationData
+  | CS.ControlClosing
+  | CS.ControlClosed -> 1
+  | _ -> 0
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+(** Per-step client SEND potential fact: a legal client model step's appdata
+    SENT-delta count plus the pre-step send potential is at least the post-step
+    send potential.  The only send that raises the potential is the protected
+    Finished (HsServerFinishedVerified → ControlApplicationData), which is exactly
+    one ApplicationData record. **)
+let lemma_client_sent_potential_step
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent raw_received:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event m conn_ev /\
+        CS.step_model m conn_ev == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        CS.event_raw_delta_legal m conn_ev raw_sent raw_received)
+      (ensures
+        raw_appdata_count raw_sent + client_sent_potential m.CS.model_control
+          >= client_sent_potential m'.CS.model_control)
+  = match conn_ev with
+    | CS.ConnLocalEvent _ ->
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    | CS.ConnNetworkEvent dm ->
+      (match dm.CL.message_direction with
+       | CL.Received ->
+         Seq.lemma_eq_elim raw_sent B.empty;
+         lemma_raw_appdata_count_empty ();
+         lemma_raw_appdata_count_seq_equal raw_sent B.empty
+       | CL.Sent ->
+         if CS.network_message_is_cleartext CL.Sent dm.CL.message_value
+         then ()
+         else
+           (match dm.CL.message_value with
+            | M.TlsApplicationData _ -> ()
+            | _ ->
+              assert (CS.protected_record_count CL.Sent dm.CL.message_value == 1);
+              lemma_protected_raw_count_one raw_sent))
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+(** Client-step SEND potential fact, lifted to `client_step`. **)
+let lemma_client_step_sent_potential
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        ClientCP.client_step st0 ev st1 out /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint)
+      (ensures
+        list_appdata_count out.SM.so_wire_outputs
+          + client_sent_potential st0.CS.cs_model.CS.model_control
+          >= client_sent_potential st1.CS.cs_model.CS.model_control)
+  = lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
+    match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+           (CW.wire_serialize wire) /\
+         (exists content_type fragment.
+           CT.network_input_message_projection st0 content_type fragment msg
+             (CW.wire_serialize wire)) /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns
+        (list_appdata_count out.SM.so_wire_outputs
+          + client_sent_potential st0.CS.cs_model.CS.model_control
+          >= client_sent_potential st1.CS.cs_model.CS.model_control)
+      with _.
+      (
+        let conn_ev = CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received; CL.message_value = msg; } in
+        let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
+        lemma_client_sent_potential_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches st0 api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta st0
+           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty; } st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns
+        (list_appdata_count out.SM.so_wire_outputs
+          + client_sent_potential st0.CS.cs_model.CS.model_control
+          >= client_sent_potential st1.CS.cs_model.CS.model_control)
+      with _.
+      (
+        lemma_raw_appdata_count_seq_equal
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+          raw_sent;
+        lemma_client_sent_potential_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent B.empty
+      )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Trace-level client SEND potential telescoping. **)
+let rec lemma_client_trace_sent_potential
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.client_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ClientCP.client_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint)
+          (ensures
+            list_appdata_count (SM.trace_wire_outputs trace)
+              + client_sent_potential st0.CS.cs_model.CS.model_control
+              >= client_sent_potential st1.CS.cs_model.CS.model_control)
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ClientCP.client_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_client_step_preserves_config st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_client_step_sent_potential st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_client_trace_sent_potential init s' st1 rest;
+      lemma_list_appdata_count_append
+        tr.SM.tr_output.SM.so_wire_outputs
+        (SM.trace_wire_outputs rest)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Shared bridge: a reachable client whose control has send-potential ≥ 1 has
+    SENT at least one ApplicationData-typed record. **)
+let lemma_client_sent_potential_ge1_implies_sent_ge1
+  (cfg:CS.connection_config)
+  (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            client_sent_potential client.CS.cs_model.CS.model_control >= 1 /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures raw_appdata_count client.CS.cs_wire_log.CL.raw_sent >= 1)
+  = let init = CS.initial cfg in
+    let sm = ClientCP.client_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.client_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace client
+    returns raw_appdata_count client.CS.cs_wire_log.CL.raw_sent >= 1
+    with _.
+    (
+      lemma_client_trace_sent_potential init init client trace;
+      PNTWL.lemma_client_trace_wire_logs_match init init trace client;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (client_sent_potential init.CS.cs_model.CS.model_control == 0);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal client.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      lemma_raw_appdata_count_serialize_all out_msgs;
+      lemma_raw_appdata_count_seq_equal client.CS.cs_wire_log.CL.raw_sent sm_bytes
+    )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+(** ═══ TARGET LEMMA 3 (corrected) : CLIENT past handshake ⇒ RECV ≥ 4 ∧ SENT ≥ 1.
+    ═══
+    A reachable client that has genuinely completed its handshake — i.e. is in the
+    application-data region proper (ControlApplicationData / ControlClosing /
+    ControlClosed) — has RECEIVED at least four ApplicationData-typed records (the
+    protected server flight) and SENT at least one (its protected Finished).
+
+    DEVIATION FROM THE LITERAL TASK: the literal precondition `~(pre_appdata
+    client.control)` is UNSOUND — it also admits `ControlFailed`, which a client
+    can enter at ANY point via a legal `LocalFail` local event (see
+    `TLS13.Spec.ConnectionState.legal_local_event`, the `LocalFail _, _ -> True`
+    case).  The one-step trace `CS.initial cfg --LocalFail--> ControlFailed` is a
+    reachable client with `~(pre_appdata ControlFailed)` yet RECV = SENT = 0, so
+    `recv >= 4 /\ sent >= 1` is FALSE at `ControlFailed`.  We therefore exclude
+    `ControlFailed` (the only other `~pre_appdata` control), which is exactly the
+    set of clients that truly reached application data. **)
+let lemma_client_postappdata_recv_ge4_sent_ge1
+  (cfg:CS.connection_config)
+  (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            ~(pre_appdata_ctrl client.CS.cs_model.CS.model_control) /\
+            ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures
+            raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 4 /\
+            raw_appdata_count client.CS.cs_wire_log.CL.raw_sent >= 1)
+  = lemma_client_recv_potential_ge4_implies_recv_ge4 cfg client;
+    lemma_client_sent_potential_ge1_implies_sent_ge1 cfg client
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PART 4 — per-step APPLICATION-DATA COUNT deltas at the application-data
+    control (used by the System `client_appdata_len_ok` conjunct).
+
+    These are single-endpoint facts: a client that SENDS while at/into the
+    application-data control emits ≥ 1 ApplicationData record, and a client that
+    RECEIVES while at the application-data control consumes exactly 1
+    ApplicationData record.  Plus the two "no local/receive enters application
+    data" facts and the reachable-parses witnesses used to split the count over
+    an append.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** `list_has_appdata` gives a POSITIVE appdata count. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let rec lemma_list_has_appdata_count_ge1 (msgs:list CW.wire_message)
+  : Lemma (requires list_has_appdata msgs)
+          (ensures list_appdata_count msgs >= 1)
+          (decreases msgs)
+  = match msgs with
+    | [] -> ()
+    | m :: rest ->
+      if m.CW.wm_content_type = T.ApplicationData then ()
+      else begin
+        eliminate exists (m0:CW.wire_message).
+          L.memP m0 msgs /\ m0.CW.wm_content_type == T.ApplicationData
+        returns list_has_appdata rest
+        with _.
+          introduce exists (m':CW.wire_message).
+            L.memP m' rest /\ m'.CW.wm_content_type == T.ApplicationData
+          with m0 and ();
+        lemma_list_has_appdata_count_ge1 rest
+      end
+#pop-options
+
+(** A wire record serializes to a NON-EMPTY byte log (the record header alone is
+    5 bytes; the parse consumes a positive prefix). **)
+let lemma_wire_serialize_nonempty (w:CW.wire_message)
+  : Lemma (ensures B.length (CW.wire_serialize w) > 0)
+  = W.lemma_parse_record_wire_some_consumed_positive
+      w.CW.wm_raw w.CW.wm_content_type w.CW.wm_fragment (B.length w.CW.wm_raw)
+
+(** A byte log with EXACTLY ZERO records is empty. **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30"
+let lemma_raw_records_exactly_zero_empty (raw:B.bytes) (outer:T.content_type)
+  : Lemma (requires CS.raw_records_exactly raw outer 0)
+          (ensures Seq.equal raw B.empty)
+  = let parsed = CL.parse_record_prefix raw in
+    assert (L.length parsed.CL.values == 0);
+    (match parsed.CL.values with | [] -> () | _ :: _ -> ());
+    assert (parsed.CL.values == []);
+    assert (CL.serialize_tls_records parsed.CL.values == B.empty);
+    assert (parsed.CL.consumed == 0);
+    Seq.lemma_eq_elim (Seq.slice raw parsed.CL.consumed (B.length raw)) raw;
+    Seq.lemma_eq_elim raw B.empty
+#pop-options
+
+(** MODEL — a client RECEIVE at the application-data control is never a cleartext
+    message (cleartext handshake / CCS records are all illegal at
+    `ControlApplicationData`, i.e. `step_model` returns `None`). **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
+let lemma_client_recv_at_appdata_not_cleartext
+  (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m (CS.ConnNetworkEvent dm) /\
+            CS.step_model m (CS.ConnNetworkEvent dm) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata m.CS.model_control /\
+            dm.CL.message_direction == CL.Received)
+          (ensures ~(CS.network_message_is_cleartext CL.Received dm.CL.message_value))
+  = ()
+#pop-options
+
+(** MODEL — a client RECEIVE at the application-data control consumes EXACTLY one
+    ApplicationData-typed record. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+let lemma_client_recv_at_appdata_appdata_record
+  (m:CS.connection_model) (dm:CL.directed_message M.tls_message)
+  (m':CS.connection_model) (raw_received:B.bytes)
+  : Lemma (requires
+            CS.legal_event m (CS.ConnNetworkEvent dm) /\
+            CS.step_model m (CS.ConnNetworkEvent dm) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata m.CS.model_control /\
+            dm.CL.message_direction == CL.Received /\
+            CS.network_message_raw_delta_legal m dm raw_received)
+          (ensures CS.raw_records_exactly raw_received T.ApplicationData 1)
+  = lemma_client_recv_at_appdata_not_cleartext m dm m';
+    assert (CS.network_message_is_cleartext CL.Received dm.CL.message_value == false);
+    assert (CS.protected_record_count CL.Received dm.CL.message_value == 1)
+#pop-options
+
+(** MODEL — a client SEND that STAYS at the application-data control is never a
+    cleartext message (only `TlsApplicationData` / `TlsKeyUpdate` sends keep the
+    client at `ControlApplicationData`, both protected). **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
+let lemma_client_send_stay_appdata_not_cleartext
+  (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m (CS.ConnNetworkEvent dm) /\
+            CS.step_model m (CS.ConnNetworkEvent dm) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata m.CS.model_control /\
+            client_at_appdata m'.CS.model_control /\
+            dm.CL.message_direction == CL.Sent)
+          (ensures ~(CS.network_message_is_cleartext CL.Sent dm.CL.message_value))
+  = ()
+#pop-options
+
+(** Local re-proof of the (un-exported) `raw_records_exactly` first-record fact:
+    a POSITIVE record count means the first `parse_record` succeeds with the
+    common outer type, consuming a positive prefix.  Mirrors
+    `TLS13.ConnectionState.Lemmas.lemma_raw_records_exactly_nonempty_parse_record`
+    (which is not in the `.fsti`), over the transparent `ConnectionLog` module. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_ws_raw_records_nonempty_parse_record
+  (raw:B.bytes) (outer:T.content_type) (count:nat)
+  : Lemma
+      (requires CS.raw_records_exactly raw outer count /\ count > 0)
+      (ensures exists fragment. exists (consumed:nat).
+        W.parse_record raw == Some (outer, fragment, consumed) /\
+        consumed > 0 /\
+        consumed <= B.length raw)
+  = let parsed = CL.parse_record_prefix raw in
+    assert (L.length parsed.CL.values == count);
+    assert (CS.all_records_outer_type outer parsed.CL.values);
+    match W.parse_record raw with
+    | None ->
+      assert (B.length raw + 1 > 0);
+      assert (CL.parse_record_prefix raw == CL.raw_record_stream_view raw);
+      assert (parsed.CL.values == []);
+      assert False
+    | Some (content_type, fragment, consumed) ->
+      W.lemma_parse_record_serializes raw;
+      if consumed = 0 || consumed > B.length raw then (
+        assert (CL.parse_record_prefix raw == CL.raw_record_stream_view raw);
+        assert (parsed.CL.values == []);
+        assert False
+      ) else (
+        let rest = Seq.slice raw consumed (B.length raw) in
+        let tail = CL.parse_record_prefix_fuel (B.length raw) rest in
+        let record =
+          { M.record_outer_type = content_type;
+            M.record_fragment = fragment } in
+        assert (CL.parse_record_prefix raw ==
+          {
+            CL.values = record :: tail.CL.values;
+            CL.consumed = consumed + tail.CL.consumed;
+            CL.residual = tail.CL.residual;
+          });
+        assert (parsed.CL.values == record :: tail.CL.values);
+        assert (CS.all_records_outer_type outer (record :: tail.CL.values));
+        assert (content_type == outer)
+      )
+#pop-options
+
+(** MODEL — a client SEND that STAYS at the application-data control emits a
+    byte log whose FIRST record is ApplicationData-typed. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+let lemma_client_send_stay_appdata_first_record
+  (m:CS.connection_model) (dm:CL.directed_message M.tls_message)
+  (m':CS.connection_model) (raw_sent:B.bytes)
+  : Lemma (requires
+            CS.legal_event m (CS.ConnNetworkEvent dm) /\
+            CS.step_model m (CS.ConnNetworkEvent dm) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata m.CS.model_control /\
+            client_at_appdata m'.CS.model_control /\
+            dm.CL.message_direction == CL.Sent /\
+            CS.network_message_raw_delta_legal m dm raw_sent /\
+            B.length raw_sent > 0)
+          (ensures
+            (match W.parse_record_wire raw_sent with
+             | Some (ct, _, _) -> ct == T.ApplicationData
+             | None -> False))
+  = lemma_client_send_stay_appdata_not_cleartext m dm m';
+    assert (CS.network_message_is_cleartext CL.Sent dm.CL.message_value == false);
+    let n = CS.protected_record_count CL.Sent dm.CL.message_value in
+    assert (CS.raw_records_exactly raw_sent T.ApplicationData n);
+    if n = 0 then begin
+      lemma_raw_records_exactly_zero_empty raw_sent T.ApplicationData;
+      assert (Seq.equal raw_sent B.empty);
+      assert False
+    end;
+    assert (n > 0);
+    lemma_ws_raw_records_nonempty_parse_record raw_sent T.ApplicationData n;
+    W.lemma_parse_record_implies_parse_record_wire raw_sent
+#pop-options
+
+(** MODEL — a client event that STAYS at the application-data control and produces
+    a NON-EMPTY sent-delta emits a byte log whose FIRST record is ApplicationData
+    (handles every `conn_ev` shape; empty-delta shapes are ruled out by length>0). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_client_stay_appdata_raw_sent_first_appdata
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent:B.bytes)
+  : Lemma (requires
+            CS.legal_event m conn_ev /\
+            CS.step_model m conn_ev == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata m.CS.model_control /\
+            client_at_appdata m'.CS.model_control /\
+            CS.event_raw_delta_legal m conn_ev raw_sent B.empty /\
+            B.length raw_sent > 0)
+          (ensures
+            (match W.parse_record_wire raw_sent with
+             | Some (ct, _, _) -> ct == T.ApplicationData
+             | None -> False))
+  = match conn_ev with
+    | CS.ConnLocalEvent _ ->
+      Seq.lemma_eq_elim raw_sent B.empty
+    | CS.ConnNetworkEvent dm ->
+      (match dm.CL.message_direction with
+       | CL.Received ->
+         Seq.lemma_eq_elim raw_sent B.empty
+       | CL.Sent ->
+         lemma_client_send_stay_appdata_first_record m dm m' raw_sent)
+#pop-options
+
+(** CLIENT-STEP level — a client SEND (single wire output) that STAYS at the
+    application-data control emits ≥ 1 ApplicationData record. **)
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+let lemma_client_send_stay_appdata_count_ge1
+  (st0:CS.connection_state) (local:CTy.client_local_event)
+  (st1:CS.connection_state) (out:SM.step_output CW.wire_message CTy.local_output)
+  (w:CW.wire_message)
+  : Lemma (requires
+            ClientCP.client_step st0 (SM.LocalEvent local) st1 out /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata st0.CS.cs_model.CS.model_control /\
+            client_at_appdata st1.CS.cs_model.CS.model_control /\
+            out.SM.so_wire_outputs == [w])
+          (ensures
+            raw_appdata_count
+              (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) >= 1)
+  = let api = CTy.client_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (ClientCP.client_api_event_matches st0 api conn_ev /\
+       ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta st0
+         { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = B.empty; } st1 /\
+       CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+       CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+    returns
+      raw_appdata_count
+        (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) >= 1
+    with _.
+    (
+      lemma_wire_serialize_nonempty w;
+      lemma_serialize_all_single_wire w;
+      // raw_sent == serialize_all [w] (Seq.equal from client_wire_outputs_match).
+      Seq.lemma_eq_elim raw_sent
+        (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs);
+      assert (B.length raw_sent > 0);
+      lemma_client_stay_appdata_raw_sent_first_appdata
+        st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent;
+      PNTWL.lemma_wire_parse_serialize_all_inverse out.SM.so_wire_outputs;
+      lemma_first_record_appdata raw_sent out.SM.so_wire_outputs;
+      lemma_list_has_appdata_count_ge1 out.SM.so_wire_outputs;
+      lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs
+    )
+#pop-options
+
+(** CLIENT-STEP level — a client RECEIVE at the application-data control consumes
+    EXACTLY one ApplicationData record. **)
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+let lemma_client_recv_at_appdata_count1
+  (st0:CS.connection_state) (wire:CW.wire_message)
+  (st1:CS.connection_state) (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires
+            ClientCP.client_step st0 (SM.WireEvent wire) st1 out /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata st0.CS.cs_model.CS.model_control)
+          (ensures raw_appdata_count (CW.wire_serialize wire) == 1)
+  = eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent {
+           CL.message_direction = CL.Received; CL.message_value = msg; } in
+       CS.legal_connection_delta st0
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent =
+             WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+       CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       (exists content_type fragment.
+         CT.network_input_message_projection st0 content_type fragment msg
+           (CW.wire_serialize wire)) /\
+       ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns raw_appdata_count (CW.wire_serialize wire) == 1
+    with _.
+    (
+      let dm = { CL.message_direction = CL.Received; CL.message_value = msg; } in
+      lemma_client_recv_at_appdata_appdata_record
+        st0.CS.cs_model dm st1.CS.cs_model (CW.wire_serialize wire);
+      lemma_protected_raw_count_one (CW.wire_serialize wire)
+    )
+#pop-options
+
+(** MODEL — a step with an EMPTY sent-delta never enters the application-data
+    control (the unique entry, the protected Finished send, has a non-empty
+    ApplicationData sent-delta). **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+let lemma_client_empty_delta_not_into_appdata
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent:B.bytes)
+  : Lemma (requires
+            CS.legal_event m conn_ev /\
+            CS.step_model m conn_ev == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            ~(client_at_appdata m.CS.model_control) /\
+            CS.event_raw_delta_legal m conn_ev raw_sent B.empty /\
+            Seq.equal raw_sent B.empty)
+          (ensures ~(client_at_appdata m'.CS.model_control))
+  = if client_at_appdata m'.CS.model_control then begin
+      lemma_client_into_appdata_raw_sent_appdata m conn_ev m' raw_sent;
+      // raw_records_exactly raw_sent ApplicationData 1 with raw_sent empty: impossible.
+      lemma_ws_raw_records_nonempty_parse_record raw_sent T.ApplicationData 1
+    end
+#pop-options
+
+(** CLIENT-STEP level — a client LOCAL step emitting NO wire output never enters
+    the application-data control. **)
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+let lemma_client_local_noout_not_into_appdata
+  (st0:CS.connection_state) (local:CTy.client_local_event)
+  (st1:CS.connection_state) (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires
+            ClientCP.client_step st0 (SM.LocalEvent local) st1 out /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            out.SM.so_wire_outputs == [] /\
+            ~(client_at_appdata st0.CS.cs_model.CS.model_control))
+          (ensures ~(client_at_appdata st1.CS.cs_model.CS.model_control))
+  = let api = CTy.client_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (ClientCP.client_api_event_matches st0 api conn_ev /\
+       ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta st0
+         { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = B.empty; } st1 /\
+       CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+       CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+    returns ~(client_at_appdata st1.CS.cs_model.CS.model_control)
+    with _.
+    (
+      lemma_serialize_all_nil_wire ();
+      // client_wire_outputs_match: Seq.equal (serialize_all []) raw_sent, so raw_sent empty.
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_client_empty_delta_not_into_appdata st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent
+    )
+#pop-options
+
+(** CLIENT-STEP level — a client RECEIVE never moves control INTO the
+    application-data control from outside it. **)
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+let lemma_client_wire_recv_not_into_appdata
+  (st0:CS.connection_state) (wire:CW.wire_message)
+  (st1:CS.connection_state) (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma (requires
+            ClientCP.client_step st0 (SM.WireEvent wire) st1 out /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            client_at_appdata st1.CS.cs_model.CS.model_control)
+          (ensures client_at_appdata st0.CS.cs_model.CS.model_control)
+  = eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent {
+           CL.message_direction = CL.Received; CL.message_value = msg; } in
+       CS.legal_connection_delta st0
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent =
+             WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire; } st1 /\
+       CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       (exists content_type fragment.
+         CT.network_input_message_projection st0 content_type fragment msg
+           (CW.wire_serialize wire)) /\
+       ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns client_at_appdata st0.CS.cs_model.CS.model_control
+    with _.
+    (
+      if client_at_appdata st0.CS.cs_model.CS.model_control then ()
+      else
+        lemma_client_recv_not_into_appdata st0.CS.cs_model msg st1.CS.cs_model
+    )
+#pop-options
+
+(** REACHABLE PARSES — a reachable client's outgoing byte log cleanly decomposes
+    into a wire-record list (the append witness for `lemma_raw_appdata_count_append`). **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_client_reachable_raw_sent_parses
+  (cfg:CS.connection_config) (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures
+            (exists (msgs:list CW.wire_message).
+              WF.parses_as CW.tls_record_wire_format
+                client.CS.cs_wire_log.CL.raw_sent msgs Seq.empty))
+  = let init = CS.initial cfg in
+    let sm = ClientCP.client_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.client_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace client
+    returns
+      (exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          client.CS.cs_wire_log.CL.raw_sent msgs Seq.empty)
+    with _.
+    (
+      PNTWL.lemma_client_trace_wire_logs_match init init trace client;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal client.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      Seq.lemma_eq_elim client.CS.cs_wire_log.CL.raw_sent sm_bytes;
+      PNTWL.lemma_wire_parse_serialize_all_inverse out_msgs;
+      introduce exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          client.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
+      with out_msgs and ()
+    )
+#pop-options
+
+(** REACHABLE PARSES — a reachable client's incoming byte log cleanly decomposes
+    into a wire-record list. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_client_reachable_raw_received_parses
+  (cfg:CS.connection_config) (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures
+            (exists (msgs:list CW.wire_message).
+              WF.parses_as CW.tls_record_wire_format
+                client.CS.cs_wire_log.CL.raw_received msgs Seq.empty))
+  = let init = CS.initial cfg in
+    let sm = ClientCP.client_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.client_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace client
+    returns
+      (exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          client.CS.cs_wire_log.CL.raw_received msgs Seq.empty)
+    with _.
+    (
+      PNTWL.lemma_client_trace_wire_logs_match init init trace client;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal client.CS.cs_wire_log.CL.raw_received sm_bytes);
+      Seq.lemma_eq_elim client.CS.cs_wire_log.CL.raw_received sm_bytes;
+      PNTWL.lemma_wire_parse_serialize_all_inverse in_msgs;
+      introduce exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          client.CS.cs_wire_log.CL.raw_received msgs Seq.empty
+      with in_msgs and ()
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    SERVER at ControlApplicationData ⇒ RECEIVED ≥ 1 ApplicationData record.
+
+    A LOWER-bound RECV potential telescoping (dual to the `recv_le1` cluster).
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** Client-Finished-region potential: 1 iff the server has reached receipt of the
+    client Finished AND has not yet moved to Closing/Closed/Failed.  Entering this
+    3-set from OUTSIDE requires receiving the client Finished (an ApplicationData
+    record); leaving it to Closing/Closed/Failed only DECREASES the potential. **)
+let server_cf_region_prior (m:CS.connection_model) : nat =
+  match m.CS.model_control with
+  | CS.ControlHandshaking CS.HsClientFinishedReceived
+  | CS.ControlHandshaking CS.HsClientFinishedVerified
+  | CS.ControlApplicationData -> 1
+  | _ -> 0
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+(** Per-step server CF-region LOWER fact: a legal server-role step's appdata
+    RECV-delta count plus the pre-step CF-region potential is at least the
+    post-step CF-region potential.  (Entering the 3-set from outside requires a
+    protected ApplicationData receive — the client Finished; sends, local events
+    and cleartext receives never raise the potential.) **)
+let lemma_server_cf_region_step
+  (m:CS.connection_model) (conn_ev:CS.conn_event)
+  (m':CS.connection_model) (raw_sent raw_received:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event m conn_ev /\
+        CS.step_model m conn_ev == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        server_ctrl_ok m.CS.model_control /\
+        CS.event_raw_delta_legal m conn_ev raw_sent raw_received)
+      (ensures
+        server_cf_region_prior m'
+          <= raw_appdata_count raw_received + server_cf_region_prior m)
+  = match conn_ev with
+    | CS.ConnLocalEvent _ ->
+      Seq.lemma_eq_elim raw_received B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_received B.empty
+    | CS.ConnNetworkEvent dm ->
+      (match dm.CL.message_direction with
+       | CL.Sent ->
+         Seq.lemma_eq_elim raw_received B.empty;
+         lemma_raw_appdata_count_empty ();
+         lemma_raw_appdata_count_seq_equal raw_received B.empty
+       | CL.Received ->
+         if CS.network_message_is_cleartext CL.Received dm.CL.message_value
+         then lemma_received_cleartext_count_zero dm.CL.message_value raw_received
+         else
+           (assert (CS.protected_record_count CL.Received dm.CL.message_value == 1);
+            lemma_protected_raw_count_one raw_received))
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+(** Server-step CF-region LOWER fact, lifted to `server_step`. **)
+let lemma_server_step_cf_region_lower
+  (st0:CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.server_local_event)
+  (st1:CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        ServerCP.server_step st0 ev st1 out /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        server_ctrl_ok st0.CS.cs_model.CS.model_control)
+      (ensures
+        server_cf_region_prior st1.CS.cs_model
+          <= list_appdata_count (WFSM.event_input_messages ev)
+             + server_cf_region_prior st0.CS.cs_model)
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev =
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = msg;
+           } in
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection
+           st0.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection
+           st0.CS.cs_model conn_ev (CW.wire_serialize wire) /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns
+        (server_cf_region_prior st1.CS.cs_model
+          <= list_appdata_count (WFSM.event_input_messages ev)
+             + server_cf_region_prior st0.CS.cs_model)
+      with _.
+      (
+        let conn_ev =
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          } in
+        let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
+        lemma_list_appdata_count_single_wire wire;
+        lemma_server_cf_region_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)
+      )
+    | SM.LocalEvent local ->
+      let api = CTy.server_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ServerCP.server_api_event_matches api conn_ev /\
+         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent = raw_sent;
+             CS.delta_raw_received = B.empty;
+           }
+           st1 /\
+         CS.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+      returns
+        (server_cf_region_prior st1.CS.cs_model
+          <= list_appdata_count (WFSM.event_input_messages ev)
+             + server_cf_region_prior st0.CS.cs_model)
+      with _.
+        lemma_server_cf_region_step
+          st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent B.empty
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** Trace-level server CF-region LOWER telescoping: along ANY reachable
+    server-role trace whose start state is `server_ctrl_ok`, the total appdata
+    RECV-input count plus the initial CF-region potential is at least the final
+    CF-region potential.  (No forward-closure hypothesis is needed — only
+    `server_ctrl_ok` preservation, via `lemma_server_step_model_facts`.) **)
+let rec lemma_server_trace_cf_region_lower
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                 CTy.server_local_event CTy.local_output))
+  : Lemma (requires
+            SM.trace_reaches (ServerCP.server_state_machine init) st0 trace st1 /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            server_ctrl_ok st0.CS.cs_model.CS.model_control)
+          (ensures
+            server_cf_region_prior st1.CS.cs_model
+              <= list_appdata_count (WFSM.trace_input_messages trace)
+                 + server_cf_region_prior st0.CS.cs_model)
+          (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+      let s' = tr.SM.tr_next_state in
+      assert (ServerCP.server_step st0 tr.SM.tr_event s' tr.SM.tr_output);
+      lemma_server_step_model_facts st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_server_step_cf_region_lower st0 tr.SM.tr_event s' tr.SM.tr_output;
+      lemma_server_trace_cf_region_lower init s' st1 rest;
+      lemma_list_appdata_count_append
+        (WFSM.event_input_messages tr.SM.tr_event)
+        (WFSM.trace_input_messages rest)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ SERVER at ControlApplicationData ⇒ RECEIVED ≥ 1 ApplicationData record.
+    A reachable server that has reached application data has RECEIVED at least one
+    ApplicationData-typed record (the client's protected Finished). **)
+let lemma_server_appdata_received_appdata
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            server.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures raw_appdata_count server.CS.cs_wire_log.CL.raw_received >= 1)
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns raw_appdata_count server.CS.cs_wire_log.CL.raw_received >= 1
+    with _.
+    (
+      lemma_server_trace_cf_region_lower init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
+      lemma_raw_appdata_count_serialize_all in_msgs;
+      lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_received sm_bytes
+    )
 #pop-options
