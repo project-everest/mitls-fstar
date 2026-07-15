@@ -24,8 +24,8 @@ let paired_client_finished_raw_record_equality
     Seq.equal
       server.CS.cs_wire_log.CL.raw_received
       (B.append server_ch_raw server_finished_raw) /\
-    CS.raw_records_exactly client_finished_raw T.ApplicationData 1 /\
-    CS.raw_records_exactly server_finished_raw T.ApplicationData 1 /\
+    CS.raw_records_exactly client_finished_raw T.Application_data 1 /\
+    CS.raw_records_exactly server_finished_raw T.Application_data 1 /\
     Seq.equal client_finished_raw server_finished_raw
 
 val lemma_paired_no_tail_client_finished_staged_milestone_client_finished_raw_record_equality

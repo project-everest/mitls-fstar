@@ -352,7 +352,7 @@ fn seal_application
           pure ((ok ==> R.seal
                            's
                            (Ghost.reveal 'aad_bytes)
-                           { R.content_type = T.ApplicationData;
+                           { R.content_type = T.Application_data;
                              R.fragment = Ghost.reveal 'plain_bytes } == Some (out_bytes, s') /\
                          B.length out_bytes == B.length 'old) /\
                 (not ok ==> s' == 's /\
@@ -360,7 +360,7 @@ fn seal_application
                             R.seal
                               's
                               (Ghost.reveal 'aad_bytes)
-                              { R.content_type = T.ApplicationData;
+                              { R.content_type = T.Application_data;
                                 R.fragment = Ghost.reveal 'plain_bytes } == None))
 {
   unfold (is_record_state st 's);
@@ -383,10 +383,10 @@ fn seal_application
     assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
                   's.R.seq == U64.v seq));
     assert (pure (B.length (C.chacha20_poly1305_seal key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes)) == B.length 'old));
-    assert (pure (R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } ==
+    assert (pure (R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } ==
                   Some ((C.chacha20_poly1305_seal key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes) <: B.bytes),
                         R.next_seq 's)));
-    assert (pure (match R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } with
+    assert (pure (match R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } with
                   | Some (sealed, s') ->
                     sealed == (C.chacha20_poly1305_seal key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes) <: B.bytes) /\
                     s' == R.next_seq 's /\
@@ -399,7 +399,7 @@ fn seal_application
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
-    assert (pure (R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } == None));
+    assert (pure (R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } == None));
     fold (is_record_state st 's);
     false
   }
@@ -428,7 +428,7 @@ fn seal_application_no_update
           pure ((ok ==> R.seal
                            's
                            (Ghost.reveal 'aad_bytes)
-                           { R.content_type = T.ApplicationData;
+                           { R.content_type = T.Application_data;
                              R.fragment = Ghost.reveal 'plain_bytes } ==
                            Some (out_bytes, R.next_seq 's) /\
                          B.length out_bytes == B.length 'old) /\
@@ -436,7 +436,7 @@ fn seal_application_no_update
                             R.seal
                               's
                               (Ghost.reveal 'aad_bytes)
-                              { R.content_type = T.ApplicationData;
+                              { R.content_type = T.Application_data;
                                 R.fragment = Ghost.reveal 'plain_bytes } == None))
 {
   unfold (is_record_state st 's);
@@ -466,7 +466,7 @@ fn seal_application_no_update
     assert (pure (R.seal
       's
       (Ghost.reveal 'aad_bytes)
-      { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } ==
+      { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } ==
       Some ((C.chacha20_poly1305_seal
                key_s
                (C.tls13_record_nonce iv_s (U64.v seq))
@@ -482,7 +482,7 @@ fn seal_application_no_update
     assert (pure (R.seal
       's
       (Ghost.reveal 'aad_bytes)
-      { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } ==
+      { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } ==
       Some ((out_s <: B.bytes), R.next_seq 's)));
     fold (is_record_state st 's);
     true
@@ -496,7 +496,7 @@ fn seal_application_no_update
     assert (pure (R.seal
       's
       (Ghost.reveal 'aad_bytes)
-      { R.content_type = T.ApplicationData; R.fragment = Ghost.reveal 'plain_bytes } == None));
+      { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } == None));
     fold (is_record_state st 's);
     false
   }

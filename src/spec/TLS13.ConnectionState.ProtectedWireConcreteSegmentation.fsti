@@ -5,6 +5,9 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module Seq = FStar.Seq
@@ -13,11 +16,11 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (server_model0:CS.connection_model)
   (client_model0:CS.connection_model)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:CS.connection_model)
   (server_model2:CS.connection_model)
   (server_model3:CS.connection_model)
@@ -40,7 +43,7 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (client_verify_skip:CS.local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
@@ -202,11 +205,11 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (server:CS.connection_state)
   (client:CS.connection_state)
   (start:CS.handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:CS.connection_model)
   (server_model2:CS.connection_model)
   (server_model3:CS.connection_model)
@@ -229,7 +232,7 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (client_verify_skip:CS.local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)

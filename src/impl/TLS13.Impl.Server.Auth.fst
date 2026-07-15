@@ -19,6 +19,8 @@ module CLH = TLS13.Impl.ConnectionState.LocalHandshake
 module CR = TLS13.Impl.ConnectionState.Repr
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
+module GCV = TLS13.Wire.Generated.CertificateVerify
 module O = TLS13.OpenSSL
 module Ser = TLS13.Impl.Serializer
 module ST = TLS13.Impl.Server.Types
@@ -163,12 +165,12 @@ fn process_sign_certificate_verify
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     selection.CS.server_selected_signature_scheme ==
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     selection.CS.server_selected_credential ==
                       Ghost.reveal 'credential_identity /\
                     CS.signature_scheme_offered
                       'st0.CS.cs_model.CS.model_config.CS.config_signature_schemes
-                      T.RsaPssRsaeSha256
+                      T.Rsa_pss_rsae_sha256
                   | None -> False))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -299,7 +301,7 @@ fn process_sign_certificate_verify
         (Seq.slice signature_bytes 0 (SZ.v signature_len))));
       assert (pure (B.length (Ghost.reveal signature) == SZ.v signature_len));
       assert (pure (TLS13.Crypto.Spec.verify_signature
-        T.RsaPssRsaeSha256
+        T.Rsa_pss_rsae_sha256
         (Ghost.reveal 'credential_identity)
         (Seq.slice (Ghost.reveal certificate_verify_input_bytes) 0 130)
         (Ghost.reveal signature)));
@@ -308,16 +310,16 @@ fn process_sign_certificate_verify
         (H.certificate_verify_input
           (Tr.hash 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript))));
       assert (pure (TLS13.Crypto.Spec.verify_signature
-        T.RsaPssRsaeSha256
+        T.Rsa_pss_rsae_sha256
         (Ghost.reveal 'credential_identity)
         (H.certificate_verify_input
           (Tr.hash 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript))
         (Ghost.reveal signature)));
-      let cv : erased M.certificate_verify = Ghost.hide {
-        M.scheme = T.RsaPssRsaeSha256;
-        M.signature = Ghost.reveal signature;
-        M.body = B.empty;
-      };
+      assert (pure (Seq.length (Ghost.reveal signature) <= 65535));
+      let cv : erased GCV.certificateVerify = Ghost.hide ({
+        GCV.algorithm = T.Rsa_pss_rsae_sha256;
+        GCV.signature = (Ghost.reveal signature <: GCV.certificateVerify_signature);
+      });
       let lcv = {
         IM.certificate_verify_scheme = 0x0804us;
         IM.certificate_verify_signature = signature_vec;
@@ -329,11 +331,11 @@ fn process_sign_certificate_verify
       assert (pure (lcv.IM.certificate_verify_scheme == 0x0804us));
       rewrite (V.pts_to signature_vec signature_bytes)
         as (V.pts_to lcv.IM.certificate_verify_signature signature_bytes);
-      assert_norm (IM.signature_scheme_matches 0x0804us T.RsaPssRsaeSha256);
+      assert_norm (IM.signature_scheme_matches 0x0804us T.Rsa_pss_rsae_sha256);
       assert (pure (IM.byte_prefix_matches
         signature_bytes
         signature_len
-        (Ghost.reveal cv).M.signature));
+        (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))));
       fold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
 
       assert (pure (CS.legal_event
@@ -452,6 +454,14 @@ fn process_verify_client_finished
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+                 // TODO-A1: transcript+36 bound was previously obtained from the
+                 // (Phase-4-deleted) W.lemma_serialize_finished_len applied to
+                 // can_verify_client_finished's conjunct 5. W.serialize_handshake is
+                 // now abstract with no surviving reveal lemma, so the bound must be
+                 // threaded as an explicit precondition. Caller (Server.fst dispatcher)
+                 // must establish it.
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   Bounds.max_transcript_len /\
                  CM.can_verify_client_finished
                    'st0
                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
@@ -480,7 +490,9 @@ fn process_verify_client_finished
   assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
     Some (Ghost.reveal fin)));
   assert (pure (CM.can_verify_client_finished 'st0 (Ghost.reveal fin)));
-  W.lemma_serialize_finished_len (Ghost.reveal fin);
+  // TODO-A1: was `W.lemma_serialize_finished_len (Ghost.reveal fin)` to derive the
+  // transcript+36 bound from can_verify conjunct 5; lemma deleted in Phase 4 and
+  // W.serialize_handshake is abstract. Bound is now threaded as a precondition above.
   assert (pure (B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
     Bounds.max_transcript_len));
   unfold (connection_exactly s 'st0);

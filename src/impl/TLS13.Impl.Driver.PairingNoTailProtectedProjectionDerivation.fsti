@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module R = TLS13.Record.Spec
@@ -69,7 +70,7 @@ unfold let installed_protected_projection_replay_inputs
   (cf_server_after_app_write:CS.connection_model)
   (cf_client_after_finished:CS.connection_model)
   (cf_server_after_finished:CS.connection_model)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
@@ -366,7 +367,7 @@ type installed_protected_projection_replay_witness_pack = {
   ippr_cf_server_after_app_write: CS.connection_model;
   ippr_cf_client_after_finished: CS.connection_model;
   ippr_cf_server_after_finished: CS.connection_model;
-  ippr_verified_server_finished: M.finished;
+  ippr_verified_server_finished: GFin.finished;
   ippr_client_app_write_material: CS.traffic_key_material;
   ippr_client_app_read_material: CS.traffic_key_material;
   ippr_server_app_write_material: CS.traffic_key_material;
@@ -500,7 +501,7 @@ val lemma_pairing_protected_projection_witnesses_from_installed_replay_inputs
   (cf_server_after_app_write:CS.connection_model)
   (cf_client_after_finished:CS.connection_model)
   (cf_server_after_finished:CS.connection_model)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)

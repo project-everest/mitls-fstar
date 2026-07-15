@@ -79,12 +79,6 @@ let lemma_client_server_application_record_material_agrees_from_normalized_repla
       CS.received_cleartext_tls_message_raw
         (M.TlsHandshake (M.ServerHello w.PCB.hcb_client_sh))
         w.PCB.hcb_client_sh_raw /\
-      W.parse_supported_server_hello
-        (W.serialize_handshake (M.ServerHello w.PCB.hcb_server_sh)) ==
-        Some w.PCB.hcb_server_sh /\
-      W.parse_supported_server_hello
-        (W.serialize_handshake (M.ServerHello w.PCB.hcb_client_sh)) ==
-        Some w.PCB.hcb_client_sh /\
       Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
         client
         server /\

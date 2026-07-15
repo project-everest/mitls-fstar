@@ -9,6 +9,9 @@ module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GCV   = TLS13.Wire.Generated.CertificateVerify
 module PNTCRR = TLS13.Impl.Driver.PairingNoTailClientReceivedRawShape
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
@@ -18,7 +21,7 @@ module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 #push-options "--split_queries always --z3rlimit 10"
 
 let sent_certificate_verify_event
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   : CS.conn_event =
   CS.ConnNetworkEvent {
     CL.message_direction = CL.Sent;
@@ -41,7 +44,7 @@ let rec lemma_split_after_prefix_no_event
   (prefix:list CS.conn_event)
   (rest:list CS.conn_event)
   (before:list CS.conn_event)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   (after:list CS.conn_event)
   : Lemma
       (requires
@@ -86,11 +89,11 @@ let rec lemma_split_after_prefix_no_event
         after
 
 let lemma_server_cleartext_prefix_no_sent_certificate_verify
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
-  (cv:M.certificate_verify)
+  (sh:GSH.serverHello)
+  (cv:GCV.certificateVerify)
   : Lemma
       (ensures
         list_no_event
@@ -191,15 +194,15 @@ let lemma_server_post_server_hello_sent_certificate_verify_split
                 CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
               } :: after'));
         introduce exists
-          (ch':M.client_hello)
+          (ch':GCH.clientHello)
           (selection':CS.server_handshake_selection)
           (server_shared':C.x25519_shared_secret)
-          (sh':M.server_hello)
+          (sh':GSH.serverHello)
           (e5':CS.conn_event)
           (e6':CS.conn_event)
           (rest':list CS.conn_event)
           (prefix':list CS.conn_event)
-          (cv':M.certificate_verify)
+          (cv':GCV.certificateVerify)
           (suffix':list CS.conn_event).
           server.CS.cs_event_log ==
             FStar.List.Tot.append

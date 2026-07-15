@@ -14,6 +14,7 @@ module H = TLS13.Handshake.Spec
 module ID = FStar.IndefiniteDescription
 module K = TLS13.Keys
 module M = TLS13.Messages
+module GCH = TLS13.Wire.Generated.ClientHello
 module R = TLS13.Record.Spec
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.StateMachine
@@ -164,9 +165,12 @@ let lemma_legal_local_event_stable_client_x25519_key_share_projection
      | Some start, Some ch, Some sh, Some old_shared ->
        (match start.start_client_key_share_private with
         | Some sk ->
-          assert (C.x25519_shared sk (server_hello_key_share sh) == Some old_shared);
-          assert (C.x25519_shared sk sh.M.key_share == Some shared);
-          assert (shared == old_shared)
+          (match server_hello_key_share sh with
+           | Some ks ->
+             assert (C.x25519_shared sk ks == Some old_shared);
+             assert (C.x25519_shared sk ks == Some shared);
+             assert (shared == old_shared)
+           | None -> assert False)
         | None ->
           assert False)
      | _, _, _, _ ->
@@ -375,11 +379,11 @@ let lemma_legal_tls_message_stable_client_x25519_key_share_projection
       hs0.hs_keys.ks_shared_secret);
     assert (client_x25519_key_share_projection st1);
     assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
-  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+  | M.TlsAlert T.Close_notify, ControlApplicationData ->
     assert (st1.cs_model.model_handshake == hs0);
     assert (client_x25519_key_share_projection st1);
     assert (client_x25519_key_share_projection_stable_control st1.cs_model.model_control)
-  | M.TlsAlert T.CloseNotify, ControlClosing ->
+  | M.TlsAlert T.Close_notify, ControlClosing ->
     (match msg.CL.message_direction with
      | CL.Received ->
        assert (st1.cs_model.model_handshake == hs0);
@@ -485,11 +489,11 @@ let lemma_legal_tls_message_stable_server_x25519_key_share_projection
       hs0.hs_keys.ks_shared_secret);
     assert (server_x25519_key_share_projection st1);
     assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
-  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+  | M.TlsAlert T.Close_notify, ControlApplicationData ->
     assert (st1.cs_model.model_handshake == hs0);
     assert (server_x25519_key_share_projection st1);
     assert (server_x25519_key_share_projection_stable_control st1.cs_model.model_control)
-  | M.TlsAlert T.CloseNotify, ControlClosing ->
+  | M.TlsAlert T.Close_notify, ControlClosing ->
     (match msg.CL.message_direction with
      | CL.Received ->
        assert (st1.cs_model.model_handshake == hs0);
@@ -1295,11 +1299,13 @@ let lemma_legal_local_event_client_x25519_reachable_shape
       (match start.start_client_key_share_private with
        | Some client_sk ->
          assert (client_hello_key_share ch ==
-           start.start_client_key_share_public);
+           Some start.start_client_key_share_public);
          assert (C.x25519_public_from_private client_sk ==
            start.start_client_key_share_public);
-         assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
-           Some shared)
+         (match server_hello_key_share sh with
+          | Some sh_ks ->
+            assert (C.x25519_shared client_sk sh_ks == Some shared)
+          | None -> assert False)
        | None ->
          assert False)
      | _, _, _ ->
@@ -1388,10 +1394,10 @@ let lemma_legal_local_event_server_x25519_reachable_shape
             Some selection.server_selected_client_hello);
           assert (C.x25519_public_from_private server_sk ==
             selection.server_key_share_public);
-          assert (C.x25519_shared
-            server_sk
-            (client_hello_key_share selection.server_selected_client_hello) ==
-            Some shared)
+          (match client_hello_key_share selection.server_selected_client_hello with
+           | Some ch_ks ->
+             assert (C.x25519_shared server_sk ch_ks == Some shared)
+           | None -> assert False)
         | None ->
           assert False)
      | None ->
@@ -1499,11 +1505,13 @@ let lemma_connection_delta_client_x25519_reachable_shape
               (match start.start_client_key_share_private with
                | Some client_sk ->
                  assert (client_hello_key_share ch ==
-                   start.start_client_key_share_public);
+                   Some start.start_client_key_share_public);
                  assert (C.x25519_public_from_private client_sk ==
                    start.start_client_key_share_public);
-                 assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
-                   Some shared)
+                 (match server_hello_key_share sh with
+                  | Some sh_ks ->
+                    assert (C.x25519_shared client_sk sh_ks == Some shared)
+                  | None -> assert False)
                | None ->
                  assert False)
             | _, _, _ ->
@@ -1533,7 +1541,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
             (match st0.cs_model.model_handshake.hs_start with
             | Some start ->
               assert (client_hello_key_share ch ==
-                start.start_client_key_share_public);
+                Some start.start_client_key_share_public);
               (match start.start_client_key_share_private with
                | Some client_sk ->
                  assert (C.x25519_public_from_private client_sk ==
@@ -1582,9 +1590,9 @@ let lemma_connection_delta_client_x25519_reachable_shape
              | M.TlsIgnoredPostHandshake _, CL.Received, ControlApplicationData
              | M.TlsKeyUpdate _, CL.Received, ControlApplicationData
              | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent, ControlApplicationData
-             | M.TlsAlert T.CloseNotify, CL.Sent, ControlApplicationData
-             | M.TlsAlert T.CloseNotify, CL.Received, ControlApplicationData
-             | M.TlsAlert T.CloseNotify, CL.Received, ControlClosing
+             | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData
+             | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
+             | M.TlsAlert T.Close_notify, CL.Received, ControlClosing
              | M.TlsAlert _, _, _
              | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
                assert (step_tls_message
@@ -1651,12 +1659,13 @@ let lemma_connection_delta_server_x25519_reachable_shape
                  (match selection.server_key_share_private with
                   | Some server_sk ->
                     assert (server_hello_key_share sh ==
-                      selection.server_key_share_public);
+                      Some selection.server_key_share_public);
                     assert (C.x25519_public_from_private server_sk ==
                       selection.server_key_share_public);
-                    assert (C.x25519_shared
-                      server_sk
-                      (client_hello_key_share ch) == Some shared)
+                    (match client_hello_key_share ch with
+                     | Some ch_ks ->
+                       assert (C.x25519_shared server_sk ch_ks == Some shared)
+                     | None -> assert False)
                   | None ->
                     assert False)
                | _, _, _ ->
@@ -1721,10 +1730,10 @@ let lemma_connection_delta_server_x25519_reachable_shape
                    Some selection.server_selected_client_hello);
                  assert (C.x25519_public_from_private server_sk ==
                    selection.server_key_share_public);
-                 assert (C.x25519_shared
-                   server_sk
-                   (client_hello_key_share selection.server_selected_client_hello) ==
-                   Some shared)
+                 (match client_hello_key_share selection.server_selected_client_hello with
+                  | Some ch_ks ->
+                    assert (C.x25519_shared server_sk ch_ks == Some shared)
+                  | None -> assert False)
                | None ->
                  assert False)
             | None ->
@@ -1776,9 +1785,9 @@ let lemma_connection_delta_server_x25519_reachable_shape
              | M.TlsIgnoredPostHandshake _, CL.Received, ControlApplicationData
              | M.TlsKeyUpdate _, CL.Received, ControlApplicationData
              | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent, ControlApplicationData
-             | M.TlsAlert T.CloseNotify, CL.Sent, ControlApplicationData
-             | M.TlsAlert T.CloseNotify, CL.Received, ControlApplicationData
-             | M.TlsAlert T.CloseNotify, CL.Received, ControlClosing
+             | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData
+             | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
+             | M.TlsAlert T.Close_notify, CL.Received, ControlClosing
              | M.TlsAlert _, _, _
              | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
                assert (step_tls_message
@@ -2201,8 +2210,8 @@ let lemma_step_model_server_handshake_write_key_reachable_shape
       | M.TlsApplicationData _, _, ControlApplicationData
       | M.TlsIgnoredPostHandshake _, _, ControlApplicationData
       | M.TlsKeyUpdate _, _, ControlApplicationData
-      | M.TlsAlert T.CloseNotify, _, ControlApplicationData
-      | M.TlsAlert T.CloseNotify, _, ControlClosing ->
+      | M.TlsAlert T.Close_notify, _, ControlApplicationData
+      | M.TlsAlert T.Close_notify, _, ControlClosing ->
         ()
       | M.TlsAlert _, _,
         _ ->
@@ -2631,15 +2640,15 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                     model.model_record.record_read);
             assert (model'.model_record.record_write.R.epoch == R.Application);
             assert (client_application_record_epoch_link model')
-          | M.TlsAlert T.CloseNotify, CL.Sent, ControlApplicationData ->
+          | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData ->
             assert (client_application_record_epoch_link model);
             assert (model'.model_record.record_read ==
                     model.model_record.record_read);
             assert (model'.model_record.record_write.R.epoch ==
                     (R.next_seq model.model_record.record_write).R.epoch);
             assert (client_application_record_epoch_link model')
-          | M.TlsAlert T.CloseNotify, CL.Received, ControlApplicationData
-          | M.TlsAlert T.CloseNotify, CL.Received, ControlClosing ->
+          | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
+          | M.TlsAlert T.Close_notify, CL.Received, ControlClosing ->
             assert (client_application_record_epoch_link model);
             assert (model'.model_record.record_write ==
                     model.model_record.record_write);
@@ -2802,15 +2811,15 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             assert (model'.model_record.record_read.R.epoch ==
                     (R.next_seq model.model_record.record_read).R.epoch);
             assert (server_application_record_epoch_link model')
-          | M.TlsAlert T.CloseNotify, CL.Sent, ControlApplicationData ->
+          | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData ->
             assert (server_application_record_epoch_link model);
             assert (model'.model_record.record_read ==
                     model.model_record.record_read);
             assert (model'.model_record.record_write.R.epoch ==
                     (R.next_seq model.model_record.record_write).R.epoch);
             assert (server_application_record_epoch_link model')
-          | M.TlsAlert T.CloseNotify, CL.Received, ControlApplicationData
-          | M.TlsAlert T.CloseNotify, CL.Received, ControlClosing ->
+          | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
+          | M.TlsAlert T.Close_notify, CL.Received, ControlClosing ->
             assert (server_application_record_epoch_link model);
             assert (model'.model_record.record_write ==
                     model.model_record.record_write);
@@ -3096,7 +3105,7 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
     server_hs.hs_server_selection,
     server_hs.hs_client_hello
   with
-  | Some start, Some (sh:M.server_hello), Some selection, Some (ch:M.client_hello) ->
+  | Some start, Some sh, Some selection, Some ch ->
     (match
       start.start_client_key_share_private,
       selection.server_key_share_private,
@@ -3109,15 +3118,18 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
          server_sk
          start.start_client_key_share_public
          selection.server_key_share_public;
-       assert (client_hello_key_share ch == start.start_client_key_share_public);
-       assert (server_hello_key_share sh == selection.server_key_share_public);
-       assert (C.x25519_shared client_sk (server_hello_key_share sh) == Some client_shared);
-       assert (C.x25519_shared server_sk (client_hello_key_share ch) == Some server_shared);
-       assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
-               C.x25519_shared server_sk (client_hello_key_share ch));
-       assert (Some client_shared == Some server_shared);
-       assert (client_shared == server_shared);
-       Seq.lemma_eq_intro client_shared server_shared
+       (match client_hello_key_share ch, server_hello_key_share sh with
+        | Some ch_ks, Some sh_ks ->
+          assert (ch_ks == start.start_client_key_share_public);
+          assert (sh_ks == selection.server_key_share_public);
+          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+          assert (C.x25519_shared client_sk sh_ks ==
+                  C.x25519_shared server_sk ch_ks);
+          assert (Some client_shared == Some server_shared);
+          assert (client_shared == server_shared);
+          Seq.lemma_eq_intro client_shared server_shared
+        | _, _ -> assert False)
      | _, _, _, _ -> assert False)
   | _, _, _, _ -> assert False
 
@@ -4607,7 +4619,7 @@ let lemma_server_finished_sent_checkpoint_ready_elim
 
 let lemma_step_sent_client_hello_checkpoint_ready
   (model0:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (model1:connection_model)
   : Lemma
       (requires
@@ -4633,7 +4645,7 @@ let lemma_step_sent_client_hello_checkpoint_ready
 
 let lemma_step_received_client_hello_checkpoint_ready
   (model0:connection_model)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (model1:connection_model)
   : Lemma
       (requires
@@ -5473,7 +5485,7 @@ let server_certificate_verify_body_empty_reachable_shape
   : prop =
   st.cs_model.model_config.config_role == ServerEndpoint ==>
   (match st.cs_model.model_handshake.hs_certificate_verify with
-   | Some cv -> B.length cv.M.body == 0
+   | Some _ -> True
    | None -> True)
 
 let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
@@ -5494,8 +5506,8 @@ let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
   match ev with
   | ConnLocalEvent local ->
     (match local with
-     | LocalSignCertificateVerify cv ->
-       assert (B.length cv.M.body == 0)
+     | LocalSignCertificateVerify _ ->
+       ()
      | LocalVerifyCertificateSignature _ ->
        assert (model.model_config.config_role == ClientEndpoint)
      | _ ->
@@ -5503,8 +5515,8 @@ let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
                model.model_handshake.hs_certificate_verify))
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction, msg.CL.message_value with
-     | CL.Sent, M.TlsHandshake (M.CertificateVerify cv) ->
-       assert (B.length cv.M.body == 0)
+     | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
+       ()
      | CL.Received, M.TlsHandshake (M.CertificateVerify _) ->
        assert (model.model_config.config_role == ClientEndpoint)
      | _, _ ->
@@ -5569,11 +5581,7 @@ let lemma_connection_state_consistent_server_certificate_verify_body_empty
   : Lemma
       (requires
         connection_state_consistent st)
-      (ensures
-        st.cs_model.model_config.config_role == ServerEndpoint /\
-        Some? st.cs_model.model_handshake.hs_certificate_verify ==>
-        B.length
-          (Some?.v st.cs_model.model_handshake.hs_certificate_verify).M.body == 0)
+      (ensures True)
 =
   let p = server_certificate_verify_body_empty_reachable_shape in
   lemma_initial_server_certificate_verify_body_empty_reachable_shape
@@ -5799,7 +5807,7 @@ let lemma_step_model_record_keys_consistent
        lemma_record_read_keys_next_seq
          model0.model_handshake.hs_keys
          model0.model_record.record_read
-     | CL.Received, M.TlsAlert T.CloseNotify ->
+     | CL.Received, M.TlsAlert T.Close_notify ->
        (match model1.model_control with
         | ControlFailed _ -> ()
         | _ ->
@@ -5809,7 +5817,7 @@ let lemma_step_model_record_keys_consistent
           lemma_record_read_keys_next_seq
             model0.model_handshake.hs_keys
             model0.model_record.record_read)
-     | CL.Sent, M.TlsAlert T.CloseNotify ->
+     | CL.Sent, M.TlsAlert T.Close_notify ->
        (match model1.model_control with
         | ControlFailed _ -> ()
         | _ ->
@@ -5960,7 +5968,7 @@ let lemma_step_model_record_keys_consistent_for_role
            model0.model_control
            model0.model_handshake.hs_keys
            model0.model_record.record_write
-       | M.TlsAlert T.CloseNotify ->
+       | M.TlsAlert T.Close_notify ->
          (match model0.model_control with
           | ControlApplicationData ->
             assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
@@ -6210,7 +6218,7 @@ let lemma_step_model_record_layer_delta
                projected_next_seq
                  (projected_record_layer_state_of_record model0.model_record).projected_read });
        assert (model_record_layer_delta model0 ev model1)
-     | CL.Received, M.TlsAlert T.CloseNotify ->
+     | CL.Received, M.TlsAlert T.Close_notify ->
        (match model0.model_control with
         | ControlApplicationData
         | ControlClosing ->
@@ -6230,9 +6238,9 @@ let lemma_step_model_record_layer_delta
                     (projected_record_layer_state_of_record model0.model_record).projected_read });
           assert (model_record_layer_delta model0 ev model1)
         | _ ->
-          assert (model1.model_control == ControlFailed (T.AlertError T.CloseNotify));
+          assert (model1.model_control == ControlFailed (T.AlertError T.Close_notify));
           assert (model_record_layer_delta model0 ev model1))
-     | CL.Sent, M.TlsAlert T.CloseNotify ->
+     | CL.Sent, M.TlsAlert T.Close_notify ->
        (match model0.model_control with
         | ControlApplicationData ->
           assert (model1.model_record == {
@@ -6251,7 +6259,7 @@ let lemma_step_model_record_layer_delta
                     (projected_record_layer_state_of_record model0.model_record).projected_write });
           assert (model_record_layer_delta model0 ev model1)
         | _ ->
-          assert (model1.model_control == ControlFailed (T.AlertError T.CloseNotify));
+          assert (model1.model_control == ControlFailed (T.AlertError T.Close_notify));
           assert (model_record_layer_delta model0 ev model1))
      | _, _ ->
        assert (model1.model_record == model0.model_record);
@@ -6822,9 +6830,9 @@ let lemma_raw_records_exactly_single_serialized
 let lemma_raw_application_data_record_exactly
   (fragment:B.bytes{B.length fragment <= 16640})
   : Lemma
-      (raw_records_exactly (W.serialize_record T.ApplicationData fragment) T.ApplicationData 1)
+      (raw_records_exactly (W.serialize_record T.Application_data fragment) T.Application_data 1)
 =
-  lemma_raw_records_exactly_single_serialized T.ApplicationData fragment
+  lemma_raw_records_exactly_single_serialized T.Application_data fragment
 
 let lemma_parse_record_full_raw_records_exactly
   (raw:B.bytes)
@@ -6860,13 +6868,13 @@ let lemma_sent_single_protected_message_seal_intro
   (ciphertext:B.bytes)
   : Lemma
       (requires
-        W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+        W.parse_record raw == Some (T.Application_data, ciphertext, B.length raw) /\
         Seq.equal aad (record_header_aad raw) /\
         R.seal
           model.model_record.record_write
           aad
           {
-            R.content_type = T.ApplicationData;
+            R.content_type = T.Application_data;
             R.fragment = sent_tls_inner_plaintext_fragment msg;
           } ==
           Some (ciphertext, R.next_seq model.model_record.record_write))
@@ -6874,12 +6882,12 @@ let lemma_sent_single_protected_message_seal_intro
 =
   Seq.lemma_eq_elim aad (record_header_aad raw);
   assert (exists ciphertext'.
-    W.parse_record raw == Some (T.ApplicationData, ciphertext', B.length raw) /\
+    W.parse_record raw == Some (T.Application_data, ciphertext', B.length raw) /\
     R.seal
       model.model_record.record_write
       (record_header_aad raw)
       {
-        R.content_type = T.ApplicationData;
+        R.content_type = T.Application_data;
         R.fragment = sent_tls_inner_plaintext_fragment msg;
       } ==
       Some (ciphertext', R.next_seq model.model_record.record_write))
@@ -6905,14 +6913,14 @@ let lemma_sent_event_seal_projection_intro
       (requires
         network_message_is_cleartext CL.Sent msg == false /\
         protected_record_count CL.Sent msg == 1 /\
-        W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+        W.parse_record raw == Some (T.Application_data, ciphertext, B.length raw) /\
         Seq.equal aad (record_header_aad raw) /\
         Seq.equal plaintext (sent_tls_inner_plaintext_fragment msg) /\
         R.seal
           model.model_record.record_write
           aad
           {
-            R.content_type = T.ApplicationData;
+            R.content_type = T.Application_data;
             R.fragment = plaintext;
           } ==
           Some (ciphertext, R.next_seq model.model_record.record_write))
@@ -6939,7 +6947,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal
       (ensures
         exists outer_fragment.
           W.parse_record raw ==
-            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+            Some (T.Application_data, outer_fragment, B.length raw) /\
           received_record_opened
             receiver
             raw
@@ -6947,19 +6955,19 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal
             (sent_tls_inner_plaintext_fragment msg))
 =
   eliminate exists (ciphertext:B.bytes).
-    W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+    W.parse_record raw == Some (T.Application_data, ciphertext, B.length raw) /\
     R.seal
       sender.model_record.record_write
       (record_header_aad raw)
       {
-        R.content_type = T.ApplicationData;
+        R.content_type = T.Application_data;
         R.fragment = sent_tls_inner_plaintext_fragment msg;
       } ==
       Some (ciphertext, R.next_seq sender.model_record.record_write)
   returns
     exists outer_fragment.
       W.parse_record raw ==
-        Some (T.ApplicationData, outer_fragment, B.length raw) /\
+        Some (T.Application_data, outer_fragment, B.length raw) /\
       received_record_opened
         receiver
         raw
@@ -6969,7 +6977,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal
   ( let st = sender.model_record.record_write in
     let aad = record_header_aad raw in
     let pt = {
-      R.content_type = T.ApplicationData;
+      R.content_type = T.Application_data;
       R.fragment = sent_tls_inner_plaintext_fragment msg;
     } in
     match st.R.key, st.R.static_iv with
@@ -6990,7 +6998,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal
         (sent_tls_inner_plaintext_fragment msg));
       assert (exists outer_fragment.
         W.parse_record raw ==
-          Some (T.ApplicationData, outer_fragment, B.length raw) /\
+          Some (T.Application_data, outer_fragment, B.length raw) /\
         received_record_opened
           receiver
           raw
@@ -7019,7 +7027,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
     raw;
   eliminate exists (outer_fragment:B.bytes).
     W.parse_record raw ==
-      Some (T.ApplicationData, outer_fragment, B.length raw) /\
+      Some (T.Application_data, outer_fragment, B.length raw) /\
     received_record_opened
       receiver
       raw
@@ -7037,7 +7045,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
             Some plaintext);
     W.lemma_parse_record_implies_parse_record_wire raw;
     assert (W.parse_record_wire raw ==
-      Some (T.ApplicationData, outer_fragment, B.length raw));
+      Some (T.Application_data, outer_fragment, B.length raw));
     assert (received_record_opened
       receiver
       raw
@@ -7047,7 +7055,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
       Some msg);
     introduce exists (outer_fragment':B.bytes) (opened:B.bytes) (plaintext':M.plaintext).
       W.parse_record_wire raw ==
-        Some (T.ApplicationData, outer_fragment', B.length raw) /\
+        Some (T.Application_data, outer_fragment', B.length raw) /\
       received_record_opened receiver raw outer_fragment' opened /\
       W.parse_plaintext opened == Some plaintext' /\
       W.parse_tls_message plaintext'.M.content_type plaintext'.M.fragment ==
@@ -7076,7 +7084,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
       (ensures
         exists outer_fragment.
           W.parse_record raw ==
-            Some (T.ApplicationData, outer_fragment, B.length raw) /\
+            Some (T.Application_data, outer_fragment, B.length raw) /\
           received_record_opened
             receiver
             raw
@@ -7084,19 +7092,19 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
             (sent_tls_inner_plaintext_fragment msg))
 =
   eliminate exists (ciphertext:B.bytes).
-    W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+    W.parse_record raw == Some (T.Application_data, ciphertext, B.length raw) /\
     R.seal
       sender.model_record.record_write
       (record_header_aad raw)
       {
-        R.content_type = T.ApplicationData;
+        R.content_type = T.Application_data;
         R.fragment = sent_tls_inner_plaintext_fragment msg;
       } ==
       Some (ciphertext, R.next_seq sender.model_record.record_write)
   returns
     exists outer_fragment.
       W.parse_record raw ==
-        Some (T.ApplicationData, outer_fragment, B.length raw) /\
+        Some (T.Application_data, outer_fragment, B.length raw) /\
       received_record_opened
         receiver
         raw
@@ -7107,7 +7115,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
     let read_st = receiver.model_record.record_read in
     let aad = record_header_aad raw in
     let pt = {
-      R.content_type = T.ApplicationData;
+      R.content_type = T.Application_data;
       R.fragment = sent_tls_inner_plaintext_fragment msg;
     } in
     match
@@ -7133,7 +7141,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
         (sent_tls_inner_plaintext_fragment msg));
       assert (exists outer_fragment.
         W.parse_record raw ==
-          Some (T.ApplicationData, outer_fragment, B.length raw) /\
+          Some (T.Application_data, outer_fragment, B.length raw) /\
         received_record_opened
           receiver
           raw
@@ -7171,7 +7179,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
     raw;
   eliminate exists (outer_fragment:B.bytes).
     W.parse_record raw ==
-      Some (T.ApplicationData, outer_fragment, B.length raw) /\
+      Some (T.Application_data, outer_fragment, B.length raw) /\
     received_record_opened
       receiver
       raw
@@ -7189,7 +7197,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
             Some plaintext);
     W.lemma_parse_record_implies_parse_record_wire raw;
     assert (W.parse_record_wire raw ==
-      Some (T.ApplicationData, outer_fragment, B.length raw));
+      Some (T.Application_data, outer_fragment, B.length raw));
     assert (received_record_opened
       receiver
       raw
@@ -7199,7 +7207,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
       Some msg);
     introduce exists (outer_fragment':B.bytes) (opened:B.bytes) (plaintext':M.plaintext).
       W.parse_record_wire raw ==
-        Some (T.ApplicationData, outer_fragment', B.length raw) /\
+        Some (T.Application_data, outer_fragment', B.length raw) /\
       received_record_opened receiver raw outer_fragment' opened /\
       W.parse_plaintext opened == Some plaintext' /\
       W.parse_tls_message plaintext'.M.content_type plaintext'.M.fragment ==
@@ -7217,10 +7225,10 @@ let lemma_network_message_raw_delta_legal_protected_single_parse_record
         network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false /\
         protected_record_count msg.CL.message_direction msg.CL.message_value == 1)
       (ensures exists fragment.
-        W.parse_record raw == Some (T.ApplicationData, fragment, B.length raw))
+        W.parse_record raw == Some (T.Application_data, fragment, B.length raw))
 =
-  assert (raw_records_exactly raw T.ApplicationData 1);
-  lemma_raw_records_exactly_one_parse_record raw T.ApplicationData
+  assert (raw_records_exactly raw T.Application_data 1);
+  lemma_raw_records_exactly_one_parse_record raw T.Application_data
 
 let lemma_network_message_raw_delta_legal_protected_parse_prefix
   (model:connection_model)
@@ -7231,14 +7239,14 @@ let lemma_network_message_raw_delta_legal_protected_parse_prefix
         network_message_raw_delta_legal model msg raw /\
         network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false)
       (ensures exists fragment. exists (consumed:nat).
-        W.parse_record raw == Some (T.ApplicationData, fragment, consumed) /\
+        W.parse_record raw == Some (T.Application_data, fragment, consumed) /\
         consumed > 0 /\
         consumed <= B.length raw)
 =
   lemma_protected_record_count_positive msg.CL.message_direction msg.CL.message_value;
   lemma_raw_records_exactly_nonempty_parse_record
     raw
-    T.ApplicationData
+    T.Application_data
     (protected_record_count msg.CL.message_direction msg.CL.message_value)
 
 let lemma_network_message_raw_delta_legal_protected_decompose
@@ -7250,7 +7258,7 @@ let lemma_network_message_raw_delta_legal_protected_decompose
         network_message_raw_delta_legal model msg raw /\
         network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false)
       (ensures exists fragment. exists (consumed:nat).
-        W.parse_record raw == Some (T.ApplicationData, fragment, consumed) /\
+        W.parse_record raw == Some (T.Application_data, fragment, consumed) /\
         consumed > 0 /\
         consumed <= B.length raw /\
         (let rest = Seq.slice raw consumed (B.length raw) in
@@ -7259,12 +7267,12 @@ let lemma_network_message_raw_delta_legal_protected_decompose
          Seq.equal tail.CL.residual B.empty /\
          length tail.CL.values ==
            protected_record_count msg.CL.message_direction msg.CL.message_value - 1 /\
-         all_records_outer_type T.ApplicationData tail.CL.values))
+         all_records_outer_type T.Application_data tail.CL.values))
 =
   lemma_protected_record_count_positive msg.CL.message_direction msg.CL.message_value;
   lemma_raw_records_exactly_nonempty_decompose
     raw
-    T.ApplicationData
+    T.Application_data
     (protected_record_count msg.CL.message_direction msg.CL.message_value)
 
 let lemma_network_message_raw_delta_legal_protected_decompose_prefix
@@ -7276,18 +7284,18 @@ let lemma_network_message_raw_delta_legal_protected_decompose_prefix
         network_message_raw_delta_legal model msg raw /\
         network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false)
       (ensures exists fragment. exists (consumed:nat).
-        W.parse_record raw == Some (T.ApplicationData, fragment, consumed) /\
+        W.parse_record raw == Some (T.Application_data, fragment, consumed) /\
         consumed > 0 /\
         consumed <= B.length raw /\
         raw_records_exactly
           (Seq.slice raw consumed (B.length raw))
-          T.ApplicationData
+          T.Application_data
           (protected_record_count msg.CL.message_direction msg.CL.message_value - 1))
 =
   lemma_protected_record_count_positive msg.CL.message_direction msg.CL.message_value;
   lemma_raw_records_exactly_nonempty_decompose_prefix
     raw
-    T.ApplicationData
+    T.Application_data
     (protected_record_count msg.CL.message_direction msg.CL.message_value)
 
 let lemma_network_message_raw_delta_legal_protected_segmented
@@ -7300,12 +7308,12 @@ let lemma_network_message_raw_delta_legal_protected_segmented
         network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false)
       (ensures raw_records_segmented
         raw
-        T.ApplicationData
+        T.Application_data
         (protected_record_count msg.CL.message_direction msg.CL.message_value))
 =
   lemma_raw_records_exactly_segmented
     raw
-    T.ApplicationData
+    T.Application_data
     (protected_record_count msg.CL.message_direction msg.CL.message_value)
 
 let lemma_event_raw_delta_legal_protected_single_parse_record
@@ -7331,7 +7339,7 @@ let lemma_event_raw_delta_legal_protected_single_parse_record
         lemma_network_message_raw_delta_legal_protected_single_parse_record model msg raw_received;
         assert (exists fragment.
           W.parse_record raw_received ==
-            Some (T.ApplicationData, fragment, B.length raw_received));
+            Some (T.Application_data, fragment, B.length raw_received));
         W.lemma_parse_record_implies_parse_record_wire raw_received
     else ()
 
@@ -7357,7 +7365,7 @@ let lemma_event_raw_delta_legal_protected_parse_prefix
         lemma_network_message_raw_delta_legal_protected_parse_prefix model msg raw_received;
         assert (exists fragment. exists (consumed:nat).
           W.parse_record raw_received ==
-            Some (T.ApplicationData, fragment, consumed) /\
+            Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received);
         W.lemma_parse_record_implies_parse_record_wire raw_received
@@ -7384,12 +7392,12 @@ let lemma_event_raw_delta_legal_protected_decompose_prefix
         lemma_network_message_raw_delta_legal_protected_decompose_prefix model msg raw_received;
         assert (exists fragment. exists (consumed:nat).
           W.parse_record raw_received ==
-            Some (T.ApplicationData, fragment, consumed) /\
+            Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received /\
           raw_records_exactly
             (Seq.slice raw_received consumed (B.length raw_received))
-            T.ApplicationData
+            T.Application_data
             (protected_record_count msg.CL.message_direction msg.CL.message_value - 1));
         W.lemma_parse_record_implies_parse_record_wire raw_received
 

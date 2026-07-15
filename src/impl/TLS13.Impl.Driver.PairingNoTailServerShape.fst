@@ -10,6 +10,9 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GFin  = TLS13.Wire.Generated.Finished
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
@@ -333,7 +336,7 @@ let lemma_server_hs_client_hello_received_local_event_step_none
 
 let lemma_server_hs_client_hello_received_no_selection_sent_server_hello_illegal
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   : Lemma
       (requires
         model.CS.model_control ==
@@ -362,7 +365,7 @@ let lemma_server_hs_client_hello_received_no_selection_sent_server_hello_illegal
 
 let lemma_server_hs_client_hello_received_no_shared_sent_server_hello_illegal
   (model:CS.connection_model)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   : Lemma
       (requires
         model.CS.model_control ==
@@ -827,13 +830,13 @@ let lemma_server_application_progress_rank_step
       (match msg.CL.message_value with
       | M.TlsAlert alert ->
         (match alert, model.CS.model_control, msg.CL.message_direction with
-        | T.CloseNotify, CS.ControlApplicationData, CL.Sent ->
+        | T.Close_notify, CS.ControlApplicationData, CL.Sent ->
           assert (server_application_progress_rank model <=
             server_application_progress_rank model' + 1)
-        | T.CloseNotify, CS.ControlApplicationData, CL.Received ->
+        | T.Close_notify, CS.ControlApplicationData, CL.Received ->
           assert (server_application_progress_rank model <=
             server_application_progress_rank model' + 1)
-        | T.CloseNotify, CS.ControlClosing, CL.Received ->
+        | T.Close_notify, CS.ControlClosing, CL.Received ->
           assert (server_application_progress_rank model <=
             server_application_progress_rank model' + 1)
         | _, _, _ ->
@@ -2061,6 +2064,7 @@ let lemma_server_no_tail_second_event_client_hello_clean
   lemma_server_no_tail_second_event_not_ccs server;
   lemma_server_no_tail_second_event_client_hello_if_not_ccs server
 
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_server_no_tail_third_event_select_parameters_clean
   (server:CS.connection_state)
   : Lemma
@@ -2268,7 +2272,7 @@ let lemma_server_no_tail_third_event_select_parameters_clean
               rest
         with _.
         (
-          assert_norm (
+          assert (
             CS.step_model
               model1
               (CS.ConnNetworkEvent ({
@@ -2728,7 +2732,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
               rest
         with _.
         (
-          assert_norm (
+          assert (
             CS.step_model
               model1
               (CS.ConnNetworkEvent ({
@@ -3144,7 +3148,8 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
   proof obligation in this lemma but not quite enough at that final depth;
   bump it locally rather than growing it project-wide.
 **)
-#push-options "--z3rlimit 10"
+#pop-options
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_server_no_tail_fifth_event_server_hello_clean
   (server:CS.connection_state)
   : Lemma
@@ -3350,7 +3355,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
              rest
        with _.
        (
-         assert_norm (
+         assert (
            CS.step_model
              model1
              (CS.ConnNetworkEvent ({
@@ -3781,10 +3786,10 @@ let lemma_server_no_tail_desired_shape_start_spine
      (ensures server_no_tail_start_spine server)
 =
   eliminate exists
-   (ch:M.client_hello)
+   (ch:GCH.clientHello)
    (selection:CS.server_handshake_selection)
    (server_shared:C.x25519_shared_secret)
-   (sh:M.server_hello)
+   (sh:GSH.serverHello)
    (server_material:CS.traffic_key_material)
    (sent_msg0:M.handshake_msg)
    (sent_msg1:M.handshake_msg)
@@ -3793,7 +3798,7 @@ let lemma_server_no_tail_desired_shape_start_spine
    (sent_msg3:M.handshake_msg)
    (server_app_write_material:CS.traffic_key_material)
    (received_msg4:M.handshake_msg)
-   (cf:M.finished)
+   (cf:GFin.finished)
    (server_app_read_material:CS.traffic_key_material).
    received_msg4 == M.Finished cf /\
    server.CS.cs_event_log ==
@@ -3940,10 +3945,10 @@ let lemma_server_no_tail_desired_shape_length
       (ensures FStar.List.Tot.length server.CS.cs_event_log == 15)
 =
   eliminate exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (server_material:CS.traffic_key_material)
     (sent_msg0:M.handshake_msg)
     (sent_msg1:M.handshake_msg)
@@ -3952,7 +3957,7 @@ let lemma_server_no_tail_desired_shape_length
     (sent_msg3:M.handshake_msg)
     (server_app_write_material:CS.traffic_key_material)
     (received_msg4:M.handshake_msg)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (server_app_read_material:CS.traffic_key_material).
     received_msg4 == M.Finished cf /\
     server.CS.cs_event_log ==

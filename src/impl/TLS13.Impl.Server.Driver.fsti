@@ -11,6 +11,11 @@ module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Impl.CanonicalWire
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
+module CryptoSpec = TLS13.Crypto.Spec
+module M = TLS13.Messages
+module W = TLS13.Wire.Spec
+module SS = TLS13.Impl.Server.Send
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -526,10 +531,10 @@ fn accept_endpoint
            pts_to bind_host 'bind_host_bytes **
            V.pts_to private_key #1.0R 'private_key_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
-                B.length 'private_key_bytes == 32 /\
-                Seq.equal 'private_key_bytes
-                  (EP.server_endpoint_private_bytes_of_material
-                    (Ghost.reveal material_spec)))
+                 B.length 'private_key_bytes == 32 /\
+                 Seq.equal 'private_key_bytes
+                   (EP.server_endpoint_private_bytes_of_material
+                     (Ghost.reveal material_spec)))
   returns result:option EP.server_endpoint_run_result
   ensures pts_to bind_host 'bind_host_bytes **
           (let cfg = server_driver_endpoint_config d in

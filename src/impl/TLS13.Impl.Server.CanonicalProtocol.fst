@@ -15,11 +15,14 @@ module CW = TLS13.Impl.CanonicalWire
 module CTypes = TLS13.Impl.CanonicalTypes
 module ID = FStar.IndefiniteDescription
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
+module GSH = TLS13.Wire.Generated.ServerHello
 module MR = Pulse.Lib.MonotonicGhostRef
 module O = TLS13.OpenSSL
 module RVD = TLS13.Wire.Spec.RevealDecode
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.Impl.Server
+module SS = TLS13.Impl.Server.Send
 module Seq = FStar.Seq
 module SM = Common.StateMachine
 module ST = TLS13.Impl.Server.Types
@@ -30,6 +33,7 @@ module U8 = FStar.UInt8
 module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
 module WS = TLS13.Wire.Spec
+module V = Pulse.Lib.Vec
 
 (**
   Canonical Common.ProtocolImplementation boundary for the low-level server.
@@ -202,7 +206,7 @@ let server_supported_profile_selection
   : prop =
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-    T.RsaPssRsaeSha256 /\
+    T.Rsa_pss_rsae_sha256 /\
   (match st.CS.cs_model.CS.model_config.CS.config_server with
    | Some cfg ->
      CS.cipher_suite_offered
@@ -213,10 +217,10 @@ let server_supported_profile_selection
        T.X25519 /\
      CS.signature_scheme_offered
        cfg.CS.server_allowed_signature_schemes
-       T.RsaPssRsaeSha256 /\
+       T.Rsa_pss_rsae_sha256 /\
      (match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
-        CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+        CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
       | None ->
         True)
    | None ->
@@ -224,7 +228,7 @@ let server_supported_profile_selection
   server_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->
-     selection.CS.server_selected_signature_scheme == T.RsaPssRsaeSha256 /\
+     selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
      selection.CS.server_selected_credential == credential_identity
    | None ->
      True)
@@ -384,7 +388,11 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
   (msg:M.tls_message)
   (raw_received:B.bytes)
   : Lemma
-      (requires CT.received_tls_raw_delta_legal st0 msg raw_received)
+      (requires CT.received_tls_raw_delta_legal st0 msg raw_received /\
+                (match msg with
+                 | M.TlsHandshake (M.ServerHello sh) ->
+                   B.length (WS.serialize_handshake (M.ServerHello sh)) <= 16640
+                 | _ -> True))
       (ensures CT.raw_record_parse_success raw_received)
 =
   let received_msg = {
@@ -444,8 +452,6 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
       WS.lemma_serialize_tls_message_handshake (M.ServerHello sh);
       assert (outer_ct == T.Handshake);
       assert (outer_fragment == WS.serialize_handshake (M.ServerHello sh));
-      WS.lemma_serialize_server_hello_len sh;
-      assert (M.server_hello_max_len <= 16640);
       assert (B.length outer_fragment <= 16640);
       WS.lemma_parse_record_serialize_record outer_ct outer_fragment;
       WS.lemma_parse_record_implies_parse_record_wire
@@ -460,7 +466,7 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
           Some (outer_ct', outer_fragment', B.length raw_received))
     | M.TlsChangeCipherSpec ->
       assert (CS.cleartext_tls_message_raw msg raw_received);
-      let outer_ct = T.ChangeCipherSpec in
+      let outer_ct = T.Change_cipher_spec in
       let outer_fragment = B.singleton 1uy in
       WS.lemma_serialize_tls_message_change_cipher_spec ();
       assert (Seq.equal
@@ -484,20 +490,20 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
   ) else (
     assert (CS.raw_records_exactly
       raw_received
-      T.ApplicationData
+      T.Application_data
       (CS.protected_record_count CL.Received msg));
     assert (CS.protected_record_count CL.Received msg == 1);
-    CSL.lemma_raw_records_exactly_one_parse_record raw_received T.ApplicationData;
+    CSL.lemma_raw_records_exactly_one_parse_record raw_received T.Application_data;
     assert (exists fragment.
-      WS.parse_record raw_received == Some (T.ApplicationData, fragment, B.length raw_received));
+      WS.parse_record raw_received == Some (T.Application_data, fragment, B.length raw_received));
     let fragment =
       ID.indefinite_description_ghost
         B.bytes
         (fun fragment ->
-          WS.parse_record raw_received == Some (T.ApplicationData, fragment, B.length raw_received)) in
+          WS.parse_record raw_received == Some (T.Application_data, fragment, B.length raw_received)) in
     WS.lemma_parse_record_implies_parse_record_wire raw_received;
     assert (WS.parse_record_wire raw_received ==
-      Some (T.ApplicationData, fragment, B.length raw_received));
+      Some (T.Application_data, fragment, B.length raw_received));
     assert (exists outer_ct outer_fragment.
       WS.parse_record_wire raw_received ==
         Some (outer_ct, outer_fragment, B.length raw_received))
@@ -755,6 +761,55 @@ let lemma_server_network_step_ok_received_decode_legal_response
     assert False
   )
 
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
+(* A well-formed server (server_end_to_end_invariant ==> config_role ==
+   ServerEndpoint) never legally receives a ServerHello: legal_handshake_message
+   only permits a Received ServerHello for a ClientEndpoint.  Hence for any msg
+   admitted by legal_response_for_event on a server, the ServerHello case is
+   vacuous, discharging the serialize-length bound of
+   [lemma_received_tls_raw_delta_legal_raw_record_parse_success]. *)
+let lemma_server_received_msg_bound_server_hello
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (msg:M.tls_message)
+  (consumed:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.server_end_to_end_invariant st0 /\
+        ST.legal_response_for_event
+          st0 st1 resp (ST.received_message_event msg)
+          B.empty consumed network_out app_out)
+      (ensures
+        (match msg with
+         | M.TlsHandshake (M.ServerHello sh) ->
+           B.length (WS.serialize_handshake (M.ServerHello sh)) <= 16640
+         | _ -> True))
+=
+  match msg with
+  | M.TlsHandshake (M.ServerHello sh) ->
+    assert_norm (ST.server_end_to_end_invariant st0 ==
+      (ST.server_state_correct st0 /\ ST.server_raw_to_message_replay_consistent st0));
+    assert_norm (ST.server_state_correct st0 ==
+      (ST.server_state_core_correct st0 /\
+       CS.connection_state_sent_seal_replay_consistent st0 /\
+       CS.connection_state_received_decode_replay_consistent st0));
+    assert (ST.server_state_core_correct st0);
+    assert (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+    assert (CS.legal_connection_delta st0
+      { CS.delta_event = ST.received_message_event msg;
+        CS.delta_raw_sent = B.empty;
+        CS.delta_raw_received = consumed } st1);
+    assert (CS.legal_event st0.CS.cs_model (ST.received_message_event msg));
+    assert (CS.legal_tls_message st0.CS.cs_model CL.Received msg);
+    assert (CS.legal_handshake_message st0.CS.cs_model CL.Received (M.ServerHello sh));
+    assert (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+    assert False
+  | _ -> ()
+#pop-options
+
 let lemma_server_network_step_ok_process_correct
   (initial:CS.connection_state)
   (st0:CS.connection_state)
@@ -887,6 +942,9 @@ let lemma_server_network_step_ok_process_correct
     network_out
     app_out);
   assert (CT.received_tls_raw_delta_legal st0 msg consumed);
+  assert (ST.server_end_to_end_invariant st0);
+  lemma_server_received_msg_bound_server_hello
+    st0 st1 resp msg consumed network_out app_out;
   lemma_received_tls_raw_delta_legal_raw_record_parse_success
     st0
     msg
@@ -3453,7 +3511,7 @@ let lemma_server_network_decode_error_bridge_result
   let consumed = ST.server_network_consumed_prefix buffer_resp input_contents in
   let wire_outputs = server_response_wire_outputs resp network_out in
   let local_outputs = server_response_local_outputs resp app_out in
-  let decode_err = T.AlertError T.DecodeError in
+  let decode_err = T.AlertError T.Decode_error in
   let conn_ev = CS.ConnLocalEvent (CS.LocalFail decode_err) in
   assert (resp.ST.status == ST.DecodeError);
   assert (ST.decode_error_response st0 st1 resp network_out app_out);
@@ -4489,7 +4547,17 @@ let lemma_server_local_raw_sent_parse_success
         let (content_type, fragment) =
           WS.serialize_tls_message msg.CL.message_value in
         WS.lemma_serialize_tls_message_handshake (M.ServerHello sh);
-        WS.lemma_serialize_server_hello_len sh;
+        // The record-size bound on a sent ServerHello now comes from message
+        // legality: legal_handshake_message only admits a Sent ServerHello in the
+        // HsClientHelloReceived stage via [server_hello_matches_selection], whose
+        // final conjunct is exactly [B.length (serialize_handshake (ServerHello sh)) <= 16640].
+        // (Previously supplied by the now-removed WS.lemma_serialize_server_hello_len,
+        // which relied on the fixed-layout hand-written ServerHello serializer.)
+        assert (CS.legal_event st0.CS.cs_model ev);
+        assert (CS.legal_tls_message st0.CS.cs_model CL.Sent
+          (M.TlsHandshake (M.ServerHello sh)));
+        assert (CS.legal_handshake_message st0.CS.cs_model CL.Sent (M.ServerHello sh));
+        assert (B.length (WS.serialize_handshake (M.ServerHello sh)) <= 16640);
         assert (Seq.equal
           raw_sent
           (CS.serialized_cleartext_tls_message msg.CL.message_value));
@@ -4528,22 +4596,22 @@ let lemma_server_local_raw_sent_parse_success
       assert (CS.network_message_raw_delta_legal st0.CS.cs_model msg raw_sent);
       assert (CS.raw_records_exactly
         raw_sent
-        T.ApplicationData
+        T.Application_data
         (CS.protected_record_count
           msg.CL.message_direction
           msg.CL.message_value));
       assert (CS.protected_record_count
         msg.CL.message_direction
         msg.CL.message_value == 1);
-      CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.ApplicationData;
+      CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.Application_data;
       let fragment =
         ID.indefinite_description_ghost
           B.bytes
           (fun fragment ->
             WS.parse_record raw_sent ==
-              Some (T.ApplicationData, fragment, B.length raw_sent)) in
+              Some (T.Application_data, fragment, B.length raw_sent)) in
       assert (WS.parse_record raw_sent ==
-        Some (T.ApplicationData, fragment, B.length raw_sent));
+        Some (T.Application_data, fragment, B.length raw_sent));
       WS.lemma_parse_record_implies_parse_record_wire raw_sent;
       assert (exists content_type fragment'.
         WS.parse_record_wire raw_sent ==
@@ -4898,7 +4966,7 @@ let lemma_server_local_process_correct
       local_outputs)
   ) else (
     assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
-    let err : T.tls_error = T.AlertError T.UnexpectedMessage in
+    let err : T.tls_error = T.AlertError T.Unexpected_message in
     let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
     let api_fail : CTypes.server_api_event = {
       CTypes.server_local_kind = ST.LocalFail;
@@ -5296,7 +5364,7 @@ let lemma_server_network_nonstep_canonical_step
   if resp.ST.status = ST.DecodeError then (
     // DecodeError → LocalFail (tls_decode_error)
     assert (ST.decode_error_response st0 st1 resp network_out app_out);
-    let decode_err : T.tls_error = T.AlertError T.DecodeError in
+    let decode_err : T.tls_error = T.AlertError T.Decode_error in
     let conn_ev = CS.ConnLocalEvent (CS.LocalFail decode_err) in
     assert (CS.legal_connection_delta st0 {
       CS.delta_event = conn_ev;
@@ -5555,7 +5623,7 @@ let lemma_server_local_progress
     // So unexpected_message_response holds.
     assert (resp.ST.status <> ST.StepOk);
     assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
-    let err : T.tls_error = T.AlertError T.UnexpectedMessage in
+    let err : T.tls_error = T.AlertError T.Unexpected_message in
     let conn_ev = CS.ConnLocalEvent (CS.LocalFail err) in
     assert (CS.legal_connection_delta st0 {
       CS.delta_event = conn_ev;
@@ -6025,6 +6093,118 @@ let server_process_local_post
         wire_outputs
         local_outputs)
 
+// Runtime non-emptiness check for the configured certificate chain, used to
+// discharge the [kind == LocalSendCertificate ==> 1 <= |chain|] obligation of
+// [SS.lemma_server_process_local_obligations] / [process_local_event_with_
+// credentials].  With the (un-weakened) plain [input_ready] carrying a reachable
+// LocalSendCertificate case, this obligation is no longer vacuous, and no state
+// invariant guarantees a non-empty chain; we establish it at runtime by copying
+// the chain into a scratch buffer (O.copy_server_certificate_chain returns the
+// exact chain length).  Mirrors Server.Driver.Local.check_certificate_chain_
+// nonempty.  The None (buffer-too-small) case is impossible for a well-configured
+// server (|chain| <= max_server_certificate_chain_len == 16610 < 32768) but is
+// handled soundly by reporting ok = false.
+fn canonical_check_certificate_chain_nonempty
+  (creds:O.server_credentials)
+  requires O.is_server_credentials creds 'certificate_chain 'credential_identity
+  returns ok:bool
+  ensures O.is_server_credentials creds 'certificate_chain 'credential_identity **
+          pure (ok ==> 1 <= B.length 'certificate_chain)
+{
+  let chain_bytes = V.alloc 0uy 32768sz;
+  with old_chain_bytes. assert (V.pts_to chain_bytes old_chain_bytes);
+  assert (pure (V.is_full_vec chain_bytes));
+  assert (pure (B.length old_chain_bytes == 32768));
+  V.to_array_pts_to chain_bytes;
+  let copy_result =
+    O.copy_server_certificate_chain
+      creds
+      (V.vec_to_array chain_bytes)
+      32768sz;
+  V.to_vec_pts_to chain_bytes;
+  V.free chain_bytes;
+  match copy_result {
+    None -> {
+      false
+    }
+    Some written -> {
+      SZ.gt written 0sz
+    }
+  }
+}
+
+// Credentialed local-event dispatch that first discharges the
+// LocalSendCertificate [1 <= |chain|] obligation via the runtime chain-non-empty
+// check above (routing the degenerate empty-chain case to the plain no-op
+// process_local_event, which treats the Certificate send as an unexpected event
+// and needs no chain bound).  All other kinds go straight through
+// process_local_event_with_credentials after the obligations lemma.  The
+// explicit postcondition lets Pulse push the goal into each branch, so the three
+// leaves converge without an (unprovable) nested-match join.
+fn server_dispatch_local
+  (s:S.server)
+  (creds:O.server_credentials)
+  (kind:ST.local_event_kind)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires S.connection_exactly s 'st0 **
+           O.is_server_credentials creds 'certificate_chain 'credential_identity **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 ST.server_local_event_input_ready 'st0 kind 'payload_bytes /\
+                 ST.server_local_event_input_ready_with_credentials
+                   'st0 kind 'payload_bytes 'certificate_chain 'credential_identity)
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          S.connection_exactly s st1 **
+          O.is_server_credentials creds 'certificate_chain 'credential_identity **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0 st1 resp kind 'payload_bytes network_out_bytes app_out_bytes)
+{
+  if (kind = ST.LocalSendCertificate) {
+    let nonempty = canonical_check_certificate_chain_nonempty creds;
+    if nonempty {
+      SS.lemma_server_process_local_obligations
+        'st0 kind 'payload_bytes 'certificate_chain 'credential_identity
+        (SZ.v network_out_len);
+      S.process_local_event_with_credentials
+        s creds kind
+        payload payload_len
+        network_out network_out_len
+        app_out app_out_len
+    } else {
+      S.process_local_event
+        s kind
+        payload payload_len
+        network_out network_out_len
+        app_out app_out_len
+    }
+  } else {
+    SS.lemma_server_process_local_obligations
+      'st0 kind 'payload_bytes 'certificate_chain 'credential_identity
+      (SZ.v network_out_len);
+    S.process_local_event_with_credentials
+      s creds kind
+      payload payload_len
+      network_out network_out_len
+      app_out app_out_len
+  }
+}
+
 fn server_process_local
   (srv:canonical_server)
   (ev:CTypes.server_local_event)
@@ -6141,8 +6321,16 @@ ensures exists* (received1:Ghost.erased B.bytes)
     (Ghost.reveal api).CTypes.server_local_payload
     certificate_chain
     credential_identity));
+  // Discharge the conditional obligations threaded through
+  // process_local_event_with_credentials from the (un-weakened) input_ready
+  // facts.  The LocalSendCertificate case additionally needs [1 <= |chain|]
+  // (the new mk_cert_witness bytesize is conditional and plain input_ready no
+  // longer rules the case out); no state invariant provides it, so
+  // server_dispatch_local branches on a runtime chain-non-emptiness check,
+  // routing the degenerate empty-chain case to the plain no-op
+  // process_local_event.
   let resp =
-    S.process_local_event_with_credentials
+    server_dispatch_local
       srv.canonical_server_state
       srv.canonical_server_credentials
       kind

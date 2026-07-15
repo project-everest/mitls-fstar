@@ -4,7 +4,6 @@ module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module M = TLS13.Messages
 module Seq = FStar.Seq
-module SHC = TLS13.ServerHello.Checks
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
@@ -13,6 +12,7 @@ module GCert = TLS13.Wire.Generated.Certificate
 module GCH = TLS13.Wire.Generated.ClientHello
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GCV = TLS13.Wire.Generated.CertificateVerify
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GECH = TLS13.Wire.Generated.ExtensionClientHello
@@ -32,6 +32,7 @@ module GHN = TLS13.Wire.Generated.HostName
 module GSS = TLS13.Wire.Generated.SignatureScheme
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module LP = LowParse.Spec
+module SHC = TLS13.ServerHello.Checks
 
 (**
   Wire-level M/L boundary.
@@ -53,7 +54,7 @@ type parse_error = T.tls_error
 val read_u16:
   input:B.bytes ->
   pos:nat{pos + 2 <= B.length input} ->
-  GTot nat
+  GTot (n:nat{n < 65536})
 
 val lemma_read_u16_definition:
   input:B.bytes ->
@@ -74,16 +75,60 @@ val lemma_read_u24_one:
           U8.v (Seq.index input 2) == 0 /\
           U8.v (Seq.index input 3) == 1))
 
+val parse_ignored_post_handshake:
+  input:B.bytes ->
+  GTot (option B.bytes)
+
+val lemma_parse_ignored_post_handshake_def:
+  input:B.bytes ->
+  Lemma (parse_ignored_post_handshake input ==
+    (if B.length input >= 4 &&
+        U8.v (Seq.index input 0) = 4 &&
+        (U8.v (Seq.index input 1) * 65536 +
+         U8.v (Seq.index input 2) * 256 +
+         U8.v (Seq.index input 3)) + 4 = B.length input
+     then Some (Seq.slice input 4 (B.length input))
+     else None))
+
+val parse_key_update:
+  input:B.bytes ->
+  GTot (option M.key_update_request)
+
+val lemma_parse_key_update_def:
+  input:B.bytes ->
+  Lemma (parse_key_update input ==
+    (if B.length input = 5 &&
+        U8.v (Seq.index input 0) = 24 &&
+        U8.v (Seq.index input 1) = 0 &&
+        U8.v (Seq.index input 2) = 0 &&
+        U8.v (Seq.index input 3) = 1
+     then (match U8.v (Seq.index input 4) with
+           | 0 -> Some M.UpdateNotRequested
+           | 1 -> Some M.UpdateRequested
+           | _ -> None)
+     else None))
+
+(* ============================================================================ *)
+(* Read-direction spec helpers restored for TLS13.Impl.Parser (phase3bd).       *)
+(*                                                                              *)
+(* These are the field scanners and per-constructor [synth_handshake_msg_of]    *)
+(* reveals that the byte-level parser needs.  The representability predicates    *)
+(* (the accept/reject gate of the validating [synth_handshake_msg_of]) are      *)
+(* exposed opaquely above so the reveal lemmas can name the gate; their bodies   *)
+(* are unchanged in the .fst.                                                    *)
+(* ============================================================================ *)
+
+(* --- cipher-suite / signature-scheme synths (identity on the shared enums,
+       since [T.cipher_suite == GCS.cipherSuite] and
+       [T.signature_scheme == GSS.signatureScheme]). --- *)
+
 val synth_cipher_suite:
   c:GCS.cipherSuite ->
   GTot T.cipher_suite
 
 val lemma_synth_cipher_suite:
   c:GCS.cipherSuite ->
-  Lemma (synth_cipher_suite c ==
-    (match c with
-     | GCS.TLS_CHACHA20_POLY1305_SHA256 -> T.TLS_CHACHA20_POLY1305_SHA256
-     | GCS.Unknown_cipherSuite v -> T.UnknownCipherSuite (U16.v v)))
+  Lemma (synth_cipher_suite c == c)
 
 val synth_cipher_suites:
   l:list GCS.cipherSuite ->
@@ -98,6 +143,26 @@ val lemma_synth_cipher_suites_cons:
   tl:list GCS.cipherSuite ->
   Lemma (synth_cipher_suites (c :: tl) ==
          synth_cipher_suite c :: synth_cipher_suites tl)
+
+val synth_signature_scheme:
+  s:GSS.signatureScheme ->
+  GTot T.signature_scheme
+
+val synth_sig_schemes:
+  l:list GSS.signatureScheme ->
+  GTot (list T.signature_scheme)
+
+val lemma_synth_sig_schemes_nil:
+  unit ->
+  Lemma (synth_sig_schemes [] == [])
+
+val lemma_synth_sig_schemes_cons:
+  s:GSS.signatureScheme ->
+  tl:list GSS.signatureScheme ->
+  Lemma (synth_sig_schemes (s :: tl) ==
+         synth_signature_scheme s :: synth_sig_schemes tl)
+
+(* --- ClientHello field scanners --- *)
 
 val key_exchange_to_key32:
   ke:GKSE.keyShareEntry_key_exchange ->
@@ -126,24 +191,6 @@ val lemma_ch_find_key_share_cons:
                 | Some k -> Some k
                 | None -> ch_find_key_share tl)
           else ch_find_key_share tl))
-
-val synth_signature_scheme:
-  s:GSS.signatureScheme ->
-  GTot T.signature_scheme
-
-val synth_sig_schemes:
-  l:list GSS.signatureScheme ->
-  GTot (list T.signature_scheme)
-
-val lemma_synth_sig_schemes_nil:
-  unit ->
-  Lemma (synth_sig_schemes [] == [])
-
-val lemma_synth_sig_schemes_cons:
-  s:GSS.signatureScheme ->
-  tl:list GSS.signatureScheme ->
-  Lemma (synth_sig_schemes (s :: tl) ==
-         synth_signature_scheme s :: synth_sig_schemes tl)
 
 val ch_server_name:
   snl:list GSN.serverName ->
@@ -182,9 +229,10 @@ val lemma_ch_extensions_cons_sn:
   sv:bool ->
   ss:list T.signature_scheme ->
   Lemma (ch_extensions (GECH.Extension_data_server_name snl :: tl) sn ks sv ss ==
-         (match ch_server_name snl with
-          | Some name -> ch_extensions tl (Some name) ks sv ss
-          | None -> None))
+         (if Some? sn then ch_extensions tl sn ks sv ss
+          else (match ch_server_name snl with
+                | Some name -> ch_extensions tl (Some name) ks sv ss
+                | None -> None)))
 
 val lemma_ch_extensions_cons_sg:
   sgl:GESG.extensionClientHello_extension_data_supported_groups ->
@@ -204,7 +252,7 @@ val lemma_ch_extensions_cons_sa:
   sv:bool ->
   ss:list T.signature_scheme ->
   Lemma (ch_extensions (GECH.Extension_data_signature_algorithms ssl :: tl) sn ks sv ss ==
-         ch_extensions tl sn ks sv (synth_sig_schemes ssl))
+         ch_extensions tl sn ks sv (if Nil? ss then synth_sig_schemes ssl else ss))
 
 val lemma_ch_extensions_cons_ks:
   kscl:GESK.extensionClientHello_extension_data_key_share ->
@@ -214,9 +262,10 @@ val lemma_ch_extensions_cons_ks:
   sv:bool ->
   ss:list T.signature_scheme ->
   Lemma (ch_extensions (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
-         (match ch_find_key_share kscl with
-          | Some k -> ch_extensions tl sn (Some k) sv ss
-          | None -> None))
+         (if Some? ks then ch_extensions tl sn ks sv ss
+          else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
+                | Some raw -> if B.length raw = 32 then ch_extensions tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else None
+                | None -> None)))
 
 val lemma_ch_extensions_cons_sv:
   svl:GESV.extensionClientHello_extension_data_supported_versions ->
@@ -246,280 +295,101 @@ val lemma_ch_extensions_cons_other:
       not (GECH.Extension_data_supported_versions? e))
     (ensures ch_extensions (e :: tl) sn ks sv ss ==
              ch_extensions tl sn ks sv ss)
+(* The total byte size of a certificate chain (sum of raw DER blob lengths),
+   exposed so the Reveal layer can bridge it to [reveal_cert_chain_total_bytes].
+   Declared here (ahead of the representability predicates) to match the order
+   of the realizing definitions in the implementation module. *)
+val cert_chain_total_bytes (l:list (Seq.seq U8.t)) : GTot nat
 
-val synth_client_hello:
+val clientHello_representable (b:GCH.clientHello) : GTot bool
+
+(* --- Reveal [clientHello_representable] as the [ch_extensions] scan outcome
+       (X25519 key share present, <=16 sig schemes, server_name <=255 bytes)
+       plus the <=16 cipher-suite bound.  Definitional; lets the byte-level
+       Parser tie its scan result to representability. --- *)
+
+val lemma_clientHello_representable_scan:
   c:GCH.clientHello ->
-  GTot (option M.client_hello)
+  Lemma (clientHello_representable c ==
+    ((match ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                          None None false [] with
+      | Some (server_name, Some key_share, _, sig_schemes) ->
+        Cons? sig_schemes &&
+        FStar.List.Tot.length sig_schemes <= M.client_hello_max_signature_schemes &&
+        (match server_name with
+         | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
+         | None -> true)
+      | _ -> false) &&
+     FStar.List.Tot.length (TLS13.Wire.Semantics.clientHello_cipher_suites c)
+       <= M.client_hello_max_cipher_suites))
 
-val lemma_synth_client_hello:
+(* --- The Parser bridge: an accepted (commit-first) ClientHello's stored
+       (server_name, key_share, sig_schemes) equal the first-wins [Sem]
+       accessors used by [is_valid_client_hello].  Under representability the
+       key share is present (Some) and sig schemes non-empty (Cons?), so the
+       Some/Cons? branches below pin the Sem accessors exactly. --- *)
+val lemma_ch_extensions_connect:
   c:GCH.clientHello ->
-  Lemma (synth_client_hello c ==
-    (if not (GPV.TLS_1p2? c.GCH.legacy_version) then None
-     else match ch_extensions c.GCH.extensions None None false [] with
-          | Some (server_name, Some key_share, _, signature_schemes) ->
-            let cipher_suites = synth_cipher_suites c.GCH.cipher_suites in
-            if FStar.List.Tot.length cipher_suites <= M.client_hello_max_cipher_suites &&
-               FStar.List.Tot.length signature_schemes <= M.client_hello_max_signature_schemes &&
-               (match server_name with
-                | Some hostname -> B.length hostname <= M.client_hello_server_name_max_len
-                | None -> True)
-            then Some ({ M.random = (c.GCH.random <: B.bytes_of_len 32);
-                         M.server_name = server_name;
-                         M.key_share = key_share;
-                         M.cipher_suites = cipher_suites;
-                         M.signature_schemes = signature_schemes;
-                         M.body = B.empty })
-            else None
-          | _ -> None))
+  Lemma (ensures (
+    match ch_extensions (c.GCH.extensions <: list GECH.extensionClientHello)
+                        None None false [] with
+    | Some (sn, ks, _, ss) ->
+      sn == TLS13.Wire.Semantics.clientHello_server_name c /\
+      (match ks with
+       | Some k -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c
+                   == Some ((k <: B.bytes) <: Seq.seq U8.t)
+       | None -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None) /\
+      (match TLS13.Wire.Semantics.clientHello_sig_algs c with
+       | Some sas -> ss == synth_sig_schemes sas
+       | None -> ss == [])
+    | None -> True))
 
-val parse_client_hello:
-  input:B.bytes ->
-  GTot (option M.client_hello)
+val serverHello_representable (b:GSH.serverHello) : GTot bool
+val encryptedExtensions_representable (b:GEE.encryptedExtensions) : GTot bool
+val certificate_representable (b:GCert.certificate) : GTot bool
+val certificateVerify_representable (b:GCV.certificateVerify) : GTot bool
 
-val sh_key_share:
-  l:list GESH.extensionServerHello ->
-  saw_supported_versions:bool ->
-  key_share:option (B.bytes_of_len 32) ->
-  GTot (option (B.bytes_of_len 32))
+(* Reveal the opaque per-message representability predicates as their [Sem]-level
+   accept conditions (the Parser's accept/reject branches compute these). *)
+val lemma_certificateVerify_representable (b:GCV.certificateVerify)
+  : Lemma (certificateVerify_representable b ==
+           (B.length (TLS13.Wire.Semantics.certificateVerify_signature_bytes b)
+            <= M.signature_max_len))
 
-val lemma_sh_key_share_nil:
-  saw_supported_versions:bool ->
-  key_share:option (B.bytes_of_len 32) ->
-  Lemma (sh_key_share [] saw_supported_versions key_share ==
-    (if saw_supported_versions then key_share else None))
+val lemma_serverHello_representable (b:GSH.serverHello)
+  : Lemma (serverHello_representable b ==
+           ((match TLS13.Wire.Semantics.serverHello_key_share_x25519 b with
+             | Some k -> B.length k = 32
+             | None -> false) &&
+            (match TLS13.Wire.Semantics.serverHello_cipher_suite b with
+             | Some cs -> cs = T.TLS_CHACHA20_POLY1305_SHA256
+             | None -> false)))
 
-val lemma_sh_key_share_cons:
-  e:GESH.extensionServerHello ->
-  tl:list GESH.extensionServerHello ->
-  saw_supported_versions:bool ->
-  key_share:option (B.bytes_of_len 32) ->
-  Lemma (sh_key_share (e :: tl) saw_supported_versions key_share ==
-    (match e with
-     | GESH.Extension_data_supported_versions sv ->
-       if GPV.TLS_1p3? sv then sh_key_share tl true key_share else None
-     | GESH.Extension_data_key_share kse ->
-       if GNG.X25519? kse.GKSE.group
-       then (match key_exchange_to_key32 kse.GKSE.key_exchange with
-             | Some k -> sh_key_share tl saw_supported_versions (Some k)
-             | None -> None)
-       else None
-     | _ -> sh_key_share tl saw_supported_versions key_share))
+val lemma_encryptedExtensions_representable (b:GEE.encryptedExtensions)
+  : Lemma (encryptedExtensions_representable b ==
+           (match TLS13.Wire.Semantics.encryptedExtensions_alpn b with
+            | Some a -> B.length a <= M.client_hello_server_name_max_len
+            | None -> true))
 
-val synth_server_hello:
-  sh:GSH.serverHello ->
-  GTot (option M.server_hello)
+(* Reveal [certificate_representable] as its [Sem]-level accept condition, then
+   the recursion equations for [cert_chain_total_bytes] (order matches the
+   realizing definitions in the implementation module). *)
+val lemma_certificate_representable (b:GCert.certificate)
+  : Lemma (certificate_representable b ==
+           (FStar.List.Tot.length (TLS13.Wire.Semantics.certificate_entries b)
+              <= M.certificate_chain_max_entries &&
+            cert_chain_total_bytes (TLS13.Wire.Semantics.certificate_entries b)
+              <= M.certificate_chain_max_bytes))
 
-val parse_server_hello:
-  input:B.bytes ->
-  GTot (option M.server_hello)
+val lemma_cert_chain_total_bytes_nil (_:unit)
+  : Lemma (cert_chain_total_bytes [] == 0)
 
-val synth_cert_chain:
-  l:list GCE.certificateEntry ->
-  GTot (list B.bytes)
-
-val cert_chain_total_bytes:
-  chain:list B.bytes ->
-  GTot nat
-
-val cert_chain_fits:
-  chain:list B.bytes ->
-  GTot bool
-
-val lemma_synth_cert_chain_nil:
-  unit ->
-  Lemma (synth_cert_chain [] == [])
-
-val lemma_synth_cert_chain_cons:
-  e:GCE.certificateEntry ->
-  tl:list GCE.certificateEntry ->
-  Lemma (synth_cert_chain (e :: tl) ==
-         (e.GCE.cert_data <: B.bytes) :: synth_cert_chain tl)
-
-val lemma_synth_cert_chain_length:
-  l:list GCE.certificateEntry ->
-  Lemma (FStar.List.Tot.length (synth_cert_chain l) ==
-         FStar.List.Tot.length l)
-
-val lemma_cert_chain_total_bytes_nil:
-  unit ->
-  Lemma (cert_chain_total_bytes [] == 0)
-
-val lemma_cert_chain_total_bytes_snoc:
-  chain:list B.bytes ->
-  x:B.bytes ->
-  Lemma (cert_chain_total_bytes (FStar.List.Tot.append chain [x]) ==
-         cert_chain_total_bytes chain + B.length x)
-
-val lemma_cert_chain_total_bytes_prefix_le:
-  prefix:list B.bytes ->
-  x:B.bytes ->
-  rest:list B.bytes ->
-  Lemma (cert_chain_total_bytes prefix + B.length x <=
-         cert_chain_total_bytes (FStar.List.Tot.append prefix (x :: rest)))
-
-val parse_certificate_msg:
-  input:B.bytes ->
-  GTot (option M.certificate_msg)
-
-val alpn_first_name:
-  pnl:GEEE.extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation ->
-  GTot (option B.bytes)
-
-val synth_encrypted_extensions:
-  l:list GEEE.extensionEncryptedExtensions ->
-  GTot (option M.encrypted_extensions)
-
-val lemma_synth_encrypted_extensions_nil:
-  unit ->
-  Lemma (synth_encrypted_extensions [] ==
-    Some ({ M.negotiated_alpn = None; M.body = B.empty }))
-
-val lemma_synth_encrypted_extensions_cons_non_alpn:
-  e:GEEE.extensionEncryptedExtensions ->
-  tl:list GEEE.extensionEncryptedExtensions ->
-  Lemma
-    (requires not (GEEE.Extension_data_application_layer_protocol_negotiation? e))
-    (ensures synth_encrypted_extensions (e :: tl) == synth_encrypted_extensions tl)
-
-val lemma_synth_encrypted_extensions_cons_alpn:
-  pnl:GEEE.extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation ->
-  tl:list GEEE.extensionEncryptedExtensions ->
-  Lemma (synth_encrypted_extensions
-           (GEEE.Extension_data_application_layer_protocol_negotiation pnl :: tl)
-         == (match alpn_first_name pnl with
-             | Some name -> Some ({ M.negotiated_alpn = Some name; M.body = B.empty })
-             | None -> None))
-
-val parse_encrypted_extensions:
-  input:B.bytes ->
-  GTot (option M.encrypted_extensions)
-
-val parse_certificate_verify:
-  input:B.bytes ->
-  GTot (option M.certificate_verify)
-
-val parse_finished:
-  input:B.bytes ->
-  GTot (option M.finished)
-
-val parse_ignored_post_handshake:
-  input:B.bytes ->
-  GTot (option B.bytes)
-
-val lemma_parse_ignored_post_handshake_def:
-  input:B.bytes ->
-  Lemma (parse_ignored_post_handshake input ==
-    (if B.length input >= 4 &&
-        U8.v (Seq.index input 0) = 4 &&
-        (U8.v (Seq.index input 1) * 65536 +
-         U8.v (Seq.index input 2) * 256 +
-         U8.v (Seq.index input 3)) + 4 = B.length input
-     then Some (Seq.slice input 4 (B.length input))
-     else None))
-
-val parse_key_update:
-  input:B.bytes ->
-  GTot (option M.key_update_request)
-
-val lemma_parse_key_update_def:
-  input:B.bytes ->
-  Lemma (parse_key_update input ==
-    (if B.length input = 5 &&
-        U8.v (Seq.index input 0) = 24 &&
-        U8.v (Seq.index input 1) = 0 &&
-        U8.v (Seq.index input 2) = 0 &&
-        U8.v (Seq.index input 3) = 1
-     then (match U8.v (Seq.index input 4) with
-           | 0 -> Some M.UpdateNotRequested
-           | 1 -> Some M.UpdateRequested
-           | _ -> None)
-     else None))
+val lemma_cert_chain_total_bytes_cons (c:Seq.seq U8.t) (tl:list (Seq.seq U8.t))
+  : Lemma (cert_chain_total_bytes (c :: tl) == B.length c + cert_chain_total_bytes tl)
 
 val synth_handshake_msg_of:
   h:GHS.handshake ->
   GTot (option M.handshake_msg)
-
-val lemma_synth_handshake_msg_finished:
-  b:GHS.handshake_body_finished ->
-  Lemma (synth_handshake_msg_of (GHS.Body_finished b) ==
-    Some (M.Finished ({ M.verify_data = (b <: B.bytes_of_len 32) })))
-
-val lemma_synth_handshake_msg_certificate_verify:
-  b:GHS.handshake_body_certificate_verify ->
-  Lemma (synth_handshake_msg_of (GHS.Body_certificate_verify b) ==
-    (if B.length (b.GCV.signature <: B.bytes) <= M.signature_max_len
-     then Some (M.CertificateVerify ({
-            M.scheme = synth_signature_scheme b.GCV.algorithm;
-            M.signature = (b.GCV.signature <: B.bytes);
-            M.body = LP.serialize GHS.handshake_serializer (GHS.Body_certificate_verify b) }))
-     else None))
-
-val lemma_synth_handshake_msg_key_update:
-  b:GHS.handshake_body_key_update ->
-  Lemma (synth_handshake_msg_of (GHS.Body_key_update b) == None)
-
-val lemma_synth_handshake_msg_client_hello:
-  b:GHS.handshake_body_client_hello ->
-  Lemma (synth_handshake_msg_of (GHS.Body_client_hello b) ==
-    (match synth_client_hello b with
-     | Some ch ->
-       let full = LP.serialize GHS.handshake_serializer (GHS.Body_client_hello b) in
-       if B.length full <= M.client_hello_max_len
-       then Some (M.ClientHello ({ ch with M.body = full }))
-       else None
-     | None -> None))
-
-val lemma_synth_handshake_msg_server_hello_bad_version:
-  b:GHS.handshake_body_server_hello ->
-  Lemma (requires not (GPV.TLS_1p2? b.GSH.legacy_version))
-        (ensures synth_handshake_msg_of (GHS.Body_server_hello b) == None)
-
-val lemma_synth_handshake_msg_server_hello_hrr:
-  b:GHS.handshake_body_server_hello ->
-  shb:GSHBody.serverHelloBody ->
-  Lemma (requires GPV.TLS_1p2? b.GSH.legacy_version /\
-                  b.GSH.body == GSHB.HelloRetryRequest shb)
-        (ensures synth_handshake_msg_of (GHS.Body_server_hello b) == Some M.HelloRetryRequest)
-
-val lemma_synth_handshake_msg_server_hello_sh:
-  b:GHS.handshake_body_server_hello ->
-  sf:GSHB.serverHello_body_false ->
-  Lemma (requires GPV.TLS_1p2? b.GSH.legacy_version /\
-                  b.GSH.body == GSHB.ServerHello_body_false sf)
-        (ensures synth_handshake_msg_of (GHS.Body_server_hello b) ==
-          (if U8.v sf.GSHB.value.GSHBody.legacy_compression_method <> 0 then None
-           else match sh_key_share sf.GSHB.value.GSHBody.extensions false None with
-                | Some ks ->
-                  if B.length (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b))
-                     <= M.server_hello_max_len
-                  then (match sf.GSHB.value.GSHBody.cipher_suite with
-                        | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
-                          Some (M.ServerHello ({
-                            M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
-                            M.key_share = ks;
-                            M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                            M.body = LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b) }))
-                        | GCS.Unknown_cipherSuite _ -> None)
-                  else None
-                | None -> None))
-
-val lemma_synth_handshake_msg_encrypted_extensions:
-  b:GHS.handshake_body_encrypted_extensions ->
-  Lemma (synth_handshake_msg_of (GHS.Body_encrypted_extensions b) ==
-    (match synth_encrypted_extensions b with
-     | Some x -> Some (M.EncryptedExtensions ({ x with
-         M.body = LP.serialize GHS.handshake_serializer (GHS.Body_encrypted_extensions b) }))
-     | None -> None))
-
-val lemma_synth_handshake_msg_certificate:
-  b:GHS.handshake_body_certificate ->
-  Lemma (synth_handshake_msg_of (GHS.Body_certificate b) ==
-    (let chain = synth_cert_chain (b.GCert.certificate_list <: list GCE.certificateEntry) in
-     if FStar.List.Tot.length chain <= M.certificate_chain_max_entries &&
-        cert_chain_total_bytes chain <= M.certificate_chain_max_bytes
-     then Some (M.Certificate ({ M.chain = chain;
-            M.body = LP.serialize GHS.handshake_serializer (GHS.Body_certificate b) }))
-     else None))
 
 val parse_handshake:
   input:B.bytes ->
@@ -529,63 +399,6 @@ val parse_handshake_msg:
   input:B.bytes ->
   GTot (option (M.handshake_msg & nat))
 
-val parse_supported_server_hello:
-  input:B.bytes ->
-  GTot (option M.server_hello)
-
-val lemma_parse_supported_server_hello_ok:
-  input:B.bytes ->
-  Lemma (Some? (parse_supported_server_hello input) <==>
-         SHC.server_hello_ok input)
-
-val lemma_parse_supported_server_hello_fields:
-  input:B.bytes ->
-  Lemma
-    (requires SHC.server_hello_ok input)
-    (ensures (
-      match parse_supported_server_hello input with
-      | Some sh ->
-        B.length sh.M.body == 0 /\
-        sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
-        Seq.equal sh.M.random (Seq.slice input 6 38) /\
-        ((SHC.server_hello_ok_52 input /\
-          Seq.equal sh.M.key_share (Seq.slice input 52 84)) \/
-         (SHC.server_hello_ok_58 input /\
-          Seq.equal sh.M.key_share (Seq.slice input 58 90)))
-      | None -> False))
-
-val parse_certificate_leaf_der:
-  input:B.bytes ->
-  GTot (option B.bytes)
-
-val serialize_client_hello:
-  hello:M.client_hello ->
-  GTot B.bytes
-
-val serialize_server_hello:
-  hello:M.server_hello ->
-  GTot B.bytes
-
-val serialize_encrypted_extensions:
-  ee:M.encrypted_extensions ->
-  GTot B.bytes
-
-val serialize_certificate_msg:
-  cert:M.certificate_msg ->
-  GTot B.bytes
-
-val serialize_certificate_verify:
-  cv:M.certificate_verify ->
-  GTot B.bytes
-
-val serialize_finished:
-  fin:M.finished ->
-  GTot B.bytes
-
-val serialize_supported_client_hello:
-  hello:M.client_hello ->
-  GTot B.bytes
-
 val serialize_handshake:
   msg:M.handshake_msg ->
   GTot B.bytes
@@ -593,92 +406,6 @@ val serialize_handshake:
 val serialize_handshake_msg:
   msg:M.handshake_msg ->
   GTot B.bytes
-
-val lemma_serialize_finished_len:
-  fin:M.finished ->
-  Lemma (B.length (serialize_finished fin) == 32 /\
-         B.length (serialize_handshake (M.Finished fin)) == 36 /\
-         B.length (serialize_handshake_msg (M.Finished fin)) == 36)
-
-val lemma_serialize_server_hello_len:
-  sh:M.server_hello ->
-  Lemma (B.length (serialize_handshake (M.ServerHello sh)) <= M.server_hello_max_len /\
-         B.length (serialize_handshake_msg (M.ServerHello sh)) <= M.server_hello_max_len)
-
-val serialize_server_hello_from_selection:
-  sh:M.server_hello ->
-  GTot B.bytes
-
-val lemma_serialize_server_hello_from_selection_len:
-  sh:M.server_hello ->
-  Lemma
-    (requires B.length sh.M.random == 32 /\
-              B.length sh.M.key_share == 32)
-    (ensures B.length (serialize_server_hello_from_selection sh) == 90)
-
-val serialize_empty_encrypted_extensions:
-  unit ->
-  GTot B.bytes
-
-val serialize_certificate_from_credential:
-  cert:M.certificate_msg ->
-  GTot B.bytes
-
-val lemma_serialize_certificate_from_single_chain_len:
-  certificate:B.bytes ->
-  Lemma
-    (B.length
-      (serialize_certificate_msg { M.chain = [certificate]; M.body = B.empty }) ==
-        9 + B.length certificate /\
-     B.length
-      (serialize_handshake (M.Certificate { M.chain = [certificate]; M.body = B.empty })) ==
-        13 + B.length certificate /\
-     B.length
-      (serialize_certificate_from_credential { M.chain = [certificate]; M.body = B.empty }) ==
-        13 + B.length certificate)
-
-val serialize_certificate_verify_from_signature:
-  cv:M.certificate_verify ->
-  GTot B.bytes
-
-val lemma_serialize_certificate_verify_from_signature_len:
-  cv:M.certificate_verify ->
-  Lemma
-    (B.length (serialize_certificate_verify cv) == 4 + B.length cv.M.signature /\
-     (B.length cv.M.body == 0 ==>
-      B.length (serialize_handshake (M.CertificateVerify cv)) ==
-        8 + B.length cv.M.signature) /\
-     B.length (serialize_certificate_verify_from_signature cv) ==
-       8 + B.length cv.M.signature)
-
-val serialize_server_finished:
-  fin:M.finished ->
-  GTot B.bytes
-
-val lemma_fixed_server_handshake_serializers:
-  sh:M.server_hello ->
-  cert:M.certificate_msg ->
-  cv:M.certificate_verify ->
-  fin:M.finished ->
-  Lemma
-    (requires B.length sh.M.body == 0 /\
-              B.length cert.M.body == 0 /\
-              B.length cv.M.body == 0)
-    (ensures Seq.equal
-       (serialize_server_hello_from_selection sh)
-       (serialize_handshake (M.ServerHello sh)) /\
-     Seq.equal
-       (serialize_empty_encrypted_extensions ())
-       (serialize_handshake (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty })) /\
-     Seq.equal
-       (serialize_certificate_from_credential cert)
-       (serialize_handshake (M.Certificate cert)) /\
-     Seq.equal
-       (serialize_certificate_verify_from_signature cv)
-       (serialize_handshake (M.CertificateVerify cv)) /\
-     Seq.equal
-       (serialize_server_finished fin)
-       (serialize_handshake (M.Finished fin)))
 
 val serialize_server_certificate_verify_input:
   transcript_hash:B.bytes ->
@@ -723,7 +450,8 @@ val parse_record_header:
 val lemma_parse_record_header_some_iff:
   input:B.bytes{B.length input == 5} ->
   Lemma (Some? (parse_record_header input) <==>
-    ((Seq.index input 0 = 0x14uy ||
+    ((Seq.index input 0 = 0x00uy ||
+      Seq.index input 0 = 0x14uy ||
       Seq.index input 0 = 0x15uy ||
       Seq.index input 0 = 0x16uy ||
       Seq.index input 0 = 0x17uy) &&
@@ -757,6 +485,41 @@ val lemma_parse_plaintext_serialize_plaintext:
   pt:M.plaintext ->
   Lemma (parse_plaintext (serialize_plaintext pt) == Some pt)
 
+(* --- Branch-specific (LTL/pairing) bespoke ServerHello field parser.  Parses a
+       canonical fixed-layout ChaCha20 ServerHello, extracting the 32-byte random
+       and the x25519 key_share by byte offset (52- or 58-byte key_share
+       position).  Retargeted off the deleted M.server_hello projection record
+       onto this local field-view record. --- *)
+type supported_server_hello = {
+  random: B.bytes_of_len 32;
+  key_share: B.bytes_of_len 32;
+  cipher_suite: T.cipher_suite;
+}
+
+val parse_supported_server_hello:
+  input:B.bytes ->
+  GTot (option supported_server_hello)
+
+val lemma_parse_supported_server_hello_ok:
+  input:B.bytes ->
+  Lemma (Some? (parse_supported_server_hello input) <==>
+         SHC.server_hello_ok input)
+
+val lemma_parse_supported_server_hello_fields:
+  input:B.bytes ->
+  Lemma
+    (requires SHC.server_hello_ok input)
+    (ensures (
+      match parse_supported_server_hello input with
+      | Some sh ->
+        sh.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
+        Seq.equal sh.random (Seq.slice input 6 38) /\
+        ((SHC.server_hello_ok_52 input /\
+          Seq.equal sh.key_share (Seq.slice input 52 84)) \/
+         (SHC.server_hello_ok_58 input /\
+          Seq.equal sh.key_share (Seq.slice input 58 90)))
+      | None -> False))
+
 val parse_sealed_record:
   input:B.bytes ->
   GTot (option M.sealed_record)
@@ -769,6 +532,13 @@ val parse_tls_message:
   content_type:T.content_type ->
   fragment:B.bytes ->
   GTot (option M.tls_message)
+
+(* The generated [Invalid] content type (wire byte 0) never carries a TLS
+   message: the spec parser rejects it.  Exposed so consumers can discharge the
+   "no content type matches" obligation for an unknown record content type. *)
+val lemma_parse_tls_message_invalid_none:
+  fragment:B.bytes ->
+  Lemma (parse_tls_message T.Invalid fragment == None)
 
 val lemma_parse_handshake_none_of_lp_none:
   fragment:B.bytes ->
@@ -807,17 +577,17 @@ val lemma_serialize_tls_message_handshake:
 
 val lemma_serialize_tls_message_application_data:
   data:B.bytes ->
-  Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.ApplicationData, data))
+  Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.Application_data, data))
 
 val lemma_serialize_tls_message_close_notify:
   unit ->
-  Lemma (serialize_tls_message (M.TlsAlert T.CloseNotify) ==
+  Lemma (serialize_tls_message (M.TlsAlert T.Close_notify) ==
     (T.Alert, B.of_list [2uy; 0uy]))
 
 val lemma_serialize_tls_message_change_cipher_spec:
   unit ->
   Lemma (serialize_tls_message M.TlsChangeCipherSpec ==
-    (T.ChangeCipherSpec, B.singleton 1uy))
+    (T.Change_cipher_spec, B.singleton 1uy))
 
 val lemma_serialize_tls_message_key_update_not_requested:
   unit ->
@@ -878,3 +648,76 @@ val lemma_parse_tls_message_round_trip:
       | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
         Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
       | _ -> True))
+
+
+(* --- synth_client_hello: the ClientHello accept/reject gate.  Re-targeted to
+       return the generated wire record itself ([Some b] iff representable),
+       matching how [synth_handshake_msg_of] wraps [M.ClientHello b]. --- *)
+
+val synth_client_hello:
+  c:GCH.clientHello ->
+  GTot (option GCH.clientHello)
+
+val lemma_synth_client_hello:
+  c:GCH.clientHello ->
+  Lemma (synth_client_hello c ==
+         (if clientHello_representable c then Some c else None))
+
+(* --- Per-constructor reveals of [synth_handshake_msg_of].  Each equation is
+       exactly the corresponding arm of the validating synth dispatch. --- *)
+
+val lemma_synth_handshake_msg_finished:
+  b:GHS.handshake_body_finished ->
+  Lemma (synth_handshake_msg_of (GHS.Body_finished b) == Some (M.Finished b))
+
+val lemma_synth_handshake_msg_key_update:
+  b:GHS.handshake_body_key_update ->
+  Lemma (synth_handshake_msg_of (GHS.Body_key_update b) == None)
+
+val lemma_synth_handshake_msg_client_hello:
+  b:GHS.handshake_body_client_hello ->
+  Lemma (synth_handshake_msg_of (GHS.Body_client_hello b) ==
+         (if clientHello_representable b then Some (M.ClientHello b) else None))
+
+val lemma_synth_handshake_msg_certificate:
+  b:GHS.handshake_body_certificate ->
+  Lemma (synth_handshake_msg_of (GHS.Body_certificate b) ==
+         (if certificate_representable (b <: GCert.certificate)
+          then Some (M.Certificate (b <: GCert.certificate)) else None))
+
+val lemma_synth_handshake_msg_certificate_verify:
+  b:GHS.handshake_body_certificate_verify ->
+  Lemma (synth_handshake_msg_of (GHS.Body_certificate_verify b) ==
+         (if certificateVerify_representable b then Some (M.CertificateVerify b) else None))
+
+val lemma_synth_handshake_msg_encrypted_extensions:
+  b:GHS.handshake_body_encrypted_extensions ->
+  Lemma (synth_handshake_msg_of (GHS.Body_encrypted_extensions b) ==
+         (if encryptedExtensions_representable b then Some (M.EncryptedExtensions b) else None))
+
+val lemma_synth_handshake_msg_server_hello_hrr:
+  b:GHS.handshake_body_server_hello ->
+  shb:GSHBody.serverHelloBody ->
+  Lemma (requires b.GSH.body == GSHB.HelloRetryRequest shb)
+        (ensures synth_handshake_msg_of (GHS.Body_server_hello b) == Some M.HelloRetryRequest)
+
+val lemma_synth_handshake_msg_server_hello_sh:
+  b:GHS.handshake_body_server_hello ->
+  sf:GSHB.serverHello_body_false ->
+  Lemma (requires b.GSH.body == GSHB.ServerHello_body_false sf)
+        (ensures synth_handshake_msg_of (GHS.Body_server_hello b) ==
+                 (if serverHello_representable b then Some (M.ServerHello b) else None))
+
+val lemma_synth_handshake_msg_server_hello_bad_version:
+  b:GHS.handshake_body_server_hello ->
+  Lemma (requires GSHB.ServerHello_body_false? b.GSH.body /\ not (serverHello_representable b))
+        (ensures synth_handshake_msg_of (GHS.Body_server_hello b) == None)
+
+val lemma_synth_signature_scheme:
+  s:GSS.signatureScheme ->
+  Lemma (synth_signature_scheme s ==
+         (match s with
+          | GSS.Ecdsa_secp256r1_sha256 -> T.Ecdsa_secp256r1_sha256
+          | GSS.Rsa_pss_rsae_sha256 -> T.Rsa_pss_rsae_sha256
+          | GSS.Ed25519 -> T.Ed25519
+          | GSS.Unknown_signatureScheme v -> T.Unknown_signatureScheme v))

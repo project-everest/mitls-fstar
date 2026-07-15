@@ -41,6 +41,7 @@ module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
+module MR = Pulse.Lib.MonotonicGhostRef
 module RS = TLS13.Record.Spec
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -49,9 +50,10 @@ module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
-module MR = Pulse.Lib.MonotonicGhostRef
 module SP = TLS13.Impl.Server.CanonicalProtocol
 module WFSM = Common.WireFormatStateMachine
+module SS = TLS13.Impl.Server.Send
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
 type server_driver = DS.server_driver
 
@@ -1257,7 +1259,7 @@ fn accept
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
+                      T.Rsa_pss_rsae_sha256 /\
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns status:server_workflow_status

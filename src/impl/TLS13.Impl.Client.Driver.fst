@@ -26,6 +26,7 @@ module IO = Common.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
+module Sem = TLS13.Wire.Semantics
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
@@ -2425,11 +2426,11 @@ fn driver_copy_certificate_verify_signature
                 SZ.v snapshot.CR.cv_signature_len <= B.length out_bytes /\
                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                  | Some cv ->
-                   L.signature_scheme_matches snapshot.CR.cv_signature_scheme cv.M.scheme /\
-                   SZ.v snapshot.CR.cv_signature_len == B.length cv.M.signature /\
+                   L.signature_scheme_matches snapshot.CR.cv_signature_scheme (Sem.certificateVerify_scheme cv) /\
+                   SZ.v snapshot.CR.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv) /\
                    Seq.equal
                      (Seq.slice out_bytes 0 (SZ.v snapshot.CR.cv_signature_len))
-                     cv.M.signature
+                     (Sem.certificateVerify_signature_bytes cv)
                  | None -> False))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
@@ -2864,6 +2865,8 @@ fn driver_process_buffered_network_bytes_once
      (0 <= i /\ i < SZ.v buffered_len /\ True))));
   assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
     Some? (Seq.index raw_joined_mask i)));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Seq.index raw_joined_mask i == Some (Seq.index (Ghost.reveal 'old_raw) i)));
   A.from_mask raw;
   with raw_bytes.
     assert (pts_to raw raw_bytes);
@@ -5001,6 +5004,7 @@ fn rec driver_handshake
   }
 }
 
+#push-options "--z3refresh --z3rlimit 40 --split_queries always --z3seed 17"
 fn rec driver_receive_application_data
   (d:top_driver)
   (empty_payload:array U8.t)
@@ -5441,6 +5445,7 @@ fn rec driver_receive_application_data
     }
   }
 }
+#pop-options
 
 fn rec driver_await_peer_close_notify
   (d:driver)
