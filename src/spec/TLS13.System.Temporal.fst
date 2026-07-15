@@ -38,25 +38,28 @@ open TLS13.System
     Flagship: AG ( quiescent /\ application_ready ==> record material agrees )
     ───────────────────────────────────────────────────────────────────────── **)
 
-(** The flagship state-predicate: at any quiescent, handshake-complete state the
-    application record-key material agrees in both traffic directions. **)
-let record_material_agrees_when_ready : T.sprop tls_system_state = fun s ->
-  (tls_quiescent s /\ tls_application_ready s) ==>
+(** The flagship state-predicate (scoped): at any *non-rekeyed*, quiescent,
+    handshake-complete state the application record-key material agrees in both
+    traffic directions.  The no-rekeying side condition is now part of the
+    antecedent (rather than pinned inside the step relation) — the honest run
+    never rekeys, so it still fires along every real run. **)
+let record_material_agrees_when_ready_scoped : T.sprop tls_system_state = fun s ->
+  (tls_no_rekeying s /\ tls_quiescent s /\ tls_application_ready s) ==>
     (CS.peer_record_material_agrees
        (CS.traffic_id CS.TrafficApplication CS.ClientTraffic) s.client s.server /\
      CS.peer_record_material_agrees
        (CS.traffic_id CS.TrafficApplication CS.ServerTraffic) s.client s.server)
 
-(** The structural invariant entails the flagship state-predicate: at a quiescent
-    + ready state the invariant supplies handshake-message pairing and the
-    no-rekeying discipline, and the existing verified pairing payoff concludes
+(** The structural invariant entails the scoped flagship state-predicate: at a
+    quiescent + ready state the invariant supplies handshake-message pairing and
+    the no-rekeying discipline, and the existing verified pairing payoff concludes
     record-material agreement (which is definitionally the two conjuncts). **)
 val lemma_inv_implies_agreement (s:tls_system_state)
   : Lemma (requires tls_system_inv s)
-          (ensures record_material_agrees_when_ready s)
+          (ensures record_material_agrees_when_ready_scoped s)
 let lemma_inv_implies_agreement s =
   introduce
-    (tls_quiescent s /\ tls_application_ready s) ==>
+    (tls_no_rekeying s /\ tls_quiescent s /\ tls_application_ready s) ==>
       (CS.peer_record_material_agrees
          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic) s.client s.server /\
        CS.peer_record_material_agrees
@@ -70,8 +73,9 @@ let lemma_inv_implies_agreement s =
 
 (**
   Flagship theorem: on *every* run of the system from the initial state, it is
-  *always* the case that if the system is quiescent and the handshake has
-  completed on both endpoints then the application record-key material agrees.
+  *always* the case that if the system is quiescent, has not rekeyed, and the
+  handshake has completed on both endpoints then the application record-key
+  material agrees.
 **)
 val lemma_flagship_record_material_agreement
   (cfg_c cfg_s:CS.connection_config)
@@ -82,22 +86,31 @@ val lemma_flagship_record_material_agreement
         WFL.supported_client_config_wire_profile cfg_c)
       (ensures
         T.ag tls_sys_step
-          record_material_agrees_when_ready
+          record_material_agrees_when_ready_scoped
           (initial_tls_system cfg_c cfg_s))
 let lemma_flagship_record_material_agreement cfg_c cfg_s =
   let s0 = initial_tls_system cfg_c cfg_s in
   introduce
     forall (s':tls_system_state).
-      T.reachable tls_sys_step s0 s' ==> record_material_agrees_when_ready s'
+      T.reachable tls_sys_step s0 s' ==> record_material_agrees_when_ready_scoped s'
   with begin
     introduce
-      T.reachable tls_sys_step s0 s' ==> record_material_agrees_when_ready s'
-    with _pf. begin
-      lemma_reachable_inv cfg_c cfg_s s';
-      lemma_inv_implies_agreement s'
+      T.reachable tls_sys_step s0 s' ==> record_material_agrees_when_ready_scoped s'
+    with _reach. begin
+      introduce
+        (tls_no_rekeying s' /\ tls_quiescent s' /\ tls_application_ready s') ==>
+          (CS.peer_record_material_agrees
+             (CS.traffic_id CS.TrafficApplication CS.ClientTraffic) s'.client s'.server /\
+           CS.peer_record_material_agrees
+             (CS.traffic_id CS.TrafficApplication CS.ServerTraffic) s'.client s'.server)
+      with _ant. begin
+        // tls_no_rekeying s' (from _ant) unlocks the combined-invariant reachability.
+        lemma_reachable_inv cfg_c cfg_s s';
+        lemma_inv_implies_agreement s'
+      end
     end
   end;
-  T.lemma_ag_of_invariant tls_sys_step record_material_agrees_when_ready s0
+  T.lemma_ag_of_invariant tls_sys_step record_material_agrees_when_ready_scoped s0
 
 (** ─────────────────────────────────────────────────────────────────────────
     A next-step (X) property exercising the operator vocabulary.

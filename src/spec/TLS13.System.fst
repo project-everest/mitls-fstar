@@ -487,8 +487,10 @@ let tls_system_inv (s:tls_system_state) : prop =
     step of the official canonical relation, VERBATIM (no wrapper, no pin).  Sends
     require a quiet channel and emit a single record; a LocalEvent that emits a
     record is a "send", one that emits nothing is a "local".  Deliveries consume
-    the matching in-flight raw and return the channel to quiet.  Every shape
-    guards the changed endpoint with `connection_state_no_key_update_trace`.
+    the matching in-flight raw and return the channel to quiet.  The shapes do NOT
+    restrict rekeying: a raw canonical step is taken VERBATIM (the no-rekeying
+    discipline is folded into the flagship theorem's antecedent and re-established
+    on reachable states via the combined invariant below, not pinned per-step).
     ───────────────────────────────────────────────────────────────────────── **)
 
 (** The strict-progress SIDE CONDITION (STAGE 1).  A pre-application-data
@@ -534,7 +536,6 @@ let tls_step_client_send (a b:tls_system_state) : prop =
           (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
      CCP.client_step a.client (SM.LocalEvent local) c' out /\
      out.SM.so_wire_outputs == [w] /\
-     CS.connection_state_no_key_update_trace c' /\
      client_advances a.client c' /\
      b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) })
 
@@ -544,7 +545,6 @@ let tls_step_server_send (a b:tls_system_state) : prop =
           (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
      SCP.server_step a.server (SM.LocalEvent local) s' out /\
      out.SM.so_wire_outputs == [w] /\
-     CS.connection_state_no_key_update_trace s' /\
      server_advances a.server s' /\
      b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) })
 
@@ -554,7 +554,6 @@ let tls_step_deliver_to_server (a b:tls_system_state) : prop =
      a.channel == TlsInFlight CS.ServerEndpoint raw /\
      Seq.equal (CW.wire_serialize wire) raw /\
      SCP.server_step a.server (SM.WireEvent wire) s' out /\
-     CS.connection_state_no_key_update_trace s' /\
      server_advances a.server s' /\
      b == { a with server = s'; channel = TlsQuiet })
 
@@ -564,7 +563,6 @@ let tls_step_deliver_to_client (a b:tls_system_state) : prop =
      a.channel == TlsInFlight CS.ClientEndpoint raw /\
      Seq.equal (CW.wire_serialize wire) raw /\
      CCP.client_step a.client (SM.WireEvent wire) c' out /\
-     CS.connection_state_no_key_update_trace c' /\
      client_advances a.client c' /\
      b == { a with client = c'; channel = TlsQuiet })
 
@@ -574,7 +572,6 @@ let tls_step_client_local (a b:tls_system_state) : prop =
           (out:SM.step_output CW.wire_message CTy.local_output).
      CCP.client_step a.client (SM.LocalEvent local) c' out /\
      out.SM.so_wire_outputs == [] /\
-     CS.connection_state_no_key_update_trace c' /\
      client_local_advances a.client c' /\
      b == { a with client = c' })
 
@@ -584,7 +581,6 @@ let tls_step_server_local (a b:tls_system_state) : prop =
           (out:SM.step_output CW.wire_message CTy.local_output).
      SCP.server_step a.server (SM.LocalEvent local) s' out /\
      out.SM.so_wire_outputs == [] /\
-     CS.connection_state_no_key_update_trace s' /\
      server_local_advances a.server s' /\
      b == { a with server = s' })
 
@@ -1090,7 +1086,6 @@ let lemma_wire_facts_client_send a b =
                    (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
     CCP.client_step a.client (SM.LocalEvent local) c' out /\
     out.SM.so_wire_outputs == [w] /\
-    CS.connection_state_no_key_update_trace c' /\
     b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
           channel_consistent b /\ hello_coupling b
@@ -1194,7 +1189,6 @@ let lemma_wire_facts_server_send a b =
                    (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
     SCP.server_step a.server (SM.LocalEvent local) s' out /\
     out.SM.so_wire_outputs == [w] /\
-    CS.connection_state_no_key_update_trace s' /\
     b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
           channel_consistent b /\ hello_coupling b
@@ -1224,7 +1218,6 @@ let lemma_wire_facts_deliver_to_server a b =
     a.channel == TlsInFlight CS.ServerEndpoint raw /\
     Seq.equal (CW.wire_serialize wire) raw /\
     SCP.server_step a.server (SM.WireEvent wire) s' out /\
-    CS.connection_state_no_key_update_trace s' /\
     b == { a with server = s'; channel = TlsQuiet }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pd. (
@@ -1423,7 +1416,6 @@ let lemma_wire_facts_deliver_to_client a b =
     a.channel == TlsInFlight CS.ClientEndpoint raw /\
     Seq.equal (CW.wire_serialize wire) raw /\
     CCP.client_step a.client (SM.WireEvent wire) c' out /\
-    CS.connection_state_no_key_update_trace c' /\
     b == { a with client = c'; channel = TlsQuiet }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pd. (
@@ -1505,7 +1497,6 @@ let lemma_wire_facts_client_local a b =
                    (out:SM.step_output CW.wire_message CTy.local_output).
     CCP.client_step a.client (SM.LocalEvent local) c' out /\
     out.SM.so_wire_outputs == [] /\
-    CS.connection_state_no_key_update_trace c' /\
     b == { a with client = c' }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pf. (
@@ -1534,7 +1525,6 @@ let lemma_wire_facts_server_local a b =
                    (out:SM.step_output CW.wire_message CTy.local_output).
     SCP.server_step a.server (SM.LocalEvent local) s' out /\
     out.SM.so_wire_outputs == [] /\
-    CS.connection_state_no_key_update_trace s' /\
     b == { a with server = s' }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pf. (
@@ -1878,6 +1868,54 @@ let rec lemma_no_key_update_last (l:list CS.conn_event) (ev:CS.conn_event)
   = match l with
     | [] -> ()
     | _ :: rest -> lemma_no_key_update_last rest ev
+
+(** A trace whose extension by one event has no key-update also has no key-update
+    on its prefix (backward monotonicity of the no-rekeying predicate). **)
+let rec lemma_no_key_update_prefix (l:list CS.conn_event) (ev:CS.conn_event)
+  : Lemma
+      (requires CS.conn_events_no_key_update (FStar.List.Tot.append l [ev]) == true)
+      (ensures CS.conn_events_no_key_update l == true)
+      (decreases l)
+  = match l with
+    | [] -> ()
+    | _ :: rest -> lemma_no_key_update_prefix rest ev
+
+(** Backward no-rekeying across a single legal delta: if the post-state has no
+    key-update in its event log, neither does the pre-state (the pre-log is a
+    prefix of the post-log, which is the pre-log extended by the delta event). **)
+let lemma_delta_no_key_update_backward (st0 st1:CS.connection_state)
+  : Lemma
+      (requires (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1) /\
+                CS.connection_state_no_key_update_trace st1)
+      (ensures CS.connection_state_no_key_update_trace st0)
+  = eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
+    returns CS.connection_state_no_key_update_trace st0
+    with _pf.
+      (lemma_no_key_update_prefix st0.CS.cs_event_log d.CS.delta_event)
+
+(** Backward no-rekeying across an official client step. **)
+let lemma_client_step_no_ku_backward
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.client_local_event)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires CCP.client_step st0 e st1 out /\
+                CS.connection_state_no_key_update_trace st1)
+      (ensures CS.connection_state_no_key_update_trace st0)
+  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
+    lemma_delta_no_key_update_backward st0 st1
+
+(** Backward no-rekeying across an official server step. **)
+let lemma_server_step_no_ku_backward
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.server_local_event)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires SCP.server_step st0 e st1 out /\
+                CS.connection_state_no_key_update_trace st1)
+      (ensures CS.connection_state_no_key_update_trace st0)
+  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
+    lemma_delta_no_key_update_backward st0 st1
 
 (** `advance_direction_records` is iterated `next_seq`, which rewrites only the
     sequence number; it never touches the record key or static IV. **)
@@ -3022,18 +3060,18 @@ let lemma_server_step_preserves_stage_ok
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_client_send (a b:tls_system_state)
-  : Lemma (requires tls_system_inv a /\ tls_step_client_send a b)
+  : Lemma (requires tls_system_inv a /\ tls_step_client_send a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
                      (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
       CCP.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [w] /\
-      CS.connection_state_no_key_update_trace c' /\
       client_advances a.client c' /\
       b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
     returns tls_system_inv b
     with _pf.
-      (lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
+      (assert (CS.connection_state_no_key_update_trace c');
+       lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
        lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
        lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
        lemma_client_reach_pres a c' (SM.LocalEvent local) out;
@@ -3048,18 +3086,18 @@ let lemma_pres_client_send (a b:tls_system_state)
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_server_send (a b:tls_system_state)
-  : Lemma (requires tls_system_inv a /\ tls_step_server_send a b)
+  : Lemma (requires tls_system_inv a /\ tls_step_server_send a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
                      (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
       SCP.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [w] /\
-      CS.connection_state_no_key_update_trace s' /\
       server_advances a.server s' /\
       b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
     returns tls_system_inv b
     with _pf.
-      (lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
+      (assert (CS.connection_state_no_key_update_trace s');
+       lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
        lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
        lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
        lemma_server_reach_pres a s' (SM.LocalEvent local) out;
@@ -3100,19 +3138,19 @@ let lemma_ready_couple_post_cf (s:tls_system_state)
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
 let lemma_pres_deliver_to_server (a b:tls_system_state)
-  : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_server a b)
+  : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_server a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
                      (out:SM.step_output CW.wire_message CTy.local_output) (raw:B.bytes).
       a.channel == TlsInFlight CS.ServerEndpoint raw /\
       Seq.equal (CW.wire_serialize wire) raw /\
       SCP.server_step a.server (SM.WireEvent wire) s' out /\
-      CS.connection_state_no_key_update_trace s' /\
       server_advances a.server s' /\
       b == { a with server = s'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
-      (lemma_server_step_preserves_stage_ok a.server s' (SM.WireEvent wire) out;
+      (assert (CS.connection_state_no_key_update_trace s');
+       lemma_server_step_preserves_stage_ok a.server s' (SM.WireEvent wire) out;
        lemma_server_step_pres a.server s' (SM.WireEvent wire) out;
        lemma_server_step_shape a.server s' (SM.WireEvent wire) out;
        lemma_server_reach_pres a s' (SM.WireEvent wire) out;
@@ -3130,19 +3168,19 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
 let lemma_pres_deliver_to_client (a b:tls_system_state)
-  : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_client a b)
+  : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_client a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
                     (out:SM.step_output CW.wire_message CTy.local_output) (raw:B.bytes).
       a.channel == TlsInFlight CS.ClientEndpoint raw /\
       Seq.equal (CW.wire_serialize wire) raw /\
       CCP.client_step a.client (SM.WireEvent wire) c' out /\
-      CS.connection_state_no_key_update_trace c' /\
       client_advances a.client c' /\
       b == { a with client = c'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
-      (lemma_client_step_preserves_stage_ok a.client c' (SM.WireEvent wire) out;
+      (assert (CS.connection_state_no_key_update_trace c');
+       lemma_client_step_preserves_stage_ok a.client c' (SM.WireEvent wire) out;
        lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
        lemma_client_step_shape a.client c' (SM.WireEvent wire) out;
        lemma_client_reach_pres a c' (SM.WireEvent wire) out;
@@ -3161,18 +3199,18 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_client_local (a b:tls_system_state)
-  : Lemma (requires tls_system_inv a /\ tls_step_client_local a b)
+  : Lemma (requires tls_system_inv a /\ tls_step_client_local a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
                      (out:SM.step_output CW.wire_message CTy.local_output).
       CCP.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
-      CS.connection_state_no_key_update_trace c' /\
       client_local_advances a.client c' /\
       b == { a with client = c' }
     returns tls_system_inv b
     with _pf.
-      (lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
+      (assert (CS.connection_state_no_key_update_trace c');
+       lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
        lemma_client_local_advances_to_advances a.client c' local out;
        lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
        lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
@@ -3192,18 +3230,18 @@ let lemma_pres_client_local (a b:tls_system_state)
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_server_local (a b:tls_system_state)
-  : Lemma (requires tls_system_inv a /\ tls_step_server_local a b)
+  : Lemma (requires tls_system_inv a /\ tls_step_server_local a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
                      (out:SM.step_output CW.wire_message CTy.local_output).
       SCP.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
-      CS.connection_state_no_key_update_trace s' /\
       server_local_advances a.server s' /\
       b == { a with server = s' }
     returns tls_system_inv b
     with _pf.
-      (lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
+      (assert (CS.connection_state_no_key_update_trace s');
+       lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
        lemma_server_local_advances_to_advances a.server s' local out;
        lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
        lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
@@ -3221,8 +3259,104 @@ let lemma_pres_server_local (a b:tls_system_state)
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_no_ku_backward_client_send (x y:tls_system_state)
+  : Lemma (requires tls_step_client_send x y /\ tls_no_rekeying y)
+          (ensures tls_no_rekeying x)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
+      CCP.client_step x.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      client_advances x.client c' /\
+      y == { x with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
+    returns tls_no_rekeying x
+    with _pf. lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
+
+let lemma_no_ku_backward_server_send (x y:tls_system_state)
+  : Lemma (requires tls_step_server_send x y /\ tls_no_rekeying y)
+          (ensures tls_no_rekeying x)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
+      SCP.server_step x.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      server_advances x.server s' /\
+      y == { x with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
+    returns tls_no_rekeying x
+    with _pf. lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
+
+let lemma_no_ku_backward_deliver_to_client (x y:tls_system_state)
+  : Lemma (requires tls_step_deliver_to_client x y /\ tls_no_rekeying y)
+          (ensures tls_no_rekeying x)
+  = eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output) (raw:B.bytes).
+      x.channel == TlsInFlight CS.ClientEndpoint raw /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      CCP.client_step x.client (SM.WireEvent wire) c' out /\
+      client_advances x.client c' /\
+      y == { x with client = c'; channel = TlsQuiet }
+    returns tls_no_rekeying x
+    with _pf. lemma_client_step_no_ku_backward x.client c' (SM.WireEvent wire) out
+
+let lemma_no_ku_backward_deliver_to_server (x y:tls_system_state)
+  : Lemma (requires tls_step_deliver_to_server x y /\ tls_no_rekeying y)
+          (ensures tls_no_rekeying x)
+  = eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output) (raw:B.bytes).
+      x.channel == TlsInFlight CS.ServerEndpoint raw /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      SCP.server_step x.server (SM.WireEvent wire) s' out /\
+      server_advances x.server s' /\
+      y == { x with server = s'; channel = TlsQuiet }
+    returns tls_no_rekeying x
+    with _pf. lemma_server_step_no_ku_backward x.server s' (SM.WireEvent wire) out
+
+let lemma_no_ku_backward_client_local (x y:tls_system_state)
+  : Lemma (requires tls_step_client_local x y /\ tls_no_rekeying y)
+          (ensures tls_no_rekeying x)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output).
+      CCP.client_step x.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      client_local_advances x.client c' /\
+      y == { x with client = c' }
+    returns tls_no_rekeying x
+    with _pf. lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
+
+let lemma_no_ku_backward_server_local (x y:tls_system_state)
+  : Lemma (requires tls_step_server_local x y /\ tls_no_rekeying y)
+          (ensures tls_no_rekeying x)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output).
+      SCP.server_step x.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      server_local_advances x.server s' /\
+      y == { x with server = s' }
+    returns tls_no_rekeying x
+    with _pf. lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
+
+(** System-level backward monotonicity of no-rekeying: any single system step
+    appends one event to the acting endpoint's log; if the post-state has no
+    key-update, neither does the pre-state.  Case-split over the six transitions,
+    each discharged by the per-transition backward lemma. **)
+let lemma_no_key_update_backward (x y:tls_system_state)
+  : Lemma (requires tls_sys_step x y /\ tls_no_rekeying y)
+          (ensures tls_no_rekeying x)
+  = FStar.Classical.move_requires_2 lemma_no_ku_backward_client_send x y;
+    FStar.Classical.move_requires_2 lemma_no_ku_backward_server_send x y;
+    FStar.Classical.move_requires_2 lemma_no_ku_backward_deliver_to_client x y;
+    FStar.Classical.move_requires_2 lemma_no_ku_backward_deliver_to_server x y;
+    FStar.Classical.move_requires_2 lemma_no_ku_backward_client_local x y;
+    FStar.Classical.move_requires_2 lemma_no_ku_backward_server_local x y
+#pop-options
+
+(** The combined invariant that IS inductive under the now-rekey-permitting step:
+    if the state has not rekeyed, then it satisfies the structural invariant.
+    Backward monotonicity of no-rekeying + guard recovery make this inductive. **)
+let combined_inv (s:tls_system_state) : prop =
+  tls_no_rekeying s ==> tls_system_inv s
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
 let lemma_inv_preserved (a b:tls_system_state)
-  : Lemma (requires tls_system_inv a /\ tls_sys_step a b)
+  : Lemma (requires tls_system_inv a /\ tls_sys_step a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = FStar.Classical.move_requires_2 lemma_pres_client_send a b;
     FStar.Classical.move_requires_2 lemma_pres_server_send a b;
@@ -3232,18 +3366,44 @@ let lemma_inv_preserved (a b:tls_system_state)
     FStar.Classical.move_requires_2 lemma_pres_server_local a b
 #pop-options
 
-(** Reachable states satisfy the invariant. **)
+(** The combined invariant is inductive: given `combined_inv x` and a step to `y`,
+    if `y` has not rekeyed then (by backward monotonicity) neither has `x`, so
+    `tls_system_inv x` holds; the recovered no-rekeying guard on `y` then feeds the
+    existing guarded preservation lemma to conclude `tls_system_inv y`. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_combined_inv_preserved (x y:tls_system_state)
+  : Lemma (requires combined_inv x /\ tls_sys_step x y)
+          (ensures combined_inv y)
+  = introduce tls_no_rekeying y ==> tls_system_inv y
+    with _nr.
+      (lemma_no_key_update_backward x y;
+       lemma_inv_preserved x y)
+#pop-options
+
+(** At the initial state the structural invariant holds unconditionally, so the
+    combined invariant holds too. **)
+let lemma_initial_combined_inv (cfg_c cfg_s:CS.connection_config)
+  : Lemma
+      (requires
+        cfg_c.CS.config_role == CS.ClientEndpoint /\
+        cfg_s.CS.config_role == CS.ServerEndpoint /\
+        WFL.supported_client_config_wire_profile cfg_c)
+      (ensures combined_inv (initial_tls_system cfg_c cfg_s))
+  = lemma_initial_inv cfg_c cfg_s
+
+(** Reachable states that have not rekeyed satisfy the invariant. **)
 val lemma_reachable_inv (cfg_c cfg_s:CS.connection_config) (s:tls_system_state)
   : Lemma (requires cfg_c.CS.config_role == CS.ClientEndpoint /\
                     cfg_s.CS.config_role == CS.ServerEndpoint /\
                     WFL.supported_client_config_wire_profile cfg_c /\
+                    tls_no_rekeying s /\
                     RTC.closure tls_sys_step (initial_tls_system cfg_c cfg_s) s)
           (ensures tls_system_inv s)
 let lemma_reachable_inv cfg_c cfg_s s =
-  lemma_initial_inv cfg_c cfg_s;
+  lemma_initial_combined_inv cfg_c cfg_s;
   FStar.Classical.forall_intro_2
-    (FStar.Classical.move_requires_2 lemma_inv_preserved);
-  RTC.stable_on_closure tls_sys_step tls_system_inv ()
+    (FStar.Classical.move_requires_2 lemma_combined_inv_preserved);
+  RTC.stable_on_closure tls_sys_step combined_inv ()
 
 (** ─────────────────────────────────────────────────────────────────────────
     The payoff at a completed, quiescent state.
