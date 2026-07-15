@@ -535,7 +535,6 @@ let tls_step_client_send (a b:tls_system_state) : prop =
      CCP.client_step a.client (SM.LocalEvent local) c' out /\
      out.SM.so_wire_outputs == [w] /\
      CS.connection_state_no_key_update_trace c' /\
-     client_stage_ok c' /\
      client_advances a.client c' /\
      b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) })
 
@@ -546,7 +545,6 @@ let tls_step_server_send (a b:tls_system_state) : prop =
      SCP.server_step a.server (SM.LocalEvent local) s' out /\
      out.SM.so_wire_outputs == [w] /\
      CS.connection_state_no_key_update_trace s' /\
-     server_stage_ok s' /\
      server_advances a.server s' /\
      b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) })
 
@@ -557,7 +555,6 @@ let tls_step_deliver_to_server (a b:tls_system_state) : prop =
      Seq.equal (CW.wire_serialize wire) raw /\
      SCP.server_step a.server (SM.WireEvent wire) s' out /\
      CS.connection_state_no_key_update_trace s' /\
-     server_stage_ok s' /\
      server_advances a.server s' /\
      b == { a with server = s'; channel = TlsQuiet })
 
@@ -568,7 +565,6 @@ let tls_step_deliver_to_client (a b:tls_system_state) : prop =
      Seq.equal (CW.wire_serialize wire) raw /\
      CCP.client_step a.client (SM.WireEvent wire) c' out /\
      CS.connection_state_no_key_update_trace c' /\
-     client_stage_ok c' /\
      client_advances a.client c' /\
      b == { a with client = c'; channel = TlsQuiet })
 
@@ -579,7 +575,6 @@ let tls_step_client_local (a b:tls_system_state) : prop =
      CCP.client_step a.client (SM.LocalEvent local) c' out /\
      out.SM.so_wire_outputs == [] /\
      CS.connection_state_no_key_update_trace c' /\
-     client_stage_ok c' /\
      client_local_advances a.client c' /\
      b == { a with client = c' })
 
@@ -590,7 +585,6 @@ let tls_step_server_local (a b:tls_system_state) : prop =
      SCP.server_step a.server (SM.LocalEvent local) s' out /\
      out.SM.so_wire_outputs == [] /\
      CS.connection_state_no_key_update_trace s' /\
-     server_stage_ok s' /\
      server_local_advances a.server s' /\
      b == { a with server = s' })
 
@@ -651,6 +645,7 @@ let lemma_server_step_pres
       (CSL.lemma_legal_connection_delta_consistent st0 d st1;
        CSL.lemma_step_model_preserves_config st0.CS.cs_model d.CS.delta_event st1.CS.cs_model)
 #pop-options
+
 
 (** A single legal model step preserves the client's start/config agreement.
     The only step installing `hs_start` is `LocalStartHandshake`, whose legality
@@ -730,7 +725,7 @@ let lemma_server_step_shape
     region-entry shape fact.  The server analogue is symmetric.
     ───────────────────────────────────────────────────────────────────────── **)
 
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 80 --split_queries always"
 let lemma_client_step_len_micro
   (a c':CS.connection_state)
   (e:SM.event CW.wire_message CTy.client_local_event)
@@ -759,11 +754,16 @@ let lemma_client_step_len_micro
        if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then begin
          (if not (PC.pre_appdata_control a.CS.cs_model.CS.model_control)
           then PC.lemma_step_post_appdata_stable a.CS.cs_model d.CS.delta_event c'.CS.cs_model);
-         PC.lemma_client_progress_step_bound a.CS.cs_model d.CS.delta_event c'.CS.cs_model
+         assert (PC.pre_appdata_control a.CS.cs_model.CS.model_control);
+         PC.lemma_client_progress_step_bound a.CS.cs_model d.CS.delta_event c'.CS.cs_model;
+         assert (PC.client_progress c'.CS.cs_model > PC.client_progress a.CS.cs_model);
+         assert (FStar.List.Tot.length c'.CS.cs_event_log
+                   == FStar.List.Tot.length a.CS.cs_event_log + 1);
+         assert (FStar.List.Tot.length c'.CS.cs_event_log == PC.client_progress c'.CS.cs_model)
        end)
 #pop-options
 
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 80 --split_queries always"
 let lemma_server_step_len_micro
   (a s':CS.connection_state)
   (e:SM.event CW.wire_message CTy.server_local_event)
@@ -792,7 +792,12 @@ let lemma_server_step_len_micro
        if PC.pre_appdata_control s'.CS.cs_model.CS.model_control then begin
          (if not (PC.pre_appdata_control a.CS.cs_model.CS.model_control)
           then PC.lemma_step_post_appdata_stable a.CS.cs_model d.CS.delta_event s'.CS.cs_model);
-         PC.lemma_server_progress_step_bound a.CS.cs_model d.CS.delta_event s'.CS.cs_model
+         assert (PC.pre_appdata_control a.CS.cs_model.CS.model_control);
+         PC.lemma_server_progress_step_bound a.CS.cs_model d.CS.delta_event s'.CS.cs_model;
+         assert (PC.server_progress s'.CS.cs_model > PC.server_progress a.CS.cs_model);
+         assert (FStar.List.Tot.length s'.CS.cs_event_log
+                   == FStar.List.Tot.length a.CS.cs_event_log + 1);
+         assert (FStar.List.Tot.length s'.CS.cs_event_log == PC.server_progress s'.CS.cs_model)
        end)
 #pop-options
 
@@ -1086,7 +1091,6 @@ let lemma_wire_facts_client_send a b =
     CCP.client_step a.client (SM.LocalEvent local) c' out /\
     out.SM.so_wire_outputs == [w] /\
     CS.connection_state_no_key_update_trace c' /\
-    client_stage_ok c' /\
     b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
           channel_consistent b /\ hello_coupling b
@@ -1107,7 +1111,7 @@ let lemma_wire_facts_client_send a b =
     `hs_server_hello`; every other server send is PROTECTED (the server never sends
     a cleartext CCS in this model), so the raw is an ApplicationData record and the
     "received cleartext ServerHello" antecedent (a Handshake record) is FALSE. **)
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --split_queries always"
 let lemma_cc_server_send
   (a:tls_system_state)
   (local:CTy.server_local_event) (s':CS.connection_state)
@@ -1191,7 +1195,6 @@ let lemma_wire_facts_server_send a b =
     SCP.server_step a.server (SM.LocalEvent local) s' out /\
     out.SM.so_wire_outputs == [w] /\
     CS.connection_state_no_key_update_trace s' /\
-    server_stage_ok s' /\
     b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
           channel_consistent b /\ hello_coupling b
@@ -1222,7 +1225,6 @@ let lemma_wire_facts_deliver_to_server a b =
     Seq.equal (CW.wire_serialize wire) raw /\
     SCP.server_step a.server (SM.WireEvent wire) s' out /\
     CS.connection_state_no_key_update_trace s' /\
-    server_stage_ok s' /\
     b == { a with server = s'; channel = TlsQuiet }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pd. (
@@ -1414,7 +1416,7 @@ val lemma_wire_facts_deliver_to_client (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_client a b)
           (ensures ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
                    hello_coupling b)
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --split_queries always"
 let lemma_wire_facts_deliver_to_client a b =
   eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
                    (out:SM.step_output CW.wire_message CTy.local_output) (raw:B.bytes).
@@ -1422,7 +1424,6 @@ let lemma_wire_facts_deliver_to_client a b =
     Seq.equal (CW.wire_serialize wire) raw /\
     CCP.client_step a.client (SM.WireEvent wire) c' out /\
     CS.connection_state_no_key_update_trace c' /\
-    client_stage_ok c' /\
     b == { a with client = c'; channel = TlsQuiet }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pd. (
@@ -1505,7 +1506,6 @@ let lemma_wire_facts_client_local a b =
     CCP.client_step a.client (SM.LocalEvent local) c' out /\
     out.SM.so_wire_outputs == [] /\
     CS.connection_state_no_key_update_trace c' /\
-    client_stage_ok c' /\
     b == { a with client = c' }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pf. (
@@ -1535,7 +1535,6 @@ let lemma_wire_facts_server_local a b =
     SCP.server_step a.server (SM.LocalEvent local) s' out /\
     out.SM.so_wire_outputs == [] /\
     CS.connection_state_no_key_update_trace s' /\
-    server_stage_ok s' /\
     b == { a with server = s' }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
   with _pf. (
@@ -2861,10 +2860,10 @@ let lemma_pw_pres_server_local
         tls_system_inv a /\
         TlsQuiet? a.channel /\
         SCP.server_step a.server (SM.LocalEvent local) s' out /\
+        server_stage_ok s' /\
         out.SM.so_wire_outputs == [] /\
         CS.connection_state_no_key_update_trace s' /\
-        server_stage_ok s' /\
-        b == { a with server = s' })
+          b == { a with server = s' })
       (ensures protected_witnesses_ok b)
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
@@ -2959,6 +2958,68 @@ let lemma_pw_pres_client_send
     no-rekeying, all from the shape guards + `inv a`), and pulls the wire FACTS
     from the named helpers above (with channel_consistent discharged inline in the
     LOCAL/DELIVER cases, where the post-state channel is quiet). **)
+(** ─────────────────────────────────────────────────────────────────────────
+    Stage-predicate inductiveness.
+
+    `client_stage_ok`/`server_stage_ok` pin the acting endpoint to a
+    role-appropriate control state and record which paired handshake message
+    fields must be populated at that stage.  They are INDUCTIVE under the raw
+    canonical step: `step_model` reaches each control stage only via the same
+    delta event that atomically sets that stage's write-once message field, and
+    no legal step ever un-sets a message field.  Hence at the SYSTEM level the
+    six per-transition `stage_ok` side conditions are redundant with the
+    `tls_system_inv` conjuncts — they can be dropped from the shapes and
+    re-established inductively by these two lemmas, faithfully mirroring the
+    official `client_step`/`server_step`.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** CLIENT.  `client_stage_ok` is inductive per-step from `client_stage_ok`
+    alone: the client advances control by one field at a time (it never dwells
+    at a wide multi-field stage — it goes directly `HsServerFinishedVerified` →
+    `ControlApplicationData`), so each control-advancing step sets exactly the
+    newly-required field and carries the lower ones.  A split on the event's top
+    constructor keeps the query small. **)
+#restart-solver
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_client_step_preserves_stage_ok
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.client_local_event)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires CCP.client_step st0 e st1 out /\ client_stage_ok st0)
+      (ensures client_stage_ok st1)
+  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
+    eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
+    returns client_stage_ok st1
+    with _pf.
+      (match d.CS.delta_event with
+       | CS.ConnLocalEvent _ -> ()
+       | CS.ConnNetworkEvent _ -> ())
+#pop-options
+
+(** SERVER.  `server_stage_ok` alone is NOT inductive per-step: at the wide
+    `HsServerEncryptedFlightSent` stage the server dwells while filling EE,
+    Certificate, CertificateVerify and Finished, and the Finished-send legality
+    exposes only `hs_certificate_verify_verified`, not the presence of the
+    Certificate/CertificateVerify fields it needs at `HsServerFinishedSent`.
+    That coupling is a REACHABILITY fact, supplied by the role-pinned
+    `WStep.server_stage_shape` invariant lifted off `connection_state_consistent`
+    (which `lemma_server_step_pres` re-establishes for the post-state). **)
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
+let lemma_server_step_preserves_stage_ok
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.server_local_event)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        SCP.server_step st0 e st1 out /\
+        CS.connection_state_consistent st0 /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+      (ensures server_stage_ok st1)
+  = lemma_server_step_pres st0 st1 e out;
+    WStep.lemma_connection_state_consistent_server_stage_shape st1
+#pop-options
+
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_client_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_client_send a b)
@@ -2968,12 +3029,12 @@ let lemma_pres_client_send (a b:tls_system_state)
       CCP.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [w] /\
       CS.connection_state_no_key_update_trace c' /\
-      client_stage_ok c' /\
       client_advances a.client c' /\
       b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
     returns tls_system_inv b
     with _pf.
-      (lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
+      (lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
+       lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
        lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
        lemma_client_reach_pres a c' (SM.LocalEvent local) out;
        lemma_client_step_len_micro a.client c' (SM.LocalEvent local) out;
@@ -2994,12 +3055,12 @@ let lemma_pres_server_send (a b:tls_system_state)
       SCP.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [w] /\
       CS.connection_state_no_key_update_trace s' /\
-      server_stage_ok s' /\
       server_advances a.server s' /\
       b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
     returns tls_system_inv b
     with _pf.
-      (lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
+      (lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
+       lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
        lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
        lemma_server_reach_pres a s' (SM.LocalEvent local) out;
        lemma_server_step_len_micro a.server s' (SM.LocalEvent local) out;
@@ -3047,12 +3108,12 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       SCP.server_step a.server (SM.WireEvent wire) s' out /\
       CS.connection_state_no_key_update_trace s' /\
-      server_stage_ok s' /\
       server_advances a.server s' /\
       b == { a with server = s'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
-      (lemma_server_step_pres a.server s' (SM.WireEvent wire) out;
+      (lemma_server_step_preserves_stage_ok a.server s' (SM.WireEvent wire) out;
+       lemma_server_step_pres a.server s' (SM.WireEvent wire) out;
        lemma_server_step_shape a.server s' (SM.WireEvent wire) out;
        lemma_server_reach_pres a s' (SM.WireEvent wire) out;
        lemma_server_step_len_micro a.server s' (SM.WireEvent wire) out;
@@ -3077,12 +3138,12 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       CCP.client_step a.client (SM.WireEvent wire) c' out /\
       CS.connection_state_no_key_update_trace c' /\
-      client_stage_ok c' /\
       client_advances a.client c' /\
       b == { a with client = c'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
-      (lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
+      (lemma_client_step_preserves_stage_ok a.client c' (SM.WireEvent wire) out;
+       lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
        lemma_client_step_shape a.client c' (SM.WireEvent wire) out;
        lemma_client_reach_pres a c' (SM.WireEvent wire) out;
        lemma_client_step_len_micro a.client c' (SM.WireEvent wire) out;
@@ -3107,12 +3168,12 @@ let lemma_pres_client_local (a b:tls_system_state)
       CCP.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       CS.connection_state_no_key_update_trace c' /\
-      client_stage_ok c' /\
       client_local_advances a.client c' /\
       b == { a with client = c' }
     returns tls_system_inv b
     with _pf.
-      (lemma_client_local_advances_to_advances a.client c' local out;
+      (lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
+       lemma_client_local_advances_to_advances a.client c' local out;
        lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
        lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
        lemma_client_reach_pres a c' (SM.LocalEvent local) out;
@@ -3138,12 +3199,12 @@ let lemma_pres_server_local (a b:tls_system_state)
       SCP.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       CS.connection_state_no_key_update_trace s' /\
-      server_stage_ok s' /\
       server_local_advances a.server s' /\
       b == { a with server = s' }
     returns tls_system_inv b
     with _pf.
-      (lemma_server_local_advances_to_advances a.server s' local out;
+      (lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
+       lemma_server_local_advances_to_advances a.server s' local out;
        lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
        lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
        lemma_server_reach_pres a s' (SM.LocalEvent local) out;

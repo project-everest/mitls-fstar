@@ -94,7 +94,7 @@ let hellos_shape (m:CS.connection_model) : prop =
   | CS.ControlClosing | CS.ControlClosed | CS.ControlFailed _ -> True
 
 (** A single legal step preserves `hellos_shape` AND the hello field values. **)
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --split_queries always"
 let lemma_step_model_preserves_hellos
   (m0:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma
@@ -3646,4 +3646,143 @@ let lemma_server_appdata_received_appdata
       lemma_raw_appdata_count_serialize_all in_msgs;
       lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_received sm_bytes
     )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    Server-side handshake field shape (role-pinned), reachable from `initial`.
+
+    A single legal step keeps this exact control->field characterization; unlike
+    the per-endpoint `server_stage_ok` (lower bounds only), the shape carries the
+    UPPER bounds plus the `verified ==> cert/cv` coupling at the wide
+    `HsServerEncryptedFlightSent` stage, which is exactly what makes it INDUCTIVE.
+    Lifting it over the reachability closure gives `server_stage_ok` at every
+    reachable (consistent) server state — the fact the `TLS13.System` step-shapes
+    need to re-establish the moved `server_stage_ok` invariant conjunct.
+    ───────────────────────────────────────────────────────────────────────── **)
+let server_stage_shape_m (m:CS.connection_model) : prop =
+  let h = m.CS.model_handshake in
+  m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  (match m.CS.model_control with
+   | CS.ControlNew
+   | CS.ControlHandshaking CS.HsAwaitingClientHello ->
+     h.CS.hs_client_hello == None /\ h.CS.hs_server_hello == None /\
+     h.CS.hs_encrypted_extensions == None /\
+     h.CS.hs_certificate == None /\ h.CS.hs_certificate_verify == None /\
+     h.CS.hs_certificate_verify_verified == false /\
+     h.CS.hs_server_finished == None /\ h.CS.hs_client_finished == None
+   | CS.ControlHandshaking CS.HsClientHelloReceived ->
+     Some? h.CS.hs_client_hello /\
+     h.CS.hs_server_hello == None /\ h.CS.hs_encrypted_extensions == None /\
+     h.CS.hs_certificate == None /\ h.CS.hs_certificate_verify == None /\
+     h.CS.hs_certificate_verify_verified == false /\
+     h.CS.hs_server_finished == None /\ h.CS.hs_client_finished == None
+   | CS.ControlHandshaking CS.HsServerHelloSent ->
+     Some? h.CS.hs_client_hello /\ Some? h.CS.hs_server_hello /\
+     h.CS.hs_encrypted_extensions == None /\
+     h.CS.hs_certificate == None /\ h.CS.hs_certificate_verify == None /\
+     h.CS.hs_certificate_verify_verified == false /\
+     h.CS.hs_server_finished == None /\ h.CS.hs_client_finished == None
+   | CS.ControlHandshaking CS.HsServerEncryptedFlightSent ->
+     Some? h.CS.hs_client_hello /\ Some? h.CS.hs_server_hello /\
+     Some? h.CS.hs_encrypted_extensions /\
+     h.CS.hs_server_finished == None /\ h.CS.hs_client_finished == None /\
+     (Some? h.CS.hs_certificate_verify ==> Some? h.CS.hs_certificate) /\
+     (h.CS.hs_certificate_verify_verified ==>
+        (Some? h.CS.hs_certificate /\ Some? h.CS.hs_certificate_verify))
+   | CS.ControlHandshaking CS.HsServerFinishedSent ->
+     Some? h.CS.hs_client_hello /\ Some? h.CS.hs_server_hello /\
+     Some? h.CS.hs_encrypted_extensions /\ Some? h.CS.hs_certificate /\
+     Some? h.CS.hs_certificate_verify /\
+     h.CS.hs_certificate_verify_verified == true /\
+     Some? h.CS.hs_server_finished /\ h.CS.hs_client_finished == None
+   | CS.ControlHandshaking CS.HsClientFinishedReceived
+   | CS.ControlHandshaking CS.HsClientFinishedVerified
+   | CS.ControlApplicationData ->
+     Some? h.CS.hs_client_hello /\ Some? h.CS.hs_server_hello /\
+     Some? h.CS.hs_encrypted_extensions /\ Some? h.CS.hs_certificate /\
+     Some? h.CS.hs_certificate_verify /\ Some? h.CS.hs_server_finished /\
+     Some? h.CS.hs_client_finished
+   | CS.ControlClosing | CS.ControlClosed | CS.ControlFailed _ -> True
+   | _ -> False)
+
+let server_stage_shape (st:CS.connection_state) : prop =
+  server_stage_shape_m st.CS.cs_model
+
+(** A single legal model step preserves the server field shape. **)
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 100"
+let lemma_step_model_preserves_server_stage_shape
+  (m0:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_event m0 ev /\ CS.step_model m0 ev == Some m1 /\
+        server_stage_shape_m m0)
+      (ensures server_stage_shape_m m1)
+  = ()
+#pop-options
+
+(** A single legal connection delta preserves the server field shape. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_connection_delta_preserves_server_stage_shape
+  (st0 st1:CS.connection_state)
+  : Lemma
+      (requires
+        CS.connection_state_single_step st0 st1 /\ server_stage_shape st0)
+      (ensures server_stage_shape st1)
+  = assert (exists (delta:CS.connection_delta). CS.legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    lemma_step_model_preserves_server_stage_shape
+      st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+#pop-options
+
+(** The server field shape holds at the initial state of any server config. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_initial_server_stage_shape (cfg:CS.connection_config)
+  : Lemma
+      (requires cfg.CS.config_role == CS.ServerEndpoint)
+      (ensures server_stage_shape (CS.initial cfg))
+  = ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_single_step_server_stage_shape (u:unit)
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (server_stage_shape y); (CS.connection_state_single_step x y)}
+          server_stage_shape x /\ CS.connection_state_single_step x y ==>
+          server_stage_shape y)
+  = introduce forall (x:CS.connection_state) (y:CS.connection_state).
+      server_stage_shape x /\ CS.connection_state_single_step x y ==>
+      server_stage_shape y
+    with
+      introduce _ ==> _ with _.
+      lemma_connection_delta_preserves_server_stage_shape x y
+#pop-options
+
+(** A consistent (reachable) server-role state satisfies the server field shape,
+    hence in particular the `server_stage_ok` lower bounds. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_connection_state_consistent_server_stage_shape (st:CS.connection_state)
+  : Lemma
+      (requires
+        CS.connection_state_consistent st /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+      (ensures server_stage_shape st)
+  = let p = server_stage_shape in
+    lemma_initial_server_stage_shape st.CS.cs_model.CS.model_config;
+    lemma_single_step_server_stage_shape ();
+    let stable :
+      squash (
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure
+      CS.connection_state_single_step
+      p
+      stable;
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st)
 #pop-options
