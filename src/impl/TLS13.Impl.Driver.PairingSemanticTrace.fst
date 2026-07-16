@@ -9,7 +9,7 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -30,6 +30,8 @@ module Seq = FStar.Seq
 module T = TLS13.Types
 module X = TLS13.X509.Spec
 
+open TLS13.Spec.Pairing.SemanticTrace
+
 #push-options "--split_queries always --z3rlimit 10 --z3refresh"
 
 noextract
@@ -48,16 +50,16 @@ let lemma_step_model_many_cons_next
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.step_model_many model (ev :: rest) == Some final_model)
+        TLS13.Spec.StateMachine.Reachability.step_model_many model (ev :: rest) == Some final_model)
       (ensures
         CS.step_model model ev == Some (next_model model ev) /\
-        CS.step_model_many (next_model model ev) rest == Some final_model)
+        TLS13.Spec.StateMachine.Reachability.step_model_many (next_model model ev) rest == Some final_model)
 =
   match CS.step_model model ev with
   | Some _ ->
     ()
   | None ->
-    assert_norm (CS.step_model_many model (ev :: rest) == None);
+    assert_norm (TLS13.Spec.StateMachine.Reachability.step_model_many model (ev :: rest) == None);
     assert False
 
 let rec lemma_conn_events_raw_replay_legal_after_prefix
@@ -71,8 +73,8 @@ let rec lemma_conn_events_raw_replay_legal_after_prefix
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.step_model_many model prefix == Some prefix_model /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Reachability.step_model_many model prefix == Some prefix_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           (prefix @ (ev :: rest))
           raw_sent
@@ -96,7 +98,7 @@ let rec lemma_conn_events_raw_replay_legal_after_prefix
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
     returns CS.legal_event prefix_model ev
     with _.
     ( assert (prefix_model == model) )
@@ -113,13 +115,13 @@ let rec lemma_conn_events_raw_replay_legal_after_prefix
       CS.event_raw_delta_legal model hd delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 (tl @ (ev :: rest)) tail_sent tail_received final_model
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (tl @ (ev :: rest)) tail_sent tail_received final_model
     returns CS.legal_event prefix_model ev
     with _.
     ( assert (model1 == next_model model hd);
-      assert (CS.step_model_many model (hd :: tl) ==
-        CS.step_model_many model1 tl);
-      assert (CS.step_model_many model1 tl == Some prefix_model);
+      assert (TLS13.Spec.StateMachine.Reachability.step_model_many model (hd :: tl) ==
+        TLS13.Spec.StateMachine.Reachability.step_model_many model1 tl);
+      assert (TLS13.Spec.StateMachine.Reachability.step_model_many model1 tl == Some prefix_model);
       lemma_conn_events_raw_replay_legal_after_prefix
         model1
         prefix_model
@@ -144,8 +146,8 @@ let lemma_client_semantic_install_event_tls_deltas_empty
   : Lemma
       (requires client_semantic_install_event ev)
       (ensures
-        CS.conn_event_sent_tls_delta ev == [] /\
-        CS.conn_event_received_tls_delta ev == [])
+        TLS13.Spec.StateMachine.Log.conn_event_sent_tls_delta ev == [] /\
+        TLS13.Spec.StateMachine.Log.conn_event_received_tls_delta ev == [])
 =
   if PCPS.client_no_tail_handshake_write_install_event ev then (
     PCPS.lemma_client_no_tail_handshake_write_install_event_cases ev
@@ -378,7 +380,7 @@ let lemma_client_finished_shape_model_slots_from_event_log
         client.CS.cs_model.CS.model_handshake.CS.hs_server_finished == Some sf /\
         client.CS.cs_model.CS.model_handshake.CS.hs_client_finished == Some cf)
 =
-  assert (CS.connection_state_event_log_consistent client);
+  assert (TLS13.Spec.StateMachine.Log.connection_state_event_log_consistent client);
   PCPS.lemma_client_no_tail_two_handshake_install_cover_cases e4 e5;
   PNTCAS.lemma_client_no_tail_application_install_cover_cases e13 e14;
   assert (client_semantic_install_event e4);
@@ -449,7 +451,7 @@ let lemma_client_finished_shape_model_slots_from_event_log
   let tail1 = ev2 :: tail2 in
   let tail0 = ev1 :: tail1 in
   assert (client.CS.cs_event_log == ev0 :: tail0);
-  assert (CS.step_model_many m0 (ev0 :: tail0) == Some final_model);
+  assert (TLS13.Spec.StateMachine.Reachability.step_model_many m0 (ev0 :: tail0) == Some final_model);
 
   let m1 = next_model m0 ev0 in
   lemma_step_model_many_cons_next m0 ev0 tail0 final_model;
@@ -602,7 +604,7 @@ let lemma_client_finished_shape_model_slots_from_event_log
   assert (m16.CS.model_handshake.CS.hs_certificate_verify == Some cv);
   assert (m16.CS.model_handshake.CS.hs_server_finished == Some sf);
   assert (m16.CS.model_handshake.CS.hs_client_finished == Some cf);
-  assert_norm (CS.step_model_many m16 [] == Some m16);
+  assert_norm (TLS13.Spec.StateMachine.Reachability.step_model_many m16 [] == Some m16);
   assert (m16 == final_model)
 
 let lemma_client_finished_shape_tls_message_projections
@@ -666,12 +668,12 @@ let lemma_client_finished_shape_tls_message_projections
         PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
         PNTCAS.client_no_tail_application_install_cover e13 e14)
       (ensures
-        CS.sent_tls_messages client_trace ==
+        TLS13.Spec.StateMachine.Log.sent_tls_messages client_trace ==
           [
             M.TlsHandshake (M.ClientHello ch);
             M.TlsHandshake (M.Finished cf)
           ] /\
-        CS.received_tls_messages client_trace ==
+        TLS13.Spec.StateMachine.Log.received_tls_messages client_trace ==
           [
             M.TlsHandshake (M.ServerHello sh);
             M.TlsHandshake (M.EncryptedExtensions ee);
@@ -742,7 +744,7 @@ let lemma_client_finished_shape_tls_message_projections
                    CL.message_value = M.TlsHandshake (M.Finished cf);
                  }
                ]);
-             assert_norm (CS.sent_tls_messages
+             assert_norm (TLS13.Spec.StateMachine.Log.sent_tls_messages
                [
                  CS.ConnLocalEvent (CS.LocalStartHandshake start);
                  CS.ConnNetworkEvent {
@@ -786,7 +788,7 @@ let lemma_client_finished_shape_tls_message_projections
                  M.TlsHandshake (M.ClientHello ch);
                  M.TlsHandshake (M.Finished cf)
                ]);
-             assert_norm (CS.received_tls_messages
+             assert_norm (TLS13.Spec.StateMachine.Log.received_tls_messages
                [
                  CS.ConnLocalEvent (CS.LocalStartHandshake start);
                  CS.ConnNetworkEvent {
@@ -833,12 +835,12 @@ let lemma_client_finished_shape_tls_message_projections
                  M.TlsHandshake (M.CertificateVerify cv);
                  M.TlsHandshake (M.Finished sf)
                ]);
-             assert (CS.sent_tls_messages client_trace ==
+             assert (TLS13.Spec.StateMachine.Log.sent_tls_messages client_trace ==
                [
                  M.TlsHandshake (M.ClientHello ch);
                  M.TlsHandshake (M.Finished cf)
                ]);
-             assert (CS.received_tls_messages client_trace ==
+             assert (TLS13.Spec.StateMachine.Log.received_tls_messages client_trace ==
                [
                  M.TlsHandshake (M.ServerHello sh);
                  M.TlsHandshake (M.EncryptedExtensions ee);
@@ -1138,8 +1140,8 @@ let lemma_server_semantic_handshake_install_event_tls_deltas_empty
   : Lemma
       (requires server_semantic_handshake_install_event ev)
       (ensures
-        CS.conn_event_sent_tls_delta ev == [] /\
-        CS.conn_event_received_tls_delta ev == [])
+        TLS13.Spec.StateMachine.Log.conn_event_sent_tls_delta ev == [] /\
+        TLS13.Spec.StateMachine.Log.conn_event_received_tls_delta ev == [])
 =
   lemma_server_semantic_handshake_install_event_local ev;
   match ev with
@@ -1230,7 +1232,7 @@ let lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           (CS.initial_model cfg)
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent {
@@ -1271,7 +1273,7 @@ let lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
     CS.event_raw_delta_legal m0 ev0 delta_sent0 delta_received0 /\
     Seq.equal raw_sent (B.append delta_sent0 tail_sent0) /\
     Seq.equal raw_received (B.append delta_received0 tail_received0) /\
-    CS.conn_events_raw_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       m1
       tail0
       tail_sent0
@@ -1303,7 +1305,7 @@ let lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
       CS.event_raw_delta_legal m1 ev1 delta_sent1 delta_received1 /\
       Seq.equal tail_sent0 (B.append delta_sent1 tail_sent1) /\
       Seq.equal tail_received0 (B.append delta_received1 tail_received1) /\
-      CS.conn_events_raw_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         m2
         (ev2 :: rest)
         tail_sent1
@@ -1338,7 +1340,7 @@ let lemma_server_select_parameters_matches_received_client_hello_from_raw_replay
         CS.event_raw_delta_legal m2 ev2 delta_sent2 delta_received2 /\
         Seq.equal tail_sent1 (B.append delta_sent2 tail_sent2) /\
         Seq.equal tail_received1 (B.append delta_received2 tail_received2) /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           m3
           rest
           tail_sent2
@@ -1427,7 +1429,7 @@ let lemma_server_finished_shape_tls_message_projections
             ] /\
         PNTSS.server_no_tail_two_handshake_install_cover e5 e6)
       (ensures
-        CS.sent_tls_messages server_trace ==
+        TLS13.Spec.StateMachine.Log.sent_tls_messages server_trace ==
           [
             M.TlsHandshake (M.ServerHello sh);
             M.TlsHandshake (M.EncryptedExtensions ee);
@@ -1435,7 +1437,7 @@ let lemma_server_finished_shape_tls_message_projections
             M.TlsHandshake (M.CertificateVerify cv);
             M.TlsHandshake (M.Finished sf)
           ] /\
-        CS.received_tls_messages server_trace ==
+        TLS13.Spec.StateMachine.Log.received_tls_messages server_trace ==
           [
             M.TlsHandshake (M.ClientHello ch);
             M.TlsHandshake (M.Finished cf)
@@ -1506,7 +1508,7 @@ let lemma_server_finished_shape_tls_message_projections
              });
            CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
          ]);
-       assert_norm (CS.sent_tls_messages
+       assert_norm (TLS13.Spec.StateMachine.Log.sent_tls_messages
          [
           CS.ConnLocalEvent CS.LocalStartServer;
           CS.ConnNetworkEvent {
@@ -1569,7 +1571,7 @@ let lemma_server_finished_shape_tls_message_projections
            M.TlsHandshake (M.CertificateVerify cv);
            M.TlsHandshake (M.Finished sf)
          ]);
-       assert_norm (CS.received_tls_messages
+       assert_norm (TLS13.Spec.StateMachine.Log.received_tls_messages
          [
           CS.ConnLocalEvent CS.LocalStartServer;
           CS.ConnNetworkEvent {
@@ -1629,7 +1631,7 @@ let lemma_server_finished_shape_tls_message_projections
            M.TlsHandshake (M.ClientHello ch);
            M.TlsHandshake (M.Finished cf)
          ]);
-       assert (CS.sent_tls_messages server_trace ==
+       assert (TLS13.Spec.StateMachine.Log.sent_tls_messages server_trace ==
          [
           M.TlsHandshake (M.ServerHello sh);
           M.TlsHandshake (M.EncryptedExtensions ee);
@@ -1637,7 +1639,7 @@ let lemma_server_finished_shape_tls_message_projections
           M.TlsHandshake (M.CertificateVerify cv);
           M.TlsHandshake (M.Finished sf)
          ]);
-       assert (CS.received_tls_messages server_trace ==
+       assert (TLS13.Spec.StateMachine.Log.received_tls_messages server_trace ==
          [
           M.TlsHandshake (M.ClientHello ch);
           M.TlsHandshake (M.Finished cf)
@@ -1774,8 +1776,8 @@ let lemma_server_finished_shape_model_slots_from_event_log
         server.CS.cs_model.CS.model_handshake.CS.hs_server_finished == Some sf /\
         server.CS.cs_model.CS.model_handshake.CS.hs_client_finished == Some cf)
 =
-  assert (CS.connection_state_event_log_consistent server);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Log.connection_state_event_log_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   PNTSS.lemma_server_no_tail_two_handshake_install_cover_cases e5 e6;
   assert (server_semantic_handshake_install_event e5);
   assert (server_semantic_handshake_install_event e6);
@@ -1866,9 +1868,9 @@ let lemma_server_finished_shape_model_slots_from_event_log
   let tail0 = ev1 :: tail1 in
   lemma_server_cleartext_prefix_append ch selection server_shared sh tail4;
   assert (server.CS.cs_event_log == ev0 :: tail0);
-  assert (CS.step_model_many m0 (ev0 :: tail0) == Some final_model);
+  assert (TLS13.Spec.StateMachine.Reachability.step_model_many m0 (ev0 :: tail0) == Some final_model);
   assert
-    (CS.conn_events_raw_replay
+    (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       m0
       (ev0 :: tail0)
       server.CS.cs_wire_log.CL.raw_sent
@@ -2021,7 +2023,7 @@ let lemma_server_finished_shape_model_slots_from_event_log
   assert (m16.CS.model_handshake.CS.hs_certificate_verify == Some cv);
   assert (m16.CS.model_handshake.CS.hs_server_finished == Some sf);
   assert (m16.CS.model_handshake.CS.hs_client_finished == Some cf);
-  assert_norm (CS.step_model_many m16 [] == Some m16);
+  assert_norm (TLS13.Spec.StateMachine.Reachability.step_model_many m16 [] == Some m16);
   assert (m16 == final_model)
 #pop-options
 
@@ -2421,23 +2423,23 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
     Pairing.paired_handshake_message_states client server
   with _.
   ( assert
-      (CS.sent_tls_messages client_trace ==
+      (TLS13.Spec.StateMachine.Log.sent_tls_messages client_trace ==
         [
           M.TlsHandshake (M.ClientHello c_ch);
           M.TlsHandshake (M.Finished c_cf)
         ]);
     assert
-      (CS.received_tls_messages server_trace ==
+      (TLS13.Spec.StateMachine.Log.received_tls_messages server_trace ==
         [
           M.TlsHandshake (M.ClientHello s_ch);
           M.TlsHandshake (M.Finished s_cf)
         ]);
     assert
-      (CS.tls_messages_correspond
-        (CS.sent_tls_messages client_trace)
-        (CS.received_tls_messages server_trace));
+      (TLS13.Spec.StateMachine.Correspondence.tls_messages_correspond
+        (TLS13.Spec.StateMachine.Log.sent_tls_messages client_trace)
+        (TLS13.Spec.StateMachine.Log.received_tls_messages server_trace));
     assert
-      (CS.tls_messages_correspond
+      (TLS13.Spec.StateMachine.Correspondence.tls_messages_correspond
        [
         M.TlsHandshake (M.ClientHello c_ch);
         M.TlsHandshake (M.Finished c_cf)
@@ -2446,20 +2448,20 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
         M.TlsHandshake (M.ClientHello s_ch);
         M.TlsHandshake (M.Finished s_cf)
        ]);
-    CS.lemma_tls_messages_correspond_two_handshakes
+    TLS13.Spec.StateMachine.Correspondence.lemma_tls_messages_correspond_two_handshakes
       (M.ClientHello c_ch)
       (M.Finished c_cf)
       (M.ClientHello s_ch)
       (M.Finished s_cf);
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.ClientHello c_ch)
       (M.ClientHello s_ch));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Finished c_cf)
       (M.Finished s_cf));
-    assert (CS.client_hello_corresponds c_ch s_ch);
+    assert (TLS13.Spec.StateMachine.Correspondence.client_hello_corresponds c_ch s_ch);
     assert
-      (CS.sent_tls_messages server_trace ==
+      (TLS13.Spec.StateMachine.Log.sent_tls_messages server_trace ==
         [
           M.TlsHandshake (M.ServerHello s_sh);
           M.TlsHandshake (M.EncryptedExtensions s_ee);
@@ -2468,7 +2470,7 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
           M.TlsHandshake (M.Finished s_sf)
         ]);
     assert
-      (CS.received_tls_messages client_trace ==
+      (TLS13.Spec.StateMachine.Log.received_tls_messages client_trace ==
         [
           M.TlsHandshake (M.ServerHello c_sh);
           M.TlsHandshake (M.EncryptedExtensions c_ee);
@@ -2477,11 +2479,11 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
           M.TlsHandshake (M.Finished c_sf)
         ]);
     assert
-      (CS.tls_messages_correspond
-        (CS.sent_tls_messages server_trace)
-        (CS.received_tls_messages client_trace));
+      (TLS13.Spec.StateMachine.Correspondence.tls_messages_correspond
+        (TLS13.Spec.StateMachine.Log.sent_tls_messages server_trace)
+        (TLS13.Spec.StateMachine.Log.received_tls_messages client_trace));
     assert
-      (CS.tls_messages_correspond
+      (TLS13.Spec.StateMachine.Correspondence.tls_messages_correspond
        [
         M.TlsHandshake (M.ServerHello s_sh);
         M.TlsHandshake (M.EncryptedExtensions s_ee);
@@ -2496,7 +2498,7 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
         M.TlsHandshake (M.CertificateVerify c_cv);
         M.TlsHandshake (M.Finished c_sf)
        ]);
-    CS.lemma_tls_messages_correspond_five_handshakes
+    TLS13.Spec.StateMachine.Correspondence.lemma_tls_messages_correspond_five_handshakes
       (M.ServerHello s_sh)
       (M.EncryptedExtensions s_ee)
       (M.Certificate s_cert)
@@ -2507,49 +2509,49 @@ let lemma_paired_successful_no_tail_semantic_traces_paired_handshake_message_sta
       (M.Certificate c_cert)
       (M.CertificateVerify c_cv)
       (M.Finished c_sf);
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.ServerHello s_sh)
       (M.ServerHello c_sh));
-    CS.lemma_handshake_msg_corresponds_sym
+    TLS13.Spec.StateMachine.Correspondence.lemma_handshake_msg_corresponds_sym
       (M.ServerHello s_sh)
       (M.ServerHello c_sh);
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.ServerHello c_sh)
       (M.ServerHello s_sh));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.EncryptedExtensions s_ee)
       (M.EncryptedExtensions c_ee));
-    CS.lemma_handshake_msg_corresponds_sym
+    TLS13.Spec.StateMachine.Correspondence.lemma_handshake_msg_corresponds_sym
       (M.EncryptedExtensions s_ee)
       (M.EncryptedExtensions c_ee);
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.EncryptedExtensions c_ee)
       (M.EncryptedExtensions s_ee));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Certificate s_cert)
       (M.Certificate c_cert));
-    CS.lemma_handshake_msg_corresponds_sym
+    TLS13.Spec.StateMachine.Correspondence.lemma_handshake_msg_corresponds_sym
       (M.Certificate s_cert)
       (M.Certificate c_cert);
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Certificate c_cert)
       (M.Certificate s_cert));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.CertificateVerify s_cv)
       (M.CertificateVerify c_cv));
-    CS.lemma_handshake_msg_corresponds_sym
+    TLS13.Spec.StateMachine.Correspondence.lemma_handshake_msg_corresponds_sym
       (M.CertificateVerify s_cv)
       (M.CertificateVerify c_cv);
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.CertificateVerify c_cv)
       (M.CertificateVerify s_cv));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Finished s_sf)
       (M.Finished c_sf));
-    CS.lemma_handshake_msg_corresponds_sym
+    TLS13.Spec.StateMachine.Correspondence.lemma_handshake_msg_corresponds_sym
       (M.Finished s_sf)
       (M.Finished c_sf);
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Finished c_sf)
       (M.Finished s_sf));
     assert
@@ -2609,13 +2611,13 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
           client_trace
           server_trace)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -2641,13 +2643,13 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
           client_trace
           server_trace)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -2690,7 +2692,7 @@ let lemma_application_data_step_preserves_handshake_message_slots
       (requires
         model.CS.model_control == CS.ControlApplicationData /\
         CS.legal_event model ev /\
-        CS.conn_event_is_key_update ev == false /\
+        TLS13.Spec.StateMachine.Correspondence.conn_event_is_key_update ev == false /\
         conn_event_is_ccs ev == false /\
         CS.step_model model ev == Some model1 /\
         model1.CS.model_control == CS.ControlApplicationData)
@@ -2721,7 +2723,7 @@ let lemma_application_data_step_preserves_handshake_message_slots
           assert_norm (CS.step_model model ev == None);
           assert False)
      | M.TlsKeyUpdate _ ->
-       assert_norm (CS.conn_event_is_key_update ev == true);
+       assert_norm (TLS13.Spec.StateMachine.Correspondence.conn_event_is_key_update ev == true);
        assert False
      | M.TlsAlert alert ->
        (match alert with
@@ -2819,12 +2821,12 @@ let lemma_paired_handshake_message_states_preserved_by_application_suffixes
     client_prefix.CS.cs_model.CS.model_handshake);
   assert (server.CS.cs_model.CS.model_handshake ==
     server_prefix.CS.cs_model.CS.model_handshake);
-  assert (CS.same_transcript_checkpoint CS.TH_CH client server);
-  assert (CS.same_transcript_checkpoint CS.TH_SH client server);
-  assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
-  assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
-  assert (CS.same_transcript_checkpoint CS.TH_SF client server);
-  assert (CS.same_transcript_checkpoint CS.TH_CF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CH client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SH client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_CV client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_SF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CF client server);
   assert (Pairing.paired_handshake_message_states client server);
   assert (Pairing.paired_handshake_events client server)
 
@@ -2837,13 +2839,13 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
           client
           server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -2862,13 +2864,13 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
           client
           server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -2889,13 +2891,13 @@ let lemma_client_server_application_record_material_agrees_from_paired_successfu
       server_prefix
       server_suffix
   returns
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.

@@ -9,7 +9,7 @@ module TLS13.Impl.Client.FragmentBound
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module R = TLS13.Record.Spec

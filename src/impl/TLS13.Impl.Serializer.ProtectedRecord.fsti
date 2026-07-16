@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module Rec = TLS13.Record
@@ -38,11 +38,11 @@ fn serialize_protected_handshake_record
                  SZ.v handshake_len + 22 <= SZ.v network_out_len /\
                  Some? (R.seal
                    (Ghost.reveal record_write)
-                   (CS.application_data_record_header (SZ.v handshake_len + 17))
+                   (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17))
                    {
                      R.content_type = T.Application_data;
                      R.fragment =
-                       CS.sent_tls_inner_plaintext_fragment
+                       TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
                          (M.TlsHandshake (Ghost.reveal msg));
                    }))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
@@ -59,15 +59,15 @@ fn serialize_protected_handshake_record
                      Some (T.Application_data, outer_fragment, B.length raw_prefix) /\
                    Seq.equal raw_prefix (WS.serialize_record T.Application_data outer_fragment) /\
                    Seq.equal
-                     (CS.record_header_aad raw_prefix)
-                     (CS.application_data_record_header (SZ.v handshake_len + 17)) /\
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                     (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17)) /\
                    R.seal
                      (Ghost.reveal record_write)
-                     (CS.record_header_aad raw_prefix)
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
                      {
                        R.content_type = T.Application_data;
                        R.fragment =
-                         CS.sent_tls_inner_plaintext_fragment
+                         TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
                            (M.TlsHandshake (Ghost.reveal msg));
                      } ==
                      Some (outer_fragment, R.next_seq (Ghost.reveal record_write)))))

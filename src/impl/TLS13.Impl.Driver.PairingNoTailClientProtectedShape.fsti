@@ -8,7 +8,7 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CD = TLS13.Impl.Client.Driver
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 
@@ -170,7 +170,7 @@ val lemma_client_no_tail_model8_witness
           FStar.List.Tot.length rest4 == 8 /\
           PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
           client_after_certificate_model model8 /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model8
             rest4
             tail_sent

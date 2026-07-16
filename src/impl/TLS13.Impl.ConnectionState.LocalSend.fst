@@ -10,7 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
@@ -30,7 +30,7 @@ module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -507,20 +507,20 @@ fn try_send_client_finished
     fold (IM.is_valid_finished lfin (Ghost.reveal fin));
     lemma_seal_some_of_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
-      (CS.application_data_record_header 53)
+      (TLS13.Spec.StateMachine.Canonical.application_data_record_header 53)
       {
         R.content_type = T.Application_data;
         R.fragment =
-          CS.sent_tls_inner_plaintext_fragment
+          TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
             (M.TlsHandshake (M.Finished (Ghost.reveal fin)));
       };
     assert (pure (Some? (R.seal
       st0.CS.cs_model.CS.model_record.CS.record_write
-      (CS.application_data_record_header 53)
+      (TLS13.Spec.StateMachine.Canonical.application_data_record_header 53)
       {
         R.content_type = T.Application_data;
         R.fragment =
-          CS.sent_tls_inner_plaintext_fragment
+          TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
             (M.TlsHandshake (M.Finished (Ghost.reveal fin)));
       })));
 
@@ -616,7 +616,7 @@ fn mark_sent_application_data_after_record_advanced
            application_exactly c.application st0.CS.cs_model.CS.model_application **
            ArrPts.pts_to payload 'payload_bytes **
            ArrPts.pts_to network_out 'network_out_bytes **
-           pure (CS.connection_state_consistent st0 /\
+           pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0 /\
                  B.length 'payload_bytes == SZ.v payload_len /\
                  can_send_application_data
                    st0
@@ -644,7 +644,7 @@ fn mark_sent_application_data_after_record_advanced
   assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
 
   unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
-  assert (pure (CS.pending_application_consistent
+  assert (pure (TLS13.Spec.StateMachine.Correspondence.pending_application_consistent
     (sent_application_data_state
       st0
       (Ghost.reveal 'payload_bytes)
@@ -756,7 +756,7 @@ fn mark_sent_close_notify_after_record_advanced
            handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake **
            application_exactly c.application st0.CS.cs_model.CS.model_application **
            ArrPts.pts_to network_out 'network_out_bytes **
-           pure (CS.connection_state_consistent st0 /\
+           pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0 /\
                  can_send_close_notify
                    st0
                    (Ghost.reveal raw_sent) /\
@@ -1093,7 +1093,7 @@ fn try_send_application_data
         })));
       W.lemma_serialize_tls_message_application_data (Ghost.reveal 'payload_bytes);
       assert (pure (
-        CS.sent_tls_inner_plaintext_fragment
+        TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
           (M.TlsApplicationData (Ghost.reveal 'payload_bytes)) ==
         W.serialize_plaintext {
           M.content_type = T.Application_data;
@@ -1101,29 +1101,29 @@ fn try_send_application_data
         }));
       assert (pure (Seq.equal
         inner_plaintext_bytes
-        (CS.sent_tls_inner_plaintext_fragment
+        (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
           (M.TlsApplicationData (Ghost.reveal 'payload_bytes)))));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.application_data_record_header (SZ.v ciphertext_len))));
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
       assert (pure (Seq.equal
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
-        (CS.application_data_record_header (SZ.v ciphertext_len))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
       Seq.lemma_eq_elim
         aad_bytes
-        (CS.application_data_record_header (SZ.v ciphertext_len));
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len));
       Seq.lemma_eq_elim
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
-        (CS.application_data_record_header (SZ.v ciphertext_len));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
       Seq.lemma_eq_elim
         (Ghost.reveal raw_sent)
         (Seq.slice network_out_bytes 0 (SZ.v written));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.record_header_aad (Ghost.reveal raw_sent))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Ghost.reveal raw_sent))));
       CSL.lemma_sent_event_seal_projection_intro
         st0.CS.cs_model
         (M.TlsApplicationData (Ghost.reveal 'payload_bytes))
@@ -1131,7 +1131,7 @@ fn try_send_application_data
         aad_bytes
         inner_plaintext_bytes
         ciphertext_bytes;
-      assert (pure (CS.sent_event_seal_projection
+      assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
         st0.CS.cs_model
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
@@ -1378,35 +1378,35 @@ fn try_send_close_notify
         })));
       W.lemma_serialize_tls_message_close_notify ();
       assert (pure (
-        CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.Close_notify) ==
+        TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsAlert T.Close_notify) ==
         W.serialize_plaintext {
           M.content_type = T.Alert;
           M.fragment = B.of_list [2uy; 0uy];
         }));
       assert (pure (Seq.equal
         inner_plaintext_bytes
-        (CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.Close_notify))));
+        (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsAlert T.Close_notify))));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.application_data_record_header (SZ.v ciphertext_len))));
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
       assert (pure (Seq.equal
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
-        (CS.application_data_record_header (SZ.v ciphertext_len))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
       Seq.lemma_eq_elim
         aad_bytes
-        (CS.application_data_record_header (SZ.v ciphertext_len));
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len));
       Seq.lemma_eq_elim
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
-        (CS.application_data_record_header (SZ.v ciphertext_len));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
       Seq.lemma_eq_elim
         (Ghost.reveal raw_sent)
         (Seq.slice network_out_bytes 0 (SZ.v written));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.record_header_aad (Ghost.reveal raw_sent))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Ghost.reveal raw_sent))));
       CSL.lemma_sent_event_seal_projection_intro
         st0.CS.cs_model
         (M.TlsAlert T.Close_notify)
@@ -1414,7 +1414,7 @@ fn try_send_close_notify
         aad_bytes
         inner_plaintext_bytes
         ciphertext_bytes;
-      assert (pure (CS.sent_event_seal_projection
+      assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
         st0.CS.cs_model
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
@@ -1662,7 +1662,7 @@ fn try_send_key_update
         })));
       W.lemma_serialize_tls_message_key_update_not_requested ();
       assert (pure (
-        CS.sent_tls_inner_plaintext_fragment
+        TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
           (M.TlsKeyUpdate M.UpdateNotRequested) ==
         W.serialize_plaintext {
           M.content_type = T.Handshake;
@@ -1670,29 +1670,29 @@ fn try_send_key_update
         }));
       assert (pure (Seq.equal
         inner_plaintext_bytes
-        (CS.sent_tls_inner_plaintext_fragment
+        (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
           (M.TlsKeyUpdate M.UpdateNotRequested))));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.application_data_record_header (SZ.v ciphertext_len))));
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
       assert (pure (Seq.equal
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
-        (CS.application_data_record_header (SZ.v ciphertext_len))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
       Seq.lemma_eq_elim
         aad_bytes
-        (CS.application_data_record_header (SZ.v ciphertext_len));
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len));
       Seq.lemma_eq_elim
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
-        (CS.application_data_record_header (SZ.v ciphertext_len));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
       Seq.lemma_eq_elim
         (Ghost.reveal raw_sent)
         (Seq.slice network_out_bytes 0 (SZ.v written));
       assert (pure (Seq.equal
         aad_bytes
-        (CS.record_header_aad (Ghost.reveal raw_sent))));
+        (TLS13.Spec.StateMachine.Canonical.record_header_aad (Ghost.reveal raw_sent))));
       CSL.lemma_sent_event_seal_projection_intro
         st0.CS.cs_model
         (M.TlsKeyUpdate M.UpdateNotRequested)
@@ -1700,7 +1700,7 @@ fn try_send_key_update
         aad_bytes
         inner_plaintext_bytes
         ciphertext_bytes;
-      assert (pure (CS.sent_event_seal_projection
+      assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
         st0.CS.cs_model
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
@@ -1902,7 +1902,7 @@ fn try_send_key_update
                     st0.CS.cs_model.CS.model_application.CS.app_pending_source_offset));
       assert (pure ((sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_application.CS.app_pending_received_raw ==
                     st0.CS.cs_model.CS.model_application.CS.app_pending_received_raw));
-      assert (pure (CS.pending_application_consistent
+      assert (pure (TLS13.Spec.StateMachine.Correspondence.pending_application_consistent
         (sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_application));
       fold (application_exactly
         c.application

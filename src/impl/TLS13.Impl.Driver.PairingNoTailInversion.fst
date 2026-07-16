@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module CL = TLS13.ConnectionLog
 module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
@@ -38,7 +38,7 @@ let rec lemma_conn_events_raw_replay_from_failed_results_failed
   : Lemma
       (requires
         CS.ControlFailed? model.CS.model_control /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           events
           raw_sent
@@ -52,21 +52,21 @@ let rec lemma_conn_events_raw_replay_from_failed_results_failed
     assert (final_model == model)
   | ev :: rest ->
     assert_norm (
-      CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
       (exists model1 delta_sent delta_received tail_sent tail_received.
         CS.legal_event model ev /\
         CS.step_model model ev == Some model1 /\
         CS.event_raw_delta_legal model ev delta_sent delta_received /\
         Seq.equal raw_sent (B.append delta_sent tail_sent) /\
         Seq.equal raw_received (B.append delta_received tail_received) /\
-        CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
     eliminate exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
     returns
       CS.ControlFailed? final_model.CS.model_control
     with _.
@@ -918,8 +918,8 @@ let lemma_client_application_ready_progress_rank_zero
 =
   let keys = client.CS.cs_model.CS.model_handshake.CS.hs_keys in
   CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
-  assert (CS.stable_client_x25519_key_share_projection client);
-  assert (CS.client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.stable_client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.client_x25519_key_share_projection client);
   assert (CS.application_record_keys_installed_for_role
     CS.ClientEndpoint
     client.CS.cs_model);
@@ -1197,7 +1197,7 @@ let rec lemma_client_application_progress_rank_replay_lower_bound
   : Lemma
       (requires
         model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        CS.conn_events_raw_replay model events raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model events raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         client_application_progress_rank final_model == 0)
       (ensures
@@ -1209,21 +1209,21 @@ let rec lemma_client_application_progress_rank_replay_lower_bound
     assert (final_model == model)
   | ev :: rest ->
     assert_norm (
-      CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
       (exists model1 delta_sent delta_received tail_sent tail_received.
         CS.legal_event model ev /\
         CS.step_model model ev == Some model1 /\
         CS.event_raw_delta_legal model ev delta_sent delta_received /\
         Seq.equal raw_sent (B.append delta_sent tail_sent) /\
         Seq.equal raw_received (B.append delta_received tail_received) /\
-        CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
     eliminate exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
     returns
       client_application_progress_rank model <= FStar.List.Tot.length (ev :: rest)
     with _.
@@ -1274,7 +1274,7 @@ let lemma_client_post_derive_next_event_handshake_traffic_install
         model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           (ev :: rest)
           raw_sent
@@ -1288,21 +1288,21 @@ let lemma_client_post_derive_next_event_handshake_traffic_install
   lemma_client_hs_server_hello_received_derived_no_traffic_progress_rank model;
   assert (client_application_progress_rank model == 12);
   assert_norm (
-    CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
     (exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
   eliminate exists model1 delta_sent delta_received tail_sent tail_received.
     CS.legal_event model ev /\
     CS.step_model model ev == Some model1 /\
     CS.event_raw_delta_legal model ev delta_sent delta_received /\
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
-    CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
   returns
     client_no_tail_handshake_traffic_install_event ev
   with _.
@@ -1687,9 +1687,9 @@ let lemma_client_no_tail_first_event_start
   with _.
   (
     assert (CT.client_end_to_end_invariant client);
-    assert (CS.connection_state_raw_event_replay_consistent client);
+    assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
     let initial = CS.initial_model client.CS.cs_model.CS.model_config in
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       initial
       client.CS.cs_event_log
       client.CS.cs_wire_log.CL.raw_sent
@@ -1697,14 +1697,14 @@ let lemma_client_no_tail_first_event_start
       client.CS.cs_model);
     assert (client.CS.cs_event_log ==
       e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       initial
       (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
       client.CS.cs_wire_log.CL.raw_sent
       client.CS.cs_wire_log.CL.raw_received
       client.CS.cs_model);
     assert_norm (
-      CS.conn_events_raw_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         initial
         (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
         client.CS.cs_wire_log.CL.raw_sent
@@ -1720,7 +1720,7 @@ let lemma_client_no_tail_first_event_start
         Seq.equal
           client.CS.cs_wire_log.CL.raw_received
           (B.append delta_received tail_received) /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model1
           [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
           tail_sent
@@ -1736,7 +1736,7 @@ let lemma_client_no_tail_first_event_start
       Seq.equal
         client.CS.cs_wire_log.CL.raw_received
         (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         model1
         [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
         tail_sent
@@ -1830,9 +1830,9 @@ let lemma_server_no_tail_first_event_start
   with _.
   (
    assert (ST.server_end_to_end_invariant server);
-   assert (CS.connection_state_raw_event_replay_consistent server);
+   assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
    let initial = CS.initial_model server.CS.cs_model.CS.model_config in
-   assert (CS.conn_events_raw_replay
+   assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
      initial
      server.CS.cs_event_log
      server.CS.cs_wire_log.CL.raw_sent
@@ -1840,14 +1840,14 @@ let lemma_server_no_tail_first_event_start
      server.CS.cs_model);
    assert (server.CS.cs_event_log ==
      e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]);
-   assert (CS.conn_events_raw_replay
+   assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
      initial
      (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14])
      server.CS.cs_wire_log.CL.raw_sent
      server.CS.cs_wire_log.CL.raw_received
      server.CS.cs_model);
    assert_norm (
-     CS.conn_events_raw_replay
+     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
        initial
        (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14])
        server.CS.cs_wire_log.CL.raw_sent
@@ -1863,7 +1863,7 @@ let lemma_server_no_tail_first_event_start
        Seq.equal
          server.CS.cs_wire_log.CL.raw_received
          (B.append delta_received tail_received) /\
-       CS.conn_events_raw_replay
+       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
          model1
          [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
          tail_sent
@@ -1879,7 +1879,7 @@ let lemma_server_no_tail_first_event_start
      Seq.equal
        server.CS.cs_wire_log.CL.raw_received
        (B.append delta_received tail_received) /\
-     CS.conn_events_raw_replay
+     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
        model1
        [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
        tail_sent
@@ -1973,9 +1973,9 @@ let lemma_server_no_tail_first_event_start16
   with _.
   (
    assert (ST.server_end_to_end_invariant server);
-   assert (CS.connection_state_raw_event_replay_consistent server);
+   assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
    let initial = CS.initial_model server.CS.cs_model.CS.model_config in
-   assert (CS.conn_events_raw_replay
+   assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
      initial
      server.CS.cs_event_log
      server.CS.cs_wire_log.CL.raw_sent
@@ -1983,14 +1983,14 @@ let lemma_server_no_tail_first_event_start16
      server.CS.cs_model);
    assert (server.CS.cs_event_log ==
      e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
-   assert (CS.conn_events_raw_replay
+   assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
      initial
      (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
      server.CS.cs_wire_log.CL.raw_sent
      server.CS.cs_wire_log.CL.raw_received
      server.CS.cs_model);
    assert_norm (
-     CS.conn_events_raw_replay
+     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
        initial
        (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
        server.CS.cs_wire_log.CL.raw_sent
@@ -2006,7 +2006,7 @@ let lemma_server_no_tail_first_event_start16
        Seq.equal
          server.CS.cs_wire_log.CL.raw_received
          (B.append delta_received tail_received) /\
-       CS.conn_events_raw_replay
+       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
          model1
          [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
          tail_sent
@@ -2022,7 +2022,7 @@ let lemma_server_no_tail_first_event_start16
      Seq.equal
        server.CS.cs_wire_log.CL.raw_received
        (B.append delta_received tail_received) /\
-     CS.conn_events_raw_replay
+     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
        model1
        [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
        tail_sent
@@ -2160,9 +2160,9 @@ let lemma_client_no_tail_second_event_client_hello
         m.CL.message_value == M.TlsChangeCipherSpec));
 
       assert (CT.client_end_to_end_invariant client);
-      assert (CS.connection_state_raw_event_replay_consistent client);
+      assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
       let initial = CS.initial_model client.CS.cs_model.CS.model_config in
-      assert (CS.conn_events_raw_replay
+      assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         initial
         client.CS.cs_event_log
         client.CS.cs_wire_log.CL.raw_sent
@@ -2171,7 +2171,7 @@ let lemma_client_no_tail_second_event_client_hello
       assert (client.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
       assert_norm (
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           initial
           (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
           client.CS.cs_wire_log.CL.raw_sent
@@ -2187,7 +2187,7 @@ let lemma_client_no_tail_second_event_client_hello
           Seq.equal
             client.CS.cs_wire_log.CL.raw_received
             (B.append delta_received0 tail_received0) /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model1
             [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
             tail_sent0
@@ -2203,7 +2203,7 @@ let lemma_client_no_tail_second_event_client_hello
         Seq.equal
           client.CS.cs_wire_log.CL.raw_received
           (B.append delta_received0 tail_received0) /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model1
           [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
           tail_sent0
@@ -2242,7 +2242,7 @@ let lemma_client_no_tail_second_event_client_hello
         assert (model1.CS.model_config == initial.CS.model_config);
 
         assert_norm (
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model1
             [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
             tail_sent0
@@ -2258,7 +2258,7 @@ let lemma_client_no_tail_second_event_client_hello
             Seq.equal
               tail_received0
               (B.append delta_received1 tail_received1) /\
-            CS.conn_events_raw_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
               model2
               [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
               tail_sent1
@@ -2274,7 +2274,7 @@ let lemma_client_no_tail_second_event_client_hello
           Seq.equal
             tail_received0
             (B.append delta_received1 tail_received1) /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model2
             [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
             tail_sent1
@@ -2475,10 +2475,10 @@ let lemma_client_no_tail_second_event_not_ccs
           (match msg.CL.message_value with
            | M.TlsChangeCipherSpec ->
              assert (CT.client_end_to_end_invariant client);
-             assert (CS.connection_state_raw_event_replay_consistent client);
+             assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
              lemma_client_application_ready_progress_rank_zero client;
              let initial = CS.initial_model client.CS.cs_model.CS.model_config in
-             assert (CS.conn_events_raw_replay
+             assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                initial
                client.CS.cs_event_log
                client.CS.cs_wire_log.CL.raw_sent
@@ -2487,7 +2487,7 @@ let lemma_client_no_tail_second_event_not_ccs
              assert (client.CS.cs_event_log ==
                e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
              assert_norm (
-               CS.conn_events_raw_replay
+               TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                  initial
                  (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
                  client.CS.cs_wire_log.CL.raw_sent
@@ -2503,7 +2503,7 @@ let lemma_client_no_tail_second_event_not_ccs
                  Seq.equal
                    client.CS.cs_wire_log.CL.raw_received
                    (B.append delta_received0 tail_received0) /\
-                 CS.conn_events_raw_replay
+                 TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                    model1
                    [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                    tail_sent0
@@ -2519,7 +2519,7 @@ let lemma_client_no_tail_second_event_not_ccs
                Seq.equal
                  client.CS.cs_wire_log.CL.raw_received
                  (B.append delta_received0 tail_received0) /\
-               CS.conn_events_raw_replay
+               TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                  model1
                  [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                  tail_sent0
@@ -2555,7 +2555,7 @@ let lemma_client_no_tail_second_event_not_ccs
                assert (model1.CS.model_control == CS.ControlHandshaking CS.HsStarted);
                assert (model1.CS.model_config == initial.CS.model_config);
                assert_norm (
-                 CS.conn_events_raw_replay
+                 TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                    model1
                    [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                    tail_sent0
@@ -2571,7 +2571,7 @@ let lemma_client_no_tail_second_event_not_ccs
                    Seq.equal
                      tail_received0
                      (B.append delta_received1 tail_received1) /\
-                   CS.conn_events_raw_replay
+                   TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                      model2
                      [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                      tail_sent1
@@ -2587,7 +2587,7 @@ let lemma_client_no_tail_second_event_not_ccs
                  Seq.equal
                    tail_received0
                    (B.append delta_received1 tail_received1) /\
-                 CS.conn_events_raw_replay
+                 TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                    model2
                    [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                    tail_sent1
@@ -2731,10 +2731,10 @@ let lemma_client_no_tail_third_event_server_hello_clean
         assert (rest_after_ch == [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
 
         assert (CT.client_end_to_end_invariant client);
-        assert (CS.connection_state_raw_event_replay_consistent client);
+        assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
         lemma_client_application_ready_progress_rank_zero client;
         let initial = CS.initial_model client.CS.cs_model.CS.model_config in
-        assert (CS.conn_events_raw_replay
+        assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           initial
           client.CS.cs_event_log
           client.CS.cs_wire_log.CL.raw_sent
@@ -2743,7 +2743,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
         assert (client.CS.cs_event_log ==
           e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
         assert_norm (
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             initial
             (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
             client.CS.cs_wire_log.CL.raw_sent
@@ -2759,7 +2759,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
             Seq.equal
               client.CS.cs_wire_log.CL.raw_received
               (B.append delta_received0 tail_received0) /\
-            CS.conn_events_raw_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
               model1
               [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
               tail_sent0
@@ -2775,7 +2775,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
           Seq.equal
             client.CS.cs_wire_log.CL.raw_received
             (B.append delta_received0 tail_received0) /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model1
             [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
             tail_sent0
@@ -2818,7 +2818,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
           assert (model1.CS.model_config == initial.CS.model_config);
 
           assert_norm (
-            CS.conn_events_raw_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
               model1
               [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
               tail_sent0
@@ -2834,7 +2834,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
               Seq.equal
                 tail_received0
                 (B.append delta_received1 tail_received1) /\
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model2
                 [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                 tail_sent1
@@ -2850,7 +2850,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
             Seq.equal
               tail_received0
               (B.append delta_received1 tail_received1) /\
-            CS.conn_events_raw_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
               model2
               [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
               tail_sent1
@@ -2935,7 +2935,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
             assert (client_application_progress_rank model2 == 14);
 
             assert_norm (
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model2
                 [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                 tail_sent1
@@ -2951,7 +2951,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
                 Seq.equal
                   tail_received1
                   (B.append delta_received2 tail_received2) /\
-                CS.conn_events_raw_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   model3
                   [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                   tail_sent2
@@ -2967,7 +2967,7 @@ let lemma_client_no_tail_third_event_server_hello_clean
               Seq.equal
                 tail_received1
                 (B.append delta_received2 tail_received2) /\
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model3
                 [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                 tail_sent2
@@ -3216,17 +3216,17 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
         assert (rest_after_sh == [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
 
         assert (CT.client_end_to_end_invariant client);
-        assert (CS.connection_state_raw_event_replay_consistent client);
+        assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
         lemma_client_application_ready_progress_rank_zero client;
         let initial = CS.initial_model client.CS.cs_model.CS.model_config in
-        assert (CS.conn_events_raw_replay
+        assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           initial
           client.CS.cs_event_log
           client.CS.cs_wire_log.CL.raw_sent
           client.CS.cs_wire_log.CL.raw_received
           client.CS.cs_model);
         assert_norm (
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             initial
             (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
             client.CS.cs_wire_log.CL.raw_sent
@@ -3242,7 +3242,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
             Seq.equal
               client.CS.cs_wire_log.CL.raw_received
               (B.append delta_received0 tail_received0) /\
-            CS.conn_events_raw_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
               model1
               [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
               tail_sent0
@@ -3258,7 +3258,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
           Seq.equal
             client.CS.cs_wire_log.CL.raw_received
             (B.append delta_received0 tail_received0) /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model1
             [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
             tail_sent0
@@ -3302,7 +3302,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
           assert (model1.CS.model_config == initial.CS.model_config);
 
           assert_norm (
-            CS.conn_events_raw_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
               model1
               [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
               tail_sent0
@@ -3318,7 +3318,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
               Seq.equal
                 tail_received0
                 (B.append delta_received1 tail_received1) /\
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model2
                 [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                 tail_sent1
@@ -3334,7 +3334,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
             Seq.equal
               tail_received0
               (B.append delta_received1 tail_received1) /\
-            CS.conn_events_raw_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
               model2
               [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
               tail_sent1
@@ -3420,7 +3420,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
             assert (model2.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None);
 
             assert_norm (
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model2
                 [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                 tail_sent1
@@ -3436,7 +3436,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
                 Seq.equal
                   tail_received1
                   (B.append delta_received2 tail_received2) /\
-                CS.conn_events_raw_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   model3
                   [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                   tail_sent2
@@ -3452,7 +3452,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
               Seq.equal
                 tail_received1
                 (B.append delta_received2 tail_received2) /\
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model3
                 [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                 tail_sent2
@@ -3538,7 +3538,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
               assert (client_application_progress_rank model3 == 13);
 
               assert_norm (
-                CS.conn_events_raw_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   model3
                   [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                   tail_sent2
@@ -3554,7 +3554,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
                   Seq.equal
                     tail_received2
                     (B.append delta_received3 tail_received3) /\
-                  CS.conn_events_raw_replay
+                  TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                     model4
                     [e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                     tail_sent3
@@ -3570,7 +3570,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
                 Seq.equal
                   tail_received2
                   (B.append delta_received3 tail_received3) /\
-                CS.conn_events_raw_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   model4
                   [e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                   tail_sent3
@@ -3749,7 +3749,7 @@ let lemma_client_no_tail_model4_witness
                     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
                     model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
                     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-                    CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+                    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
                     client_application_progress_rank client.CS.cs_model == 0)
 =
             lemma_client_no_tail_log_spine16 client;
@@ -3782,7 +3782,7 @@ let lemma_client_no_tail_model4_witness
                 model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
                 model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
                 model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-                CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+                TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
                 client_application_progress_rank client.CS.cs_model == 0
             with _.
             (
@@ -3824,7 +3824,7 @@ let lemma_client_no_tail_model4_witness
                   model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
                   model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
                   model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-                  CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+                  TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
                   client_application_progress_rank client.CS.cs_model == 0
               with _.
               (
@@ -3843,17 +3843,17 @@ let lemma_client_no_tail_model4_witness
                 assert (rest_after_derive == [e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
 
                 assert (CT.client_end_to_end_invariant client);
-                assert (CS.connection_state_raw_event_replay_consistent client);
+                assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
                 lemma_client_application_ready_progress_rank_zero client;
                 let initial = CS.initial_model client.CS.cs_model.CS.model_config in
-                assert (CS.conn_events_raw_replay
+                assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   initial
                   client.CS.cs_event_log
                   client.CS.cs_wire_log.CL.raw_sent
                   client.CS.cs_wire_log.CL.raw_received
                   client.CS.cs_model);
                 assert_norm (
-                  CS.conn_events_raw_replay
+                  TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                     initial
                     (e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15])
                     client.CS.cs_wire_log.CL.raw_sent
@@ -3869,7 +3869,7 @@ let lemma_client_no_tail_model4_witness
                     Seq.equal
                       client.CS.cs_wire_log.CL.raw_received
                       (B.append delta_received0 tail_received0) /\
-                    CS.conn_events_raw_replay
+                    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                       model1
                       [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                       tail_sent0
@@ -3885,7 +3885,7 @@ let lemma_client_no_tail_model4_witness
                   Seq.equal
                     client.CS.cs_wire_log.CL.raw_received
                     (B.append delta_received0 tail_received0) /\
-                  CS.conn_events_raw_replay
+                  TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                     model1
                     [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                     tail_sent0
@@ -3916,7 +3916,7 @@ let lemma_client_no_tail_model4_witness
                     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
                     model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
                     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-                    CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+                    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
                     client_application_progress_rank client.CS.cs_model == 0
                 with _.
                 (
@@ -3935,7 +3935,7 @@ let lemma_client_no_tail_model4_witness
                       CS.HsStarted);
 
                   assert_norm (
-                    CS.conn_events_raw_replay
+                    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                       model1
                       [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                       tail_sent0
@@ -3947,7 +3947,7 @@ let lemma_client_no_tail_model4_witness
                       CS.event_raw_delta_legal model1 e1 delta_sent1 delta_received1 /\
                       Seq.equal tail_sent0 (B.append delta_sent1 tail_sent1) /\
                       Seq.equal tail_received0 (B.append delta_received1 tail_received1) /\
-                      CS.conn_events_raw_replay
+                      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                         model2
                         [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                         tail_sent1
@@ -3959,7 +3959,7 @@ let lemma_client_no_tail_model4_witness
                     CS.event_raw_delta_legal model1 e1 delta_sent1 delta_received1 /\
                     Seq.equal tail_sent0 (B.append delta_sent1 tail_sent1) /\
                     Seq.equal tail_received0 (B.append delta_received1 tail_received1) /\
-                    CS.conn_events_raw_replay
+                    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                       model2
                       [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                       tail_sent1
@@ -3990,7 +3990,7 @@ let lemma_client_no_tail_model4_witness
                       model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
                       model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
                       model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-                      CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+                      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
                       client_application_progress_rank client.CS.cs_model == 0
                   with _.
                   (
@@ -4038,7 +4038,7 @@ let lemma_client_no_tail_model4_witness
                     assert (model2.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None);
 
                     assert_norm (
-                      CS.conn_events_raw_replay
+                      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                         model2
                         [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                         tail_sent1
@@ -4050,7 +4050,7 @@ let lemma_client_no_tail_model4_witness
                         CS.event_raw_delta_legal model2 e2 delta_sent2 delta_received2 /\
                         Seq.equal tail_sent1 (B.append delta_sent2 tail_sent2) /\
                         Seq.equal tail_received1 (B.append delta_received2 tail_received2) /\
-                        CS.conn_events_raw_replay
+                        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                           model3
                           [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                           tail_sent2
@@ -4062,7 +4062,7 @@ let lemma_client_no_tail_model4_witness
                       CS.event_raw_delta_legal model2 e2 delta_sent2 delta_received2 /\
                       Seq.equal tail_sent1 (B.append delta_sent2 tail_sent2) /\
                       Seq.equal tail_received1 (B.append delta_received2 tail_received2) /\
-                      CS.conn_events_raw_replay
+                      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                         model3
                         [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                         tail_sent2
@@ -4093,7 +4093,7 @@ let lemma_client_no_tail_model4_witness
                         model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
                         model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
                         model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-                        CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+                        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
                         client_application_progress_rank client.CS.cs_model == 0
                     with _.
                     (
@@ -4141,7 +4141,7 @@ let lemma_client_no_tail_model4_witness
                       assert (model3.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None);
 
                       assert_norm (
-                        CS.conn_events_raw_replay
+                        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                           model3
                           [e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                           tail_sent2
@@ -4153,7 +4153,7 @@ let lemma_client_no_tail_model4_witness
                           CS.event_raw_delta_legal model3 e3 delta_sent3 delta_received3 /\
                           Seq.equal tail_sent2 (B.append delta_sent3 tail_sent3) /\
                           Seq.equal tail_received2 (B.append delta_received3 tail_received3) /\
-                          CS.conn_events_raw_replay
+                          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                             model4
                             [e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                             tail_sent3
@@ -4165,7 +4165,7 @@ let lemma_client_no_tail_model4_witness
                         CS.event_raw_delta_legal model3 e3 delta_sent3 delta_received3 /\
                         Seq.equal tail_sent2 (B.append delta_sent3 tail_sent3) /\
                         Seq.equal tail_received2 (B.append delta_received3 tail_received3) /\
-                        CS.conn_events_raw_replay
+                        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                           model4
                           [e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
                           tail_sent3
@@ -4196,7 +4196,7 @@ let lemma_client_no_tail_model4_witness
                           model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
                           model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
                           model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-                          CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+                          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
                           client_application_progress_rank client.CS.cs_model == 0
                       with _.
                       (
@@ -4224,7 +4224,7 @@ let lemma_client_no_tail_model4_witness
                         let rest : list CS.conn_event =
                           [e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15] in
                         assert_norm (FStar.List.Tot.length rest == 11);
-                        assert (CS.conn_events_raw_replay
+                        assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                           model4
                           (e4 :: rest)
                           tail_sent3
@@ -4299,7 +4299,7 @@ let lemma_client_no_tail_fifth_event_handshake_traffic_install_clean
     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
     model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-    CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
     client_application_progress_rank client.CS.cs_model == 0
   returns
     exists start ch sh client_shared e4 rest.

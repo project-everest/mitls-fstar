@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module CD = TLS13.Impl.Client.Driver
 module M = TLS13.Messages
 module Sem   = TLS13.Wire.Semantics
@@ -32,8 +34,8 @@ module WFL = TLS13.Spec.WireFormatLemmas
 #push-options "--split_queries always --z3rlimit 10"
 
 let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -65,8 +67,8 @@ let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
     server_sent;
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   eliminate exists
     client_start
     client_ch
@@ -119,25 +121,25 @@ let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
       client_rest == client.CS.cs_event_log /\
     FStar.Seq.equal server_suffix_sent client_suffix_received /\
     FStar.Seq.equal client_suffix_sent server_suffix_received /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       server_mid
       server_rest
       server_suffix_sent
       server_suffix_received
       server.CS.cs_model /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       server_mid
       server_rest
       server_suffix_sent
       server_suffix_received
       server.CS.cs_model /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       client_mid
       client_rest
       client_suffix_sent
       client_suffix_received
       client.CS.cs_model /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       client_mid
       client_rest
       client_suffix_sent
@@ -175,7 +177,7 @@ let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
         CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
       }) ::
       server_rest);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       client_model0
       (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
        CS.ConnNetworkEvent ({
@@ -191,7 +193,7 @@ let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
       client.CS.cs_wire_log.CL.raw_sent
       client.CS.cs_wire_log.CL.raw_received
       client.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -232,8 +234,8 @@ let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_staged_boundary_derivation_milestones
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -558,8 +560,8 @@ let lemma_normalized_replay_boundary_inputs_with_clean16_fragment_completions
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_normalized_staged_replay_boundary_from_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -594,8 +596,8 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_staged_replay_boundary_fr
   assert (PSNB.paired_supported_normalized_staged_replay_boundary client server)
 
 let lemma_clean16_no_tail_valid_byte_traces_normalized_projection_boundary_from_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -967,8 +969,8 @@ let lemma_clean16_projection_boundary_completion_from_cleartext_and_installed_re
     server
 
 let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_projection_boundary_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -988,13 +990,13 @@ let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_sent /\
         clean16_projection_boundary_completion client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -1012,8 +1014,8 @@ let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
     server
 
 let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_staged_boundary_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1033,13 +1035,13 @@ let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_sent /\
         clean16_staged_boundary_completion client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =

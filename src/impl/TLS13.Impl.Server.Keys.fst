@@ -10,7 +10,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
@@ -31,7 +31,7 @@ module O = TLS13.OpenSSL
 module P = TLS13.Impl.Parser
 module R = TLS13.Record.Spec
 module Ser = TLS13.Impl.Serializer
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module T = TLS13.Types
@@ -625,12 +625,12 @@ fn process_install_server_handshake_write_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
@@ -844,12 +844,12 @@ fn process_derive_and_install_server_handshake_write_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
@@ -1092,12 +1092,12 @@ fn process_install_client_handshake_read_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
@@ -1311,12 +1311,12 @@ fn process_derive_and_install_client_handshake_read_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
@@ -1559,12 +1559,12 @@ fn process_install_server_application_write_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
@@ -1784,12 +1784,12 @@ fn process_install_client_application_read_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
@@ -2003,12 +2003,12 @@ fn process_derive_and_install_server_application_write_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
@@ -2245,12 +2245,12 @@ fn process_derive_and_install_client_application_read_keys
     B.empty
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
-  assert_norm (CS.sent_event_seal_projection
+  assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
     B.empty);
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))

@@ -8,7 +8,9 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
+module ES = TLS13.Spec.Endpoint.Server
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CryptoSpec = TLS13.Crypto.Spec
@@ -16,7 +18,7 @@ module M = TLS13.Messages
 module W = TLS13.Wire.Spec
 module SS = TLS13.Impl.Server.Send
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module DL = TLS13.Impl.Server.Driver.Local
@@ -213,7 +215,7 @@ ghost fn server_driver_endpoint_connected_valid_byte_trace
             (Ghost.reveal canonical_received)
             (Ghost.reveal canonical_sent) **
           pure (WFSM.valid_byte_trace
-            (SP.server_system
+            (ES.server_system #CTypes.server_local_event
               (Ghost.reveal
                 (server_driver_canonical d).SP.canonical_server_initial))
             (Ghost.reveal canonical_received)
@@ -607,9 +609,9 @@ fn send_endpoint
            pure (exists (old_out:B.bytes)
                         (out_contents:B.bytes)
                         (wire_outputs:list CW.wire_message)
-                        (local_outputs:list CTypes.local_output).
+                        (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (SP.server_system
+               (ES.server_system #CTypes.server_local_event
                  (Ghost.reveal
                    (server_driver_canonical d).SP.canonical_server_initial))
                (server_driver_endpoint_send_event payload_bytes)
@@ -701,9 +703,9 @@ fn close_endpoint
            pure (exists (old_out:B.bytes)
                          (out_contents:B.bytes)
                          (wire_outputs:list CW.wire_message)
-                         (local_outputs:list CTypes.local_output).
+                         (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (SP.server_system
+               (ES.server_system #CTypes.server_local_event
                  (Ghost.reveal
                    (server_driver_canonical d).SP.canonical_server_initial))
                server_driver_endpoint_close_event

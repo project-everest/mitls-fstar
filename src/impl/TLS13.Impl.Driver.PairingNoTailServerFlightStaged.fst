@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -237,8 +239,8 @@ let lemma_server_post_server_hello_sent_certificate_verify_split
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_server_encrypted_flight_staged_milestone
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

@@ -8,7 +8,7 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CD = TLS13.Impl.Client.Driver
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -870,7 +870,7 @@ let lemma_client_after_server_finished_verified_next_event_application_install
   : Lemma
       (requires
         PNTCFS.client_after_server_finished_verified_model model /\
-        CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNI.client_application_progress_rank final_model == 0 /\
         FStar.List.Tot.length rest == 2)
@@ -879,21 +879,21 @@ let lemma_client_after_server_finished_verified_next_event_application_install
   PNTCFS.lemma_client_after_server_finished_verified_model_facts model;
   lemma_client_after_server_finished_verified_progress_rank model;
   assert_norm (
-    CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
     (exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
   eliminate exists model1 delta_sent delta_received tail_sent tail_received.
     CS.legal_event model ev /\
     CS.step_model model ev == Some model1 /\
     CS.event_raw_delta_legal model ev delta_sent delta_received /\
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
-    CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
   returns client_no_tail_application_install_event ev
   with _.
   (
@@ -978,7 +978,7 @@ let lemma_client_after_one_application_install_next_event_application_install
   : Lemma
       (requires
         client_after_one_application_install_model model /\
-        CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNI.client_application_progress_rank final_model == 0 /\
         FStar.List.Tot.length rest == 1)
@@ -987,21 +987,21 @@ let lemma_client_after_one_application_install_next_event_application_install
   lemma_client_after_one_application_install_model_facts model;
   lemma_client_after_one_application_install_progress_rank model;
   assert_norm (
-    CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
     (exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
   eliminate exists model1 delta_sent delta_received tail_sent tail_received.
     CS.legal_event model ev /\
     CS.step_model model ev == Some model1 /\
     CS.event_raw_delta_legal model ev delta_sent delta_received /\
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
-    CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
   returns client_no_tail_application_install_event ev
   with _.
   (
@@ -1086,7 +1086,7 @@ let lemma_client_after_application_installs_next_event_client_finished
   : Lemma
       (requires
         client_after_application_installs_model model /\
-        CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNI.client_application_progress_rank final_model == 0 /\
         FStar.List.Tot.length rest == 0)
@@ -1100,21 +1100,21 @@ let lemma_client_after_application_installs_next_event_client_finished
   lemma_client_after_application_installs_model_facts model;
   lemma_client_after_application_installs_progress_rank model;
   assert_norm (
-    CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
     (exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
   eliminate exists model1 delta_sent delta_received tail_sent tail_received.
     CS.legal_event model ev /\
     CS.step_model model ev == Some model1 /\
     CS.event_raw_delta_legal model ev delta_sent delta_received /\
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
-    CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
   returns
     exists cf.
       ev == CS.ConnNetworkEvent {
@@ -1279,7 +1279,7 @@ let lemma_client_no_tail_model15_witness
           PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
           client_no_tail_application_install_cover e13 e14 /\
           client_after_application_installs_model model15 /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model15
             rest11
             tail_sent
@@ -1325,7 +1325,7 @@ let lemma_client_no_tail_model15_witness
     FStar.List.Tot.length rest9 == 3 /\
     PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
     PNTCFS.client_after_server_finished_verified_model model13 /\
-    CS.conn_events_raw_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       model13
       rest9
       tail_sent
@@ -1373,7 +1373,7 @@ let lemma_client_no_tail_model15_witness
       PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
       client_no_tail_application_install_cover e13 e14 /\
       client_after_application_installs_model model15 /\
-      CS.conn_events_raw_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         model15
         rest11
         tail_sent
@@ -1394,21 +1394,21 @@ let lemma_client_no_tail_model15_witness
         client.CS.cs_model;
       assert (client_no_tail_application_install_event e13);
       assert_norm (
-        CS.conn_events_raw_replay model13 (e13 :: rest10) tail_sent tail_received client.CS.cs_model ==
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model13 (e13 :: rest10) tail_sent tail_received client.CS.cs_model ==
         (exists model14 delta_sent delta_received tail_sent2 tail_received2.
           CS.legal_event model13 e13 /\
           CS.step_model model13 e13 == Some model14 /\
           CS.event_raw_delta_legal model13 e13 delta_sent delta_received /\
           Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
           Seq.equal tail_received (B.append delta_received tail_received2) /\
-          CS.conn_events_raw_replay model14 rest10 tail_sent2 tail_received2 client.CS.cs_model));
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model14 rest10 tail_sent2 tail_received2 client.CS.cs_model));
       eliminate exists model14 delta_sent delta_received tail_sent2 tail_received2.
         CS.legal_event model13 e13 /\
         CS.step_model model13 e13 == Some model14 /\
         CS.event_raw_delta_legal model13 e13 delta_sent delta_received /\
         Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
         Seq.equal tail_received (B.append delta_received tail_received2) /\
-        CS.conn_events_raw_replay model14 rest10 tail_sent2 tail_received2 client.CS.cs_model
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model14 rest10 tail_sent2 tail_received2 client.CS.cs_model
       returns
         exists start ch sh client_shared e4 e5 ee cert peer cv sf e13 e14 rest11 model15 tail_sent tail_received.
           client.CS.cs_event_log ==
@@ -1450,7 +1450,7 @@ let lemma_client_no_tail_model15_witness
           PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
           client_no_tail_application_install_cover e13 e14 /\
           client_after_application_installs_model model15 /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model15
             rest11
             tail_sent
@@ -1473,21 +1473,21 @@ let lemma_client_no_tail_model15_witness
             client.CS.cs_model;
           assert (client_no_tail_application_install_event e14);
           assert_norm (
-            CS.conn_events_raw_replay model14 (e14 :: rest11) tail_sent2 tail_received2 client.CS.cs_model ==
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model14 (e14 :: rest11) tail_sent2 tail_received2 client.CS.cs_model ==
             (exists model15 delta_sent2 delta_received2 tail_sent3 tail_received3.
               CS.legal_event model14 e14 /\
               CS.step_model model14 e14 == Some model15 /\
               CS.event_raw_delta_legal model14 e14 delta_sent2 delta_received2 /\
               Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
               Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
-              CS.conn_events_raw_replay model15 rest11 tail_sent3 tail_received3 client.CS.cs_model));
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model15 rest11 tail_sent3 tail_received3 client.CS.cs_model));
           eliminate exists model15 delta_sent2 delta_received2 tail_sent3 tail_received3.
             CS.legal_event model14 e14 /\
             CS.step_model model14 e14 == Some model15 /\
             CS.event_raw_delta_legal model14 e14 delta_sent2 delta_received2 /\
             Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
             Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
-            CS.conn_events_raw_replay model15 rest11 tail_sent3 tail_received3 client.CS.cs_model
+            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model15 rest11 tail_sent3 tail_received3 client.CS.cs_model
           returns
             exists start ch sh client_shared e4 e5 ee cert peer cv sf e13 e14 rest11 model15 tail_sent tail_received.
               client.CS.cs_event_log ==
@@ -1529,7 +1529,7 @@ let lemma_client_no_tail_model15_witness
               PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
               client_no_tail_application_install_cover e13 e14 /\
               client_after_application_installs_model model15 /\
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model15
                 rest11
                 tail_sent
@@ -1642,7 +1642,7 @@ let lemma_client_no_tail_model15_witness
               PCPS.client_no_tail_two_handshake_install_cover e40 e50 /\
               client_no_tail_application_install_cover e130 e140 /\
               client_after_application_installs_model model150 /\
-              CS.conn_events_raw_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 model150
                 rest110
                 tail_sent0
@@ -1705,7 +1705,7 @@ let lemma_client_no_tail_fourteenth_and_fifteenth_events_application_install_cov
     PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
     client_no_tail_application_install_cover e13 e14 /\
     client_after_application_installs_model model15 /\
-    CS.conn_events_raw_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       model15
       rest11
       tail_sent
@@ -1822,7 +1822,7 @@ let lemma_client_no_tail_sixteenth_event_client_finished_clean
     PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
     client_no_tail_application_install_cover e13 e14 /\
     client_after_application_installs_model model15 /\
-    CS.conn_events_raw_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       model15
       rest11
       tail_sent

@@ -8,53 +8,24 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CPI = Common.ProtocolImplementation
 module CT = TLS13.Impl.Client.Types
+module EC = TLS13.Spec.Endpoint.Client
 module ET = TLS13.Impl.Endpoint.Types
+module ES = TLS13.Spec.Endpoint.Server
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 
 (**
-  Shared role-neutral vocabulary for the canonical Common.ProtocolImplementation
-  adapters.
+  Role-specific, extraction-facing vocabulary for the canonical
+  Common.ProtocolImplementation adapters.
 
-  Error/status detail is represented by [CPI.process_status].  Application bytes
-  delivered through the endpoint [app_out] buffer are surfaced as tagged local
-  outputs; richer driver/control APIs remain outside this first canonical
-  boundary.
+  This module contains only implementation-specific vocabulary: client/server
+  wrappers over the C-ABI [local_event_kind] enums, exhaustive projections of
+  those wrappers into the core semantic endpoint-event vocabularies, and
+  conversions from extraction-facing endpoint responses into
+  [CPI.process_result].  Core definitions are imported explicitly; this module
+  does not re-export them.
  **)
-
-type local_output =
-  | AppOut: bytes:B.bytes -> local_output
-
-let local_output_bytes (out:local_output) : B.bytes =
-  match out with
-  | AppOut bytes -> bytes
-
-let rec local_outputs_bytes (outs:list local_output) : Tot (list B.bytes)
-  (decreases outs)
-=
-  match outs with
-  | [] -> []
-  | out :: rest -> local_output_bytes out :: local_outputs_bytes rest
-
-let local_outputs_app_bytes (outs:list local_output) : B.bytes =
-  CL.concat_bytes (local_outputs_bytes outs)
-
-noextract
-let local_outputs_of_app_bytes (bytes:B.bytes) : GTot (list local_output) =
-  if B.length bytes == 0 then [] else [AppOut bytes]
-
-let lemma_local_outputs_of_app_bytes_exact (bytes:B.bytes)
-  : Lemma
-      (ensures Seq.equal
-        (local_outputs_app_bytes (local_outputs_of_app_bytes bytes))
-        bytes)
-=
-  if B.length bytes == 0 then (
-    Seq.lemma_eq_intro bytes B.empty
-  ) else (
-    Seq.append_empty_r bytes
-  )
 
 type client_api_event = {
   client_local_kind: CT.local_event_kind;
@@ -83,6 +54,125 @@ let client_local_event_api
       client_local_kind = CT.LocalValidateCertificate;
       client_local_payload = Ghost.reveal payload;
     }
+
+noextract
+let client_api_event_semantic
+  (api:client_api_event)
+  : EC.local_event =
+  match api.client_local_kind with
+  | CT.LocalStartHandshake ->
+      EC.ClientStartHandshake
+  | CT.LocalDeriveSharedSecret ->
+      EC.ClientDeriveSharedSecret
+  | CT.LocalInstallClientHandshakeTrafficKeys ->
+      EC.ClientInstallClientHandshakeTrafficKeys
+  | CT.LocalInstallServerHandshakeTrafficKeys ->
+      EC.ClientInstallServerHandshakeTrafficKeys
+  | CT.LocalInstallClientApplicationTrafficKeys ->
+      EC.ClientInstallClientApplicationTrafficKeys
+  | CT.LocalInstallServerApplicationTrafficKeys ->
+      EC.ClientInstallServerApplicationTrafficKeys
+  | CT.LocalValidateCertificate ->
+      EC.ClientValidateCertificate api.client_local_payload
+  | CT.LocalVerifyCertificateSignature ->
+      EC.ClientVerifyCertificateSignature
+  | CT.LocalVerifyFinished ->
+      EC.ClientVerifyFinished
+  | CT.LocalDeliverApplicationData ->
+      EC.ClientDeliverApplicationData api.client_local_payload
+  | CT.LocalSendClientHello ->
+      EC.ClientSendClientHello
+  | CT.LocalSendClientFinished ->
+      EC.ClientSendClientFinished
+  | CT.LocalSendApplicationData ->
+      EC.ClientSendApplicationData api.client_local_payload
+  | CT.LocalSendKeyUpdate ->
+      EC.ClientSendKeyUpdate
+  | CT.LocalSendCloseNotify ->
+      EC.ClientSendCloseNotify
+  | CT.LocalFail ->
+      EC.ClientFail
+
+noextract
+let client_local_event_semantic
+  (ev:client_local_event)
+  : GTot EC.local_event =
+  client_api_event_semantic (client_local_event_api ev)
+
+noextract
+let client_api_event_matches
+  (st:TLS13.Spec.StateMachine.connection_state)
+  (api:client_api_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : prop =
+  EC.client_local_event_matches st (client_api_event_semantic api) ev
+
+let lemma_client_api_event_semantic_exact
+  (st:TLS13.Spec.StateMachine.connection_state)
+  (api:client_api_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : Lemma
+      (ensures
+        (client_api_event_matches st api ev <==>
+         CT.local_event_kind_matches
+           st
+           api.client_local_kind
+           api.client_local_payload
+           ev))
+=
+  match api.client_local_kind with
+  | CT.LocalStartHandshake
+  | CT.LocalDeriveSharedSecret
+  | CT.LocalInstallClientHandshakeTrafficKeys
+  | CT.LocalInstallServerHandshakeTrafficKeys
+  | CT.LocalInstallClientApplicationTrafficKeys
+  | CT.LocalInstallServerApplicationTrafficKeys
+  | CT.LocalValidateCertificate
+  | CT.LocalVerifyCertificateSignature
+  | CT.LocalVerifyFinished
+  | CT.LocalDeliverApplicationData
+  | CT.LocalSendClientHello
+  | CT.LocalSendClientFinished
+  | CT.LocalSendApplicationData
+  | CT.LocalSendKeyUpdate
+  | CT.LocalSendCloseNotify
+  | CT.LocalFail ->
+      ()
+
+noextract
+let client_local_event_matches
+  (st:TLS13.Spec.StateMachine.connection_state)
+  (input:client_local_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : prop =
+  let api = client_local_event_api input in
+  CT.local_event_kind_matches
+    st
+    api.client_local_kind
+    api.client_local_payload
+    ev
+
+let lemma_client_local_event_semantic_exact
+  (st:TLS13.Spec.StateMachine.connection_state)
+  (input:client_local_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : Lemma
+      (client_local_event_matches st input ev <==>
+       EC.client_local_event_matches
+         st
+         (client_local_event_semantic input)
+         ev)
+=
+  lemma_client_api_event_semantic_exact st (client_local_event_api input) ev
+
+noextract
+instance client_event_representation
+  : EC.client_event_representation client_local_event =
+  {
+    EC.client_event_semantic = client_local_event_semantic;
+    EC.client_representation_matches = client_local_event_matches;
+    EC.client_representation_exact = lemma_client_local_event_semantic_exact;
+  }
 
 type server_api_event = {
   server_local_kind: ST.local_event_kind;
@@ -114,6 +204,124 @@ let server_local_event_api
       server_local_kind = kind;
       server_local_payload = Ghost.reveal payload;
     }
+
+noextract
+let server_api_event_semantic
+  (api:server_api_event)
+  : ES.local_event =
+  match api.server_local_kind with
+  | ST.LocalStartServer ->
+      ES.ServerStart
+  | ST.LocalSelectServerParameters ->
+      ES.ServerSelectParameters
+  | ST.LocalDeriveSharedSecret ->
+      ES.ServerDeriveSharedSecret
+  | ST.LocalInstallClientHandshakeTrafficKeys ->
+      ES.ServerInstallClientHandshakeTrafficKeys
+  | ST.LocalInstallServerHandshakeTrafficKeys ->
+      ES.ServerInstallServerHandshakeTrafficKeys
+  | ST.LocalInstallClientApplicationTrafficKeys ->
+      ES.ServerInstallClientApplicationTrafficKeys
+  | ST.LocalInstallServerApplicationTrafficKeys ->
+      ES.ServerInstallServerApplicationTrafficKeys
+  | ST.LocalSignCertificateVerify ->
+      ES.ServerSignCertificateVerify
+  | ST.LocalVerifyClientFinished ->
+      ES.ServerVerifyClientFinished
+  | ST.LocalDeliverApplicationData ->
+      ES.ServerDeliverApplicationData api.server_local_payload
+  | ST.LocalSendServerHello ->
+      ES.ServerSendServerHello
+  | ST.LocalSendEncryptedExtensions ->
+      ES.ServerSendEncryptedExtensions
+  | ST.LocalSendCertificate ->
+      ES.ServerSendCertificate
+  | ST.LocalSendCertificateVerify ->
+      ES.ServerSendCertificateVerify
+  | ST.LocalSendServerFinished ->
+      ES.ServerSendServerFinished
+  | ST.LocalSendApplicationData ->
+      ES.ServerSendApplicationData api.server_local_payload
+  | ST.LocalSendCloseNotify ->
+      ES.ServerSendCloseNotify
+  | ST.LocalFail ->
+      ES.ServerFail
+
+noextract
+let server_local_event_semantic
+  (ev:server_local_event)
+  : GTot ES.local_event =
+  server_api_event_semantic (server_local_event_api ev)
+
+noextract
+let server_api_event_matches
+  (api:server_api_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : prop =
+  ES.server_local_event_matches (server_api_event_semantic api) ev
+
+let lemma_server_api_event_semantic_exact
+  (api:server_api_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : Lemma
+      (ensures
+        (server_api_event_matches api ev <==>
+         ST.local_event_kind_matches
+           api.server_local_kind
+           api.server_local_payload
+           ev))
+=
+  match api.server_local_kind with
+  | ST.LocalStartServer
+  | ST.LocalSelectServerParameters
+  | ST.LocalDeriveSharedSecret
+  | ST.LocalInstallClientHandshakeTrafficKeys
+  | ST.LocalInstallServerHandshakeTrafficKeys
+  | ST.LocalInstallClientApplicationTrafficKeys
+  | ST.LocalInstallServerApplicationTrafficKeys
+  | ST.LocalSignCertificateVerify
+  | ST.LocalVerifyClientFinished
+  | ST.LocalDeliverApplicationData
+  | ST.LocalSendServerHello
+  | ST.LocalSendEncryptedExtensions
+  | ST.LocalSendCertificate
+  | ST.LocalSendCertificateVerify
+  | ST.LocalSendServerFinished
+  | ST.LocalSendApplicationData
+  | ST.LocalSendCloseNotify
+  | ST.LocalFail ->
+      ()
+
+noextract
+let server_local_event_matches
+  (input:server_local_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : prop =
+  let api = server_local_event_api input in
+  ST.local_event_kind_matches
+    api.server_local_kind
+    api.server_local_payload
+    ev
+
+let lemma_server_local_event_semantic_exact
+  (input:server_local_event)
+  (ev:TLS13.Spec.StateMachine.conn_event)
+  : Lemma
+      (server_local_event_matches input ev <==>
+       ES.server_local_event_matches
+         (server_local_event_semantic input)
+         ev)
+=
+  lemma_server_api_event_semantic_exact (server_local_event_api input) ev
+
+noextract
+instance server_event_representation
+  : ES.server_event_representation server_local_event =
+  {
+    ES.server_event_semantic = server_local_event_semantic;
+    ES.server_representation_matches = server_local_event_matches;
+    ES.server_representation_exact = lemma_server_local_event_semantic_exact;
+  }
 
 let endpoint_status_to_process_status
   (status:ET.endpoint_status)

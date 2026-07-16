@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -291,7 +291,7 @@ val lemma_server_no_tail_desired_shape_length
   A satisfiable server no-tail trace must be length 16, not 15: the server
   has to install [ServerEndpoint]/[TrafficHandshake] *read* key material
   before it can legally receive the protected [ClientFinished] record in
-  [HsServerFinishedSent] (see [TLS13.Spec.ConnectionState.legal_event] /
+  [HsServerFinishedSent] (see [TLS13.Spec.StateMachine.legal_event] /
   [step_tls_message] for that receive transition, and
   `PAIRING_THEOREM.md`'s "server-side length-15 milestone is now known to be
   stale" discussion).  [server_no_tail_desired_shape] above and the spec-level

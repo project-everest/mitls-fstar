@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CVR = TLS13.ConnectionState.ClientCertificateVerifyReachability
 module M = TLS13.Messages
@@ -64,8 +64,8 @@ let lemma_client_no_tail_final_model_witnesses
 =
   let hs = client.CS.cs_model.CS.model_handshake in
   CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
-  assert (CS.stable_client_x25519_key_share_projection client);
-  assert (CS.client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.stable_client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.client_x25519_key_share_projection client);
   assert (CS.application_record_keys_installed_for_role
     CS.ClientEndpoint
     client.CS.cs_model);

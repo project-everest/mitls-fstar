@@ -10,7 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -29,7 +29,7 @@ module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -147,7 +147,7 @@ fn mark_sent_application_data_after_record_advanced
            application_exactly c.application st0.CS.cs_model.CS.model_application **
            ArrPts.pts_to payload 'payload_bytes **
            ArrPts.pts_to network_out 'network_out_bytes **
-           pure (CS.connection_state_consistent st0 /\
+           pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0 /\
                  B.length 'payload_bytes == SZ.v payload_len /\
                  can_send_application_data
                    st0
@@ -187,7 +187,7 @@ fn mark_sent_close_notify_after_record_advanced
            handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake **
            application_exactly c.application st0.CS.cs_model.CS.model_application **
            ArrPts.pts_to network_out 'network_out_bytes **
-           pure (CS.connection_state_consistent st0 /\
+           pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0 /\
                  can_send_close_notify
                    st0
                    (Ghost.reveal raw_sent) /\

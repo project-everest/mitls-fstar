@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module C = TLS13.Crypto.Spec
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -24,26 +24,7 @@ module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module SD = TLS13.Impl.Server.Driver
 module X = TLS13.X509.Spec
 
-(**
-  Semantic trace pairing, independent of record bytes.
-
-  These traces are [CS.conn_event] logs.  The two equalities say that the TLS
-  messages semantically sent by each endpoint are exactly the TLS messages
-  semantically received by its peer, in order.  ChangeCipherSpec no-ops and
-  local API events contribute no handshake messages unless they are represented
-  as TLS network events in these projections.
-**)
-noextract
-let paired_semantic_tls_io_traces
-  (client_trace:list CS.conn_event)
-  (server_trace:list CS.conn_event)
-  : prop =
-  CS.tls_messages_correspond
-    (CS.sent_tls_messages client_trace)
-    (CS.received_tls_messages server_trace) /\
-  CS.tls_messages_correspond
-    (CS.sent_tls_messages server_trace)
-    (CS.received_tls_messages client_trace)
+open TLS13.Spec.Pairing.SemanticTrace
 
 (**
   Client-side no-tail semantic inversion package.
@@ -114,12 +95,12 @@ let client_successful_no_tail_semantic_trace_state_inputs
     ] /\
   PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
   PNTCAS.client_no_tail_application_install_cover e13 e14 /\
-  CS.sent_tls_messages client_trace ==
+  TLS13.Spec.StateMachine.Log.sent_tls_messages client_trace ==
     [
       M.TlsHandshake (M.ClientHello ch);
       M.TlsHandshake (M.Finished cf)
     ] /\
-  CS.received_tls_messages client_trace ==
+  TLS13.Spec.StateMachine.Log.received_tls_messages client_trace ==
     [
       M.TlsHandshake (M.ServerHello sh);
       M.TlsHandshake (M.EncryptedExtensions ee);
@@ -262,7 +243,7 @@ let server_successful_no_tail_semantic_trace_state_inputs
         CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
       ] /\
   PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
-  CS.sent_tls_messages server_trace ==
+  TLS13.Spec.StateMachine.Log.sent_tls_messages server_trace ==
     [
       M.TlsHandshake (M.ServerHello sh);
       M.TlsHandshake (M.EncryptedExtensions ee);
@@ -270,7 +251,7 @@ let server_successful_no_tail_semantic_trace_state_inputs
       M.TlsHandshake (M.CertificateVerify cv);
       M.TlsHandshake (M.Finished sf)
     ] /\
-  CS.received_tls_messages server_trace ==
+  TLS13.Spec.StateMachine.Log.received_tls_messages server_trace ==
     [
       M.TlsHandshake (M.ClientHello ch);
       M.TlsHandshake (M.Finished cf)
@@ -445,7 +426,7 @@ let rec application_data_preserving_semantic_suffix
   | ev :: rest ->
     model.CS.model_control == CS.ControlApplicationData /\
     CS.legal_event model ev /\
-    CS.conn_event_is_key_update ev == false /\
+    TLS13.Spec.StateMachine.Correspondence.conn_event_is_key_update ev == false /\
     conn_event_is_ccs ev == false /\
     (match CS.step_model model ev with
      | Some model1 ->
@@ -556,13 +537,13 @@ val lemma_client_server_application_record_material_agrees_from_paired_successfu
           client_trace
           server_trace)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
@@ -575,12 +556,12 @@ val lemma_client_server_application_record_material_agrees_from_paired_successfu
           client
           server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)

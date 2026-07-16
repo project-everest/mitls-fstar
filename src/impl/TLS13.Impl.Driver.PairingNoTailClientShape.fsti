@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -234,7 +236,7 @@ val lemma_client_no_tail_fifth_event_handshake_traffic_install_clean
 
 (**
   Exact client post-cleartext install order is not exposed by the role-local
-  application-ready/length facts alone, nor by a bare [ClientCP.client_system]
+  application-ready/length facts alone, nor by a bare [EC.client_system]
   valid byte trace: the abstract client API/connection model allows the client
   handshake read/write traffic-key installs to commute.  The exact order below
   is stated under [client_no_tail_normalized_shape], i.e. the canonical client

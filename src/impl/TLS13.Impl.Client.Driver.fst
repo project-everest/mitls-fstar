@@ -15,11 +15,13 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
+module EC = TLS13.Spec.Endpoint.Client
 module EP = TLS13.Impl.Client.Endpoint
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
@@ -54,8 +56,8 @@ let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
 
 noeq type client_driver = {
   client_driver_client: C.client;
-  client_driver_progress: MR.mref CP.client_progress_preorder;
-  client_driver_initial: Ghost.erased CS.connection_state;
+  client_driver_progress: MR.mref (EC.client_progress_preorder #CTypes.client_local_event);
+  client_driver_initial: Ghost.erased EC.client_initial_state;
   client_driver_auth: O.auth_context;
   client_driver_channel: Box.box (option IO.channel);
   client_driver_buffered_len: Box.box SZ.t;
@@ -279,7 +281,7 @@ let logged_received_bytes_accounted
 
 noextract
 let client_driver_wire_logs_match_witness
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
   (consumed:B.bytes)
@@ -295,7 +297,7 @@ let client_driver_wire_logs_match_witness
 
 noextract
 let client_driver_wire_logs_match
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
   (buffered:B.bytes)
@@ -311,7 +313,7 @@ let client_driver_wire_logs_match
       buffered_len
 
 let lemma_logged_received_bytes_accounted_transport
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (received:B.bytes)
   (consumed:B.bytes)
   (buffered:B.bytes)
@@ -330,7 +332,7 @@ let lemma_logged_received_bytes_accounted_transport
   SeqP.lemma_append_count consumed buffered
 
 let lemma_client_driver_wire_logs_match_received_accounted
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
   (buffered:B.bytes)
@@ -366,7 +368,7 @@ let lemma_client_driver_wire_logs_match_received_accounted
 noextract
 let channel_open
   (ch:IO.channel)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (buffered:B.bytes)
   (buffered_len:SZ.t)
   : slprop =
@@ -377,7 +379,7 @@ let channel_open
 noextract
 let driver_exactly
   (d:driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (buffered:B.bytes)
   (buffered_len:SZ.t)
   : slprop =
@@ -394,7 +396,7 @@ let no_channel : option IO.channel = None
 noextract
 let top_driver_exactly
   (d:top_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (buffered:B.bytes)
   (buffered_len:SZ.t)
   : slprop =
@@ -473,7 +475,7 @@ let client_driver_canonical_seed
 noextract
 let client_driver_live
   (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
   client_driver_canonical_seed d **
@@ -492,7 +494,7 @@ let client_driver_live
 noextract
 let client_driver_connected
   (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
   : slprop =
@@ -522,7 +524,7 @@ let client_driver_endpoint_connected
   (d:client_driver)
   (cfg:CQueries.client_next_local_action_config)
   (frame:EP.client_endpoint_frame)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (canonical_received:B.bytes)
   (canonical_sent:B.bytes)
   : slprop =
@@ -571,7 +573,7 @@ ghost fn client_driver_endpoint_connected_valid_byte_trace
             (Ghost.reveal canonical_received)
             (Ghost.reveal canonical_sent) **
           pure (WFSM.valid_byte_trace
-            (CP.client_system
+            (EC.client_system #CTypes.client_local_event
               (Ghost.reveal
                 (client_driver_canonical d).CP.canonical_client_initial))
             (Ghost.reveal canonical_received)
@@ -603,7 +605,7 @@ ghost fn client_driver_endpoint_connected_valid_byte_trace
 }
 
 let lemma_client_local_process_correct_received_unchanged
-  (initial:CS.connection_state)
+  (initial:EC.client_initial_state)
   (ev:CTypes.client_local_event)
   (old_out:B.bytes)
   (out_contents:B.bytes)
@@ -616,11 +618,11 @@ let lemma_client_local_process_correct_received_unchanged
   (sent1:B.bytes)
   (st1:CS.connection_state)
   (wire_outputs:list CW.wire_message)
-  (local_outputs:list CTypes.local_output)
+  (local_outputs:list EAPI.local_output)
   : Lemma
       (requires
         CPI.local_process_correct
-          (CP.client_system initial)
+          (EC.client_system #CTypes.client_local_event initial)
           ev
           old_out
           out_contents
@@ -647,7 +649,7 @@ let lemma_client_local_process_correct_received_unchanged
   | CPI.ConnectionFailed -> ()
 
 let lemma_client_driver_endpoint_local_wire_logs_match
-  (initial:CS.connection_state)
+  (initial:EC.client_initial_state)
   (st0:CS.connection_state)
   (st1:CS.connection_state)
   (canonical_received0:B.bytes)
@@ -664,7 +666,7 @@ let lemma_client_driver_endpoint_local_wire_logs_match
   (out_len:SZ.t)
   (result:CPI.process_result)
   (wire_outputs:list CW.wire_message)
-  (local_outputs:list CTypes.local_output)
+  (local_outputs:list EAPI.local_output)
   : Lemma
       (requires
         CP.client_invariant_pure
@@ -685,7 +687,7 @@ let lemma_client_driver_endpoint_local_wire_logs_match
           buffered
           buffered_len /\
         CPI.local_process_correct
-          (CP.client_system initial)
+          (EC.client_system #CTypes.client_local_event initial)
           ev
           old_out
           out_contents
@@ -849,7 +851,7 @@ ensures
 noextract
 let client_driver_closed
   (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
   client_driver_canonical_seed d
@@ -1204,7 +1206,7 @@ let internal_local_action_kind
     True
 
 let lemma_ready_internal_action_empty_payload_wf
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (network_out_len:SZ.t)
   (certificate_public_key_len:SZ.t)
   (server_finished_payload_len:SZ.t)
@@ -1952,7 +1954,7 @@ fn new_client
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds))
 {
-  let initial = Ghost.hide (
+  let initial : Ghost.erased EC.client_initial_state = Ghost.hide (
     CR.configured_initial_state
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
@@ -1965,7 +1967,7 @@ fn new_client
       trust_anchors_len
       validation_time_seconds;
   let progress =
-    MR.alloc #_ #CP.client_progress_preorder (Ghost.reveal initial);
+    MR.alloc #_ #(EC.client_progress_preorder #CTypes.client_local_event) (Ghost.reveal initial);
   MR.take_snapshot progress (Ghost.reveal initial);
   let c =
     C.new_client
@@ -7119,9 +7121,9 @@ fn send_endpoint
            pure (exists (old_out:B.bytes)
                         (out_contents:B.bytes)
                         (wire_outputs:list CW.wire_message)
-                        (local_outputs:list CTypes.local_output).
+                        (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (CP.client_system
+               (EC.client_system #CTypes.client_local_event
                  (Ghost.reveal
                    (client_driver_canonical d).CP.canonical_client_initial))
                (client_driver_endpoint_send_event payload_bytes)
@@ -7244,7 +7246,7 @@ fn send_endpoint
         (Ghost.reveal local_outputs));
   assert (pure (ev == client_driver_endpoint_send_event payload_bytes));
   assert (pure (CPI.local_process_correct
-    (CP.client_system
+    (EC.client_system #CTypes.client_local_event
       (Ghost.reveal
         (client_driver_canonical d).CP.canonical_client_initial))
     (client_driver_endpoint_send_event payload_bytes)
@@ -7335,9 +7337,9 @@ fn send_endpoint
   assert (pure (exists (old_out0:B.bytes)
                        (out_contents0:B.bytes)
                        (wire_outputs0:list CW.wire_message)
-                       (local_outputs0:list CTypes.local_output).
+                       (local_outputs0:list EAPI.local_output).
     CPI.local_process_correct
-      (CP.client_system
+      (EC.client_system #CTypes.client_local_event
         (Ghost.reveal
           (client_driver_canonical d).CP.canonical_client_initial))
       (client_driver_endpoint_send_event payload_bytes)
@@ -7630,9 +7632,9 @@ fn close_endpoint
            pure (exists (old_out:B.bytes)
                         (out_contents:B.bytes)
                         (wire_outputs:list CW.wire_message)
-                        (local_outputs:list CTypes.local_output).
+                        (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (CP.client_system
+               (EC.client_system #CTypes.client_local_event
                  (Ghost.reveal
                   (client_driver_canonical d).CP.canonical_client_initial))
                client_driver_endpoint_close_event
@@ -7754,7 +7756,7 @@ fn close_endpoint
         (Ghost.reveal local_outputs));
   assert (pure (ev == client_driver_endpoint_close_event));
   assert (pure (CPI.local_process_correct
-    (CP.client_system
+    (EC.client_system #CTypes.client_local_event
       (Ghost.reveal
         (client_driver_canonical d).CP.canonical_client_initial))
     client_driver_endpoint_close_event
@@ -7845,9 +7847,9 @@ fn close_endpoint
   assert (pure (exists (old_out0:B.bytes)
                        (out_contents0:B.bytes)
                        (wire_outputs0:list CW.wire_message)
-                       (local_outputs0:list CTypes.local_output).
+                       (local_outputs0:list EAPI.local_output).
     CPI.local_process_correct
-      (CP.client_system
+      (EC.client_system #CTypes.client_local_event
         (Ghost.reveal
           (client_driver_canonical d).CP.canonical_client_initial))
       client_driver_endpoint_close_event

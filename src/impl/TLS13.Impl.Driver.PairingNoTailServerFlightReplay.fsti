@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -164,7 +166,7 @@ let server_encrypted_flight_staged_replay_fragment
     R.next_seq w.PCB.hcb_server_after2.CS.model_record.CS.record_write /\
   w.PCB.hcb_client_after3.CS.model_record.CS.record_read ==
     R.next_seq w.PCB.hcb_client_after_verify_skip.CS.model_record.CS.record_read /\
-  CS.conn_events_sent_seal_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
     w.PCB.hcb_server_model5
     (PWL.server_encrypted_flight_replay_events
       w.PCB.hcb_server_material
@@ -177,7 +179,7 @@ let server_encrypted_flight_staged_replay_fragment
     r.sfr_server_raw_sent
     r.sfr_server_raw_received
     r.sfr_server_final /\
-  CS.conn_events_received_decode_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
     w.PCB.hcb_client_model4
     (PWL.client_receive_server_encrypted_flight_replay_events
       w.PCB.hcb_client_material
@@ -249,7 +251,7 @@ let server_post_server_hello_sent_seal_replay_slice
     Seq.equal
       server.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       (CS.initial_model server.CS.cs_model.CS.model_config)
       (PWSeg.server_cleartext_handshake_prefix_events
         ch
@@ -259,7 +261,7 @@ let server_post_server_hello_sent_seal_replay_slice
       prefix_sent
       prefix_received
       model5 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model5
       (e5 :: e6 :: rest)
       suffix_sent
@@ -353,7 +355,7 @@ let server_post_server_hello_ordered_sent_seal_replay_slice
     Seq.equal
       server.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       (CS.initial_model server.CS.cs_model.CS.model_config)
       (PWSeg.server_cleartext_handshake_prefix_events
         ch
@@ -363,7 +365,7 @@ let server_post_server_hello_ordered_sent_seal_replay_slice
       prefix_sent
       prefix_received
       model5 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model5
       (e5 :: e6 :: ordered_rest)
       suffix_sent
@@ -477,7 +479,7 @@ let server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
     Seq.equal
       server.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       (CS.initial_model server.CS.cs_model.CS.model_config)
       (PWSeg.server_cleartext_handshake_prefix_events
         ch
@@ -489,7 +491,7 @@ let server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
       model5 /\
     CS.step_model model5 server_write_install == Some server_after_write /\
     CS.step_model server_after_write server_read_install == Some server_after_read /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model5
       (server_write_install :: server_read_install :: ordered_rest)
       suffix_sent
@@ -584,7 +586,7 @@ let server_after_handshake_installs_sent_seal_replay_slice
       ] in
     CS.step_model model5 server_write_install == Some server_after_write /\
     CS.step_model server_after_write server_read_install == Some server_after_read /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       server_after_read
       ordered_rest
       installed_suffix_sent
@@ -597,7 +599,7 @@ val lemma_server_post_server_hello_sent_seal_replay_slice_from_staged_milestone
   : Lemma
       (requires
         PNTSFS.clean16_server_encrypted_flight_staged_milestone client server /\
-        CS.connection_state_sent_seal_replay_consistent server)
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server)
       (ensures server_post_server_hello_sent_seal_replay_slice server)
 
 val lemma_server_post_server_hello_ordered_sent_seal_replay_slice
@@ -625,8 +627,8 @@ val lemma_server_after_handshake_installs_sent_seal_replay_slice
       (ensures server_after_handshake_installs_sent_seal_replay_slice server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_sent_seal_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -647,8 +649,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_sent_seal_r
       (ensures server_post_server_hello_sent_seal_replay_slice server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_ordered_sent_seal_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -705,7 +707,7 @@ let server_post_server_hello_received_decode_replay_slice
     Seq.equal
       server.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       (CS.initial_model server.CS.cs_model.CS.model_config)
       (PWSeg.server_cleartext_handshake_prefix_events
         ch
@@ -715,7 +717,7 @@ let server_post_server_hello_received_decode_replay_slice
       prefix_sent
       prefix_received
       model5 /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       model5
       (e5 :: e6 :: rest)
       suffix_sent
@@ -803,7 +805,7 @@ let server_post_server_hello_ordered_received_decode_replay_slice
     Seq.equal
       server.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       (CS.initial_model server.CS.cs_model.CS.model_config)
       (PWSeg.server_cleartext_handshake_prefix_events
         ch
@@ -813,7 +815,7 @@ let server_post_server_hello_ordered_received_decode_replay_slice
       prefix_sent
       prefix_received
       model5 /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       model5
       (e5 :: e6 :: ordered_rest)
       suffix_sent
@@ -826,7 +828,7 @@ val lemma_server_post_server_hello_received_decode_replay_slice_from_staged_mile
   : Lemma
       (requires
         PNTSFS.clean16_server_encrypted_flight_staged_milestone client server /\
-        CS.connection_state_received_decode_replay_consistent server)
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server)
       (ensures server_post_server_hello_received_decode_replay_slice server)
 
 val lemma_server_post_server_hello_ordered_received_decode_replay_slice
@@ -838,8 +840,8 @@ val lemma_server_post_server_hello_ordered_received_decode_replay_slice
       (ensures server_post_server_hello_ordered_received_decode_replay_slice server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_received_decode_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -860,8 +862,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_received_de
       (ensures server_post_server_hello_received_decode_replay_slice server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_ordered_received_decode_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -920,7 +922,7 @@ let client_post_derive_received_decode_replay_slice
     Seq.equal
       client.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       (CS.initial_model client.CS.cs_model.CS.model_config)
       (PWSeg.client_cleartext_handshake_prefix_events
         start
@@ -930,7 +932,7 @@ let client_post_derive_received_decode_replay_slice
       prefix_sent
       prefix_received
       model4 /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       model4
       (e4 :: e5 :: rest)
       suffix_sent
@@ -1012,7 +1014,7 @@ let client_post_derive_ordered_received_decode_replay_slice
     Seq.equal
       client.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       (CS.initial_model client.CS.cs_model.CS.model_config)
       (PWSeg.client_cleartext_handshake_prefix_events
         start
@@ -1022,7 +1024,7 @@ let client_post_derive_ordered_received_decode_replay_slice
       prefix_sent
       prefix_received
       model4 /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       model4
       (e4 :: e5 :: ordered_rest)
       suffix_sent
@@ -1100,7 +1102,7 @@ let client_after_handshake_installs_received_decode_replay_slice
     PNTCAS.client_no_tail_application_install_cover e13 e14 /\
     CS.step_model model4 e4 == Some client_after_e4 /\
     CS.step_model client_after_e4 e5 == Some client_after_installs /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       client_after_installs
       ordered_rest
       installed_suffix_sent
@@ -1115,7 +1117,7 @@ val lemma_client_post_derive_received_decode_replay_slice_from_staged_milestone
         TLS13.Impl.Driver.PairingNoTailClientFinishedStaged.paired_no_tail_client_finished_staged_milestone
           client
           server /\
-        CS.connection_state_received_decode_replay_consistent client)
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client)
       (ensures client_post_derive_received_decode_replay_slice client)
 
 val lemma_client_post_derive_ordered_received_decode_replay_slice_from_staged_milestone
@@ -1126,7 +1128,7 @@ val lemma_client_post_derive_ordered_received_decode_replay_slice_from_staged_mi
         TLS13.Impl.Driver.PairingNoTailClientFinishedStaged.paired_no_tail_client_finished_staged_milestone
           client
           server /\
-        CS.connection_state_received_decode_replay_consistent client)
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client)
       (ensures client_post_derive_ordered_received_decode_replay_slice client)
 
 val lemma_client_after_handshake_installs_received_decode_replay_slice
@@ -1136,8 +1138,8 @@ val lemma_client_after_handshake_installs_received_decode_replay_slice
       (ensures client_after_handshake_installs_received_decode_replay_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_post_derive_received_decode_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1158,8 +1160,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_post_derive_received_decode_r
       (ensures client_post_derive_received_decode_replay_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_post_derive_ordered_received_decode_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1180,8 +1182,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_post_derive_ordered_received_
       (ensures client_post_derive_ordered_received_decode_replay_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_after_handshake_installs_received_decode_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

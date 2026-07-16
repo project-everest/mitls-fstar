@@ -8,7 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module IM = TLS13.Impl.Messages
@@ -129,7 +129,7 @@ fn process_client_finished
                    'st0
                    (Ghost.reveal fin)
                    (Ghost.reveal 'raw_bytes) /\
-                 CS.received_event_nonempty_decode_projection
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
                      (M.TlsHandshake (M.Finished (Ghost.reveal fin))))

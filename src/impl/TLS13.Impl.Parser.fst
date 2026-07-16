@@ -61,7 +61,7 @@ module DW = TLS13.Impl.Parser.DecoderWF
 module RVD = TLS13.Wire.Spec.RevealDecode
 module Rec = TLS13.Record
 module RecSpec = TLS13.Record.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 
 (* ServerHello-related generated modules (aliases match TLS13.Wire.Spec.Reveal). *)
 module GSH = TLS13.Wire.Generated.ServerHello

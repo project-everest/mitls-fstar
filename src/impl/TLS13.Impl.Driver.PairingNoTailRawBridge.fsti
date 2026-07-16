@@ -8,7 +8,7 @@ module B = TLS13.Bytes
 module CSL = TLS13.ConnectionState.Lemmas
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
@@ -266,7 +266,7 @@ val lemma_client_prefix_sent_client_hello_supported
   : Lemma
       (requires
         WFL.supported_client_config_wire_profile model0.CS.model_config /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
            CS.ConnNetworkEvent ({
@@ -292,7 +292,7 @@ val lemma_server_start_then_received_change_cipher_spec_raw_slice
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -316,7 +316,7 @@ val lemma_server_start_then_sent_change_cipher_spec_raw_slice
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -341,7 +341,7 @@ val lemma_server_start_client_hello_then_received_change_cipher_spec_raw_slices
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -375,7 +375,7 @@ val lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -405,7 +405,7 @@ val lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -441,7 +441,7 @@ val lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slic
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -473,7 +473,7 @@ val lemma_server_start_client_hello_select_shared_then_received_change_cipher_sp
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -511,7 +511,7 @@ val lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_r
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -545,7 +545,7 @@ val lemma_client_prefix_raw_slices
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
            CS.ConnNetworkEvent ({
@@ -584,7 +584,7 @@ val lemma_client_cleartext_prefix_step_models_from_raw_replay
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
            CS.ConnNetworkEvent ({
@@ -622,7 +622,7 @@ val lemma_client_cleartext_prefix_step_models_from_raw_replay
             model3
             (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared)) ==
             Some model4 /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model4
             client_rest
             tail_sent
@@ -641,7 +641,7 @@ val lemma_client_cleartext_prefix_final_hello_slots_from_raw_replay
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
            CS.ConnNetworkEvent ({
@@ -675,7 +675,7 @@ val lemma_server_prefix_raw_slices
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -715,7 +715,7 @@ val lemma_server_cleartext_prefix_step_models_from_raw_replay
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -757,7 +757,7 @@ val lemma_server_cleartext_prefix_step_models_from_raw_replay
               CL.message_direction = CL.Sent;
               CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
             })) == Some model5 /\
-          CS.conn_events_raw_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
             model5
             server_rest
             tail_sent
@@ -776,7 +776,7 @@ val lemma_server_cleartext_prefix_final_hello_slots_from_raw_replay
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model0
           (CS.ConnLocalEvent CS.LocalStartServer ::
            CS.ConnNetworkEvent ({
@@ -828,9 +828,9 @@ val lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
           server_sh
           server_rest /\
         WFL.supported_client_hello_wire_profile client_ch /\
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
-        CS.paired_wire_logs client server)
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server)
       (ensures
         normalized_cleartext_raw_wire_bridge
           client_ch

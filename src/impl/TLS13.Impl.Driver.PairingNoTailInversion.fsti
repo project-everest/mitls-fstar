@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module CL = TLS13.ConnectionLog
 module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module SD = TLS13.Impl.Server.Driver
@@ -139,7 +139,7 @@ val lemma_conn_events_raw_replay_from_failed_results_failed
   : Lemma
       (requires
         CS.ControlFailed? model.CS.model_control /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           events
           raw_sent
@@ -201,7 +201,7 @@ val lemma_client_application_progress_rank_replay_lower_bound
   : Lemma
       (requires
         model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        CS.conn_events_raw_replay model events raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model events raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         client_application_progress_rank final_model == 0)
       (ensures
@@ -225,7 +225,7 @@ val lemma_client_post_derive_next_event_handshake_traffic_install
         model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           (ev :: rest)
           raw_sent
@@ -471,7 +471,7 @@ val lemma_client_no_tail_model4_witness
           model4.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None /\
           model4.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
           model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-          CS.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
           client_application_progress_rank client.CS.cs_model == 0)
 
 val lemma_client_no_tail_fifth_event_handshake_traffic_install_clean

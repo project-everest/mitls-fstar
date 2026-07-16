@@ -6,7 +6,9 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module Seq = FStar.Seq
 module Staged = TLS13.Impl.Driver.PairingNoTailClientFinishedStaged
@@ -37,8 +39,8 @@ val lemma_paired_no_tail_client_finished_staged_milestone_client_finished_raw_re
       (ensures paired_client_finished_raw_record_equality client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_raw_record_equality
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

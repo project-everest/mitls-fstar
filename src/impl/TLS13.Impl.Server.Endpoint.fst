@@ -14,9 +14,11 @@ module CPI = Common.ProtocolImplementation
 module CQ = TLS13.Impl.ConnectionStateQuery
 module CR = TLS13.Impl.ConnectionState.Repr
 module ConnQ = TLS13.Impl.ConnectionState.Queries
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
+module ES = TLS13.Spec.Endpoint.Server
 module IM = TLS13.Impl.Messages
 module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
@@ -515,6 +517,39 @@ ensures
             (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server));
           assert (pure (Some?
             (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+          CR.lemma_option_some_v
+            (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server;
+          CR.lemma_option_some_v
+            (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello;
+          assert (pure (
+            ((Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+             (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server) ==
+            (Some (Some?.v
+              (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello),
+             Some (Some?.v
+              (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server))));
+          assert (pure (CS.cipher_suite_offered
+            (Some?.v
+              (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server)
+              .CS.server_supported_cipher_suites
+            T.TLS_CHACHA20_POLY1305_SHA256));
+          assert (pure (CS.named_group_offered
+            (Some?.v
+              (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server)
+              .CS.server_supported_groups
+            T.X25519));
+          assert (pure (CS.signature_scheme_offered
+            (Some?.v
+              (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server)
+              .CS.server_allowed_signature_schemes
+            T.Rsa_pss_rsae_sha256));
+          assert (pure (CS.sni_policy_accepts
+            (Some?.v
+              (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server)
+              .CS.server_sni_policy
+            (Sem.clientHello_server_name
+              (Some?.v
+                (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello))));
           assert (pure (match
               (Ghost.reveal st).CS.cs_model.CS.model_handshake.CS.hs_client_hello,
               (Ghost.reveal st).CS.cs_model.CS.model_config.CS.config_server with
@@ -1371,7 +1406,7 @@ fn server_finish_network_action
   (st1:Ghost.erased CS.connection_state)
   (consumed:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   server_endpoint_network_continuation srv cfg frame (Ghost.reveal st0) network_frame **
   SP.server_network_bridge_frame_post
@@ -1422,7 +1457,7 @@ fn server_finish_network_io
   (out_contents:Ghost.erased B.bytes)
   (consumed:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   server_network_io_continuation srv ch frame (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0) nio **
   pts_to (server_network_input nio) (Ghost.reveal (server_network_input_contents nio)) **
@@ -2193,7 +2228,7 @@ fn server_finish_local_action
   (st0:Ghost.erased CS.connection_state)
   (st1:Ghost.erased CS.connection_state)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   server_endpoint_local_continuation srv cfg frame (Ghost.reveal st0) ev local_frame **
   SP.server_local_bridge_frame_post
@@ -2345,7 +2380,7 @@ fn server_finish_local_io
   (st1:Ghost.erased CS.connection_state)
   (out_contents:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   server_local_io_continuation srv ch frame (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0) ev lio **
   pts_to (server_local_output lio) (Ghost.reveal out_contents) **
@@ -2787,7 +2822,7 @@ ensures
           (old_out:Ghost.erased B.bytes)
           (out_contents:Ghost.erased B.bytes)
           (wire_outputs:Ghost.erased (list CW.wire_message))
-          (local_outputs:Ghost.erased (list CTypes.local_output)).
+          (local_outputs:Ghost.erased (list EAPI.local_output)).
     SP.server_invariant
       srv
       (Ghost.reveal received1)
@@ -2812,7 +2847,7 @@ ensures
       (Ghost.reveal local_outputs) **
     pure (
       CPI.local_process_correct
-        (SP.server_system (Ghost.reveal srv.SP.canonical_server_initial))
+        (ES.server_system #CTypes.server_local_event (Ghost.reveal srv.SP.canonical_server_initial))
         ev
         (Ghost.reveal old_out)
         (Ghost.reveal out_contents)
@@ -2918,7 +2953,7 @@ ensures
       (Ghost.reveal local_outputse));
   assert (pure (
     CPI.local_process_correct
-      (SP.server_system (Ghost.reveal srv.SP.canonical_server_initial))
+      (ES.server_system #CTypes.server_local_event (Ghost.reveal srv.SP.canonical_server_initial))
       ev
       (Ghost.reveal (server_local_old_output lio))
       (Ghost.reveal out_contentse)
@@ -4099,7 +4134,7 @@ let server_protocol_endpoint
       CS.connection_state
       CW.wire_message
       CTypes.server_local_event
-      CTypes.local_output
+      EAPI.local_output
       SP.server_protocol_implementation
   =
   {

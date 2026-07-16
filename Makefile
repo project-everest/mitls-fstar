@@ -46,11 +46,14 @@ EXTRACT_DIR = _extract
 HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
 HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
+SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(GENERATED_DIR) \
+  $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include common \
-  --include src/spec \
+  $(addprefix --include ,$(SPEC_DIRS)) \
   --include src/impl \
   --include $(GENERATED_DIR) \
   --include $(LOWPARSE_HOME) \
@@ -95,7 +98,7 @@ FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
-SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
+SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
@@ -381,7 +384,7 @@ COMMON_ENDPOINT_MODULES = \
 TLS13_SHARED_ENDPOINT_MODULES = \
   TLS13.Impl.ConnectionStateQuery \
   TLS13.Impl.CanonicalTypes \
-  TLS13.Impl.CanonicalWire
+  TLS13.Spec.Endpoint.Wire
 TLS13_CLIENT_ENDPOINT_MODULES = \
   $(TLS13_SHARED_ENDPOINT_MODULES) \
   TLS13.Impl.Client.CanonicalProtocol \
@@ -550,7 +553,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@target_base=$$(basename "$@" .krml); \
 	module=; src=; \
 	for ext in fst fsti; do \
-	  for dir in common src/spec src/impl $(GENERATED_DIR) $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse \
+	  for dir in $(SOURCE_DIRS) \
 	      $(FSTAR_ULIB) $(FSTAR_PULSE_COMMON) $(FSTAR_PULSE_LIB); do \
 	    test -d "$$dir" || continue; \
 	    for candidate in "$$dir"/*.$$ext; do \
@@ -612,8 +615,8 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
 	  -library TLS13.Crypto -library TLS13.X509 -library Common.TCP \
 	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
-	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
+	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
@@ -714,9 +717,14 @@ check-c-stubs: | check-deps
 	  $(ECHO_STUB_SOURCES)
 
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
-test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: \
-  scripts/generate-test-certs.sh
+TEST_CERT_STAMP = test/certs/.generated
+
+$(TEST_CERT_STAMP): scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
+	touch $@
+
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: $(TEST_CERT_STAMP)
+	@test -f $@
 
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
@@ -820,7 +828,8 @@ clean:
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
 	  test/openssl_echo_server.port \
-	  test/openssl_echo_server.log
+	  test/openssl_echo_server.log \
+	  $(TEST_CERT_STAMP)
 	find src test -name '*.checked' -delete
 
 .PHONY: all verify test extract-krml extract-connection extract-smoke \

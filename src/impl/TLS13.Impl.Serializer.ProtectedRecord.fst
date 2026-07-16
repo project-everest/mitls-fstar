@@ -8,7 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module C = TLS13.Impl.Serializer.Common
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module Rec = TLS13.Record
@@ -76,7 +76,7 @@ fn encode_handshake_inner_plaintext
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 Seq.equal out_bytes
-                  (CS.sent_tls_inner_plaintext_fragment
+                  (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
                     (M.TlsHandshake (Ghost.reveal msg))))
 {
   C.copy_array_slice_to_array handshake handshake_len 0sz handshake_len out out_len 0sz;
@@ -150,7 +150,7 @@ fn encode_handshake_inner_plaintext
   WSRD.lemma_serialize_tls_message_handshake (Ghost.reveal msg);
   assert (pure (Seq.equal
     (Ghost.reveal out_bytes)
-    (CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)))));
+    (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)))));
 }
 
 fn serialize_application_data_header
@@ -166,7 +166,7 @@ fn serialize_application_data_header
           pure (B.length header_bytes == 5 /\
                 Seq.equal
                   (Ghost.reveal header_bytes)
-                  (CS.application_data_record_header (SZ.v fragment_len)) /\
+                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len)) /\
                 WS.parse_record_header (Ghost.reveal header_bytes) ==
                   Some (T.Application_data, SZ.v fragment_len))
 {
@@ -194,12 +194,12 @@ fn serialize_application_data_header
     header_bytes
     (WSR.application_data_record_header_bytes (SZ.v fragment_len));
   Seq.lemma_eq_elim
-    (CS.application_data_record_header (SZ.v fragment_len))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len))
     (WSR.application_data_record_header_bytes (SZ.v fragment_len));
   WSR.lemma_parse_application_data_record_header_bytes (SZ.v fragment_len);
   assert (pure (Seq.equal
     header_bytes
-    (CS.application_data_record_header (SZ.v fragment_len))));
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len))));
   assert (pure (WS.parse_record_header header_bytes ==
     Some (T.Application_data, SZ.v fragment_len)));
 }
@@ -225,8 +225,8 @@ fn serialize_raw_application_data_record
                   Seq.slice out_bytes 0 (SZ.v written) in
                 Seq.equal raw_prefix (WS.serialize_record T.Application_data (Ghost.reveal 'fragment_bytes)) /\
                 Seq.equal
-                  (CS.record_header_aad raw_prefix)
-                  (CS.application_data_record_header (SZ.v fragment_len)) /\
+                  (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len)) /\
                 WS.parse_record raw_prefix ==
                   Some (T.Application_data, (Ghost.reveal 'fragment_bytes), SZ.v written) /\
                 CS.raw_records_exactly raw_prefix T.Application_data 1))
@@ -256,7 +256,7 @@ fn serialize_raw_application_data_record
     (CL.raw_slice header_written 0 5)
     (WSR.application_data_record_header_bytes (SZ.v fragment_len));
   Seq.lemma_eq_elim
-    (CS.application_data_record_header (SZ.v fragment_len))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len))
     (WSR.application_data_record_header_bytes (SZ.v fragment_len));
   C.copy_array_slice_to_array fragment fragment_len 0sz fragment_len out out_len 5sz;
   let written = SZ.add fragment_len 5sz;
@@ -286,7 +286,7 @@ fn serialize_raw_application_data_record
     (Ghost.reveal 'fragment_bytes);
   assert (pure (Seq.equal
     (Seq.slice out_bytes 0 (SZ.v written))
-    (B.append (CS.application_data_record_header (SZ.v fragment_len)) (Ghost.reveal 'fragment_bytes))));
+    (B.append (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len)) (Ghost.reveal 'fragment_bytes))));
   WSR.lemma_serialize_application_data_record_reveal (Ghost.reveal 'fragment_bytes);
   assert (pure (Seq.equal
     (Seq.slice out_bytes 0 (SZ.v written))
@@ -302,8 +302,8 @@ fn serialize_raw_application_data_record
     Some (T.Application_data, (Ghost.reveal 'fragment_bytes), SZ.v written)));
   WSR.lemma_application_data_record_aad (Ghost.reveal 'fragment_bytes);
   assert (pure (Seq.equal
-    (CS.record_header_aad (Seq.slice out_bytes 0 (SZ.v written)))
-    (CS.application_data_record_header (SZ.v fragment_len))));
+    (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice out_bytes 0 (SZ.v written)))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len))));
   assert (pure (CS.raw_records_exactly (Seq.slice out_bytes 0 (SZ.v written)) T.Application_data 1));
   written
 }
@@ -330,11 +330,11 @@ fn serialize_protected_handshake_record
                  SZ.v handshake_len + 22 <= SZ.v network_out_len /\
                  Some? (R.seal
                    (Ghost.reveal record_write)
-                   (CS.application_data_record_header (SZ.v handshake_len + 17))
+                   (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17))
                    {
                      R.content_type = T.Application_data;
                      R.fragment =
-                       CS.sent_tls_inner_plaintext_fragment
+                       TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
                          (M.TlsHandshake (Ghost.reveal msg));
                    }))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
@@ -351,15 +351,15 @@ fn serialize_protected_handshake_record
                      Some (T.Application_data, outer_fragment, B.length raw_prefix) /\
                    Seq.equal raw_prefix (WS.serialize_record T.Application_data outer_fragment) /\
                    Seq.equal
-                     (CS.record_header_aad raw_prefix)
-                     (CS.application_data_record_header (SZ.v handshake_len + 17)) /\
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                     (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17)) /\
                    R.seal
                      (Ghost.reveal record_write)
-                     (CS.record_header_aad raw_prefix)
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
                      {
                        R.content_type = T.Application_data;
                        R.fragment =
-                         CS.sent_tls_inner_plaintext_fragment
+                         TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
                            (M.TlsHandshake (Ghost.reveal msg));
                      } ==
                      Some (outer_fragment, R.next_seq (Ghost.reveal record_write)))))
@@ -388,13 +388,13 @@ fn serialize_protected_handshake_record
   assert (pure (B.length inner_plaintext_bytes == SZ.v inner_len));
   assert (pure (Seq.equal
     inner_plaintext_bytes
-    (CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)))));
+    (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)))));
 
   let mut aad = [| 0uy; 5sz |];
   serialize_application_data_header ciphertext_len aad 5sz;
   with aad_bytes. assert (pts_to aad aad_bytes);
-  assert (pure (Seq.equal aad_bytes (CS.application_data_record_header (SZ.v ciphertext_len))));
-  assert (pure (Seq.equal aad_bytes (CS.application_data_record_header (SZ.v handshake_len + 17))));
+  assert (pure (Seq.equal aad_bytes (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
+  assert (pure (Seq.equal aad_bytes (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17))));
 
   let ciphertext = V.alloc 0uy ciphertext_len;
   V.to_array_pts_to ciphertext;
@@ -415,17 +415,17 @@ fn serialize_protected_handshake_record
       Some (ciphertext_bytes, R.next_seq (Ghost.reveal record_write))));
     Seq.lemma_eq_elim
       aad_bytes
-      (CS.application_data_record_header (SZ.v handshake_len + 17));
+      (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17));
     Seq.lemma_eq_elim
       inner_plaintext_bytes
-      (CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)));
+      (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)));
     assert (pure (R.seal
       (Ghost.reveal record_write)
-      (CS.application_data_record_header (SZ.v handshake_len + 17))
+      (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17))
       {
         R.content_type = T.Application_data;
         R.fragment =
-          CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg));
+          TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg));
       } ==
       Some (ciphertext_bytes, R.next_seq (Ghost.reveal record_write))));
 
@@ -447,18 +447,18 @@ fn serialize_protected_handshake_record
     assert (pure (WS.parse_record (Seq.slice network_bytes 0 (SZ.v written)) ==
       Some (T.Application_data, ciphertext_bytes, SZ.v written)));
     assert (pure (Seq.equal
-      (CS.record_header_aad (Seq.slice network_bytes 0 (SZ.v written)))
-      (CS.application_data_record_header (SZ.v ciphertext_len))));
+      (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_bytes 0 (SZ.v written)))
+      (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v ciphertext_len))));
     assert (pure (Seq.equal
-      (CS.record_header_aad (Seq.slice network_bytes 0 (SZ.v written)))
-      (CS.application_data_record_header (SZ.v handshake_len + 17))));
+      (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_bytes 0 (SZ.v written)))
+      (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17))));
     assert (pure (R.seal
       (Ghost.reveal record_write)
-      (CS.record_header_aad (Seq.slice network_bytes 0 (SZ.v written)))
+      (TLS13.Spec.StateMachine.Canonical.record_header_aad (Seq.slice network_bytes 0 (SZ.v written)))
       {
         R.content_type = T.Application_data;
         R.fragment =
-          CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg));
+          TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg));
       } ==
       Some (ciphertext_bytes, R.next_seq (Ghost.reveal record_write))));
     V.to_vec_pts_to ciphertext;
@@ -473,10 +473,10 @@ fn serialize_protected_handshake_record
       { R.content_type = T.Application_data; R.fragment = inner_plaintext_bytes } == None));
     Seq.lemma_eq_elim
       aad_bytes
-      (CS.application_data_record_header (SZ.v handshake_len + 17));
+      (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17));
     Seq.lemma_eq_elim
       inner_plaintext_bytes
-      (CS.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)));
+      (TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsHandshake (Ghost.reveal msg)));
     V.to_vec_pts_to ciphertext;
     V.free ciphertext;
     V.to_vec_pts_to inner_plaintext;

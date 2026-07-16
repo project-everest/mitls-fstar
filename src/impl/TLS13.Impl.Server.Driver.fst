@@ -8,14 +8,16 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
+module ES = TLS13.Spec.Endpoint.Server
 module A = Pulse.Lib.Array
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CT = TLS13.Impl.Client.Types
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -215,7 +217,7 @@ ghost fn server_driver_endpoint_connected_valid_byte_trace
             (Ghost.reveal canonical_received)
             (Ghost.reveal canonical_sent) **
           pure (WFSM.valid_byte_trace
-            (SP.server_system
+            (ES.server_system #CTypes.server_local_event
               (Ghost.reveal
                 (DS.server_driver_canonical d).SP.canonical_server_initial))
             (Ghost.reveal canonical_received)
@@ -254,7 +256,7 @@ noextract
 let server_driver_closed = DS.server_driver_closed
 
 let lemma_server_local_process_correct_received_unchanged
-  (initial:CS.connection_state)
+  (initial:ES.server_initial_state)
   (ev:CTypes.server_local_event)
   (old_out:B.bytes)
   (out_contents:B.bytes)
@@ -267,11 +269,11 @@ let lemma_server_local_process_correct_received_unchanged
   (sent1:B.bytes)
   (st1:CS.connection_state)
   (wire_outputs:list CW.wire_message)
-  (local_outputs:list CTypes.local_output)
+  (local_outputs:list EAPI.local_output)
   : Lemma
       (requires
         CPI.local_process_correct
-          (SP.server_system initial)
+          (ES.server_system #CTypes.server_local_event initial)
           ev
           old_out
           out_contents
@@ -298,7 +300,7 @@ let lemma_server_local_process_correct_received_unchanged
   | CPI.ConnectionFailed -> ()
 
 let lemma_server_driver_endpoint_local_wire_logs_match
-  (initial:CS.connection_state)
+  (initial:ES.server_initial_state)
   (st0:CS.connection_state)
   (st1:CS.connection_state)
   (canonical_received0:B.bytes)
@@ -315,7 +317,7 @@ let lemma_server_driver_endpoint_local_wire_logs_match
   (out_len:SZ.t)
   (result:CPI.process_result)
   (wire_outputs:list CW.wire_message)
-  (local_outputs:list CTypes.local_output)
+  (local_outputs:list EAPI.local_output)
   : Lemma
       (requires
         SP.server_invariant_pure
@@ -336,7 +338,7 @@ let lemma_server_driver_endpoint_local_wire_logs_match
           buffered
           buffered_len /\
         CPI.local_process_correct
-          (SP.server_system initial)
+          (ES.server_system #CTypes.server_local_event initial)
           ev
           old_out
           out_contents
@@ -760,7 +762,7 @@ fn new_server
           (CR.server_initial_state
             (Ghost.reveal 'certificate_chain_bytes)
             credential_identity));
-      let progress = MR.alloc #_ #SP.server_progress_preorder
+      let progress = MR.alloc #_ #(ES.server_progress_preorder #CTypes.server_local_event)
         (CR.server_initial_state
           (Ghost.reveal 'certificate_chain_bytes)
           credential_identity);
@@ -1921,9 +1923,9 @@ fn send_endpoint
            pure (exists (old_out:B.bytes)
                         (out_contents:B.bytes)
                         (wire_outputs:list CW.wire_message)
-                        (local_outputs:list CTypes.local_output).
+                        (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (SP.server_system
+               (ES.server_system #CTypes.server_local_event
                  (Ghost.reveal
                    (server_driver_canonical d).SP.canonical_server_initial))
                (server_driver_endpoint_send_event payload_bytes)
@@ -2048,7 +2050,7 @@ fn send_endpoint
         (Ghost.reveal local_outputs));
   assert (pure (ev == server_driver_endpoint_send_event payload_bytes));
   assert (pure (CPI.local_process_correct
-    (SP.server_system
+    (ES.server_system #CTypes.server_local_event
       (Ghost.reveal
         (server_driver_canonical d).SP.canonical_server_initial))
     (server_driver_endpoint_send_event payload_bytes)
@@ -2187,7 +2189,7 @@ fn send_endpoint
       (Ghost.reveal sent1) **
     pts_to payload payload_bytes **
     pure (CPI.local_process_correct
-      (SP.server_system
+      (ES.server_system #CTypes.server_local_event
         (Ghost.reveal
           (server_driver_canonical d).SP.canonical_server_initial))
       (server_driver_endpoint_send_event payload_bytes)
@@ -2527,9 +2529,9 @@ fn close_endpoint
            pure (exists (old_out:B.bytes)
                          (out_contents:B.bytes)
                          (wire_outputs:list CW.wire_message)
-                         (local_outputs:list CTypes.local_output).
+                         (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (SP.server_system
+               (ES.server_system #CTypes.server_local_event
                  (Ghost.reveal
                    (server_driver_canonical d).SP.canonical_server_initial))
                server_driver_endpoint_close_event
@@ -2653,7 +2655,7 @@ fn close_endpoint
         (Ghost.reveal local_outputs));
   assert (pure (ev == server_driver_endpoint_close_event));
   assert (pure (CPI.local_process_correct
-    (SP.server_system
+    (ES.server_system #CTypes.server_local_event
       (Ghost.reveal
         (server_driver_canonical d).SP.canonical_server_initial))
     server_driver_endpoint_close_event
@@ -2783,9 +2785,9 @@ fn close_endpoint
   assert (pure (exists (old_out0:B.bytes)
                        (out_contents0:B.bytes)
                        (wire_outputs0:list CW.wire_message)
-                       (local_outputs0:list CTypes.local_output).
+                       (local_outputs0:list EAPI.local_output).
     CPI.local_process_correct
-      (SP.server_system
+      (ES.server_system #CTypes.server_local_event
         (Ghost.reveal
           (server_driver_canonical d).SP.canonical_server_initial))
       server_driver_endpoint_close_event

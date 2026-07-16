@@ -8,7 +8,7 @@ module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -330,13 +330,13 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           server_final
           client_final)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -643,7 +643,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           R.next_seq server_after2.CS.model_record.CS.record_write /\
         client_after3.CS.model_record.CS.record_read ==
           R.next_seq client_after_verify_skip.CS.model_record.CS.record_read /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           server_flight_sender
           (CS.ConnLocalEvent
             (CS.LocalInstallTrafficKeysForRole {
@@ -669,7 +669,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           server_raw_sent
           server_raw_received
           server_final /\
-        CS.conn_events_received_decode_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
           server_flight_receiver
           (CS.ConnLocalEvent
             (CS.LocalInstallTrafficKeys {
@@ -692,9 +692,9 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client_raw_sent
           client_raw_received
           client_final /\
-        CS.record_key_iv_material_agrees
-          (CS.record_material_of_traffic_material client_finished_client_write_material)
-          (CS.record_material_of_traffic_material client_finished_server_read_material) /\
+        TLS13.Spec.StateMachine.KeyMaterial.record_key_iv_material_agrees
+          (TLS13.Spec.StateMachine.KeyMaterial.record_material_of_traffic_material client_finished_client_write_material)
+          (TLS13.Spec.StateMachine.KeyMaterial.record_material_of_traffic_material client_finished_server_read_material) /\
         CS.step_model
           client_finished_write_install_source
           (CS.ConnLocalEvent
@@ -760,7 +760,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
             CL.message_direction = CL.Received;
             CL.message_value = M.TlsHandshake received_msg4;
           }) == Some cf_server_after_finished /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           client_finished_sender
           (CS.ConnLocalEvent (CS.LocalVerifyFinished verified_server_finished) ::
            CS.ConnLocalEvent
@@ -782,7 +782,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client_finished_raw_sent
           client_finished_raw_received
           client_finished_final /\
-        CS.conn_events_received_decode_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
           client_finished_receiver
           (CS.ConnLocalEvent
              (CS.LocalInstallTrafficKeysForRole {
@@ -801,13 +801,13 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           server_finished_raw_received
           server_finished_final)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -1256,38 +1256,38 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_prefix
           }) == Some cf_server_after_finished /\
         Seq.equal server_full_sent client_full_received /\
         Seq.equal client_full_sent server_full_received /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           server_model0
           (FStar.List.Tot.append server_prefix server_suffix)
           server_full_sent
           server_full_received
           server_final /\
-        CS.conn_events_received_decode_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
           server_model0
           (FStar.List.Tot.append server_prefix server_suffix)
           server_full_sent
           server_full_received
           server_final /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           client_model0
           (FStar.List.Tot.append client_prefix client_suffix)
           client_full_sent
           client_full_received
           client_final /\
-        CS.conn_events_received_decode_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
           client_model0
           (FStar.List.Tot.append client_prefix client_suffix)
           client_full_sent
           client_full_received
           client_final))
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -1374,13 +1374,13 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_prefix
       server_final
       client_final
   returns
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.
@@ -1796,13 +1796,13 @@ let lemma_client_server_application_record_material_agrees_from_handshake_comple
             CL.message_value = M.TlsHandshake received_msg4;
           }) == Some cf_server_after_finished))
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -1883,13 +1883,13 @@ let lemma_client_server_application_record_material_agrees_from_handshake_comple
       server.CS.cs_model
       client.CS.cs_model
   returns
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.
