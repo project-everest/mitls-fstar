@@ -493,7 +493,34 @@ let tls_system_inv (s:tls_system_state) : prop =
     on reachable states via the combined invariant below, not pinned per-step).
     ───────────────────────────────────────────────────────────────────────── **)
 
-(** The strict-progress SIDE CONDITION (STAGE 1).  A pre-application-data
+(** TODO (strict-progress / pure-canonical `tls_sys_step`).  The four
+    `*_advances` and two `*_local_advances` side conditions below are the LAST
+    residue keeping `tls_sys_step` from being the LITERAL canonical product
+    (`client_step`/`server_step` + channel plumbing only).  We investigated
+    folding them into the flagship theorem's antecedent (the way the no-rekeying
+    guard was folded) and found it UNSOUND without new machinery: both guards
+    encode a strict-progress lower bound ("each pre-application-data step raises
+    progress by exactly one") that the codebase only ever POSTULATES via these
+    guards — `TLS13.System.ProgressCount` proves only the `<= +1` UPPER bound.
+    Two distinct stutters block the fold:
+      * the send/deliver `*_advances` guards also exclude a stray
+        `TlsChangeCipherSpec` at `ControlHandshaking`, whose no-progress step
+        combines with the `ControlFailed` progress-collapse to break backward
+        monotonicity of any progress-based state predicate; and
+      * the local `*_local_advances` guards additionally exclude a redundant
+        idempotent key re-install, whose "stutter" status is STATE-dependent (it
+        depends on whether the target cache slot was already `Some`) and hence is
+        NOT a log-syntactic predicate — so no clean fold exists.
+    These guards exclude ONLY degenerate stutters that an honest implementation
+    never performs, so keeping them here does not affect the honest run
+    (non-vacuity) nor the Pulse-refinement/reachability argument.  Future work to
+    make `tls_sys_step` the pure canonical product is EITHER (a) prove the
+    intrinsic strict-progress theorem (a rank lower-bound over all `step_model`
+    transitions, comparable in size to the existing rank/inversion stack), OR
+    (b) move these guards into the OFFICIAL transition functions
+    (`client_step`/`server_step`) so `tls_sys_step` inherits them for free.
+
+    The strict-progress SIDE CONDITION (STAGE 1).  A pre-application-data
     transition must strictly raise the acting endpoint's progress count; once the
     endpoint has left the pre-application-data region (application data / close)
     the condition is vacuously satisfied.  This forbids exactly the two model
@@ -521,7 +548,11 @@ let server_advances (before after:CS.connection_state) : prop =
     advances progress (pre-application-data handshake locals) or changes control,
     so the honest run to a ready+quiescent state is untouched — NON-VACUITY: the
     honest run performs only progress-increasing handshake locals and
-    control-changing steps and never an internal app-read before it is ready. **)
+    control-changing steps and never an internal app-read before it is ready.
+    TODO: see the strict-progress note above `client_advances` — these two guards
+    are not soundly foldable into a state predicate (the redundant-install stutter
+    is state-dependent, not log-syntactic); revisit via the strict-progress
+    theorem or by moving them into the official `client_step`/`server_step`. **)
 let client_local_advances (before after:CS.connection_state) : prop =
   PC.client_progress after.CS.cs_model > PC.client_progress before.CS.cs_model \/
   ~(after.CS.cs_model.CS.model_control == before.CS.cs_model.CS.model_control)
