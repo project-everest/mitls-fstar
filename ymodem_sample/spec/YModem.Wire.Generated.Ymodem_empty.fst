@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let ymodem_empty_parser = LP.parse_empty
 
 noextract let ymodem_empty_serializer = LP.serialize_empty
 
 let ymodem_empty_bytesize_eq x = ()
 
-let ymodem_empty_reader = PPC.leaf_read_empty
+let ymodem_empty_reader = fun input #pm #v -> (PPC.leaf_read_empty) input #pm #v
 
-let ymodem_empty_writer = LPC.l2r_leaf_write_empty
+let ymodem_empty_writer = fun x out offset #v -> (LPC.l2r_leaf_write_empty) x out offset #v
 
-let ymodem_empty_leaf_size = LPC.leaf_size_empty
+let ymodem_empty_leaf_size = fun x -> (LPC.leaf_size_empty) x
 
-let read_ymodem_empty : PPB.copyful_parse ymodem_empty_vmatch ymodem_empty_parser ymodem_empty_conv = (PPB.copyful_parse_leaf PPC.leaf_read_empty)
+let read_ymodem_empty : PPB.copyful_parse ymodem_empty_vmatch ymodem_empty_parser ymodem_empty_conv = fun input #pm #v -> ((PPB.copyful_parse_leaf PPC.leaf_read_empty)) input #pm #v
 
-let free_ymodem_empty : PPB.free_t ymodem_empty_vmatch = (PPB.free_leaf #unit)
+let free_ymodem_empty : PPB.free_t ymodem_empty_vmatch = fun x #v -> ((PPB.free_leaf #unit)) x #v
 
-let write_ymodem_empty : PPB.l2r_safe_writer ymodem_empty_vmatch ymodem_empty_serializer ymodem_empty_conv = (PPB.l2r_safe_writer_leaf LP.serialize_empty 0sz LPC.l2r_leaf_write_empty)
+let write_ymodem_empty : PPB.l2r_safe_writer ymodem_empty_vmatch ymodem_empty_serializer ymodem_empty_conv = fun x #y out #v perr -> ((PPB.l2r_safe_writer_leaf LP.serialize_empty 0sz LPC.l2r_leaf_write_empty)) x #y out #v perr
 
 let ymodem_empty_bytesize_eqn x = (assert (FStar.Seq.length (LP.serialize LP.serialize_empty (x)) == 0))
 
