@@ -490,6 +490,9 @@ ensures exists* (chr chs pr ps:TCP.bytes) (st1:TP.tftp_server_state)
       (* st_a == send_next_state st; re-derive the shifted plan facts at c+1. *)
       Plan.lemma_send_shift (Ghost.reveal contents) (SZ.v c) (Ghost.reveal nblocks);
       FStar.List.Tot.Properties.append_length st.TP.tss_sent [L.hd st.TP.tss_pending];
+      (* fits_u64-free FStar.SizeT derives `fits 516` only via fits_at_least_16's
+         SMTPat, which needs `516 < pow2 16` concretized here. *)
+      assert_norm (516 < pow2 16);
       FStar.SizeT.fits_lte (4 + SZ.v block_len_c) 516;
       let nw = TCP.write ch out (SZ.add 4sz block_len_c);
       let nr = TCP.read ch ackbuf 4sz;
