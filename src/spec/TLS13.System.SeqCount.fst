@@ -1,0 +1,2038 @@
+module TLS13.System.SeqCount
+
+(**
+  STAGE 2a — the per-endpoint handshake-region seq-counting invariant, as a
+  STANDALONE module (NOT yet wired into `tls_system_inv`).
+
+  Founds `H_seq` (sender.record_write.seq == receiver.record_read.seq) on the
+  existing `byte_pairing`, via the counting invariants proved here.  See the
+  the payoff `lemma_hseq_from_counts` (bottom of this file) for how these found H_seq.
+
+  This file is being built incrementally; the pure per-endpoint delta lemmas come
+  first, then the system-level lifting.
+**)
+
+module B     = TLS13.Bytes
+module CL    = TLS13.ConnectionLog
+module CS    = TLS13.Spec.ConnectionState
+module M     = TLS13.Messages
+module R     = TLS13.Record.Spec
+module Seq   = FStar.Seq
+module T     = TLS13.Types
+module CW    = TLS13.Impl.CanonicalWire
+module WF    = Common.WireFormat
+module WStep = TLS13.System.WireStep
+module CSL   = TLS13.ConnectionState.Lemmas
+module Sys   = TLS13.System
+module PC    = TLS13.System.ProgressCount
+module ServerCP = TLS13.Impl.Server.CanonicalProtocol
+module ClientCP = TLS13.Impl.Client.CanonicalProtocol
+module SM    = Common.StateMachine
+module WFSM  = Common.WireFormatStateMachine
+module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
+module CTy   = TLS13.Impl.CanonicalTypes
+module RTC   = FStar.ReflexiveTransitiveClosure
+module ID    = FStar.IndefiniteDescription
+module W     = TLS13.Wire.Spec
+module PNI   = TLS13.Impl.Driver.PairingNoTailInversion
+module SWR   = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
+
+#set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+
+(** WRITE-side handshake-region counting invariant (two clauses).
+
+    GATED under `pre_appdata_control` — the same predicate that guards
+    `client_len_ok`/`server_len_ok`.  A mid-handshake `Close_notify`/`fail_model`
+    freezes `record_write` at `Handshake` while forcing one protected
+    (ApplicationData) record onto the sent log, so the raw ungated clause is FALSE
+    exactly at those close/fail exits (machine-checked counterexample).  Gating
+    makes the clause active precisely on the honest pre-application-data region,
+    where the seq/count pairing is genuinely maintained. **)
+let pwrite_ok (st:CS.connection_state) : prop =
+  PC.pre_appdata_control st.CS.cs_model.CS.model_control ==>
+  ( (st.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+       st.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+         WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_sent) /\
+    (st.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Initial ==>
+       WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_sent == 0) )
+
+(** READ-side handshake-region counting invariant (two clauses).  Gated exactly
+    like `pwrite_ok`. **)
+let pread_ok (st:CS.connection_state) : prop =
+  PC.pre_appdata_control st.CS.cs_model.CS.model_control ==>
+  ( (st.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+       st.CS.cs_model.CS.model_record.CS.record_read.R.seq ==
+         WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_received) /\
+    (st.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
+       WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_received == 0) )
+
+(** FORWARD-CLOSURE bridge (model level, lifted to `pre_appdata_control`): a legal
+    delta cannot re-enter the pre-application-data region once it has left it, so
+    a post-state that is still pre-application-data forces the pre-state to be as
+    well.  This UNLOCKS the (gated) hypothesis `pwrite_ok`/`pread_ok st0` whenever
+    the (gated) goal at `st1` is active.  Contrapositive of
+    `WStep.lemma_step_notpreappdata_stable`; the two `pre_appdata` predicates are
+    byte-identical definitions in `PC` and `WStep`. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_pre_appdata_back
+  (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
+  : Lemma
+      (requires CS.legal_connection_delta st0 d st1)
+      (ensures
+        PC.pre_appdata_control st1.CS.cs_model.CS.model_control ==>
+        PC.pre_appdata_control st0.CS.cs_model.CS.model_control)
+  = if PC.pre_appdata_control st0.CS.cs_model.CS.model_control
+    then ()
+    else begin
+      assert (PC.pre_appdata_control st0.CS.cs_model.CS.model_control ==
+              WStep.pre_appdata_ctrl st0.CS.cs_model.CS.model_control);
+      WStep.lemma_step_notpreappdata_stable
+        st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
+      assert (PC.pre_appdata_control st1.CS.cs_model.CS.model_control ==
+              WStep.pre_appdata_ctrl st1.CS.cs_model.CS.model_control)
+    end
+#pop-options
+
+(** System-level conjunct over both endpoints. **)
+let seq_count_ok (s:Sys.tls_system_state) : prop =
+  pwrite_ok s.Sys.client /\ pread_ok s.Sys.client /\
+  pwrite_ok s.Sys.server /\ pread_ok s.Sys.server
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PROBE 1 — RECEIVED network event preserves `pwrite_ok`.
+
+    Every `Received` network event modifies only `record_read`; `record_write`
+    and `raw_sent` are untouched (delta sent bytes empty).  So `pwrite_ok`
+    transports trivially.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+let lemma_pwrite_received
+  (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
+  (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.legal_connection_delta st0 d st1 /\
+        d.CS.delta_event == CS.received_tls_event msg /\
+        pwrite_ok st0)
+      (ensures pwrite_ok st1)
+  = assert (CS.event_raw_delta_legal st0.CS.cs_model d.CS.delta_event
+              d.CS.delta_raw_sent d.CS.delta_raw_received);
+    assert (Seq.equal d.CS.delta_raw_sent B.empty);
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_sent st0.CS.cs_wire_log.CL.raw_sent);
+    WStep.lemma_raw_appdata_count_seq_equal
+      st1.CS.cs_wire_log.CL.raw_sent st0.CS.cs_wire_log.CL.raw_sent;
+    assert (st1.CS.cs_model.CS.model_record.CS.record_write ==
+            st0.CS.cs_model.CS.model_record.CS.record_write);
+    // control may change (received event): unlock pwrite_ok st0 whenever the gated
+    // goal at st1 is active, via forward-closure of pre_appdata_control.
+    lemma_pre_appdata_back st0 d st1
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    COUNTING-ALGEBRA CORE (write side).
+
+    `pwrite_ok` is preserved by any legal delta, GIVEN three per-event facts that
+    isolate exactly what a discharger must prove:
+
+      P_seqdelta  : if the write epoch stays Handshake across the step, the write
+                    seq rises by exactly the appdata-record count of the sent
+                    byte-delta   (the counting crux — protected sends +1/+1;
+                    non-write events +0/+0).
+      P_installHS : if the step ENTERS the Handshake write epoch (a key install),
+                    the new seq is 0 and no appdata has been sent yet
+                    (the region fact: `raw_appdata_count(raw_sent)==0`).
+      P_initial   : if the step is at the Initial write epoch, no appdata sent.
+
+    The append law `lemma_raw_appdata_count_append` (needing the sent log to parse
+    cleanly into records — supplied by `client/server_byte_reachable`) transports
+    the count across the wire-log append.  Everything else is pure arithmetic.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40 --split_queries always"
+let lemma_pwrite_algebra
+  (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
+  (msgs:list CW.wire_message)
+  : Lemma
+      (requires
+        CS.legal_connection_delta st0 d st1 /\
+        pwrite_ok st0 /\
+        WF.parses_as CW.tls_record_wire_format
+          st0.CS.cs_wire_log.CL.raw_sent msgs Seq.empty /\
+        // P_seqdelta (gated on the goal being active at st1):
+        (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
+         st0.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         st1.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+         st1.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+           st0.CS.cs_model.CS.model_record.CS.record_write.R.seq +
+           WStep.raw_appdata_count d.CS.delta_raw_sent) /\
+        // P_installHS (gated):
+        (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
+         st1.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         ~(st0.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake) ==>
+         st1.CS.cs_model.CS.model_record.CS.record_write.R.seq == 0 /\
+         WStep.raw_appdata_count st1.CS.cs_wire_log.CL.raw_sent == 0) /\
+        // P_initial (gated):
+        (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
+         st1.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Initial ==>
+         WStep.raw_appdata_count st1.CS.cs_wire_log.CL.raw_sent == 0))
+      (ensures pwrite_ok st1)
+  = // st1.raw_sent == st0.raw_sent ++ d.delta_raw_sent (from legal_connection_delta)
+    WStep.lemma_raw_appdata_count_append
+      st0.CS.cs_wire_log.CL.raw_sent d.CS.delta_raw_sent msgs;
+    WStep.lemma_raw_appdata_count_seq_equal
+      st1.CS.cs_wire_log.CL.raw_sent
+      (B.append st0.CS.cs_wire_log.CL.raw_sent d.CS.delta_raw_sent);
+    // whenever the gated goal at st1 is active, pwrite_ok st0 is unlocked.
+    lemma_pre_appdata_back st0 d st1
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    SENT network event preserves `pread_ok` (read side untouched).
+    Mirror of `lemma_pwrite_received`: a Sent event modifies only `record_write`
+    and `raw_sent`; `record_read` and `raw_received` are unchanged.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+let lemma_pread_sent
+  (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
+  (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.legal_connection_delta st0 d st1 /\
+        d.CS.delta_event == CS.sent_tls_event msg /\
+        pread_ok st0)
+      (ensures pread_ok st1)
+  = assert (CS.event_raw_delta_legal st0.CS.cs_model d.CS.delta_event
+              d.CS.delta_raw_sent d.CS.delta_raw_received);
+    assert (Seq.equal d.CS.delta_raw_received B.empty);
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received
+                      st0.CS.cs_wire_log.CL.raw_received);
+    WStep.lemma_raw_appdata_count_seq_equal
+      st1.CS.cs_wire_log.CL.raw_received st0.CS.cs_wire_log.CL.raw_received;
+    assert (st1.CS.cs_model.CS.model_record.CS.record_read ==
+            st0.CS.cs_model.CS.model_record.CS.record_read);
+    lemma_pre_appdata_back st0 d st1
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    COUNTING-ALGEBRA CORE (read side) — mirror of `lemma_pwrite_algebra`.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40 --split_queries always"
+let lemma_pread_algebra
+  (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
+  (msgs:list CW.wire_message)
+  : Lemma
+      (requires
+        CS.legal_connection_delta st0 d st1 /\
+        pread_ok st0 /\
+        WF.parses_as CW.tls_record_wire_format
+          st0.CS.cs_wire_log.CL.raw_received msgs Seq.empty /\
+        // P_seqdelta (gated):
+        (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
+         st0.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         st1.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         st1.CS.cs_model.CS.model_record.CS.record_read.R.seq ==
+           st0.CS.cs_model.CS.model_record.CS.record_read.R.seq +
+           WStep.raw_appdata_count d.CS.delta_raw_received) /\
+        // P_installHS (gated):
+        (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
+         st1.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         ~(st0.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake) ==>
+         st1.CS.cs_model.CS.model_record.CS.record_read.R.seq == 0 /\
+         WStep.raw_appdata_count st1.CS.cs_wire_log.CL.raw_received == 0) /\
+        // P_initial (gated):
+        (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
+         st1.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
+         WStep.raw_appdata_count st1.CS.cs_wire_log.CL.raw_received == 0))
+      (ensures pread_ok st1)
+  = WStep.lemma_raw_appdata_count_append
+      st0.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received msgs;
+    WStep.lemma_raw_appdata_count_seq_equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received);
+    lemma_pre_appdata_back st0 d st1
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    INITIAL STATE.  Both endpoints start at record epoch Initial, seq 0, with
+    empty wire logs (appdata count 0), so `seq_count_ok` holds.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_seq_count_ok_initial (cfg_c cfg_s:CS.connection_config)
+  : Lemma (seq_count_ok (Sys.initial_tls_system cfg_c cfg_s))
+  = WStep.lemma_raw_appdata_count_empty ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    SERVER REACHABLE PARSES — the server analogues of
+    `WStep.lemma_client_reachable_raw_sent_parses` / `_raw_received_parses`.
+    A reachable server's outgoing / incoming byte log cleanly decomposes into a
+    wire-record list (the append witness for `lemma_raw_appdata_count_append`).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_reachable_raw_sent_parses
+  (cfg:CS.connection_config) (server:CS.connection_state)
+  : Lemma (requires
+            WStep.server_reachable (CS.initial cfg) server /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            (exists (msgs:list CW.wire_message).
+              WF.parses_as CW.tls_record_wire_format
+                server.CS.cs_wire_log.CL.raw_sent msgs Seq.empty))
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns
+      (exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          server.CS.cs_wire_log.CL.raw_sent msgs Seq.empty)
+    with _.
+    (
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      Seq.lemma_eq_elim server.CS.cs_wire_log.CL.raw_sent sm_bytes;
+      PNTWL.lemma_wire_parse_serialize_all_inverse out_msgs;
+      introduce exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          server.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
+      with out_msgs and ()
+    )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_reachable_raw_received_parses
+  (cfg:CS.connection_config) (server:CS.connection_state)
+  : Lemma (requires
+            WStep.server_reachable (CS.initial cfg) server /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            (exists (msgs:list CW.wire_message).
+              WF.parses_as CW.tls_record_wire_format
+                server.CS.cs_wire_log.CL.raw_received msgs Seq.empty))
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns
+      (exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          server.CS.cs_wire_log.CL.raw_received msgs Seq.empty)
+    with _.
+    (
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
+      Seq.lemma_eq_elim server.CS.cs_wire_log.CL.raw_received sm_bytes;
+      PNTWL.lemma_wire_parse_serialize_all_inverse in_msgs;
+      introduce exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          server.CS.cs_wire_log.CL.raw_received msgs Seq.empty
+      with in_msgs and ()
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    KEY/EPOCH COUPLING (record layer).  On reachable states, a record direction
+    is at the `Initial` epoch iff it has no key installed: `install_keys` always
+    sets a non-`Initial` epoch together with a key, `next_seq`/`advance` preserve
+    both, and every other step leaves the record untouched.  Used to exclude a
+    protected server send at an `Initial` write epoch (the seal projection forces
+    a key, hence a non-`Initial` epoch).
+    ───────────────────────────────────────────────────────────────────────── **)
+let record_key_epoch_coupling (m:CS.connection_model) : prop =
+  (m.CS.model_record.CS.record_write.R.epoch == R.Initial ==>
+     m.CS.model_record.CS.record_write.R.key == None) /\
+  (m.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
+     m.CS.model_record.CS.record_read.R.key == None)
+
+let rec lemma_advance_preserves_key_epoch (st:R.direction_state) (n:nat)
+  : Lemma (ensures (CS.advance_direction_records st n).R.key == st.R.key /\
+                   (CS.advance_direction_records st n).R.epoch == st.R.epoch)
+          (decreases n)
+          [SMTPat (CS.advance_direction_records st n)]
+  = if n = 0 then () else lemma_advance_preserves_key_epoch st (n - 1)
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_step_record_key_epoch_coupling
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        record_key_epoch_coupling m /\
+        CS.legal_event m ev /\
+        CS.step_model m ev == Some m')
+      (ensures record_key_epoch_coupling m')
+  = ()
+#pop-options
+
+let lemma_delta_record_key_epoch_coupling
+  (st0 st1:CS.connection_state)
+  : Lemma
+      (requires
+        record_key_epoch_coupling st0.CS.cs_model /\
+        CS.connection_state_single_step st0 st1)
+      (ensures record_key_epoch_coupling st1.CS.cs_model)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_record_key_epoch_coupling
+      st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+
+let lemma_single_step_record_key_epoch_coupling ()
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (record_key_epoch_coupling y.CS.cs_model);
+                     (CS.connection_state_single_step x y)}
+          record_key_epoch_coupling x.CS.cs_model /\
+          CS.connection_state_single_step x y ==>
+          record_key_epoch_coupling y.CS.cs_model)
+  = introduce forall x y.
+      record_key_epoch_coupling x.CS.cs_model /\
+      CS.connection_state_single_step x y ==>
+      record_key_epoch_coupling y.CS.cs_model
+    with
+      introduce _ ==> _ with _.
+      lemma_delta_record_key_epoch_coupling x y
+
+let lemma_consistent_record_key_epoch_coupling
+  (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st)
+      (ensures record_key_epoch_coupling st.CS.cs_model)
+  = let p (st:CS.connection_state) = record_key_epoch_coupling st.CS.cs_model in
+    lemma_single_step_record_key_epoch_coupling ();
+    let stable :
+      squash (
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure
+      CS.connection_state_single_step
+      p
+      stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+
+(** ─────────────────────────────────────────────────────────────────────────
+    RECORD/KEY-SCHEDULE COUPLING (handshake epoch).  On reachable states, a
+    record direction is at the `Handshake` epoch only once the corresponding
+    handshake-traffic key-schedule slot is populated.  A handshake key install
+    sets BOTH the record epoch (`Handshake`) and the matching schedule slot;
+    `next_seq`/`advance` preserve the epoch and never touch the schedule; and no
+    step ever clears a schedule slot.  Used to EXCLUDE a redundant handshake key
+    re-install: since the slot is already `Some`, the re-install cannot raise the
+    progress rank (which counts only slot presence), and it never changes the
+    control state — so the `*_local_advances` guard forbids it.
+    ───────────────────────────────────────────────────────────────────────── **)
+let hs_traffic_slot
+  (keys:CS.key_schedule_state) (label:CS.traffic_label)
+  : option CS.traffic_key_material =
+  match label with
+  | CS.ClientTraffic -> keys.CS.ks_client_handshake_traffic
+  | CS.ServerTraffic -> keys.CS.ks_server_handshake_traffic
+
+let record_schedule_coupling (m:CS.connection_model) : prop =
+  let role = m.CS.model_config.CS.config_role in
+  let keys = m.CS.model_handshake.CS.hs_keys in
+  (m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+     Some? (hs_traffic_slot keys
+             (CS.traffic_label_for_endpoint_direction role CS.TrafficWrite))) /\
+  (m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+     Some? (hs_traffic_slot keys
+             (CS.traffic_label_for_endpoint_direction role CS.TrafficRead)))
+
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 60 --split_queries always"
+let lemma_step_record_schedule_coupling
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        record_schedule_coupling m /\
+        CS.legal_event m ev /\
+        CS.step_model m ev == Some m')
+      (ensures record_schedule_coupling m')
+  = match ev with
+    | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnLocalEvent local ->
+      (match local with
+       | CS.LocalInstallTrafficKeys install -> ()
+       | CS.LocalInstallTrafficKeysForRole role_install -> ()
+       | _ -> ())
+#pop-options
+
+let lemma_delta_record_schedule_coupling
+  (st0 st1:CS.connection_state)
+  : Lemma
+      (requires
+        record_schedule_coupling st0.CS.cs_model /\
+        CS.connection_state_single_step st0 st1)
+      (ensures record_schedule_coupling st1.CS.cs_model)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_record_schedule_coupling
+      st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+
+let lemma_single_step_record_schedule_coupling ()
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (record_schedule_coupling y.CS.cs_model);
+                     (CS.connection_state_single_step x y)}
+          record_schedule_coupling x.CS.cs_model /\
+          CS.connection_state_single_step x y ==>
+          record_schedule_coupling y.CS.cs_model)
+  = introduce forall x y.
+      record_schedule_coupling x.CS.cs_model /\
+      CS.connection_state_single_step x y ==>
+      record_schedule_coupling y.CS.cs_model
+    with
+      introduce _ ==> _ with _.
+      lemma_delta_record_schedule_coupling x y
+
+let lemma_consistent_record_schedule_coupling
+  (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st)
+      (ensures record_schedule_coupling st.CS.cs_model)
+  = let p (st:CS.connection_state) = record_schedule_coupling st.CS.cs_model in
+    lemma_single_step_record_schedule_coupling ();
+    let stable :
+      squash (
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure
+      CS.connection_state_single_step
+      p
+      stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+
+(** ─────────────────────────────────────────────────────────────────────────
+    MODEL FACTS for a SENT network event (write side).  Under the gated
+    pre-application-data region, a Sent event's write-record seq rises by exactly
+    the appdata count of the sent byte-delta; it never installs handshake write
+    keys; and at the Initial write epoch it emits no appdata (cleartext hellos /
+    ChangeCipherSpec).  Protected sends at an Initial write epoch are excluded by
+    the seal projection + key/epoch coupling (a seal forces a key, hence a
+    non-Initial epoch).  The two cleartext-hello count-0 facts are supplied by the
+    caller from reachability (ServerHello wire bound / ClientHello wire profile).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_sent_write_model_facts
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  (rs rr:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.sent_tls_event msg) /\
+        CS.step_model m (CS.sent_tls_event msg) == Some m' /\
+        CS.event_raw_delta_legal m (CS.sent_tls_event msg) rs rr /\
+        record_key_epoch_coupling m /\
+        CS.sent_event_nonempty_seal_projection m (CS.sent_tls_event msg) rs /\
+        ((M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
+           WStep.raw_appdata_count rs == 0) /\
+        ((M.TlsHandshake? msg /\ M.ClientHello? (M.TlsHandshake?._0 msg)) ==>
+           WStep.raw_appdata_count rs == 0))
+      (ensures
+        (let w0 = m.CS.model_record.CS.record_write in
+         let w1 = m'.CS.model_record.CS.record_write in
+         (PC.pre_appdata_control m'.CS.model_control /\
+          w0.R.epoch == R.Handshake /\ w1.R.epoch == R.Handshake ==>
+            w1.R.seq == w0.R.seq + WStep.raw_appdata_count rs) /\
+         (PC.pre_appdata_control m'.CS.model_control /\
+          w1.R.epoch == R.Handshake ==> w0.R.epoch == R.Handshake) /\
+         (PC.pre_appdata_control m'.CS.model_control /\
+          w1.R.epoch == R.Initial ==> w0.R.epoch == R.Initial) /\
+         (PC.pre_appdata_control m'.CS.model_control /\
+          w1.R.epoch == R.Initial ==> WStep.raw_appdata_count rs == 0)))
+  = match msg with
+    | M.TlsChangeCipherSpec ->
+      WStep.lemma_cleartext_raw_count_zero msg rs
+    | M.TlsHandshake (M.EncryptedExtensions _)
+    | M.TlsHandshake (M.Certificate _)
+    | M.TlsHandshake (M.CertificateVerify _)
+    | M.TlsHandshake (M.Finished _) ->
+      WStep.lemma_protected_raw_count_one rs;
+      // protected ⟹ seal Some ⟹ write key Some ⟹ (coupling) write epoch ≠ Initial.
+      assert (CS.raw_records_exactly rs T.Application_data 1);
+      assert (B.length rs > 0);
+      assert (CS.sent_event_seal_projection m (CS.sent_tls_event msg) rs);
+      assert (CS.sent_single_protected_message_seal m msg rs);
+      assert (Some? m.CS.model_record.CS.record_write.R.key)
+    | _ -> ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    MODEL FACTS for a RECEIVED network event (read side).  Mirror of
+    `lemma_sent_write_model_facts`.  A received protected record advances the read
+    seq by one (count 1); a received cleartext record (ClientHello / ServerHello /
+    HelloRetryRequest / ChangeCipherSpec) has count 0.  Protected receives at an
+    Initial read epoch are excluded by the decode projection + key/epoch coupling
+    (an open forces a read key, hence a non-Initial epoch).  The ServerHello wire
+    bound is supplied by the caller from reachability.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_recv_read_model_facts
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  (rs rr:B.bytes)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.received_tls_event msg) /\
+        CS.step_model m (CS.received_tls_event msg) == Some m' /\
+        CS.event_raw_delta_legal m (CS.received_tls_event msg) rs rr /\
+        record_key_epoch_coupling m /\
+        CS.received_event_nonempty_decode_projection m (CS.received_tls_event msg) rr /\
+        ((M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
+           B.length (W.serialize_handshake (M.ServerHello (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))) <= 16640))
+      (ensures
+        (let r0 = m.CS.model_record.CS.record_read in
+         let r1 = m'.CS.model_record.CS.record_read in
+         (PC.pre_appdata_control m'.CS.model_control /\
+          r0.R.epoch == R.Handshake /\ r1.R.epoch == R.Handshake ==>
+            r1.R.seq == r0.R.seq + WStep.raw_appdata_count rr) /\
+         (PC.pre_appdata_control m'.CS.model_control /\
+          r1.R.epoch == R.Handshake ==> r0.R.epoch == R.Handshake) /\
+         (PC.pre_appdata_control m'.CS.model_control /\
+          r1.R.epoch == R.Initial ==> r0.R.epoch == R.Initial) /\
+         (PC.pre_appdata_control m'.CS.model_control /\
+          r1.R.epoch == R.Initial ==> WStep.raw_appdata_count rr == 0)))
+  = match msg with
+    | M.TlsChangeCipherSpec ->
+      WStep.lemma_received_cleartext_count_zero msg rr
+    | M.TlsHandshake (M.ClientHello _) ->
+      WStep.lemma_received_cleartext_count_zero msg rr
+    | M.TlsHandshake (M.ServerHello _) ->
+      WStep.lemma_received_cleartext_count_zero msg rr
+    | M.TlsHandshake M.HelloRetryRequest ->
+      WStep.lemma_received_cleartext_count_zero msg rr
+    | M.TlsHandshake (M.EncryptedExtensions _)
+    | M.TlsHandshake (M.Certificate _)
+    | M.TlsHandshake (M.CertificateVerify _)
+    | M.TlsHandshake (M.Finished _) ->
+      WStep.lemma_protected_raw_count_one rr;
+      assert (CS.raw_records_exactly rr T.Application_data 1);
+      assert (B.length rr > 0);
+      assert (CS.received_event_decode_projection m (CS.received_tls_event msg) rr);
+      assert (CS.received_single_protected_message_decode m msg rr);
+      assert (Some? m.CS.model_record.CS.record_read.R.key)
+    | _ -> ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    SMALL BRIDGES for the per-transition helpers.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** A wire record serialises to a non-empty byte string. **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_wire_serialize_nonempty (w:CW.wire_message)
+  : Lemma (B.length (CW.wire_serialize w) > 0)
+  = W.lemma_parse_record_wire_some_consumed_positive
+      w.CW.wm_raw w.CW.wm_content_type w.CW.wm_fragment (B.length w.CW.wm_raw)
+#pop-options
+
+(** With a legal raw delta, a non-empty SENT byte-delta forces a Sent network
+    event (a ConnLocalEvent / Received event has an empty sent byte-delta). **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_nonempty_sent_event
+  (m:CS.connection_model) (ev:CS.conn_event) (rs rr:B.bytes)
+  : Lemma
+      (requires CS.event_raw_delta_legal m ev rs rr /\ B.length rs > 0)
+      (ensures (exists (msg:M.tls_message). ev == CS.sent_tls_event msg))
+  = match ev with
+    | CS.ConnLocalEvent _ -> ()
+    | CS.ConnNetworkEvent dm ->
+      (match dm.CL.message_direction with
+       | CL.Sent ->
+         introduce exists (msg:M.tls_message). ev == CS.sent_tls_event msg
+         with dm.CL.message_value
+         and ()
+       | CL.Received -> ())
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PER-TRANSITION HELPER : client SEND.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_scop_client_send (a b:Sys.tls_system_state)
+  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_client_send a b /\ seq_count_ok a)
+          (ensures seq_count_ok b)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
+      ClientCP.client_step a.Sys.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      Sys.client_advances a.Sys.client c' /\
+      b == Sys.({ a with client = c';
+                         channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.Sys.client.CS.cs_model })
+    returns seq_count_ok b
+    with _pf.
+    (
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches a.Sys.client api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta a.Sys.client
+           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+              CS.delta_raw_received = B.empty }) c' /\
+         CS.sent_event_nonempty_seal_projection a.Sys.client.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection a.Sys.client.CS.cs_model conn_ev B.empty)
+      returns seq_count_ok b
+      with _pf2.
+      (
+        let d : CS.connection_delta =
+          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty } in
+        lemma_wire_serialize_nonempty w;
+        WStep.lemma_serialize_all_single_wire w;
+        Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
+        WStep.lemma_raw_appdata_count_seq_equal
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
+        assert (B.length raw_sent > 0);
+        lemma_nonempty_sent_event a.Sys.client.CS.cs_model conn_ev raw_sent B.empty;
+        eliminate exists (msg:M.tls_message). conn_ev == CS.sent_tls_event msg
+        returns seq_count_ok b
+        with _pf3.
+        (
+          lemma_pread_sent a.Sys.client d c' msg;
+          ( if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
+              (
+                WStep.lemma_client_reachable_raw_sent_parses
+                  a.Sys.client.CS.cs_model.CS.model_config a.Sys.client;
+                eliminate exists (msgs:list CW.wire_message).
+                  WF.parses_as CW.tls_record_wire_format
+                    a.Sys.client.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
+                returns pwrite_ok c'
+                with _pf4.
+                (
+                  lemma_pre_appdata_back a.Sys.client d c';
+                  assert (WStep.client_start_shape a.Sys.client.CS.cs_model);
+                  WStep.lemma_client_step_sent_zero
+                    a.Sys.client (SM.LocalEvent local) c' out;
+                  WStep.lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
+                  WStep.lemma_raw_appdata_count_seq_equal
+                    raw_sent (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs);
+                  lemma_consistent_record_key_epoch_coupling a.Sys.client;
+                  lemma_sent_write_model_facts
+                    a.Sys.client.CS.cs_model msg c'.CS.cs_model raw_sent B.empty;
+                  WStep.lemma_raw_appdata_count_append
+                    a.Sys.client.CS.cs_wire_log.CL.raw_sent raw_sent msgs;
+                  Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_sent
+                    (B.append a.Sys.client.CS.cs_wire_log.CL.raw_sent raw_sent);
+                  lemma_pwrite_algebra a.Sys.client d c' msgs
+                )
+              )
+            else () );
+          assert (pwrite_ok b.Sys.server);
+          assert (pread_ok b.Sys.server)
+        )
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PER-TRANSITION HELPER : deliver to CLIENT (client RECEIVE).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_scop_deliver_to_client (a b:Sys.tls_system_state)
+  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_deliver_to_client a b /\ seq_count_ok a)
+          (ensures seq_count_ok b)
+  = eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output)
+                     (raw:B.bytes) (snap:CS.connection_model).
+      a.Sys.channel == Sys.TlsInFlight CS.ClientEndpoint raw snap /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ClientCP.client_step a.Sys.client (SM.WireEvent wire) c' out /\
+      Sys.client_advances a.Sys.client c' /\
+      b == Sys.({ a with client = c'; channel = TlsQuiet })
+    returns seq_count_ok b
+    with _pf.
+    (
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent
+             ({ CL.message_direction = CL.Received; CL.message_value = msg }) in
+         CS.legal_connection_delta a.Sys.client
+           ({ CS.delta_event = conn_ev;
+              CS.delta_raw_sent =
+                WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+              CS.delta_raw_received = CW.wire_serialize wire }) c' /\
+         CS.sent_event_nonempty_seal_projection a.Sys.client.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         CS.received_event_nonempty_decode_projection a.Sys.client.CS.cs_model conn_ev
+           (CW.wire_serialize wire))
+      returns seq_count_ok b
+      with _pf2.
+      (
+        WStep.lemma_client_wire_event_no_output a.Sys.client c' wire out;
+        let d : CS.connection_delta =
+          { CS.delta_event = CS.received_tls_event msg;
+            CS.delta_raw_sent =
+              WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+            CS.delta_raw_received = CW.wire_serialize wire } in
+        // WRITE side untouched.
+        lemma_pwrite_received a.Sys.client d c' msg;
+        // READ side.
+        ( if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
+            (
+              WStep.lemma_client_reachable_raw_received_parses
+                a.Sys.client.CS.cs_model.CS.model_config a.Sys.client;
+              eliminate exists (msgs:list CW.wire_message).
+                WF.parses_as CW.tls_record_wire_format
+                  a.Sys.client.CS.cs_wire_log.CL.raw_received msgs Seq.empty
+              returns pread_ok c'
+              with _pf4.
+              (
+                lemma_pre_appdata_back a.Sys.client d c';
+                lemma_consistent_record_key_epoch_coupling a.Sys.client;
+                WStep.lemma_consistent_server_hello_wire_bound a.Sys.client;
+                WStep.lemma_step_model_server_hello_wire_bound_reachable_shape
+                  a.Sys.client.CS.cs_model (CS.received_tls_event msg) c'.CS.cs_model;
+                assert (CS.step_model a.Sys.client.CS.cs_model (CS.received_tls_event msg)
+                          == Some c'.CS.cs_model);
+                introduce (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
+                          B.length (W.serialize_handshake
+                            (M.ServerHello (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))) <= 16640
+                with _hyp.
+                (
+                  assert (c'.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+                          Some (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))
+                );
+                lemma_recv_read_model_facts
+                  a.Sys.client.CS.cs_model msg c'.CS.cs_model
+                  (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+                  (CW.wire_serialize wire);
+                WStep.lemma_raw_appdata_count_append
+                  a.Sys.client.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire) msgs;
+                Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_received
+                  (B.append a.Sys.client.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire));
+                lemma_pread_algebra a.Sys.client d c' msgs
+              )
+            )
+          else () );
+        assert (pwrite_ok b.Sys.server);
+        assert (pread_ok b.Sys.server)
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PER-TRANSITION HELPER : server SEND.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** A Sent ClientHello is only legal at the client-only `HsStarted` stage; the
+    server (whose `server_stage_ok` excludes that stage) therefore never sends
+    one — used to discharge the ClientHello arm vacuously. **)
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 40"
+let lemma_sent_client_hello_forces_hsstarted
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma
+      (requires
+        (M.TlsHandshake? msg /\ M.ClientHello? (M.TlsHandshake?._0 msg)) /\
+        CS.step_model m (CS.sent_tls_event msg) == Some m')
+      (ensures m.CS.model_control == CS.ControlHandshaking CS.HsStarted)
+  = ()
+#pop-options
+
+(** A Sent ServerHello stores itself in `hs_server_hello`. **)
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 40"
+let lemma_sent_server_hello_stored
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma
+      (requires
+        (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) /\
+        CS.step_model m (CS.sent_tls_event msg) == Some m')
+      (ensures m'.CS.model_handshake.CS.hs_server_hello ==
+               Some (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))
+  = ()
+#pop-options
+
+(** A Received ServerHello stores itself in `hs_server_hello`. **)
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 40"
+let lemma_recv_server_hello_stored
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma
+      (requires
+        (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) /\
+        CS.step_model m (CS.received_tls_event msg) == Some m')
+      (ensures m'.CS.model_handshake.CS.hs_server_hello ==
+               Some (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_scop_server_send (a b:Sys.tls_system_state)
+  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_server_send a b /\ seq_count_ok a)
+          (ensures seq_count_ok b)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
+      ServerCP.server_step a.Sys.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      Sys.server_advances a.Sys.server s' /\
+      b == Sys.({ a with server = s';
+                         channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.Sys.server.CS.cs_model })
+    returns seq_count_ok b
+    with _pf.
+    (
+      let api = CTy.server_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ServerCP.server_api_event_matches api conn_ev /\
+         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta a.Sys.server
+           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+              CS.delta_raw_received = B.empty }) s' /\
+         CS.sent_event_nonempty_seal_projection a.Sys.server.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection a.Sys.server.CS.cs_model conn_ev B.empty)
+      returns seq_count_ok b
+      with _pf2.
+      (
+        let d : CS.connection_delta =
+          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty } in
+        lemma_wire_serialize_nonempty w;
+        WStep.lemma_serialize_all_single_wire w;
+        Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
+        WStep.lemma_raw_appdata_count_seq_equal
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
+        assert (B.length raw_sent > 0);
+        lemma_nonempty_sent_event a.Sys.server.CS.cs_model conn_ev raw_sent B.empty;
+        eliminate exists (msg:M.tls_message). conn_ev == CS.sent_tls_event msg
+        returns seq_count_ok b
+        with _pf3.
+        (
+          // READ side untouched.
+          lemma_pread_sent a.Sys.server d s' msg;
+          // WRITE side.
+          ( if PC.pre_appdata_control s'.CS.cs_model.CS.model_control then
+              (
+                lemma_server_reachable_raw_sent_parses
+                  a.Sys.server.CS.cs_model.CS.model_config a.Sys.server;
+                eliminate exists (msgs:list CW.wire_message).
+                  WF.parses_as CW.tls_record_wire_format
+                    a.Sys.server.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
+                returns pwrite_ok s'
+                with _pf4.
+                (
+                  lemma_pre_appdata_back a.Sys.server d s';
+                  lemma_consistent_record_key_epoch_coupling a.Sys.server;
+                  // ServerHello bound (reachable-shape lifted across the step).
+                  WStep.lemma_consistent_server_hello_wire_bound a.Sys.server;
+                  WStep.lemma_step_model_server_hello_wire_bound_reachable_shape
+                    a.Sys.server.CS.cs_model (CS.sent_tls_event msg) s'.CS.cs_model;
+                  assert (CS.step_model a.Sys.server.CS.cs_model (CS.sent_tls_event msg)
+                            == Some s'.CS.cs_model);
+                  // ServerHello send ==> count(raw_sent)==0.
+                  introduce (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
+                            WStep.raw_appdata_count raw_sent == 0
+                  with _hyp.
+                  (
+                    lemma_sent_server_hello_stored
+                      a.Sys.server.CS.cs_model msg s'.CS.cs_model;
+                    WStep.lemma_cleartext_raw_count_zero msg raw_sent
+                  );
+                  // ClientHello send is impossible for a server (stage_ok excludes HsStarted).
+                  introduce (M.TlsHandshake? msg /\ M.ClientHello? (M.TlsHandshake?._0 msg)) ==>
+                            WStep.raw_appdata_count raw_sent == 0
+                  with _hyp.
+                  (
+                    lemma_sent_client_hello_forces_hsstarted
+                      a.Sys.server.CS.cs_model msg s'.CS.cs_model
+                  );
+                  lemma_sent_write_model_facts
+                    a.Sys.server.CS.cs_model msg s'.CS.cs_model raw_sent B.empty;
+                  WStep.lemma_raw_appdata_count_append
+                    a.Sys.server.CS.cs_wire_log.CL.raw_sent raw_sent msgs;
+                  Seq.lemma_eq_elim s'.CS.cs_wire_log.CL.raw_sent
+                    (B.append a.Sys.server.CS.cs_wire_log.CL.raw_sent raw_sent);
+                  lemma_pwrite_algebra a.Sys.server d s' msgs
+                )
+              )
+            else () );
+          assert (pwrite_ok b.Sys.client);
+          assert (pread_ok b.Sys.client)
+        )
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PER-TRANSITION HELPER : deliver to SERVER (server RECEIVE).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_scop_deliver_to_server (a b:Sys.tls_system_state)
+  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_deliver_to_server a b /\ seq_count_ok a)
+          (ensures seq_count_ok b)
+  = eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output)
+                     (raw:B.bytes) (snap:CS.connection_model).
+      a.Sys.channel == Sys.TlsInFlight CS.ServerEndpoint raw snap /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ServerCP.server_step a.Sys.server (SM.WireEvent wire) s' out /\
+      Sys.server_advances a.Sys.server s' /\
+      b == Sys.({ a with server = s'; channel = TlsQuiet })
+    returns seq_count_ok b
+    with _pf.
+    (
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent
+             ({ CL.message_direction = CL.Received; CL.message_value = msg }) in
+         CS.legal_connection_delta a.Sys.server
+           ({ CS.delta_event = conn_ev;
+              CS.delta_raw_sent =
+                WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+              CS.delta_raw_received = CW.wire_serialize wire }) s' /\
+         CS.received_event_nonempty_decode_projection a.Sys.server.CS.cs_model conn_ev
+           (CW.wire_serialize wire))
+      returns seq_count_ok b
+      with _pf2.
+      (
+        WStep.lemma_server_wire_event_no_output a.Sys.server s' wire out;
+        let d : CS.connection_delta =
+          { CS.delta_event = CS.received_tls_event msg;
+            CS.delta_raw_sent =
+              WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+            CS.delta_raw_received = CW.wire_serialize wire } in
+        // WRITE side untouched.
+        lemma_pwrite_received a.Sys.server d s' msg;
+        // READ side.
+        ( if PC.pre_appdata_control s'.CS.cs_model.CS.model_control then
+            (
+              lemma_server_reachable_raw_received_parses
+                a.Sys.server.CS.cs_model.CS.model_config a.Sys.server;
+              eliminate exists (msgs:list CW.wire_message).
+                WF.parses_as CW.tls_record_wire_format
+                  a.Sys.server.CS.cs_wire_log.CL.raw_received msgs Seq.empty
+              returns pread_ok s'
+              with _pf4.
+              (
+                lemma_pre_appdata_back a.Sys.server d s';
+                lemma_consistent_record_key_epoch_coupling a.Sys.server;
+                WStep.lemma_consistent_server_hello_wire_bound a.Sys.server;
+                WStep.lemma_step_model_server_hello_wire_bound_reachable_shape
+                  a.Sys.server.CS.cs_model (CS.received_tls_event msg) s'.CS.cs_model;
+                assert (CS.step_model a.Sys.server.CS.cs_model (CS.received_tls_event msg)
+                          == Some s'.CS.cs_model);
+                introduce (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
+                          B.length (W.serialize_handshake
+                            (M.ServerHello (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))) <= 16640
+                with _hyp.
+                (
+                  lemma_recv_server_hello_stored
+                    a.Sys.server.CS.cs_model msg s'.CS.cs_model
+                );
+                lemma_recv_read_model_facts
+                  a.Sys.server.CS.cs_model msg s'.CS.cs_model
+                  (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+                  (CW.wire_serialize wire);
+                WStep.lemma_raw_appdata_count_append
+                  a.Sys.server.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire) msgs;
+                Seq.lemma_eq_elim s'.CS.cs_wire_log.CL.raw_received
+                  (B.append a.Sys.server.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire));
+                lemma_pread_algebra a.Sys.server d s' msgs
+              )
+            )
+          else () );
+        assert (pwrite_ok b.Sys.client);
+        assert (pread_ok b.Sys.client)
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PROGRESS congruence: `client_progress`/`server_progress` depend only on the
+    control state and the Some?/None status of the key-schedule slots (and, for
+    the server, the encrypted-flight message fields) — NEVER on `model_record`.
+    A handshake key re-install that re-populates an already-`Some` slot therefore
+    leaves progress unchanged; combined with the fact that an install keeps the
+    control state, this violates the `*_local_advances` guard, EXCLUDING the
+    redundant re-install (the seq-resetting stutter).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 40 --split_queries always"
+let lemma_client_progress_congruence (m m':CS.connection_model)
+  : Lemma
+      (requires
+        m'.CS.model_control == m.CS.model_control /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic))
+      (ensures PC.client_progress m' == PC.client_progress m)
+  = ()
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_progress_congruence (m m':CS.connection_model)
+  : Lemma
+      (requires
+        m'.CS.model_control == m.CS.model_control /\
+        (Some? m'.CS.model_handshake.CS.hs_server_selection
+           <==> Some? m.CS.model_handshake.CS.hs_server_selection) /\
+        m'.CS.model_handshake.CS.hs_certificate_verify_verified
+           == m.CS.model_handshake.CS.hs_certificate_verify_verified /\
+        (Some? m'.CS.model_handshake.CS.hs_certificate_verify
+           <==> Some? m.CS.model_handshake.CS.hs_certificate_verify) /\
+        (Some? m'.CS.model_handshake.CS.hs_certificate
+           <==> Some? m.CS.model_handshake.CS.hs_certificate) /\
+        (Some? m'.CS.model_handshake.CS.hs_encrypted_extensions
+           <==> Some? m.CS.model_handshake.CS.hs_encrypted_extensions) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic) /\
+        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic))
+      (ensures PC.server_progress m' == PC.server_progress m)
+  = ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    LOCAL record-seq stability (client).  A client LOCAL step changes the record
+    ONLY via a key install (all other locals leave `model_record` fixed).  The
+    only install that resets `record_write.seq` while KEEPING the write epoch at
+    `Handshake` is a redundant handshake-write re-install; by `record_schedule_coupling`
+    the corresponding key slot is already `Some`, so the re-install leaves progress
+    flat (congruence) — but an install also keeps the control state, so the
+    `client_local_advances` guard (progress↑ ∨ control-changed) is violated.  The
+    read side is the mirror.  Hence the record seq is preserved (P_seqdelta with
+    an EMPTY delta).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_install_seq_stable
+  (m:CS.connection_model) (install:CS.traffic_key_install) (m':CS.connection_model)
+  : Lemma
+      (requires
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        record_schedule_coupling m /\
+        CS.ControlHandshaking? m.CS.model_control /\
+        m' == { m with
+                  CS.model_record = CS.install_record_keys m.CS.model_record install;
+                  CS.model_handshake =
+                    { m.CS.model_handshake with
+                        CS.hs_keys =
+                          CS.update_key_schedule_with_install
+                            m.CS.model_handshake.CS.hs_keys install } } /\
+        (PC.client_progress m' > PC.client_progress m \/
+         ~(m'.CS.model_control == m.CS.model_control)))
+      (ensures
+        (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_write.R.seq
+           == m.CS.model_record.CS.record_write.R.seq) /\
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_read.R.seq
+           == m.CS.model_record.CS.record_read.R.seq))
+  = assert (m'.CS.model_control == m.CS.model_control);
+    introduce (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+               m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
+              ==> m'.CS.model_record.CS.record_write.R.seq
+                    == m.CS.model_record.CS.record_write.R.seq
+    with _pf.
+      (match install.CS.install_epoch, install.CS.install_direction with
+       | CS.TrafficHandshake, CS.TrafficWrite -> lemma_client_progress_congruence m m'
+       | _, _ -> ());
+    introduce (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+               m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
+              ==> m'.CS.model_record.CS.record_read.R.seq
+                    == m.CS.model_record.CS.record_read.R.seq
+    with _pf.
+      (match install.CS.install_epoch, install.CS.install_direction with
+       | CS.TrafficHandshake, CS.TrafficRead -> lemma_client_progress_congruence m m'
+       | _, _ -> ())
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_install_for_role_seq_stable
+  (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        role_install.CS.install_role == CS.ClientEndpoint /\
+        record_schedule_coupling m /\
+        CS.ControlHandshaking? m.CS.model_control /\
+        m' == { m with
+                  CS.model_record =
+                    CS.install_record_keys_for_role
+                      role_install.CS.install_role
+                      m.CS.model_record role_install.CS.install_payload;
+                  CS.model_handshake =
+                    { m.CS.model_handshake with
+                        CS.hs_keys =
+                          CS.update_key_schedule_with_install_for_role
+                            role_install.CS.install_role
+                            m.CS.model_handshake.CS.hs_keys
+                            role_install.CS.install_payload } } /\
+        (PC.client_progress m' > PC.client_progress m \/
+         ~(m'.CS.model_control == m.CS.model_control)))
+      (ensures
+        (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_write.R.seq
+           == m.CS.model_record.CS.record_write.R.seq) /\
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_read.R.seq
+           == m.CS.model_record.CS.record_read.R.seq))
+  = // For role == ClientEndpoint the `_for_role` installs reduce to the plain ones.
+    lemma_client_local_install_seq_stable m role_install.CS.install_payload m'
+#pop-options
+
+(** Client LOCAL record-seq stability (dispatch on the local event).  Only the two
+    key-install locals touch `model_record`; everything else leaves it fixed. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_record_seq_stable
+  (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_local_event m local /\
+        CS.step_local_event m local == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        record_schedule_coupling m /\
+        (PC.client_progress m' > PC.client_progress m \/
+         ~(m'.CS.model_control == m.CS.model_control)))
+      (ensures
+        (PC.pre_appdata_control m'.CS.model_control /\
+         m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_write.R.seq
+           == m.CS.model_record.CS.record_write.R.seq) /\
+        (PC.pre_appdata_control m'.CS.model_control /\
+         m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_read.R.seq
+           == m.CS.model_record.CS.record_read.R.seq))
+  = match local with
+    | CS.LocalInstallTrafficKeys install ->
+      lemma_client_local_install_seq_stable m install m'
+    | CS.LocalInstallTrafficKeysForRole role_install ->
+      lemma_client_local_install_for_role_seq_stable m role_install m'
+    | _ -> ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    LOCAL record-seq stability (server).  Mirror of the client version: a server
+    installs traffic keys via `LocalInstallTrafficKeysForRole` with
+    `install_role == ServerEndpoint`.  The `(ServerEndpoint,TrafficApplication,
+    TrafficWrite)` install moves the write epoch to `Application` (so the
+    `Handshake` P_seqdelta antecedent is vacuous); the handshake installs are
+    excluded from resetting a `Handshake` seq by the same progress-flat +
+    `server_local_advances`-guard argument.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_local_install_for_role_seq_stable
+  (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        role_install.CS.install_role == CS.ServerEndpoint /\
+        record_schedule_coupling m /\
+        CS.ControlHandshaking? m.CS.model_control /\
+        m' == { m with
+                  CS.model_record =
+                    CS.install_record_keys_for_role
+                      role_install.CS.install_role
+                      m.CS.model_record role_install.CS.install_payload;
+                  CS.model_handshake =
+                    { m.CS.model_handshake with
+                        CS.hs_keys =
+                          CS.update_key_schedule_with_install_for_role
+                            role_install.CS.install_role
+                            m.CS.model_handshake.CS.hs_keys
+                            role_install.CS.install_payload } } /\
+        (PC.server_progress m' > PC.server_progress m \/
+         ~(m'.CS.model_control == m.CS.model_control)))
+      (ensures
+        (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_write.R.seq
+           == m.CS.model_record.CS.record_write.R.seq) /\
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_read.R.seq
+           == m.CS.model_record.CS.record_read.R.seq))
+  = assert (m'.CS.model_control == m.CS.model_control);
+    introduce (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+               m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
+              ==> m'.CS.model_record.CS.record_write.R.seq
+                    == m.CS.model_record.CS.record_write.R.seq
+    with _pf.
+      (match role_install.CS.install_payload.CS.install_epoch,
+             role_install.CS.install_payload.CS.install_direction with
+       | CS.TrafficHandshake, CS.TrafficWrite -> lemma_server_progress_congruence m m'
+       | _, _ -> ());
+    introduce (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+               m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
+              ==> m'.CS.model_record.CS.record_read.R.seq
+                    == m.CS.model_record.CS.record_read.R.seq
+    with _pf.
+      (match role_install.CS.install_payload.CS.install_epoch,
+             role_install.CS.install_payload.CS.install_direction with
+       | CS.TrafficHandshake, CS.TrafficRead -> lemma_server_progress_congruence m m'
+       | _, _ -> ())
+#pop-options
+
+(** Server LOCAL record-seq stability (dispatch).  Only key-install locals touch
+    `model_record`; the plain `LocalInstallTrafficKeys` is client-only (legality),
+    so a server install is always the `_ForRole` variant. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_local_record_seq_stable
+  (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_local_event m local /\
+        CS.step_local_event m local == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        record_schedule_coupling m /\
+        (PC.server_progress m' > PC.server_progress m \/
+         ~(m'.CS.model_control == m.CS.model_control)))
+      (ensures
+        (PC.pre_appdata_control m'.CS.model_control /\
+         m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_write.R.seq
+           == m.CS.model_record.CS.record_write.R.seq) /\
+        (PC.pre_appdata_control m'.CS.model_control /\
+         m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_read.R.seq
+           == m.CS.model_record.CS.record_read.R.seq))
+  = match local with
+    | CS.LocalInstallTrafficKeysForRole role_install ->
+      lemma_server_local_install_for_role_seq_stable m role_install m'
+    | _ -> ()
+#pop-options
+
+(** A cleartext network step (ClientHello / ServerHello / HelloRetryRequest /
+    ChangeCipherSpec, either direction) leaves the record layer UNCHANGED: no
+    `next_seq` (that is for protected records) and no key install (those are local
+    events).  Hence such a step trivially preserves both record seqs. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 50 --split_queries always"
+let lemma_cleartext_step_record_unchanged
+  (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnNetworkEvent dm) /\
+        CS.step_model m (CS.ConnNetworkEvent dm) == Some m' /\
+        CS.network_message_is_cleartext dm.CL.message_direction dm.CL.message_value)
+      (ensures m'.CS.model_record == m.CS.model_record)
+  = ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    RECORD/APPLICATION-KEY COUPLING.  On reachable states, a record direction is
+    at the `Application` epoch only once the matching APPLICATION-traffic key
+    slot is populated: the epoch is set to `Application` exactly by the app-key
+    install (`install_record_keys`/`install_record_keys_for_role`), which also
+    populates the app slot; `next_seq`/`advance` preserve the epoch and never
+    touch the schedule, and no network event ever moves a record to `Application`.
+    Combined with the per-stage `application_record_epoch_reachable_shape` (app
+    slots are `None` at the early handshake-install stages), this EXCLUDES a
+    backward `Application -> Handshake` key install: a handshake install is pinned
+    (`legal_local_event`) to an early stage where the app slot is `None`, so the
+    record cannot already be at `Application`.
+    ───────────────────────────────────────────────────────────────────────── **)
+let app_traffic_slot
+  (keys:CS.key_schedule_state) (label:CS.traffic_label)
+  : option CS.traffic_key_material =
+  match label with
+  | CS.ClientTraffic -> keys.CS.ks_client_application_traffic
+  | CS.ServerTraffic -> keys.CS.ks_server_application_traffic
+
+let record_app_epoch_coupling (m:CS.connection_model) : prop =
+  let role = m.CS.model_config.CS.config_role in
+  let keys = m.CS.model_handshake.CS.hs_keys in
+  (m.CS.model_record.CS.record_write.R.epoch == R.Application ==>
+     Some? (app_traffic_slot keys
+             (CS.traffic_label_for_endpoint_direction role CS.TrafficWrite))) /\
+  (m.CS.model_record.CS.record_read.R.epoch == R.Application ==>
+     Some? (app_traffic_slot keys
+             (CS.traffic_label_for_endpoint_direction role CS.TrafficRead)))
+
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 60 --split_queries always"
+let lemma_step_record_app_epoch_coupling
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        record_app_epoch_coupling m /\
+        CS.legal_event m ev /\
+        CS.step_model m ev == Some m')
+      (ensures record_app_epoch_coupling m')
+  = match ev with
+    | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnLocalEvent local ->
+      (match local with
+       | CS.LocalInstallTrafficKeys install -> ()
+       | CS.LocalInstallTrafficKeysForRole role_install -> ()
+       | _ -> ())
+#pop-options
+
+let lemma_delta_record_app_epoch_coupling
+  (st0 st1:CS.connection_state)
+  : Lemma
+      (requires
+        record_app_epoch_coupling st0.CS.cs_model /\
+        CS.connection_state_single_step st0 st1)
+      (ensures record_app_epoch_coupling st1.CS.cs_model)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_record_app_epoch_coupling
+      st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+
+let lemma_single_step_record_app_epoch_coupling ()
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (record_app_epoch_coupling y.CS.cs_model);
+                     (CS.connection_state_single_step x y)}
+          record_app_epoch_coupling x.CS.cs_model /\
+          CS.connection_state_single_step x y ==>
+          record_app_epoch_coupling y.CS.cs_model)
+  = introduce forall x y.
+      record_app_epoch_coupling x.CS.cs_model /\
+      CS.connection_state_single_step x y ==>
+      record_app_epoch_coupling y.CS.cs_model
+    with
+      introduce _ ==> _ with _.
+      lemma_delta_record_app_epoch_coupling x y
+
+let lemma_consistent_record_app_epoch_coupling
+  (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st)
+      (ensures record_app_epoch_coupling st.CS.cs_model)
+  = let p (st:CS.connection_state) = record_app_epoch_coupling st.CS.cs_model in
+    lemma_single_step_record_app_epoch_coupling ();
+    let stable :
+      squash (
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure
+      CS.connection_state_single_step
+      p
+      stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+
+(** ─────────────────────────────────────────────────────────────────────────
+    APP-SLOTS-NONE per-stage shape (self-contained RTC coupling).  At the early
+    handshake stages — those at or before a handshake key install and strictly
+    before any application key install — BOTH application-traffic key slots are
+    empty.  Application slots are populated ONLY by an application key install,
+    which `legal_local_event` pins to a LATE stage (client:
+    HsServerFinishedVerified; server: HsServerFinishedSent / HsClientFinishedReceived);
+    so at the early stages the app slots stay `None`.  Combined with
+    `record_app_epoch_coupling`, this forces the SOURCE record epoch of a handshake
+    install (pinned to an early stage) to be non-`Application` — the key fact that
+    discharges the `P_installHS` premise of the counting-algebra core for a LOCAL
+    step.
+    ───────────────────────────────────────────────────────────────────────── **)
+let client_app_slots_none_stage (control:CS.connection_control_state) : bool =
+  match control with
+  | CS.ControlNew
+  | CS.ControlHandshaking CS.HsStarted
+  | CS.ControlHandshaking CS.HsClientHelloSent
+  | CS.ControlHandshaking CS.HsServerHelloReceived
+  | CS.ControlHandshaking CS.HsEncryptedExtensionsReceived
+  | CS.ControlHandshaking CS.HsCertificateReceived
+  | CS.ControlHandshaking CS.HsCertificateValidated
+  | CS.ControlHandshaking CS.HsCertificateVerifyReceived
+  | CS.ControlHandshaking CS.HsCertificateVerifyVerified
+  | CS.ControlHandshaking CS.HsServerFinishedReceived -> true
+  | _ -> false
+
+let server_app_slots_none_stage (control:CS.connection_control_state) : bool =
+  match control with
+  | CS.ControlNew
+  | CS.ControlHandshaking CS.HsAwaitingClientHello
+  | CS.ControlHandshaking CS.HsClientHelloReceived
+  | CS.ControlHandshaking CS.HsServerHelloSent
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent -> true
+  | _ -> false
+
+let app_slots_none_shape (m:CS.connection_model) : prop =
+  let keys = m.CS.model_handshake.CS.hs_keys in
+  (m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+   client_app_slots_none_stage m.CS.model_control == true ==>
+     keys.CS.ks_client_application_traffic == None /\
+     keys.CS.ks_server_application_traffic == None) /\
+  (m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+   server_app_slots_none_stage m.CS.model_control == true ==>
+     keys.CS.ks_client_application_traffic == None /\
+     keys.CS.ks_server_application_traffic == None)
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_step_app_slots_none_shape
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        app_slots_none_shape m /\
+        CS.legal_event m ev /\
+        CS.step_model m ev == Some m')
+      (ensures app_slots_none_shape m')
+  = ()
+#pop-options
+
+let lemma_delta_app_slots_none_shape
+  (st0 st1:CS.connection_state)
+  : Lemma
+      (requires
+        app_slots_none_shape st0.CS.cs_model /\
+        CS.connection_state_single_step st0 st1)
+      (ensures app_slots_none_shape st1.CS.cs_model)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_app_slots_none_shape
+      st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+
+let lemma_single_step_app_slots_none_shape ()
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (app_slots_none_shape y.CS.cs_model);
+                     (CS.connection_state_single_step x y)}
+          app_slots_none_shape x.CS.cs_model /\
+          CS.connection_state_single_step x y ==>
+          app_slots_none_shape y.CS.cs_model)
+  = introduce forall x y.
+      app_slots_none_shape x.CS.cs_model /\
+      CS.connection_state_single_step x y ==>
+      app_slots_none_shape y.CS.cs_model
+    with
+      introduce _ ==> _ with _.
+      lemma_delta_app_slots_none_shape x y
+
+let lemma_consistent_app_slots_none_shape
+  (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st)
+      (ensures app_slots_none_shape st.CS.cs_model)
+  = let p (st:CS.connection_state) = app_slots_none_shape st.CS.cs_model in
+    lemma_single_step_app_slots_none_shape ();
+    let stable :
+      squash (
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure
+      CS.connection_state_single_step
+      p
+      stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+
+(** ─────────────────────────────────────────────────────────────────────────
+    A network step whose byte-delta is EMPTY, taken from a pre-application-data
+    control state, leaves `model_record` UNCHANGED.  With empty raw the message
+    cannot be protected (a protected record needs at least one ApplicationData
+    record, whose serialization is non-empty — refuted by
+    `lemma_ws_raw_records_nonempty_parse_record`); the only protected message with
+    a possibly-zero record count is a `Sent` `TlsApplicationData`, which is legal
+    ONLY at `ControlApplicationData` (excluded by `pre_appdata`).  Hence the
+    message is cleartext, and `lemma_cleartext_step_record_unchanged` applies.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_network_empty_delta_record_unchanged
+  (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnNetworkEvent dm) /\
+        CS.step_model m (CS.ConnNetworkEvent dm) == Some m' /\
+        CS.event_raw_delta_legal m (CS.ConnNetworkEvent dm) B.empty B.empty /\
+        PC.pre_appdata_control m.CS.model_control)
+      (ensures m'.CS.model_record == m.CS.model_record)
+  = if CS.network_message_is_cleartext dm.CL.message_direction dm.CL.message_value
+    then lemma_cleartext_step_record_unchanged m dm m'
+    else begin
+      (match dm.CL.message_direction with
+       | CL.Sent ->
+         assert (CS.network_message_raw_delta_legal m dm B.empty);
+         assert (CS.raw_records_exactly B.empty T.Application_data
+                   (CS.protected_record_count CL.Sent dm.CL.message_value));
+         (match dm.CL.message_value with
+          | M.TlsApplicationData _ -> ()
+          | _ ->
+            WStep.lemma_ws_raw_records_nonempty_parse_record
+              B.empty T.Application_data
+              (CS.protected_record_count CL.Sent dm.CL.message_value))
+       | CL.Received ->
+         assert (CS.network_message_raw_delta_legal m dm B.empty);
+         assert (CS.raw_records_exactly B.empty T.Application_data
+                   (CS.protected_record_count CL.Received dm.CL.message_value));
+         WStep.lemma_ws_raw_records_nonempty_parse_record
+           B.empty T.Application_data
+           (CS.protected_record_count CL.Received dm.CL.message_value))
+    end
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    CLIENT LOCAL install characterization (P_installHS + P_initial, model level).
+    A client LOCAL step changes `model_record` ONLY via a key install; a write
+    install that MOVES the epoch to `Handshake` must be a `(TrafficHandshake,
+    TrafficWrite)` install (others leave the write direction fixed or move it to
+    `Application`), which `R.install_keys` sets to seq 0.  Its SOURCE epoch cannot
+    be `Application`: `legal_local_event` pins a handshake install to the early
+    stage `HsServerHelloReceived`, where `app_slots_none_shape` forces both
+    application-traffic slots `None`, so `record_app_epoch_coupling` rules out a
+    pre-existing `Application` record — hence the source epoch is `Initial`.  The
+    read direction is the mirror.  A write/read that STAYS at `Initial` was left
+    untouched (installs never yield `Initial`), so the source epoch is `Initial`.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_record_install_char
+  (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_local_event m local /\
+        CS.step_local_event m local == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        record_app_epoch_coupling m /\
+        app_slots_none_shape m)
+      (ensures
+        (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         ~(m.CS.model_record.CS.record_write.R.epoch == R.Handshake) ==>
+         m'.CS.model_record.CS.record_write.R.seq == 0 /\
+         m.CS.model_record.CS.record_write.R.epoch == R.Initial) /\
+        (m'.CS.model_record.CS.record_write.R.epoch == R.Initial ==>
+         m.CS.model_record.CS.record_write.R.epoch == R.Initial) /\
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         ~(m.CS.model_record.CS.record_read.R.epoch == R.Handshake) ==>
+         m'.CS.model_record.CS.record_read.R.seq == 0 /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Initial) /\
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
+         m.CS.model_record.CS.record_read.R.epoch == R.Initial))
+  = ()
+#pop-options
+
+(** SERVER LOCAL install characterization — mirror of the client version.  A server
+    installs traffic keys ONLY via `LocalInstallTrafficKeysForRole` with
+    `install_role == ServerEndpoint`.  A write install that reaches the `Handshake`
+    epoch is the `(TrafficHandshake, TrafficWrite)` install (the app-write install
+    moves the write record to `Application`, not `Handshake`), pinned by
+    `legal_local_event` to `HsServerHelloSent`; there `app_slots_none_shape` +
+    `record_app_epoch_coupling` exclude a pre-existing `Application` record, so the
+    source epoch is `Initial`.  The read direction is the mirror (handshake read
+    install pinned to `HsServerHelloSent`). **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_local_record_install_char
+  (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_local_event m local /\
+        CS.step_local_event m local == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        record_app_epoch_coupling m /\
+        app_slots_none_shape m)
+      (ensures
+        (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+         ~(m.CS.model_record.CS.record_write.R.epoch == R.Handshake) ==>
+         m'.CS.model_record.CS.record_write.R.seq == 0 /\
+         m.CS.model_record.CS.record_write.R.epoch == R.Initial) /\
+        (m'.CS.model_record.CS.record_write.R.epoch == R.Initial ==>
+         m.CS.model_record.CS.record_write.R.epoch == R.Initial) /\
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         ~(m.CS.model_record.CS.record_read.R.epoch == R.Handshake) ==>
+         m'.CS.model_record.CS.record_read.R.seq == 0 /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Initial) /\
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
+         m.CS.model_record.CS.record_read.R.epoch == R.Initial))
+  = ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    CLIENT LOCAL, WRITE side.  Given a legal LOCAL delta (empty byte-deltas) from
+    a client state whose model couplings hold and which satisfies the
+    `client_local_advances` guard, `pwrite_ok` transports to the post-state.  The
+    three gated premises of `lemma_pwrite_algebra` are discharged from the
+    per-transition record facts: `lemma_client_local_record_seq_stable`
+    (P_seqdelta), `lemma_client_local_record_install_char` (P_installHS/P_initial),
+    and `lemma_network_empty_delta_record_unchanged` (network conn-events leave the
+    record fixed).  The `raw_sent` log is unchanged (empty delta), so
+    `raw_appdata_count c'.raw_sent == raw_appdata_count a.raw_sent`; when the source
+    write epoch is `Initial` this is 0 by `pwrite_ok a`.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_pwrite
+  (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
+  : Lemma
+      (requires
+        CS.legal_connection_delta a d c' /\
+        Seq.equal d.CS.delta_raw_sent B.empty /\
+        Seq.equal d.CS.delta_raw_received B.empty /\
+        pwrite_ok a /\
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        record_schedule_coupling a.CS.cs_model /\
+        record_app_epoch_coupling a.CS.cs_model /\
+        app_slots_none_shape a.CS.cs_model /\
+        (PC.client_progress c'.CS.cs_model > PC.client_progress a.CS.cs_model \/
+         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
+        WStep.client_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
+      (ensures pwrite_ok c')
+  = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
+    (
+      lemma_pre_appdata_back a d c';
+      WStep.lemma_client_reachable_raw_sent_parses a.CS.cs_model.CS.model_config a;
+      eliminate exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          a.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
+      returns pwrite_ok c'
+      with _pf.
+      (
+        // count(c'.raw_sent) == count(a.raw_sent)  (empty sent delta)
+        WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_sent B.empty;
+        WStep.lemma_raw_appdata_count_empty ();
+        WStep.lemma_raw_appdata_count_append
+          a.CS.cs_wire_log.CL.raw_sent d.CS.delta_raw_sent msgs;
+        WStep.lemma_raw_appdata_count_seq_equal
+          c'.CS.cs_wire_log.CL.raw_sent
+          (B.append a.CS.cs_wire_log.CL.raw_sent d.CS.delta_raw_sent);
+        // per-transition record facts
+        (match d.CS.delta_event with
+         | CS.ConnLocalEvent local' ->
+           assert (CS.legal_local_event a.CS.cs_model local');
+           assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
+           lemma_client_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnNetworkEvent dm ->
+           lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
+        lemma_pwrite_algebra a d c' msgs
+      )
+    )
+    else ()
+#pop-options
+
+(** CLIENT LOCAL, READ side — mirror of `lemma_client_local_pwrite` on
+    `record_read` / `raw_received`. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_pread
+  (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
+  : Lemma
+      (requires
+        CS.legal_connection_delta a d c' /\
+        Seq.equal d.CS.delta_raw_sent B.empty /\
+        Seq.equal d.CS.delta_raw_received B.empty /\
+        pread_ok a /\
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        record_schedule_coupling a.CS.cs_model /\
+        record_app_epoch_coupling a.CS.cs_model /\
+        app_slots_none_shape a.CS.cs_model /\
+        (PC.client_progress c'.CS.cs_model > PC.client_progress a.CS.cs_model \/
+         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
+        WStep.client_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
+      (ensures pread_ok c')
+  = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
+    (
+      lemma_pre_appdata_back a d c';
+      WStep.lemma_client_reachable_raw_received_parses a.CS.cs_model.CS.model_config a;
+      eliminate exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          a.CS.cs_wire_log.CL.raw_received msgs Seq.empty
+      returns pread_ok c'
+      with _pf.
+      (
+        WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_received B.empty;
+        WStep.lemma_raw_appdata_count_empty ();
+        WStep.lemma_raw_appdata_count_append
+          a.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received msgs;
+        WStep.lemma_raw_appdata_count_seq_equal
+          c'.CS.cs_wire_log.CL.raw_received
+          (B.append a.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received);
+        (match d.CS.delta_event with
+         | CS.ConnLocalEvent local' ->
+           assert (CS.legal_local_event a.CS.cs_model local');
+           assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
+           lemma_client_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnNetworkEvent dm ->
+           lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
+        lemma_pread_algebra a d c' msgs
+      )
+    )
+    else ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PER-TRANSITION HELPER : client LOCAL.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_scop_client_local (a b:Sys.tls_system_state)
+  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_client_local a b /\ seq_count_ok a)
+          (ensures seq_count_ok b)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output).
+      ClientCP.client_step a.Sys.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      Sys.client_local_advances a.Sys.client c' /\
+      b == Sys.({ a with client = c' })
+    returns seq_count_ok b
+    with _pf.
+    (
+      let api = CTy.client_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ClientCP.client_api_event_matches a.Sys.client api conn_ev /\
+         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta a.Sys.client
+           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+              CS.delta_raw_received = B.empty }) c' /\
+         CS.sent_event_nonempty_seal_projection a.Sys.client.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection a.Sys.client.CS.cs_model conn_ev B.empty)
+      returns seq_count_ok b
+      with _pf2.
+      (
+        WStep.lemma_serialize_all_nil_wire ();
+        Seq.lemma_eq_elim raw_sent B.empty;
+        let d : CS.connection_delta =
+          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty } in
+        lemma_consistent_record_schedule_coupling a.Sys.client;
+        lemma_consistent_record_app_epoch_coupling a.Sys.client;
+        lemma_consistent_app_slots_none_shape a.Sys.client;
+        lemma_client_local_pwrite a.Sys.client d c';
+        lemma_client_local_pread a.Sys.client d c';
+        assert (pwrite_ok b.Sys.client);
+        assert (pread_ok b.Sys.client);
+        assert (pwrite_ok b.Sys.server);
+        assert (pread_ok b.Sys.server)
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    SERVER LOCAL, WRITE / READ sides — mirrors of the client helpers, using the
+    server per-transition record facts and the local server reachability
+    parse-witness helpers.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_local_pwrite
+  (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
+  : Lemma
+      (requires
+        CS.legal_connection_delta a d c' /\
+        Seq.equal d.CS.delta_raw_sent B.empty /\
+        Seq.equal d.CS.delta_raw_received B.empty /\
+        pwrite_ok a /\
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        record_schedule_coupling a.CS.cs_model /\
+        record_app_epoch_coupling a.CS.cs_model /\
+        app_slots_none_shape a.CS.cs_model /\
+        (PC.server_progress c'.CS.cs_model > PC.server_progress a.CS.cs_model \/
+         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
+        WStep.server_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
+      (ensures pwrite_ok c')
+  = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
+    (
+      lemma_pre_appdata_back a d c';
+      lemma_server_reachable_raw_sent_parses a.CS.cs_model.CS.model_config a;
+      eliminate exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          a.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
+      returns pwrite_ok c'
+      with _pf.
+      (
+        WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_sent B.empty;
+        WStep.lemma_raw_appdata_count_empty ();
+        WStep.lemma_raw_appdata_count_append
+          a.CS.cs_wire_log.CL.raw_sent d.CS.delta_raw_sent msgs;
+        WStep.lemma_raw_appdata_count_seq_equal
+          c'.CS.cs_wire_log.CL.raw_sent
+          (B.append a.CS.cs_wire_log.CL.raw_sent d.CS.delta_raw_sent);
+        (match d.CS.delta_event with
+         | CS.ConnLocalEvent local' ->
+           assert (CS.legal_local_event a.CS.cs_model local');
+           assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
+           lemma_server_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnNetworkEvent dm ->
+           lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
+        lemma_pwrite_algebra a d c' msgs
+      )
+    )
+    else ()
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_local_pread
+  (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
+  : Lemma
+      (requires
+        CS.legal_connection_delta a d c' /\
+        Seq.equal d.CS.delta_raw_sent B.empty /\
+        Seq.equal d.CS.delta_raw_received B.empty /\
+        pread_ok a /\
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        record_schedule_coupling a.CS.cs_model /\
+        record_app_epoch_coupling a.CS.cs_model /\
+        app_slots_none_shape a.CS.cs_model /\
+        (PC.server_progress c'.CS.cs_model > PC.server_progress a.CS.cs_model \/
+         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
+        WStep.server_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
+      (ensures pread_ok c')
+  = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
+    (
+      lemma_pre_appdata_back a d c';
+      lemma_server_reachable_raw_received_parses a.CS.cs_model.CS.model_config a;
+      eliminate exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          a.CS.cs_wire_log.CL.raw_received msgs Seq.empty
+      returns pread_ok c'
+      with _pf.
+      (
+        WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_received B.empty;
+        WStep.lemma_raw_appdata_count_empty ();
+        WStep.lemma_raw_appdata_count_append
+          a.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received msgs;
+        WStep.lemma_raw_appdata_count_seq_equal
+          c'.CS.cs_wire_log.CL.raw_received
+          (B.append a.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received);
+        (match d.CS.delta_event with
+         | CS.ConnLocalEvent local' ->
+           assert (CS.legal_local_event a.CS.cs_model local');
+           assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
+           lemma_server_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnNetworkEvent dm ->
+           lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
+        lemma_pread_algebra a d c' msgs
+      )
+    )
+    else ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PER-TRANSITION HELPER : server LOCAL.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_scop_server_local (a b:Sys.tls_system_state)
+  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_server_local a b /\ seq_count_ok a)
+          (ensures seq_count_ok b)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message CTy.local_output).
+      ServerCP.server_step a.Sys.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      Sys.server_local_advances a.Sys.server s' /\
+      b == Sys.({ a with server = s' })
+    returns seq_count_ok b
+    with _pf.
+    (
+      let api = CTy.server_local_event_api local in
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ServerCP.server_api_event_matches api conn_ev /\
+         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         CS.legal_connection_delta a.Sys.server
+           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+              CS.delta_raw_received = B.empty }) s' /\
+         CS.sent_event_nonempty_seal_projection a.Sys.server.CS.cs_model conn_ev raw_sent /\
+         CS.received_event_nonempty_decode_projection a.Sys.server.CS.cs_model conn_ev B.empty)
+      returns seq_count_ok b
+      with _pf2.
+      (
+        WStep.lemma_serialize_all_nil_wire ();
+        Seq.lemma_eq_elim raw_sent B.empty;
+        let d : CS.connection_delta =
+          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty } in
+        lemma_consistent_record_schedule_coupling a.Sys.server;
+        lemma_consistent_record_app_epoch_coupling a.Sys.server;
+        lemma_consistent_app_slots_none_shape a.Sys.server;
+        lemma_server_local_pwrite a.Sys.server d s';
+        lemma_server_local_pread a.Sys.server d s';
+        assert (pwrite_ok b.Sys.server);
+        assert (pread_ok b.Sys.server);
+        assert (pwrite_ok b.Sys.client);
+        assert (pread_ok b.Sys.client)
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    MAIN THEOREM : `seq_count_ok` is preserved by any single honest system
+    transition.  `Sys.tls_sys_step` unfolds to the 6-way disjunction of
+    `Sys.tls_step_*`; each disjunct is discharged by its per-transition helper via
+    `FStar.Classical.move_requires_2`.
+    ───────────────────────────────────────────────────────────────────────── **)
+val lemma_seq_count_ok_preserved (a b : Sys.tls_system_state)
+  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_sys_step a b /\ seq_count_ok a)
+          (ensures  seq_count_ok b)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_seq_count_ok_preserved a b =
+  FStar.Classical.move_requires_2 lemma_scop_client_send a b;
+  FStar.Classical.move_requires_2 lemma_scop_server_send a b;
+  FStar.Classical.move_requires_2 lemma_scop_deliver_to_client a b;
+  FStar.Classical.move_requires_2 lemma_scop_deliver_to_server a b;
+  FStar.Classical.move_requires_2 lemma_scop_client_local a b;
+  FStar.Classical.move_requires_2 lemma_scop_server_local a b
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    H_seq PAYOFF.
+
+    The whole point of the counting invariants: given `pwrite_ok` on the sender
+    and `pread_ok` on the receiver, both still in the pre-application-data region
+    and both at the Handshake RECORD epoch, and the `byte_pairing` byte-equality
+    (sender's sent log == receiver's received log), the two record `seq` counters
+    are equal — i.e. `H_seq`, the seq-alignment HYPOTHESIS consumed by the
+    protected-message decode lemmas and baked into
+    `protected_handshake_event_projection_pair`.  H_seq is thus a COROLLARY of
+    `byte_pairing` + the counting invariants, with no dependence on the event-log
+    length or the strict-progress guards.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_hseq_from_counts (sender receiver:CS.connection_state)
+  : Lemma
+      (requires
+        pwrite_ok sender /\
+        pread_ok receiver /\
+        PC.pre_appdata_control sender.CS.cs_model.CS.model_control /\
+        PC.pre_appdata_control receiver.CS.cs_model.CS.model_control /\
+        sender.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+        receiver.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+        Seq.equal
+          sender.CS.cs_wire_log.CL.raw_sent
+          receiver.CS.cs_wire_log.CL.raw_received)
+      (ensures
+        sender.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+          receiver.CS.cs_model.CS.model_record.CS.record_read.R.seq)
+  = WStep.lemma_raw_appdata_count_seq_equal
+      sender.CS.cs_wire_log.CL.raw_sent
+      receiver.CS.cs_wire_log.CL.raw_received
+#pop-options
