@@ -15,6 +15,7 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Minimal apt set:
+#   time                      - build Karamel
 #   ca-certificates,curl,git  - fetch the EverParse fork, HACL* submodule, RFCs, Z3
 #   opam                      - drives the local OCaml switch for the F*/KaRaMeL build
 #   build-essential           - gcc/make for the OCaml build and the agentic-tls C code
@@ -28,6 +29,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 #                               for the tftp_sample interop tests (RFC 1350)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
+      time \
       ca-certificates \
       curl \
       git \
