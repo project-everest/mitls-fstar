@@ -1,4 +1,4 @@
-module TLS13.System.SeqCount
+module TLS13.System.SeqCountBase
 
 (**
   STAGE 2a — the per-endpoint handshake-region seq-counting invariant, as a
@@ -23,7 +23,6 @@ module CW    = TLS13.Impl.CanonicalWire
 module WF    = Common.WireFormat
 module WStep = TLS13.System.WireStep
 module CSL   = TLS13.ConnectionState.Lemmas
-module Sys   = TLS13.System
 module PC    = TLS13.System.ProgressCount
 module ServerCP = TLS13.Impl.Server.CanonicalProtocol
 module ClientCP = TLS13.Impl.Client.CanonicalProtocol
@@ -93,10 +92,9 @@ let lemma_pre_appdata_back
     end
 #pop-options
 
-(** System-level conjunct over both endpoints. **)
-let seq_count_ok (s:Sys.tls_system_state) : prop =
-  pwrite_ok s.Sys.client /\ pread_ok s.Sys.client /\
-  pwrite_ok s.Sys.server /\ pread_ok s.Sys.server
+(** Per-connection-state pair conjunct over both endpoints. **)
+let seq_count_ok_pair (client server:CS.connection_state) : prop =
+  pwrite_ok client /\ pread_ok client /\ pwrite_ok server /\ pread_ok server
 
 (** ─────────────────────────────────────────────────────────────────────────
     PROBE 1 — RECEIVED network event preserves `pwrite_ok`.
@@ -251,15 +249,6 @@ let lemma_pread_algebra
     lemma_pre_appdata_back st0 d st1
 #pop-options
 
-(** ─────────────────────────────────────────────────────────────────────────
-    INITIAL STATE.  Both endpoints start at record epoch Initial, seq 0, with
-    empty wire logs (appdata count 0), so `seq_count_ok` holds.
-    ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
-let lemma_seq_count_ok_initial (cfg_c cfg_s:CS.connection_config)
-  : Lemma (seq_count_ok (Sys.initial_tls_system cfg_c cfg_s))
-  = WStep.lemma_raw_appdata_count_empty ()
-#pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
     SERVER REACHABLE PARSES — the server analogues of
@@ -665,170 +654,7 @@ let lemma_nonempty_sent_event
        | CL.Received -> ())
 #pop-options
 
-(** ─────────────────────────────────────────────────────────────────────────
-    PER-TRANSITION HELPER : client SEND.
-    ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
-let lemma_scop_client_send (a b:Sys.tls_system_state)
-  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_client_send a b /\ seq_count_ok a)
-          (ensures seq_count_ok b)
-  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
-      ClientCP.client_step a.Sys.client (SM.LocalEvent local) c' out /\
-      out.SM.so_wire_outputs == [w] /\
-      Sys.client_advances a.Sys.client c' /\
-      b == Sys.({ a with client = c';
-                         channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.Sys.client.CS.cs_model })
-    returns seq_count_ok b
-    with _pf.
-    (
-      let api = CTy.client_local_event_api local in
-      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-        (ClientCP.client_api_event_matches a.Sys.client api conn_ev /\
-         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
-         CS.legal_connection_delta a.Sys.client
-           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-              CS.delta_raw_received = B.empty }) c' /\
-         CS.sent_event_nonempty_seal_projection a.Sys.client.CS.cs_model conn_ev raw_sent /\
-         CS.received_event_nonempty_decode_projection a.Sys.client.CS.cs_model conn_ev B.empty)
-      returns seq_count_ok b
-      with _pf2.
-      (
-        let d : CS.connection_delta =
-          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = B.empty } in
-        lemma_wire_serialize_nonempty w;
-        WStep.lemma_serialize_all_single_wire w;
-        Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
-        WStep.lemma_raw_appdata_count_seq_equal
-          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
-        assert (B.length raw_sent > 0);
-        lemma_nonempty_sent_event a.Sys.client.CS.cs_model conn_ev raw_sent B.empty;
-        eliminate exists (msg:M.tls_message). conn_ev == CS.sent_tls_event msg
-        returns seq_count_ok b
-        with _pf3.
-        (
-          lemma_pread_sent a.Sys.client d c' msg;
-          ( if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
-              (
-                WStep.lemma_client_reachable_raw_sent_parses
-                  a.Sys.client.CS.cs_model.CS.model_config a.Sys.client;
-                eliminate exists (msgs:list CW.wire_message).
-                  WF.parses_as CW.tls_record_wire_format
-                    a.Sys.client.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
-                returns pwrite_ok c'
-                with _pf4.
-                (
-                  lemma_pre_appdata_back a.Sys.client d c';
-                  assert (WStep.client_start_shape a.Sys.client.CS.cs_model);
-                  WStep.lemma_client_step_sent_zero
-                    a.Sys.client (SM.LocalEvent local) c' out;
-                  WStep.lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
-                  WStep.lemma_raw_appdata_count_seq_equal
-                    raw_sent (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs);
-                  lemma_consistent_record_key_epoch_coupling a.Sys.client;
-                  lemma_sent_write_model_facts
-                    a.Sys.client.CS.cs_model msg c'.CS.cs_model raw_sent B.empty;
-                  WStep.lemma_raw_appdata_count_append
-                    a.Sys.client.CS.cs_wire_log.CL.raw_sent raw_sent msgs;
-                  Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_sent
-                    (B.append a.Sys.client.CS.cs_wire_log.CL.raw_sent raw_sent);
-                  lemma_pwrite_algebra a.Sys.client d c' msgs
-                )
-              )
-            else () );
-          assert (pwrite_ok b.Sys.server);
-          assert (pread_ok b.Sys.server)
-        )
-      )
-    )
-#pop-options
 
-(** ─────────────────────────────────────────────────────────────────────────
-    PER-TRANSITION HELPER : deliver to CLIENT (client RECEIVE).
-    ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
-let lemma_scop_deliver_to_client (a b:Sys.tls_system_state)
-  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_deliver_to_client a b /\ seq_count_ok a)
-          (ensures seq_count_ok b)
-  = eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message CTy.local_output)
-                     (raw:B.bytes) (snap:CS.connection_model).
-      a.Sys.channel == Sys.TlsInFlight CS.ClientEndpoint raw snap /\
-      Seq.equal (CW.wire_serialize wire) raw /\
-      ClientCP.client_step a.Sys.client (SM.WireEvent wire) c' out /\
-      Sys.client_advances a.Sys.client c' /\
-      b == Sys.({ a with client = c'; channel = TlsQuiet })
-    returns seq_count_ok b
-    with _pf.
-    (
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent
-             ({ CL.message_direction = CL.Received; CL.message_value = msg }) in
-         CS.legal_connection_delta a.Sys.client
-           ({ CS.delta_event = conn_ev;
-              CS.delta_raw_sent =
-                WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
-              CS.delta_raw_received = CW.wire_serialize wire }) c' /\
-         CS.sent_event_nonempty_seal_projection a.Sys.client.CS.cs_model conn_ev
-           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
-         CS.received_event_nonempty_decode_projection a.Sys.client.CS.cs_model conn_ev
-           (CW.wire_serialize wire))
-      returns seq_count_ok b
-      with _pf2.
-      (
-        WStep.lemma_client_wire_event_no_output a.Sys.client c' wire out;
-        let d : CS.connection_delta =
-          { CS.delta_event = CS.received_tls_event msg;
-            CS.delta_raw_sent =
-              WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
-            CS.delta_raw_received = CW.wire_serialize wire } in
-        // WRITE side untouched.
-        lemma_pwrite_received a.Sys.client d c' msg;
-        // READ side.
-        ( if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
-            (
-              WStep.lemma_client_reachable_raw_received_parses
-                a.Sys.client.CS.cs_model.CS.model_config a.Sys.client;
-              eliminate exists (msgs:list CW.wire_message).
-                WF.parses_as CW.tls_record_wire_format
-                  a.Sys.client.CS.cs_wire_log.CL.raw_received msgs Seq.empty
-              returns pread_ok c'
-              with _pf4.
-              (
-                lemma_pre_appdata_back a.Sys.client d c';
-                lemma_consistent_record_key_epoch_coupling a.Sys.client;
-                WStep.lemma_consistent_server_hello_wire_bound a.Sys.client;
-                WStep.lemma_step_model_server_hello_wire_bound_reachable_shape
-                  a.Sys.client.CS.cs_model (CS.received_tls_event msg) c'.CS.cs_model;
-                assert (CS.step_model a.Sys.client.CS.cs_model (CS.received_tls_event msg)
-                          == Some c'.CS.cs_model);
-                introduce (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
-                          B.length (W.serialize_handshake
-                            (M.ServerHello (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))) <= 16640
-                with _hyp.
-                (
-                  assert (c'.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
-                          Some (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))
-                );
-                lemma_recv_read_model_facts
-                  a.Sys.client.CS.cs_model msg c'.CS.cs_model
-                  (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
-                  (CW.wire_serialize wire);
-                WStep.lemma_raw_appdata_count_append
-                  a.Sys.client.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire) msgs;
-                Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_received
-                  (B.append a.Sys.client.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire));
-                lemma_pread_algebra a.Sys.client d c' msgs
-              )
-            )
-          else () );
-        assert (pwrite_ok b.Sys.server);
-        assert (pread_ok b.Sys.server)
-      )
-    )
-#pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
     PER-TRANSITION HELPER : server SEND.
@@ -874,184 +700,7 @@ let lemma_recv_server_hello_stored
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
-let lemma_scop_server_send (a b:Sys.tls_system_state)
-  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_server_send a b /\ seq_count_ok a)
-          (ensures seq_count_ok b)
-  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
-                     (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message).
-      ServerCP.server_step a.Sys.server (SM.LocalEvent local) s' out /\
-      out.SM.so_wire_outputs == [w] /\
-      Sys.server_advances a.Sys.server s' /\
-      b == Sys.({ a with server = s';
-                         channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.Sys.server.CS.cs_model })
-    returns seq_count_ok b
-    with _pf.
-    (
-      let api = CTy.server_local_event_api local in
-      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-        (ServerCP.server_api_event_matches api conn_ev /\
-         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
-         CS.legal_connection_delta a.Sys.server
-           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-              CS.delta_raw_received = B.empty }) s' /\
-         CS.sent_event_nonempty_seal_projection a.Sys.server.CS.cs_model conn_ev raw_sent /\
-         CS.received_event_nonempty_decode_projection a.Sys.server.CS.cs_model conn_ev B.empty)
-      returns seq_count_ok b
-      with _pf2.
-      (
-        let d : CS.connection_delta =
-          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = B.empty } in
-        lemma_wire_serialize_nonempty w;
-        WStep.lemma_serialize_all_single_wire w;
-        Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
-        WStep.lemma_raw_appdata_count_seq_equal
-          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
-        assert (B.length raw_sent > 0);
-        lemma_nonempty_sent_event a.Sys.server.CS.cs_model conn_ev raw_sent B.empty;
-        eliminate exists (msg:M.tls_message). conn_ev == CS.sent_tls_event msg
-        returns seq_count_ok b
-        with _pf3.
-        (
-          // READ side untouched.
-          lemma_pread_sent a.Sys.server d s' msg;
-          // WRITE side.
-          ( if PC.pre_appdata_control s'.CS.cs_model.CS.model_control then
-              (
-                lemma_server_reachable_raw_sent_parses
-                  a.Sys.server.CS.cs_model.CS.model_config a.Sys.server;
-                eliminate exists (msgs:list CW.wire_message).
-                  WF.parses_as CW.tls_record_wire_format
-                    a.Sys.server.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
-                returns pwrite_ok s'
-                with _pf4.
-                (
-                  lemma_pre_appdata_back a.Sys.server d s';
-                  lemma_consistent_record_key_epoch_coupling a.Sys.server;
-                  // ServerHello bound (reachable-shape lifted across the step).
-                  WStep.lemma_consistent_server_hello_wire_bound a.Sys.server;
-                  WStep.lemma_step_model_server_hello_wire_bound_reachable_shape
-                    a.Sys.server.CS.cs_model (CS.sent_tls_event msg) s'.CS.cs_model;
-                  assert (CS.step_model a.Sys.server.CS.cs_model (CS.sent_tls_event msg)
-                            == Some s'.CS.cs_model);
-                  // ServerHello send ==> count(raw_sent)==0.
-                  introduce (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
-                            WStep.raw_appdata_count raw_sent == 0
-                  with _hyp.
-                  (
-                    lemma_sent_server_hello_stored
-                      a.Sys.server.CS.cs_model msg s'.CS.cs_model;
-                    WStep.lemma_cleartext_raw_count_zero msg raw_sent
-                  );
-                  // ClientHello send is impossible for a server (stage_ok excludes HsStarted).
-                  introduce (M.TlsHandshake? msg /\ M.ClientHello? (M.TlsHandshake?._0 msg)) ==>
-                            WStep.raw_appdata_count raw_sent == 0
-                  with _hyp.
-                  (
-                    lemma_sent_client_hello_forces_hsstarted
-                      a.Sys.server.CS.cs_model msg s'.CS.cs_model
-                  );
-                  lemma_sent_write_model_facts
-                    a.Sys.server.CS.cs_model msg s'.CS.cs_model raw_sent B.empty;
-                  WStep.lemma_raw_appdata_count_append
-                    a.Sys.server.CS.cs_wire_log.CL.raw_sent raw_sent msgs;
-                  Seq.lemma_eq_elim s'.CS.cs_wire_log.CL.raw_sent
-                    (B.append a.Sys.server.CS.cs_wire_log.CL.raw_sent raw_sent);
-                  lemma_pwrite_algebra a.Sys.server d s' msgs
-                )
-              )
-            else () );
-          assert (pwrite_ok b.Sys.client);
-          assert (pread_ok b.Sys.client)
-        )
-      )
-    )
-#pop-options
 
-(** ─────────────────────────────────────────────────────────────────────────
-    PER-TRANSITION HELPER : deliver to SERVER (server RECEIVE).
-    ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
-let lemma_scop_deliver_to_server (a b:Sys.tls_system_state)
-  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_deliver_to_server a b /\ seq_count_ok a)
-          (ensures seq_count_ok b)
-  = eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
-                     (out:SM.step_output CW.wire_message CTy.local_output)
-                     (raw:B.bytes) (snap:CS.connection_model).
-      a.Sys.channel == Sys.TlsInFlight CS.ServerEndpoint raw snap /\
-      Seq.equal (CW.wire_serialize wire) raw /\
-      ServerCP.server_step a.Sys.server (SM.WireEvent wire) s' out /\
-      Sys.server_advances a.Sys.server s' /\
-      b == Sys.({ a with server = s'; channel = TlsQuiet })
-    returns seq_count_ok b
-    with _pf.
-    (
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent
-             ({ CL.message_direction = CL.Received; CL.message_value = msg }) in
-         CS.legal_connection_delta a.Sys.server
-           ({ CS.delta_event = conn_ev;
-              CS.delta_raw_sent =
-                WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
-              CS.delta_raw_received = CW.wire_serialize wire }) s' /\
-         CS.received_event_nonempty_decode_projection a.Sys.server.CS.cs_model conn_ev
-           (CW.wire_serialize wire))
-      returns seq_count_ok b
-      with _pf2.
-      (
-        WStep.lemma_server_wire_event_no_output a.Sys.server s' wire out;
-        let d : CS.connection_delta =
-          { CS.delta_event = CS.received_tls_event msg;
-            CS.delta_raw_sent =
-              WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
-            CS.delta_raw_received = CW.wire_serialize wire } in
-        // WRITE side untouched.
-        lemma_pwrite_received a.Sys.server d s' msg;
-        // READ side.
-        ( if PC.pre_appdata_control s'.CS.cs_model.CS.model_control then
-            (
-              lemma_server_reachable_raw_received_parses
-                a.Sys.server.CS.cs_model.CS.model_config a.Sys.server;
-              eliminate exists (msgs:list CW.wire_message).
-                WF.parses_as CW.tls_record_wire_format
-                  a.Sys.server.CS.cs_wire_log.CL.raw_received msgs Seq.empty
-              returns pread_ok s'
-              with _pf4.
-              (
-                lemma_pre_appdata_back a.Sys.server d s';
-                lemma_consistent_record_key_epoch_coupling a.Sys.server;
-                WStep.lemma_consistent_server_hello_wire_bound a.Sys.server;
-                WStep.lemma_step_model_server_hello_wire_bound_reachable_shape
-                  a.Sys.server.CS.cs_model (CS.received_tls_event msg) s'.CS.cs_model;
-                assert (CS.step_model a.Sys.server.CS.cs_model (CS.received_tls_event msg)
-                          == Some s'.CS.cs_model);
-                introduce (M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) ==>
-                          B.length (W.serialize_handshake
-                            (M.ServerHello (M.ServerHello?._0 (M.TlsHandshake?._0 msg)))) <= 16640
-                with _hyp.
-                (
-                  lemma_recv_server_hello_stored
-                    a.Sys.server.CS.cs_model msg s'.CS.cs_model
-                );
-                lemma_recv_read_model_facts
-                  a.Sys.server.CS.cs_model msg s'.CS.cs_model
-                  (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
-                  (CW.wire_serialize wire);
-                WStep.lemma_raw_appdata_count_append
-                  a.Sys.server.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire) msgs;
-                Seq.lemma_eq_elim s'.CS.cs_wire_log.CL.raw_received
-                  (B.append a.Sys.server.CS.cs_wire_log.CL.raw_received (CW.wire_serialize wire));
-                lemma_pread_algebra a.Sys.server d s' msgs
-              )
-            )
-          else () );
-        assert (pwrite_ok b.Sys.client);
-        assert (pread_ok b.Sys.client)
-      )
-    )
-#pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
     PROGRESS congruence: `client_progress`/`server_progress` depend only on the
@@ -1788,52 +1437,6 @@ let lemma_client_local_pread
     else ()
 #pop-options
 
-(** ─────────────────────────────────────────────────────────────────────────
-    PER-TRANSITION HELPER : client LOCAL.
-    ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_scop_client_local (a b:Sys.tls_system_state)
-  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_client_local a b /\ seq_count_ok a)
-          (ensures seq_count_ok b)
-  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message CTy.local_output).
-      ClientCP.client_step a.Sys.client (SM.LocalEvent local) c' out /\
-      out.SM.so_wire_outputs == [] /\
-      Sys.client_local_advances a.Sys.client c' /\
-      b == Sys.({ a with client = c' })
-    returns seq_count_ok b
-    with _pf.
-    (
-      let api = CTy.client_local_event_api local in
-      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-        (ClientCP.client_api_event_matches a.Sys.client api conn_ev /\
-         ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-         ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
-         CS.legal_connection_delta a.Sys.client
-           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-              CS.delta_raw_received = B.empty }) c' /\
-         CS.sent_event_nonempty_seal_projection a.Sys.client.CS.cs_model conn_ev raw_sent /\
-         CS.received_event_nonempty_decode_projection a.Sys.client.CS.cs_model conn_ev B.empty)
-      returns seq_count_ok b
-      with _pf2.
-      (
-        WStep.lemma_serialize_all_nil_wire ();
-        Seq.lemma_eq_elim raw_sent B.empty;
-        let d : CS.connection_delta =
-          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = B.empty } in
-        lemma_consistent_record_schedule_coupling a.Sys.client;
-        lemma_consistent_record_app_epoch_coupling a.Sys.client;
-        lemma_consistent_app_slots_none_shape a.Sys.client;
-        lemma_client_local_pwrite a.Sys.client d c';
-        lemma_client_local_pread a.Sys.client d c';
-        assert (pwrite_ok b.Sys.client);
-        assert (pread_ok b.Sys.client);
-        assert (pwrite_ok b.Sys.server);
-        assert (pread_ok b.Sys.server)
-      )
-    )
-#pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
     SERVER LOCAL, WRITE / READ sides — mirrors of the client helpers, using the
@@ -1936,72 +1539,6 @@ let lemma_server_local_pread
     else ()
 #pop-options
 
-(** ─────────────────────────────────────────────────────────────────────────
-    PER-TRANSITION HELPER : server LOCAL.
-    ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_scop_server_local (a b:Sys.tls_system_state)
-  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_step_server_local a b /\ seq_count_ok a)
-          (ensures seq_count_ok b)
-  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
-                     (out:SM.step_output CW.wire_message CTy.local_output).
-      ServerCP.server_step a.Sys.server (SM.LocalEvent local) s' out /\
-      out.SM.so_wire_outputs == [] /\
-      Sys.server_local_advances a.Sys.server s' /\
-      b == Sys.({ a with server = s' })
-    returns seq_count_ok b
-    with _pf.
-    (
-      let api = CTy.server_local_event_api local in
-      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-        (ServerCP.server_api_event_matches api conn_ev /\
-         ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-         ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
-         CS.legal_connection_delta a.Sys.server
-           ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-              CS.delta_raw_received = B.empty }) s' /\
-         CS.sent_event_nonempty_seal_projection a.Sys.server.CS.cs_model conn_ev raw_sent /\
-         CS.received_event_nonempty_decode_projection a.Sys.server.CS.cs_model conn_ev B.empty)
-      returns seq_count_ok b
-      with _pf2.
-      (
-        WStep.lemma_serialize_all_nil_wire ();
-        Seq.lemma_eq_elim raw_sent B.empty;
-        let d : CS.connection_delta =
-          { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-            CS.delta_raw_received = B.empty } in
-        lemma_consistent_record_schedule_coupling a.Sys.server;
-        lemma_consistent_record_app_epoch_coupling a.Sys.server;
-        lemma_consistent_app_slots_none_shape a.Sys.server;
-        lemma_server_local_pwrite a.Sys.server d s';
-        lemma_server_local_pread a.Sys.server d s';
-        assert (pwrite_ok b.Sys.server);
-        assert (pread_ok b.Sys.server);
-        assert (pwrite_ok b.Sys.client);
-        assert (pread_ok b.Sys.client)
-      )
-    )
-#pop-options
-
-(** ─────────────────────────────────────────────────────────────────────────
-    MAIN THEOREM : `seq_count_ok` is preserved by any single honest system
-    transition.  `Sys.tls_sys_step` unfolds to the 6-way disjunction of
-    `Sys.tls_step_*`; each disjunct is discharged by its per-transition helper via
-    `FStar.Classical.move_requires_2`.
-    ───────────────────────────────────────────────────────────────────────── **)
-val lemma_seq_count_ok_preserved (a b : Sys.tls_system_state)
-  : Lemma (requires Sys.tls_system_inv a /\ Sys.tls_sys_step a b /\ seq_count_ok a)
-          (ensures  seq_count_ok b)
-
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
-let lemma_seq_count_ok_preserved a b =
-  FStar.Classical.move_requires_2 lemma_scop_client_send a b;
-  FStar.Classical.move_requires_2 lemma_scop_server_send a b;
-  FStar.Classical.move_requires_2 lemma_scop_deliver_to_client a b;
-  FStar.Classical.move_requires_2 lemma_scop_deliver_to_server a b;
-  FStar.Classical.move_requires_2 lemma_scop_client_local a b;
-  FStar.Classical.move_requires_2 lemma_scop_server_local a b
-#pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
     H_seq PAYOFF.
