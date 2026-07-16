@@ -14,6 +14,8 @@ typedef struct Common_TCP_history_s {
 extern Common_TCP_history Common_TCP_empty_history;
 
 Common_TCP_channel Common_TCP_channel_of_fd(int fd);
+/* A channel that reads from rfd and writes to wfd (e.g. stdin/stdout). */
+Common_TCP_channel Common_TCP_channel_of_fds(int rfd, int wfd);
 
 #ifdef COMMON_TCP_KARAMEL_FULL_DECLS
 

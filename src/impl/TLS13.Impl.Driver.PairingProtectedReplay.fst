@@ -10,6 +10,9 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PWCS = TLS13.ConnectionState.ProtectedWireConcreteSegmentation
 module PWL = TLS13.ConnectionState.ProtectedWireBase
@@ -24,10 +27,10 @@ module WFL = TLS13.Spec.WireFormatLemmas
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_contiguous_replay_views
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -60,7 +63,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
   (received_msg2:M.handshake_msg)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
@@ -103,10 +106,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
           client
           server /\
@@ -407,10 +406,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_staged_replays_v2
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -463,7 +462,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
   (cf_server_after_app_write:CS.connection_model)
   (cf_client_after_finished:CS.connection_model)
   (cf_server_after_finished:CS.connection_model)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
@@ -500,10 +499,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
           client
           server /\
@@ -896,10 +891,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
 let lemma_client_server_application_record_material_agrees_from_cleartext_prefix_full_replays
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -945,7 +940,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_prefix
   (received_msg2:M.handshake_msg)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
@@ -1027,10 +1022,6 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_prefix
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
           client
           server /\
@@ -1456,10 +1447,10 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_prefix
 let lemma_client_server_application_record_material_agrees_from_handshake_complete_boundary
   (client:CS.connection_state)
   (server:CS.connection_state)
-  (client_ch:M.client_hello)
-  (server_ch:M.client_hello)
-  (client_sh:M.server_hello)
-  (server_sh:M.server_hello)
+  (client_ch:GCH.clientHello)
+  (server_ch:GCH.clientHello)
+  (client_sh:GSH.serverHello)
+  (server_sh:GSH.serverHello)
   (client_ch_raw:B.bytes)
   (server_ch_raw:B.bytes)
   (client_sh_raw:B.bytes)
@@ -1503,7 +1494,7 @@ let lemma_client_server_application_record_material_agrees_from_handshake_comple
   (received_msg2:M.handshake_msg)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:CS.traffic_key_material)
   (client_app_read_material:CS.traffic_key_material)
   (server_app_write_material:CS.traffic_key_material)
@@ -1544,10 +1535,6 @@ let lemma_client_server_application_record_material_agrees_from_handshake_comple
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello server_sh)) == Some server_sh /\
-        W.parse_supported_server_hello
-          (W.serialize_handshake (M.ServerHello client_sh)) == Some client_sh /\
         Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
           client
           server /\

@@ -84,7 +84,7 @@ fn sign_certificate_verify
                    SZ.v signature_len <= SZ.v signature_capacity /\
                    SZ.v signature_len <= B.length signature_bytes /\
                    C.verify_signature
-                     T.RsaPssRsaeSha256
+                     T.Rsa_pss_rsae_sha256
                      (Ghost.reveal 'credential_identity)
                      (Seq.slice (Ghost.reveal 'input_bytes) 0 (SZ.v input_len))
                      (Seq.slice signature_bytes 0 (SZ.v signature_len))

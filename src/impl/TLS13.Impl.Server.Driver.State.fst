@@ -16,12 +16,16 @@ module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
+module SQueries = TLS13.Impl.Server.CanonicalQueries
+module EP = TLS13.Impl.Server.Endpoint
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module MR = Pulse.Lib.MonotonicGhostRef
+module SP = TLS13.Impl.Server.CanonicalProtocol
 
 let driver_network_out_capacity : SZ.t = SZ.uint_to_t 20000
 let driver_app_out_capacity : SZ.t = SZ.uint_to_t 16640
@@ -31,6 +35,81 @@ let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
 let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
 
 let no_channel : option IO.channel = None
+
+noextract
+let server_driver_endpoint_config
+  (_d: server_driver)
+  : SQueries.server_next_local_action_config =
+  ()
+
+noextract
+let server_driver_endpoint_frame
+  (d: server_driver)
+  (network_app_out: array U8.t)
+  (network_app_out_len: SZ.t)
+  (local_payload: array U8.t)
+  (local_payload_len: SZ.t)
+  (local_app_out: array U8.t)
+  (local_app_out_len: SZ.t)
+  (certificate_chain_len: SZ.t)
+  (certificate_chain_len_proof:
+    (certificate_chain:Ghost.erased B.bytes ->
+      Ghost.erased
+        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
+  (certificate_chain_len_bound:
+    Ghost.erased
+      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
+  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
+  (private_key: V.vec U8.t)
+  (material_deferred_ready:
+    (st:Ghost.erased CS.connection_state ->
+    action:SQueries.server_deferred_action ->
+      Ghost.erased
+        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
+         EP.server_endpoint_material_bytes_match_state
+           (Ghost.reveal material_spec)
+           (Ghost.reveal st))))
+  : f:EP.server_endpoint_frame{
+      f.EP.server_ep_query.SQueries.server_query_network_app_out == network_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_network_app_out_len ==
+        SZ.v network_app_out_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_payload == local_payload /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_payload_len ==
+        SZ.v local_payload_len /\
+      f.EP.server_ep_query.SQueries.server_query_local_app_out == local_app_out /\
+      SZ.v f.EP.server_ep_query.SQueries.server_query_local_app_out_len ==
+        SZ.v local_app_out_len /\
+      f.EP.server_ep_raw == d.server_driver_raw /\
+      SZ.v f.EP.server_ep_raw_len == SZ.v driver_rx_capacity /\
+      f.EP.server_ep_network_out == d.server_driver_network_out /\
+      SZ.v f.EP.server_ep_network_out_len == SZ.v driver_network_out_capacity /\
+      f.EP.server_ep_material == d.server_driver_material_payload /\
+      SZ.v f.EP.server_ep_material_len == SZ.v driver_material_capacity /\
+      f.EP.server_ep_material_spec == material_spec /\
+      f.EP.server_ep_private == private_key} =
+  {
+    EP.server_ep_query = {
+      SQueries.server_query_network_app_out = network_app_out;
+      SQueries.server_query_network_app_out_len = network_app_out_len;
+      SQueries.server_query_local_payload = local_payload;
+      SQueries.server_query_local_payload_len = local_payload_len;
+      SQueries.server_query_local_app_out = local_app_out;
+      SQueries.server_query_local_app_out_len = local_app_out_len;
+    };
+    EP.server_ep_raw_len = driver_rx_capacity;
+    EP.server_ep_raw = d.server_driver_raw;
+    EP.server_ep_network_out_len = driver_network_out_capacity;
+    EP.server_ep_network_out = d.server_driver_network_out;
+    EP.server_ep_certificate_chain_len = certificate_chain_len;
+    EP.server_ep_certificate_chain_len_proof = certificate_chain_len_proof;
+    EP.server_ep_certificate_chain_len_bound = certificate_chain_len_bound;
+    EP.server_ep_material_len = driver_material_capacity;
+    EP.server_ep_material = d.server_driver_material_payload;
+    EP.server_ep_material_spec = material_spec;
+    EP.server_ep_private_len = 32sz;
+    EP.server_ep_private = private_key;
+    EP.server_ep_material_deferred_ready = material_deferred_ready;
+  }
 
 let lemma_logged_received_bytes_accounted_transport
   (st:CS.connection_state)
@@ -323,7 +402,7 @@ let lemma_local_event_wire_lengths
       st0
       st1
       resp
-      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
       B.empty
       B.empty
       network_out
@@ -332,7 +411,7 @@ let lemma_local_event_wire_lengths
       st0
       st1
       resp
-      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
       B.empty
       B.empty
       network_out
@@ -487,7 +566,7 @@ fn forget_server_driver_connected_app_out
     buffered
     buffered_len
     'app_out);
-  with empty_payload raw network_out material cv_input signature.
+  with empty_payload raw network_out material cv_input signature local_app_out.
     assert (
       Box.pts_to d.server_driver_buffered_len buffered_len **
       V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -496,7 +575,8 @@ fn forget_server_driver_connected_app_out
       V.pts_to d.server_driver_material_payload #1.0R material **
       V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
       V.pts_to d.server_driver_signature #1.0R signature **
-      V.pts_to d.server_driver_app_out #1.0R 'app_out);
+      V.pts_to d.server_driver_app_out #1.0R 'app_out **
+      V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
   fold (server_driver_buffers d buffered buffered_len);
   fold (server_driver_connected
     d
@@ -538,7 +618,7 @@ fn expose_server_driver_connected_app_out
             IO.is_channel ch 'received 'sent **
             server_driver_buffers d buffered buffered_len);
   unfold (server_driver_buffers d buffered buffered_len);
-  with empty_payload raw network_out material cv_input signature app_out.
+  with empty_payload raw network_out material cv_input signature app_out local_app_out.
     assert (
       Box.pts_to d.server_driver_buffered_len buffered_len **
       V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -547,7 +627,8 @@ fn expose_server_driver_connected_app_out
       V.pts_to d.server_driver_material_payload #1.0R material **
       V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
       V.pts_to d.server_driver_signature #1.0R signature **
-      V.pts_to d.server_driver_app_out #1.0R app_out);
+      V.pts_to d.server_driver_app_out #1.0R app_out **
+      V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
   fold (server_driver_buffers_with_app_out d buffered buffered_len app_out);
   fold (server_driver_connected_with_app_out
     d

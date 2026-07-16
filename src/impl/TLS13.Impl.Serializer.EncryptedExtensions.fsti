@@ -12,6 +12,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
 
 fn serialize_empty_encrypted_extensions
   (out: array U8.t)
@@ -25,4 +26,5 @@ fn serialize_empty_encrypted_extensions
           pts_to out out_bytes **
           pure (B.length out_bytes == 6 /\
                 SZ.v written == 6 /\
-                Seq.equal out_bytes (WS.serialize_empty_encrypted_extensions ()))
+                Seq.equal out_bytes
+                  (WS.serialize_handshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions))))

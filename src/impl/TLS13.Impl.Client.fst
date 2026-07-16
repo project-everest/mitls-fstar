@@ -19,11 +19,13 @@ module HDecodeError = TLS13.Impl.Handle.DecodeError
 module HLocal = TLS13.Impl.Handle.Local
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Sem = TLS13.Wire.Semantics
 module P = TLS13.Impl.Parser
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module WS = TLS13.Wire.Spec
 
 fn new_client_default ()
   returns c:client
@@ -375,11 +377,11 @@ fn copy_certificate_verify_signature
                 SZ.v snapshot.CR.cv_signature_len <= B.length out_bytes /\
                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                 | Some cv ->
-                  L.signature_scheme_matches snapshot.CR.cv_signature_scheme cv.M.scheme /\
-                  SZ.v snapshot.CR.cv_signature_len == B.length cv.M.signature /\
+                  L.signature_scheme_matches snapshot.CR.cv_signature_scheme (Sem.certificateVerify_scheme cv) /\
+                  SZ.v snapshot.CR.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv) /\
                   Seq.equal
                     (Seq.slice out_bytes 0 (SZ.v snapshot.CR.cv_signature_len))
-                    cv.M.signature
+                    (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 {
   CQ.copy_certificate_verify_signature c out out_len
@@ -577,7 +579,13 @@ fn process_network_bytes
                   'old_app_out
                   app_out_bytes /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                 buffer_resp.CT.consumed_len == 0sz))
+                 buffer_resp.CT.consumed_len == 0sz /\
+                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
+                (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
+                 buffer_resp.CT.consumed_len == 0sz) /\
+                (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
+                 buffer_resp.CT.consumed_len == 0sz) /\
+                (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   let decoded = P.decode_network_buffer c raw raw_len;
   match decoded {
@@ -615,7 +623,13 @@ fn process_network_bytes
         'old_app_out
         'old_app_out;
       assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+        buffer_resp.CT.consumed_len == 0sz /\
+        WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None));
+      assert (pure (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
         buffer_resp.CT.consumed_len == 0sz));
+      assert (pure (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
+        buffer_resp.CT.consumed_len == 0sz));
+      assert (pure (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False));
       buffer_resp
     }
     L.NetworkBufferDecodeError -> {
@@ -670,6 +684,11 @@ fn process_network_bytes
         'old_app_out;
       assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
         buffer_resp.CT.consumed_len == 0sz));
+      assert (pure (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
+        buffer_resp.CT.consumed_len == 0sz));
+      assert (pure (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
+        buffer_resp.CT.consumed_len == 0sz));
+      assert (pure (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False));
       buffer_resp
     }
     L.NetworkBufferOk decoded_buffer -> {
@@ -713,6 +732,15 @@ fn process_network_bytes
           decoded_buffer.L.decoded_buffer_consumed_len)));
       let decoded_error = resp.CT.status = CT.DecodeError;
       if decoded_error {
+        // A content-level decode error carries the same "zero bytes
+        // received" model event (CM.local_fail_state ... tls_decode_error,
+        // via decode_error_response) as a framing-level decode error, even
+        // though the underlying record itself was successfully framed
+        // (nonzero decoded_buffer_consumed_len).  To keep the returned
+        // buffer_resp consistent with network_process_correct's raw
+        // received-log equation (received1 == received0 ++ consumed), we
+        // report a zero-length consumption here too, exactly mirroring the
+        // L.NetworkBufferDecodeError (framing-level) case above.
         CT.lemma_legal_network_response_decode_error_response
           'st0
           st1
@@ -722,40 +750,119 @@ fn process_network_bytes
           raw_record_bytes
           network_out_bytes
           app_out_bytes;
-        CT.lemma_network_bytes_decode_error_projection_intro_parse_failure
+        assert (pure (CT.decode_error_response
           'st0
           st1
-          buffer_resp
-          (Ghost.reveal 'raw_bytes)
-          decoded_buffer.L.decoded_buffer_content_type
-          fragment_bytes
-          raw_record_bytes
+          resp
+          network_out_bytes
+          app_out_bytes));
+        let buffer_resp0 = {
+          CT.response = resp;
+          CT.consumed_len = 0sz;
+        };
+        CT.lemma_decode_error_response_for_network_input
+          'st0
+          st1
+          resp
+          (CT.network_consumed_prefix (Ghost.reveal 'raw_bytes) 0sz)
           network_out_bytes
           app_out_bytes;
-        CT.lemma_network_bytes_decoded_message_projection_intro_decode_error
+        CT.lemma_network_bytes_decode_error_projection_intro_consumed_zero
           'st0
           st1
-          buffer_resp
+          buffer_resp0
+          (Ghost.reveal 'raw_bytes)
+          network_out_bytes
+          app_out_bytes;
+        CT.lemma_network_bytes_decoded_message_projection_intro_consumed_zero
+          'st0
+          st1
+          buffer_resp0
           (Ghost.reveal 'raw_bytes)
           network_out_bytes
           app_out_bytes;
         CT.lemma_network_bytes_step_correct_end_to_end
           'st0
           st1
-          buffer_resp
+          buffer_resp0
           (Ghost.reveal 'raw_bytes)
           'old_network_out
           network_out_bytes
           'old_app_out
           app_out_bytes;
+        assert (pure (buffer_resp0.CT.response.CT.status == CT.NeedMoreInput ==>
+          buffer_resp0.CT.consumed_len == 0sz));
+        assert (pure (buffer_resp0.CT.response.CT.status == CT.DecodeError ==>
+          buffer_resp0.CT.consumed_len == 0sz));
+        assert (pure (buffer_resp0.CT.response.CT.status == CT.IllegalTransition ==>
+          buffer_resp0.CT.consumed_len == 0sz));
+        assert (pure (buffer_resp0.CT.response.CT.status == CT.OutputBufferTooSmall ==> False));
         V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
         V.free decoded_buffer.L.decoded_buffer_fragment;
         V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
         V.free decoded_buffer.L.decoded_buffer_raw_record;
-        buffer_resp
+        buffer_resp0
       } else {
         assert (pure (decoded_error == false));
         assert (pure (resp.CT.status == CT.DecodeError ==> False));
+        let illegal_transition = resp.CT.status = CT.IllegalTransition;
+        if illegal_transition {
+          assert (pure (resp.CT.status == CT.IllegalTransition));
+          assert (pure (CT.unexpected_message_response
+            'st0
+            st1
+            resp
+            network_out_bytes
+            app_out_bytes));
+          let buffer_resp0 = {
+            CT.response = resp;
+            CT.consumed_len = 0sz;
+          };
+          CT.lemma_unexpected_message_response_for_network_input
+            'st0
+            st1
+            resp
+            (CT.network_consumed_prefix (Ghost.reveal 'raw_bytes) 0sz)
+            network_out_bytes
+            app_out_bytes;
+          CT.lemma_network_bytes_decode_error_projection_intro_consumed_zero
+            'st0
+            st1
+            buffer_resp0
+            (Ghost.reveal 'raw_bytes)
+            network_out_bytes
+            app_out_bytes;
+          CT.lemma_network_bytes_decoded_message_projection_intro_consumed_zero
+            'st0
+            st1
+            buffer_resp0
+            (Ghost.reveal 'raw_bytes)
+            network_out_bytes
+            app_out_bytes;
+          CT.lemma_network_bytes_step_correct_end_to_end
+            'st0
+            st1
+            buffer_resp0
+            (Ghost.reveal 'raw_bytes)
+            'old_network_out
+            network_out_bytes
+            'old_app_out
+            app_out_bytes;
+          assert (pure (buffer_resp0.CT.response.CT.status == CT.NeedMoreInput ==>
+            buffer_resp0.CT.consumed_len == 0sz));
+          assert (pure (buffer_resp0.CT.response.CT.status == CT.DecodeError ==>
+            buffer_resp0.CT.consumed_len == 0sz));
+          assert (pure (buffer_resp0.CT.response.CT.status == CT.IllegalTransition ==>
+            buffer_resp0.CT.consumed_len == 0sz));
+          assert (pure (buffer_resp0.CT.response.CT.status == CT.OutputBufferTooSmall ==> False));
+          V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
+          V.free decoded_buffer.L.decoded_buffer_fragment;
+          V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+          V.free decoded_buffer.L.decoded_buffer_raw_record;
+          buffer_resp0
+        } else {
+        assert (pure (illegal_transition == false));
+        assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
         CT.lemma_network_bytes_decoded_message_projection_intro_network_response
           'st0
           st1
@@ -782,11 +889,19 @@ fn process_network_bytes
           network_out_bytes
           'old_app_out
           app_out_bytes;
+        assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+          buffer_resp.CT.consumed_len == 0sz));
+        assert (pure (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
+          buffer_resp.CT.consumed_len == 0sz));
+        assert (pure (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
+          buffer_resp.CT.consumed_len == 0sz));
+        assert (pure (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False));
         V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
         V.free decoded_buffer.L.decoded_buffer_fragment;
         V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
         V.free decoded_buffer.L.decoded_buffer_raw_record;
         buffer_resp
+        }
       }
     }
   }

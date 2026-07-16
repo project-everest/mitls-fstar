@@ -788,11 +788,11 @@ let lemma_sent_event_nonempty_seal_projection_protected
 =
   if B.length delta_sent == 0 then
     begin
-      assert (raw_records_exactly delta_sent T.ApplicationData 1);
-      CSL.lemma_raw_records_exactly_one_parse_record delta_sent T.ApplicationData;
+      assert (raw_records_exactly delta_sent T.Application_data 1);
+      CSL.lemma_raw_records_exactly_one_parse_record delta_sent T.Application_data;
       eliminate exists (fragment:B.bytes).
         W.parse_record delta_sent ==
-          Some (T.ApplicationData, fragment, B.length delta_sent)
+          Some (T.Application_data, fragment, B.length delta_sent)
       returns
         sent_event_seal_projection
           model
@@ -805,7 +805,7 @@ let lemma_sent_event_nonempty_seal_projection_protected
       ( W.lemma_parse_record_implies_parse_record_wire delta_sent;
         W.lemma_parse_record_wire_some_consumed_positive
           delta_sent
-          T.ApplicationData
+          T.Application_data
           fragment
           (B.length delta_sent);
         assert False )
@@ -854,11 +854,11 @@ let lemma_received_event_nonempty_decode_projection_protected
 =
   if B.length delta_received == 0 then
     begin
-      assert (raw_records_exactly delta_received T.ApplicationData 1);
-      CSL.lemma_raw_records_exactly_one_parse_record delta_received T.ApplicationData;
+      assert (raw_records_exactly delta_received T.Application_data 1);
+      CSL.lemma_raw_records_exactly_one_parse_record delta_received T.Application_data;
       eliminate exists (fragment:B.bytes).
         W.parse_record delta_received ==
-          Some (T.ApplicationData, fragment, B.length delta_received)
+          Some (T.Application_data, fragment, B.length delta_received)
       returns
         received_event_decode_projection
           model
@@ -871,7 +871,7 @@ let lemma_received_event_nonempty_decode_projection_protected
       ( W.lemma_parse_record_implies_parse_record_wire delta_received;
         W.lemma_parse_record_wire_some_consumed_positive
           delta_received
-          T.ApplicationData
+          T.Application_data
           fragment
           (B.length delta_received);
         assert False )
@@ -1032,12 +1032,12 @@ let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
         receiver_delta);
       eliminate exists (sender_ciphertext:B.bytes).
         W.parse_record sender_delta ==
-          Some (T.ApplicationData, sender_ciphertext, B.length sender_delta) /\
+          Some (T.Application_data, sender_ciphertext, B.length sender_delta) /\
         R.seal
           sender.model_record.record_write
           (record_header_aad sender_delta)
           {
-            R.content_type = T.ApplicationData;
+            R.content_type = T.Application_data;
             R.fragment = sent_tls_inner_plaintext_fragment (M.TlsHandshake sent_msg);
           } ==
           Some (sender_ciphertext, R.next_seq sender.model_record.record_write)
@@ -1054,13 +1054,13 @@ let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
       with _.
       ( W.lemma_parse_record_implies_parse_record_wire sender_delta;
         assert (W.parse_record_wire sender_delta ==
-          Some (T.ApplicationData, sender_ciphertext, B.length sender_delta));
+          Some (T.Application_data, sender_ciphertext, B.length sender_delta));
         eliminate exists
           (receiver_fragment:B.bytes)
           (opened:B.bytes)
           (plaintext:M.plaintext).
           W.parse_record_wire receiver_delta ==
-            Some (T.ApplicationData, receiver_fragment, B.length receiver_delta) /\
+            Some (T.Application_data, receiver_fragment, B.length receiver_delta) /\
           received_record_opened receiver receiver_delta receiver_fragment opened /\
           W.parse_plaintext opened == Some plaintext /\
           W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
@@ -1083,9 +1083,9 @@ let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
             sender_tail
             receiver_delta
             receiver_tail
-            T.ApplicationData
+            T.Application_data
             sender_ciphertext
-            T.ApplicationData
+            T.Application_data
             receiver_fragment;
           assert (B.length sender_delta == B.length receiver_delta);
           lemma_protected_handshake_event_projection_pair_from_aligned_heads
@@ -1164,12 +1164,12 @@ let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
         receiver_delta);
       eliminate exists (sender_ciphertext:M.sealed_record).
         W.parse_record sender_delta ==
-          Some (T.ApplicationData, sender_ciphertext, B.length sender_delta) /\
+          Some (T.Application_data, sender_ciphertext, B.length sender_delta) /\
         R.seal
           sender.model_record.record_write
           (record_header_aad sender_delta)
           {
-            R.content_type = T.ApplicationData;
+            R.content_type = T.Application_data;
             R.fragment = sent_tls_inner_plaintext_fragment (M.TlsHandshake sent_msg);
           } ==
           Some (sender_ciphertext, R.next_seq sender.model_record.record_write)
@@ -1177,13 +1177,13 @@ let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
       with _.
       ( W.lemma_parse_record_implies_parse_record_wire sender_delta;
         assert (W.parse_record_wire sender_delta ==
-          Some (T.ApplicationData, sender_ciphertext, B.length sender_delta));
+          Some (T.Application_data, sender_ciphertext, B.length sender_delta));
         eliminate exists
           (receiver_fragment:M.sealed_record)
           (opened:B.bytes)
           (plaintext:M.plaintext).
           W.parse_record_wire receiver_delta ==
-            Some (T.ApplicationData, receiver_fragment, B.length receiver_delta) /\
+            Some (T.Application_data, receiver_fragment, B.length receiver_delta) /\
           received_record_opened receiver receiver_delta receiver_fragment opened /\
           W.parse_plaintext opened == Some plaintext /\
           W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
@@ -1197,9 +1197,9 @@ let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
             sender_tail
             receiver_delta
             receiver_tail
-            T.ApplicationData
+            T.Application_data
             sender_ciphertext
-            T.ApplicationData
+            T.Application_data
             receiver_fragment;
           assert (B.length sender_delta == B.length receiver_delta);
           Seq.lemma_eq_elim sender_stream receiver_stream;

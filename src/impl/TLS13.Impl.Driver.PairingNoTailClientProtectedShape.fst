@@ -11,6 +11,11 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module Sem   = TLS13.Wire.Semantics
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module R = TLS13.Record.Spec
@@ -129,7 +134,7 @@ let lemma_client_after_certificate_progress_rank
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_client_encrypted_extensions_step_model_shape
   (model6 model7:CS.connection_model)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   : Lemma
       (requires
         client_after_two_handshake_installs_model model6 /\
@@ -148,7 +153,9 @@ let lemma_client_encrypted_extensions_step_model_shape
       CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
     })
     model7;
-  assert_norm (
+  assert (model6.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerHelloReceived);
+  assert (
     CS.step_model
       model6
       (CS.ConnNetworkEvent {
@@ -172,7 +179,7 @@ let lemma_client_encrypted_extensions_step_model_shape
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_client_certificate_step_model_shape
   (model7 model8:CS.connection_model)
-  (cert:M.certificate_msg)
+  (cert:GCert.certificate)
   : Lemma
       (requires
         client_after_encrypted_extensions_model model7 /\
@@ -211,7 +218,7 @@ let lemma_client_certificate_step_model_shape
             CS.hs_buffers =
               { model7.CS.model_handshake.CS.hs_buffers with
                   CS.hb_certificate_leaf_der =
-                    (match cert.M.chain with
+                    (match (Sem.certificate_entries cert) with
                      | leaf :: _ -> Some leaf
                      | [] -> None);
               };
@@ -496,7 +503,7 @@ let lemma_client_after_two_installs_next_event_encrypted_extensions
        | M.TlsHandshake hs ->
          (match msg.CL.message_direction, hs with
           | CL.Received, M.EncryptedExtensions ee ->
-            introduce exists (ee':M.encrypted_extensions).
+            introduce exists (ee':GEE.encryptedExtensions).
               ev == CS.ConnNetworkEvent {
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee');
@@ -669,12 +676,12 @@ let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
               (
                 introduce exists
                   (start0:CS.handshake_start)
-                  (ch0:M.client_hello)
-                  (sh0:M.server_hello)
+                  (ch0:GCH.clientHello)
+                  (sh0:GSH.serverHello)
                   (client_shared0:C.x25519_shared_secret)
                   (e40:CS.conn_event)
                   (e50:CS.conn_event)
-                  (ee0:M.encrypted_extensions)
+                  (ee0:GEE.encryptedExtensions)
                   (rest0:list CS.conn_event).
                   client.CS.cs_event_log ==
                     CS.ConnLocalEvent (CS.LocalStartHandshake start0) ::
@@ -955,8 +962,8 @@ let lemma_client_no_tail_model6_witness
             PCPS.lemma_client_two_handshake_install_cover_model_shape model4 model5 model6 e4 e5;
             introduce exists
               (start0:CS.handshake_start)
-              (ch0:M.client_hello)
-              (sh0:M.server_hello)
+              (ch0:GCH.clientHello)
+              (sh0:GSH.serverHello)
               (client_shared0:C.x25519_shared_secret)
               (e40:CS.conn_event)
               (e50:CS.conn_event)
@@ -1100,7 +1107,7 @@ let lemma_client_after_encrypted_extensions_next_event_certificate
        | M.TlsHandshake hs ->
          (match msg.CL.message_direction, hs with
           | CL.Received, M.Certificate cert ->
-            introduce exists (cert':M.certificate_msg).
+            introduce exists (cert':GCert.certificate).
               ev == CS.ConnNetworkEvent {
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.Certificate cert');
@@ -1325,13 +1332,13 @@ let lemma_client_no_tail_eighth_event_certificate_clean
             (
               introduce exists
                 (start0:CS.handshake_start)
-                (ch0:M.client_hello)
-                (sh0:M.server_hello)
+                (ch0:GCH.clientHello)
+                (sh0:GSH.serverHello)
                 (client_shared0:C.x25519_shared_secret)
                 (e40:CS.conn_event)
                 (e50:CS.conn_event)
-                (ee0:M.encrypted_extensions)
-                (cert0:M.certificate_msg)
+                (ee0:GEE.encryptedExtensions)
+                (cert0:GCert.certificate)
                 (rest0:list CS.conn_event).
                 client.CS.cs_event_log ==
                   CS.ConnLocalEvent (CS.LocalStartHandshake start0) ::
@@ -1679,13 +1686,13 @@ let lemma_client_no_tail_model8_witness
                 assert (client_after_certificate_model model8);
                 introduce exists
                   (start0:CS.handshake_start)
-                  (ch0:M.client_hello)
-                  (sh0:M.server_hello)
+                  (ch0:GCH.clientHello)
+                  (sh0:GSH.serverHello)
                   (client_shared0:C.x25519_shared_secret)
                   (e40:CS.conn_event)
                   (e50:CS.conn_event)
-                  (ee0:M.encrypted_extensions)
-                  (cert0:M.certificate_msg)
+                  (ee0:GEE.encryptedExtensions)
+                  (cert0:GCert.certificate)
                   (rest40:list CS.conn_event)
                   (model80:CS.connection_model)
                   (tail_sent0:B.bytes)
@@ -1793,13 +1800,13 @@ let lemma_client_no_tail_ninth_event_validate_certificate_clean
       (
         introduce exists
           (start0:CS.handshake_start)
-          (ch0:M.client_hello)
-          (sh0:M.server_hello)
+          (ch0:GCH.clientHello)
+          (sh0:GSH.serverHello)
           (client_shared0:C.x25519_shared_secret)
           (e40:CS.conn_event)
           (e50:CS.conn_event)
-          (ee0:M.encrypted_extensions)
-          (cert0:M.certificate_msg)
+          (ee0:GEE.encryptedExtensions)
+          (cert0:GCert.certificate)
           (peer0:X.peer_identity)
           (rest0:list CS.conn_event).
           client.CS.cs_event_log ==

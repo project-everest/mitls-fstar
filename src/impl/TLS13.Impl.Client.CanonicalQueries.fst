@@ -34,14 +34,6 @@ noeq
 type client_next_local_action_frame = {
   client_query_network_app_out: array U8.t;
   client_query_network_app_out_len: SZ.t;
-  client_query_network_bridge_proof:
-    old:Ghost.erased B.bytes ->
-      Ghost.erased
-        (CP.client_network_bridge_obligation {
-          CP.tls_client_network_app_out = client_query_network_app_out;
-          CP.tls_client_network_app_out_len = client_query_network_app_out_len;
-          CP.tls_client_network_old_app_out = old;
-        });
   client_query_local_payload: array U8.t;
   client_query_local_payload_len: SZ.t;
   client_query_local_app_out: array U8.t;
@@ -59,8 +51,6 @@ let client_network_frame_of_current
   } in
   {
     CP.tls_client_network_bridge_base = base;
-    CP.tls_client_network_bridge_proof =
-      frame.client_query_network_bridge_proof old;
   }
 
 let client_local_frame_of_current

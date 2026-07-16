@@ -40,7 +40,7 @@ fn serialize_protected_handshake_record
                    (Ghost.reveal record_write)
                    (CS.application_data_record_header (SZ.v handshake_len + 17))
                    {
-                     R.content_type = T.ApplicationData;
+                     R.content_type = T.Application_data;
                      R.fragment =
                        CS.sent_tls_inner_plaintext_fragment
                          (M.TlsHandshake (Ghost.reveal msg));
@@ -53,11 +53,11 @@ fn serialize_protected_handshake_record
           pure (B.length network_bytes == SZ.v network_out_len /\
                 SZ.v written == SZ.v handshake_len + 22 /\
                 (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
-                CS.raw_records_exactly raw_prefix T.ApplicationData 1 /\
+                CS.raw_records_exactly raw_prefix T.Application_data 1 /\
                 (exists outer_fragment.
                    WS.parse_record raw_prefix ==
-                     Some (T.ApplicationData, outer_fragment, B.length raw_prefix) /\
-                   Seq.equal raw_prefix (WS.serialize_record T.ApplicationData outer_fragment) /\
+                     Some (T.Application_data, outer_fragment, B.length raw_prefix) /\
+                   Seq.equal raw_prefix (WS.serialize_record T.Application_data outer_fragment) /\
                    Seq.equal
                      (CS.record_header_aad raw_prefix)
                      (CS.application_data_record_header (SZ.v handshake_len + 17)) /\
@@ -65,7 +65,7 @@ fn serialize_protected_handshake_record
                      (Ghost.reveal record_write)
                      (CS.record_header_aad raw_prefix)
                      {
-                       R.content_type = T.ApplicationData;
+                       R.content_type = T.Application_data;
                        R.fragment =
                          CS.sent_tls_inner_plaintext_fragment
                            (M.TlsHandshake (Ghost.reveal msg));

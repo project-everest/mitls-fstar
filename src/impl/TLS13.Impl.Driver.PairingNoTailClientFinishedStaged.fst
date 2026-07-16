@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin  = TLS13.Wire.Generated.Finished
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
 module PNTCFS = TLS13.Impl.Driver.PairingNoTailClientFinishedShape
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
@@ -22,9 +23,9 @@ let lemma_client_finished_model12_exact_suffix_raw_record_slice
       (ensures client_finished_model12_exact_suffix_raw_record_slice client)
 =
   eliminate exists
-    (sf:M.finished)
+    (sf:GFin.finished)
     (e13 e14:CS.conn_event)
-    (cf:M.finished)
+    (cf:GFin.finished)
     (model12:CS.connection_model)
     tail_sent
     tail_received.
@@ -64,7 +65,7 @@ let lemma_client_finished_model12_exact_suffix_raw_record_slice
       client.CS.cs_model;
     eliminate exists finished_raw.
       Seq.equal tail_sent finished_raw /\
-      CS.raw_records_exactly finished_raw T.ApplicationData 1
+      CS.raw_records_exactly finished_raw T.Application_data 1
     returns
       client_finished_model12_exact_suffix_raw_record_slice client
     with _.
@@ -100,7 +101,7 @@ let lemma_client_finished_model12_exact_suffix_raw_record_slice
           tail_received
           client.CS.cs_model /\
         Seq.equal tail_sent finished_raw /\
-        CS.raw_records_exactly finished_raw T.ApplicationData 1
+        CS.raw_records_exactly finished_raw T.Application_data 1
       with
         sf
         e13

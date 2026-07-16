@@ -356,6 +356,33 @@ let rec lemma_wire_serialize_all_append
       (WF.serialize_all CW.tls_record_wire_format tl)
       (WF.serialize_all CW.tls_record_wire_format right)
 
+(* Appending a residual tail to the full serialization of [msgs] yields exactly
+   the serialization of [msgs] with that tail.  Combined with the parse/serialize
+   inverse for the strong-prefix TLS record format, this bridges the DATAGRAM
+   (serialize-equality) disjunct of [WFSM.valid_byte_trace] back to the STREAM
+   (parses_as) disjunct that the strong-prefix consumers rely on. *)
+let rec lemma_wire_serialize_all_append_tail
+  (msgs:list CW.wire_message)
+  (tail:TCP.bytes)
+  : Lemma
+      (ensures
+        Seq.equal
+          (Seq.append
+            (WF.serialize_all CW.tls_record_wire_format msgs)
+            tail)
+          (WF.serialize_with_tail CW.tls_record_wire_format msgs tail))
+      (decreases msgs)
+=
+  match msgs with
+  | [] ->
+    Seq.append_empty_l tail
+  | msg :: rest ->
+    lemma_wire_serialize_all_append_tail rest tail;
+    Seq.append_assoc
+      (CW.wire_serialize msg)
+      (WF.serialize_all CW.tls_record_wire_format rest)
+      tail
+
 let lemma_client_step_wire_log_delta
   (st0:CS.connection_state)
   (ev:SM.event CW.wire_message CTypes.client_local_event)
@@ -774,6 +801,331 @@ let lemma_wire_parses_as_serialize_all
           (WF.serialize_all CW.tls_record_wire_format msgs))
 =
   lemma_wire_parses_as_serialize_with_tail bytes msgs Seq.empty
+
+(* Bridge lemma: [WFSM.valid_byte_trace] was WEAKENED on its input side to a
+   disjunction (STREAM [parses_as] OR DATAGRAM [serialize-equality]) to also serve
+   datagram transports.  The TLS client binds the strong-prefix
+   [CW.tls_record_wire_format], for which the DATAGRAM disjunct implies the STREAM
+   disjunct.  This lemma re-derives, via an SMTPat, the pre-weakening STRONG
+   existential (with a bare [parses_as]) that the strong-prefix consumers below
+   [eliminate] unchanged. *)
+let lemma_client_valid_byte_trace_strong_parse
+  (client_initial:CS.connection_state)
+  (client_received:B.bytes)
+  (client:CS.connection_state)
+  (client_sent:B.bytes)
+  (residual:TCP.bytes)
+  : Lemma
+      (requires
+        WFSM.valid_byte_trace
+          (ClientCP.client_system client_initial)
+          client_received
+          client
+          client_sent
+          residual)
+      (ensures
+        exists (trace:list (SM.transition
+                              CS.connection_state
+                              CW.wire_message
+                              CTypes.client_local_event
+                              CTypes.local_output)).
+          SM.trace_reaches
+            (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
+            (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+            trace
+            client /\
+          WF.parses_as
+            (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+            client_received
+            (WFSM.trace_input_messages trace)
+            residual /\
+          Seq.equal
+            client_sent
+            (WF.serialize_all
+              (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+              (SM.trace_wire_outputs trace)))
+      [SMTPat
+        (WFSM.valid_byte_trace
+          (ClientCP.client_system client_initial)
+          client_received
+          client
+          client_sent
+          residual)]
+=
+  assert ((ClientCP.client_system client_initial).WFSM.wfsm_wire_format ==
+    CW.tls_record_wire_format);
+  eliminate exists trace.
+    SM.trace_reaches
+      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
+      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      trace
+      client /\
+    (WF.parses_as
+       (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+       client_received
+       (WFSM.trace_input_messages trace)
+       residual
+     \/
+     Seq.equal
+       client_received
+       (Seq.append
+         (WF.serialize_all
+           (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+           (WFSM.trace_input_messages trace))
+         residual)) /\
+    Seq.equal
+      client_sent
+      (WF.serialize_all
+        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (SM.trace_wire_outputs trace))
+  returns
+    exists (trace:list (SM.transition
+                          CS.connection_state
+                          CW.wire_message
+                          CTypes.client_local_event
+                          CTypes.local_output)).
+      SM.trace_reaches
+        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
+        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        trace
+        client /\
+      WF.parses_as
+        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        client_received
+        (WFSM.trace_input_messages trace)
+        residual /\
+      Seq.equal
+        client_sent
+        (WF.serialize_all
+          (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+          (SM.trace_wire_outputs trace))
+  with _.
+  (
+    introduce
+      Seq.equal
+        client_received
+        (Seq.append
+          (WF.serialize_all
+            (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+            (WFSM.trace_input_messages trace))
+          residual)
+      ==>
+      WF.parses_as
+        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        client_received
+        (WFSM.trace_input_messages trace)
+        residual
+    with _.
+    (
+      lemma_wire_serialize_all_append_tail
+        (WFSM.trace_input_messages trace)
+        residual;
+      Seq.lemma_eq_elim
+        (Seq.append
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.trace_input_messages trace))
+          residual)
+        (WF.serialize_with_tail
+          CW.tls_record_wire_format
+          (WFSM.trace_input_messages trace)
+          residual);
+      Seq.lemma_eq_elim
+        client_received
+        (Seq.append
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.trace_input_messages trace))
+          residual);
+      lemma_wire_parse_serialize_with_tail_inverse
+        (WFSM.trace_input_messages trace)
+        residual;
+      assert (WF.parses_as
+        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        client_received
+        (WFSM.trace_input_messages trace)
+        residual)
+    );
+    assert (exists (trace':list (SM.transition
+                                  CS.connection_state
+                                  CW.wire_message
+                                  CTypes.client_local_event
+                                  CTypes.local_output)).
+      SM.trace_reaches
+        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
+        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        trace'
+        client /\
+      WF.parses_as
+        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        client_received
+        (WFSM.trace_input_messages trace')
+        residual /\
+      Seq.equal
+        client_sent
+        (WF.serialize_all
+          (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+          (SM.trace_wire_outputs trace')))
+  )
+
+let lemma_server_valid_byte_trace_strong_parse
+  (server_initial:CS.connection_state)
+  (server_received:B.bytes)
+  (server:CS.connection_state)
+  (server_sent:B.bytes)
+  (residual:TCP.bytes)
+  : Lemma
+      (requires
+        WFSM.valid_byte_trace
+          (ServerCP.server_system server_initial)
+          server_received
+          server
+          server_sent
+          residual)
+      (ensures
+        exists (trace:list (SM.transition
+                              CS.connection_state
+                              CW.wire_message
+                              CTypes.server_local_event
+                              CTypes.local_output)).
+          SM.trace_reaches
+            (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
+            (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+            trace
+            server /\
+          WF.parses_as
+            (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+            server_received
+            (WFSM.trace_input_messages trace)
+            residual /\
+          Seq.equal
+            server_sent
+            (WF.serialize_all
+              (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+              (SM.trace_wire_outputs trace)))
+      [SMTPat
+        (WFSM.valid_byte_trace
+          (ServerCP.server_system server_initial)
+          server_received
+          server
+          server_sent
+          residual)]
+=
+  assert ((ServerCP.server_system server_initial).WFSM.wfsm_wire_format ==
+    CW.tls_record_wire_format);
+  eliminate exists trace.
+    SM.trace_reaches
+      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
+      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      trace
+      server /\
+    (WF.parses_as
+       (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+       server_received
+       (WFSM.trace_input_messages trace)
+       residual
+     \/
+     Seq.equal
+       server_received
+       (Seq.append
+         (WF.serialize_all
+           (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+           (WFSM.trace_input_messages trace))
+         residual)) /\
+    Seq.equal
+      server_sent
+      (WF.serialize_all
+        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (SM.trace_wire_outputs trace))
+  returns
+    exists (trace:list (SM.transition
+                          CS.connection_state
+                          CW.wire_message
+                          CTypes.server_local_event
+                          CTypes.local_output)).
+      SM.trace_reaches
+        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
+        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        trace
+        server /\
+      WF.parses_as
+        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        server_received
+        (WFSM.trace_input_messages trace)
+        residual /\
+      Seq.equal
+        server_sent
+        (WF.serialize_all
+          (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+          (SM.trace_wire_outputs trace))
+  with _.
+  (
+    introduce
+      Seq.equal
+        server_received
+        (Seq.append
+          (WF.serialize_all
+            (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+            (WFSM.trace_input_messages trace))
+          residual)
+      ==>
+      WF.parses_as
+        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        server_received
+        (WFSM.trace_input_messages trace)
+        residual
+    with _.
+    (
+      lemma_wire_serialize_all_append_tail
+        (WFSM.trace_input_messages trace)
+        residual;
+      Seq.lemma_eq_elim
+        (Seq.append
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.trace_input_messages trace))
+          residual)
+        (WF.serialize_with_tail
+          CW.tls_record_wire_format
+          (WFSM.trace_input_messages trace)
+          residual);
+      Seq.lemma_eq_elim
+        server_received
+        (Seq.append
+          (WF.serialize_all
+            CW.tls_record_wire_format
+            (WFSM.trace_input_messages trace))
+          residual);
+      lemma_wire_parse_serialize_with_tail_inverse
+        (WFSM.trace_input_messages trace)
+        residual;
+      assert (WF.parses_as
+        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        server_received
+        (WFSM.trace_input_messages trace)
+        residual)
+    );
+    assert (exists (trace':list (SM.transition
+                                  CS.connection_state
+                                  CW.wire_message
+                                  CTypes.server_local_event
+                                  CTypes.local_output)).
+      SM.trace_reaches
+        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
+        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        trace'
+        server /\
+      WF.parses_as
+        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        server_received
+        (WFSM.trace_input_messages trace')
+        residual /\
+      Seq.equal
+        server_sent
+        (WF.serialize_all
+          (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+          (SM.trace_wire_outputs trace')))
+  )
 
 let lemma_client_valid_byte_trace_inverts_to_serialized_trace
   (client_initial:CS.connection_state)

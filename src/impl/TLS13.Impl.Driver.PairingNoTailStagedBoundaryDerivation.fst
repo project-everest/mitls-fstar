@@ -10,6 +10,13 @@ module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CD = TLS13.Impl.Client.Driver
 module M = TLS13.Messages
+module Sem   = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
@@ -789,6 +796,7 @@ let lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_compl
         server)
     prove
 
+#push-options "--z3rlimit 30"
 let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_completion
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -891,17 +899,23 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
       returns WFL.paired_cleartext_hello_key_shares client server
       with _.
       (
+        assert (WFL.supported_client_hello_wire_profile client_ch);
         WFL.lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
           client_ch
           server_ch
           client_ch_raw
           server_ch_raw;
-        assert (FStar.Seq.equal client_ch.M.key_share server_ch.M.key_share);
-        FStar.Seq.lemma_eq_elim client_ch.M.key_share server_ch.M.key_share;
-        assert (CS.client_hello_key_share client_ch ==
-          CS.client_hello_key_share server_ch);
-        assert (CS.server_hello_key_share client_sh ==
-          CS.server_hello_key_share server_sh);
+        WFL.lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
+          client
+          server
+          client_ch
+          server_ch
+          client_sh
+          server_sh
+          client_ch_raw
+          server_ch_raw
+          client_sh_raw
+          server_sh_raw;
         assert (WFL.paired_cleartext_hello_key_shares client server)
       )
     ) in
@@ -909,6 +923,7 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
     #(clean16_staged_boundary_derivation_milestones client server)
     #(WFL.paired_cleartext_hello_key_shares client server)
     prove
+#pop-options
 
 let lemma_clean16_protected_projection_witnesses_completion_from_installed_replay_completion
   (client:CS.connection_state)
@@ -1159,8 +1174,8 @@ let peel_nil_received (model final:CS.connection_model)
 // Linchpin (A): transcript equality of server model5 and client model4
 #push-options "--z3rlimit 40 --split_queries always"
 let lemma_transcript_eq
-  (server_ch:M.client_hello) (client_ch:M.client_hello)
-  (server_sh:M.server_hello) (client_sh:M.server_hello)
+  (server_ch:GCH.clientHello) (client_ch:GCH.clientHello)
+  (server_sh:GSH.serverHello) (client_sh:GSH.serverHello)
   (selection:CS.server_handshake_selection)
   (server_shared client_shared:C.x25519_shared_secret)
   (start:CS.handshake_start)
@@ -1189,7 +1204,7 @@ let lemma_transcript_eq
 
 // Linchpin (B): handshake secret equality of server model5 and client model4
 let lemma_secret_eq
-  (server_ch:M.client_hello) (server_sh:M.server_hello) (client_sh:M.server_hello) (client_ch:M.client_hello)
+  (server_ch:GCH.clientHello) (server_sh:GSH.serverHello) (client_sh:GSH.serverHello) (client_ch:GCH.clientHello)
   (selection:CS.server_handshake_selection)
   (server_shared client_shared:C.x25519_shared_secret)
   (start:CS.handshake_start)
@@ -1346,8 +1361,8 @@ let lemma_cover_both_install (e13 e14:CS.conn_event)
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_server_flight_walk
   (m0:CS.connection_model)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (cv:M.certificate_verify)
-  (sf cf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (cv:GCV.certificateVerify)
+  (sf cf:GFin.finished)
   (appw appr:CS.traffic_key_material)
   (final:CS.connection_model)
   : Lemma
@@ -1438,8 +1453,8 @@ let lemma_server_flight_walk
 #push-options "--z3rlimit 80 --split_queries always --fuel 2 --ifuel 2"
 let lemma_client_flight_walk
   (m0:CS.connection_model)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-  (cv:M.certificate_verify) (sf cf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+  (cv:GCV.certificateVerify) (sf cf:GFin.finished)
   (e13 e14:CS.conn_event)
   (final:CS.connection_model)
   : Lemma
@@ -1545,7 +1560,7 @@ let lemma_client_flight_walk
 #pop-options
 
 #push-options "--z3rlimit 40 --split_queries always --fuel 3 --ifuel 3"
-let lemma_sent_finished_at_appdata_sets_client_finished (m m':CS.connection_model) (fin:M.finished)
+let lemma_sent_finished_at_appdata_sets_client_finished (m m':CS.connection_model) (fin:GFin.finished)
   : Lemma
       (requires
         CS.step_model m (CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished fin); }) == Some m' /\
@@ -1553,7 +1568,7 @@ let lemma_sent_finished_at_appdata_sets_client_finished (m m':CS.connection_mode
       (ensures m'.CS.model_handshake.CS.hs_client_finished == Some fin)
 = ()
 
-let lemma_verify_client_finished_sets_client_finished (m m':CS.connection_model) (fin:M.finished)
+let lemma_verify_client_finished_sets_client_finished (m m':CS.connection_model) (fin:GFin.finished)
   : Lemma
       (requires
         CS.step_model m (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)) == Some m')
@@ -1565,7 +1580,7 @@ let lemma_verify_client_finished_sets_client_finished (m m':CS.connection_model)
 // ================= CFRR SUFFIX WALK (server receiving client finished) =================
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_cfrr_suffix_walk
-  (m0:CS.connection_model) (appw appr:CS.traffic_key_material) (cf:M.finished) (final:CS.connection_model)
+  (m0:CS.connection_model) (appw appr:CS.traffic_key_material) (cf:GFin.finished) (final:CS.connection_model)
   : Lemma
       (requires
         (let ev_iaw = CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole { CS.install_role = CS.ServerEndpoint; CS.install_payload = { CS.install_epoch = CS.TrafficApplication; CS.install_direction = CS.TrafficWrite; CS.install_material = appw; }; }) in
@@ -1602,8 +1617,8 @@ let lemma_cfrr_suffix_walk
 #push-options "--z3rlimit 20 --split_queries always --fuel 1 --ifuel 1"
 let lemma_message_match
   (client server:CS.connection_state)
-  (ee_s:M.encrypted_extensions) (cert_s:M.certificate_msg) (cv_s:M.certificate_verify) (sf_s:M.finished) (cf_r:M.finished)
-  (ee_c:M.encrypted_extensions) (cert_c:M.certificate_msg) (cv_c:M.certificate_verify) (sf_c:M.finished) (cf_f:M.finished)
+  (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_s:GCV.certificateVerify) (sf_s:GFin.finished) (cf_r:GFin.finished)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_c:GCV.certificateVerify) (sf_c:GFin.finished) (cf_f:GFin.finished)
   : Lemma
       (requires
         server.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == Some ee_s /\
@@ -1814,8 +1829,8 @@ let rec lemma_received_replay_preserves_slots
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_server_prefix_slots
   (m0:CS.connection_model)
-  (ch:M.client_hello) (selection:CS.server_handshake_selection)
-  (server_shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (model5:CS.connection_model)
   : Lemma
       (requires
@@ -1855,7 +1870,7 @@ let lemma_server_prefix_slots
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_client_prefix_slots
   (m0:CS.connection_model)
-  (start:CS.handshake_start) (ch:M.client_hello) (sh:M.server_hello)
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (model4:CS.connection_model)
   : Lemma
@@ -1893,8 +1908,8 @@ let lemma_client_prefix_slots
 #push-options "--z3rlimit 40 --split_queries always"
 let lemma_server_final_slots
   (server:CS.connection_state)
-  (ch:M.client_hello) (selection:CS.server_handshake_selection)
-  (server_shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (model5:CS.connection_model) (suffix:list CS.conn_event)
   : Lemma
       (requires
@@ -1917,7 +1932,7 @@ let lemma_server_final_slots
 
 let lemma_client_final_slots
   (client:CS.connection_state)
-  (start:CS.handshake_start) (ch:M.client_hello) (sh:M.server_hello)
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (model4:CS.connection_model) (suffix:list CS.conn_event)
   : Lemma
@@ -1945,10 +1960,10 @@ let lemma_client_final_slots
 #push-options "--z3rlimit 30 --split_queries always"
 let lemma_shared_secret_eq
   (client server:CS.connection_state)
-  (ch_s:M.client_hello) (selection_s:CS.server_handshake_selection)
-  (server_shared_s:C.x25519_shared_secret) (sh_s:M.server_hello)
+  (ch_s:GCH.clientHello) (selection_s:CS.server_handshake_selection)
+  (server_shared_s:C.x25519_shared_secret) (sh_s:GSH.serverHello)
   (model5_s:CS.connection_model) (server_suffix:list CS.conn_event)
-  (start_c:CS.handshake_start) (ch_c:M.client_hello) (sh_c:M.server_hello)
+  (start_c:CS.handshake_start) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   (client_shared_c:C.x25519_shared_secret)
   (model4_c:CS.connection_model) (client_suffix:list CS.conn_event)
   : Lemma
@@ -2025,8 +2040,8 @@ let lemma_checkpoint_th_sh_from_milestone
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_server_prefix_secret_transcript
   (m0:CS.connection_model)
-  (ch:M.client_hello) (selection:CS.server_handshake_selection)
-  (server_shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (model5:CS.connection_model)
   : Lemma
       (requires
@@ -2070,7 +2085,7 @@ let lemma_server_prefix_secret_transcript
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_client_prefix_secret_transcript
   (m0:CS.connection_model)
-  (start:CS.handshake_start) (ch:M.client_hello) (sh:M.server_hello)
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (model4:CS.connection_model)
   : Lemma
@@ -2112,8 +2127,8 @@ let lemma_client_prefix_secret_transcript
 let lemma_transcript_eq_from_checkpoint
   (client server:CS.connection_state)
   (model5_s model4_c:CS.connection_model)
-  (ch_s:M.client_hello) (sh_s:M.server_hello)
-  (ch_c:M.client_hello) (sh_c:M.server_hello)
+  (ch_s:GCH.clientHello) (sh_s:GSH.serverHello)
+  (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   : Lemma
       (requires
         CS.same_transcript_checkpoint CS.TH_SH client server /\
@@ -2267,8 +2282,8 @@ let lemma_app_install_events_not_hello (e13 e14:CS.conn_event)
 #push-options "--z3rlimit 30 --fuel 16 --ifuel 2 --split_queries always"
 let lemma_client_suffix_all_not_hello
   (e4 e5 e13 e14:CS.conn_event)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-  (cv:M.certificate_verify) (sf:M.finished) (cf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+  (cv:GCV.certificateVerify) (sf:GFin.finished) (cf:GFin.finished)
   : Lemma
       (requires
         PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
@@ -2411,8 +2426,8 @@ let lemma_hole1_alignment
 // K: server-suffix all_not_hello (fully concrete, high fuel)
 #push-options "--z3rlimit 30 --fuel 16 --ifuel 2 --split_queries always"
 let lemma_server_suffix_all_not_hello
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (cv:M.certificate_verify)
-  (sf:M.finished) (cf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (cv:GCV.certificateVerify)
+  (sf:GFin.finished) (cf:GFin.finished)
   (server_material server_read_material server_app_write_material server_app_read_material:CS.traffic_key_material)
   : Lemma
       (ensures
@@ -2457,16 +2472,16 @@ let lemma_server_suffix_all_not_hello
 #push-options "--z3rlimit 30 --fuel 16 --ifuel 2 --split_queries always"
 let lemma_pack_server_flight_align_real
   (client server:CS.connection_state)
-  (ch_s:M.client_hello) (selection_s:CS.server_handshake_selection)
-  (server_shared_s:C.x25519_shared_secret) (sh_s:M.server_hello)
-  (ee_s:M.encrypted_extensions) (cert_s:M.certificate_msg) (cv_s:M.certificate_verify)
-  (sf_s:M.finished) (cf_s:M.finished)
+  (ch_s:GCH.clientHello) (selection_s:CS.server_handshake_selection)
+  (server_shared_s:C.x25519_shared_secret) (sh_s:GSH.serverHello)
+  (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_s:GCV.certificateVerify)
+  (sf_s:GFin.finished) (cf_s:GFin.finished)
   (server_material_s server_read_material_s server_app_write_material_s server_app_read_material_s:CS.traffic_key_material)
   (model5_s server_after_write_s server_after_read_s:CS.connection_model)
-  (start_c:CS.handshake_start) (ch_c:M.client_hello) (sh_c:M.server_hello)
+  (start_c:CS.handshake_start) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   (client_shared_c:C.x25519_shared_secret)
-  (ee_c:M.encrypted_extensions) (cert_c:M.certificate_msg) (peer_c:X.peer_identity)
-  (cv_c:M.certificate_verify) (sf_c:M.finished) (cf_c:M.finished)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (peer_c:X.peer_identity)
+  (cv_c:GCV.certificateVerify) (sf_c:GFin.finished) (cf_c:GFin.finished)
   (e4_c e5_c e13_c e14_c:CS.conn_event)
   (model4_c client_after_e4_c client_after_installs_c:CS.connection_model)
   : Lemma
@@ -2666,7 +2681,7 @@ let peel_sent_empty_dsent
 // The single Sent ServerHello event: raw_sent == serialize(ServerHello sh)
 #push-options "--z3rlimit 20"
 let peel_sent_server_hello_bytes
-  (model:CS.connection_model) (sh:M.server_hello)
+  (model:CS.connection_model) (sh:GSH.serverHello)
   (rs rr:B.bytes) (final:CS.connection_model)
   : Lemma
       (requires
@@ -2776,7 +2791,7 @@ let received_local_singleton_rr_empty
 // The RecvSH followed by a single local event: raw_received == serialize(ServerHello sh)
 #push-options "--z3rlimit 20"
 let peel_received_server_hello_then_local_bytes
-  (model:CS.connection_model) (sh:M.server_hello) (lev:CS.local_event)
+  (model:CS.connection_model) (sh:GSH.serverHello) (lev:CS.local_event)
   (rs rr:B.bytes) (final:CS.connection_model)
   : Lemma
       (requires
@@ -2819,8 +2834,8 @@ let peel_received_server_hello_then_local_bytes
 #push-options "--z3rlimit 30"
 let lemma_server_prefix_sent_bytes
   (m0:CS.connection_model)
-  (ch:M.client_hello) (sel:CS.server_handshake_selection)
-  (shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (sel:CS.server_handshake_selection)
+  (shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (ps pr:B.bytes) (m5:CS.connection_model)
   : Lemma
       (requires
@@ -2867,8 +2882,8 @@ let lemma_server_prefix_sent_bytes
 #push-options "--z3rlimit 30"
 let lemma_client_prefix_received_bytes
   (m0:CS.connection_model)
-  (start:CS.handshake_start) (ch:M.client_hello)
-  (sh:M.server_hello) (shared:C.x25519_shared_secret)
+  (start:CS.handshake_start) (ch:GCH.clientHello)
+  (sh:GSH.serverHello) (shared:C.x25519_shared_secret)
   (ps pr:B.bytes) (m4:CS.connection_model)
   : Lemma
       (requires
@@ -2978,7 +2993,7 @@ let peel_received_bp
 #push-options "--z3rlimit 30 --split_queries always"
 let lemma_sh_serialize_eq_from_milestone
   (client server:CS.connection_state)
-  (sh_s sh_c:M.server_hello)
+  (sh_s sh_c:GSH.serverHello)
   : Lemma
       (requires
         clean16_cleartext_final_hello_slot_milestone client server /\
@@ -3077,18 +3092,18 @@ let lemma_two_install_events_are_local
 #push-options "--z3rlimit 30 --split_queries always"
 let lemma_pack_server_bytes_real
   (client server:CS.connection_state)
-  (ch_s:M.client_hello) (selection_s:CS.server_handshake_selection)
-  (server_shared_s:C.x25519_shared_secret) (sh_s:M.server_hello)
-  (ee_s:M.encrypted_extensions) (cert_s:M.certificate_msg) (cv_s:M.certificate_verify)
-  (sf_s:M.finished) (cf_s:M.finished)
+  (ch_s:GCH.clientHello) (selection_s:CS.server_handshake_selection)
+  (server_shared_s:C.x25519_shared_secret) (sh_s:GSH.serverHello)
+  (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_s:GCV.certificateVerify)
+  (sf_s:GFin.finished) (cf_s:GFin.finished)
   (server_material_s server_read_material_s server_app_write_material_s server_app_read_material_s:CS.traffic_key_material)
   (model5_s:CS.connection_model)
   (prefix_sent_s prefix_received_s suffix_sent_s suffix_received_s:B.bytes)
-  (start_c:CS.handshake_start) (ch_c:M.client_hello) (sh_c:M.server_hello)
+  (start_c:CS.handshake_start) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   (client_shared_c:C.x25519_shared_secret)
   (e4_c e5_c:CS.conn_event)
-  (ee_c:M.encrypted_extensions) (cert_c:M.certificate_msg) (peer_c:X.peer_identity)
-  (cv_c:M.certificate_verify) (sf_c:M.finished) (e13_c e14_c:CS.conn_event) (cf_c:M.finished)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (peer_c:X.peer_identity)
+  (cv_c:GCV.certificateVerify) (sf_c:GFin.finished) (e13_c e14_c:CS.conn_event) (cf_c:GFin.finished)
   (model4_c:CS.connection_model)
   (prefix_sent_c prefix_received_c suffix_received_c:B.bytes)
   : Lemma
@@ -3284,7 +3299,7 @@ let lemma_first_wire_record_unique_split_h4
 #pop-options
 
 #push-options "--z3rlimit 20 --ifuel 1"
-let lemma_client_hello_sent_is_wire_h4 (ch:M.client_hello) (raw:B.bytes)
+let lemma_client_hello_sent_is_wire_h4 (ch:GCH.clientHello) (raw:B.bytes)
   : Lemma
       (requires
         WFL.supported_client_hello_wire_profile ch /\
@@ -3303,7 +3318,7 @@ let lemma_client_hello_sent_is_wire_h4 (ch:M.client_hello) (raw:B.bytes)
 #pop-options
 
 #push-options "--z3rlimit 20 --ifuel 1"
-let lemma_received_client_hello_is_wire_h4 (ch:M.client_hello) (raw:B.bytes)
+let lemma_received_client_hello_is_wire_h4 (ch:GCH.clientHello) (raw:B.bytes)
   : Lemma
       (requires CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello ch)) raw)
       (ensures exists frag. W.parse_record_wire raw == Some (T.Handshake, frag, B.length raw))
@@ -3312,7 +3327,7 @@ let lemma_received_client_hello_is_wire_h4 (ch:M.client_hello) (raw:B.bytes)
 
 #push-options "--z3rlimit 20"
 let peel_sent_cleartext_ch_head
-  (model:CS.connection_model) (ch:M.client_hello) (rest:list CS.conn_event)
+  (model:CS.connection_model) (ch:GCH.clientHello) (rest:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
   : Lemma
       (requires
@@ -3358,7 +3373,7 @@ let peel_sent_cleartext_ch_head
 
 #push-options "--z3rlimit 20"
 let peel_received_ch_recv_head
-  (model:CS.connection_model) (ch:M.client_hello) (rest:list CS.conn_event)
+  (model:CS.connection_model) (ch:GCH.clientHello) (rest:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
   : Lemma
       (requires
@@ -3470,11 +3485,11 @@ let rec lemma_empty_recv_tail_collapses
 #push-options "--z3rlimit 30 --fuel 12 --ifuel 2"
 let lemma_client_exact_prefix_sent_ch
   (m0:CS.connection_model)
-  (start:CS.handshake_start) (ch:M.client_hello) (sh:M.server_hello)
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
   (e4 e5:CS.conn_event)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-  (cv:M.certificate_verify) (sf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+  (cv:GCV.certificateVerify) (sf:GFin.finished)
   (ps pr:B.bytes) (m12:CS.connection_model)
   : Lemma
       (requires
@@ -3545,8 +3560,8 @@ let lemma_client_exact_prefix_sent_ch
 #push-options "--z3rlimit 30 --fuel 12 --ifuel 2"
 let lemma_server_prefix_received_ch
   (m0:CS.connection_model)
-  (ch:M.client_hello) (sel:CS.server_handshake_selection)
-  (shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (sel:CS.server_handshake_selection)
+  (shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (ps pr:B.bytes) (m5:CS.connection_model)
   : Lemma
       (requires
@@ -3587,8 +3602,8 @@ let lemma_server_prefix_received_ch
 let lemma_server_flight_received_empty
   (m0:CS.connection_model)
   (e5 e6:CS.conn_event)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg)
-  (cv:M.certificate_verify) (sf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv:GCV.certificateVerify) (sf:GFin.finished)
   (ps pr:B.bytes) (mf:CS.connection_model)
   : Lemma
       (requires
@@ -3709,13 +3724,13 @@ let peel_local_construct
     m lev rest rs rr final m1 B.empty B.empty rs rr
 #pop-options
 
-let ev_sent_of (cf:M.finished) : CS.conn_event =
+let ev_sent_of (cf:GFin.finished) : CS.conn_event =
   CS.ConnNetworkEvent ({
     CL.message_direction = CL.Sent;
     CL.message_value = M.TlsHandshake (M.Finished cf);
   })
 
-let ev_vf_of (sf:M.finished) : CS.conn_event =
+let ev_vf_of (sf:GFin.finished) : CS.conn_event =
   CS.ConnLocalEvent (CS.LocalVerifyFinished sf)
 
 // commutation of the two client app installs (proved earlier standalone)
@@ -3815,9 +3830,9 @@ let lemma_two_app_install_events_are_local
 #push-options "--z3rlimit 30 --fuel 4 --ifuel 2 --split_queries always"
 let lemma_cover_to_self_install_replay
   (model12:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   (e13 e14:CS.conn_event)
-  (cf:M.finished)
+  (cf:GFin.finished)
   (suffix_sent suffix_received:B.bytes)
   (final:CS.connection_model)
   : Lemma
@@ -3935,12 +3950,12 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
         CS.connection_state_sent_seal_replay_consistent client /\
         clean16_cleartext_final_hello_slot_milestone client server)
       (ensures
-        (exists (model12:CS.connection_model) (sf cf:M.finished)
+        (exists (model12:CS.connection_model) (sf cf:GFin.finished)
            (cawm carm:CS.traffic_key_material) (av aw ar:CS.connection_model)
            (suffix_sent suffix_received prefix_sent frag:B.bytes)
-           (start:CS.handshake_start) (ch:M.client_hello) (sh:M.server_hello) (client_shared:C.x25519_shared_secret)
-           (e4 e5:CS.conn_event) (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-           (cv:M.certificate_verify) (e13 e14:CS.conn_event) (prefix_received:B.bytes).
+           (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello) (client_shared:C.x25519_shared_secret)
+           (e4 e5:CS.conn_event) (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+           (cv:GCV.certificateVerify) (e13 e14:CS.conn_event) (prefix_received:B.bytes).
            Seq.equal client.CS.cs_wire_log.CL.raw_sent (B.append prefix_sent suffix_sent) /\
            W.parse_record_wire prefix_sent == Some (T.Handshake, frag, B.length prefix_sent) /\
            CS.step_model model12 (ev_vf_of sf) == Some av /\
@@ -3984,12 +3999,12 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
 =
   PNTCFR.lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milestone client server;
   let goalp : prop =
-    (exists (model12:CS.connection_model) (sf cf:M.finished)
+    (exists (model12:CS.connection_model) (sf cf:GFin.finished)
        (cawm carm:CS.traffic_key_material) (av aw ar:CS.connection_model)
        (suffix_sent suffix_received prefix_sent frag:B.bytes)
-       (start:CS.handshake_start) (ch:M.client_hello) (sh:M.server_hello) (client_shared:C.x25519_shared_secret)
-       (e4 e5:CS.conn_event) (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-       (cv:M.certificate_verify) (e13 e14:CS.conn_event) (prefix_received:B.bytes).
+       (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello) (client_shared:C.x25519_shared_secret)
+       (e4 e5:CS.conn_event) (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+       (cv:GCV.certificateVerify) (e13 e14:CS.conn_event) (prefix_received:B.bytes).
        Seq.equal client.CS.cs_wire_log.CL.raw_sent (B.append prefix_sent suffix_sent) /\
        W.parse_record_wire prefix_sent == Some (T.Handshake, frag, B.length prefix_sent) /\
        CS.step_model model12 (ev_vf_of sf) == Some av /\
@@ -4171,13 +4186,13 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
         returns goalp
         with _rec.
         (
-          introduce exists (model12':CS.connection_model) (sf':M.finished) (cf':M.finished)
+          introduce exists (model12':CS.connection_model) (sf':GFin.finished) (cf':GFin.finished)
              (cawm':CS.traffic_key_material) (carm':CS.traffic_key_material)
              (av':CS.connection_model) (aw':CS.connection_model) (ar':CS.connection_model)
              (suffix_sent':B.bytes) (suffix_received':B.bytes) (prefix_sent':B.bytes) (frag':B.bytes)
-             (start':CS.handshake_start) (ch':M.client_hello) (sh':M.server_hello) (client_shared':C.x25519_shared_secret)
-             (e4' e5':CS.conn_event) (ee':M.encrypted_extensions) (cert':M.certificate_msg) (peer':X.peer_identity)
-             (cv':M.certificate_verify) (e13' e14':CS.conn_event) (prefix_received':B.bytes).
+             (start':CS.handshake_start) (ch':GCH.clientHello) (sh':GSH.serverHello) (client_shared':C.x25519_shared_secret)
+             (e4' e5':CS.conn_event) (ee':GEE.encryptedExtensions) (cert':GCert.certificate) (peer':X.peer_identity)
+             (cv':GCV.certificateVerify) (e13' e14':CS.conn_event) (prefix_received':B.bytes).
              (Seq.equal client.CS.cs_wire_log.CL.raw_sent (B.append prefix_sent' suffix_sent') /\
               W.parse_record_wire prefix_sent' == Some (T.Handshake, frag', B.length prefix_sent') /\
               CS.step_model model12' (ev_vf_of sf') == Some av' /\
@@ -4563,8 +4578,8 @@ let lemma_hole3_alignment_covers
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_server_prefix_slots_received
   (m0:CS.connection_model)
-  (ch:M.client_hello) (selection:CS.server_handshake_selection)
-  (server_shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (model5:CS.connection_model)
   : Lemma
       (requires
@@ -4603,8 +4618,8 @@ let lemma_server_prefix_slots_received
 #push-options "--z3rlimit 60 --split_queries always --fuel 2 --ifuel 2"
 let lemma_server_prefix_secret_transcript_received
   (m0:CS.connection_model)
-  (ch:M.client_hello) (selection:CS.server_handshake_selection)
-  (server_shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (model5:CS.connection_model)
   : Lemma
       (requires
@@ -4647,8 +4662,8 @@ let lemma_server_prefix_secret_transcript_received
 #push-options "--z3rlimit 30 --split_queries always --ifuel 2"
 let lemma_cf_client_walk
   (client_after_installs_c receiver final:CS.connection_model)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:TLS13.X509.Spec.peer_identity)
-  (cv:M.certificate_verify) (sf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:TLS13.X509.Spec.peer_identity)
+  (cv:GCV.certificateVerify) (sf:GFin.finished)
   : Lemma
       (requires
         PWL.write_read_record_material_aligned client_after_installs_c receiver /\
@@ -4695,8 +4710,8 @@ let lemma_cf_client_walk
 #push-options "--z3rlimit 30 --split_queries always --ifuel 2"
 let lemma_cf_server_walk
   (sender server_rr final:CS.connection_model)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg)
-  (cv:M.certificate_verify) (sf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv:GCV.certificateVerify) (sf:GFin.finished)
   : Lemma
       (requires
         PWL.write_read_record_material_aligned sender server_rr /\
@@ -4735,8 +4750,8 @@ let lemma_cf_server_walk
   peel_nil_received m5 final
 #pop-options
 
-let cf_six (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-         (cv:M.certificate_verify) (sf:M.finished) : list CS.conn_event =
+let cf_six (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+         (cv:GCV.certificateVerify) (sf:GFin.finished) : list CS.conn_event =
   [
     CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee); };
     CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert); };
@@ -4752,8 +4767,8 @@ let cf_six (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_ide
 let lemma_extract_client_two_six
   (model4_c client_after_e4_c client_after_installs_c c_after3 finalm:CS.connection_model)
   (e4_c e5_c:CS.conn_event)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-  (cv:M.certificate_verify) (sf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+  (cv:GCV.certificateVerify) (sf:GFin.finished)
   (tail:list CS.conn_event) (rs rr:B.bytes)
   : Lemma
       (requires
@@ -4839,8 +4854,8 @@ let lemma_extract_client_two_six
 let lemma_extract_server_covers_flight
   (model5_r server_rr' server_rr after_server_flight_r:CS.connection_model)
   (e5_r e6_r:CS.conn_event)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg)
-  (cv:M.certificate_verify) (sf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv:GCV.certificateVerify) (sf:GFin.finished)
   (rs rr:B.bytes)
   : Lemma
       (requires
@@ -4885,11 +4900,11 @@ let lemma_extract_server_covers_flight
 #push-options "--z3rlimit 30 --split_queries always --ifuel 2 --fuel 16"
 let lemma_server_final_slots_received
   (server:CS.connection_state)
-  (ch:M.client_hello) (selection:CS.server_handshake_selection)
-  (server_shared:C.x25519_shared_secret) (sh:M.server_hello)
+  (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+  (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
   (e5_r e6_r:CS.conn_event)
-  (ee:M.encrypted_extensions) (cert:M.certificate_msg) (cv:M.certificate_verify) (sf:M.finished)
-  (server_app_write_material server_app_read_material:CS.traffic_key_material) (cf:M.finished)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (cv:GCV.certificateVerify) (sf:GFin.finished)
+  (server_app_write_material server_app_read_material:CS.traffic_key_material) (cf:GFin.finished)
   (model5_r after_server_flight_r:CS.connection_model)
   : Lemma
       (requires
@@ -4964,18 +4979,18 @@ let lemma_server_final_slots_received
 #push-options "--z3rlimit 30 --fuel 16 --ifuel 2 --split_queries always"
 let lemma_shared_secret_eq_received
   (client server:CS.connection_state)
-  (ch_r:M.client_hello) (selection_r:CS.server_handshake_selection)
-  (server_shared_r:C.x25519_shared_secret) (sh_r:M.server_hello)
+  (ch_r:GCH.clientHello) (selection_r:CS.server_handshake_selection)
+  (server_shared_r:C.x25519_shared_secret) (sh_r:GSH.serverHello)
   (e5_r e6_r:CS.conn_event)
-  (ee_r:M.encrypted_extensions) (cert_r:M.certificate_msg) (cv_r:M.certificate_verify)
-  (sf_r:M.finished) (cf_r:M.finished)
+  (ee_r:GEE.encryptedExtensions) (cert_r:GCert.certificate) (cv_r:GCV.certificateVerify)
+  (sf_r:GFin.finished) (cf_r:GFin.finished)
   (server_app_write_material_r server_app_read_material_r:CS.traffic_key_material)
   (model5_r after_server_flight_r:CS.connection_model)
-  (start_c:CS.handshake_start) (ch_c:M.client_hello) (sh_c:M.server_hello)
+  (start_c:CS.handshake_start) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   (client_shared_c:C.x25519_shared_secret)
   (e4_c e5_c e13_c e14_c:CS.conn_event)
-  (ee_c:M.encrypted_extensions) (cert_c:M.certificate_msg) (peer_c:X.peer_identity)
-  (cv_c:M.certificate_verify) (sf_c:M.finished) (cf_c:M.finished)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (peer_c:X.peer_identity)
+  (cv_c:GCV.certificateVerify) (sf_c:GFin.finished) (cf_c:GFin.finished)
   (model4_c:CS.connection_model)
   : Lemma
       (requires
@@ -5061,8 +5076,8 @@ let lemma_shared_secret_eq_received
 let lemma_client_suffix_append_form
   (model4_c finalm:CS.connection_model)
   (e4_c e5_c e13_c e14_c:CS.conn_event)
-  (ee_c:M.encrypted_extensions) (cert_c:M.certificate_msg) (peer_c:X.peer_identity)
-  (cv_c:M.certificate_verify) (sf_c:M.finished) (cf_c:M.finished)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (peer_c:X.peer_identity)
+  (cv_c:GCV.certificateVerify) (sf_c:GFin.finished) (cf_c:GFin.finished)
   (suffix_sent_c suffix_received_c:B.bytes)
   : Lemma
       (requires
@@ -5099,19 +5114,19 @@ let lemma_client_suffix_append_form
 #push-options "--z3rlimit 30 --fuel 16 --ifuel 2 --split_queries always"
 let lemma_pack_cf_align_core
   (client server:CS.connection_state)
-  (ch_r:M.client_hello) (selection_r:CS.server_handshake_selection)
-  (server_shared_r:C.x25519_shared_secret) (sh_r:M.server_hello)
+  (ch_r:GCH.clientHello) (selection_r:CS.server_handshake_selection)
+  (server_shared_r:C.x25519_shared_secret) (sh_r:GSH.serverHello)
   (e5_r e6_r:CS.conn_event)
-  (ee_r:M.encrypted_extensions) (cert_r:M.certificate_msg) (cv_r:M.certificate_verify)
-  (sf_r:M.finished) (cf_r:M.finished)
+  (ee_r:GEE.encryptedExtensions) (cert_r:GCert.certificate) (cv_r:GCV.certificateVerify)
+  (sf_r:GFin.finished) (cf_r:GFin.finished)
   (server_app_write_material_r server_app_read_material_r:CS.traffic_key_material)
   (model5_r after_server_flight_r:CS.connection_model)
   (server_flight_sent_r server_flight_received_r:B.bytes)
-  (start_c:CS.handshake_start) (ch_c:M.client_hello) (sh_c:M.server_hello)
+  (start_c:CS.handshake_start) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   (client_shared_c:C.x25519_shared_secret)
   (e4_c e5_c e13_c e14_c:CS.conn_event)
-  (ee_c:M.encrypted_extensions) (cert_c:M.certificate_msg) (peer_c:X.peer_identity)
-  (cv_c:M.certificate_verify) (sf_c:M.finished) (cf_c:M.finished)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (peer_c:X.peer_identity)
+  (cv_c:GCV.certificateVerify) (sf_c:GFin.finished) (cf_c:GFin.finished)
   (model4_c client_after_e4_c client_after_installs_c c_after3:CS.connection_model)
   (suffix_sent_c suffix_received_c:B.bytes)
   : Lemma
@@ -5259,9 +5274,9 @@ let lemma_pack_cf_align_core
 #push-options "--z3rlimit 20 --fuel 16 --ifuel 2"
 let lemma_client_prefix_append_form
   (initial model12:CS.connection_model)
-  (start:CS.handshake_start) (ch:M.client_hello) (sh:M.server_hello) (client_shared:C.x25519_shared_secret)
-  (e4 e5:CS.conn_event) (ee:M.encrypted_extensions) (cert:M.certificate_msg) (peer:X.peer_identity)
-  (cv:M.certificate_verify) (sf:M.finished) (prefix_sent prefix_received:B.bytes)
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello) (client_shared:C.x25519_shared_secret)
+  (e4 e5:CS.conn_event) (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_identity)
+  (cv:GCV.certificateVerify) (sf:GFin.finished) (prefix_sent prefix_received:B.bytes)
   : Lemma
       (requires
         CS.conn_events_sent_seal_replay initial
@@ -5291,13 +5306,13 @@ let lemma_cf_client_identity
   (client:CS.connection_state)
   (initial model4_c client_after_e4_c client_after_installs_c c_after3 model12_ex:CS.connection_model)
   // recon witnesses
-  (start_x:CS.handshake_start) (ch_x:M.client_hello) (sh_x:M.server_hello) (shared_x:C.x25519_shared_secret)
-  (e4_x e5_x:CS.conn_event) (ee_x:M.encrypted_extensions) (cert_x:M.certificate_msg) (peer_x:X.peer_identity)
-  (cv_x:M.certificate_verify) (sf_x:M.finished) (e13_x e14_x:CS.conn_event) (cf_x:M.finished)
+  (start_x:CS.handshake_start) (ch_x:GCH.clientHello) (sh_x:GSH.serverHello) (shared_x:C.x25519_shared_secret)
+  (e4_x e5_x:CS.conn_event) (ee_x:GEE.encryptedExtensions) (cert_x:GCert.certificate) (peer_x:X.peer_identity)
+  (cv_x:GCV.certificateVerify) (sf_x:GFin.finished) (e13_x e14_x:CS.conn_event) (cf_x:GFin.finished)
   // _cc witnesses
-  (start_c:CS.handshake_start) (ch_c:M.client_hello) (sh_c:M.server_hello) (shared_c:C.x25519_shared_secret)
-  (e4_c e5_c:CS.conn_event) (ee_c:M.encrypted_extensions) (cert_c:M.certificate_msg) (peer_c:X.peer_identity)
-  (cv_c:M.certificate_verify) (sf_c:M.finished) (e13_c e14_c:CS.conn_event) (cf_c:M.finished)
+  (start_c:CS.handshake_start) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello) (shared_c:C.x25519_shared_secret)
+  (e4_c e5_c:CS.conn_event) (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (peer_c:X.peer_identity)
+  (cv_c:GCV.certificateVerify) (sf_c:GFin.finished) (e13_c e14_c:CS.conn_event) (cf_c:GFin.finished)
   (ps pr ps1 pr1 ss sr:B.bytes)
   : Lemma
       (requires
@@ -5436,15 +5451,15 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
       client server;
     assert (PNTCFR.client_finished_canonical_sent_seal_replay_slice client);
     eliminate exists
-      (ch_s:M.client_hello)
+      (ch_s:GCH.clientHello)
       (selection_s:CS.server_handshake_selection)
       (server_shared_s:C.x25519_shared_secret)
-      (sh_s:M.server_hello)
-      (ee_s:M.encrypted_extensions)
-      (cert_s:M.certificate_msg)
-      (cv_s:M.certificate_verify)
-      (sf_s:M.finished)
-      (cf_s:M.finished)
+      (sh_s:GSH.serverHello)
+      (ee_s:GEE.encryptedExtensions)
+      (cert_s:GCert.certificate)
+      (cv_s:GCV.certificateVerify)
+      (sf_s:GFin.finished)
+      (cf_s:GFin.finished)
       (server_material_s:CS.traffic_key_material)
       (server_read_material_s:CS.traffic_key_material)
       (server_app_write_material_s:CS.traffic_key_material)
@@ -5551,19 +5566,19 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
       assert (PNTSFR.client_post_derive_ordered_received_decode_replay_slice client);
       eliminate exists
         (start_c:CS.handshake_start)
-        (ch_c:M.client_hello)
-        (sh_c:M.server_hello)
+        (ch_c:GCH.clientHello)
+        (sh_c:GSH.serverHello)
         (client_shared_c:C.x25519_shared_secret)
         (e4_c:CS.conn_event)
         (e5_c:CS.conn_event)
-        (ee_c:M.encrypted_extensions)
-        (cert_c:M.certificate_msg)
+        (ee_c:GEE.encryptedExtensions)
+        (cert_c:GCert.certificate)
         (peer_c:X.peer_identity)
-        (cv_c:M.certificate_verify)
-        (sf_c:M.finished)
+        (cv_c:GCV.certificateVerify)
+        (sf_c:GFin.finished)
         (e13_c:CS.conn_event)
         (e14_c:CS.conn_event)
-        (cf_c:M.finished)
+        (cf_c:GFin.finished)
         (model4_c:CS.connection_model)
         (prefix_sent_c:B.bytes)
         (prefix_received_c:B.bytes)
@@ -5635,17 +5650,17 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
       (
         assert (PNTCFRR.server_client_finished_received_decode_suffix_replay_slice server);
         eliminate exists
-          (ch_r:M.client_hello)
+          (ch_r:GCH.clientHello)
           (selection_r:CS.server_handshake_selection)
           (server_shared_r:C.x25519_shared_secret)
-          (sh_r:M.server_hello)
+          (sh_r:GSH.serverHello)
           (e5_r:CS.conn_event)
           (e6_r:CS.conn_event)
-          (ee_r:M.encrypted_extensions)
-          (cert_r:M.certificate_msg)
-          (cv_r:M.certificate_verify)
-          (sf_r:M.finished)
-          (cf_r:M.finished)
+          (ee_r:GEE.encryptedExtensions)
+          (cert_r:GCert.certificate)
+          (cv_r:GCV.certificateVerify)
+          (sf_r:GFin.finished)
+          (cf_r:GFin.finished)
           (server_app_write_material_r:CS.traffic_key_material)
           (server_app_read_material_r:CS.traffic_key_material)
           (model5_r:CS.connection_model)
@@ -5755,8 +5770,8 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
         (
           assert (PNTCFR.client_finished_canonical_sent_seal_replay_slice client);
           eliminate exists
-            (sf_f:M.finished)
-            (cf_f:M.finished)
+            (sf_f:GFin.finished)
+            (cf_f:GFin.finished)
             (model12_f:CS.connection_model)
             (after_verify_f:CS.connection_model)
             (after_app_write_f:CS.connection_model)
@@ -5813,19 +5828,19 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
                 CL.message_direction = CL.Sent;
                 CL.message_value = M.TlsHandshake (M.Finished cf_f);
               })) == Some client.CS.cs_model /\
-            CS.raw_records_exactly suffix_sent_f T.ApplicationData 1)
+            CS.raw_records_exactly suffix_sent_f T.Application_data 1)
           returns
             (PNTPPD.installed_protected_projection_replay_witnesses client server)
           with _cf.
           (
             lemma_h4_client_exact_recon client server;
             let goal_w : prop = PNTPPD.installed_protected_projection_replay_witnesses client server in
-            eliminate exists (model12_ex:CS.connection_model) (sf_ex cf_ex:M.finished)
+            eliminate exists (model12_ex:CS.connection_model) (sf_ex cf_ex:GFin.finished)
                (cawm_ex carm_ex:CS.traffic_key_material) (av_ex aw_ex ar_ex:CS.connection_model)
                (suffix_sent_ex suffix_received_ex prefix_sent_ex frag_ex:B.bytes)
-               (start_ex:CS.handshake_start) (ch_ex:M.client_hello) (sh_ex:M.server_hello) (client_shared_ex:C.x25519_shared_secret)
-               (e4_ex e5_ex:CS.conn_event) (ee_ex:M.encrypted_extensions) (cert_ex:M.certificate_msg) (peer_ex:X.peer_identity)
-               (cv_ex:M.certificate_verify) (e13_ex e14_ex:CS.conn_event) (prefix_received_ex:B.bytes).
+               (start_ex:CS.handshake_start) (ch_ex:GCH.clientHello) (sh_ex:GSH.serverHello) (client_shared_ex:C.x25519_shared_secret)
+               (e4_ex e5_ex:CS.conn_event) (ee_ex:GEE.encryptedExtensions) (cert_ex:GCert.certificate) (peer_ex:X.peer_identity)
+               (cv_ex:GCV.certificateVerify) (e13_ex e14_ex:CS.conn_event) (prefix_received_ex:B.bytes).
                (Seq.equal client.CS.cs_wire_log.CL.raw_sent (B.append prefix_sent_ex suffix_sent_ex) /\
                 W.parse_record_wire prefix_sent_ex == Some (T.Handshake, frag_ex, B.length prefix_sent_ex) /\
                 CS.step_model model12_ex (ev_vf_of sf_ex) == Some av_ex /\

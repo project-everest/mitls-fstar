@@ -10,6 +10,9 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
 module PR = TLS13.Impl.Driver.PairingProtectedReplay
 module PWL = TLS13.ConnectionState.ProtectedWireBase
@@ -22,10 +25,10 @@ module WFL = TLS13.Spec.WireFormatLemmas
 
 noeq
 type handshake_complete_boundary_witnesses = {
-  hcb_client_ch: M.client_hello;
-  hcb_server_ch: M.client_hello;
-  hcb_client_sh: M.server_hello;
-  hcb_server_sh: M.server_hello;
+  hcb_client_ch: GCH.clientHello;
+  hcb_server_ch: GCH.clientHello;
+  hcb_client_sh: GSH.serverHello;
+  hcb_server_sh: GSH.serverHello;
   hcb_client_ch_raw: B.bytes;
   hcb_server_ch_raw: B.bytes;
   hcb_client_sh_raw: B.bytes;
@@ -69,7 +72,7 @@ type handshake_complete_boundary_witnesses = {
   hcb_received_msg2: M.handshake_msg;
   hcb_sent_msg3: M.handshake_msg;
   hcb_received_msg3: M.handshake_msg;
-  hcb_verified_server_finished: M.finished;
+  hcb_verified_server_finished: GFin.finished;
   hcb_client_app_write_material: CS.traffic_key_material;
   hcb_client_app_read_material: CS.traffic_key_material;
   hcb_server_app_write_material: CS.traffic_key_material;
@@ -159,12 +162,6 @@ let paired_supported_handshake_complete_boundary_inputs
   CS.received_cleartext_tls_message_raw
     (M.TlsHandshake (M.ServerHello w.hcb_client_sh))
     w.hcb_client_sh_raw /\
-  W.parse_supported_server_hello
-    (W.serialize_handshake (M.ServerHello w.hcb_server_sh)) ==
-    Some w.hcb_server_sh /\
-  W.parse_supported_server_hello
-    (W.serialize_handshake (M.ServerHello w.hcb_client_sh)) ==
-    Some w.hcb_client_sh /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\

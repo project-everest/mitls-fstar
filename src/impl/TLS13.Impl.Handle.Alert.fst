@@ -75,7 +75,15 @@ fn handle_alert
                   resp
                   'old_network_out
                   'old_app_out /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    st1
+                    resp
+                    'old_network_out
+                    'old_app_out) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   with m. unfold (L.is_valid_tls_message (L.LTlsAlert alert_wire) m);
   with malert. _;
@@ -105,10 +113,10 @@ fn handle_alert
   let close_notify = alert_wire = 0uy;
   if close_notify {
     assert (pure (U8.v alert_wire == 0));
-    assert (pure (Ghost.reveal parsed_alert == T.CloseNotify));
+    assert (pure (Ghost.reveal parsed_alert == T.Close_notify));
     assert (pure (CT.received_tls_raw_delta_legal
       'st0
-      (M.TlsAlert T.CloseNotify)
+      (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes)));
     let ready = CQ.can_receive_close_notify c;
     if ready {
@@ -126,7 +134,7 @@ fn handle_alert
         'st0
         (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
         resp
-        (M.TlsAlert T.CloseNotify)
+        (M.TlsAlert T.Close_notify)
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out));
@@ -134,7 +142,7 @@ fn handle_alert
         'st0
         (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
         resp
-        (M.TlsAlert T.CloseNotify)
+        (M.TlsAlert T.Close_notify)
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out));
@@ -144,7 +152,7 @@ fn handle_alert
         resp
         content_type
         (Ghost.reveal 'fragment_bytes)
-        (M.TlsAlert T.CloseNotify)
+        (M.TlsAlert T.Close_notify)
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out;
@@ -154,6 +162,7 @@ fn handle_alert
         resp
         'old_network_out
         'old_app_out));
+      assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
       resp
     } else {
       CF.mark_unexpected_message c;
@@ -186,6 +195,13 @@ fn handle_alert
         resp
         'old_network_out
         'old_app_out));
+      assert (pure (resp.CT.status == CT.IllegalTransition ==>
+        CT.unexpected_message_response
+          'st0
+          (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+          resp
+          'old_network_out
+          'old_app_out));
       resp
     }
   } else {
@@ -237,6 +253,7 @@ fn handle_alert
       resp
       'old_network_out
       'old_app_out));
+    assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
     resp
   }
 }

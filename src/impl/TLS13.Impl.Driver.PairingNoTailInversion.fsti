@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module SD = TLS13.Impl.Server.Driver
 
 noextract
@@ -178,7 +179,7 @@ val lemma_client_hs_server_hello_received_non_encrypted_extensions_network_step_
 
 val lemma_client_hs_server_hello_received_empty_keys_encrypted_extensions_illegal
   (model:CS.connection_model)
-  (ee:M.encrypted_extensions)
+  (ee:GEE.encryptedExtensions)
   : Lemma
       (requires
         model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\

@@ -10,6 +10,12 @@ module CL = TLS13.ConnectionLog
 module CD = TLS13.Impl.Client.Driver
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PCPS = TLS13.Impl.Driver.PairingNoTailClientPostSharedShape
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module PNTCVS = TLS13.Impl.Driver.PairingNoTailClientVerifyShape
@@ -167,7 +173,7 @@ let lemma_client_after_server_finished_verified_model_facts
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_client_signature_verify_step_model_shape
   (model10 model11:CS.connection_model)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   : Lemma
       (requires
         PNTCVS.client_after_certificate_verify_model model10 /\
@@ -196,7 +202,7 @@ let lemma_client_signature_verify_step_model_shape
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_client_server_finished_received_step_model_shape
   (model11 model12:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   : Lemma
       (requires
         client_after_signature_verified_model model11 /\
@@ -210,7 +216,9 @@ let lemma_client_server_finished_received_step_model_shape
         client_after_server_finished_model model12 /\
         model12.CS.model_handshake.CS.hs_server_finished == Some sf)
 =
-  assert_norm (
+  assert (model11.CS.model_control ==
+    CS.ControlHandshaking CS.HsCertificateVerifyVerified);
+  assert (
     CS.step_model
       model11
       (CS.ConnNetworkEvent {
@@ -236,7 +244,7 @@ let lemma_client_server_finished_received_step_model_shape
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_client_verify_finished_step_model_shape
   (model12 model13:CS.connection_model)
-  (sf:M.finished)
+  (sf:GFin.finished)
   : Lemma
       (requires
         client_after_server_finished_model model12 /\
@@ -246,7 +254,9 @@ let lemma_client_verify_finished_step_model_shape
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf)) == Some model13)
       (ensures client_after_server_finished_verified_model model13)
 =
-  assert_norm (
+  assert (model12.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerFinishedReceived);
+  assert (
     CS.step_model
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf)) ==
@@ -368,7 +378,7 @@ let lemma_client_after_signature_verified_next_event_server_finished
          assert (CS.legal_tls_message model msg.CL.message_direction msg.CL.message_value);
          (match msg.CL.message_direction with
           | CL.Received ->
-            introduce exists (sf':M.finished).
+            introduce exists (sf':GFin.finished).
               ev == CS.ConnNetworkEvent {
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.Finished sf');
@@ -388,7 +398,7 @@ let lemma_client_after_signature_verified_next_event_server_finished
 #push-options "--split_queries always --z3rlimit 10"
 let lemma_client_after_server_finished_next_event_verify_finished
   (model:CS.connection_model)
-  (stored_sf:M.finished)
+  (stored_sf:GFin.finished)
   (ev:CS.conn_event)
   (rest:list CS.conn_event)
   (raw_sent:B.bytes)
@@ -689,15 +699,15 @@ let lemma_client_no_tail_model11_witness
         lemma_client_signature_verify_step_model_shape model10 model11 cv;
         introduce exists
           (start0:CS.handshake_start)
-          (ch0:M.client_hello)
-          (sh0:M.server_hello)
+          (ch0:GCH.clientHello)
+          (sh0:GSH.serverHello)
           (client_shared0:C.x25519_shared_secret)
           (e40:CS.conn_event)
           (e50:CS.conn_event)
-          (ee0:M.encrypted_extensions)
-          (cert0:M.certificate_msg)
+          (ee0:GEE.encryptedExtensions)
+          (cert0:GCert.certificate)
           (peer0:X.peer_identity)
-          (cv0:M.certificate_verify)
+          (cv0:GCV.certificateVerify)
           (rest70:list CS.conn_event)
           (model110:CS.connection_model)
           (tail_sent0:B.bytes)
@@ -817,16 +827,16 @@ let lemma_client_no_tail_twelfth_event_server_finished_clean
       (
         introduce exists
           (start0:CS.handshake_start)
-          (ch0:M.client_hello)
-          (sh0:M.server_hello)
+          (ch0:GCH.clientHello)
+          (sh0:GSH.serverHello)
           (client_shared0:C.x25519_shared_secret)
           (e40:CS.conn_event)
           (e50:CS.conn_event)
-          (ee0:M.encrypted_extensions)
-          (cert0:M.certificate_msg)
+          (ee0:GEE.encryptedExtensions)
+          (cert0:GCert.certificate)
           (peer0:X.peer_identity)
-          (cv0:M.certificate_verify)
-          (sf0:M.finished)
+          (cv0:GCV.certificateVerify)
+          (sf0:GFin.finished)
           (rest0:list CS.conn_event).
           client.CS.cs_event_log ==
             CS.ConnLocalEvent (CS.LocalStartHandshake start0) ::
@@ -1134,16 +1144,16 @@ let lemma_client_no_tail_model12_witness
           lemma_client_server_finished_received_step_model_shape model11 model12 sf;
           introduce exists
             (start0:CS.handshake_start)
-            (ch0:M.client_hello)
-            (sh0:M.server_hello)
+            (ch0:GCH.clientHello)
+            (sh0:GSH.serverHello)
             (client_shared0:C.x25519_shared_secret)
             (e40:CS.conn_event)
             (e50:CS.conn_event)
-            (ee0:M.encrypted_extensions)
-            (cert0:M.certificate_msg)
+            (ee0:GEE.encryptedExtensions)
+            (cert0:GCert.certificate)
             (peer0:X.peer_identity)
-            (cv0:M.certificate_verify)
-            (sf0:M.finished)
+            (cv0:GCV.certificateVerify)
+            (sf0:GFin.finished)
             (rest80:list CS.conn_event)
             (model120:CS.connection_model)
             (tail_sent0:B.bytes)
@@ -1420,16 +1430,16 @@ let lemma_client_no_tail_model13_witness
         lemma_client_verify_finished_step_model_shape model12 model13 sf;
         introduce exists
           (start0:CS.handshake_start)
-          (ch0:M.client_hello)
-          (sh0:M.server_hello)
+          (ch0:GCH.clientHello)
+          (sh0:GSH.serverHello)
           (client_shared0:C.x25519_shared_secret)
           (e40:CS.conn_event)
           (e50:CS.conn_event)
-          (ee0:M.encrypted_extensions)
-          (cert0:M.certificate_msg)
+          (ee0:GEE.encryptedExtensions)
+          (cert0:GCert.certificate)
           (peer0:X.peer_identity)
-          (cv0:M.certificate_verify)
-          (sf0:M.finished)
+          (cv0:GCV.certificateVerify)
+          (sf0:GFin.finished)
           (rest90:list CS.conn_event)
           (model130:CS.connection_model)
           (tail_sent0:B.bytes)
@@ -1553,16 +1563,16 @@ let lemma_client_no_tail_thirteenth_event_verify_finished_clean
       assert (e12 == CS.ConnLocalEvent (CS.LocalVerifyFinished sf));
       introduce exists
         (start0:CS.handshake_start)
-        (ch0:M.client_hello)
-        (sh0:M.server_hello)
+        (ch0:GCH.clientHello)
+        (sh0:GSH.serverHello)
         (client_shared0:C.x25519_shared_secret)
         (e40:CS.conn_event)
         (e50:CS.conn_event)
-        (ee0:M.encrypted_extensions)
-        (cert0:M.certificate_msg)
+        (ee0:GEE.encryptedExtensions)
+        (cert0:GCert.certificate)
         (peer0:X.peer_identity)
-        (cv0:M.certificate_verify)
-        (sf0:M.finished)
+        (cv0:GCV.certificateVerify)
+        (sf0:GFin.finished)
         (rest0:list CS.conn_event).
         client.CS.cs_event_log ==
           CS.ConnLocalEvent (CS.LocalStartHandshake start0) ::

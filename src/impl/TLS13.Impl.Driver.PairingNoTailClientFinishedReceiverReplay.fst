@@ -9,6 +9,12 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GCH   = TLS13.Wire.Generated.ClientHello
+module GSH   = TLS13.Wire.Generated.ServerHello
+module GEE   = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV   = TLS13.Wire.Generated.CertificateVerify
+module GFin  = TLS13.Wire.Generated.Finished
 module PNTSFR = TLS13.Impl.Driver.PairingNoTailServerFlightReplay
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
@@ -25,17 +31,17 @@ let lemma_server_client_finished_received_decode_suffix_replay_slice_from_ordere
       (ensures server_client_finished_received_decode_suffix_replay_slice server)
 =
   eliminate exists
-    (ch:M.client_hello)
+    (ch:GCH.clientHello)
     (selection:CS.server_handshake_selection)
     (server_shared:C.x25519_shared_secret)
-    (sh:M.server_hello)
+    (sh:GSH.serverHello)
     (e5:CS.conn_event)
     (e6:CS.conn_event)
-    (ee:M.encrypted_extensions)
-    (cert:M.certificate_msg)
-    (cv:M.certificate_verify)
-    (sf:M.finished)
-    (cf:M.finished)
+    (ee:GEE.encryptedExtensions)
+    (cert:GCert.certificate)
+    (cv:GCV.certificateVerify)
+    (sf:GFin.finished)
+    (cf:GFin.finished)
     (server_app_write_material:CS.traffic_key_material)
     (server_app_read_material:CS.traffic_key_material)
     (model5:CS.connection_model)

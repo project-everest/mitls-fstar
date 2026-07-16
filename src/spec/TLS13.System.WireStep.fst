@@ -36,6 +36,13 @@ module CT  = TLS13.Impl.Client.Types
 module L   = FStar.List.Tot
 module RVD = TLS13.Wire.Spec.RevealDecode
 module WU  = TLS13.Wire.Spec.Reveal.Util
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module Sem = TLS13.Wire.Semantics
+module RVDH = TLS13.Wire.Spec.Reveal.Handshake
+module GHS = TLS13.Wire.Generated.Handshake
+module INJ = TLS13.Wire.Spec.Reveal.Injective
+module LP  = LowParse.Spec
 
 (** Hello-field stability predicate: the cleartext-hello fields plus `hs_start`
     are monotone across a step. **)
@@ -106,7 +113,7 @@ let lemma_step_model_preserves_hellos
 (** config profile + start/config + CH/start  ==>  supported CH wire profile. **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
 let lemma_ch_profile_from_start_config
-  (cfg:CS.connection_config) (start:CS.handshake_start) (ch:M.client_hello)
+  (cfg:CS.connection_config) (start:CS.handshake_start) (ch:GCH.clientHello)
   : Lemma
       (requires
         WFL.supported_client_config_wire_profile cfg /\
@@ -137,19 +144,18 @@ let lemma_ch_profile_from_start_config
     handshake serialization. **)
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 let lemma_cleartext_server_hello_parse_record
-  (sh:M.server_hello) (raw:B.bytes)
+  (sh:GSH.serverHello) (raw:B.bytes)
   : Lemma
       (requires
+        B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640 /\
         CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello sh)) raw)
       (ensures
         W.parse_record_wire raw ==
           Some (T.Handshake, W.serialize_handshake (M.ServerHello sh), B.length raw))
 =
   let fragment = W.serialize_handshake (M.ServerHello sh) in
-  W.lemma_serialize_server_hello_len sh;
   W.lemma_serialize_tls_message_handshake (M.ServerHello sh);
-  assert (B.length fragment <= M.server_hello_max_len);
-  assert (M.server_hello_max_len <= 16640);
+  assert (B.length fragment <= 16640);
   WFL.lemma_parse_record_wire_serialize_record T.Handshake fragment;
   assert (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ServerHello sh)) ==
           W.serialize_record T.Handshake fragment);
@@ -164,15 +170,15 @@ let server_hello_cipher_body_reachable_shape (st:CS.connection_state) : prop =
     ((match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection,
             st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some sel, Some ch ->
-        CS.cipher_suite_offered ch.M.cipher_suites sel.CS.server_selected_cipher_suite
+        CS.cipher_suite_offered (Sem.clientHello_cipher_suites ch) sel.CS.server_selected_cipher_suite
       | Some _, None -> False
       | None, _ -> True)
      /\
      (match st.CS.cs_model.CS.model_handshake.CS.hs_server_hello,
             st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
-      | Some (sh:M.server_hello), Some sel ->
-        sh.M.cipher_suite == sel.CS.server_selected_cipher_suite /\
-        B.length (sh.M.body <: B.bytes) == 0
+      | Some (sh:GSH.serverHello), Some sel ->
+        Sem.serverHello_cipher_suite sh == Some sel.CS.server_selected_cipher_suite /\
+        B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640
       | Some _, None -> False
       | None, _ -> True)))
 
@@ -255,15 +261,131 @@ let lemma_consistent_server_hello_cipher_body (st:CS.connection_state)
         (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
          Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_hello /\
          Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello) ==>
-        (let sh : M.server_hello = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_hello in
-         let ch : M.client_hello = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello in
-         CS.cipher_suite_offered ch.M.cipher_suites sh.M.cipher_suite /\
-         B.length (sh.M.body <: B.bytes) == 0))
+        (let sh : GSH.serverHello = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_hello in
+         let ch : GCH.clientHello = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello in
+         (match Sem.serverHello_cipher_suite sh with
+          | Some cs -> CS.cipher_suite_offered (Sem.clientHello_cipher_suites ch) cs
+          | None -> False) /\
+         B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640))
 =
   let p = server_hello_cipher_body_reachable_shape in
   lemma_initial_server_hello_cipher_body_reachable_shape
     st.CS.cs_model.CS.model_config;
   lemma_single_step_server_hello_cipher_body_reachable_shape ();
+  let stable :
+    squash (
+      forall (x:CS.connection_state) (y:CS.connection_state).
+        {:pattern (p y); (CS.connection_state_single_step x y)}
+        p x /\ CS.connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    CS.connection_state_single_step
+    p
+    stable;
+  assert (p (CS.initial st.CS.cs_model.CS.model_config));
+  assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+  assert (p st)
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    ServerHello wire-size bound reachable-shape (endpoint-agnostic).
+
+    With the QuackyDucky-generated (unbounded) [GSH.serverHello] record the old
+    hand-written [M.server_hello] type no longer supplies the single-record wire
+    bound for free.  But whenever a ServerHello is installed in the model — the
+    server SENDs it (legal_event requires [server_hello_matches_selection], which
+    carries the bound) or the client RECEIVEs it (legal_event requires the bound
+    directly) — the wire image is bounded by 16640.  This RTC invariant restores,
+    for BOTH endpoints, the record-parseability bound the deleted bounded type
+    previously gave for free. **)
+let server_hello_wire_bound_reachable_shape (st:CS.connection_state) : prop =
+  hellos_shape st.CS.cs_model /\
+  (match st.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+   | Some sh -> B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640
+   | None -> True)
+
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 80"
+let lemma_step_model_server_hello_wire_bound_reachable_shape
+  (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
+  : Lemma
+      (requires
+        server_hello_wire_bound_reachable_shape
+          { CS.cs_model = model; CS.cs_wire_log = CL.empty_raw_io_log; CS.cs_event_log = [] } /\
+        CS.legal_event model ev /\
+        CS.step_model model ev == Some model')
+      (ensures
+        server_hello_wire_bound_reachable_shape
+          { CS.cs_model = model'; CS.cs_wire_log = CL.empty_raw_io_log; CS.cs_event_log = [] })
+=
+  CSL.lemma_step_model_preserves_config model ev model';
+  lemma_step_model_preserves_hellos model ev model'
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_connection_delta_server_hello_wire_bound_reachable_shape
+  (st0:CS.connection_state) (st1:CS.connection_state)
+  : Lemma
+      (requires
+        server_hello_wire_bound_reachable_shape st0 /\
+        CS.connection_state_single_step st0 st1)
+      (ensures server_hello_wire_bound_reachable_shape st1)
+=
+  assert (exists delta. CS.legal_connection_delta st0 delta st1);
+  let delta_w =
+    ID.indefinite_description_ghost
+      CS.connection_delta
+      (fun delta -> CS.legal_connection_delta st0 delta st1) in
+  let delta : CS.connection_delta = delta_w in
+  assert (CS.legal_connection_delta st0 delta st1);
+  assert (CS.legal_event st0.CS.cs_model delta.CS.delta_event);
+  assert (CS.step_model st0.CS.cs_model delta.CS.delta_event == Some st1.CS.cs_model);
+  lemma_step_model_server_hello_wire_bound_reachable_shape
+    st0.CS.cs_model
+    delta.CS.delta_event
+    st1.CS.cs_model
+#pop-options
+
+let lemma_initial_server_hello_wire_bound_reachable_shape
+  (cfg:CS.connection_config)
+  : Lemma
+      (ensures server_hello_wire_bound_reachable_shape (CS.initial cfg))
+=
+  ()
+
+let lemma_single_step_server_hello_wire_bound_reachable_shape
+  (u:unit)
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern
+            (server_hello_wire_bound_reachable_shape y);
+            (CS.connection_state_single_step x y)}
+          server_hello_wire_bound_reachable_shape x /\
+          CS.connection_state_single_step x y ==>
+          server_hello_wire_bound_reachable_shape y)
+=
+  introduce forall x y.
+    server_hello_wire_bound_reachable_shape x /\
+    CS.connection_state_single_step x y ==>
+    server_hello_wire_bound_reachable_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_connection_delta_server_hello_wire_bound_reachable_shape x y
+
+(** The consumer: a consistent state (either endpoint) that has stored a
+    ServerHello has a ServerHello whose wire image fits a single record. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_consistent_server_hello_wire_bound (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st)
+      (ensures
+        (match st.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+         | Some sh -> B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640
+         | None -> True))
+=
+  let p = server_hello_wire_bound_reachable_shape in
+  lemma_initial_server_hello_wire_bound_reachable_shape
+    st.CS.cs_model.CS.model_config;
+  lemma_single_step_server_hello_wire_bound_reachable_shape ();
   let stable :
     squash (
       forall (x:CS.connection_state) (y:CS.connection_state).
@@ -545,7 +667,26 @@ let lemma_server_reachable_initial (cfg:CS.connection_config)
       SM.trace_reaches sm sm.SM.sm_initial_state trace (CS.initial cfg)
     with [] and ()
 
-module CHPB = TLS13.Wire.Spec.Reveal.ClientHello.Parseback
+(** ClientHello wire round-trip: the wire image of a representable ClientHello
+    parses back (through the generated codec) to the very same record.  This is
+    the ClientHello analogue of the ServerHello parseback bridge and replaces the
+    former hand-written [TLS13.Wire.Spec.Reveal.ClientHello.Parseback] module. **)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 40"
+let lemma_ch_wire_parse_roundtrip (ch:GCH.clientHello)
+  : Lemma
+      (requires W.clientHello_representable ch)
+      (ensures
+        W.parse_tls_message T.Handshake (W.serialize_handshake (M.ClientHello ch)) ==
+          Some (M.TlsHandshake (M.ClientHello ch)))
+=
+  let fragment = W.serialize_handshake (M.ClientHello ch) in
+  RVDH.lemma_serialize_handshake_client_hello ch;
+  Seq.lemma_eq_elim fragment
+    (LP.serialize GHS.handshake_serializer (GHS.Body_client_hello ch));
+  LP.parse_serialize GHS.handshake_serializer (GHS.Body_client_hello ch);
+  RVDH.lemma_handshake_synth_client_hello ch;
+  RVDH.lemma_ptm_handshake_some fragment (GHS.Body_client_hello ch) (M.ClientHello ch)
+#pop-options
 
 (**
   NON-VACUITY WITNESS (single-delivery inhabitation).
@@ -554,36 +695,38 @@ module CHPB = TLS13.Wire.Spec.Reveal.ClientHello.Parseback
   semantic-channel design vacuous.  In that design, delivering a ClientHello to
   the server required the SAME raw bytes to satisfy both
 
-    * the sender's cleartext projection for its stored ClientHello, whose
-      [body] is empty (Impl.Serializer stores [body = B.empty]); and
+    * the sender's cleartext projection for its stored ClientHello; and
     * the receiver's [received_cleartext_tls_message_raw] projection, whose
       ClientHello special case forces a body-full parse (>= 5 bytes).
 
-  Those two constraints are JOINTLY UNSATISFIABLE on a single message value, so
-  the server could never leave [HsAwaitingClientHello] and the flagship
-  agreement theorem was vacuously true.
+  Those two constraints were JOINTLY UNSATISFIABLE on the OLD hand-written model
+  (whose sent ClientHello stored an empty verbatim [body] while the received one
+  stored the full record bytes), so the server could never leave
+  [HsAwaitingClientHello] and the flagship agreement theorem was vacuously true.
 
-  Here, over the WIRE-LEVEL channel, the very same two projections ARE jointly
-  satisfiable: from one supported (body-empty) sender ClientHello [sent_ch] we
-  exhibit a common [raw] and a DISTINCT body-full received ClientHello [recv_ch]
-  (with [recv_ch.body == serialize_handshake (ClientHello sent_ch)]) satisfying
-  BOTH projections.  Hence a CH deliver-to-server transition
+  With the QuackyDucky-generated INJECTIVE codec there is no longer a separate
+  verbatim [body]: the received ClientHello record IS the parse image of the
+  sent bytes, which round-trips back to the very same record.  Here we exhibit a
+  common [raw] and a received [recv_ch] (= [sent_ch] up to wire image) satisfying
+  BOTH projections, so a CH deliver-to-server transition
   (`TLS13.System.tls_step_deliver_to_server`) is inhabited -- not identically
   [False] -- and the vacuity source is gone.
 **)
 #push-options "--z3rlimit 40 --fuel 1 --ifuel 1"
-let lemma_ch_deliver_projection_inhabited (sent_ch:M.client_hello)
+let lemma_ch_deliver_projection_inhabited (sent_ch:GCH.clientHello)
   : Lemma
-      (requires WFL.exact_client_hello_wire_parseback_profile sent_ch)
+      (requires
+        WFL.supported_client_hello_wire_profile sent_ch /\
+        W.clientHello_representable sent_ch)
       (ensures
-        (exists (raw:B.bytes) (recv_ch:M.client_hello).
+        (exists (raw:B.bytes) (recv_ch:GCH.clientHello).
           CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello sent_ch)) raw /\
           CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello recv_ch)) raw /\
-          recv_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch) /\
-          B.length sent_ch.M.body == 0))
+          Seq.equal (W.serialize_handshake (M.ClientHello recv_ch))
+                    (W.serialize_handshake (M.ClientHello sent_ch))))
   = let hs = M.ClientHello sent_ch in
     let msg = M.TlsHandshake hs in
-    // raw is the sender's cleartext serialization of its stored (body-empty) CH.
+    // raw is the sender's cleartext serialization of its stored CH.
     let frag0 = W.serialize_handshake hs in
     let raw = CS.serialized_cleartext_tls_message msg in
     // Sender-side cleartext projection holds reflexively (ClientHello is not HRR).
@@ -591,43 +734,27 @@ let lemma_ch_deliver_projection_inhabited (sent_ch:M.client_hello)
     // Pin the record framing:  raw == serialize_record Handshake frag0.
     W.lemma_serialize_tls_message_handshake hs;
     assert (Seq.equal raw (W.serialize_record T.Handshake frag0));
+    Seq.lemma_eq_elim raw (W.serialize_record T.Handshake frag0);
     // The handshake fragment fits a single record.
     WFL.lemma_serialize_handshake_client_hello_record_bound sent_ch;
     // Record round-trip:  parse_record_wire raw == Some (Handshake, frag0, len raw).
     WFL.lemma_parse_record_wire_serialize_record T.Handshake frag0;
-    // Handshake-message round-trip:  frag0 parses back to a body-full CH.
-    CHPB.lemma_parse_tls_message_serialize_client_hello sent_ch;
-    eliminate exists (parsed_ch:M.client_hello).
-        W.parse_tls_message T.Handshake frag0 ==
-          Some (M.TlsHandshake (M.ClientHello parsed_ch)) /\
-        Seq.equal sent_ch.M.random parsed_ch.M.random /\
-        sent_ch.M.server_name == parsed_ch.M.server_name /\
-        Seq.equal sent_ch.M.key_share parsed_ch.M.key_share /\
-        sent_ch.M.cipher_suites == parsed_ch.M.cipher_suites /\
-        sent_ch.M.signature_schemes == parsed_ch.M.signature_schemes /\
-        parsed_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch)
-    returns
-      (exists (raw:B.bytes) (recv_ch:M.client_hello).
-        CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello sent_ch)) raw /\
-        CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello recv_ch)) raw /\
-        recv_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch) /\
-        B.length sent_ch.M.body == 0)
-    with _. begin
-      // Assemble the receiver-side projection existential with fragment = frag0.
-      introduce exists (fragment:B.bytes).
-          W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
-          W.parse_tls_message T.Handshake fragment ==
-            Some (M.TlsHandshake (M.ClientHello parsed_ch))
-      with frag0 and ();
-      assert (CS.received_cleartext_tls_message_raw
-                (M.TlsHandshake (M.ClientHello parsed_ch)) raw);
-      introduce exists (raw':B.bytes) (recv_ch:M.client_hello).
-          CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello sent_ch)) raw' /\
-          CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello recv_ch)) raw' /\
-          recv_ch.M.body == W.serialize_handshake (M.ClientHello sent_ch) /\
-          B.length sent_ch.M.body == 0
-      with raw parsed_ch and ()
-    end
+    // Handshake-message round-trip:  frag0 parses back to the same CH record.
+    lemma_ch_wire_parse_roundtrip sent_ch;
+    // Assemble the receiver-side projection existential with fragment = frag0.
+    introduce exists (fragment:B.bytes).
+        W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+        W.parse_tls_message T.Handshake fragment ==
+          Some (M.TlsHandshake (M.ClientHello sent_ch))
+    with frag0 and ();
+    assert (CS.received_cleartext_tls_message_raw
+              (M.TlsHandshake (M.ClientHello sent_ch)) raw);
+    introduce exists (raw':B.bytes) (recv_ch:GCH.clientHello).
+        CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello sent_ch)) raw' /\
+        CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello recv_ch)) raw' /\
+        Seq.equal (W.serialize_handshake (M.ClientHello recv_ch))
+                  (W.serialize_handshake (M.ClientHello sent_ch))
+    with raw sent_ch and ()
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -650,7 +777,7 @@ let lemma_ch_deliver_projection_inhabited (sent_ch:M.client_hello)
 (** A wire-record message list contains an ApplicationData-typed record. **)
 let list_has_appdata (msgs:list CW.wire_message) : prop =
   exists (m:CW.wire_message).
-    L.memP m msgs /\ m.CW.wm_content_type == T.ApplicationData
+    L.memP m msgs /\ m.CW.wm_content_type == T.Application_data
 
 (** A raw byte log parses into a wire-record list containing an
     ApplicationData-typed record.  A pure function of `raw` (hence stable under
@@ -728,7 +855,7 @@ let lemma_first_record_appdata (raw:B.bytes) (msgs:list CW.wire_message)
   : Lemma
       (requires
         (match W.parse_record_wire raw with
-         | Some (ct, _, _) -> ct == T.ApplicationData
+         | Some (ct, _, _) -> ct == T.Application_data
          | None -> False) /\
         WF.parses_as CW.tls_record_wire_format raw msgs Seq.empty)
       (ensures list_has_appdata msgs)
@@ -745,7 +872,7 @@ let lemma_first_record_appdata (raw:B.bytes) (msgs:list CW.wire_message)
         WF.parses_as CW.tls_record_wire_format after rest Seq.empty
       returns list_has_appdata msgs
       with _p.
-      (assert (w.CW.wm_content_type == T.ApplicationData);
+      (assert (w.CW.wm_content_type == T.Application_data);
        assert (L.memP w msgs))
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -849,13 +976,13 @@ let lemma_cleartext_recv_not_appdata
               ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw)
           (ensures
             (match W.parse_record_wire raw with
-             | Some (ct, _, _) -> ~(ct == T.ApplicationData)
+             | Some (ct, _, _) -> ~(ct == T.Application_data)
              | None -> True))
   = match msg with
     | M.TlsHandshake (M.ClientHello ch) -> ()
     | M.TlsChangeCipherSpec ->
       W.lemma_serialize_tls_message_change_cipher_spec ();
-      WFL.lemma_parse_record_wire_serialize_record T.ChangeCipherSpec (B.singleton 1uy);
+      WFL.lemma_parse_record_wire_serialize_record T.Change_cipher_spec (B.singleton 1uy);
       Seq.lemma_eq_elim raw (CS.serialized_cleartext_tls_message M.TlsChangeCipherSpec)
 #pop-options
 
@@ -871,7 +998,7 @@ let lemma_server_step_recv_appdata_post_cf
             ServerCP.server_step st0 (SM.WireEvent wire) st1 out /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
             server_ctrl_ok st0.CS.cs_model.CS.model_control /\
-            wire.CW.wm_content_type == T.ApplicationData)
+            wire.CW.wm_content_type == T.Application_data)
           (ensures server_post_cf_ctrl st1.CS.cs_model.CS.model_control)
   = eliminate exists (msg:M.tls_message).
       (let conn_ev =
@@ -1020,7 +1147,7 @@ let lemma_list_has_appdata_append (a b:list CW.wire_message)
       list_has_appdata (L.append a b) ==> (list_has_appdata a \/ list_has_appdata b)
     with _.
       (eliminate exists (m:CW.wire_message).
-         L.memP m (L.append a b) /\ m.CW.wm_content_type == T.ApplicationData
+         L.memP m (L.append a b) /\ m.CW.wm_content_type == T.Application_data
        returns (list_has_appdata a \/ list_has_appdata b)
        with _. L.append_memP a b m);
     introduce
@@ -1030,12 +1157,12 @@ let lemma_list_has_appdata_append (a b:list CW.wire_message)
        returns list_has_appdata (L.append a b)
        with _la.
          (eliminate exists (m:CW.wire_message).
-            L.memP m a /\ m.CW.wm_content_type == T.ApplicationData
+            L.memP m a /\ m.CW.wm_content_type == T.Application_data
           returns list_has_appdata (L.append a b)
           with _. L.append_memP a b m)
        and _lb.
          (eliminate exists (m:CW.wire_message).
-            L.memP m b /\ m.CW.wm_content_type == T.ApplicationData
+            L.memP m b /\ m.CW.wm_content_type == T.Application_data
           returns list_has_appdata (L.append a b)
           with _. L.append_memP a b m))
 
@@ -1054,7 +1181,7 @@ let rec raw_appdata_count (raw:B.bytes) : GTot nat (decreases (B.length raw)) =
   match CW.wire_parse raw with
   | Some (m, after) ->
     if B.length after < B.length raw
-    then (if m.CW.wm_content_type = T.ApplicationData then 1 else 0)
+    then (if m.CW.wm_content_type = T.Application_data then 1 else 0)
          + raw_appdata_count after
     else 0
   | None -> 0
@@ -1064,7 +1191,7 @@ let rec list_appdata_count (msgs:list CW.wire_message) : nat =
   match msgs with
   | [] -> 0
   | m :: rest ->
-    (if m.CW.wm_content_type = T.ApplicationData then 1 else 0)
+    (if m.CW.wm_content_type = T.Application_data then 1 else 0)
     + list_appdata_count rest
 
 (** `raw_appdata_count` transports across byte-equal logs. **)
@@ -1258,7 +1385,7 @@ let rec lemma_server_trace_appdata_post_cf
               assert (ServerCP.server_step st0 (SM.WireEvent wire) s' tr.SM.tr_output);
               eliminate exists (m:CW.wire_message).
                 L.memP m (WFSM.event_input_messages tr.SM.tr_event) /\
-                m.CW.wm_content_type == T.ApplicationData
+                m.CW.wm_content_type == T.Application_data
               returns False
               with _.
                 (assert (L.memP m [wire]);
@@ -1345,7 +1472,7 @@ let lemma_client_into_appdata_raw_sent_appdata
             ~(client_at_appdata m.CS.model_control) /\
             client_at_appdata m'.CS.model_control /\
             CS.event_raw_delta_legal m conn_ev raw_sent B.empty)
-          (ensures CS.raw_records_exactly raw_sent T.ApplicationData 1)
+          (ensures CS.raw_records_exactly raw_sent T.Application_data 1)
   = ()
 #pop-options
 
@@ -1448,7 +1575,7 @@ let lemma_client_step_into_appdata_emits
       (
         lemma_client_into_appdata_raw_sent_appdata
           st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent;
-        CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.ApplicationData;
+        CSL.lemma_raw_records_exactly_one_parse_record raw_sent T.Application_data;
         W.lemma_parse_record_implies_parse_record_wire raw_sent;
         Seq.lemma_eq_elim raw_sent
           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs);
@@ -1542,10 +1669,10 @@ let lemma_single_full_record_count (raw:B.bytes) (ct:T.content_type)
         (exists (frag:M.sealed_record).
           W.parse_record_wire raw == Some (ct, frag, B.length raw)))
       (ensures
-        raw_appdata_count raw == (if ct = T.ApplicationData then 1 else 0))
+        raw_appdata_count raw == (if ct = T.Application_data then 1 else 0))
   = eliminate exists (frag:M.sealed_record).
       W.parse_record_wire raw == Some (ct, frag, B.length raw)
-    returns raw_appdata_count raw == (if ct = T.ApplicationData then 1 else 0)
+    returns raw_appdata_count raw == (if ct = T.Application_data then 1 else 0)
     with _.
     (
       W.lemma_parse_record_wire_some_consumed_positive raw ct frag (B.length raw);
@@ -1748,6 +1875,9 @@ let lemma_cleartext_raw_count_zero (msg:M.tls_message) (raw:B.bytes)
         ((M.TlsHandshake? msg /\ M.ServerHello? (M.TlsHandshake?._0 msg)) \/
          msg == M.TlsHandshake M.HelloRetryRequest \/
          msg == M.TlsChangeCipherSpec) /\
+        (forall (sh:GSH.serverHello).
+           msg == M.TlsHandshake (M.ServerHello sh) ==>
+           B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640) /\
         CS.cleartext_tls_message_raw msg raw)
       (ensures raw_appdata_count raw == 0)
   = match msg with
@@ -1760,20 +1890,20 @@ let lemma_cleartext_raw_count_zero (msg:M.tls_message) (raw:B.bytes)
       lemma_single_full_record_count raw T.Handshake
     | M.TlsChangeCipherSpec ->
       W.lemma_serialize_tls_message_change_cipher_spec ();
-      WFL.lemma_parse_record_wire_serialize_record T.ChangeCipherSpec (B.singleton 1uy);
+      WFL.lemma_parse_record_wire_serialize_record T.Change_cipher_spec (B.singleton 1uy);
       Seq.lemma_eq_elim raw (CS.serialized_cleartext_tls_message msg);
-      lemma_single_full_record_count raw T.ChangeCipherSpec
+      lemma_single_full_record_count raw T.Change_cipher_spec
 #pop-options
 
 (** A single protected ApplicationData record has appdata-count 1. **)
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
 let lemma_protected_raw_count_one (raw:B.bytes)
   : Lemma
-      (requires CS.raw_records_exactly raw T.ApplicationData 1)
+      (requires CS.raw_records_exactly raw T.Application_data 1)
       (ensures raw_appdata_count raw == 1)
-  = CSL.lemma_raw_records_exactly_one_parse_record raw T.ApplicationData;
+  = CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
     W.lemma_parse_record_implies_parse_record_wire raw;
-    lemma_single_full_record_count raw T.ApplicationData
+    lemma_single_full_record_count raw T.Application_data
 #pop-options
 
 (** ── SERVER SENT ≤ 4 : write-once protected-flight markers. ──────────────── **)
@@ -2063,7 +2193,7 @@ let lemma_server_preappdata_sent_le4
     ClientHello handshake fragment so it fits a single non-wrapping record. **)
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 let lemma_cleartext_client_hello_parse_record
-  (ch:M.client_hello) (raw:B.bytes)
+  (ch:GCH.clientHello) (raw:B.bytes)
   : Lemma
       (requires
         WFL.supported_client_hello_wire_profile ch /\
@@ -2085,7 +2215,7 @@ let lemma_cleartext_client_hello_parse_record
 (** A cleartext (supported-profile) ClientHello record has appdata-count 0: its
     outer content type is Handshake, never ApplicationData. **)
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
-let lemma_cleartext_client_hello_raw_count_zero (ch:M.client_hello) (raw:B.bytes)
+let lemma_cleartext_client_hello_raw_count_zero (ch:GCH.clientHello) (raw:B.bytes)
   : Lemma
       (requires
         WFL.supported_client_hello_wire_profile ch /\
@@ -2428,7 +2558,7 @@ let lemma_server_step_recv_potential
     match ev with
     | SM.LocalEvent _ -> ()
     | SM.WireEvent wire ->
-      if wire.CW.wm_content_type = T.ApplicationData
+      if wire.CW.wm_content_type = T.Application_data
       then
         (lemma_server_step_recv_appdata_post_cf st0 wire st1 out;
          (* Show ~post_cf(st0): otherwise the receive would be a CCS whose wire
@@ -2550,6 +2680,9 @@ let lemma_received_cleartext_count_zero (msg:M.tls_message) (raw:B.bytes)
   : Lemma
       (requires
         CS.network_message_is_cleartext CL.Received msg /\
+        (forall (sh:GSH.serverHello).
+           msg == M.TlsHandshake (M.ServerHello sh) ==>
+           B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640) /\
         CS.received_cleartext_tls_message_raw msg raw)
       (ensures raw_appdata_count raw == 0)
   = match msg with
@@ -3003,14 +3136,14 @@ let rec lemma_list_has_appdata_count_ge1 (msgs:list CW.wire_message)
   = match msgs with
     | [] -> ()
     | m :: rest ->
-      if m.CW.wm_content_type = T.ApplicationData then ()
+      if m.CW.wm_content_type = T.Application_data then ()
       else begin
         eliminate exists (m0:CW.wire_message).
-          L.memP m0 msgs /\ m0.CW.wm_content_type == T.ApplicationData
+          L.memP m0 msgs /\ m0.CW.wm_content_type == T.Application_data
         returns list_has_appdata rest
         with _.
           introduce exists (m':CW.wire_message).
-            L.memP m' rest /\ m'.CW.wm_content_type == T.ApplicationData
+            L.memP m' rest /\ m'.CW.wm_content_type == T.Application_data
           with m0 and ();
         lemma_list_has_appdata_count_ge1 rest
       end
@@ -3067,7 +3200,7 @@ let lemma_client_recv_at_appdata_appdata_record
             client_at_appdata m.CS.model_control /\
             dm.CL.message_direction == CL.Received /\
             CS.network_message_raw_delta_legal m dm raw_received)
-          (ensures CS.raw_records_exactly raw_received T.ApplicationData 1)
+          (ensures CS.raw_records_exactly raw_received T.Application_data 1)
   = lemma_client_recv_at_appdata_not_cleartext m dm m';
     assert (CS.network_message_is_cleartext CL.Received dm.CL.message_value == false);
     assert (CS.protected_record_count CL.Received dm.CL.message_value == 1)
@@ -3154,19 +3287,19 @@ let lemma_client_send_stay_appdata_first_record
             B.length raw_sent > 0)
           (ensures
             (match W.parse_record_wire raw_sent with
-             | Some (ct, _, _) -> ct == T.ApplicationData
+             | Some (ct, _, _) -> ct == T.Application_data
              | None -> False))
   = lemma_client_send_stay_appdata_not_cleartext m dm m';
     assert (CS.network_message_is_cleartext CL.Sent dm.CL.message_value == false);
     let n = CS.protected_record_count CL.Sent dm.CL.message_value in
-    assert (CS.raw_records_exactly raw_sent T.ApplicationData n);
+    assert (CS.raw_records_exactly raw_sent T.Application_data n);
     if n = 0 then begin
-      lemma_raw_records_exactly_zero_empty raw_sent T.ApplicationData;
+      lemma_raw_records_exactly_zero_empty raw_sent T.Application_data;
       assert (Seq.equal raw_sent B.empty);
       assert False
     end;
     assert (n > 0);
-    lemma_ws_raw_records_nonempty_parse_record raw_sent T.ApplicationData n;
+    lemma_ws_raw_records_nonempty_parse_record raw_sent T.Application_data n;
     W.lemma_parse_record_implies_parse_record_wire raw_sent
 #pop-options
 
@@ -3187,7 +3320,7 @@ let lemma_client_stay_appdata_raw_sent_first_appdata
             B.length raw_sent > 0)
           (ensures
             (match W.parse_record_wire raw_sent with
-             | Some (ct, _, _) -> ct == T.ApplicationData
+             | Some (ct, _, _) -> ct == T.Application_data
              | None -> False))
   = match conn_ev with
     | CS.ConnLocalEvent _ ->
@@ -3301,7 +3434,7 @@ let lemma_client_empty_delta_not_into_appdata
   = if client_at_appdata m'.CS.model_control then begin
       lemma_client_into_appdata_raw_sent_appdata m conn_ev m' raw_sent;
       // raw_records_exactly raw_sent ApplicationData 1 with raw_sent empty: impossible.
-      lemma_ws_raw_records_nonempty_parse_record raw_sent T.ApplicationData 1
+      lemma_ws_raw_records_nonempty_parse_record raw_sent T.Application_data 1
     end
 #pop-options
 

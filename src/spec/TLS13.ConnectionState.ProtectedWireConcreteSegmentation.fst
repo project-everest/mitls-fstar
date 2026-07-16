@@ -5,6 +5,9 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
+module GFin = TLS13.Wire.Generated.Finished
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
 module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
@@ -17,11 +20,11 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (server_model0:connection_model)
   (client_model0:connection_model)
   (start:handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:connection_model)
   (server_model2:connection_model)
   (server_model3:connection_model)
@@ -44,7 +47,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (client_verify_skip:local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)
@@ -660,11 +663,11 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (server:connection_state)
   (client:connection_state)
   (start:handshake_start)
-  (ch:M.client_hello)
+  (ch:GCH.clientHello)
   (selection:server_handshake_selection)
   (server_shared:C.x25519_shared_secret)
   (client_shared:C.x25519_shared_secret)
-  (sh:M.server_hello)
+  (sh:GSH.serverHello)
   (server_model1:connection_model)
   (server_model2:connection_model)
   (server_model3:connection_model)
@@ -687,7 +690,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   (client_verify_skip:local_event)
   (sent_msg3:M.handshake_msg)
   (received_msg3:M.handshake_msg)
-  (verified_server_finished:M.finished)
+  (verified_server_finished:GFin.finished)
   (client_app_write_material:traffic_key_material)
   (client_app_read_material:traffic_key_material)
   (server_app_write_material:traffic_key_material)

@@ -56,6 +56,9 @@ module PWL  = TLS13.ConnectionState.ProtectedWireBase
 module ST   = TLS13.Impl.Server.Types
 module SWR  = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
 module Bounds = TLS13.Impl.ConnectionState.Bounds
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module Sem = TLS13.Wire.Semantics
 
 open FStar.List.Tot
 
@@ -876,7 +879,7 @@ let lemma_step_preserves_server_hello
   : Lemma
       (requires
         CS.step_model m0 ev == Some m1 /\
-        (forall (dir:CS.direction) (sh:M.server_hello).
+        (forall (dir:CS.direction) (sh:GSH.serverHello).
            ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                      CL.message_value = M.TlsHandshake (M.ServerHello sh) })))
       (ensures
@@ -892,7 +895,7 @@ let lemma_step_preserves_client_hello_legal
       (requires
         CS.legal_event m0 ev /\
         CS.step_model m0 ev == Some m1 /\
-        (forall (dir:CS.direction) (ch:M.client_hello).
+        (forall (dir:CS.direction) (ch:GCH.clientHello).
            ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                      CL.message_value = M.TlsHandshake (M.ClientHello ch) })))
       (ensures
@@ -929,7 +932,7 @@ let lemma_client_local_preserves_server_hello
       st1.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello
     with _pf.
-      (assert (forall (dir:CS.direction) (sh:M.server_hello).
+      (assert (forall (dir:CS.direction) (sh:GSH.serverHello).
          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                      CL.message_value = M.TlsHandshake (M.ServerHello sh) }));
        lemma_step_preserves_server_hello st0.CS.cs_model conn_ev st1.CS.cs_model)
@@ -963,7 +966,7 @@ let lemma_server_local_preserves_client_hello
       st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello
     with _pf.
-      (assert (forall (dir:CS.direction) (ch:M.client_hello).
+      (assert (forall (dir:CS.direction) (ch:GCH.clientHello).
          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                      CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
        lemma_step_preserves_client_hello_legal st0.CS.cs_model conn_ev st1.CS.cs_model)
@@ -1283,7 +1286,7 @@ let lemma_wire_facts_deliver_to_server a b =
          assert (hello_coupling b)
        | _ ->
          // non-CH receive: hs_client_hello is unchanged, so FACT 1 transfers from a.
-         assert (forall (dir:CS.direction) (ch:M.client_hello).
+         assert (forall (dir:CS.direction) (ch:GCH.clientHello).
            conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                        CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
          lemma_step_preserves_client_hello_legal a.server.CS.cs_model conn_ev s'.CS.cs_model;
@@ -1311,7 +1314,7 @@ let lemma_wire_facts_deliver_to_server a b =
 val lemma_deliver_to_client_sh_bridge
   (a b:tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message CTy.local_output) (raw:B.bytes)
-  (client_sh:M.server_hello)
+  (client_sh:GSH.serverHello)
   (content_type:U8.t) (fragment:B.bytes)
   : Lemma
       (requires
@@ -1332,6 +1335,13 @@ val lemma_deliver_to_client_sh_bridge
 let lemma_deliver_to_client_sh_bridge a b wire c' out raw client_sh content_type fragment =
   assert (channel_consistent a);
   assert (CS.connection_state_consistent a.server);
+  // c' (the stepped client) is consistent, so its stored ServerHello satisfies the
+  // single-record wire bound (client-receive legality carries it) — supplying the
+  // hypothesis the parse-record lemma now needs on the unbounded generated SH type.
+  lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
+  assert (CS.connection_state_consistent c');
+  WStep.lemma_consistent_server_hello_wire_bound c';
+  assert (B.length (W.serialize_handshake (M.ServerHello client_sh)) <= 16640);
   // received cleartext for client_sh is a plain cleartext (SH is not HRR).
   assert (CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello client_sh)) raw);
   WStep.lemma_cleartext_server_hello_parse_record client_sh raw;
@@ -1342,7 +1352,7 @@ let lemma_deliver_to_client_sh_bridge a b wire c' out raw client_sh content_type
             (M.TlsHandshake (M.ServerHello client_sh)));
   eliminate exists (outer_ct:T.content_type) (outer_fragment:B.bytes).
     W.parse_record_wire raw == Some (outer_ct, outer_fragment, B.length raw) /\
-    (if outer_ct = T.ApplicationData
+    (if outer_ct = T.Application_data
      then CTy2.protected_decoder_fragment_relation a.client content_type fragment raw
      else
        TM.content_type_matches content_type outer_ct /\
@@ -1372,7 +1382,7 @@ let lemma_deliver_to_client_sh_bridge a b wire c' out raw client_sh content_type
         W.parse_tls_message T.Handshake frag ==
           Some (M.TlsHandshake (M.ServerHello server_sh)));
       assert (Some? (hsf a.server).CS.hs_server_hello);
-      let server_sh : M.server_hello = Some?.v (hsf a.server).CS.hs_server_hello in
+      let server_sh : GSH.serverHello = Some?.v (hsf a.server).CS.hs_server_hello in
       assert (CS.cleartext_tls_message_raw
                 (M.TlsHandshake (M.ServerHello server_sh)) raw);
       // FACT 2: sh_wire_equiv b (witness raw).
@@ -1389,42 +1399,29 @@ let lemma_deliver_to_client_sh_bridge a b wire c' out raw client_sh content_type
         ==>
         WFL.paired_cleartext_hello_key_shares b.client b.server
       with _guard. (
-        let client_ch : M.client_hello = Some?.v (hsf b.client).CS.hs_client_hello in
-        let server_ch : M.client_hello = Some?.v (hsf b.server).CS.hs_client_hello in
+        let client_ch : GCH.clientHello = Some?.v (hsf b.client).CS.hs_client_hello in
+        let server_ch : GCH.clientHello = Some?.v (hsf b.server).CS.hs_client_hello in
         // client_ch is a.client's CH (stability), server_ch is a.server's CH.
         assert ((hsf a.client).CS.hs_client_hello == Some client_ch);
         assert ((hsf a.server).CS.hs_client_hello == Some server_ch);
-        // (3a) CH key share via ch_wire_equiv a.
+        // (3a) CH raw witness via ch_wire_equiv a (also yields the CH wire profile).
         assert (ch_wire_equiv a);
         eliminate exists (raw':B.bytes).
           CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello client_ch)) raw' /\
           CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw'
         returns WFL.paired_cleartext_hello_key_shares b.client b.server
         with _che. (
-          WFL.lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
-            client_ch server_ch raw' raw';
-          // client_hello_wire_equivalent: key_share equal + server_ch fields profile.
-          Seq.lemma_eq_elim client_ch.M.key_share server_ch.M.key_share;
-          assert (server_ch.M.cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256]);
-          // (3b) SH key share via server_sh body=0 + chacha + parse equality.
-          WStep.lemma_consistent_server_hello_cipher_body a.server;
-          assert (CS.cipher_suite_offered server_ch.M.cipher_suites server_sh.M.cipher_suite);
-          assert (B.length (server_sh.M.body <: B.bytes) == 0);
-          assert (CS.cipher_suite_offered [T.TLS_CHACHA20_POLY1305_SHA256]
-                    server_sh.M.cipher_suite);
-          WStep.lemma_cipher_suite_offered_singleton_chacha server_sh.M.cipher_suite;
-          assert (server_sh.M.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256);
-          // fragment == serialize_handshake (SH server_sh)
-          WStep.lemma_cleartext_server_hello_parse_record server_sh raw;
-          Seq.lemma_eq_elim fragment (W.serialize_handshake (M.ServerHello server_sh));
-          assert (W.parse_tls_message T.Handshake
-                    (W.serialize_handshake (M.ServerHello server_sh)) ==
-                  Some (M.TlsHandshake (M.ServerHello client_sh)));
-          SHPB.lemma_parse_tls_message_serialize_server_hello_key_share
-            server_sh client_sh;
-          Seq.lemma_eq_elim client_sh.M.key_share server_sh.M.key_share;
-          assert (CS.server_hello_key_share client_sh == CS.server_hello_key_share server_sh);
-          assert (CS.client_hello_key_share client_ch == CS.client_hello_key_share server_ch);
+          // (3b) The server's canonical SH is a sent cleartext on the in-flight raw.
+          assert (CS.cleartext_tls_message_raw
+                    (M.TlsHandshake (M.ServerHello server_sh)) raw);
+          // With the injective generated codec, raw replay on BOTH hellos forces
+          // record equality (client_ch==server_ch, client_sh==server_sh), so the
+          // key-share pairing follows directly.  CH raws coincide (raw'), SH raws
+          // coincide (raw).
+          WFL.lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
+            b.client b.server
+            client_ch server_ch client_sh server_sh
+            raw' raw' raw raw;
           assert (WFL.paired_cleartext_hello_key_shares b.client b.server)
         )
       )
@@ -1477,7 +1474,7 @@ let lemma_wire_facts_deliver_to_client a b =
          // ServerHello receive: hs_server_hello is installed; hs_client_hello is
          // unchanged (SH is not a CH), so FACT 1 transfers.  The SH wire bridge
          // supplies FACTS 2/3 and the coupling.
-         assert (forall (dir:CS.direction) (ch:M.client_hello).
+         assert (forall (dir:CS.direction) (ch:GCH.clientHello).
            conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                        CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
          lemma_step_preserves_client_hello_legal a.client.CS.cs_model conn_ev c'.CS.cs_model;
@@ -1501,11 +1498,11 @@ let lemma_wire_facts_deliver_to_client a b =
        | _ ->
          // non-hello receive: both hello fields unchanged, so FACTS 1–3 + coupling
          // transfer from a.
-         assert (forall (dir:CS.direction) (sh:M.server_hello).
+         assert (forall (dir:CS.direction) (sh:GSH.serverHello).
            conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                        CL.message_value = M.TlsHandshake (M.ServerHello sh) }));
          lemma_step_preserves_server_hello a.client.CS.cs_model conn_ev c'.CS.cs_model;
-         assert (forall (dir:CS.direction) (ch:M.client_hello).
+         assert (forall (dir:CS.direction) (ch:GCH.clientHello).
            conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                        CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
          lemma_step_preserves_client_hello_legal a.client.CS.cs_model conn_ev c'.CS.cs_model;

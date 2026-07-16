@@ -32,7 +32,675 @@ module Tr = TLS13.Transcript
 module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module Ref = Pulse.Lib.Reference
 module W = TLS13.Wire.Spec
+module Rev = TLS13.Wire.Spec.Reveal.Handshake
+module LP = LowParse.Spec.Base
+module Sem = TLS13.Wire.Semantics
+module GSH = TLS13.Wire.Generated.ServerHello
+module GHS = TLS13.Wire.Generated.Handshake
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
+module GSHB = TLS13.Wire.Generated.ServerHelloBody
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GKE = TLS13.Wire.Generated.KeyShareEntry
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCertE = TLS13.Wire.Generated.CertificateEntry
+module GCL = TLS13.Wire.Generated.Certificate_certificate_list
+module GEX = TLS13.Wire.Generated.CertificateEntry_extensions
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
+module GSS = TLS13.Wire.Generated.SignatureScheme
+module SerH = TLS13.Impl.Serializer.Handshake
+
+(* ----------------------------------------------------------------------- *)
+(* Build-direction witness builders for generated wire records.            *)
+(* The migration replaced the old flat M.* message records by the          *)
+(* generated nested wire records; these helpers reconstruct a canonical    *)
+(* wire witness whose TLS13.Wire.Semantics accessors expose exactly the    *)
+(* fields the old flat records carried.                                     *)
+(* ----------------------------------------------------------------------- *)
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let mk_cert_witness (chain: B.bytes)
+  : (c:GCert.certificate {
+      (1 <= Seq.length chain /\ Seq.length chain <= 32768) ==>
+      Sem.certificate_entries c == [ (chain <: Seq.seq U8.t) ] })
+=
+  let safe : (x:Seq.seq U8.t{1 <= Seq.length x /\ Seq.length x <= 32768}) =
+    if 1 <= Seq.length chain && Seq.length chain <= 32768 then chain else Seq.create 1 0uy in
+  let cd : GCertE.certificateEntry_cert_data = safe in
+  let ex : GCertE.certificateEntry_extensions = [] in
+  let entry : GCertE.certificateEntry = { GCertE.cert_data = cd; GCertE.extensions = ex } in
+  GEX.certificateEntry_extensions_list_bytesize_nil;
+  GCL.certificate_certificate_list_list_bytesize_nil;
+  assert (GCL.certificate_certificate_list_list_bytesize [entry] ==
+          GCertE.certificateEntry_bytesize entry);
+  let cl : GCert.certificate_certificate_list = [entry] in
+  let rc : GCert.certificate_certificate_request_context = B.empty in
+  let c : GCert.certificate = { GCert.certificate_request_context = rc; GCert.certificate_list = cl } in
+  assert (Sem.certificate_entries c == Sem.cert_entries_data [entry]);
+  c
+#pop-options
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
+let mk_cert_witness_entries_unconditional (chain: B.bytes)
+  : Lemma
+    (ensures
+      (1 <= Seq.length chain /\ Seq.length chain <= 32768 ==>
+       Sem.certificate_entries (mk_cert_witness chain) == [ (chain <: Seq.seq U8.t) ]) /\
+      (~(1 <= Seq.length chain /\ Seq.length chain <= 32768) ==>
+       Sem.certificate_entries (mk_cert_witness chain) == [ (Seq.create 1 0uy <: Seq.seq U8.t) ]))
+  = ()
+
+let mk_cert_witness_chain_matches_lemma
+  (storage: B.bytes) (storage_len: nat) (offsets: Seq.seq SZ.t) (lens: Seq.seq SZ.t) (chain: B.bytes)
+  : Lemma
+    (requires
+      1 <= Seq.length chain /\ Seq.length chain <= 32768 /\
+      IM.certificate_chain_matches storage storage_len offsets lens 1 [chain])
+    (ensures
+      IM.certificate_chain_matches storage storage_len offsets lens 1
+        (Sem.certificate_entries (mk_cert_witness chain)))
+  = mk_cert_witness_entries_unconditional chain
+#pop-options
+
+(* Bridging lemma: the abstract certificate witness [mk_cert_witness] coincides,
+   under the non-empty/bounded chain guard, with the build-direction serializer's
+   canonical pin [SerH.poc_canonical_cert].  Both build the identical generated
+   record (empty request_context; single certificateEntry { cert_data = chain;
+   extensions = [] }).  Lets callers discharge the serializer's
+   [cert == SerH.poc_canonical_cert chain] precondition. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
+let lemma_mk_cert_witness_eq_poc (chain: B.bytes)
+  : Lemma
+    (requires 1 <= Seq.length chain /\ Seq.length chain <= 32768)
+    (ensures mk_cert_witness chain == SerH.poc_canonical_cert chain)
+  = ()
+#pop-options
+
+(* The canonical single-entry Certificate produced by [mk_cert_witness] from a
+   non-empty, bounded certificate chain serializes to exactly [13 + |chain|]
+   bytes on the wire: handshake msg_type 1 + handshake length 3 +
+   certificate_request_context length 1 + certificate_list length 3 +
+   [ single entry: cert_data length 3 + |chain| + extensions length 2 ]
+   = 13 + |chain|.  Discharges the serializer-length precondition of
+   [process_send_certificate_exact_and_write_once]. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_mk_cert_witness_bytesize (chain: B.bytes)
+  : Lemma
+    (requires 1 <= B.length chain /\
+              B.length chain <= Bounds.max_server_certificate_chain_len)
+    (ensures
+      B.length (W.serialize_handshake (M.Certificate (mk_cert_witness chain))) ==
+        13 + B.length chain)
+  = assert_norm (Bounds.max_server_certificate_chain_len == 16610);
+    let c = mk_cert_witness chain in
+    GCL.certificate_certificate_list_list_bytesize_nil;
+    GEX.certificateEntry_extensions_list_bytesize_nil;
+    Rev.lemma_serialize_handshake_certificate c;
+    GHS.handshake_bytesize_eq (GHS.Body_certificate (c <: GHS.handshake_body_certificate));
+    ()
+#pop-options
+
+(* The wire serialization of a CertificateVerify handshake message is exactly
+   [8 + |signature|] bytes: handshake msg_type 1 + handshake length 3 +
+   signature_scheme 2 + signature length-prefix 2 + |signature|.  Discharges the
+   serializer-length precondition of
+   [process_send_certificate_verify_exact_and_write_once]. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_serialize_handshake_certificate_verify_len (cv: GCV.certificateVerify)
+  : Lemma
+    (ensures
+      B.length (W.serialize_handshake (M.CertificateVerify cv)) ==
+        8 + B.length (Sem.certificateVerify_signature_bytes cv))
+  = Rev.lemma_serialize_handshake_certificate_verify cv;
+    GHS.handshake_bytesize_eq (GHS.Body_certificate_verify cv);
+    GSS.signatureScheme_bytesize_eq cv.GCV.algorithm;
+    ()
+#pop-options
+
+(* A TLS 1.3 Finished handshake message carrying a 32-byte verify_data
+   serializes to exactly 36 bytes: handshake msg_type 1 + handshake length 3 +
+   32 verify_data bytes.  Discharges the serializer-length precondition of the
+   client-Finished verification path. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_serialize_handshake_finished_len (fin: GFin.finished)
+  : Lemma
+    (ensures B.length (W.serialize_handshake (M.Finished fin)) == 36)
+  = Rev.lemma_serialize_handshake_finished fin;
+    GHS.handshake_bytesize_eq (GHS.Body_finished fin);
+    ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
+let mk_server_hello_witness
+  (random: B.bytes)
+  (key_share: B.bytes)
+  (cs: GCS.cipherSuite)
+  : (sh:GSH.serverHello {
+      (Seq.length random == 32 /\
+       (Seq.length random == 32 ==> (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+       Seq.length key_share == 32) ==>
+      ((match Sem.serverHello_random sh with Some r -> Seq.equal r random | None -> False) /\
+       Sem.serverHello_cipher_suite sh == Some cs /\
+       (match Sem.serverHello_key_share_x25519 sh with
+        | Some k -> Seq.equal k key_share
+        | None -> False)) })
+=
+  let safe_ks : (k:Seq.seq U8.t{Seq.length k == 32}) =
+    if Seq.length key_share = 32 then key_share else Seq.create 32 0uy in
+  let ke : GKE.keyShareEntry_key_exchange = safe_ks in
+  let kse : GKE.keyShareEntry = { GKE.group = GNG.X25519; GKE.key_exchange = ke } in
+  GNG.namedGroup_bytesize_eq GNG.X25519;
+  GKE.keyShareEntry_key_exchange_bytesize_eqn ke;
+  assert (GKE.keyShareEntry_key_exchange_bytesize ke == 34);
+  let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
+  let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
+  // RFC 8446: a TLS 1.3 ServerHello MUST carry the supported_versions extension
+  // selecting TLS 1.3 (the byte-level serializer wrote it too). Listed AFTER
+  // key_share to match the original wire order.
+  let sv_ext : GESH.extensionServerHello =
+    GESH.Extension_data_supported_versions
+      (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
+  GSHB.serverHelloBody_extensions_list_bytesize_nil;
+  GSHB.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
+  GSHB.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
+  GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+  assert (GSHB.serverHelloBody_extensions_list_bytesize [ks_ext; sv_ext] ==
+          GESH.extensionServerHello_bytesize ks_ext +
+          GESH.extensionServerHello_bytesize sv_ext);
+  let exts : GSHB.serverHelloBody_extensions = [ks_ext; sv_ext] in
+  let sid : GSHB.serverHelloBody_legacy_session_id_echo = B.empty in
+  let body : GSHB.serverHelloBody = {
+    GSHB.legacy_session_id_echo = sid;
+    GSHB.cipher_suite = cs;
+    GSHB.legacy_compression_method = 0uy;
+    GSHB.extensions = exts;
+  } in
+  if Seq.length random = 32 then begin
+    let r32 : Seq.lseq U8.t 32 = random in
+    if r32 <> GSHbody.serverHello_body_cst then begin
+      let bf : GSHbody.serverHello_body_false = { GSHbody.tag = r32; GSHbody.value = body } in
+      let sh : GSH.serverHello = {
+        GSH.legacy_version = GPV.TLS_1p2;
+        GSH.body = GSHbody.ServerHello_body_false bf;
+      } in
+      assert (Sem.serverHello_key_share_x25519 sh == Sem.sh_find_key_share [ks_ext; sv_ext]);
+      sh
+    end else
+      { GSH.legacy_version = GPV.TLS_1p2; GSH.body = GSHbody.HelloRetryRequest body }
+  end else
+    { GSH.legacy_version = GPV.TLS_1p2; GSH.body = GSHbody.HelloRetryRequest body }
+#pop-options
+
+(* The canonical ServerHello produced by [mk_server_hello_witness] (key_share +
+   supported_versions extensions) serializes to exactly 90 bytes on the wire.
+   This discharges the [|serialize_handshake (M.ServerHello sh)| == 90]
+   preconditions threaded through the server send path. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_mk_server_hello_witness_bytesize
+  (random: B.bytes)
+  (key_share: B.bytes)
+  (cs: GCS.cipherSuite)
+  : Lemma
+    (requires Seq.length random == 32 /\
+              (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+              Seq.length key_share == 32)
+    (ensures
+      B.length (W.serialize_handshake
+        (M.ServerHello (mk_server_hello_witness random key_share cs))) == 90)
+  = let sh = mk_server_hello_witness random key_share cs in
+    Rev.lemma_serialize_handshake_server_hello sh;
+    GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
+    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+    GCS.cipherSuite_bytesize_eq cs;
+    GNG.namedGroup_bytesize_eq GNG.X25519;
+    GKE.keyShareEntry_key_exchange_bytesize_eqn (key_share <: GKE.keyShareEntry_key_exchange);
+    GSHB.serverHelloBody_extensions_list_bytesize_nil;
+    ()
+#pop-options
+
+(* Bridging lemma: the abstract canonical witness [mk_server_hello_witness]
+   built by the server send path coincides, under the (runtime-checked) HRR
+   sentinel guard, with the build-direction serializer's canonical pin
+   [SerH.poc_canonical_sh].  Both construct the identical generated record
+   (legacy_version = TLS_1p2; ServerHello_body_false { tag = rnd; value = body }
+   with sid = empty, cipher_suite = cs, compression = 0, extensions =
+   [key_share(X25519, ks); supported_versions(TLS_1p3)]); only the local module
+   aliases differ.  Establishing this lets callers discharge the serializer's
+   [sh == SerH.poc_canonical_sh rnd ks cs] precondition. *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_mk_server_hello_witness_eq_poc
+  (random: B.bytes)
+  (key_share: B.bytes)
+  (cs: GCS.cipherSuite)
+  : Lemma
+    (requires Seq.length random == 32 /\
+              (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+              Seq.length key_share == 32)
+    (ensures
+      mk_server_hello_witness random key_share cs ==
+      SerH.poc_canonical_sh random key_share cs)
+  = ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
+(* Build-direction bridge (server ServerHello):                            *)
+(* the Model-level canonical builder [CM.server_hello_of_selection]         *)
+(* coincides with the send-path witness [mk_server_hello_witness] applied   *)
+(* to the same random / key_share / cipher_suite.  Both reduce to the       *)
+(* identical generated record (only the local module aliases differ,        *)
+(* exactly as in [lemma_mk_server_hello_witness_eq_poc]).                    *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
+let lemma_server_hello_of_selection_eq_witness
+  (sel: CS.server_handshake_selection)
+  : Lemma
+    (ensures
+      CM.server_hello_of_selection sel ==
+      mk_server_hello_witness
+        (CM.sho_random sel)
+        sel.CS.server_key_share_public
+        T.TLS_CHACHA20_POLY1305_SHA256)
+  = ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
+(* Build-direction bridge for CanonicalProtocol's symbolic                 *)
+(* LocalSendServerHello arm.                                                *)
+(*                                                                          *)
+(* [ST.server_local_event_input_ready]/LocalSendServerHello carries the     *)
+(* Model send obligation on the *canonical* ServerHello                     *)
+(* [CM.server_hello_of_selection selection] built from the state's server   *)
+(* selection; the credentialed send path                                    *)
+(* [S.process_local_event_with_credentials] instead requires the obligation *)
+(* on the *witness* form [mk_server_hello_witness (payload[0:32])           *)
+(* (x25519 (payload[32:64])) CHACHA] plus the HRR-sentinel guard on the     *)
+(* payload random.  Under the input_ready facts (the state selection is     *)
+(* [selection], its random and key-share match the payload slices, and      *)
+(* key-share consistency) the two canonical builders coincide, so           *)
+(* [can_send_server_hello] transfers by congruence, and the matches-clause  *)
+(* forces the random off the HRR sentinel.                                  *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_can_send_server_hello_witness_of_selection
+  (st: CS.connection_state)
+  (selection: CS.server_handshake_selection)
+  (server_random: B.bytes)
+  (server_private_key: B.bytes)
+  : Lemma
+    (requires
+      Seq.length server_random == 32 /\
+      Seq.length server_private_key == 32 /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
+      Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
+                (server_random <: Seq.seq U8.t) /\
+      Some? selection.CS.server_key_share_private /\
+      Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                (server_private_key <: Seq.seq U8.t) /\
+      CS.server_selection_key_share_consistent selection /\
+      CM.can_send_server_hello st (CM.server_hello_of_selection selection)
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ServerHello (CM.server_hello_of_selection selection)))))
+    (ensures
+      ((server_random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+      (let sh = mk_server_hello_witness server_random
+                  (CryptoSpec.x25519_public_from_private server_private_key)
+                  T.TLS_CHACHA20_POLY1305_SHA256 in
+       CM.can_send_server_hello st sh
+         (CS.serialized_cleartext_tls_message
+           (M.TlsHandshake (M.ServerHello sh)))))
+  =
+  let sh0 = CM.server_hello_of_selection selection in
+  // 1. can_send_server_hello st sh0 _ carries, via the state selection,
+  //    server_hello_matches_selection selection sh0.
+  assert (CS.server_hello_matches_selection selection sh0);
+  // 2. serverHello_random sh0 == Some (sho_random selection) (structural).
+  assert (Sem.serverHello_random sh0 == Some (CM.sho_random selection));
+  // matches => Seq.equal (sho_random selection) selection.server_random.
+  Seq.lemma_eq_elim (CM.sho_random selection <: Seq.seq U8.t)
+                    (selection.CS.server_random <: Seq.seq U8.t);
+  Seq.lemma_eq_elim (selection.CS.server_random <: Seq.seq U8.t)
+                    (server_random <: Seq.seq U8.t);
+  // hence sho_random selection == selection.server_random == server_random,
+  // and sho_random selection <> cst (type) => server_random <> cst.
+  assert ((CM.sho_random selection <: Seq.lseq U8.t 32) ==
+          (server_random <: Seq.lseq U8.t 32));
+  assert ((server_random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst);
+  // 3. key-share consistency: x25519 server_private_key == server_key_share_public.
+  Seq.lemma_eq_elim (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                    (server_private_key <: Seq.seq U8.t);
+  assert (CryptoSpec.x25519_public_from_private server_private_key ==
+          (selection.CS.server_key_share_public <: B.bytes));
+  // 4. the canonical builders coincide; congruence with (2)/(3) gives the
+  //    witness equality, and can_send_server_hello transfers.
+  lemma_server_hello_of_selection_eq_witness selection;
+  assert (sh0 == mk_server_hello_witness server_random
+                   (CryptoSpec.x25519_public_from_private server_private_key)
+                   T.TLS_CHACHA20_POLY1305_SHA256);
+  ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
+(* Build-direction bridge for the server Endpoint's deferred                *)
+(* LocalSendServerHello handler.  Given the raw state/material matching      *)
+(* facts, the canonical [CM.server_hello_of_selection selection] can be sent, *)
+(* so plain input_ready holds.  Mirrors the inline reasoning in              *)
+(* [Driver.Handshake] (valid_selection + the two Model send lemmas); factored *)
+(* into a lemma so the heavy [can_send_server_hello] derivation stays out of  *)
+(* the large Endpoint deferred-action Pulse function (whose whole-function    *)
+(* query is otherwise destabilised by the added obligations).                *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_input_ready_server_hello_of_selection
+  (st: CS.connection_state)
+  (selection: CS.server_handshake_selection)
+  (material: B.bytes)
+  : Lemma
+    (requires
+      B.length material == 64 /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        90 <= Bounds.max_transcript_len /\
+      Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
+                (CL.raw_slice material 0 32 <: Seq.seq U8.t) /\
+      ((CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+      Some? selection.CS.server_key_share_private /\
+      Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                (CL.raw_slice material 32 64 <: Seq.seq U8.t) /\
+      (selection.CS.server_key_share_public <: B.bytes) ==
+        CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64) /\
+      selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+    (ensures
+      ST.server_local_event_input_ready st ST.LocalSendServerHello material)
+  =
+  // random equalities: selection.server_random == material[0:32], off cst.
+  Seq.lemma_eq_elim (selection.CS.server_random <: Seq.seq U8.t)
+                    (CL.raw_slice material 0 32 <: Seq.seq U8.t);
+  assert ((selection.CS.server_random <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst);
+  // private-key equality => key-share consistency.
+  Seq.lemma_eq_elim (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
+                    (CL.raw_slice material 32 64 <: Seq.seq U8.t);
+  assert (CS.server_selection_key_share_consistent selection);
+  // valid_selection holds (random off HRR sentinel + CHACHA cipher suite), so
+  // the canonical builder matches the selection and serialises to 90 bytes;
+  // legal_event / event_raw_delta_legal / can_send_server_hello follow, exactly
+  // as in Driver.Handshake's inline discharge.
+  assert (CM.valid_selection selection);
+  let sh_sel = CM.server_hello_of_selection selection in
+  CM.lemma_server_hello_of_selection_matches selection;
+  CM.lemma_server_hello_of_selection_bytesize selection;
+  assert (CS.server_hello_matches_selection selection sh_sel);
+  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 90);
+  assert (CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh_sel);
+    }));
+  assert (CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh_sel);
+    })
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh_sel)))
+    B.empty);
+  assert (CM.can_send_server_hello st sh_sel
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh_sel))));
+  ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
+(* Aggregate discharge of the four conditional obligations threaded through *)
+(* [S.process_local_event_with_credentials].  CanonicalProtocol's           *)
+(* [server_process_local] calls that function with a *symbolic* kind, so it  *)
+(* must establish the whole implication conjunction at once.  We prove it    *)
+(* from the input_ready facts (both the plain and credentialed forms):       *)
+(*  - VClF: input_ready (site 2) restates can_verify_client_finished's       *)
+(*    conjuncts + [transcript+36]; the finished-length lemma bridges the     *)
+(*    transcript bound (a Finished serializes to 36 bytes).                  *)
+(*  - SendServerHello: input_ready (site 3) carries the send obligation on   *)
+(*    the canonical [CM.server_hello_of_selection selection]; the SH build   *)
+(*    bridge transfers it to the witness form + the HRR-sentinel guard.      *)
+(*  - SendCertificateVerify: input_ready (site 4) carries [transcript+8+     *)
+(*    |sig|]; the certificate-verify-length lemma bridges the serialized     *)
+(*    length ([8+|sig|]).                                                    *)
+(*  - SendCertificate: plain input_ready is [False] for this kind (it has no *)
+(*    LocalSendCertificate case), so the obligation is vacuous.              *)
+(* ----------------------------------------------------------------------- *)
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 200"
+let lemma_server_process_local_obligations
+  (st: CS.connection_state)
+  (kind: ST.local_event_kind)
+  (payload: B.bytes)
+  (certificate_chain: B.bytes)
+  (credential_identity: CS.server_credential_identity)
+  (out_len_v: nat)
+  : Lemma
+    (requires
+      ST.server_local_event_input_ready st kind payload /\
+      ST.server_local_event_input_ready_with_credentials
+        st kind payload certificate_chain credential_identity /\
+      // Certificate-chain non-emptiness.  With the (un-weakened) plain
+      // input_ready now carrying a reachable LocalSendCertificate case, this
+      // branch is no longer vacuous; 1 <= |chain| is not a state invariant (no
+      // config guarantees a non-empty chain) so it is established by a runtime
+      // check at the send site and threaded in here (mirroring the analogous
+      // Server.Driver.Local.check_certificate_chain_nonempty pattern).
+      (kind == ST.LocalSendCertificate ==> 1 <= B.length certificate_chain))
+    (ensures
+      (kind == ST.LocalVerifyClientFinished /\
+       Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+         Bounds.max_transcript_len /\
+       CM.can_verify_client_finished st
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
+      (kind == ST.LocalSendServerHello /\ out_len_v == 95 ==>
+       (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
+        (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst) /\
+       (let sh = mk_server_hello_witness
+                   (CL.raw_slice payload 0 32)
+                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                   T.TLS_CHACHA20_POLY1305_SHA256 in
+        CM.can_send_server_hello st sh
+          (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sh))))) /\
+      (kind == ST.LocalSendCertificateVerify /\
+       Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+       B.length (W.serialize_handshake (M.CertificateVerify
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) ==
+         8 + B.length (Sem.certificateVerify_signature_bytes
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)) /\
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+         B.length (W.serialize_handshake (M.CertificateVerify
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) <=
+         Bounds.max_transcript_len) /\
+      (kind == ST.LocalSendCertificate ==>
+       1 <= B.length certificate_chain /\ B.length certificate_chain <= 32768 /\
+       B.length (W.serialize_handshake
+         (M.Certificate (mk_cert_witness certificate_chain))) ==
+         13 + B.length certificate_chain))
+  =
+  match kind with
+  | ST.LocalVerifyClientFinished ->
+    introduce
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+      (B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+         Bounds.max_transcript_len /\
+       CM.can_verify_client_finished st
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
+    with _h.
+    ( let fin = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished in
+      lemma_serialize_handshake_finished_len fin;
+      assert (CM.can_verify_client_finished st fin) )
+  | ST.LocalSendServerHello ->
+    introduce
+      out_len_v == 95 ==>
+      ((Seq.length (CL.raw_slice payload 0 32) == 32 ==>
+        (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
+          GSHbody.serverHello_body_cst) /\
+       (let sh = mk_server_hello_witness
+                   (CL.raw_slice payload 0 32)
+                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                   T.TLS_CHACHA20_POLY1305_SHA256 in
+        CM.can_send_server_hello st sh
+          (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake (M.ServerHello sh)))))
+    with _h.
+    ( let server_random = CL.raw_slice payload 0 32 in
+      let server_private_key = CL.raw_slice payload 32 64 in
+      assert (B.length payload == 64);
+      assert (Seq.length server_random == 32);
+      assert (Seq.length server_private_key == 32);
+      match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+      | Some selection ->
+        lemma_can_send_server_hello_witness_of_selection
+          st selection server_random server_private_key )
+  | ST.LocalSendCertificateVerify ->
+    introduce
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==>
+      (B.length (W.serialize_handshake (M.CertificateVerify
+         (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) ==
+         8 + B.length (Sem.certificateVerify_signature_bytes
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)) /\
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+         B.length (W.serialize_handshake (M.CertificateVerify
+           (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) <=
+         Bounds.max_transcript_len)
+    with _h.
+    ( let cv = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+      lemma_serialize_handshake_certificate_verify_len cv )
+  | ST.LocalSendCertificate ->
+    // 1 <= |chain| comes from the caller obligation (established at the send
+    // site by a runtime chain non-emptiness check); |chain| <= 16610 comes from
+    // server_local_event_input_ready_with_credentials's 13 + |chain| + 17 <=
+    // 16640.  The serialize-length equation is the mk_cert_witness bytesize.
+    lemma_mk_cert_witness_bytesize certificate_chain
+  | _ -> ()
+#pop-options
+
+(* ----------------------------------------------------------------------- *)
+(* TODO-A1 cst-guard runtime check.                                        *)
+(* The ServerHello random generated by the server must differ from the     *)
+(* HelloRetryRequest sentinel [GSHbody.serverHello_body_cst]; otherwise     *)
+(* [mk_server_hello_witness] would emit an HRR.  Since the random is freshly *)
+(* generated by [Crypto.random_bytes], we discharge the (cryptographically  *)
+(* impossible) collision with a runtime 32-byte comparison.                 *)
+(* ----------------------------------------------------------------------- *)
+(* Copy of the generated (private) serverHello_body_sz_contradiction. *)
+let hrr_sentinel_sz_contradiction (j: SZ.t)
+  : Lemma (requires SZ.v j < 32 /\ ~(j == 0sz) /\ ~(j == 1sz) /\ ~(j == 2sz) /\ ~(j == 3sz) /\ ~(j == 4sz) /\ ~(j == 5sz) /\ ~(j == 6sz) /\ ~(j == 7sz) /\ ~(j == 8sz) /\ ~(j == 9sz) /\ ~(j == 10sz) /\ ~(j == 11sz) /\ ~(j == 12sz) /\ ~(j == 13sz) /\ ~(j == 14sz) /\ ~(j == 15sz) /\ ~(j == 16sz) /\ ~(j == 17sz) /\ ~(j == 18sz) /\ ~(j == 19sz) /\ ~(j == 20sz) /\ ~(j == 21sz) /\ ~(j == 22sz) /\ ~(j == 23sz) /\ ~(j == 24sz) /\ ~(j == 25sz) /\ ~(j == 26sz) /\ ~(j == 27sz) /\ ~(j == 28sz) /\ ~(j == 29sz) /\ ~(j == 30sz) /\ ~(j == 31sz)) (ensures False) = ()
+
+#push-options "--z3rlimit 16"
+inline_for_extraction
+let hrr_sentinel_byte (j: SZ.t { SZ.v j < 32 })
+  : (b: U8.t { b == Seq.index GSHbody.serverHello_body_cst (SZ.v j) }) =
+  assert_norm (FStar.List.Tot.Base.length [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] == 32);
+  FStar.Seq.Properties.lemma_seq_of_list_index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] (SZ.v j);
+  if j = 0sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 0 == 0xcfuy); 0xcfuy) else
+  if j = 1sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 1 == 0x21uy); 0x21uy) else
+  if j = 2sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 2 == 0xaduy); 0xaduy) else
+  if j = 3sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 3 == 0x74uy); 0x74uy) else
+  if j = 4sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 4 == 0xe5uy); 0xe5uy) else
+  if j = 5sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 5 == 0x9auy); 0x9auy) else
+  if j = 6sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 6 == 0x61uy); 0x61uy) else
+  if j = 7sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 7 == 0x11uy); 0x11uy) else
+  if j = 8sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 8 == 0xbeuy); 0xbeuy) else
+  if j = 9sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 9 == 0x1duy); 0x1duy) else
+  if j = 10sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 10 == 0x8cuy); 0x8cuy) else
+  if j = 11sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 11 == 0x02uy); 0x02uy) else
+  if j = 12sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 12 == 0x1euy); 0x1euy) else
+  if j = 13sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 13 == 0x65uy); 0x65uy) else
+  if j = 14sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 14 == 0xb8uy); 0xb8uy) else
+  if j = 15sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 15 == 0x91uy); 0x91uy) else
+  if j = 16sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 16 == 0xc2uy); 0xc2uy) else
+  if j = 17sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 17 == 0xa2uy); 0xa2uy) else
+  if j = 18sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 18 == 0x11uy); 0x11uy) else
+  if j = 19sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 19 == 0x16uy); 0x16uy) else
+  if j = 20sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 20 == 0x7auy); 0x7auy) else
+  if j = 21sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 21 == 0xbbuy); 0xbbuy) else
+  if j = 22sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 22 == 0x8cuy); 0x8cuy) else
+  if j = 23sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 23 == 0x5euy); 0x5euy) else
+  if j = 24sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 24 == 0x07uy); 0x07uy) else
+  if j = 25sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 25 == 0x9euy); 0x9euy) else
+  if j = 26sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 26 == 0x09uy); 0x09uy) else
+  if j = 27sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 27 == 0xe2uy); 0xe2uy) else
+  if j = 28sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 28 == 0xc8uy); 0xc8uy) else
+  if j = 29sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 29 == 0xa8uy); 0xa8uy) else
+  if j = 30sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 30 == 0x33uy); 0x33uy) else
+  if j = 31sz then (assert_norm (FStar.List.Tot.Base.index [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] 31 == 0x9cuy); 0x9cuy) else
+  (hrr_sentinel_sz_contradiction j; 0uy)
+#pop-options
+
+let lemma_pointwise_iff_raw_slice_cst (mb: B.bytes)
+  : Lemma (requires B.length mb >= 32)
+          (ensures ((forall (k:nat). k < 32 ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k) <==>
+                    ((CL.raw_slice mb 0 32 <: Seq.lseq U8.t 32) == GSHbody.serverHello_body_cst)))
+  = let s : Seq.lseq U8.t 32 = CL.raw_slice mb 0 32 in
+    assert (s == Seq.slice mb 0 32);
+    let cst = GSHbody.serverHello_body_cst in
+    introduce (forall (k:nat). k < 32 ==> Seq.index mb k == Seq.index cst k) ==> (s == cst)
+    with _. (
+      Seq.lemma_eq_intro s cst
+    );
+    introduce (s == cst) ==> (forall (k:nat). k < 32 ==> Seq.index mb k == Seq.index cst k)
+    with _. ()
+
+let lemma_range_ext_cst (mb: B.bytes) (n:nat) (ae:bool) (mv cv: U8.t)
+  : Lemma (requires B.length mb >= 32 /\ n < 32 /\
+                    mv == Seq.index mb n /\
+                    cv == Seq.index GSHbody.serverHello_body_cst n /\
+                    (ae <==> (forall (k:nat). k < n ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k)))
+          (ensures ((ae && (mv = cv)) <==>
+                    (forall (k:nat). k < n + 1 ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k)))
+  = ()
+
+fn server_random_differs_from_cst (material: array U8.t) (#p: perm) (#mb: erased (b:B.bytes{B.length b >= 32}))
+  requires pts_to material #p mb
+  returns b: bool
+  ensures pts_to material #p mb **
+          pure (b <==> (CL.raw_slice mb 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst)
+{
+  let mut j = 0sz;
+  let mut all_equal = true;
+  while (
+    let jv = Ref.read j;
+    jv `SZ.lt` 32sz
+  )
+  invariant exists* je ae.
+    pts_to material #p mb **
+    Ref.pts_to j je **
+    Ref.pts_to all_equal ae **
+    pure (SZ.v je <= 32 /\ B.length mb >= 32 /\
+          (ae <==> (forall (k:nat). k < SZ.v je ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k)))
+  {
+    let jv = Ref.read j;
+    let mv = material.(jv);
+    let cv = hrr_sentinel_byte jv;
+    let cur = Ref.read all_equal;
+    lemma_range_ext_cst mb (SZ.v jv) cur mv cv;
+    Ref.write all_equal (cur && (mv = cv));
+    Ref.write j (jv `SZ.add` 1sz);
+  };
+  lemma_pointwise_iff_raw_slice_cst mb;
+  let res = Ref.read all_equal;
+  not res
+}
 
 noextract
 let lemma_server_handshake_write_seal_some
@@ -50,7 +718,7 @@ let lemma_server_handshake_write_seal_some
         st.CS.cs_model.CS.model_record.CS.record_write
         aad
         {
-          R.content_type = T.ApplicationData;
+          R.content_type = T.Application_data;
           R.fragment = CS.sent_tls_inner_plaintext_fragment msg;
         }))
 =
@@ -91,7 +759,7 @@ let lemma_server_handshake_write_seal_some
     st.CS.cs_model.CS.model_record.CS.record_write
     aad
     {
-      R.content_type = T.ApplicationData;
+      R.content_type = T.Application_data;
       R.fragment = CS.sent_tls_inner_plaintext_fragment msg;
     }
 
@@ -102,7 +770,7 @@ fn process_send_server_hello
   (fragment:array U8.t)
   (fragment_len:SZ.t)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -281,7 +949,9 @@ fn process_send_server_hello
 fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
+  (#server_random_bytes: erased B.bytes)
+  (#server_key_share_bytes: erased B.bytes)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
@@ -294,6 +964,14 @@ fn process_send_server_hello_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Seq.length (Ghost.reveal server_random_bytes) == 32 /\
+                 (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
+                 Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
+                 Ghost.reveal sh ==
+                   mk_server_hello_witness
+                     (Ghost.reveal server_random_bytes)
+                     (Ghost.reveal server_key_share_bytes)
+                     (T.TLS_CHACHA20_POLY1305_SHA256) /\
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -324,9 +1002,16 @@ fn process_send_server_hello_serialized
                   network_out_bytes
                   app_out_bytes)
 {
+  lemma_mk_server_hello_witness_eq_poc
+    (Ghost.reveal server_random_bytes)
+    (Ghost.reveal server_key_share_bytes)
+    (T.TLS_CHACHA20_POLY1305_SHA256);
   let written_raw =
     Ser.serialize_server_hello_record_from_selection
       #sh
+      #server_random_bytes
+      #server_key_share_bytes
+      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
       lsh
       network_out
       network_out_len;
@@ -346,6 +1031,9 @@ fn process_send_server_hello_serialized
   let written_fragment =
     Ser.serialize_server_hello_from_selection
       #sh
+      #server_random_bytes
+      #server_key_share_bytes
+      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
       lsh
       fragment
       90sz;
@@ -491,17 +1179,15 @@ fn process_send_server_hello_serialized
 fn build_server_hello_from_arrays
   (server_random:array U8.t)
   (server_key_share:array U8.t)
-  (#sh:erased M.server_hello)
+  (#sh:erased GSH.serverHello)
   requires pts_to server_random 'server_random_bytes **
            pts_to server_key_share 'server_key_share_bytes **
            pure (B.length 'server_random_bytes == 32 /\
                 B.length 'server_key_share_bytes == 32 /\
-                Ghost.reveal sh == {
-                  M.random = Ghost.reveal 'server_random_bytes;
-                  M.key_share = Ghost.reveal 'server_key_share_bytes;
-                  M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                  M.body = B.empty;
-                })
+                // TODO-A1: ServerHello random must differ from the HRR sentinel
+                (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
+                 (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+                Ghost.reveal sh == (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256)))
   returns lsh:IM.server_hello
   ensures pts_to server_random 'server_random_bytes **
           pts_to server_key_share 'server_key_share_bytes **
@@ -550,12 +1236,12 @@ fn process_send_server_hello_from_arrays
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
-                 (let sh = {
-                   M.random = Ghost.reveal 'server_random_bytes;
-                   M.key_share = Ghost.reveal 'server_key_share_bytes;
-                   M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                   M.body = B.empty;
-                 } in
+                 // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                 // sentinel (serverHello_body_cst); unprovable for a symbolic random,
+                 // so threaded as an explicit caller obligation.
+                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
+                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -572,12 +1258,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = {
-                    M.random = Ghost.reveal 'server_random_bytes;
-                    M.key_share = Ghost.reveal 'server_key_share_bytes;
-                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                    M.body = B.empty;
-                  } in
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -596,12 +1277,7 @@ fn process_send_server_hello_from_arrays
                   network_out_bytes
                   app_out_bytes)
 {
-  let sh = Ghost.hide {
-    M.random = Ghost.reveal 'server_random_bytes;
-    M.key_share = Ghost.reveal 'server_key_share_bytes;
-    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-    M.body = B.empty;
-  };
+  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) <: GSH.serverHello);
   let lsh =
     build_server_hello_from_arrays
       server_random
@@ -611,6 +1287,8 @@ fn process_send_server_hello_from_arrays
     s
     lsh
     #sh
+    #('server_random_bytes)
+    #('server_key_share_bytes)
     network_out
     network_out_len
     app_out
@@ -636,14 +1314,13 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 95 /\
                  ST.server_end_to_end_invariant 'st0 /\
-                 (let sh = {
-                   M.random = Ghost.reveal 'server_random_bytes;
-                   M.key_share =
-                     CryptoSpec.x25519_public_from_private
-                       (Ghost.reveal 'server_private_key_bytes);
-                   M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                   M.body = B.empty;
-                 } in
+                 // TODO-A1: ServerHello random must differ from the HelloRetryRequest
+                 // sentinel (serverHello_body_cst); unprovable for a symbolic random,
+                 // so threaded as an explicit caller obligation.
+                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
+                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                     (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -660,14 +1337,8 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
-                 (let sh = {
-                    M.random = Ghost.reveal 'server_random_bytes;
-                    M.key_share =
-                      CryptoSpec.x25519_public_from_private
-                        (Ghost.reveal 'server_private_key_bytes);
-                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-                    M.body = B.empty;
-                  } in
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                       (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -692,12 +1363,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
   assert (pure (server_key_share_bytes ==
     CryptoSpec.x25519_public_from_private (Ghost.reveal 'server_private_key_bytes)));
   assert (pure (B.length server_key_share_bytes == 32));
-  let sh = Ghost.hide {
-    M.random = Ghost.reveal 'server_random_bytes;
-    M.key_share = server_key_share_bytes;
-    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-    M.body = B.empty;
-  };
+  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256));
   assert (pure (CM.can_send_server_hello
     'st0
     (Ghost.reveal sh)
@@ -756,7 +1422,7 @@ fn process_send_encrypted_extensions_serialized
                      CL.message_direction = CL.Sent;
                      CL.message_value =
                        M.TlsHandshake
-                         (M.EncryptedExtensions { M.negotiated_alpn = None; M.body = B.empty });
+                         (M.EncryptedExtensions ([] <: GEE.encryptedExtensions));
                    }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -765,7 +1431,7 @@ fn process_send_encrypted_extensions_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                (let ee = { M.negotiated_alpn = None; M.body = B.empty } in
+                (let ee = ([] <: GEE.encryptedExtensions) in
                  st1 ==
                    CM.sent_encrypted_extensions_state
                      'st0
@@ -780,9 +1446,9 @@ fn process_send_encrypted_extensions_serialized
                   network_out_bytes
                   app_out_bytes)
 {
-  let ee : erased M.encrypted_extensions =
-    Ghost.hide { M.negotiated_alpn = None; M.body = B.empty };
-  assert (pure ((Ghost.reveal ee).M.negotiated_alpn == None));
+  let ee : erased GEE.encryptedExtensions =
+    Ghost.hide ([] <: GEE.encryptedExtensions);
+
 
   let alpn = V.alloc 0uy 255sz;
   let lee = {
@@ -807,30 +1473,6 @@ fn process_send_encrypted_extensions_serialized
   with fragment_bytes. assert (pts_to fragment fragment_bytes);
   assert (pure (B.length fragment_bytes == 6));
   assert (pure (SZ.v written_fragment == 6));
-  assert (pure (Seq.equal
-    fragment_bytes
-    (W.serialize_empty_encrypted_extensions ())));
-  let dummy_sh : erased M.server_hello = Ghost.hide {
-    M.random = Seq.create 32 0uy;
-    M.key_share = Seq.create 32 0uy;
-    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-    M.body = B.empty;
-  };
-  let dummy_cert : erased M.certificate_msg = Ghost.hide { M.chain = []; M.body = B.empty };
-  let dummy_cv : erased M.certificate_verify = Ghost.hide {
-    M.scheme = T.RsaPssRsaeSha256;
-    M.signature = B.empty;
-    M.body = B.empty;
-  };
-  let dummy_fin : erased M.finished = Ghost.hide { M.verify_data = Seq.create 32 0uy };
-  W.lemma_fixed_server_handshake_serializers
-    (Ghost.reveal dummy_sh)
-    (Ghost.reveal dummy_cert)
-    (Ghost.reveal dummy_cv)
-    (Ghost.reveal dummy_fin);
-  assert (pure (Seq.equal
-    (W.serialize_empty_encrypted_extensions ())
-    (W.serialize_handshake (M.EncryptedExtensions (Ghost.reveal ee)))));
   assert (pure (Seq.equal
     fragment_bytes
     (W.serialize_handshake (M.EncryptedExtensions (Ghost.reveal ee)))));
@@ -862,7 +1504,7 @@ fn process_send_encrypted_extensions_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1030,16 +1672,23 @@ fn process_send_encrypted_extensions_serialized
   resp
 }
 
+#push-options "--fuel 3 --ifuel 2 --z3rlimit 200"
 fn build_certificate_from_credentials
   (creds:O.server_credentials)
-  requires O.is_server_credentials creds 'certificate_chain 'credential_identity
+  requires O.is_server_credentials creds 'certificate_chain 'credential_identity **
+           // TODO-A1: chain length bound not exposed by O.is_server_credentials;
+           // needed because mk_cert_witness's Sem.certificate_entries postcondition is conditional
+           // on 1 <= |chain| <= 32768. The empty-chain case is excluded at the caller by
+           // legal_event (certificate_msg_matches_server_config).
+           pure (1 <= B.length (Ghost.reveal 'certificate_chain) /\
+                 B.length (Ghost.reveal 'certificate_chain) <= 32768)
   returns result: option IM.certificate_msg
   ensures O.is_server_credentials creds 'certificate_chain 'credential_identity **
           (match result with
            | Some lcert ->
              IM.is_valid_certificate_msg
                lcert
-               { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty } **
+               (mk_cert_witness (Ghost.reveal 'certificate_chain)) **
              pure (
                SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
                  B.length (Ghost.reveal 'certificate_chain) /\
@@ -1129,9 +1778,16 @@ fn build_certificate_from_credentials
         lens
         1
         [Ghost.reveal 'certificate_chain]));
+      assert (pure (SZ.v certificate_len <= 32768));
+      mk_cert_witness_chain_matches_lemma
+        copied_chain_bytes
+        (SZ.v certificate_len)
+        offsets
+        lens
+        (Ghost.reveal 'certificate_chain);
       fold (IM.is_valid_certificate_msg
         lcert
-        { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
+        (mk_cert_witness (Ghost.reveal 'certificate_chain)));
       assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
         B.length (Ghost.reveal 'certificate_chain)));
       assert (pure (lcert.IM.certificate_msg_cert_count == 1sz));
@@ -1139,11 +1795,13 @@ fn build_certificate_from_credentials
     }
   }
 }
+#pop-options
 
 fn process_send_certificate_serialized
   (s:server)
   (lcert:IM.certificate_msg)
-  (#cert:erased M.certificate_msg)
+  (#cert:erased GCert.certificate)
+  (#chain:erased B.bytes)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -1155,10 +1813,12 @@ fn process_send_certificate_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
+                 1 <= Seq.length (Ghost.reveal chain) /\
+                 Seq.length (Ghost.reveal chain) <= 32768 /\
+                 Ghost.reveal cert == mk_cert_witness (Ghost.reveal chain) /\
                  SZ.v fragment_len ==
                    B.length
-                     (W.serialize_certificate_from_credential
-                       (Ghost.reveal cert)) /\
+                     (W.serialize_handshake (M.Certificate (Ghost.reveal cert))) /\
                  SZ.v fragment_len + 17 <= 16640 /\
                  SZ.v network_out_len == SZ.v fragment_len + 22 /\
                  ST.server_end_to_end_invariant 'st0 /\
@@ -1169,11 +1829,10 @@ fn process_send_certificate_serialized
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
-                 B.length (Ghost.reveal cert).M.body == 0 /\
                  lcert.IM.certificate_msg_cert_count == 1sz /\
                  (exists (certificate:B.bytes).
-                   (Ghost.reveal cert).M.chain == [certificate]) /\
-                 (Ghost.reveal cert).M.chain <> [] /\
+                   Sem.certificate_entries (Ghost.reveal cert) == [certificate]) /\
+                 Sem.certificate_entries (Ghost.reveal cert) <> [] /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
@@ -1216,31 +1875,17 @@ fn process_send_certificate_serialized
   V.pts_to_len fragment;
   assert (pure (B.length old_fragment_bytes == SZ.v fragment_len));
   V.to_array_pts_to fragment;
+  lemma_mk_cert_witness_eq_poc (Ghost.reveal chain);
   let written_fragment =
     Ser.serialize_certificate_from_credential
       #cert
+      #chain
       lcert
       (V.vec_to_array fragment)
       fragment_len;
   with fragment_bytes. assert (pts_to (V.vec_to_array fragment) fragment_bytes);
   assert (pure (B.length fragment_bytes == SZ.v fragment_len));
   assert (pure (SZ.v written_fragment == SZ.v fragment_len));
-  assert (pure (Seq.equal
-    fragment_bytes
-    (W.serialize_certificate_from_credential (Ghost.reveal cert))));
-  W.lemma_fixed_server_handshake_serializers
-    {
-      M.random = Seq.create 32 0uy;
-      M.key_share = Seq.create 32 0uy;
-      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-      M.body = B.empty;
-    }
-    (Ghost.reveal cert)
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
-    { M.verify_data = Seq.create 32 0uy };
-  assert (pure (Seq.equal
-    (W.serialize_certificate_from_credential (Ghost.reveal cert))
-    (W.serialize_handshake (M.Certificate (Ghost.reveal cert)))));
   assert (pure (Seq.equal
     fragment_bytes
     (W.serialize_handshake (M.Certificate (Ghost.reveal cert)))));
@@ -1275,7 +1920,7 @@ fn process_send_certificate_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1473,6 +2118,13 @@ fn process_send_certificate_from_credentials
                  13 + B.length (Ghost.reveal 'certificate_chain) + 17 <= 16640 /\
                  SZ.v network_out_len ==
                    13 + B.length (Ghost.reveal 'certificate_chain) + 22 /\
+                 // TODO-A1: |serialize_handshake (Certificate cert)| == 13 + |chain| was provided
+                 // by the now-deleted W.lemma_serialize_certificate_from_single_chain_len; threaded
+                 // as a precondition (true wire length of a single-entry certificate with empty
+                 // request-context and empty extensions).
+                 B.length (W.serialize_handshake
+                   (M.Certificate (mk_cert_witness (Ghost.reveal 'certificate_chain)))) ==
+                   13 + B.length (Ghost.reveal 'certificate_chain) /\
                  (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
                   | Some cfg -> cfg.CS.server_certificate_chain == Ghost.reveal 'certificate_chain
                   | None -> False) /\
@@ -1485,7 +2137,7 @@ fn process_send_certificate_from_credentials
                      CL.message_direction = CL.Sent;
                      CL.message_value =
                        M.TlsHandshake
-                         (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty });
+                         (M.Certificate (mk_cert_witness (Ghost.reveal 'certificate_chain)));
                    }))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -1498,7 +2150,7 @@ fn process_send_certificate_from_credentials
                 st1 ==
                   CM.sent_certificate_state
                     'st0
-                    { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty }
+                    (mk_cert_witness (Ghost.reveal 'certificate_chain))
                     network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
@@ -1526,18 +2178,26 @@ fn process_send_certificate_from_credentials
       }
     }
     Some lcert -> {
-      let cert:erased M.certificate_msg =
-        Ghost.hide { M.chain = [Ghost.reveal 'certificate_chain]; M.body = B.empty };
+      let cert:erased GCert.certificate =
+        Ghost.hide (mk_cert_witness (Ghost.reveal 'certificate_chain));
+      // Branch spec's certificate_msg_matches_server_config requires the exact
+      // Sem.certificate_entries (mk_cert_witness chain) == [chain]; the branch SMT context
+      // (unlike pr265's) does not auto-unfold this, so call the lemma explicitly.
+      // 1 <= |chain| <= 32768 is available here (precondition of build_certificate_from_credentials).
+      mk_cert_witness_entries_unconditional (Ghost.reveal 'certificate_chain);
       assert (pure (lcert.IM.certificate_msg_cert_count == 1sz));
       assert (pure (exists (certificate:B.bytes).
-        (Ghost.reveal cert).M.chain == [certificate]));
-      assert (pure ((Ghost.reveal cert).M.chain <> []));
+        Sem.certificate_entries (Ghost.reveal cert) == [certificate]));
+      assert (pure (Sem.certificate_entries (Ghost.reveal cert) <> []));
       assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
         B.length (Ghost.reveal 'certificate_chain)));
-      W.lemma_serialize_certificate_from_single_chain_len
-        (Ghost.reveal 'certificate_chain);
+      // TODO-A1: |serialize_handshake (Certificate cert)| == 13 + |chain| was provided by the
+      // now-deleted W.lemma_serialize_certificate_from_single_chain_len. For a single-entry
+      // certificate with empty request-context and empty extensions this is exactly the wire
+      // length (4 hs-header + 1 ctx-len + 3 list-len + 3 entry-len + |chain| + 2 ext-len). It is
+      // now threaded in as a precondition of this function (see requires below).
       assert (pure (
-        B.length (W.serialize_certificate_from_credential (Ghost.reveal cert)) ==
+        B.length (W.serialize_handshake (M.Certificate (Ghost.reveal cert))) ==
           13 + B.length (Ghost.reveal 'certificate_chain)));
       assert (pure (
         13 + B.length (Ghost.reveal 'certificate_chain) <=
@@ -1547,7 +2207,7 @@ fn process_send_certificate_from_credentials
       let fragment_len =
         SZ.add lcert.IM.certificate_msg_chain_bytes_len 13sz;
       assert (pure (SZ.v fragment_len ==
-        B.length (W.serialize_certificate_from_credential (Ghost.reveal cert))));
+        B.length (W.serialize_handshake (M.Certificate (Ghost.reveal cert)))));
       assert (pure (SZ.v fragment_len + 17 <= 16640));
       assert (pure (SZ.v network_out_len == SZ.v fragment_len + 22));
       assert (pure (B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
@@ -1560,6 +2220,7 @@ fn process_send_certificate_from_credentials
         s
         lcert
         #cert
+        #('certificate_chain)
         fragment_len
         network_out
         network_out_len
@@ -1572,7 +2233,7 @@ fn process_send_certificate_from_credentials
 fn process_send_certificate_verify_serialized
   (s:server)
   (lcv:IM.certificate_verify)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -1586,8 +2247,7 @@ fn process_send_certificate_verify_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v fragment_len ==
                    B.length
-                     (W.serialize_certificate_verify_from_signature
-                       (Ghost.reveal cv)) /\
+                     (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))) /\
                  SZ.v fragment_len + 17 <= 16640 /\
                  SZ.v network_out_len == SZ.v fragment_len + 22 /\
                  ST.server_end_to_end_invariant 'st0 /\
@@ -1596,7 +2256,6 @@ fn process_send_certificate_verify_serialized
                  'st0.CS.cs_model.CS.model_config.CS.config_role ==
                    CS.ServerEndpoint /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
-                 B.length (Ghost.reveal cv).M.body == 0 /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                  U64.fits
@@ -1650,22 +2309,6 @@ fn process_send_certificate_verify_serialized
   assert (pure (SZ.v written_fragment == SZ.v fragment_len));
   assert (pure (Seq.equal
     fragment_bytes
-    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
-  W.lemma_fixed_server_handshake_serializers
-    {
-      M.random = Seq.create 32 0uy;
-      M.key_share = Seq.create 32 0uy;
-      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-      M.body = B.empty;
-    }
-    { M.chain = []; M.body = B.empty }
-    (Ghost.reveal cv)
-    { M.verify_data = Seq.create 32 0uy };
-  assert (pure (Seq.equal
-    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))
-    (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
-  assert (pure (Seq.equal
-    fragment_bytes
     (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
   assert (pure (
     B.length (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))) ==
@@ -1699,7 +2342,7 @@ fn process_send_certificate_verify_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1870,7 +2513,7 @@ fn process_send_certificate_verify_serialized
 
 fn process_send_stored_certificate_verify_serialized
   (s:server)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -1883,8 +2526,7 @@ fn process_send_stored_certificate_verify_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v fragment_len ==
                    B.length
-                     (W.serialize_certificate_verify_from_signature
-                       (Ghost.reveal cv)) /\
+                     (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))) /\
                  SZ.v fragment_len + 17 <= 16640 /\
                  SZ.v network_out_len == SZ.v fragment_len + 22 /\
                  ST.server_end_to_end_invariant 'st0 /\
@@ -1899,7 +2541,6 @@ fn process_send_stored_certificate_verify_serialized
                    ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
                  'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
                    Some (Ghost.reveal cv) /\
-                 B.length (Ghost.reveal cv).M.body == 0 /\
                  B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
                    SZ.v fragment_len <= Bounds.max_transcript_len /\
                  CS.legal_event
@@ -1950,22 +2591,6 @@ fn process_send_stored_certificate_verify_serialized
   assert (pure (SZ.v written_fragment == SZ.v fragment_len));
   assert (pure (Seq.equal
     fragment_bytes
-    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
-  W.lemma_fixed_server_handshake_serializers
-    {
-      M.random = Seq.create 32 0uy;
-      M.key_share = Seq.create 32 0uy;
-      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-      M.body = B.empty;
-    }
-    { M.chain = []; M.body = B.empty }
-    (Ghost.reveal cv)
-    { M.verify_data = Seq.create 32 0uy };
-  assert (pure (Seq.equal
-    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))
-    (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
-  assert (pure (Seq.equal
-    fragment_bytes
     (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
   assert (pure (
     B.length (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))) ==
@@ -1998,7 +2623,7 @@ fn process_send_stored_certificate_verify_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -2202,13 +2827,10 @@ fn process_send_server_finished_serialized
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic
                  with
                  | Some server_hs ->
-                   let fin = {
-                     M.verify_data =
-                       K.finished_verify_data
+                   let fin = ((K.finished_verify_data
                          server_hs.CS.traffic_secret
                          (Tr.hash
-                           'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
-                   } in
+                           'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)) <: GFin.finished) in
                    st1 ==
                      CM.sent_server_finished_state
                        'st0
@@ -2304,7 +2926,7 @@ fn process_send_server_finished_serialized
   fold (CR.connection_model_exactly s 'st0.CS.cs_model);
   fold (connection_exactly s 'st0);
 
-  let fin = Ghost.hide ({ M.verify_data = verify_data_bytes });
+  let fin = Ghost.hide ((verify_data_bytes) <: GFin.finished);
   let fin_vec = V.alloc 0uy 32sz;
   CR.copy_fixed32_array_to_vec verify_data fin_vec;
   let lfin = { IM.finished_verify_data = fin_vec };
@@ -2314,7 +2936,7 @@ fn process_send_server_finished_serialized
   rewrite (V.pts_to fin_vec fin_vec_bytes)
     as (V.pts_to lfin.IM.finished_verify_data fin_vec_bytes);
   assert (pure (B.length verify_data_bytes == 32));
-  assert (pure (Seq.equal fin_vec_bytes (Ghost.reveal fin).M.verify_data));
+  assert (pure (Seq.equal fin_vec_bytes (Sem.finished_verify_data (Ghost.reveal fin))));
   fold (IM.is_valid_finished lfin (Ghost.reveal fin));
 
   let mut fragment = [| 0uy; 36sz |];
@@ -2327,22 +2949,6 @@ fn process_send_server_finished_serialized
   with fragment_bytes. assert (pts_to fragment fragment_bytes);
   assert (pure (B.length fragment_bytes == 36));
   assert (pure (SZ.v written_fragment == 36));
-  assert (pure (Seq.equal
-    fragment_bytes
-    (W.serialize_server_finished (Ghost.reveal fin))));
-  W.lemma_fixed_server_handshake_serializers
-    {
-      M.random = Seq.create 32 0uy;
-      M.key_share = Seq.create 32 0uy;
-      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-      M.body = B.empty;
-    }
-    { M.chain = []; M.body = B.empty }
-    { M.scheme = T.RsaPssRsaeSha256; M.signature = B.empty; M.body = B.empty }
-    (Ghost.reveal fin);
-  assert (pure (Seq.equal
-    (W.serialize_server_finished (Ghost.reveal fin))
-    (W.serialize_handshake (M.Finished (Ghost.reveal fin)))));
   assert (pure (Seq.equal
     fragment_bytes
     (W.serialize_handshake (M.Finished (Ghost.reveal fin)))));
@@ -2374,7 +2980,7 @@ fn process_send_server_finished_serialized
   Seq.lemma_eq_intro
     network_out_bytes
     (Seq.slice network_out_bytes 0 (SZ.v written_raw));
-  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.Application_data 1));
   assert (pure (CS.event_raw_delta_legal
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {

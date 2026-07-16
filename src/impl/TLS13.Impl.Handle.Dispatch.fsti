@@ -88,4 +88,12 @@ fn dispatch_network_event
                   network_out_bytes
                   app_out_bytes /\
                 CT.some_legal_response 'st0 st1 resp network_out_bytes app_out_bytes /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    st1
+                    resp
+                    network_out_bytes
+                    app_out_bytes) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))

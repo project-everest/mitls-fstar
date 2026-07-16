@@ -3,6 +3,7 @@ module TLS13.ConnectionState.ServerCertificateVerifyEvent
 module CL = TLS13.ConnectionLog
 module ID = FStar.IndefiniteDescription
 module M = TLS13.Messages
+module GCV = TLS13.Wire.Generated.CertificateVerify
 module RTC = FStar.ReflexiveTransitiveClosure
 module T = TLS13.Types
 
@@ -47,7 +48,7 @@ let rec lemma_contains_sent_certificate_verify_append_snoc
 
 let rec lemma_contains_sent_certificate_verify_snoc_intro
   (events:list conn_event)
-  (cv:M.certificate_verify)
+  (cv:GCV.certificateVerify)
   : Lemma
       (ensures
         contains_sent_certificate_verify
@@ -85,7 +86,7 @@ let rec lemma_contains_sent_certificate_verify_split
        (match msg.CL.message_direction, msg.CL.message_value with
         | CL.Sent, M.TlsHandshake (M.CertificateVerify cv) ->
           introduce exists (prefix:list conn_event)
-            (cv':M.certificate_verify)
+            (cv':GCV.certificateVerify)
             (suffix:list conn_event).
             events ==
               prefix @
@@ -115,7 +116,7 @@ let rec lemma_contains_sent_certificate_verify_split
           with _.
           (
             introduce exists (prefix':list conn_event)
-              (cv':M.certificate_verify)
+              (cv':GCV.certificateVerify)
               (suffix':list conn_event).
               events ==
                 prefix' @
@@ -146,7 +147,7 @@ let rec lemma_contains_sent_certificate_verify_split
        with _.
        (
          introduce exists (prefix':list conn_event)
-           (cv':M.certificate_verify)
+           (cv':GCV.certificateVerify)
            (suffix':list conn_event).
            events ==
              prefix' @
@@ -343,8 +344,8 @@ let lemma_step_tls_message_server_certificate_verify_sent_event_log
   | M.TlsApplicationData _, ControlApplicationData
   | M.TlsIgnoredPostHandshake _, ControlApplicationData
   | M.TlsKeyUpdate _, ControlApplicationData
-  | M.TlsAlert T.CloseNotify, ControlApplicationData
-  | M.TlsAlert T.CloseNotify, ControlClosing
+  | M.TlsAlert T.Close_notify, ControlApplicationData
+  | M.TlsAlert T.Close_notify, ControlClosing
   | M.TlsChangeCipherSpec, ControlHandshaking _ ->
     assert (model'.model_config == model.model_config);
     if model'.model_config.config_role == ServerEndpoint /\

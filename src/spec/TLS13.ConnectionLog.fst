@@ -903,8 +903,8 @@ let state_event_of_tls_message (msg:directed_message tls_message) : GTot (option
   | Sent, TlsHandshake (M.Finished fin) -> Some (S.SendClientFinished fin)
   | Sent, TlsApplicationData bytes -> Some (S.SendApplicationData bytes)
   | Received, TlsApplicationData bytes -> Some (S.RecvApplicationData bytes)
-  | Sent, TlsAlert T.CloseNotify -> Some S.SendCloseNotify
-  | Received, TlsAlert T.CloseNotify -> Some S.RecvCloseNotify
+  | Sent, TlsAlert T.Close_notify -> Some S.SendCloseNotify
+  | Received, TlsAlert T.Close_notify -> Some S.RecvCloseNotify
   | _, TlsAlert alert -> Some (S.Fail (T.AlertError alert))
   | _, TlsChangeCipherSpec -> None
   | _, _ -> None
@@ -1049,10 +1049,10 @@ let received_app_event (bytes:B.bytes) : host_event =
   NetworkEvent { message_direction = Received; message_value = TlsApplicationData bytes }
 
 let sent_close_notify_event : host_event =
-  NetworkEvent { message_direction = Sent; message_value = TlsAlert T.CloseNotify }
+  NetworkEvent { message_direction = Sent; message_value = TlsAlert T.Close_notify }
 
 let received_close_notify_event : host_event =
-  NetworkEvent { message_direction = Received; message_value = TlsAlert T.CloseNotify }
+  NetworkEvent { message_direction = Received; message_value = TlsAlert T.Close_notify }
 
 let local_fail_event (err:T.tls_error) : host_event =
   LocalEvent (LocalFail err)
@@ -2757,7 +2757,7 @@ let lemma_step_read_alert_failed
                 raw_view.app_view == view0.app_view /\
                 raw_io_log_extends view0.raw_log raw_view.raw_log /\
                 raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
-                alert <> T.CloseNotify /\
+                alert <> T.Close_notify /\
                 state == S.fail view0.state (T.AlertError alert))
       (ensures step
         view0

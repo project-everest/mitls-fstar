@@ -8,6 +8,7 @@ module CSL = TLS13.ConnectionState.Lemmas
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
+module Sem = TLS13.Wire.Semantics
 module ID = FStar.IndefiniteDescription
 module Seq = FStar.Seq
 module SM = TLS13.StateMachine
@@ -106,9 +107,9 @@ let lemma_client_state_correct_raw_to_message_replay
 =
   CSL.lemma_connection_state_raw_to_message_replay st
 
-let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
+let tls_decode_error : T.tls_error = T.AlertError T.Decode_error
 
-let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage
+let tls_unexpected_message_error : T.tls_error = T.AlertError T.Unexpected_message
 
 let tls_bad_finished_error : T.tls_error = T.BadFinished
 
@@ -171,7 +172,7 @@ let local_input_wf
          st.CS.cs_model.CS.model_config.CS.config_server_name
          st.CS.cs_model.CS.model_config.CS.config_validation_time
          st.CS.cs_model.CS.model_config.CS.config_trust_store
-         cert.M.chain ==
+         (Sem.certificate_entries cert) ==
            Some (local_validation_peer st payload) /\
        CS.legal_event
          st.CS.cs_model
@@ -186,10 +187,10 @@ let local_input_wf
            st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input with
      | Some cv, Some peer, Some verify_input ->
        C.verify_signature
-         cv.M.scheme
+         (Sem.certificateVerify_scheme cv)
          peer.X.leaf_public_key
          verify_input
-         cv.M.signature == true /\
+         (Sem.certificateVerify_signature_bytes cv) == true /\
        CS.legal_event
          st.CS.cs_model
          (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv))
@@ -1432,7 +1433,7 @@ let protected_decoder_fragment_relation
   : prop =
   exists outer_fragment.
     WS.parse_record_wire raw_received ==
-     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+     Some (T.Application_data, outer_fragment, B.length raw_received) /\
     (exists opened.
      protected_record_opened st0 raw_received outer_fragment opened /\
      (exists plaintext.
@@ -1446,7 +1447,7 @@ let protected_record_decodes_to_message
   : prop =
   exists outer_fragment opened plaintext.
     WS.parse_record_wire raw_received ==
-       Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+       Some (T.Application_data, outer_fragment, B.length raw_received) /\
     protected_record_opened st0 raw_received outer_fragment opened /\
     WS.parse_plaintext opened == Some plaintext /\
     WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
@@ -1465,7 +1466,7 @@ let lemma_protected_decoder_fragment_relation_decodes_to_message
 =
   assert (exists outer_fragment.
     WS.parse_record_wire raw_received ==
-     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+     Some (T.Application_data, outer_fragment, B.length raw_received) /\
     (exists opened.
      protected_record_opened st0 raw_received outer_fragment opened /\
      (exists plaintext.
@@ -1476,7 +1477,7 @@ let lemma_protected_decoder_fragment_relation_decodes_to_message
        B.bytes
        (fun outer_fragment ->
          WS.parse_record_wire raw_received ==
-           Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+           Some (T.Application_data, outer_fragment, B.length raw_received) /\
          (exists opened.
            protected_record_opened st0 raw_received outer_fragment opened /\
            (exists plaintext.
@@ -1522,7 +1523,7 @@ let lemma_protected_decoder_fragment_relation_decodes_to_message
   assert (WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg);
   assert (exists outer_fragment' opened' plaintext'.
     WS.parse_record_wire raw_received ==
-       Some (T.ApplicationData, outer_fragment', B.length raw_received) /\
+       Some (T.Application_data, outer_fragment', B.length raw_received) /\
     protected_record_opened st0 raw_received outer_fragment' opened' /\
     WS.parse_plaintext opened' == Some plaintext' /\
     WS.parse_tls_message plaintext'.M.content_type plaintext'.M.fragment == Some msg)
@@ -1533,7 +1534,7 @@ let protected_record_decode_uses_scheduled_read_key
   : prop =
   exists outer_fragment opened.
     WS.parse_record_wire raw_received ==
-     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+     Some (T.Application_data, outer_fragment, B.length raw_received) /\
     protected_record_opened st0 raw_received outer_fragment opened /\
     CS.record_read_key_schedule_projection st0.CS.cs_model
 
@@ -1558,7 +1559,7 @@ let lemma_protected_record_decodes_to_received_single_decode
 =
   assert (exists outer_fragment opened plaintext.
     WS.parse_record_wire raw_received ==
-       Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+       Some (T.Application_data, outer_fragment, B.length raw_received) /\
     protected_record_opened st0 raw_received outer_fragment opened /\
     WS.parse_plaintext opened == Some plaintext /\
     WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg);
@@ -1567,7 +1568,7 @@ let lemma_protected_record_decodes_to_received_single_decode
       B.bytes
       (fun outer_fragment -> exists opened plaintext.
         WS.parse_record_wire raw_received ==
-          Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+          Some (T.Application_data, outer_fragment, B.length raw_received) /\
         protected_record_opened st0 raw_received outer_fragment opened /\
         WS.parse_plaintext opened == Some plaintext /\
         WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg) in
@@ -1576,7 +1577,7 @@ let lemma_protected_record_decodes_to_received_single_decode
       B.bytes
       (fun opened -> exists plaintext.
         WS.parse_record_wire raw_received ==
-          Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+          Some (T.Application_data, outer_fragment, B.length raw_received) /\
         protected_record_opened st0 raw_received outer_fragment opened /\
         WS.parse_plaintext opened == Some plaintext /\
         WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg) in
@@ -1585,7 +1586,7 @@ let lemma_protected_record_decodes_to_received_single_decode
       M.plaintext
       (fun plaintext ->
         WS.parse_record_wire raw_received ==
-          Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+          Some (T.Application_data, outer_fragment, B.length raw_received) /\
         protected_record_opened st0 raw_received outer_fragment opened /\
         WS.parse_plaintext opened == Some plaintext /\
         WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg) in
@@ -1613,7 +1614,7 @@ let lemma_protected_decoder_fragment_relation_read_key_schedule_projection
 =
   assert (exists outer_fragment.
     WS.parse_record_wire raw_received ==
-     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+     Some (T.Application_data, outer_fragment, B.length raw_received) /\
     (exists opened.
      protected_record_opened st0 raw_received outer_fragment opened /\
      (exists plaintext.
@@ -1624,7 +1625,7 @@ let lemma_protected_decoder_fragment_relation_read_key_schedule_projection
      B.bytes
      (fun outer_fragment ->
        WS.parse_record_wire raw_received ==
-         Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+         Some (T.Application_data, outer_fragment, B.length raw_received) /\
        (exists opened.
          protected_record_opened st0 raw_received outer_fragment opened /\
          (exists plaintext.
@@ -1650,7 +1651,7 @@ let lemma_protected_decoder_fragment_relation_read_key_schedule_projection
   assert (CS.record_read_key_schedule_projection st0.CS.cs_model);
   assert (exists outer_fragment' opened'.
     WS.parse_record_wire raw_received ==
-     Some (T.ApplicationData, outer_fragment', B.length raw_received) /\
+     Some (T.Application_data, outer_fragment', B.length raw_received) /\
     protected_record_opened st0 raw_received outer_fragment' opened' /\
     CS.record_read_key_schedule_projection st0.CS.cs_model)
 
@@ -1663,7 +1664,7 @@ let decoder_fragment_relation
   exists outer_ct outer_fragment.
     WS.parse_record_wire raw_received ==
       Some (outer_ct, outer_fragment, B.length raw_received) /\
-    (if outer_ct == T.ApplicationData
+    (if outer_ct == T.Application_data
      then protected_decoder_fragment_relation st0 content_type fragment raw_received
      else
        L.content_type_matches content_type outer_ct /\
@@ -1765,29 +1766,29 @@ let lemma_decoder_fragment_relation_protected_from_raw_records
   : Lemma
       (requires
         decoder_fragment_relation st0 content_type fragment raw_received /\
-        CS.raw_records_exactly raw_received T.ApplicationData 1)
+        CS.raw_records_exactly raw_received T.Application_data 1)
       (ensures protected_decoder_fragment_relation st0 content_type fragment raw_received)
 =
-  CSL.lemma_raw_records_exactly_one_parse_record raw_received T.ApplicationData;
+  CSL.lemma_raw_records_exactly_one_parse_record raw_received T.Application_data;
   assert (exists app_fragment.
     WS.parse_record raw_received ==
-      Some (T.ApplicationData, app_fragment, B.length raw_received));
+      Some (T.Application_data, app_fragment, B.length raw_received));
   let app_fragment =
     ID.indefinite_description_ghost
       B.bytes
       (fun app_fragment ->
         WS.parse_record raw_received ==
-          Some (T.ApplicationData, app_fragment, B.length raw_received)) in
+          Some (T.Application_data, app_fragment, B.length raw_received)) in
   WS.lemma_parse_record_implies_parse_record_wire raw_received;
   assert (WS.parse_record_wire raw_received ==
-    Some (T.ApplicationData, app_fragment, B.length raw_received));
+    Some (T.Application_data, app_fragment, B.length raw_received));
   let outer_ct =
     ID.indefinite_description_ghost
       T.content_type
       (fun outer_ct -> exists outer_fragment.
         WS.parse_record_wire raw_received ==
           Some (outer_ct, outer_fragment, B.length raw_received) /\
-        (if outer_ct == T.ApplicationData
+        (if outer_ct == T.Application_data
          then protected_decoder_fragment_relation st0 content_type fragment raw_received
          else
            L.content_type_matches content_type outer_ct /\
@@ -1798,7 +1799,7 @@ let lemma_decoder_fragment_relation_protected_from_raw_records
       (fun outer_fragment ->
         WS.parse_record_wire raw_received ==
           Some (outer_ct, outer_fragment, B.length raw_received) /\
-        (if outer_ct == T.ApplicationData
+        (if outer_ct == T.Application_data
          then protected_decoder_fragment_relation st0 content_type fragment raw_received
          else
            L.content_type_matches content_type outer_ct /\
@@ -1806,8 +1807,8 @@ let lemma_decoder_fragment_relation_protected_from_raw_records
   assert (WS.parse_record_wire raw_received ==
     Some (outer_ct, outer_fragment, B.length raw_received));
   assert (WS.parse_record_wire raw_received ==
-    Some (T.ApplicationData, app_fragment, B.length raw_received));
-  assert (outer_ct == T.ApplicationData);
+    Some (T.Application_data, app_fragment, B.length raw_received));
+  assert (outer_ct == T.Application_data);
   assert (protected_decoder_fragment_relation st0 content_type fragment raw_received)
 
 let network_input_message_projection
@@ -1838,11 +1839,11 @@ let network_input_message_projection
    else
      CS.raw_records_exactly
        raw_received
-       T.ApplicationData
+       T.Application_data
        (CS.protected_record_count CL.Received msg) /\
      CS.raw_records_segmented
        raw_received
-       T.ApplicationData
+       T.Application_data
        (CS.protected_record_count CL.Received msg))
 
 let lemma_network_input_wf_message_projection
@@ -1880,7 +1881,7 @@ let lemma_network_input_wf_message_projection
   else (
     assert (CS.raw_records_exactly
       raw_received
-      T.ApplicationData
+      T.Application_data
       (CS.protected_record_count CL.Received msg));
     assert (CS.protected_record_count CL.Received msg == 1);
     lemma_decoder_fragment_relation_protected_from_raw_records
@@ -1906,7 +1907,7 @@ let lemma_network_input_wf_message_projection
       raw_received);
     assert (CS.raw_records_segmented
       raw_received
-      T.ApplicationData
+      T.Application_data
       (CS.protected_record_count CL.Received msg))
   )
 
@@ -2040,7 +2041,7 @@ let local_event_kind_matches
      | _ -> False)
   | LocalSendCloseNotify, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
-    msg.CL.message_value == M.TlsAlert T.CloseNotify
+    msg.CL.message_value == M.TlsAlert T.Close_notify
   | LocalSendKeyUpdate, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
     msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
@@ -2544,10 +2545,13 @@ let network_bytes_step_correct
    response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out) \/
   (SZ.v buffer_resp.consumed_len <= B.length network_input /\
    ((resp.status == DecodeError /\ buffer_resp.consumed_len == 0sz) \/
+    (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz) \/
     raw_record_parse_success
      (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
    (resp.status == DecodeError ==>
     decode_error_response st0 st1 resp network_out app_out) /\
+   (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz ==>
+    unexpected_message_response st0 st1 resp network_out app_out) /\
    some_legal_response st0 st1 resp network_out app_out /\
    some_legal_response_for_network_prefix
     st0
@@ -4672,6 +4676,34 @@ let lemma_decode_error_response_network_out_seal_projection
       st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
     CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
 
+let lemma_unexpected_message_response_network_out_seal_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires unexpected_message_response st0 st1 resp network_out app_out)
+      (ensures response_network_out_seal_projection st0 st1 resp network_out app_out)
+=
+  assert (legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+    B.empty
+    B.empty
+    network_out
+    app_out);
+  assert (CS.sent_event_seal_projection
+    st0.CS.cs_model
+    (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+    B.empty);
+  assert (exists ev' raw_sent' raw_received'.
+    legal_response_for_event
+      st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
+    CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
+
 let lemma_decoded_message_event_response_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4795,10 +4827,13 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
     assert (resp.status == DecodeError ==> False);
     assert (SZ.v buffer_resp.consumed_len <= B.length network_input /\
       ((resp.status == DecodeError /\ buffer_resp.consumed_len == 0sz) \/
+       (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz) \/
        raw_record_parse_success
         (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
       (resp.status == DecodeError ==>
        decode_error_response st0 st1 resp network_out app_out) /\
+      (resp.status == IllegalTransition /\ buffer_resp.consumed_len == 0sz ==>
+       unexpected_message_response st0 st1 resp network_out app_out) /\
       some_legal_response st0 st1 resp network_out app_out /\
       some_legal_response_for_network_prefix
         st0
@@ -4808,6 +4843,17 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
         buffer_resp.consumed_len
         network_out
         app_out);
+    if resp.status == IllegalTransition && buffer_resp.consumed_len = 0sz then (
+      assert (unexpected_message_response st0 st1 resp network_out app_out);
+      lemma_unexpected_message_response_network_out_seal_projection
+        st0
+        st1
+        resp
+        network_out
+        app_out;
+      assert (network_bytes_network_out_seal_projection
+        st0 st1 buffer_resp network_input network_out app_out)
+    ) else (
     assert (raw_record_parse_success
       (network_consumed_prefix network_input buffer_resp.consumed_len));
     if buffer_resp.consumed_len = 0sz then (
@@ -4872,6 +4918,7 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
       app_out;
     assert (network_bytes_network_out_seal_projection
       st0 st1 buffer_resp network_input network_out app_out)
+    )
   )
 #pop-options
 
@@ -5638,6 +5685,20 @@ let lemma_decode_error_response_for_network_input
   (app_out:B.bytes)
   : Lemma
       (requires decode_error_response st0 st1 resp network_out app_out)
+      (ensures some_legal_response_for_network_input
+        st0 st1 resp network_input network_out app_out)
+=
+  ()
+
+let lemma_unexpected_message_response_for_network_input
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires unexpected_message_response st0 st1 resp network_out app_out)
       (ensures some_legal_response_for_network_input
         st0 st1 resp network_input network_out app_out)
 =

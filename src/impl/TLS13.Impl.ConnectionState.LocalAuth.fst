@@ -40,6 +40,13 @@ module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module Sem = TLS13.Wire.Semantics
+module GCH = TLS13.Wire.Generated.ClientHello
+module GSH = TLS13.Wire.Generated.ServerHello
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GCert = TLS13.Wire.Generated.Certificate
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GFin = TLS13.Wire.Generated.Finished
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -263,7 +270,7 @@ fn mark_validated_certificate
 
 fn mark_verified_certificate_signature
   (c:connection_state)
-  (#cv:erased M.certificate_verify)
+  (#cv:erased GCV.certificateVerify)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            pure (st0.CS.cs_model.CS.model_control ==
@@ -423,7 +430,7 @@ fn mark_verified_server_finished
   (c:connection_state)
   (payload:array U8.t)
   (payload_len:SZ.t)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to payload 'payload_bytes **
@@ -619,7 +626,7 @@ fn mark_verified_server_finished
 
 fn mark_verified_stored_server_finished
   (c:connection_state)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            pure (st0.CS.cs_model.CS.model_control ==
@@ -696,7 +703,7 @@ fn mark_verified_client_finished
   (c:connection_state)
   (payload:array U8.t)
   (payload_len:SZ.t)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to payload 'payload_bytes **
@@ -882,7 +889,7 @@ fn mark_verified_client_finished
 
 fn mark_verified_stored_client_finished
   (c:connection_state)
-  (#fin:erased M.finished)
+  (#fin:erased GFin.finished)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==

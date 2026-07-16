@@ -70,7 +70,14 @@ fn handle_unexpected_application_input
                   resp
                   'old_network_out
                   'old_app_out /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+                    resp
+                    'old_network_out
+                    'old_app_out))
 {
   with m. assert (pure True);
   L.free_tls_message (L.LTlsApplicationData lapp);
@@ -172,7 +179,15 @@ fn handle_application_data
                       'old_network_out
                       app_out_bytes /\
                     Seq.equal bytes (CT.response_app_out resp app_out_bytes)) /\
-                (resp.CT.status == CT.NeedMoreInput ==> False))
+                (resp.CT.status == CT.NeedMoreInput ==> False) /\
+                (resp.CT.status == CT.IllegalTransition ==>
+                  CT.unexpected_message_response
+                    'st0
+                    st1
+                    resp
+                    'old_network_out
+                    app_out_bytes) /\
+                (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   let ready = CQ.can_receive_application_data c;
   if ready {
@@ -266,6 +281,7 @@ fn handle_application_data
               'old_network_out
               app_out_bytes /\
             Seq.equal bytes (CT.response_app_out resp app_out_bytes)));
+        assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
     resp
   } else {
     let resp =
@@ -292,6 +308,13 @@ fn handle_application_data
           'old_network_out
           'old_app_out /\
         Seq.equal bytes (CT.response_app_out resp 'old_app_out)));
+    assert (pure (resp.CT.status == CT.IllegalTransition ==>
+      CT.unexpected_message_response
+        'st0
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
     resp
   }
 }
