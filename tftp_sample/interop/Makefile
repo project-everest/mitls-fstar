@@ -30,7 +30,7 @@ EXTRACT_DIR := $(PARENT)/_extract
 STUBS_DIR   := $(PARENT)/../c_stubs
 VERIFIED_DIR:= $(PARENT)/verified
 EVERPARSE_HOME ?= $(abspath $(PARENT)/../tools/everparse)
-KRML_HOME   ?= $(EVERPARSE_HOME)/opt/FStar/karamel
+KRML_HOME   ?= $(EVERPARSE_HOME)/opt/karamel
 KRML_INCLUDE = $(KRML_HOME)/include
 KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 

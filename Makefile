@@ -13,7 +13,7 @@
 EVERPARSE_HOME ?= $(CURDIR)/tools/everparse
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE  ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME  ?= $(FSTAR_HOME)/karamel
+KRML_HOME  ?= $(EVERPARSE_HOME)/opt/karamel
 # Use the installed KaRaMeL binary (opt/FStar/karamel/out/bin/krml): unlike the
 # in-tree `krml` symlink to _build/default/src/Karamel.exe, it self-locates its
 # krmllib/share, so no extra symlinks are needed.
