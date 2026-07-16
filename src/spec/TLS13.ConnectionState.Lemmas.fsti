@@ -875,3 +875,40 @@ val lemma_handshake_record_direction_material_matches_key_schedule_for_role
             TrafficHandshake
             (traffic_label_for_endpoint_direction role dir))
           model)
+
+(** STAGE 2c-i: any installed handshake traffic slot of a consistent connection
+    state matches the expected derived key-schedule material.  Supplies the
+    per-endpoint [traffic_material_matches_expected_derived_material] inputs of
+    the generic bridge below at the handshake traffic epoch. *)
+val lemma_connection_state_consistent_handshake_traffic_material_matches_expected
+  (st:connection_state)
+  (label:traffic_label)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some?
+          (traffic_material_for_label
+            st.cs_model.model_handshake.hs_keys
+            TrafficHandshake
+            label))
+      (ensures
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficHandshake label)
+          st)
+
+(** Generic key-schedule bridge: cross-endpoint agreement of the derived
+    key/iv material together with each endpoint's [matches_expected] fact
+    yields cross-endpoint agreement of the INSTALLED traffic key/iv material.
+    Instantiated at the handshake traffic epoch by the STAGE 2c-i extractors. *)
+val lemma_key_schedule_traffic_record_material_agrees_from_expected_material
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        peer_derived_key_material_agrees (TrafficKey traffic_id) client server /\
+        peer_derived_key_material_agrees (TrafficIV traffic_id) client server /\
+        traffic_material_matches_expected_derived_material traffic_id client /\
+        traffic_material_matches_expected_derived_material traffic_id server)
+      (ensures
+        key_schedule_traffic_record_material_agrees traffic_id client server)

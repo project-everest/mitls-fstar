@@ -1257,6 +1257,70 @@ val lemma_client_server_handshake_record_material_client_to_server_agrees
           client
           server)
 
+(** STAGE 2c-i: handshake-epoch [peer_record_material_agrees] ("H_mat") produced
+    directly from facts available in [tls_system_inv] at a protected-handshake
+    send/deliver.  The cross-endpoint key/iv agreement
+    [key_schedule_traffic_record_material_agrees] required by the STAGE 2b
+    extractor is CONSTRUCTED here from:
+
+      (1) [supported_profile_all_derived_key_material_agrees] — the derived
+          key-schedule material agreement available in [tls_system_inv]
+          (established from [hello_key_shares_ok] by the pairing key-schedule
+          lemmas); it bundles the per-endpoint agreement of the derived
+          handshake [TrafficKey]/[TrafficIV] material, and
+
+      (2) [lemma_connection_state_consistent_handshake_traffic_material_matches_expected]
+          — each endpoint's installed handshake traffic slot equals its
+          schedule-expected material (STAGE 2c-i reachable-shape invariant),
+
+    combined by the generic bridge
+    [lemma_key_schedule_traffic_record_material_agrees_from_expected_material].
+    The installed-slot facts (which also feed the accessor) come from the record
+    slot being at the [R.Handshake] epoch, exactly as in STAGE 2b. *)
+val lemma_handshake_peer_record_material_server_to_client_agrees_from_hello
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.connection_state_consistent client /\
+        CS.connection_state_consistent server /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+        ~(CS.ControlFailed? server.CS.cs_model.CS.model_control) /\
+        server.CS.cs_model.CS.model_record.CS.record_write.R.epoch ==
+          R.Handshake /\
+        client.CS.cs_model.CS.model_record.CS.record_read.R.epoch ==
+          R.Handshake)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic)
+          client
+          server)
+
+val lemma_handshake_peer_record_material_client_to_server_agrees_from_hello
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.connection_state_consistent client /\
+        CS.connection_state_consistent server /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+        ~(CS.ControlFailed? server.CS.cs_model.CS.model_control) /\
+        client.CS.cs_model.CS.model_record.CS.record_write.R.epoch ==
+          R.Handshake /\
+        server.CS.cs_model.CS.model_record.CS.record_read.R.epoch ==
+          R.Handshake)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic)
+          client
+          server)
+
 val lemma_client_to_server_protected_message_decode_from_peer_record_material
   (epoch:CS.traffic_epoch)
   (client:CS.connection_state)
