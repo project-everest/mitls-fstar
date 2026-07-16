@@ -192,6 +192,27 @@ val lemma_client_hs_server_hello_received_empty_keys_encrypted_extensions_illega
           })))
       (ensures False)
 
+(**
+  One-step rank bound (exposed for the System-level length invariant): a single
+  legal client-role step decreases [client_application_progress_rank] by at most
+  one (unless it lands in a failed control).  This is the "at most +1 progress"
+  half used to force the strict-progress System guard to advance the event-log
+  length by exactly one per handshake step.
+**)
+val lemma_client_application_progress_rank_step
+  (model:CS.connection_model)
+  (ev:CS.conn_event)
+  (model':CS.connection_model)
+  : Lemma
+      (requires
+        model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        CS.legal_event model ev /\
+        CS.step_model model ev == Some model')
+      (ensures
+        CS.ControlFailed? model'.CS.model_control \/
+        client_application_progress_rank model <=
+        client_application_progress_rank model' + 1)
+
 val lemma_client_application_progress_rank_replay_lower_bound
   (model:CS.connection_model)
   (events:list CS.conn_event)

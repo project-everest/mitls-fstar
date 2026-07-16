@@ -519,3 +519,37 @@ val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
+
+val lemma_installed_protected_projection_replay_witnesses_from_milestones_and_hello_key_shares
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        clean16_staged_boundary_derivation_milestones client server /\
+        WFL.paired_cleartext_hello_key_shares client server)
+      (ensures
+        PNTPPD.installed_protected_projection_replay_witnesses client server)
+
+val lemma_paired_protected_witnesses_from_clean16_valid_byte_traces_and_hello_key_shares
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        PNTN.paired_supported_no_tail_valid_byte_traces_clean16
+          client_initial
+          server_initial
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        WFL.paired_cleartext_hello_key_shares client server)
+      (ensures
+        Pairing.paired_protected_handshake_event_projection_pair_witnesses client server)
