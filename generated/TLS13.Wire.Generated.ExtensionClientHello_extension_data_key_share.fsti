@@ -35,14 +35,14 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.KeyShareClientHello
 
-type extensionClientHello_extension_data_key_share = x:keyShareClientHello{let l = (keyShareClientHello_bytesize (x)) in 0 <= l /\ l <= 65535}
+noextract type extensionClientHello_extension_data_key_share = x:keyShareClientHello{let l = (keyShareClientHello_bytesize (x)) in 0 <= l /\ l <= 65535}
 
-type extensionClientHello_extension_data_key_share' = LP.parse_bounded_vldata_strong_t 0 65535 keyShareClientHello_serializer
+noextract type extensionClientHello_extension_data_key_share' = LP.parse_bounded_vldata_strong_t 0 65535 keyShareClientHello_serializer
 
-inline_for_extraction let synth_extensionClientHello_extension_data_key_share (x: extensionClientHello_extension_data_key_share') : Tot extensionClientHello_extension_data_key_share =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_key_share (x: extensionClientHello_extension_data_key_share') : Tot extensionClientHello_extension_data_key_share =
   [@inline_let] let _ = (keyShareClientHello_bytesize_eq (x)) in x
 
-inline_for_extraction let synth_extensionClientHello_extension_data_key_share_recip (x: extensionClientHello_extension_data_key_share) : Tot extensionClientHello_extension_data_key_share' =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_key_share_recip (x: extensionClientHello_extension_data_key_share) : Tot extensionClientHello_extension_data_key_share' =
   [@inline_let] let _ = (keyShareClientHello_bytesize_eq (x)) in x
 
 inline_for_extraction noextract let extensionClientHello_extension_data_key_share_parser_kind = LP.strong_parser_kind 4 65537 None

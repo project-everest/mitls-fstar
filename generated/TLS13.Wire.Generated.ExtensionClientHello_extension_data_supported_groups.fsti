@@ -35,14 +35,14 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.NamedGroupList
 
-type extensionClientHello_extension_data_supported_groups = x:namedGroupList{let l = (namedGroupList_bytesize (x)) in 0 <= l /\ l <= 65535}
+noextract type extensionClientHello_extension_data_supported_groups = x:namedGroupList{let l = (namedGroupList_bytesize (x)) in 0 <= l /\ l <= 65535}
 
-type extensionClientHello_extension_data_supported_groups' = LP.parse_bounded_vldata_strong_t 0 65535 namedGroupList_serializer
+noextract type extensionClientHello_extension_data_supported_groups' = LP.parse_bounded_vldata_strong_t 0 65535 namedGroupList_serializer
 
-inline_for_extraction let synth_extensionClientHello_extension_data_supported_groups (x: extensionClientHello_extension_data_supported_groups') : Tot extensionClientHello_extension_data_supported_groups =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_supported_groups (x: extensionClientHello_extension_data_supported_groups') : Tot extensionClientHello_extension_data_supported_groups =
   [@inline_let] let _ = (namedGroupList_bytesize_eq (x)) in x
 
-inline_for_extraction let synth_extensionClientHello_extension_data_supported_groups_recip (x: extensionClientHello_extension_data_supported_groups) : Tot extensionClientHello_extension_data_supported_groups' =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_supported_groups_recip (x: extensionClientHello_extension_data_supported_groups) : Tot extensionClientHello_extension_data_supported_groups' =
   [@inline_let] let _ = (namedGroupList_bytesize_eq (x)) in x
 
 inline_for_extraction noextract let extensionClientHello_extension_data_supported_groups_parser_kind = LP.strong_parser_kind 6 65537 None

@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field cert_data*)
 open TLS13.Wire.Generated.CertificateEntry_cert_data
 
@@ -94,7 +92,7 @@ let read_certificateEntry : PPB.copyful_parse certificateEntry_vmatch certificat
   assert_norm (certificateEntry_parser_kind == certificateEntry'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair certificateEntry_cert_data_jumper read_certificateEntry_cert_data () read_certificateEntry_extensions) synth_certificateEntry synth_certificateEntry_recip
 
-let free_certificateEntry : PPB.free_t certificateEntry_vmatch = (PPC.free_pair free_certificateEntry_cert_data free_certificateEntry_extensions)
+let free_certificateEntry : PPB.free_t certificateEntry_vmatch = fun x #v -> ((PPC.free_pair free_certificateEntry_cert_data free_certificateEntry_extensions)) x #v
 
 let write_certificateEntry : PPB.l2r_safe_writer certificateEntry_vmatch certificateEntry_serializer certificateEntry_conv =
   synth_certificateEntry_injective ();

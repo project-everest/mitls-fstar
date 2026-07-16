@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let extensionClientHello_extension_data_supported_versions_parser =
   LP.parse_bounded_vldata 0 65535 supportedVersionsClientHello_parser
 
@@ -46,20 +44,20 @@ let extensionClientHello_extension_data_supported_versions_serializer =
 let extensionClientHello_extension_data_supported_versions_bytesize_eq x = ()
 
 let extensionClientHello_extension_data_supported_versions_validator =
-  PPVD.validate_bounded_vldata 0 65535 supportedVersionsClientHello_validator (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata 0 65535 supportedVersionsClientHello_validator (PPBI.leaf_read_bounded_integer_2 ())
 
 let extensionClientHello_extension_data_supported_versions_jumper =
-  PPVD.jump_bounded_vldata 0 65535 supportedVersionsClientHello_parser (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata 0 65535 supportedVersionsClientHello_parser (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
-let extensionClientHello_extension_data_supported_versions_accessor = PPVD.accessor_bounded_vldata_payload 0 65535 (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+let extensionClientHello_extension_data_supported_versions_accessor = PPVD.accessor_bounded_vldata_payload 0 65535 (PPBI.leaf_read_bounded_integer_2 ())
 
 let read_extensionClientHello_extension_data_supported_versions : PPB.copyful_parse extensionClientHello_extension_data_supported_versions_vmatch extensionClientHello_extension_data_supported_versions_parser extensionClientHello_extension_data_supported_versions_conv =
-  PPVD.copyful_parse_bounded_vldata_payload 0 65535 read_supportedVersionsClientHello (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.copyful_parse_bounded_vldata_payload 0 65535 read_supportedVersionsClientHello (PPBI.leaf_read_bounded_integer_2 ())
 
-let free_extensionClientHello_extension_data_supported_versions : PPB.free_t extensionClientHello_extension_data_supported_versions_vmatch = free_supportedVersionsClientHello
+let free_extensionClientHello_extension_data_supported_versions : PPB.free_t extensionClientHello_extension_data_supported_versions_vmatch = fun x #v -> (free_supportedVersionsClientHello) x #v
 
 let write_extensionClientHello_extension_data_supported_versions : PPB.l2r_safe_writer extensionClientHello_extension_data_supported_versions_vmatch extensionClientHello_extension_data_supported_versions_serializer extensionClientHello_extension_data_supported_versions_conv =
-  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0sz 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) supportedVersionsClientHello_serializer write_supportedVersionsClientHello fits_u64_squash
+  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0ul 65535 65535ul 2 2sz supportedVersionsClientHello_serializer write_supportedVersionsClientHello
 
 let extensionClientHello_extension_data_supported_versions_bytesize_eqn x =
   (supportedVersionsClientHello_bytesize_eq (x))

@@ -1913,6 +1913,7 @@ let rec lemma_connection_view_consistent_note_app_received_chunks
 ///   (5) advances read_state.seq by exactly 1 from the k-chunk view
 /// Core can call this single lemma per loop iteration instead of combining several
 /// separate lemma calls inside the Pulse proof context.
+#push-options "--z3rlimit 100"
 let lemma_note_app_received_chunks_loop_step
   (view:connection_view)
   (chunks:list B.bytes)
@@ -1945,6 +1946,7 @@ let lemma_note_app_received_chunks_loop_step
   L.append_assoc view.app_view.app_received chunks [bytes];
   lemma_note_app_received_chunks_pending_fields view (chunks @ [bytes]);
   lemma_note_app_received_chunks_raw_log view (chunks @ [bytes])
+#pop-options
 
 let lemma_note_app_received_chunks_loop_accept_output
   (view:connection_view)

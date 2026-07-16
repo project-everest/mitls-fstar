@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let tLSPlaintext_fragment_parser = LP.parse_bounded_seq_vlbytes 0 16640
 
 noextract let tLSPlaintext_fragment_serializer = LP.serialize_bounded_seq_vlbytes 0 16640
 
 let tLSPlaintext_fragment_bytesize_eq x = ()
 
-let tLSPlaintext_fragment_validator = LSeqB.validate_bounded_seq_vlbytes 0 16640 (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+let tLSPlaintext_fragment_validator = LSeqB.validate_bounded_seq_vlbytes 0 16640 (PPBI.leaf_read_bounded_integer_2 ())
 
-let tLSPlaintext_fragment_jumper = LSeqB.jump_bounded_seq_vlbytes 0 16640 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16640)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+let tLSPlaintext_fragment_jumper = LSeqB.jump_bounded_seq_vlbytes 0 16640 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16640)) (PPBI.leaf_read_bounded_integer_2 ()))
 
-let read_tLSPlaintext_fragment = LSeqB.copyful_parse_bounded_seq_vlbytes 0 16640 (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+let read_tLSPlaintext_fragment = LSeqB.copyful_parse_bounded_seq_vlbytes 0 16640 (PPBI.leaf_read_bounded_integer_2 ())
 
 let free_tLSPlaintext_fragment : PPB.free_t tLSPlaintext_fragment_vmatch = fun x #v -> LSeqB.free_copy_seqbytes x #(Ghost.hide (Ghost.reveal v <: Seq.seq FStar.UInt8.t))
 
-let write_tLSPlaintext_fragment = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 16640 (LSeqB.mk_seq_sizet 16640 fits_u64_squash) 2sz fits_u64_squash
+let write_tLSPlaintext_fragment = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 0ul 16640 16640ul 2sz
 
-let size_tLSPlaintext_fragment = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 16640 (LSeqB.mk_seq_sizet 16640 fits_u64_squash) 2sz fits_u64_squash
+let size_tLSPlaintext_fragment = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 0ul 16640 16640ul 2sz
 
 let tLSPlaintext_fragment_bytesize_eqn x = LP.length_serialize_bounded_seq_vlbytes 0 16640 x
 

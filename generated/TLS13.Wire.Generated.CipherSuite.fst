@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let cipherSuite_repr_parser = LPI.parse_u16
 
 noextract let cipherSuite_repr_serializer = LPI.serialize_u16
@@ -49,7 +47,7 @@ inline_for_extraction noextract let cipherSuite_repr_reader = (PPB.leaf_reader_o
 
 inline_for_extraction noextract let cipherSuite_repr_writer = (LPPI.l2r_leaf_write_u16 ())
 
-inline_for_extraction let synth_cipherSuite (x:LP.maybe_enum_key cipherSuite_enum) : cipherSuite =
+inline_for_extraction noextract let synth_cipherSuite (x:LP.maybe_enum_key cipherSuite_enum) : cipherSuite = 
   match x with
   | LP.Known k -> k
   | LP.Unknown y ->
@@ -57,7 +55,7 @@ inline_for_extraction let synth_cipherSuite (x:LP.maybe_enum_key cipherSuite_enu
     [@inline_let] let _ = assert_norm (LP.list_mem v (LP.list_map snd cipherSuite_enum) == known_cipherSuite_repr v) in
     Unknown_cipherSuite v
 
-inline_for_extraction let synth_cipherSuite_inv (x:cipherSuite) : LP.maybe_enum_key cipherSuite_enum =
+inline_for_extraction noextract let synth_cipherSuite_inv (x:cipherSuite) : LP.maybe_enum_key cipherSuite_enum = 
   match x with
   | Unknown_cipherSuite y ->
     [@inline_let] let v : U16.t = y in
@@ -77,7 +75,7 @@ let lemma_synth_cipherSuite_inv' () : Lemma
     (_ by (LP.forall_maybe_enum_key_unknown_tac ()))
 
 let lemma_synth_cipherSuite_inj () : Lemma
-  (LP.synth_injective synth_cipherSuite) =
+  (LP.synth_injective synth_cipherSuite) = 
   lemma_synth_cipherSuite_inv' ();
   LP.synth_inverse_synth_injective synth_cipherSuite synth_cipherSuite_inv
 
@@ -86,7 +84,6 @@ let lemma_synth_cipherSuite_inv () : Lemma
   (LP.synth_inverse synth_cipherSuite synth_cipherSuite_inv) = allow_inversion cipherSuite; ()
 
 #pop-options
-
 noextract let parse_maybe_cipherSuite_key : LP.parser _ (LP.maybe_enum_key cipherSuite_enum) =
   LP.parse_maybe_enum_key cipherSuite_repr_parser cipherSuite_enum
 
@@ -133,3 +130,4 @@ let free_cipherSuite = PPB.free_leaf
 let write_cipherSuite = PPB.l2r_safe_writer_leaf cipherSuite_serializer 2sz cipherSuite_writer
 
 let size_cipherSuite = PPB.l2r_safe_size_leaf cipherSuite_serializer 2sz
+

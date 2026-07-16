@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let certificateEntry_cert_data_parser = LP.parse_bounded_seq_vlbytes 1 16777215
 
 noextract let certificateEntry_cert_data_serializer = LP.serialize_bounded_seq_vlbytes 1 16777215
 
 let certificateEntry_cert_data_bytesize_eq x = ()
 
-let certificateEntry_cert_data_validator = LSeqB.validate_bounded_seq_vlbytes 1 16777215 (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+let certificateEntry_cert_data_validator = LSeqB.validate_bounded_seq_vlbytes 1 16777215 (PPBI.leaf_read_bounded_integer_3 ())
 
-let certificateEntry_cert_data_jumper = LSeqB.jump_bounded_seq_vlbytes 1 16777215 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 fits_u64_squash)) fits_u64_squash
+let certificateEntry_cert_data_jumper = LSeqB.jump_bounded_seq_vlbytes 1 16777215 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 ()))
 
-let read_certificateEntry_cert_data = LSeqB.copyful_parse_bounded_seq_vlbytes 1 16777215 (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+let read_certificateEntry_cert_data = LSeqB.copyful_parse_bounded_seq_vlbytes 1 16777215 (PPBI.leaf_read_bounded_integer_3 ())
 
 let free_certificateEntry_cert_data : PPB.free_t certificateEntry_cert_data_vmatch = fun x #v -> LSeqB.free_copy_seqbytes x #(Ghost.hide (Ghost.reveal v <: Seq.seq FStar.UInt8.t))
 
-let write_certificateEntry_cert_data = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 1 (LSeqB.mk_seq_sizet 1 fits_u64_squash) 16777215 (LSeqB.mk_seq_sizet 16777215 fits_u64_squash) 3sz fits_u64_squash
+let write_certificateEntry_cert_data = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 1 1ul 16777215 16777215ul 3sz
 
-let size_certificateEntry_cert_data = LSeqB.l2r_safe_size_bounded_seq_vlbytes 1 (LSeqB.mk_seq_sizet 1 fits_u64_squash) 16777215 (LSeqB.mk_seq_sizet 16777215 fits_u64_squash) 3sz fits_u64_squash
+let size_certificateEntry_cert_data = LSeqB.l2r_safe_size_bounded_seq_vlbytes 1 1ul 16777215 16777215ul 3sz
 
 let certificateEntry_cert_data_bytesize_eqn x = LP.length_serialize_bounded_seq_vlbytes 1 16777215 x
 

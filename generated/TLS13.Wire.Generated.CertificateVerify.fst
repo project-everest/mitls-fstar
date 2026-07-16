@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field signature*)
 open TLS13.Wire.Generated.CertificateVerify_signature
 
@@ -91,7 +89,7 @@ let read_certificateVerify : PPB.copyful_parse certificateVerify_vmatch certific
   assert_norm (certificateVerify_parser_kind == certificateVerify'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair signatureScheme_jumper read_signatureScheme () read_certificateVerify_signature) synth_certificateVerify synth_certificateVerify_recip
 
-let free_certificateVerify : PPB.free_t certificateVerify_vmatch = (PPC.free_pair free_signatureScheme free_certificateVerify_signature)
+let free_certificateVerify : PPB.free_t certificateVerify_vmatch = fun x #v -> ((PPC.free_pair free_signatureScheme free_certificateVerify_signature)) x #v
 
 let write_certificateVerify : PPB.l2r_safe_writer certificateVerify_vmatch certificateVerify_serializer certificateVerify_conv =
   synth_certificateVerify_injective ();
@@ -100,7 +98,7 @@ let write_certificateVerify : PPB.l2r_safe_writer certificateVerify_vmatch certi
 
 let size_certificateVerify : PPB.l2r_safe_size certificateVerify_vmatch certificateVerify_serializer certificateVerify_conv =
   synth_certificateVerify_injective ();
-  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair fits_u64_squash size_signatureScheme () size_certificateVerify_signature) synth_certificateVerify synth_certificateVerify_recip
+  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair size_signatureScheme () size_certificateVerify_signature) synth_certificateVerify synth_certificateVerify_recip
 
 let certificateVerify_bytesize_eqn x =
   [@inline_let] let _ = synth_certificateVerify_injective () in
