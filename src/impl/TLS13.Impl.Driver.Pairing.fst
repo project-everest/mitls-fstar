@@ -1300,6 +1300,112 @@ let lemma_client_server_application_record_material_server_to_client_agrees
     client
     server)
 
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE 2b: handshake-epoch record-material extractors.
+
+    Unlike the application-epoch extractors above (which are trivial because
+    [supported_profile_application_record_material_agrees] is bundled inside
+    [supported_profile_client_server_key_material_agrees]), there is no
+    handshake counterpart predicate.  We CONSTRUCT the handshake
+    [peer_record_material_agrees] from the two [peer_record_material_inputs_agree]
+    ingredients:
+
+      (1) [key_schedule_traffic_record_material_agrees] — the CROSS-endpoint
+          handshake key/iv agreement (taken as a hypothesis; it is a pure
+          key-schedule fact that the pairing key-schedule lemmas establish), and
+
+      (2) [record_direction_material_matches_key_schedule_for_role] on the
+          sender's write slot and the receiver's read slot — the INSTALL-STATUS
+          fact, obtained from [connection_state_consistent] (per-role record-key
+          consistency) plus the record slot being at the [R.Handshake] epoch.
+
+    The two directions differ only in which slots must be at the handshake epoch:
+    server→client uses server.record_write + client.record_read; the reverse uses
+    client.record_write + server.record_read.  Both hold during the protected
+    handshake flight (EE/Cert/CV/SF send for server→client, CF send for the
+    reverse).
+    ───────────────────────────────────────────────────────────────────────── *)
+
+let lemma_client_server_handshake_record_material_server_to_client_agrees
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.key_schedule_traffic_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic) client server /\
+        CS.connection_state_consistent client /\
+        CS.connection_state_consistent server /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+        ~(CS.ControlFailed? server.CS.cs_model.CS.model_control) /\
+        server.CS.cs_model.CS.model_record.CS.record_write.R.epoch ==
+          R.Handshake /\
+        client.CS.cs_model.CS.model_record.CS.record_read.R.epoch ==
+          R.Handshake)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic)
+          client
+          server)
+=
+  CSL.lemma_connection_state_consistent_record_keys_consistent_for_config_role
+    client;
+  CSL.lemma_connection_state_consistent_record_keys_consistent_for_config_role
+    server;
+  assert (CS.model_record_keys_consistent_for_role
+    CS.ServerEndpoint server.CS.cs_model);
+  assert (CS.model_record_keys_consistent_for_role
+    CS.ClientEndpoint client.CS.cs_model);
+  CSL.lemma_handshake_record_direction_material_matches_key_schedule_for_role
+    CS.ServerEndpoint CS.TrafficWrite server.CS.cs_model;
+  CSL.lemma_handshake_record_direction_material_matches_key_schedule_for_role
+    CS.ClientEndpoint CS.TrafficRead client.CS.cs_model;
+  assert (CS.peer_record_material_inputs_agree
+    (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic) client server);
+  CSL.lemma_peer_record_material_agrees
+    (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic) client server
+
+let lemma_client_server_handshake_record_material_client_to_server_agrees
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.key_schedule_traffic_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic) client server /\
+        CS.connection_state_consistent client /\
+        CS.connection_state_consistent server /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+        ~(CS.ControlFailed? server.CS.cs_model.CS.model_control) /\
+        client.CS.cs_model.CS.model_record.CS.record_write.R.epoch ==
+          R.Handshake /\
+        server.CS.cs_model.CS.model_record.CS.record_read.R.epoch ==
+          R.Handshake)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic)
+          client
+          server)
+=
+  CSL.lemma_connection_state_consistent_record_keys_consistent_for_config_role
+    client;
+  CSL.lemma_connection_state_consistent_record_keys_consistent_for_config_role
+    server;
+  assert (CS.model_record_keys_consistent_for_role
+    CS.ClientEndpoint client.CS.cs_model);
+  assert (CS.model_record_keys_consistent_for_role
+    CS.ServerEndpoint server.CS.cs_model);
+  CSL.lemma_handshake_record_direction_material_matches_key_schedule_for_role
+    CS.ClientEndpoint CS.TrafficWrite client.CS.cs_model;
+  CSL.lemma_handshake_record_direction_material_matches_key_schedule_for_role
+    CS.ServerEndpoint CS.TrafficRead server.CS.cs_model;
+  assert (CS.peer_record_material_inputs_agree
+    (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic) client server);
+  CSL.lemma_peer_record_material_agrees
+    (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic) client server
+
 let lemma_client_to_server_protected_message_decode_from_peer_record_material
   (epoch:CS.traffic_epoch)
   (client:CS.connection_state)

@@ -274,7 +274,6 @@ val lemma_peer_record_material_agrees
   : Lemma
       (requires peer_record_material_inputs_agree traffic_id client server)
       (ensures peer_record_material_agrees traffic_id client server)
-
 val lemma_paired_supported_profile_all_record_material_agrees
   (client:connection_state)
   (server:connection_state)
@@ -844,3 +843,35 @@ val lemma_legal_connection_delta_consistent
         connection_state_consistent st0 /\
         legal_connection_delta st0 delta st1)
       (ensures connection_state_consistent st1)
+
+
+(** Extract per-role record-key consistency from [connection_state_consistent].
+    Used by the STAGE 2b handshake record-material extractors to obtain, for the
+    endpoint's own [config_role], that each record slot at the [R.Handshake]
+    epoch matches the handshake key-schedule material. *)
+val lemma_connection_state_consistent_record_keys_consistent_for_config_role
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures connection_state_record_keys_consistent_for_config_role st)
+
+(** Turn a handshake-epoch record slot of a role-consistent, non-failed model
+    into the [record_direction_material_matches_key_schedule_for_role] input
+    required by [peer_record_material_inputs_agree] at the handshake epoch. *)
+val lemma_handshake_record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : Lemma
+      (requires
+        ~(ControlFailed? model.model_control) /\
+        model_record_keys_consistent_for_role role model /\
+        (record_direction_for_endpoint role dir model).R.epoch == R.Handshake)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          role
+          dir
+          (traffic_id
+            TrafficHandshake
+            (traffic_label_for_endpoint_direction role dir))
+          model)

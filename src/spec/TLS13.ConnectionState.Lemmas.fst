@@ -10117,3 +10117,133 @@ let lemma_legal_connection_delta_consistent
   assert (connection_state_evolves st0 st1);
   assert (connection_state_evolves (initial st0.cs_model.model_config) st0);
   assert (connection_state_evolves (initial st0.cs_model.model_config) st1)
+(** ─────────────────────────────────────────────────────────────────────────
+    Handshake-epoch record-material install-status extraction.
+
+    These support the STAGE 2b handshake record-material extractors.  Unlike the
+    application epoch (whose record slots are only installed at
+    [ControlApplicationData]), the handshake record slots are installed
+    incrementally during the flight.  The key observation is that
+    [model_record_keys_consistent_for_role] already relates each record slot at
+    the [R.Handshake] epoch to the corresponding handshake key-schedule
+    material.  We (1) extract [model_record_keys_consistent_for_role] for the
+    endpoint's own [config_role] from [connection_state_consistent] via the RTC
+    closure, and (2) turn the handshake-epoch consistency conjunct into the
+    [record_direction_material_matches_key_schedule_for_role] input required by
+    [peer_record_material_inputs_agree].
+    ───────────────────────────────────────────────────────────────────────── *)
+
+let lemma_connection_delta_record_keys_consistent_for_config_role
+  (st0:connection_state)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        connection_state_record_keys_consistent_for_config_role st0 /\
+        connection_state_single_step st0 st1)
+      (ensures connection_state_record_keys_consistent_for_config_role st1)
+=
+  assert (exists delta. legal_connection_delta st0 delta st1);
+  let delta_w =
+    ID.indefinite_description_ghost
+      connection_delta
+      (fun delta -> legal_connection_delta st0 delta st1) in
+  let delta : connection_delta = delta_w in
+  assert (legal_connection_delta st0 delta st1);
+  assert (step_model st0.cs_model delta.delta_event == Some st1.cs_model);
+  lemma_step_model_preserves_config_for_x25519_reachable_shape
+    st0.cs_model delta.delta_event st1.cs_model;
+  assert (st1.cs_model.model_config == st0.cs_model.model_config);
+  lemma_legal_connection_delta_record_keys_consistent_for_role
+    st0.cs_model.model_config.config_role
+    st0
+    delta
+    st1
+
+let lemma_connection_state_single_step_record_keys_consistent_for_config_role
+  ()
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern
+            (connection_state_record_keys_consistent_for_config_role y);
+            (connection_state_single_step x y)}
+          connection_state_record_keys_consistent_for_config_role x /\
+          connection_state_single_step x y ==>
+          connection_state_record_keys_consistent_for_config_role y)
+=
+  introduce forall x y.
+    connection_state_record_keys_consistent_for_config_role x /\
+    connection_state_single_step x y ==>
+    connection_state_record_keys_consistent_for_config_role y
+  with
+    introduce _ ==> _ with _.
+    lemma_connection_delta_record_keys_consistent_for_config_role x y
+
+let lemma_initial_record_keys_consistent_for_config_role
+  (cfg:connection_config)
+  : Lemma
+      (ensures
+        connection_state_record_keys_consistent_for_config_role (initial cfg))
+=
+  lemma_initial_record_keys_consistent_for_role cfg.config_role cfg
+
+let lemma_connection_state_consistent_record_keys_consistent_for_config_role
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures connection_state_record_keys_consistent_for_config_role st)
+=
+  let p (st:connection_state) =
+    connection_state_record_keys_consistent_for_config_role st in
+  lemma_initial_record_keys_consistent_for_config_role st.cs_model.model_config;
+  lemma_connection_state_single_step_record_keys_consistent_for_config_role ();
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+
+let lemma_handshake_record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : Lemma
+      (requires
+        ~(ControlFailed? model.model_control) /\
+        model_record_keys_consistent_for_role role model /\
+        (record_direction_for_endpoint role dir model).R.epoch == R.Handshake)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          role
+          dir
+          (traffic_id
+            TrafficHandshake
+            (traffic_label_for_endpoint_direction role dir))
+          model)
+=
+  let keys = model.model_handshake.hs_keys in
+  let label = traffic_label_for_endpoint_direction role dir in
+  let st = record_direction_for_endpoint role dir model in
+  assert (record_keys_match_key_schedule_for_role
+    role dir model.model_control keys st);
+  assert (traffic_material_option_matches_record_direction
+    (traffic_material_for_label keys TrafficHandshake label) st);
+  match traffic_material_for_label keys TrafficHandshake label with
+  | Some material ->
+    assert (traffic_material_matches_record_direction material st);
+    assert (st.R.key == Some material.traffic_key);
+    assert (st.R.static_iv == Some material.traffic_iv);
+    assert (record_direction_material st ==
+      Some (record_material_of_traffic_material material));
+    assert (Seq.equal material.traffic_key material.traffic_key);
+    assert (Seq.equal material.traffic_iv material.traffic_iv)
+  | None ->
+    assert False
+
