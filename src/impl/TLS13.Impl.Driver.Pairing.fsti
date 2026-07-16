@@ -1321,6 +1321,67 @@ val lemma_handshake_peer_record_material_client_to_server_agrees_from_hello
           client
           server)
 
+(** STAGE 2c-ii-B: handshake-only variants of the two from_hello extractors.
+    They weaken the requires from the application-inclusive
+    [supported_profile_all_derived_key_material_agrees] bundle down to just the
+    two handshake [TrafficKey]/[TrafficIV] [peer_derived_key_material_agrees]
+    facts that the proof actually uses, so they can be discharged mid-handshake
+    (at protected server-flight sends/deliveries) before any application-traffic
+    key agreement is established. *)
+val lemma_handshake_peer_record_material_server_to_client_agrees_from_hello_hsonly
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.peer_derived_key_material_agrees
+          (CS.TrafficKey (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic))
+          client server /\
+        CS.peer_derived_key_material_agrees
+          (CS.TrafficIV (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic))
+          client server /\
+        CS.connection_state_consistent client /\
+        CS.connection_state_consistent server /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+        ~(CS.ControlFailed? server.CS.cs_model.CS.model_control) /\
+        server.CS.cs_model.CS.model_record.CS.record_write.R.epoch ==
+          R.Handshake /\
+        client.CS.cs_model.CS.model_record.CS.record_read.R.epoch ==
+          R.Handshake)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic)
+          client
+          server)
+
+val lemma_handshake_peer_record_material_client_to_server_agrees_from_hello_hsonly
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CS.peer_derived_key_material_agrees
+          (CS.TrafficKey (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic))
+          client server /\
+        CS.peer_derived_key_material_agrees
+          (CS.TrafficIV (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic))
+          client server /\
+        CS.connection_state_consistent client /\
+        CS.connection_state_consistent server /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+        ~(CS.ControlFailed? server.CS.cs_model.CS.model_control) /\
+        client.CS.cs_model.CS.model_record.CS.record_write.R.epoch ==
+          R.Handshake /\
+        server.CS.cs_model.CS.model_record.CS.record_read.R.epoch ==
+          R.Handshake)
+      (ensures
+        CS.peer_record_material_agrees
+          (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic)
+          client
+          server)
+
 val lemma_client_to_server_protected_message_decode_from_peer_record_material
   (epoch:CS.traffic_epoch)
   (client:CS.connection_state)

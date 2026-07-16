@@ -101,6 +101,21 @@ val lemma_connection_application_keys_supported_profile_key_schedule_lineage
         application_record_keys_installed_for_role role st.cs_model)
       (ensures connection_supported_profile_key_schedule_lineage st)
 
+(** STAGE 2c-ii-B: a consistent connection state whose handshake secret is
+    installed already satisfies the full supported-profile key-schedule
+    lineage.  Unlike the application-keyed variant above, this fires
+    mid-handshake (as soon as [derive_shared_secret_model] has run), because
+    that step sets shared/early/handshake/master secrets all at once with the
+    lineage relations, and the reachable-shape invariant keeps them in the
+    all-Some lineage branch thereafter. *)
+val lemma_connection_state_consistent_handshake_key_schedule_lineage
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_handshake_secret)
+      (ensures connection_supported_profile_key_schedule_lineage st)
+
 val lemma_connection_state_consistent_server_selection_private_shape
   (st:connection_state)
   : Lemma
@@ -266,6 +281,28 @@ val lemma_paired_supported_profile_all_derived_key_material_agrees
         paired_key_derivation_checkpoints client server)
       (ensures
         supported_profile_all_derived_key_material_agrees client server)
+
+(** STAGE 2c-ii-B: handshake-only slice of the derived-material agreement
+    bundle above.  Produces exactly the two handshake TrafficKey/TrafficIV
+    peer-derived agreement facts for a single [label], from the hello-level
+    facts, without depending on application-traffic material. *)
+val lemma_handshake_peer_derived_key_material_agrees_from_paired_hellos
+  (label:traffic_label)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_x25519_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_handshake_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_handshake_secret /\
+        connection_state_consistent client /\
+        connection_state_consistent server)
+      (ensures
+        peer_derived_key_material_agrees
+          (TrafficKey (traffic_id TrafficHandshake label)) client server /\
+        peer_derived_key_material_agrees
+          (TrafficIV (traffic_id TrafficHandshake label)) client server)
 
 val lemma_peer_record_material_agrees
   (traffic_id:labeled_traffic_epoch)

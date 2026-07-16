@@ -1191,6 +1191,28 @@ let lemma_connection_application_keys_supported_profile_key_schedule_lineage
     role
     st.cs_model
 
+(** STAGE 2c-ii-B: handshake-installed lineage.  Once [ks_handshake_secret] is
+    [Some], the reachable-shape invariant [supported_profile_base_lineage_or_empty]
+    can only be in its all-[Some] branch, which is exactly the lineage. *)
+let lemma_connection_state_consistent_handshake_key_schedule_lineage
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_handshake_secret)
+      (ensures connection_supported_profile_key_schedule_lineage st)
+=
+  lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape st;
+  let keys = st.cs_model.model_handshake.hs_keys in
+  match
+    keys.ks_shared_secret,
+    keys.ks_early_secret,
+    keys.ks_handshake_secret,
+    keys.ks_master_secret
+  with
+  | Some shared, Some early, Some handshake, Some master -> ()
+  | _, _, _, _ -> assert False
+
 let lemma_step_model_preserves_config_for_x25519_reachable_shape
   (model:connection_model)
   (ev:conn_event)
@@ -3322,6 +3344,39 @@ let lemma_paired_supported_profile_all_derived_key_material_agrees
     (FinishedKey ClientTraffic) client server;
   lemma_paired_x25519_key_shares_derived_key_agrees
     (FinishedKey ServerTraffic) client server
+
+(** STAGE 2c-ii-B assembler: produce the two handshake traffic key/iv
+    peer-derived agreement facts (for [label]) directly from the hello-level
+    facts.  This is the handshake-only slice of
+    [lemma_paired_supported_profile_all_derived_key_material_agrees] that avoids
+    depending on application-traffic material.  The handshake lineage is
+    supplied by [lemma_connection_state_consistent_handshake_key_schedule_lineage]
+    at each endpoint, and the checkpoint-inputs of a handshake TrafficKey/TrafficIV
+    reduce to [same_key_derivation_checkpoint DeriveHandshakeTraffic]. *)
+let lemma_handshake_peer_derived_key_material_agrees_from_paired_hellos
+  (label:traffic_label)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_x25519_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_handshake_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_handshake_secret /\
+        connection_state_consistent client /\
+        connection_state_consistent server)
+      (ensures
+        peer_derived_key_material_agrees
+          (TrafficKey (traffic_id TrafficHandshake label)) client server /\
+        peer_derived_key_material_agrees
+          (TrafficIV (traffic_id TrafficHandshake label)) client server)
+=
+  lemma_connection_state_consistent_handshake_key_schedule_lineage client;
+  lemma_connection_state_consistent_handshake_key_schedule_lineage server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficKey (traffic_id TrafficHandshake label)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficIV (traffic_id TrafficHandshake label)) client server
 
 let lemma_key_schedule_traffic_record_material_agrees_from_expected
   (traffic_id:labeled_traffic_epoch)
