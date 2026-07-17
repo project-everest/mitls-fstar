@@ -95,7 +95,7 @@ jobs:
       matrix:
         include:
           - name: tls-root (make test)
-            cmd: make -j"$(nproc)" test
+            cmd: make -j"$(nproc)" _cache/TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.fst.checked && make -j"$(nproc)" test
           - name: calc (test-c)
             cmd: make -j"$(nproc)" -C calc_sample test-c
           - name: ftp (verify)
