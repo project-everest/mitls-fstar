@@ -1,7 +1,6 @@
 name: CI
 
 on:
-  push:
   pull_request:
   workflow_dispatch:
 
@@ -42,13 +41,6 @@ jobs:
           path: devcontainer.tgz
           key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh') }}
           lookup-only: true
-
-      - name: Free disk space
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
-            /usr/local/share/boost "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
-          df -h /
 
       - name: Build the dev container image + toolchain
         if: steps.cache.outputs.cache-hit != 'true'
