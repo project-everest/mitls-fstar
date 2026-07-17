@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  push:
+    branches:
+    - agentic
   pull_request:
   workflow_dispatch:
 
