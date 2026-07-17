@@ -69,4 +69,4 @@ WORKDIR /home/vscode
 
 # Put F*, Z3, and QD on the PATH
 RUN ep=/workspaces/agentic-tls/tools/everparse/; \
-  echo "export PATH=$ep/opt/FStar/out/bin:$ep/opt/FStar/karamel/out/bin:$ep/bin:$ep/opt/z3:\$PATH" | tee --append $HOME/.profile $HOME/.bashrc $HOME/.bash_profile
+  echo "export PATH=$ep/opt/FStar/out/bin:$ep/opt/karamel/out/bin:$ep/bin:$ep/opt/z3:\$PATH" | tee --append $HOME/.profile $HOME/.bashrc $HOME/.bash_profile
