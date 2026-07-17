@@ -85,6 +85,13 @@ jobs:
   # injecting it leaves the cached toolchain and fetched RFCs untouched.
   # fail-fast: false so every target reports independently; the ci-success gate
   # still needs all of them.
+  #
+  # The tls-root leg additionally caches the F* verification of the generated
+  # TLS13.Wire.Generated.* parsers/serializers (a ~9-min step).  Those .checked
+  # files are a pure function of the wire spec (tls.qd.rfc) and the pinned
+  # toolchain (scripts/build-everparse.sh), so the cache is keyed on the hash of
+  # exactly those two files; the Makefile save-/restore-generated-cache targets
+  # export/import them as a single tarball moved in/out of the container.
   tests:
     name: ${{ matrix.name }}
     needs: devcontainer
@@ -96,6 +103,7 @@ jobs:
         include:
           - name: tls-root (make test)
             cmd: make -j"$(nproc)" _cache/TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.fst.checked && make -j"$(nproc)" test
+            cache_generated: true
           - name: calc (test-c)
             cmd: make -j"$(nproc)" -C calc_sample test-c
           - name: ftp (verify)
@@ -127,18 +135,51 @@ jobs:
           gunzip -c devcontainer.tgz | docker load
           rm -f devcontainer.tgz
 
+      # Cache the generated-parser/serializer verification for the tls-root leg
+      # only.  Keyed on the wire spec + pinned toolchain, the two inputs that
+      # fully determine the generated TLS13.Wire.Generated.* modules and their
+      # .checked files.  On a miss the run step below recomputes and exports them
+      # (restored/saved via the tarball); actions/cache stores it post-job.  No
+      # restore-keys: a prefix-matched (stale) cache could carry .checked that no
+      # longer match the sources, so we only ever reuse an exact-input match.
+      - name: Cache generated-parser verification (tls-root)
+        id: gencache
+        if: ${{ matrix.cache_generated }}
+        uses: actions/cache@v4
+        with:
+          path: generated-checked.tar.gz
+          key: agentic-tls-generated-checked-${{ hashFiles('scripts/build-everparse.sh', 'tls.qd.rfc') }}
+
       - name: Run ${{ matrix.name }}
         env:
           CMD: ${{ matrix.cmd }}
+          CACHE_GENERATED: ${{ matrix.cache_generated }}
+          CACHE_HIT: ${{ steps.gencache.outputs.cache-hit }}
         run: |
           container=$(docker run -d agentic-tls-ci sleep infinity)
           # Inject the freshly checked-out source into the toolchain-only image
           # so the committed code is what gets tested.  tools/everparse and the
           # fetched RFCs are gitignored (absent from the checkout), so the cached
-          # toolchain and deps are left intact.
-          tar c --exclude=./.git . \
+          # toolchain and deps are left intact.  The generated-verification cache
+          # tarball is injected separately (below), so exclude it here.
+          tar c --exclude=./.git --exclude=./generated-checked.tar.gz . \
             | docker exec -i -w /workspaces/agentic-tls "$container" tar --overwrite -x
+          # tls-root only: restore the cached generated-module verification so
+          # `make` skips re-verifying the TLS13.Wire.Generated.* parsers.  A miss
+          # (no tarball) is a no-op and the modules are verified from scratch.
+          if [ -n "$CACHE_GENERATED" ]; then
+            if [ -f generated-checked.tar.gz ]; then
+              docker cp generated-checked.tar.gz "$container":/workspaces/agentic-tls/
+            fi
+            docker exec -w /workspaces/agentic-tls "$container" make restore-generated-cache
+          fi
           docker exec -w /workspaces/agentic-tls "$container" bash -lc "$CMD"
+          # On a miss, export the freshly-computed verification to the host so the
+          # post-job actions/cache save stores it under the content-hash key.
+          if [ -n "$CACHE_GENERATED" ] && [ "$CACHE_HIT" != "true" ]; then
+            docker exec -w /workspaces/agentic-tls "$container" make save-generated-cache
+            docker cp "$container":/workspaces/agentic-tls/generated-checked.tar.gz .
+          fi
           docker rm -f "$container"
 
   # ── 3. Overall gate ───────────────────────────────────────────────────────
