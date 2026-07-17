@@ -55,6 +55,7 @@ echo "Checking out pinned EverParse commit $EVERPARSE_COMMIT ..."
 git -C "$EVERPARSE_HOME" checkout --quiet "$EVERPARSE_COMMIT"
 
 echo "Building EverParse (make quackyducky -j$jobs) — this also builds F* and KaRaMeL ..."
+make -C "$EVERPARSE_HOME" -j"$jobs" deps && ADMIT=1 \
 make -C "$EVERPARSE_HOME" -j"$jobs" quackyducky
 
 for f in "$fstar_exe" "$krml_exe" "$qd_exe"; do
