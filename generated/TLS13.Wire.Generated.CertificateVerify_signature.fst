@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let certificateVerify_signature_parser = LP.parse_bounded_seq_vlbytes 0 65535
 
 noextract let certificateVerify_signature_serializer = LP.serialize_bounded_seq_vlbytes 0 65535
 
 let certificateVerify_signature_bytesize_eq x = ()
 
-let certificateVerify_signature_validator = LSeqB.validate_bounded_seq_vlbytes 0 65535 (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+let certificateVerify_signature_validator = LSeqB.validate_bounded_seq_vlbytes 0 65535 (PPBI.leaf_read_bounded_integer_2 ())
 
-let certificateVerify_signature_jumper = LSeqB.jump_bounded_seq_vlbytes 0 65535 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+let certificateVerify_signature_jumper = LSeqB.jump_bounded_seq_vlbytes 0 65535 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
-let read_certificateVerify_signature = LSeqB.copyful_parse_bounded_seq_vlbytes 0 65535 (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+let read_certificateVerify_signature = LSeqB.copyful_parse_bounded_seq_vlbytes 0 65535 (PPBI.leaf_read_bounded_integer_2 ())
 
 let free_certificateVerify_signature : PPB.free_t certificateVerify_signature_vmatch = fun x #v -> LSeqB.free_copy_seqbytes x #(Ghost.hide (Ghost.reveal v <: Seq.seq FStar.UInt8.t))
 
-let write_certificateVerify_signature = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2sz fits_u64_squash
+let write_certificateVerify_signature = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 0ul 65535 65535ul 2sz
 
-let size_certificateVerify_signature = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2sz fits_u64_squash
+let size_certificateVerify_signature = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 0ul 65535 65535ul 2sz
 
 let certificateVerify_signature_bytesize_eqn x = LP.length_serialize_bounded_seq_vlbytes 0 65535 x
 

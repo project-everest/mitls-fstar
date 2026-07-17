@@ -37,8 +37,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 // Need high Z3 limits for large sum types
 #set-options "--z3rlimit 480"
 
@@ -125,7 +123,7 @@ noextract inline_for_extraction let synth_handshake_cases_recip (k:LP.enum_key h
   | New_session_ticket -> [@inline_let] let _ = synth_handshake_cases_recip_pre_intro New_session_ticket x in
     (match x with Body_new_session_ticket y -> (from_handshake_case_of_handshakeType New_session_ticket y))
 
-inline_for_extraction let handshake_sum = LP.make_sum' handshakeType_enum key_of_handshake
+inline_for_extraction noextract let handshake_sum = LP.make_sum' handshakeType_enum key_of_handshake
   handshake_case_of_handshakeType synth_handshake_cases synth_handshake_cases_recip
   (_ by (LP.make_sum_synth_case_recip_synth_case_tac ()))
   (_ by (LP.synth_case_synth_case_recip_tac ()))

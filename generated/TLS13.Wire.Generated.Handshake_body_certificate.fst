@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let handshake_body_certificate'_parser : LP.parser _ handshake_body_certificate' =
   LP.parse_bounded_vldata_strong 0 16777215 certificate_serializer
 
@@ -50,12 +48,12 @@ let handshake_body_certificate_serializer = LP.serialize_synth _ synth_handshake
 let handshake_body_certificate_bytesize_eq x = ()
 
 inline_for_extraction let handshake_body_certificate'_validator : LPS.validator handshake_body_certificate'_parser =
-  PPVD.validate_bounded_vldata_strong 0 16777215 certificate_serializer certificate_validator (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 0 16777215 certificate_serializer certificate_validator (PPBI.leaf_read_bounded_integer_3 ())
 
 let handshake_body_certificate_validator = LPC.validate_synth handshake_body_certificate'_validator synth_handshake_body_certificate
 
 inline_for_extraction let handshake_body_certificate'_jumper : LPS.jumper handshake_body_certificate'_parser =
-  PPVD.jump_bounded_vldata_strong 0 16777215 certificate_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 0 16777215 certificate_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 ()))
 
 let handshake_body_certificate_jumper = LPC.jump_synth handshake_body_certificate'_jumper synth_handshake_body_certificate
 
@@ -63,7 +61,7 @@ let handshake_body_certificate_accessor =
   PPC.accessor_ext
     (PPC.accessor_compose
       (PPC.accessor_synth synth_handshake_body_certificate synth_handshake_body_certificate_recip)
-      (PPVD.accessor_bounded_vldata_strong_payload 0 16777215 certificate_serializer (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash) ())
+      (PPVD.accessor_bounded_vldata_strong_payload 0 16777215 certificate_serializer (PPBI.leaf_read_bounded_integer_3 ())) ())
     handshake_body_certificate_clens ()
 
 
@@ -75,7 +73,7 @@ let read_handshake_body_certificate : PPB.copyful_parse handshake_body_certifica
   handshake_body_certificate_copyful_synth_injective ();
   handshake_body_certificate_copyful_synth_inverse ();
   PPC.copyful_parse_synth
-    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 16777215 certificate_serializer read_certificate (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash)
+    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 16777215 certificate_serializer read_certificate (PPBI.leaf_read_bounded_integer_3 ()))
     synth_handshake_body_certificate synth_handshake_body_certificate_recip
 
 let free_handshake_body_certificate : PPB.free_t handshake_body_certificate_vmatch =
@@ -85,7 +83,7 @@ let write_handshake_body_certificate : PPB.l2r_safe_writer handshake_body_certif
   handshake_body_certificate_copyful_synth_injective ();
   handshake_body_certificate_copyful_synth_inverse ();
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 16777215 (LSeqB.mk_seq_sizet 16777215 fits_u64_squash) 3 3sz certificate_serializer write_certificate fits_u64_squash) <: PPB.l2r_safe_writer _ handshake_body_certificate'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 0ul 16777215 16777215ul 3 3sz certificate_serializer write_certificate) <: PPB.l2r_safe_writer _ handshake_body_certificate'_serializer _)
     synth_handshake_body_certificate synth_handshake_body_certificate_recip
 
 let handshake_body_certificate_bytesize_eqn x =

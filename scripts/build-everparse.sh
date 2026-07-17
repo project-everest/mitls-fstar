@@ -12,12 +12,12 @@
 # F* install is required).
 set -euo pipefail
 
-EVERPARSE_REPO="${EVERPARSE_REPO:-https://github.com/tahina-pro/quackyducky}"
-EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-_taramana_fstar2_qd_copyful}"
+EVERPARSE_REPO="${EVERPARSE_REPO:-https://github.com/project-everest/everparse}"
+EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-fstar2}"
 # Pinned EverParse commit this project is verified against.  The branch above is
 # only used as a fetch hint; the build always checks out this exact commit so the
 # toolchain is reproducible regardless of where the branch tip has moved.
-EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-7d4880c2}"
+EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-6f1f390e0c8c376ce45facdb75c9af4e5aa3f11d}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Default location: tools/everparse inside the agentic-tls checkout (matches the
@@ -27,7 +27,7 @@ EVERPARSE_HOME="${EVERPARSE_HOME:-$repo_root/tools/everparse}"
 jobs="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 
 fstar_exe="$EVERPARSE_HOME/opt/FStar/out/bin/fstar.exe"
-krml_exe="$EVERPARSE_HOME/opt/FStar/karamel/out/bin/krml"
+krml_exe="$EVERPARSE_HOME/opt/karamel/out/bin/krml"
 qd_exe="$EVERPARSE_HOME/bin/qd.exe"
 
 for cmd in git make opam; do
@@ -55,6 +55,7 @@ echo "Checking out pinned EverParse commit $EVERPARSE_COMMIT ..."
 git -C "$EVERPARSE_HOME" checkout --quiet "$EVERPARSE_COMMIT"
 
 echo "Building EverParse (make quackyducky -j$jobs) — this also builds F* and KaRaMeL ..."
+make -C "$EVERPARSE_HOME" -j"$jobs" deps && ADMIT=1 \
 make -C "$EVERPARSE_HOME" -j"$jobs" quackyducky
 
 for f in "$fstar_exe" "$krml_exe" "$qd_exe"; do

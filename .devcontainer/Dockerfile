@@ -13,6 +13,7 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04
 
 # Minimal apt set:
+#   time                      - build Karamel
 #   ca-certificates,curl,git  - fetch the EverParse fork, HACL* submodule, RFCs, Z3
 #   opam                      - drives the local OCaml switch for the F*/KaRaMeL build
 #   build-essential           - gcc/make for the OCaml build and the agentic-tls C code
@@ -24,8 +25,11 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04
 #   python3                   - agentic-tls test scripts (port picker, payload gen)
 #   tftp-hpa,tftpd-hpa         - TFTP reference client (tftp) / server (in.tftpd)
 #                               for the tftp_sample interop tests (RFC 1350)
+#   lrzsz                     - XMODEM/YMODEM/ZMODEM reference client/server (sb/rb)
+#                               for the ymodem_sample interop tests
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
+      time \
       ca-certificates \
       curl \
       git \
@@ -40,6 +44,7 @@ RUN apt-get update \
       python3 \
       tftp-hpa \
       tftpd-hpa \
+      lrzsz \
       libcap2-bin \
  && rm -rf /var/lib/apt/lists/*
 
@@ -64,4 +69,4 @@ WORKDIR /home/vscode
 
 # Put F*, Z3, and QD on the PATH
 RUN ep=/workspaces/agentic-tls/tools/everparse/; \
-  echo "export PATH=$ep/opt/FStar/out/bin:$ep/opt/FStar/karamel/out/bin:$ep/bin:$ep/opt/z3:\$PATH" | tee --append $HOME/.profile $HOME/.bashrc $HOME/.bash_profile
+  echo "export PATH=$ep/opt/FStar/out/bin:$ep/opt/karamel/out/bin:$ep/bin:$ep/opt/z3:\$PATH" | tee --append $HOME/.profile $HOME/.bashrc $HOME/.bash_profile

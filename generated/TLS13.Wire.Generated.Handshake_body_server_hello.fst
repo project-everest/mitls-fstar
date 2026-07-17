@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let handshake_body_server_hello_parser =
   LP.parse_bounded_vldata 0 16777215 serverHello_parser
 
@@ -46,20 +44,20 @@ let handshake_body_server_hello_serializer =
 let handshake_body_server_hello_bytesize_eq x = ()
 
 let handshake_body_server_hello_validator =
-  PPVD.validate_bounded_vldata 0 16777215 serverHello_validator (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata 0 16777215 serverHello_validator (PPBI.leaf_read_bounded_integer_3 ())
 
 let handshake_body_server_hello_jumper =
-  PPVD.jump_bounded_vldata 0 16777215 serverHello_parser (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata 0 16777215 serverHello_parser (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 ()))
 
-let handshake_body_server_hello_accessor = PPVD.accessor_bounded_vldata_payload 0 16777215 (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+let handshake_body_server_hello_accessor = PPVD.accessor_bounded_vldata_payload 0 16777215 (PPBI.leaf_read_bounded_integer_3 ())
 
 let read_handshake_body_server_hello : PPB.copyful_parse handshake_body_server_hello_vmatch handshake_body_server_hello_parser handshake_body_server_hello_conv =
-  PPVD.copyful_parse_bounded_vldata_payload 0 16777215 read_serverHello (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+  PPVD.copyful_parse_bounded_vldata_payload 0 16777215 read_serverHello (PPBI.leaf_read_bounded_integer_3 ())
 
-let free_handshake_body_server_hello : PPB.free_t handshake_body_server_hello_vmatch = free_serverHello
+let free_handshake_body_server_hello : PPB.free_t handshake_body_server_hello_vmatch = fun x #v -> (free_serverHello) x #v
 
 let write_handshake_body_server_hello : PPB.l2r_safe_writer handshake_body_server_hello_vmatch handshake_body_server_hello_serializer handshake_body_server_hello_conv =
-  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0sz 16777215 (LSeqB.mk_seq_sizet 16777215 fits_u64_squash) serverHello_serializer write_serverHello fits_u64_squash
+  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0ul 16777215 16777215ul 3 3sz serverHello_serializer write_serverHello
 
 let handshake_body_server_hello_bytesize_eqn x =
   (serverHello_bytesize_eq (x))

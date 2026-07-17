@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field data*)
 open FTPBlock.Wire.Generated.Ftp_block_data
 
@@ -91,7 +89,7 @@ let read_ftp_block : PPB.copyful_parse ftp_block_vmatch ftp_block_parser ftp_blo
   assert_norm (ftp_block_parser_kind == ftp_block'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair LPPI.jump_u8 (PPB.copyful_parse_leaf (PPB.leaf_reader_of_serialized (LPPI.read_u8' ()))) () read_ftp_block_data) synth_ftp_block synth_ftp_block_recip
 
-let free_ftp_block : PPB.free_t ftp_block_vmatch = (PPC.free_pair (PPB.free_leaf #U8.t) free_ftp_block_data)
+let free_ftp_block : PPB.free_t ftp_block_vmatch = fun x #v -> ((PPC.free_pair (PPB.free_leaf #U8.t) free_ftp_block_data)) x #v
 
 let write_ftp_block : PPB.l2r_safe_writer ftp_block_vmatch ftp_block_serializer ftp_block_conv =
   synth_ftp_block_injective ();
@@ -100,7 +98,7 @@ let write_ftp_block : PPB.l2r_safe_writer ftp_block_vmatch ftp_block_serializer 
 
 let size_ftp_block : PPB.l2r_safe_size ftp_block_vmatch ftp_block_serializer ftp_block_conv =
   synth_ftp_block_injective ();
-  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair fits_u64_squash (PPB.l2r_safe_size_leaf LPI.serialize_u8 1sz) () size_ftp_block_data) synth_ftp_block synth_ftp_block_recip
+  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair (PPB.l2r_safe_size_leaf LPI.serialize_u8 1sz) () size_ftp_block_data) synth_ftp_block synth_ftp_block_recip
 
 let ftp_block_bytesize_eqn x =
   [@inline_let] let _ = synth_ftp_block_injective () in

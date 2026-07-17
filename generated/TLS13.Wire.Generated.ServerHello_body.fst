@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let serverHello_body_random_parser = LP.parse_lseq_bytes 32
 
 noextract let serverHello_body_random_serializer = LP.serialize_lseq_bytes 32
@@ -61,7 +59,7 @@ let serverHello_body_parser = LP.parse_ifthenelse parse_serverHello_body_param
 inline_for_extraction let serialize_serverHello_body_payload (b:bool) : Tot (LP.serializer (dsnd (parse_serverHello_body_param.LP.parse_ifthenelse_payload_parser b))) =
   if b then serverHelloBody_serializer else serverHelloBody_serializer
 
-inline_for_extraction let serverHello_body_synth_recip (x:serverHello_body) : GTot (t:serverHello_body_random & (serverHello_body_payload (serverHello_body_cond t))) =
+inline_for_extraction noextract let serverHello_body_synth_recip (x:serverHello_body) : GTot (t:serverHello_body_random & (serverHello_body_payload (serverHello_body_cond t))) =
   match x with
   | HelloRetryRequest y -> (| serverHello_body_cst, y |)
   | ServerHello_body_false m -> (| m.tag, m.value |)

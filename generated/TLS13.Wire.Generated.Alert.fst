@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let synth_alert_recip_inverse () : Lemma (LP.synth_inverse synth_alert_recip synth_alert) = ()
 
 let synth_alert_injective () : Lemma (LP.synth_injective synth_alert) =
@@ -90,7 +88,7 @@ let alert_writer =
   [@inline_let] let _ = synth_alert_inverse () in
   LPC.l2r_leaf_write_synth alert'_writer synth_alert synth_alert_recip (fun x -> synth_alert_recip x)
 
-inline_for_extraction let alert'_leaf_size : LPS.leaf_size alert'_serializer = (LPC.leaf_size_pair alertLevel_leaf_size () alertDescription_leaf_size fits_u64_squash (_ by (FStar.Tactics.norm [delta; iota; zeta; primops]; FStar.Tactics.smt ())))
+inline_for_extraction let alert'_leaf_size : LPS.leaf_size alert'_serializer = (LPC.leaf_size_pair alertLevel_leaf_size () alertDescription_leaf_size (_ by (FStar.Tactics.norm [delta; iota; zeta; primops]; FStar.Tactics.smt ())))
 
 let alert_leaf_size =
   [@inline_let] let _ = synth_alert_injective () in
@@ -102,7 +100,7 @@ let read_alert : PPB.copyful_parse alert_vmatch alert_parser alert_conv =
   assert_norm (alert_parser_kind == alert'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair alertLevel_jumper read_alertLevel () read_alertDescription) synth_alert synth_alert_recip
 
-let free_alert : PPB.free_t alert_vmatch = (PPC.free_pair free_alertLevel free_alertDescription)
+let free_alert : PPB.free_t alert_vmatch = fun x #v -> ((PPC.free_pair free_alertLevel free_alertDescription)) x #v
 
 let write_alert : PPB.l2r_safe_writer alert_vmatch alert_serializer alert_conv =
   synth_alert_injective ();
@@ -111,7 +109,7 @@ let write_alert : PPB.l2r_safe_writer alert_vmatch alert_serializer alert_conv =
 
 let size_alert : PPB.l2r_safe_size alert_vmatch alert_serializer alert_conv =
   synth_alert_injective ();
-  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair fits_u64_squash size_alertLevel () size_alertDescription) synth_alert synth_alert_recip
+  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair size_alertLevel () size_alertDescription) synth_alert synth_alert_recip
 
 let alert_bytesize_eqn x =
   [@inline_let] let _ = synth_alert_injective () in

@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let extensionClientHello_extension_data_signature_algorithms'_parser : LP.parser _ extensionClientHello_extension_data_signature_algorithms' =
   LP.parse_bounded_vldata_strong 0 65535 signatureSchemeList_serializer
 
@@ -50,12 +48,12 @@ let extensionClientHello_extension_data_signature_algorithms_serializer = LP.ser
 let extensionClientHello_extension_data_signature_algorithms_bytesize_eq x = ()
 
 inline_for_extraction let extensionClientHello_extension_data_signature_algorithms'_validator : LPS.validator extensionClientHello_extension_data_signature_algorithms'_parser =
-  PPVD.validate_bounded_vldata_strong 0 65535 signatureSchemeList_serializer signatureSchemeList_validator (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 0 65535 signatureSchemeList_serializer signatureSchemeList_validator (PPBI.leaf_read_bounded_integer_2 ())
 
 let extensionClientHello_extension_data_signature_algorithms_validator = LPC.validate_synth extensionClientHello_extension_data_signature_algorithms'_validator synth_extensionClientHello_extension_data_signature_algorithms
 
 inline_for_extraction let extensionClientHello_extension_data_signature_algorithms'_jumper : LPS.jumper extensionClientHello_extension_data_signature_algorithms'_parser =
-  PPVD.jump_bounded_vldata_strong 0 65535 signatureSchemeList_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 0 65535 signatureSchemeList_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let extensionClientHello_extension_data_signature_algorithms_jumper = LPC.jump_synth extensionClientHello_extension_data_signature_algorithms'_jumper synth_extensionClientHello_extension_data_signature_algorithms
 
@@ -63,7 +61,7 @@ let extensionClientHello_extension_data_signature_algorithms_accessor =
   PPC.accessor_ext
     (PPC.accessor_compose
       (PPC.accessor_synth synth_extensionClientHello_extension_data_signature_algorithms synth_extensionClientHello_extension_data_signature_algorithms_recip)
-      (PPVD.accessor_bounded_vldata_strong_payload 0 65535 signatureSchemeList_serializer (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash) ())
+      (PPVD.accessor_bounded_vldata_strong_payload 0 65535 signatureSchemeList_serializer (PPBI.leaf_read_bounded_integer_2 ())) ())
     extensionClientHello_extension_data_signature_algorithms_clens ()
 
 
@@ -75,7 +73,7 @@ let read_extensionClientHello_extension_data_signature_algorithms : PPB.copyful_
   extensionClientHello_extension_data_signature_algorithms_copyful_synth_injective ();
   extensionClientHello_extension_data_signature_algorithms_copyful_synth_inverse ();
   PPC.copyful_parse_synth
-    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 signatureSchemeList_serializer read_signatureSchemeList (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 signatureSchemeList_serializer read_signatureSchemeList (PPBI.leaf_read_bounded_integer_2 ()))
     synth_extensionClientHello_extension_data_signature_algorithms synth_extensionClientHello_extension_data_signature_algorithms_recip
 
 let free_extensionClientHello_extension_data_signature_algorithms : PPB.free_t extensionClientHello_extension_data_signature_algorithms_vmatch =
@@ -85,7 +83,7 @@ let write_extensionClientHello_extension_data_signature_algorithms : PPB.l2r_saf
   extensionClientHello_extension_data_signature_algorithms_copyful_synth_injective ();
   extensionClientHello_extension_data_signature_algorithms_copyful_synth_inverse ();
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz signatureSchemeList_serializer write_signatureSchemeList fits_u64_squash) <: PPB.l2r_safe_writer _ extensionClientHello_extension_data_signature_algorithms'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 0ul 65535 65535ul 2 2sz signatureSchemeList_serializer write_signatureSchemeList) <: PPB.l2r_safe_writer _ extensionClientHello_extension_data_signature_algorithms'_serializer _)
     synth_extensionClientHello_extension_data_signature_algorithms synth_extensionClientHello_extension_data_signature_algorithms_recip
 
 let extensionClientHello_extension_data_signature_algorithms_bytesize_eqn x =
