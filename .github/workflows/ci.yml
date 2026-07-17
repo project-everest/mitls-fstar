@@ -1,11 +1,124 @@
-name: Minimal Workflow
+name: CI
+
 on:
+  push:
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  # ── 1. Build the dev container ────────────────────────────────────────────
+  # Builds the devcontainer image from .devcontainer/Dockerfile, then runs the
+  # onCreateCommand equivalent (./setup.sh) inside it to build the heavy
+  # EverParse/F*/KaRaMeL toolchain (tools/everparse, gitignored) and fetch the
+  # project dependencies.  The prepared container — repo + toolchain baked in at
+  # /workspaces/agentic-tls — is committed to a self-contained image and uploaded
+  # as a build artifact so the parallel test jobs below can just download + load
+  # it and run, without rebuilding the ~1h toolchain five times.
+  devcontainer:
+    name: Build devcontainer
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+            /usr/local/share/boost "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
+          df -h /
+
+      - name: Build the base devcontainer image
+        run: docker build -t agentic-tls-base -f .devcontainer/Dockerfile .
+
+      - name: Build the EverParse toolchain inside the container
+        run: |
+          # Prepare a container, copy the checked-out repo in (as the vscode
+          # user the image runs as), and build the toolchain + fetch deps there.
+          docker run -d --name prep agentic-tls-base sleep infinity
+          docker exec -u root prep mkdir -p /workspaces/agentic-tls
+          docker cp . prep:/workspaces/agentic-tls
+          docker exec -u root prep chown -R vscode:vscode /workspaces
+          docker exec -u vscode -w /workspaces/agentic-tls prep \
+            bash -lc './setup.sh --jobs "$(nproc)"'
+
+      - name: Commit the prepared container to a self-contained image
+        run: |
+          docker commit -c 'WORKDIR /workspaces/agentic-tls' prep agentic-tls-ci
+          docker rm -f prep
+
+      - name: Save the dev container image as a build artifact
+        run: docker save agentic-tls-ci | gzip > devcontainer.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: devcontainer-image
+          path: devcontainer.tar.gz
+          retention-days: 1
+
+  # ── 2. Parallel test jobs ─────────────────────────────────────────────────
+  # Each matrix leg downloads the prebuilt dev container image and runs one test
+  # target inside it.  fail-fast: false so every target reports independently;
+  # the ci-success gate below still requires all of them to pass.
+  tests:
+    name: ${{ matrix.name }}
+    needs: devcontainer
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: tls-root (make test)
+            cmd: make -j"$(nproc)" test
+          - name: calc (test-c)
+            cmd: make -j"$(nproc)" -C calc_sample test-c
+          - name: ftp (verify)
+            cmd: make -j"$(nproc)" -C ftp_sample
+          - name: ymodem (vloop-test + interop)
+            cmd: make -j"$(nproc)" -C ymodem_sample vloop-test && make -j"$(nproc)" -C ymodem_sample/interop
+          - name: tftp (vloop-test + interop)
+            cmd: make -j"$(nproc)" -C tftp_sample vloop-test && make -j"$(nproc)" -C tftp_sample/interop
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+            /usr/local/share/boost "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
+          df -h /
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: devcontainer-image
+
+      - name: Load the dev container image
+        run: gunzip -c devcontainer.tar.gz | docker load
+
+      - name: Run ${{ matrix.name }}
+        run: >-
+          docker run --rm agentic-tls-ci
+          bash -lc 'cd /workspaces/agentic-tls && ${{ matrix.cmd }}'
+
+  # ── 3. Overall gate ───────────────────────────────────────────────────────
+  # Succeeds only if the build and every parallel test job succeeded, giving a
+  # single status check to require on the branch/PR.
+  ci-success:
+    name: CI success
+    if: always()
+    needs: [devcontainer, tests]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Run a one-line script
-        run: echo "Hello, world!"
+      - name: Verify all jobs succeeded
+        run: |
+          echo "devcontainer: ${{ needs.devcontainer.result }}"
+          echo "tests:        ${{ needs.tests.result }}"
+          if [ "${{ needs.devcontainer.result }}" != "success" ] \
+             || [ "${{ needs.tests.result }}" != "success" ]; then
+            echo "One or more CI jobs failed."
+            exit 1
+          fi
+          echo "All CI jobs passed."
