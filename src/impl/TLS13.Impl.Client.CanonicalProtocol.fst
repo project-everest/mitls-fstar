@@ -3797,6 +3797,7 @@ let lemma_client_local_fail_network_process_correct
 // cases: both are modeled as a purely local [LocalFail err] event with empty
 // raw_sent/raw_received deltas, so [consumed] and [produced] are both empty
 // and the [network_error_refines_state_machine] LocalEvent disjunct applies.
+#push-options "--z3refresh --z3rlimit 40"
 let lemma_client_local_fail_bridge_result
   (initial:CS.connection_state)
   (received0:B.bytes)
@@ -3969,6 +3970,7 @@ let lemma_client_local_fail_bridge_result
     initial received0 sent0 st0 input_contents input_len
     old_network_out network_out out_len base st1 app_out buffer_resp
     consumed wire_outputs local_outputs
+#pop-options
 
 let lemma_client_network_decode_error_bridge_result
   (initial:CS.connection_state)

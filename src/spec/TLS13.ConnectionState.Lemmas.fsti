@@ -196,6 +196,32 @@ val lemma_server_application_ready_stable_x25519_key_share_projection
         application_record_keys_installed_for_role ServerEndpoint st.cs_model)
       (ensures stable_server_x25519_key_share_projection st)
 
+(** STAGE 2c-ii-C: mid-handshake stable x25519 key-share projections.  Unlike the
+    application-ready variants above (which require [ControlApplicationData] and
+    installed application record keys), these fire as soon as the x25519 shared
+    secret is derived, gated on a minimal handshake-stage side-condition.  They
+    delegate to the private reachable-shape invariants and unfold the [Some?]
+    shared-secret branch to the stable projection. *)
+val lemma_client_handshake_stable_x25519_key_share_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures stable_client_x25519_key_share_projection st)
+
+val lemma_server_handshake_stable_x25519_key_share_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        ControlHandshaking? st.cs_model.model_control /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived)
+      (ensures stable_server_x25519_key_share_projection st)
+
 val lemma_record_read_key_schedule_projection_client_projection
   (model:connection_model)
   : Lemma

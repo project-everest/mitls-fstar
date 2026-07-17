@@ -3021,6 +3021,8 @@ fn process_local_event_with_credentials
           if (network_out_len = expected_network_out_len) {
             assert (pure (SZ.v network_out_len ==
               13 + B.length (Ghost.reveal 'certificate_chain) + 22));
+            SS.lemma_mk_cert_witness_representable_and_bytesize
+              (Ghost.reveal 'certificate_chain);
             IM.free_certificate_msg lcert;
             process_send_certificate_from_credentials
               s

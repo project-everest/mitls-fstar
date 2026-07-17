@@ -3336,6 +3336,13 @@ fn can_send_certificate_verify_runtime
       B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
         B.length (Sem.certificateVerify_signature_bytes (Ghost.reveal cv)) <=
           max_transcript_len));
+    // The signature is bounded by [signature_max_len] (4096), so the sent
+    // CertificateVerify is [certificateVerify_representable] as the strengthened
+    // Sent-CV [legal_handshake_message] arm now requires.
+    W.lemma_certificateVerify_representable (Ghost.reveal cv);
+    assert (pure (B.length (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))
+      <= M.signature_max_len));
+    assert (pure (W.certificateVerify_representable (Ghost.reveal cv)));
     assert (pure (ok ==> CS.legal_event
       st0.CS.cs_model
       (CS.ConnNetworkEvent {

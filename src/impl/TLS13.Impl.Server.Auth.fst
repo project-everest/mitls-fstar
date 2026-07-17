@@ -338,6 +338,11 @@ fn process_sign_certificate_verify
         (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))));
       fold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
 
+      W.lemma_certificateVerify_representable (Ghost.reveal cv);
+      assert (pure (B.length
+        (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))
+        <= M.signature_max_len));
+      assert (pure (W.certificateVerify_representable (Ghost.reveal cv)));
       assert (pure (CS.legal_event
         'st0.CS.cs_model
         (CS.ConnLocalEvent (CS.LocalSignCertificateVerify (Ghost.reveal cv)))));

@@ -2703,6 +2703,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate_verify == None /\
+    W.certificateVerify_representable cv /\
     (match hs.hs_certificate, hs.hs_server_selection with
      | Some _, Some selection ->
        server_certificate_verify_signature_valid selection hs cv /\
@@ -2775,6 +2776,8 @@ let legal_handshake_message
     hs.hs_encrypted_extensions <> None /\
     hs.hs_certificate == None /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
+    W.certificate_representable cert /\
+    GCert.certificate_bytesize cert <= 16777215 /\
     (match model.model_config.config_server with
      | Some cfg -> certificate_msg_matches_server_config cfg cert
      | None -> False)
@@ -2783,6 +2786,7 @@ let legal_handshake_message
     hs.hs_certificate <> None /\
     hs.hs_certificate_verify_verified == false /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
+    W.certificateVerify_representable cv /\
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv
      | None -> False)

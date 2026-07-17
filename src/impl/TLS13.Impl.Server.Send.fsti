@@ -56,6 +56,18 @@ val lemma_mk_cert_witness_bytesize (chain: B.bytes)
       B.length (W.serialize_handshake (M.Certificate (mk_cert_witness chain))) ==
         13 + B.length chain)
 
+(* [mk_cert_witness chain] is [W.certificate_representable] and has
+   [certificate_bytesize] within the handshake-body vldata bound, for any
+   non-empty chain of at most 32768 bytes.  Discharges the representability and
+   bytesize conjuncts of the strengthened [legal_handshake_message]
+   Sent-Certificate arm. *)
+val lemma_mk_cert_witness_representable_and_bytesize (chain: B.bytes)
+  : Lemma
+    (requires 1 <= B.length chain /\ B.length chain <= 32768)
+    (ensures
+      W.certificate_representable (mk_cert_witness chain) /\
+      GCert.certificate_bytesize (mk_cert_witness chain) <= 16777215)
+
 (* The wire serialization of a CertificateVerify handshake message is exactly
    [8 + |signature|] bytes.  Discharges the serializer-length preconditions of
    the server CertificateVerify send path. *)

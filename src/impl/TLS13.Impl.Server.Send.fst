@@ -146,6 +146,29 @@ let lemma_mk_cert_witness_bytesize (chain: B.bytes)
     ()
 #pop-options
 
+(* [mk_cert_witness chain] is [W.certificate_representable] and has
+   [certificate_bytesize] within the handshake-body vldata bound, for any
+   non-empty chain of at most 32768 bytes.  Discharges the representability and
+   bytesize conjuncts of the strengthened [legal_handshake_message]
+   Sent-Certificate arm now consumed at the server certificate send. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let lemma_mk_cert_witness_representable_and_bytesize (chain: B.bytes)
+  : Lemma
+    (requires 1 <= B.length chain /\ B.length chain <= 32768)
+    (ensures
+      W.certificate_representable (mk_cert_witness chain) /\
+      GCert.certificate_bytesize (mk_cert_witness chain) <= 16777215)
+  = mk_cert_witness_entries_unconditional chain;
+    assert (Sem.certificate_entries (mk_cert_witness chain) == [ (chain <: Seq.seq U8.t) ]);
+    W.lemma_cert_chain_total_bytes_cons chain [];
+    W.lemma_cert_chain_total_bytes_nil ();
+    assert (W.cert_chain_total_bytes (Sem.certificate_entries (mk_cert_witness chain))
+            == B.length chain);
+    W.lemma_certificate_representable (mk_cert_witness chain);
+    lemma_mk_cert_witness_eq_poc chain;
+    assert (GCert.certificate_bytesize (SerH.poc_canonical_cert chain) <= 16777215)
+#pop-options
+
 (* The wire serialization of a CertificateVerify handshake message is exactly
    [8 + |signature|] bytes: handshake msg_type 1 + handshake length 3 +
    signature_scheme 2 + signature length-prefix 2 + |signature|.  Discharges the
