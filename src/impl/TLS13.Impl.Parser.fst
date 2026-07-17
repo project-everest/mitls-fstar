@@ -5409,6 +5409,17 @@ fn parse_handshake_message
                     fold (L.is_valid_tls_message
                             (L.LTlsHandshake (L.LServerHello lsh))
                             (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+                    (* Prime the precondition of [lemma_handshake_wire_success_fixed]
+                       with focused asserts (mirroring the ClientHello arm): the
+                       [fold]s above bloat the slprop context, so proving the
+                       three-way conjunction in a single query is unstable.
+                       Splitting it into individual obligations keeps each Z3
+                       query small and deterministic. *)
+                    assert (pure (L.content_type_matches content_type T.Handshake));
+                    assert (pure (LP.parse GHS.handshake_parser (Ghost.reveal 'input_bytes) ==
+                                  Some (Ghost.reveal gv, B.length (Ghost.reveal 'input_bytes))));
+                    assert (pure (RV.handshake_synth (Ghost.reveal gv) ==
+                                  Some (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
                     lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes)
                       (Ghost.reveal gv) (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
                     Some (L.LTlsHandshake (L.LServerHello lsh))
