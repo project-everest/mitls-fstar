@@ -27,6 +27,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   python3                   - agentic-tls test scripts (port picker, payload gen)
 #   tftp-hpa,tftpd-hpa         - TFTP reference client (tftp) / server (in.tftpd)
 #                               for the tftp_sample interop tests (RFC 1350)
+#   lrzsz                     - XMODEM/YMODEM/ZMODEM reference client/server (sb/rb)
+#                               for the ymodem_sample interop tests
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       time \
@@ -44,6 +46,7 @@ RUN apt-get update \
       python3 \
       tftp-hpa \
       tftpd-hpa \
+      lrzsz \
       libcap2-bin \
  && rm -rf /var/lib/apt/lists/*
 
