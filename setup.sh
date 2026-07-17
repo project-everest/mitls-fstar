@@ -10,8 +10,8 @@ Usage:
 
 Builds the EverParse toolchain (QuackyDucky + LowParse + the F*/KaRaMeL binaries
 it vendors) from the fork/branch used by this project, then fetches the HACL*
-snapshot and RFC caches.  The Makefile consumes this toolchain via EVERPARSE_HOME;
-no separate F* installation is required.
+snapshot and checks OpenSSL.  The Makefile consumes this toolchain via
+EVERPARSE_HOME; no separate F* installation is required.
 
 Environment overrides:
   EVERPARSE_HOME    where to clone/build EverParse (default: tools/everparse)
@@ -49,7 +49,6 @@ done
 
 # 2. Project dependencies.
 "$repo_root/scripts/fetch-hacl-star.sh"
-"$repo_root/scripts/fetch-rfcs.sh"
 "$repo_root/scripts/check-openssl.sh"
 
 echo "Setup complete.  Run 'make verify' to check the F* development."

@@ -802,10 +802,6 @@ check-deps:
 	@scripts/check-openssl.sh >/dev/null
 	@test -d third_party/hacl-star/dist/gcc-compatible || \
 	  { echo "Missing HACL* C snapshot; run scripts/fetch-hacl-star.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8446.txt || \
-	  { echo "Missing RFC 8446 cache; run scripts/fetch-rfcs.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8448.txt || \
-	  { echo "Missing RFC 8448 cache; run scripts/fetch-rfcs.sh"; exit 1; }
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
