@@ -16,6 +16,86 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
+fn serialize_application_data_header
+  (fragment_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to out 'old_bytes **
+           pure (B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == 5 /\
+                 SZ.v fragment_len <= 16640)
+  ensures exists* header_bytes.
+          pts_to out header_bytes **
+          pure (B.length header_bytes == 5 /\
+                Seq.equal
+                  (Ghost.reveal header_bytes)
+                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header
+                    (SZ.v fragment_len)) /\
+                WS.parse_record_header (Ghost.reveal header_bytes) ==
+                  Some (T.Application_data, SZ.v fragment_len))
+
+fn serialize_raw_record
+  (content_type: T.content_type)
+  (fragment: array U8.t)
+  (fragment_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to fragment 'fragment_bytes **
+          pts_to out 'old_out **
+          pure (B.length 'old_out == SZ.v out_len /\
+                B.length 'fragment_bytes == SZ.v fragment_len /\
+                SZ.v fragment_len <= 16640 /\
+                SZ.v fragment_len + 5 <= SZ.v out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          pts_to fragment 'fragment_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+               SZ.v written == SZ.v fragment_len + 5 /\
+               (let raw_prefix =
+                  Seq.slice out_bytes 0 (SZ.v written) in
+                Seq.equal raw_prefix
+                  (WS.serialize_record content_type (Ghost.reveal 'fragment_bytes)) /\
+                WS.parse_record raw_prefix ==
+                  Some
+                    (content_type,
+                     (Ghost.reveal 'fragment_bytes),
+                     SZ.v written) /\
+                CS.raw_records_exactly raw_prefix content_type 1))
+
+fn serialize_raw_application_data_record
+  (fragment: array U8.t)
+  (fragment_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to fragment 'fragment_bytes **
+          pts_to out 'old_out **
+          pure (B.length 'old_out == SZ.v out_len /\
+                B.length 'fragment_bytes == SZ.v fragment_len /\
+                SZ.v fragment_len <= 16640 /\
+                SZ.v fragment_len + 5 <= SZ.v out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          pts_to fragment 'fragment_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+               SZ.v written == SZ.v fragment_len + 5 /\
+               (let raw_prefix =
+                  Seq.slice out_bytes 0 (SZ.v written) in
+                Seq.equal raw_prefix
+                  (WS.serialize_record
+                    T.Application_data (Ghost.reveal 'fragment_bytes)) /\
+                Seq.equal
+                  (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header
+                    (SZ.v fragment_len)) /\
+                WS.parse_record raw_prefix ==
+                  Some
+                    (T.Application_data,
+                     (Ghost.reveal 'fragment_bytes),
+                     SZ.v written) /\
+                CS.raw_records_exactly raw_prefix T.Application_data 1))
+
 fn serialize_protected_handshake_record
   (#msg: erased M.handshake_msg)
   (write_state: Rec.record_state)

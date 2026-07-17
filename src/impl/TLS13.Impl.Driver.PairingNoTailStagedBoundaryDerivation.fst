@@ -255,6 +255,17 @@ let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
       server.CS.cs_wire_log.CL.raw_sent
       server.CS.cs_wire_log.CL.raw_received
       server.CS.cs_model;
+    PNTRB.lemma_server_prefix_sent_server_hello_supported
+      server_model0
+      server_ch
+      selection
+      server_shared
+      server_sh
+      server_rest
+      server.CS.cs_wire_log.CL.raw_sent
+      server.CS.cs_wire_log.CL.raw_received
+      server.CS.cs_model;
+    assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
     assert (clean16_cleartext_final_hello_slot_milestone client server)
   )
 
@@ -713,6 +724,7 @@ let lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_compl
         server_sh
         server_rest /\
       WFL.supported_client_hello_wire_profile client_ch /\
+      B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
       PNTRB.normalized_cleartext_raw_wire_bridge
         client_ch
         server_ch
@@ -843,6 +855,7 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
         server_sh
         server_rest /\
       WFL.supported_client_hello_wire_profile client_ch /\
+      B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
       PNTRB.normalized_cleartext_raw_wire_bridge
         client_ch
         server_ch
@@ -2015,6 +2028,7 @@ let lemma_checkpoint_th_sh_from_milestone
       client_start client_ch client_sh client_shared client_rest
       server_ch selection server_shared server_sh server_rest /\
     WFL.supported_client_hello_wire_profile client_ch /\
+    B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
     PNTRB.normalized_cleartext_raw_wire_bridge client_ch server_ch client_sh server_sh /\
     client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
     client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
@@ -3016,6 +3030,7 @@ let lemma_sh_serialize_eq_from_milestone
       client_start client_ch client_sh client_shared client_rest
       server_ch selection server_shared server_sh server_rest /\
     WFL.supported_client_hello_wire_profile client_ch /\
+    B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
     PNTRB.normalized_cleartext_raw_wire_bridge client_ch server_ch client_sh server_sh /\
     client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
     client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
@@ -4162,6 +4177,7 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
          client_start client_ch client_sh client_shared2 client_rest
          server_ch selection server_shared server_sh server_rest /\
        WFL.supported_client_hello_wire_profile client_ch /\
+       B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
        PNTRB.normalized_cleartext_raw_wire_bridge client_ch server_ch client_sh server_sh /\
        client.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some client_ch /\
        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\

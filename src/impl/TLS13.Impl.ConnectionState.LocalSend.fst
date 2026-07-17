@@ -25,6 +25,7 @@ module Repr = TLS13.Impl.ConnectionState.Repr
 module Tags = TLS13.Impl.ConnectionState.Tags
 module Arr = Pulse.Lib.Array
 module ArrPts = Pulse.Lib.Array.PtsTo
+module PR = Pulse.Lib.Reference
 module R = TLS13.Record.Spec
 module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
@@ -48,6 +49,12 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module GA = TLS13.Wire.Generated.Alert
+module GAL = TLS13.Wire.Generated.AlertLevel
+module GAD = TLS13.Wire.Generated.AlertDescription
+module LP = LowParse.Spec
+module LPC = LowParse.Pulse.Combinators
+module LPS = LowParse.Pulse.Base
 
 open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
@@ -60,21 +67,95 @@ fn write_close_notify_alert
   ensures exists* alert_bytes.
             ArrPts.pts_to alert alert_bytes **
             pure (B.length alert_bytes == 2 /\
-                  Seq.equal alert_bytes close_notify_alert_fragment)
+                  Seq.equal alert_bytes (close_notify_alert_fragment ()))
 {
-  alert.(0sz) <- 2uy;
-  alert.(1sz) <- 0uy;
+  let low : GA.alert_lowtype = (GAL.Fatal, GAD.Close_notify);
+  let mid : Ghost.erased GA.alert_mid =
+    Ghost.hide (GAL.Fatal, GAD.Close_notify);
+  fold (LPS.eq_as_slprop GAL.alertLevel GAL.Fatal GAL.Fatal);
+  fold (LPS.eq_as_slprop GAD.alertDescription GAD.Close_notify GAD.Close_notify);
+  rewrite (LPS.eq_as_slprop GAL.alertLevel GAL.Fatal GAL.Fatal)
+       as (GAL.alertLevel_vmatch GAL.Fatal GAL.Fatal);
+  rewrite (LPS.eq_as_slprop GAD.alertDescription GAD.Close_notify GAD.Close_notify)
+       as (GAD.alertDescription_vmatch GAD.Close_notify GAD.Close_notify);
+  rewrite (GAL.alertLevel_vmatch GAL.Fatal GAL.Fatal)
+       as (GAL.alertLevel_vmatch (fst low) (fst (Ghost.reveal mid)));
+  rewrite (GAD.alertDescription_vmatch GAD.Close_notify GAD.Close_notify)
+       as (GAD.alertDescription_vmatch (snd low) (snd (Ghost.reveal mid)));
+  fold (LPC.vmatch_pair
+    GAL.alertLevel_vmatch GAD.alertDescription_vmatch low (Ghost.reveal mid));
+  rewrite
+    (LPC.vmatch_pair
+      GAL.alertLevel_vmatch GAD.alertDescription_vmatch low (Ghost.reveal mid))
+    as (GA.alert_vmatch low (Ghost.reveal mid));
+  let record : Ghost.erased GA.alert = Ghost.hide {
+    GA.level = GAL.Fatal;
+    GA.description = GAD.Close_notify;
+  };
+  assert (pure (GA.alert_conv (Ghost.reveal mid) ==
+    Some (Ghost.reveal record)));
+  LP.serialize_length GAL.alertLevel_serializer GAL.Fatal;
+  LP.serialize_length GAD.alertDescription_serializer GAD.Close_notify;
+  GA.alert_bytesize_eqn (Ghost.reveal record);
+  assert (pure (B.length
+    (LP.serialize GA.alert_serializer (Ghost.reveal record)) == 2));
+  ArrPts.pts_to_len alert;
+  let s = Slice.from_array alert 2sz;
+  Slice.pts_to_len s;
+  let s_len = Slice.len s;
+  assert (pure (SZ.v s_len == 2));
+  let mut perr = false;
+  let written = GA.write_alert low #mid s perr;
+  with slice_bytes. assert (Slice.pts_to s slice_bytes);
+  Slice.pts_to_len s;
+  assert (pure (B.length slice_bytes == 2));
+  let err = PR.read perr;
+  assert (pure (err == false));
+  Slice.to_array s;
   with alert_bytes.
     assert (ArrPts.pts_to alert alert_bytes);
-  assert_norm (close_notify_alert_fragment == B.of_list [2uy; 0uy]);
-  assert_norm (B.length close_notify_alert_fragment == 2);
-  assert_norm (Seq.index close_notify_alert_fragment 0 == 2uy);
-  assert_norm (Seq.index close_notify_alert_fragment 1 == 0uy);
+  Model.lemma_close_notify_alert_fragment_generated ();
   assert (pure (B.length alert_bytes == 2));
-  assert (pure (Seq.index alert_bytes 0 == 2uy));
-  assert (pure (Seq.index alert_bytes 1 == 0uy));
-  Seq.lemma_eq_intro alert_bytes close_notify_alert_fragment;
-  assert (pure (Seq.equal alert_bytes close_notify_alert_fragment))
+  assert (pure (SZ.v written == 2));
+  assert (pure (Seq.equal
+    alert_bytes
+    (LP.serialize GA.alert_serializer {
+      GA.level = GAL.Fatal;
+      GA.description = GAD.Close_notify;
+    })));
+  assert (pure (
+    LP.serialize GA.alert_serializer {
+      GA.level = GAL.Fatal;
+      GA.description = GAD.Close_notify;
+    } == close_notify_alert_fragment ()));
+  Seq.lemma_eq_refl
+    (LP.serialize GA.alert_serializer {
+      GA.level = GAL.Fatal;
+      GA.description = GAD.Close_notify;
+    })
+    (close_notify_alert_fragment ());
+  Seq.lemma_eq_elim
+    alert_bytes
+    (LP.serialize GA.alert_serializer {
+      GA.level = GAL.Fatal;
+      GA.description = GAD.Close_notify;
+    });
+  assert (pure (Seq.equal alert_bytes (close_notify_alert_fragment ())));
+  unfold (GA.alert_vmatch low (Ghost.reveal mid));
+  unfold (LPC.vmatch_pair
+    GAL.alertLevel_vmatch GAD.alertDescription_vmatch low (Ghost.reveal mid));
+  rewrite (GAL.alertLevel_vmatch (fst low) (fst (Ghost.reveal mid)))
+       as (GAL.alertLevel_vmatch GAL.Fatal GAL.Fatal);
+  rewrite (GAD.alertDescription_vmatch (snd low) (snd (Ghost.reveal mid)))
+       as (GAD.alertDescription_vmatch GAD.Close_notify GAD.Close_notify);
+  rewrite (GAL.alertLevel_vmatch GAL.Fatal GAL.Fatal)
+       as (LPS.eq_as_slprop GAL.alertLevel GAL.Fatal GAL.Fatal);
+  rewrite (GAD.alertDescription_vmatch GAD.Close_notify GAD.Close_notify)
+       as (LPS.eq_as_slprop
+         GAD.alertDescription GAD.Close_notify GAD.Close_notify);
+  unfold (LPS.eq_as_slprop GAL.alertLevel GAL.Fatal GAL.Fatal);
+  unfold (LPS.eq_as_slprop
+    GAD.alertDescription GAD.Close_notify GAD.Close_notify)
 }
 
 fn write_key_update_response
@@ -1228,7 +1309,8 @@ fn try_send_close_notify
     write_close_notify_alert alert_plaintext;
     with alert_plaintext_bytes.
       assert (ArrPts.pts_to alert_plaintext alert_plaintext_bytes);
-    assert (pure (Seq.equal alert_plaintext_bytes close_notify_alert_fragment));
+    assert (pure (Seq.equal
+      alert_plaintext_bytes (close_notify_alert_fragment ())));
     assert (pure (B.length alert_plaintext_bytes == 2));
 
     let inner_plaintext_len = 3sz;
@@ -1366,22 +1448,23 @@ fn try_send_close_notify
           M.fragment = Seq.slice alert_plaintext_bytes 0 2;
         })));
       Seq.lemma_eq_elim (Seq.slice alert_plaintext_bytes 0 2) alert_plaintext_bytes;
-      assert (pure (Seq.equal alert_plaintext_bytes Model.close_notify_alert_fragment));
-      Seq.lemma_eq_elim alert_plaintext_bytes Model.close_notify_alert_fragment;
-      assert (pure (Seq.equal alert_plaintext_bytes (B.of_list [2uy; 0uy])));
-      Seq.lemma_eq_elim alert_plaintext_bytes (B.of_list [2uy; 0uy]);
+      assert (pure (Seq.equal
+        alert_plaintext_bytes (Model.close_notify_alert_fragment ())));
+      Seq.lemma_eq_elim
+        alert_plaintext_bytes (Model.close_notify_alert_fragment ());
       assert (pure (Seq.equal
         inner_plaintext_bytes
         (W.serialize_plaintext {
           M.content_type = T.Alert;
-          M.fragment = B.of_list [2uy; 0uy];
+          M.fragment = Model.close_notify_alert_fragment ();
         })));
+      Model.lemma_close_notify_alert_fragment_generated ();
       W.lemma_serialize_tls_message_close_notify ();
       assert (pure (
         TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment (M.TlsAlert T.Close_notify) ==
         W.serialize_plaintext {
           M.content_type = T.Alert;
-          M.fragment = B.of_list [2uy; 0uy];
+          M.fragment = Model.close_notify_alert_fragment ();
         }));
       assert (pure (Seq.equal
         inner_plaintext_bytes

@@ -2011,6 +2011,8 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
+        WFL.supported_client_config_wire_profile
+          client.CS.cs_model.CS.model_config /\
         TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
         TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
         TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
@@ -2061,6 +2063,16 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
+  PNTRB.lemma_client_prefix_received_server_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
   PNTRB.lemma_client_prefix_raw_slices
     client_model0
     client_start
@@ -2496,6 +2508,8 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
+        WFL.supported_client_config_wire_profile
+          client.CS.cs_model.CS.model_config /\
         TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
         TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
         TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
@@ -2550,6 +2564,16 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
+  PNTRB.lemma_client_prefix_received_server_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
   PNTRB.lemma_client_prefix_raw_slices
     client_model0
     client_start
@@ -2851,6 +2875,8 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
+        WFL.supported_client_config_wire_profile
+          client.CS.cs_model.CS.model_config /\
         TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
         TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
         TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
@@ -2906,6 +2932,16 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
+  PNTRB.lemma_client_prefix_received_server_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
   PNTRB.lemma_client_prefix_raw_slices
     client_model0
     client_start
@@ -3710,6 +3746,16 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                 client.CS.cs_wire_log.CL.raw_sent
                 client.CS.cs_wire_log.CL.raw_received
                 client.CS.cs_model);
+              PNTRB.lemma_client_prefix_received_server_hello_supported
+                client_model0
+                start
+                client_ch
+                client_sh
+                client_shared
+                client_tail
+                client.CS.cs_wire_log.CL.raw_sent
+                client.CS.cs_wire_log.CL.raw_received
+                client.CS.cs_model;
               PNTRB.lemma_client_prefix_raw_slices
                 client_model0
                 start

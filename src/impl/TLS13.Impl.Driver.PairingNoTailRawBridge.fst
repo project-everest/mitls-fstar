@@ -546,6 +546,7 @@ let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
   (ccs_tail:B.bytes)
   : Lemma
       (requires
+        WFL.supported_server_hello_wire_profile sh /\
         Seq.equal left_stream right_stream /\
         Seq.equal left_stream (B.append server_hello_raw server_tail) /\
         Seq.equal right_stream (B.append ccs_raw ccs_tail) /\
@@ -575,6 +576,7 @@ let lemma_equal_stream_head_received_server_hello_not_change_cipher_spec
   assert (Seq.equal ccs_raw ccs_wire);
   Seq.lemma_eq_elim server_hello_raw sh_wire;
   Seq.lemma_eq_elim ccs_raw ccs_wire;
+  WFL.lemma_serialize_handshake_server_hello_record_bound sh;
   WRU.lemma_serialize_record_head T.Handshake sh_fragment;
   WRU.lemma_serialize_record_head T.Change_cipher_spec (B.singleton 1uy);
   assert (B.length server_hello_raw > 0);

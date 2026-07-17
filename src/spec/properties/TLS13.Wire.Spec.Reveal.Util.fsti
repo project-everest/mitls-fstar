@@ -7,7 +7,9 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
-val byte: n:nat -> GTot U8.t
+val byte:
+  n:nat ->
+  GTot (b:U8.t{U8.v b == n % 256})
 
 val u8: n:nat -> GTot B.bytes
 val u16: n:nat -> GTot B.bytes
@@ -27,7 +29,12 @@ val lemma_content_type_byte_value:
 val serialize_record_header:
   content_type:T.content_type ->
   fragment_len:nat ->
-  GTot B.bytes
+  GTot (header:B.bytes{
+    B.length header == 5 /\
+    Seq.equal header
+      (B.append
+        (B.singleton (content_type_byte content_type))
+        (B.append (u16 0x0303) (u16 fragment_len)))})
 
 val lemma_slice_append_left:
   #a:eqtype ->
@@ -83,10 +90,63 @@ val lemma_u24_reveal:
   n:nat ->
   Lemma (Seq.equal (u24 n) (B.of_list [byte (n / 65536); byte (n / 256); byte n]))
 
+val lemma_u16_of_bytes:
+  hi:U8.t ->
+  lo:U8.t ->
+  Lemma (Seq.equal
+    (u16 (U8.v hi * 256 + U8.v lo))
+    (B.of_list [hi; lo]))
+
+val lemma_serialize_record_reveal:
+  content_type:T.content_type ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
+  Lemma (Seq.equal
+    (WS.serialize_record content_type fragment)
+    (B.append
+      (serialize_record_header content_type (B.length fragment))
+      fragment))
+
 val lemma_serialize_record_head:
   content_type:T.content_type ->
-  fragment:B.bytes ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
   Lemma (ensures
     B.length (WS.serialize_record content_type fragment) > 0 /\
     Seq.index (WS.serialize_record content_type fragment) 0 ==
       content_type_byte content_type)
+
+val lemma_serialize_record_legacy_version:
+  content_type:T.content_type ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
+  Lemma (ensures
+    B.length (WS.serialize_record content_type fragment) >= 3 /\
+    Seq.index (WS.serialize_record content_type fragment) 1 == 0x03uy /\
+    Seq.index (WS.serialize_record content_type fragment) 2 == 0x03uy)
+
+val lemma_serialize_record_fragment_length:
+  content_type:T.content_type ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
+  Lemma
+    (requires
+      B.length (WS.serialize_record content_type fragment) >= 5)
+    (ensures
+      WS.read_u16 (WS.serialize_record content_type fragment) 3 ==
+        B.length fragment)
+
+val lemma_serialize_record_prefix_from_header:
+  raw:B.bytes ->
+  content_type:T.content_type ->
+  fragment_len:nat ->
+  Lemma
+    (requires
+      fragment_len <= 16640 /\
+      5 + fragment_len <= B.length raw /\
+      Seq.index raw 0 == content_type_byte content_type /\
+      Seq.index raw 1 == 0x03uy /\
+      Seq.index raw 2 == 0x03uy /\
+      U8.v (Seq.index raw 3) * 256 + U8.v (Seq.index raw 4) ==
+        fragment_len)
+    (ensures Seq.equal
+      (WS.serialize_record
+        content_type
+        (Seq.slice raw 5 (5 + fragment_len)))
+      (Seq.slice raw 0 (5 + fragment_len)))

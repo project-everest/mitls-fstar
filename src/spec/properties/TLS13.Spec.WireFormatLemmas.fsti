@@ -304,6 +304,7 @@ val lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
         client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
         server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
         supported_client_hello_wire_profile client_ch /\
+        B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
         Seq.equal client_ch_raw server_ch_raw /\
         Seq.equal server_sh_raw client_sh_raw /\
         CS.cleartext_tls_message_raw
@@ -342,6 +343,7 @@ val lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
         client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
         server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
         supported_client_hello_wire_profile client_ch /\
+        B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
         Seq.equal client_ch_raw server_ch_raw /\
         Seq.equal server_sh_raw client_sh_raw /\
         CS.cleartext_tls_message_raw
@@ -389,6 +391,7 @@ val lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_ser
         client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
         server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
         supported_client_hello_wire_profile client_ch /\
+        B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
         Seq.equal client_ch_raw server_ch_raw /\
         Seq.equal server_sh_raw client_sh_raw /\
         CS.cleartext_tls_message_raw

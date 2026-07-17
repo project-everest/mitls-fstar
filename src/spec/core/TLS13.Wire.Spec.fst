@@ -3,6 +3,14 @@ module TLS13.Wire.Spec
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module LP = LowParse.Spec
+module GA = TLS13.Wire.Generated.Alert
+module GAL = TLS13.Wire.Generated.AlertLevel
+module GCCS = TLS13.Wire.Generated.ChangeCipherSpec
+module GCT = TLS13.Wire.Generated.ContentType
+module GPT = TLS13.Wire.Generated.TLSPlaintext
+module GPTF = TLS13.Wire.Generated.TLSPlaintext_fragment
+module GCTXT = TLS13.Wire.Generated.TLSCiphertext
+module GCTXTF = TLS13.Wire.Generated.TLSCiphertext_encrypted_record
 module GFinished = TLS13.Wire.Generated.Finished
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GSS = TLS13.Wire.Generated.SignatureScheme
@@ -602,19 +610,16 @@ let lemma_serialize_server_certificate_verify_input_len32
   ()
 
 let parse_record (input:B.bytes) : GTot (option (T.content_type & M.sealed_record & nat)) =
-  if B.length input < 5 then None
-  else
-    match content_type_of_byte (Seq.index input 0) with
-    | None -> None
-    | Some content_type ->
-      if read_u16 input 1 <> 0x0303 then None
-      else
-        let fragment_len = read_u16 input 3 in
-        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then None
-        else
-          match take_range input 5 fragment_len with
-          | Some fragment -> Some (content_type, fragment, 5 + fragment_len)
-          | None -> None
+  match LP.parse GCTXT.tLSCiphertext_parser input with
+  | Some (record, consumed) ->
+    (match record.GCTXT.legacy_record_version with
+     | GPV.TLS_1p2 ->
+       Some (
+         record.GCTXT.opaque_type,
+         (record.GCTXT.encrypted_record <: B.bytes),
+         consumed)
+     | GPV.TLS_1p3 -> None)
+  | None -> None
 
 let parse_record_wire (input:B.bytes) : GTot (option (T.content_type & M.sealed_record & nat)) =
   let parsed = parse_record input in
@@ -635,24 +640,24 @@ let lemma_parse_record_some_consumed_positive
   (consumed:nat)
   : Lemma
     (requires parse_record input == Some (content_type, fragment, consumed))
-    (ensures consumed > 0 /\ consumed <= B.length input)
+    (ensures consumed >= 5 /\ consumed <= B.length input)
 =
-  if B.length input < 5 then ()
-  else
-    match content_type_of_byte (Seq.index input 0) with
-    | None -> ()
-    | Some _ ->
-      if read_u16 input 1 <> 0x0303 then ()
-      else
-        let fragment_len = read_u16 input 3 in
-        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
-        else
-          match take_range input 5 fragment_len with
-          | Some _ ->
-            assert (consumed == 5 + fragment_len);
-            assert (consumed > 0);
-            assert (consumed <= B.length input)
-          | None -> ()
+  match LP.parse GCTXT.tLSCiphertext_parser input with
+  | Some (record, consumed') ->
+    (match record.GCTXT.legacy_record_version with
+     | GPV.TLS_1p2 ->
+       LP.parser_kind_prop_intro
+         GCTXT.tLSCiphertext_parser_kind
+         GCTXT.tLSCiphertext_parser;
+       LP.parser_kind_prop_equiv
+         GCTXT.tLSCiphertext_parser_kind
+         GCTXT.tLSCiphertext_parser;
+       assert (LP.parses_at_least 5 GCTXT.tLSCiphertext_parser);
+       assert (consumed' >= 5);
+       assert (consumed == consumed');
+       assert (consumed >= 5)
+     | GPV.TLS_1p3 -> ())
+  | None -> ()
 
 let lemma_parse_record_implies_parse_record_wire (input:B.bytes)
   : Lemma
@@ -664,6 +669,23 @@ let lemma_parse_record_implies_parse_record_wire (input:B.bytes)
 =
   ()
 
+let lemma_parse_record_generated
+  (input:B.bytes)
+  (record:GCTXT.tLSCiphertext)
+  (consumed:nat{consumed <= B.length input})
+  : Lemma
+    (requires (
+      LP.parse GCTXT.tLSCiphertext_parser input == Some (record, consumed) /\
+      record.GCTXT.legacy_record_version == GPV.TLS_1p2))
+    (ensures (
+      parse_record input ==
+        Some
+          (record.GCTXT.opaque_type,
+           (record.GCTXT.encrypted_record <: B.bytes),
+           consumed)))
+=
+  ()
+
 let lemma_parse_record_wire_some_consumed_positive
   (input:B.bytes)
   (content_type:T.content_type)
@@ -671,7 +693,7 @@ let lemma_parse_record_wire_some_consumed_positive
   (consumed:nat)
   : Lemma
     (requires parse_record_wire input == Some (content_type, fragment, consumed))
-    (ensures consumed > 0 /\ consumed <= B.length input)
+    (ensures consumed >= 5 /\ consumed <= B.length input)
 =
   match parse_record input with
   | Some (ct, frag, consumed') ->
@@ -688,7 +710,7 @@ let lemma_parse_record_wire_some_consumed_positive
         if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
         else (
           assert (consumed == 5 + fragment_len);
-          assert (consumed > 0);
+          assert (consumed >= 5);
           assert (consumed <= B.length input)
         )
 
@@ -723,10 +745,34 @@ let lemma_parse_record_header_some_iff (input:B.bytes{B.length input == 5})
   ()
 
 let serialize_record (content_type:T.content_type) (fragment:B.bytes) : GTot B.bytes =
-  append3
-    (u8 (content_type_to_byte content_type))
-    (u16 0x0303)
-    (B.append (u16 (B.length fragment)) fragment)
+  if B.length fragment <= 16640
+  then
+    LP.serialize GCTXT.tLSCiphertext_serializer {
+      GCTXT.opaque_type = content_type;
+      GCTXT.legacy_record_version = GPV.TLS_1p2;
+      GCTXT.encrypted_record =
+        (fragment <: GCTXTF.tLSCiphertext_encrypted_record);
+    }
+  else B.empty
+
+let lemma_serialize_record_generated
+  (content_type:T.content_type)
+  (fragment:B.bytes{B.length fragment <= 16640})
+  : Lemma (serialize_record content_type fragment ==
+    LP.serialize GCTXT.tLSCiphertext_serializer {
+      GCTXT.opaque_type = content_type;
+      GCTXT.legacy_record_version = GPV.TLS_1p2;
+      GCTXT.encrypted_record =
+        (fragment <: GCTXTF.tLSCiphertext_encrypted_record);
+    })
+= ()
+
+let lemma_serialize_record_oversize
+  (content_type:T.content_type)
+  (fragment:B.bytes{B.length fragment > 16640})
+  : Lemma (serialize_record content_type fragment == B.empty)
+=
+  ()
 
 let lemma_parse_record_serialize_record
   (content_type:T.content_type)
@@ -736,63 +782,21 @@ let lemma_parse_record_serialize_record
        parse_record (serialize_record content_type fragment) ==
         Some (content_type, fragment, B.length (serialize_record content_type fragment)))
 =
-  let ct = u8 (content_type_to_byte content_type) in
-  let ver = u16 0x0303 in
-  let lenb = u16 (B.length fragment) in
-  let tail2 = B.append lenb fragment in
-  let tail1 = B.append ver tail2 in
-  let raw = B.append ct tail1 in
-  assert (raw == serialize_record content_type fragment);
-  Seq.lemma_len_append ct tail1;
-  Seq.lemma_len_append ver tail2;
-  Seq.lemma_len_append lenb fragment;
-  assert (B.length ct == 1);
-  assert (B.length ver == 2);
-  assert (B.length lenb == 2);
-  assert (B.length raw == 5 + B.length fragment);
-
-  Seq.lemma_index_app1 ct tail1 0;
-  Seq.lemma_index_create 1 (byte (content_type_to_byte content_type)) 0;
-  assert (Seq.index raw 0 == byte (content_type_to_byte content_type));
-  lemma_byte_v (content_type_to_byte content_type);
-  (match content_type with
-   | T.Invalid -> ()
-   | T.Change_cipher_spec -> ()
-   | T.Alert -> ()
-   | T.Handshake -> ()
-   | T.Application_data -> ());
-  assert (content_type_of_byte (Seq.index raw 0) == Some content_type);
-
-  Seq.lemma_index_app2 ct tail1 1;
-  Seq.lemma_index_app1 ver tail2 0;
-  Seq.lemma_index_app2 ct tail1 2;
-  Seq.lemma_index_app1 ver tail2 1;
-  lemma_read_u16_u16 0x0303;
-  assert (read_u16 raw 1 == read_u16 ver 0);
-  assert (read_u16 raw 1 == 0x0303);
-
-  Seq.lemma_index_app2 ct tail1 3;
-  Seq.lemma_index_app2 ver tail2 2;
-  Seq.lemma_index_app1 lenb fragment 0;
-  Seq.lemma_index_app2 ct tail1 4;
-  Seq.lemma_index_app2 ver tail2 3;
-  Seq.lemma_index_app1 lenb fragment 1;
-  lemma_read_u16_u16 (B.length fragment);
-  assert (read_u16 raw 3 == read_u16 lenb 0);
-  assert (read_u16 raw 3 == B.length fragment);
-
-  assert (B.length fragment <= 16384 + 256);
-  assert (5 + B.length fragment <= B.length raw);
-  let frag_slice = Seq.slice raw 5 (5 + B.length fragment) in
-  Seq.lemma_len_slice raw 5 (5 + B.length fragment);
-  assert (forall (i:nat{i < B.length fragment}).
-    Seq.index frag_slice i == Seq.index fragment i);
-  Seq.lemma_eq_intro frag_slice fragment;
-  assert (frag_slice == fragment);
-  assert (take_range raw 5 (B.length fragment) == Some frag_slice);
-  assert (take_range raw 5 (B.length fragment) == Some fragment);
-  assert (parse_record raw ==
-    Some (content_type, fragment, B.length raw))
+  let record : GCTXT.tLSCiphertext = {
+    GCTXT.opaque_type = content_type;
+    GCTXT.legacy_record_version = GPV.TLS_1p2;
+    GCTXT.encrypted_record =
+      (fragment <: GCTXTF.tLSCiphertext_encrypted_record);
+  } in
+  LP.serialize_length GCT.contentType_serializer content_type;
+  LP.serialize_length GPV.protocolVersion_serializer GPV.TLS_1p2;
+  GCTXTF.tLSCiphertext_encrypted_record_bytesize_eqn
+    (fragment <: GCTXTF.tLSCiphertext_encrypted_record);
+  GCTXT.tLSCiphertext_bytesize_eqn record;
+  assert (B.length (LP.serialize GCTXT.tLSCiphertext_serializer record) ==
+    5 + B.length fragment);
+  LP.parse_serialize GCTXT.tLSCiphertext_serializer record;
+  lemma_serialize_record_generated content_type fragment
 
 let parse_plaintext (input:B.bytes) : GTot (option M.plaintext) =
   if B.length input == 0 then None
@@ -910,16 +914,19 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
          | None -> None)
   | T.Application_data -> Some (M.TlsApplicationData fragment)
   | T.Alert ->
-    if B.length fragment == 2
-    then
-      match alert_description_of_byte (Seq.index fragment 1) with
-      | Some alert -> Some (M.TlsAlert alert)
-      | None -> None
-    else None
+    (match LP.parse GA.alert_parser fragment with
+     | Some (alert, consumed) ->
+       if consumed == B.length fragment
+       then Some (M.TlsAlert alert.GA.description)
+       else None
+     | None -> None)
   | T.Change_cipher_spec ->
-    if B.length fragment == 1 && nat_of_byte (Seq.index fragment 0) == 1
-    then Some M.TlsChangeCipherSpec
-    else None
+    (match LP.parse GCCS.changeCipherSpec_parser fragment with
+     | Some (value, consumed) ->
+       if consumed == B.length fragment && value == 1uy
+       then Some M.TlsChangeCipherSpec
+       else None
+     | None -> None)
 
 let lemma_parse_tls_message_invalid_none fragment = ()
 
@@ -933,8 +940,13 @@ let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) 
   match msg with
   | M.TlsHandshake hs -> (T.Handshake, serialize_handshake hs)
   | M.TlsApplicationData data -> (T.Application_data, data)
-  | M.TlsAlert alert -> (T.Alert, B.of_list [byte 2; byte (alert_description_to_byte alert)])
-  | M.TlsChangeCipherSpec -> (T.Change_cipher_spec, B.singleton (byte 1))
+  | M.TlsAlert alert ->
+    (T.Alert, LP.serialize GA.alert_serializer {
+      GA.level = GAL.Fatal;
+      GA.description = alert;
+    })
+  | M.TlsChangeCipherSpec ->
+    (T.Change_cipher_spec, LP.serialize GCCS.changeCipherSpec_serializer 1uy)
   | M.TlsIgnoredPostHandshake body -> (T.Handshake, append3 (u8 4) (u24 (B.length body)) body)
   | M.TlsKeyUpdate req ->
     let request_byte =
@@ -955,7 +967,10 @@ let lemma_serialize_tls_message_application_data (data:B.bytes)
 
 let lemma_serialize_tls_message_close_notify ()
   : Lemma (serialize_tls_message (M.TlsAlert T.Close_notify) ==
-    (T.Alert, B.of_list [2uy; 0uy]))
+    (T.Alert, LP.serialize GA.alert_serializer {
+      GA.level = GAL.Fatal;
+      GA.description = T.Close_notify;
+    }))
 =
   ()
 
@@ -963,7 +978,8 @@ let lemma_serialize_tls_message_change_cipher_spec ()
   : Lemma (serialize_tls_message M.TlsChangeCipherSpec ==
     (T.Change_cipher_spec, B.singleton 1uy))
 =
-  ()
+  GCCS.changeCipherSpec_parser_serializer_eq ();
+  LP.serialize_u8_spec 1uy
 
 let lemma_serialize_tls_message_key_update_not_requested ()
   : Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) ==
@@ -1002,28 +1018,27 @@ let lemma_parse_record_serializes (input:B.bytes)
                     (Seq.slice input 0 consumed)
         | None -> True))
   =
-  if B.length input < 5 then ()
-  else
-    match content_type_of_byte (Seq.index input 0) with
+    match LP.parse GCTXT.tLSCiphertext_parser input with
+    | Some (record, consumed) ->
+      (match record.GCTXT.legacy_record_version with
+       | GPV.TLS_1p2 ->
+         let fragment : B.bytes = record.GCTXT.encrypted_record <: B.bytes in
+         LP.parsed_data_is_serialize GCTXT.tLSCiphertext_serializer input;
+         Seq.lemma_split input consumed;
+         Seq.lemma_append_inj
+           (Seq.slice input 0 consumed)
+           (Seq.slice input consumed (B.length input))
+           (LP.serialize GCTXT.tLSCiphertext_serializer record)
+           (Seq.slice input consumed (B.length input));
+         assert (Seq.equal
+           (LP.serialize GCTXT.tLSCiphertext_serializer record)
+           (Seq.slice input 0 consumed));
+         assert (serialize_record record.GCTXT.opaque_type fragment ==
+           LP.serialize GCTXT.tLSCiphertext_serializer record);
+         lemma_parse_record_some_consumed_positive
+           input record.GCTXT.opaque_type fragment consumed
+       | GPV.TLS_1p3 -> ())
     | None -> ()
-    | Some content_type ->
-      if read_u16 input 1 <> 0x0303 then ()
-      else
-        let fragment_len = read_u16 input 3 in
-        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
-        else
-          match take_range input 5 fragment_len with
-          | None -> ()
-          | Some fragment ->
-            assert (B.length fragment == fragment_len);
-            assert (B.length (serialize_record content_type fragment) == 5 + fragment_len);
-            assert (5 + fragment_len <= B.length input);
-            assert (forall (i:nat{i < B.length (serialize_record content_type fragment)}).
-                      Seq.index (serialize_record content_type fragment) i ==
-                      Seq.index (Seq.slice input 0 (5 + fragment_len)) i);
-            Seq.lemma_eq_intro
-              (serialize_record content_type fragment)
-              (Seq.slice input 0 (5 + fragment_len))
 
 let lemma_parse_record_fragment_bound (input:B.bytes)
   : Lemma
@@ -1032,21 +1047,13 @@ let lemma_parse_record_fragment_bound (input:B.bytes)
         | Some (_, fragment, _) -> B.length fragment <= 16640
         | None -> True))
 =
-  if B.length input < 5 then ()
-  else
-    match content_type_of_byte (Seq.index input 0) with
-    | None -> ()
-    | Some _ ->
-      if read_u16 input 1 <> 0x0303 then ()
-      else
-        let fragment_len = read_u16 input 3 in
-        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
-        else
-          match take_range input 5 fragment_len with
-          | Some fragment ->
-            assert (B.length fragment == fragment_len);
-            assert (B.length fragment <= 16640)
-          | None -> ()
+  match LP.parse GCTXT.tLSCiphertext_parser input with
+  | Some (record, _) ->
+    (match record.GCTXT.legacy_record_version with
+     | GPV.TLS_1p2 ->
+       assert (B.length (record.GCTXT.encrypted_record <: B.bytes) <= 16640)
+     | GPV.TLS_1p3 -> ())
+  | None -> ()
 
 let lemma_parse_record_wire_fragment_bound (input:B.bytes)
   : Lemma

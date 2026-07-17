@@ -1942,7 +1942,8 @@ let lemma_note_app_received_chunks_loop_step
   lemma_note_app_received_chunks_app_view view chunks;
   L.append_assoc view.app_view.app_received chunks [bytes];
   lemma_note_app_received_chunks_pending_fields view (chunks @ [bytes]);
-  lemma_note_app_received_chunks_raw_log view (chunks @ [bytes])
+  lemma_note_app_received_chunks_raw_log view (chunks @ [bytes]);
+  assert ((note_app_received_chunks view (chunks @ [bytes])).raw_log == view.raw_log)
 
 let lemma_note_app_received_chunks_loop_accept_output
   (view:connection_view)

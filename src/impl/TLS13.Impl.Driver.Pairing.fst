@@ -23,6 +23,7 @@ module SeqP = FStar.Seq.Properties
 module ST = TLS13.Impl.Server.Types
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
+module WStep = TLS13.System.WireStep
 
 open TLS13.Spec.Pairing.Transport
 
@@ -1542,6 +1543,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
     client
     server
@@ -1653,6 +1656,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
     client
     server
@@ -1769,6 +1774,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   PWP.lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
     client
     server
@@ -1867,6 +1874,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   eliminate exists
     (server_ee:PWL.protected_message_replay)
     (server_cert:PWL.protected_message_replay)
@@ -1993,6 +2002,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
          client
          server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   eliminate exists
     (server_ee:PWL.protected_message_replay)
     (server_cert:PWL.protected_message_replay)

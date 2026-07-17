@@ -23,6 +23,10 @@ module U16 = FStar.UInt16
 module U64 = FStar.UInt64
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module GA = TLS13.Wire.Generated.Alert
+module GAL = TLS13.Wire.Generated.AlertLevel
+module GAD = TLS13.Wire.Generated.AlertDescription
+module LP = LowParse.Spec
 
 // Phase 5: handshake_msg payloads are now the QuackyDucky-generated wire
 // records; profile-relevant fields are read through the TLS13.Wire.Semantics
@@ -1901,7 +1905,16 @@ let can_send_application_data
 
 noextract
 
-let close_notify_alert_fragment : B.bytes = B.of_list [2uy; 0uy]
+val close_notify_alert_fragment: unit -> GTot B.bytes
+
+val lemma_close_notify_alert_fragment_generated:
+  unit ->
+  Lemma (
+    close_notify_alert_fragment () ==
+    LP.serialize GA.alert_serializer {
+      GA.level = GAL.Fatal;
+      GA.description = GAD.Close_notify;
+    })
 
 noextract
 

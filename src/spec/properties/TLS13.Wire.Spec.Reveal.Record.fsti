@@ -2,6 +2,8 @@ module TLS13.Wire.Spec.Reveal.Record
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.StateMachine
+module GCCS = TLS13.Wire.Generated.ChangeCipherSpec
+module LP = LowParse.Spec
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module T = TLS13.Types
@@ -17,9 +19,12 @@ val lemma_byte_value:
 val lemma_ptm_change_cipher_spec:
   fragment:B.bytes ->
   Lemma (ensures WS.parse_tls_message T.Change_cipher_spec fragment ==
-    (if B.length fragment = 1 && U8.v (Seq.index fragment 0) = 1
-     then Some M.TlsChangeCipherSpec
-     else None))
+    (match LP.parse GCCS.changeCipherSpec_parser fragment with
+     | Some (value, consumed) ->
+       if consumed == B.length fragment && value == 1uy
+       then Some M.TlsChangeCipherSpec
+       else None
+     | None -> None))
 
 val lemma_ptm_application_data:
   fragment:B.bytes ->
@@ -56,13 +61,13 @@ val serialize_record_header:
 
 val lemma_serialize_record_reveal:
   content_type:T.content_type ->
-  fragment:B.bytes ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
   Lemma (Seq.equal
     (WS.serialize_record content_type fragment)
     (B.append (serialize_record_header content_type (B.length fragment)) fragment))
 
 val lemma_serialize_application_data_header_reveal:
-  fragment_len:nat ->
+  fragment_len:nat{fragment_len <= 16640} ->
   Lemma (Seq.equal
     (serialize_record_header T.Application_data fragment_len)
     (TLS13.Spec.StateMachine.Canonical.application_data_record_header fragment_len))
@@ -84,7 +89,7 @@ val lemma_application_data_record_aad:
     (TLS13.Spec.StateMachine.Canonical.application_data_record_header (B.length fragment)))
 
 val lemma_serialize_application_data_record_reveal:
-  fragment:B.bytes ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
   Lemma (Seq.equal
     (WS.serialize_record T.Application_data fragment)
     (B.append (TLS13.Spec.StateMachine.Canonical.application_data_record_header (B.length fragment)) fragment))

@@ -27,6 +27,7 @@ module PNTSFS = TLS13.Impl.Driver.PairingNoTailServerFlightStaged
 module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
 module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 module SD = TLS13.Impl.Server.Driver
+module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 
 noextract
@@ -59,6 +60,7 @@ let clean16_cleartext_final_hello_slot_milestone
       server_sh
       server_rest /\
     WFL.supported_client_hello_wire_profile client_ch /\
+    B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
     PNTRB.normalized_cleartext_raw_wire_bridge
       client_ch
       server_ch

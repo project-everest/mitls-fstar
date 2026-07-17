@@ -5,10 +5,9 @@ module TLS13.Wire.Spec.Reveal.Injective
     Both facts are consequences of the QuackyDucky/LowParse codec being an
     honest serializer:
 
-    * [serialize_record] appends the [fragment] verbatim after a fixed 5-byte
-      header, so two records with equal wire images have equal fragments (no
-      size bound is needed: the fragment always occupies the bytes from offset
-      5 to the end).
+    * Inside the generated TLSCiphertext codec's 16640-byte fragment domain,
+      [serialize_record] appends the [fragment] verbatim after a fixed 5-byte
+      header, so two records with equal wire images have equal fragments.
 
     * [serialize_handshake] on a fixed constructor is [LP.serialize] of the
       generated [handshake_serializer], which is injective ([LP.serializer_injective]).
@@ -29,6 +28,8 @@ val lemma_serialize_record_injective
   (f1 f2:B.bytes)
   : Lemma
       (requires
+        B.length f1 <= 16640 /\
+        B.length f2 <= 16640 /\
         Seq.equal (WS.serialize_record ct f1) (WS.serialize_record ct f2))
       (ensures Seq.equal f1 f2)
 

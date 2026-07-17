@@ -1367,6 +1367,8 @@ let lemma_deliver_to_client_sh_bridge a b wire c' out raw client_sh =
   assert (CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello client_sh)) raw);
   assert (Some? (hsf a.server).CS.hs_server_hello);
   let server_sh : GSH.serverHello = Some?.v (hsf a.server).CS.hs_server_hello in
+  WStep.lemma_consistent_server_hello_wire_bound a.server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   assert (CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello server_sh)) raw);
   // FACT 2: sh_wire_equiv b (witness raw).
   assert ((hsf b.server).CS.hs_server_hello == Some server_sh);

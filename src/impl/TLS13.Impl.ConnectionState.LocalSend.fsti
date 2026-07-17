@@ -59,7 +59,7 @@ fn write_close_notify_alert
   ensures exists* alert_bytes.
             ArrPts.pts_to alert alert_bytes **
             pure (B.length alert_bytes == 2 /\
-                  Seq.equal alert_bytes close_notify_alert_fragment)
+                  Seq.equal alert_bytes (close_notify_alert_fragment ()))
 
 fn write_key_update_response
   (handshake:array U8.t)

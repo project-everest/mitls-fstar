@@ -23,6 +23,10 @@ module U16 = FStar.UInt16
 module U64 = FStar.UInt64
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module GA = TLS13.Wire.Generated.Alert
+module GAL = TLS13.Wire.Generated.AlertLevel
+module GAD = TLS13.Wire.Generated.AlertDescription
+module LP = LowParse.Spec
 
 // Phase 5: handshake_msg payloads are the QuackyDucky-generated wire records.
 module Sem = TLS13.Wire.Semantics
@@ -325,6 +329,22 @@ let lemma_seal_application_success_next_seq
   match s.R.key, s.R.static_iv with
   | Some _, Some _ -> ()
   | _, _ -> ()
+
+noextract
+let close_notify_alert_fragment () : GTot B.bytes =
+  LP.serialize GA.alert_serializer {
+    GA.level = GAL.Fatal;
+    GA.description = GAD.Close_notify;
+  }
+
+let lemma_close_notify_alert_fragment_generated ()
+  : Lemma (
+      close_notify_alert_fragment () ==
+      LP.serialize GA.alert_serializer {
+        GA.level = GAL.Fatal;
+        GA.description = GAD.Close_notify;
+      })
+  = ()
 
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
   : Lemma

@@ -166,6 +166,7 @@ let lemma_server_hello_sent_received_eq
   (received_raw:B.bytes)
   : Lemma
       (requires
+        B.length (W.serialize_handshake (M.ServerHello sent_sh)) <= 16640 /\
         Seq.equal sent_raw received_raw /\
         CS.cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello sent_sh))
@@ -192,6 +193,15 @@ let lemma_server_hello_sent_received_eq
   lemma_seq_equal_sym sent_raw sent_record;
   lemma_seq_equal_trans sent_record sent_raw received_record;
   assert (Seq.equal sent_record received_record);
+  if B.length received_fragment > 16640 then (
+    W.lemma_parse_record_serialize_record T.Handshake sent_fragment;
+    W.lemma_serialize_record_oversize T.Handshake received_fragment;
+    assert (B.length sent_record >= 5);
+    assert (B.length received_record == 0);
+    Seq.lemma_eq_elim sent_record received_record;
+    assert False
+  );
+  assert (B.length received_fragment <= 16640);
   WRI.lemma_serialize_record_injective T.Handshake sent_fragment received_fragment;
   WRI.lemma_serialize_handshake_server_hello_injective sent_sh received_sh
 #pop-options
@@ -299,6 +309,7 @@ let lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
         client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
         server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
         supported_client_hello_wire_profile client_ch /\
+        B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
         Seq.equal client_ch_raw server_ch_raw /\
         Seq.equal server_sh_raw client_sh_raw /\
         CS.cleartext_tls_message_raw
@@ -368,6 +379,7 @@ let lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
         client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
         server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
         supported_client_hello_wire_profile client_ch /\
+        B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
         Seq.equal client_ch_raw server_ch_raw /\
         Seq.equal server_sh_raw client_sh_raw /\
         CS.cleartext_tls_message_raw
@@ -477,6 +489,7 @@ let lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_ser
         client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
         server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh /\
         supported_client_hello_wire_profile client_ch /\
+        B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
         Seq.equal client_ch_raw server_ch_raw /\
         Seq.equal server_sh_raw client_sh_raw /\
         CS.cleartext_tls_message_raw

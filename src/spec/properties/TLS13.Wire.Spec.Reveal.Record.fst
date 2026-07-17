@@ -4,6 +4,8 @@ friend TLS13.Wire.Spec
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.StateMachine
+module GCCS = TLS13.Wire.Generated.ChangeCipherSpec
+module LP = LowParse.Spec
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module T = TLS13.Types
@@ -12,16 +14,11 @@ module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 module ML = FStar.Math.Lemmas
 
-let byte n = WS.byte n
+let byte = U.byte
 
-let lemma_byte_value n = WS.lemma_byte_v n
+let lemma_byte_value n = ()
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 10"
-let lemma_ptm_change_cipher_spec fragment =
-  if B.length fragment = 1 && U8.v (Seq.index fragment 0) = 1
-  then assert (WS.nat_of_byte (Seq.index fragment 0) == 1)
-  else ()
-#pop-options
+let lemma_ptm_change_cipher_spec fragment = ()
 
 let lemma_ptm_application_data fragment = ()
 
@@ -35,9 +32,9 @@ let lemma_parse_plaintext_fragment_len input =
   | None -> ()
 #pop-options
 
-let u8 n = WS.u8 n
-let u16 n = WS.u16 n
-let u24 n = WS.u24 n
+let u8 = U.u8
+let u16 = U.u16
+let u24 = U.u24
 
 let content_type_byte ct = WS.byte (WS.content_type_to_byte ct)
 
@@ -49,16 +46,16 @@ let lemma_content_type_byte_value ct =
   | T.Handshake -> WS.lemma_byte_v 22
   | T.Application_data -> WS.lemma_byte_v 23
 
-let serialize_record_header content_type fragment_len =
-  B.append
-    (u8 (WS.content_type_to_byte content_type))
-    (B.append (u16 0x0303) (u16 fragment_len))
+let serialize_record_header = U.serialize_record_header
 
 #push-options "--fuel 8 --ifuel 2 --z3rlimit 40"
-let lemma_serialize_record_reveal content_type fragment = ()
+let lemma_serialize_record_reveal content_type fragment =
+  U.lemma_serialize_record_reveal content_type fragment
 #pop-options
 
-let lemma_serialize_application_data_header_reveal fragment_len =
+let lemma_serialize_application_data_header_reveal
+  (fragment_len:nat{fragment_len <= 16640})
+=
   let fragment = Seq.create fragment_len 0uy in
   let header = serialize_record_header T.Application_data fragment_len in
   lemma_serialize_record_reveal T.Application_data fragment;
@@ -73,7 +70,7 @@ let lemma_serialize_application_data_header_reveal fragment_len =
   assert (Seq.equal (TLS13.Spec.StateMachine.Canonical.application_data_record_header fragment_len) header)
 
 let lemma_serialize_handshake_record_header_reveal fragment_len =
-  let ct = u8 (WS.content_type_to_byte T.Handshake) in
+  let ct = B.singleton (content_type_byte T.Handshake) in
   let ver = u16 0x0303 in
   let lenb = u16 fragment_len in
   let ver_bytes = B.of_list [byte (0x0303 / 256); byte 0x0303] in
@@ -87,10 +84,12 @@ let lemma_serialize_handshake_record_header_reveal fragment_len =
       byte fragment_len
     ] in
   U.lemma_content_type_handshake_byte ();
+  lemma_content_type_byte_value T.Handshake;
+  assert_norm (U8.v 0x16uy == 22);
+  assert (U8.v (content_type_byte T.Handshake) == U8.v 0x16uy);
+  U8.v_inj (content_type_byte T.Handshake) 0x16uy;
   U.lemma_byte_3 ();
   U.lemma_byte_0303_lo ();
-  U.lemma_u8_reveal (WS.content_type_to_byte T.Handshake);
-  Seq.lemma_eq_elim ct (B.singleton (content_type_byte T.Handshake));
   U.lemma_u16_reveal 0x0303;
   Seq.lemma_eq_elim ver ver_bytes;
   U.lemma_u16_reveal fragment_len;
@@ -126,7 +125,9 @@ let lemma_application_data_record_aad fragment =
     header
     (TLS13.Spec.StateMachine.Canonical.application_data_record_header (B.length fragment))
 
-let lemma_serialize_application_data_record_reveal fragment =
+let lemma_serialize_application_data_record_reveal
+  (fragment:B.bytes{B.length fragment <= 16640})
+=
   let header = serialize_record_header T.Application_data (B.length fragment) in
   lemma_serialize_record_reveal T.Application_data fragment;
   lemma_serialize_application_data_header_reveal (B.length fragment);

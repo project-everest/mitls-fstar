@@ -31,6 +31,8 @@ module GSN = TLS13.Wire.Generated.ServerName
 module GHN = TLS13.Wire.Generated.HostName
 module GSS = TLS13.Wire.Generated.SignatureScheme
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
+module GCTX = TLS13.Wire.Generated.TLSCiphertext
+module GCTXF = TLS13.Wire.Generated.TLSCiphertext_encrypted_record
 module LP = LowParse.Spec
 module SHC = TLS13.ServerHello.Checks
 
@@ -434,6 +436,21 @@ val lemma_parse_record_implies_parse_record_wire:
         parse_record_wire input == Some (content_type, fragment, consumed)
       | None -> True))
 
+val lemma_parse_record_generated:
+  input:B.bytes ->
+  record:GCTX.tLSCiphertext ->
+  consumed:nat{consumed <= B.length input} ->
+  Lemma
+    (requires (
+      LP.parse GCTX.tLSCiphertext_parser input == Some (record, consumed) /\
+      record.GCTX.legacy_record_version == GPV.TLS_1p2))
+    (ensures (
+      parse_record input ==
+        Some
+          (record.GCTX.opaque_type,
+           (record.GCTX.encrypted_record <: B.bytes),
+           consumed)))
+
 val lemma_parse_record_wire_some_consumed_positive:
   input:B.bytes ->
   content_type:T.content_type ->
@@ -441,7 +458,7 @@ val lemma_parse_record_wire_some_consumed_positive:
   consumed:nat ->
   Lemma
     (requires parse_record_wire input == Some (content_type, fragment, consumed))
-    (ensures consumed > 0 /\ consumed <= B.length input)
+    (ensures consumed >= 5 /\ consumed <= B.length input)
 
 val parse_record_header:
   input:B.bytes ->
@@ -464,6 +481,22 @@ val serialize_record:
   content_type:T.content_type ->
   fragment:B.bytes ->
   GTot B.bytes
+
+val lemma_serialize_record_generated:
+  content_type:T.content_type ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
+  Lemma (serialize_record content_type fragment ==
+    LP.serialize GCTX.tLSCiphertext_serializer {
+      GCTX.opaque_type = content_type;
+      GCTX.legacy_record_version = GPV.TLS_1p2;
+      GCTX.encrypted_record =
+        (fragment <: GCTXF.tLSCiphertext_encrypted_record);
+    })
+
+val lemma_serialize_record_oversize:
+  content_type:T.content_type ->
+  fragment:B.bytes{B.length fragment > 16640} ->
+  Lemma (serialize_record content_type fragment == B.empty)
 
 val lemma_parse_record_serialize_record:
   content_type:T.content_type ->
@@ -582,7 +615,13 @@ val lemma_serialize_tls_message_application_data:
 val lemma_serialize_tls_message_close_notify:
   unit ->
   Lemma (serialize_tls_message (M.TlsAlert T.Close_notify) ==
-    (T.Alert, B.of_list [2uy; 0uy]))
+    (T.Alert, LP.serialize
+      TLS13.Wire.Generated.Alert.alert_serializer
+      {
+        TLS13.Wire.Generated.Alert.level =
+          TLS13.Wire.Generated.AlertLevel.Fatal;
+        TLS13.Wire.Generated.Alert.description = T.Close_notify;
+      }))
 
 val lemma_serialize_tls_message_change_cipher_spec:
   unit ->
