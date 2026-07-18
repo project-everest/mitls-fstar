@@ -15,6 +15,7 @@ module DL = TLS13.Impl.Server.Driver.Local
 module DN = TLS13.Impl.Server.Driver.Network
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module SP = TLS13.Impl.Server.CanonicalProtocol
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
@@ -73,6 +74,7 @@ type server_workflow_status =
   | ServerWorkflowStepFailed
   | ServerWorkflowExhausted
   | ServerWorkflowClosed
+  | ServerWorkflowPayloadTooLarge
 
 type server_receive_result = {
   server_receive_status: server_workflow_status;
@@ -89,6 +91,12 @@ let server_driver_send_status_correct
   else status == ServerWorkflowStepFailed
 
 noextract
+let server_driver_payload_too_large
+  (payload:B.bytes)
+  : prop =
+  B.length payload > SM.max_application_data_fragment_len
+
+noextract
 let server_driver_send_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -97,26 +105,36 @@ let server_driver_send_correct
   (sent:B.bytes)
   (sent':B.bytes)
   : prop =
-  exists resp.
-    DL.server_driver_local_write_correct
-      st0
-      st1
-      resp
-      ST.LocalSendApplicationData
-      payload
-      sent
-      sent' /\
-    server_driver_send_status_correct status resp
+  if status == ServerWorkflowPayloadTooLarge
+  then
+    st1 == st0 /\
+    Seq.equal sent' sent /\
+    server_driver_payload_too_large payload
+  else
+    exists resp.
+      DL.server_driver_local_write_correct
+        st0
+        st1
+        resp
+        ST.LocalSendApplicationData
+        payload
+        sent
+        sent' /\
+      server_driver_send_status_correct status resp
 
 noextract
 let server_driver_receive_status_correct
   (result:server_receive_result)
   (loop:DN.server_driver_network_loop_result)
+  (st1:CS.connection_state)
   (app_out:B.bytes)
   (out_bytes:B.bytes)
   : prop =
   if loop.DN.server_driver_network_loop_exhausted then
     result.server_receive_status == ServerWorkflowExhausted /\
+    result.server_receive_len == 0sz
+  else if st1.CS.cs_model.CS.model_control == CS.ControlClosed then
+    result.server_receive_status == ServerWorkflowClosed /\
     result.server_receive_len == 0sz
   else
     match loop.DN.server_driver_network_loop_last.ST.response.ST.status with
@@ -168,7 +186,7 @@ let server_driver_receive_correct
   (app_out:B.bytes)
   (out_bytes:B.bytes)
   : prop =
-  server_driver_receive_status_correct result loop app_out out_bytes /\
+  server_driver_receive_status_correct result loop st1 app_out out_bytes /\
   SZ.v result.server_receive_len <= B.length out_bytes /\
   (loop.DN.server_driver_network_loop_exhausted == false ==>
     DN.server_driver_network_process_correct
@@ -498,10 +516,7 @@ fn send
               'sent **
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 ST.server_local_event_input_ready
-                   'st0
-                   ST.LocalSendApplicationData
-                   (Ghost.reveal 'payload_bytes))
+                 server_driver_application_ready 'st0)
   returns status:server_workflow_status
   ensures exists* st1 sent'.
           server_driver_connected

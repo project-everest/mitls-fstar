@@ -34,6 +34,7 @@ module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -1092,6 +1093,10 @@ let lemma_client_receive_observation_network_correct_from_buffered
         result.driver_workflow_status <> DriverWorkflowExhausted /\
         (result.driver_workflow_status == DriverWorkflowOk ==>
           st_network == st1 /\ Seq.equal observed_app_out_bytes app_out_bytes) /\
+        (result.driver_workflow_status == DriverWorkflowClosed ==>
+          st_network == st1 /\
+          st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
+          result.driver_workflow_network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len == 0sz) /\
         client_buffered_network_io_step_correct
           st_network
           result.driver_workflow_network
@@ -1192,7 +1197,12 @@ let lemma_client_receive_observation_network_correct_from_buffered
       observed_app_out /\
     ((client_driver_workflow_observation result).client_receive_observed_status ==
       DriverWorkflowOk ==>
-      st_network == st1 /\ Seq.equal observed_app_out app_out_bytes))
+      st_network == st1 /\ Seq.equal observed_app_out app_out_bytes) /\
+    ((client_driver_workflow_observation result).client_receive_observed_status ==
+      DriverWorkflowClosed ==>
+      st_network == st1 /\
+      st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
+      (client_driver_workflow_observation result).client_receive_observed_response.CT.response.CT.app_out_len == 0sz))
 
 noextract
 let internal_local_action_kind
@@ -5153,6 +5163,13 @@ fn rec driver_receive_application_data
               pts_to app_out app_out_network);
     assert (pure (st_network.CS.cs_model.CS.model_config ==
       'st0.CS.cs_model.CS.model_config));
+    (* Take a control-state snapshot of the post-network-step state while the
+       underlying driver resource is still directly available, so that the
+       peer close_notify (ControlClosed) case can be detected below without
+       recursing to fuel exhaustion. *)
+    let snapshot = driver_control_snapshot d.top_driver_core;
+    assert (pure (CR.control_snapshot_matches snapshot st_network));
+    let net_closed = snapshot.CR.snapshot_control_tag = 4uy;
     fold (top_driver_exactly d st_network
       buffered_network
       network.buffered_network_io_buffered.buffered_network_new_len);
@@ -5264,6 +5281,71 @@ fn rec driver_receive_application_data
       };
       assert (pure (result.driver_workflow_status == DriverWorkflowOk));
       assert (pure (result.driver_workflow_network == network));
+      lemma_client_receive_observation_network_correct_from_buffered
+        'st0
+        st_network
+        st_network
+        result
+        network_out_network
+        app_out_network
+        app_out_network;
+      assert (pure (client_receive_observation_network_correct
+        'st0
+        st_network
+        (client_driver_workflow_observation result)
+        app_out_network));
+      assert (pure (result.driver_workflow_rx_len ==
+        network.buffered_network_io_buffered.buffered_network_new_len));
+      assert (pure (B.length raw_network == SZ.v raw_capacity));
+      assert (pure (B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len));
+      assert (pure (B.length 'old_auth_payload == SZ.v certificate_public_key_len));
+      assert (pure (B.length 'old_auth_cv_input == SZ.v auth_cv_input_len));
+      assert (pure (B.length 'old_auth_signature == SZ.v auth_signature_len));
+      assert (pure (SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity));
+      assert (pure (B.length buffered_network == SZ.v result.driver_workflow_rx_len));
+      assert (pure (Seq.equal buffered_network
+        (Seq.slice raw_network 0 (SZ.v result.driver_workflow_rx_len))));
+      assert (pure (B.length network_out_network == SZ.v network_out_len));
+      assert (pure (B.length app_out_network == SZ.v app_out_len));
+      assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+        CT.client_end_to_end_invariant st_network));
+      rewrite (top_driver_exactly
+        d
+        st_network
+        buffered_network
+        network.buffered_network_io_buffered.buffered_network_new_len) as
+        (top_driver_exactly
+          d
+          st_network
+          buffered_network
+          result.driver_workflow_rx_len);
+      result
+    } else if (net_ok && net_closed) {
+      (* A StepOk network step produced zero application bytes and the
+         connection control state is ControlClosed: the peer sent
+         close_notify. Report this to the caller directly instead of
+         draining local actions (none is legal once ControlClosed) and
+         recursing until [fuel] is exhausted. *)
+      assert (pure (st_network.CS.cs_model.CS.model_control == CS.ControlClosed));
+      assert (pure (client_buffered_network_io_step_correct
+        st_network
+        network
+        network_out_network
+        app_out_network));
+      let result = {
+        driver_workflow_status = DriverWorkflowClosed;
+        driver_workflow_rx_len =
+          network.buffered_network_io_buffered.buffered_network_new_len;
+        driver_workflow_local = {
+          driver_drain_last = no_op_local;
+          driver_drain_exhausted = false;
+        };
+        driver_workflow_network = network;
+      };
+      assert (pure (result.driver_workflow_status == DriverWorkflowClosed));
+      assert (pure (result.driver_workflow_status <> DriverWorkflowExhausted));
+      assert (pure (result.driver_workflow_network == network));
+      assert (pure (result.driver_workflow_network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len == 0sz));
       lemma_client_receive_observation_network_correct_from_buffered
         'st0
         st_network
@@ -6701,6 +6783,13 @@ fn connect
           close_failed_connect d ch result.driver_workflow_rx_len;
           DriverWorkflowClosed
         }
+        DriverWorkflowPayloadTooLarge -> {
+          (* Unreachable: the handshake workflow never produces this status,
+             which is specific to [send]'s own payload-length gate. Handled
+             here only so the match is total over [driver_workflow_status]. *)
+          close_failed_connect d ch result.driver_workflow_rx_len;
+          DriverWorkflowPayloadTooLarge
+        }
       }
     }
   }
@@ -6712,11 +6801,7 @@ fn send
   (payload_len:SZ.t)
   requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to payload 'payload_bytes **
-           pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 CT.local_input_wf
-                  'st0
-                  CT.LocalSendApplicationData
-                  (Ghost.reveal 'payload_bytes))
+           pure (B.length 'payload_bytes == SZ.v payload_len)
   returns status:driver_workflow_status
   ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
@@ -6761,6 +6846,32 @@ fn send
   unfold (client_driver_buffers d buffered buffered_len);
   let current_buffered_len = Box.(!d.client_driver_buffered_len);
   assert (pure (current_buffered_len == buffered_len));
+  assert_norm (SM.max_application_data_fragment_len == 16384);
+  let too_large = SZ.gt payload_len 16384sz;
+  if too_large {
+    (* TLS 1.3 caps a single application-data record's plaintext at 16384
+       bytes.  Reject the oversized payload up front, authoritatively, and
+       leave the connection exactly as it was so the caller may retry with a
+       smaller chunk. *)
+    assert (pure (SZ.v payload_len > SM.max_application_data_fragment_len));
+    assert (pure (B.length (Ghost.reveal 'payload_bytes) > SM.max_application_data_fragment_len));
+    assert (pure (client_driver_payload_too_large (Ghost.reveal 'payload_bytes)));
+    assert (pure (client_driver_send_correct
+      'st0
+      'st0
+      DriverWorkflowPayloadTooLarge
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal 'sent0)
+      (Ghost.reveal 'sent0)));
+    fold (client_driver_buffers d buffered current_buffered_len);
+    fold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
+    DriverWorkflowPayloadTooLarge
+  } else {
+    assert (pure (SZ.v payload_len <= SM.max_application_data_fragment_len));
+    assert (pure (CT.local_input_wf
+      'st0
+      CT.LocalSendApplicationData
+      (Ghost.reveal 'payload_bytes)));
   match current_channel {
     None -> {
       assert (pure False);
@@ -6920,6 +7031,7 @@ fn send
         DriverWorkflowStepFailed
       }
     }
+  }
   }
 }
 
@@ -8325,4 +8437,54 @@ fn close
       workflow.driver_workflow_status
       wait_for_peer));
   workflow.driver_workflow_status
+}
+
+(**
+  Safely disposes a connected transport after a workflow failure.  This is
+  deliberately independent of the TLS control state: callers use it when a
+  receive or send workflow has reported a non-retryable status and therefore
+  cannot establish the application-ready precondition of [close].
+**)
+fn abort
+  (d:client_driver)
+  requires client_driver_connected d 'st0 'received0 'sent0
+  ensures client_driver_closed d 'st0
+{
+  unfold (client_driver_connected
+    d
+    'st0
+    (Ghost.reveal 'received0)
+    (Ghost.reveal 'sent0));
+  with ch buffered buffered_len.
+    assert (C.connection_exactly d.client_driver_client 'st0 **
+            client_driver_canonical_seed d **
+            O.is_auth_context d.client_driver_auth **
+            Box.pts_to d.client_driver_channel (Some ch) **
+            IO.is_channel ch (Ghost.reveal 'received0) (Ghost.reveal 'sent0) **
+            client_driver_buffers d buffered buffered_len **
+            pure (client_driver_wire_logs_match
+              'st0
+              (Ghost.reveal 'received0)
+              (Ghost.reveal 'sent0)
+              buffered
+              buffered_len));
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (concrete_ch == ch));
+  rewrite
+    (IO.is_channel ch (Ghost.reveal 'received0) (Ghost.reveal 'sent0))
+    as
+    (IO.is_channel
+      concrete_ch
+      (Ghost.reveal 'received0)
+      (Ghost.reveal 'sent0));
+  unfold (client_driver_buffers d buffered buffered_len);
+  let current_buffered_len = Box.(!d.client_driver_buffered_len);
+  assert (pure (current_buffered_len == buffered_len));
+  fold (client_driver_buffers d buffered current_buffered_len);
+  Box.(d.client_driver_channel := no_channel);
+  fold (channel_open concrete_ch 'st0 buffered current_buffered_len);
+  close_failed_connect d concrete_ch current_buffered_len;
 }

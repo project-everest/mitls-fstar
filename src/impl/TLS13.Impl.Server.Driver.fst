@@ -30,6 +30,7 @@ module M = TLS13.Messages
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module S = TLS13.Impl.Server
 module DS = TLS13.Impl.Server.Driver.State
 module DT = TLS13.Impl.Server.Driver.Transport
@@ -668,6 +669,24 @@ let lemma_control_snapshot_closed
   | CS.ControlClosed -> ()
   | _ -> assert False
 
+let lemma_control_snapshot_not_closed
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        CR.control_snapshot_matches snapshot st /\
+        snapshot.CR.snapshot_control_tag <> 4uy)
+      (ensures
+        st.CS.cs_model.CS.model_control <> CS.ControlClosed)
+=
+  assert_norm (U8.v 4uy == 4);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlClosed ->
+    assert (U8.v snapshot.CR.snapshot_control_tag == 4);
+    assert (snapshot.CR.snapshot_control_tag == 4uy);
+    assert False
+  | _ -> ()
+
 let lemma_application_ready_close_notify_ready
   (st:CS.connection_state)
   : Lemma
@@ -694,6 +713,32 @@ let lemma_application_ready_close_notify_ready
       CS.ServerTraffic ==
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
     assert False
+
+let lemma_application_ready_send_ready
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  : Lemma
+      (requires
+        server_driver_application_ready st /\
+        B.length payload <= SM.max_application_data_fragment_len)
+      (ensures
+        ST.server_local_event_input_ready
+          st
+          ST.LocalSendApplicationData
+          payload)
+=
+  assert (ST.server_end_to_end_invariant st);
+  assert (st.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+  assert (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    st.CS.cs_model);
+  assert_norm (CS.traffic_label_for_endpoint_direction
+    CS.ServerEndpoint
+    CS.TrafficWrite == CS.ServerTraffic);
+  match st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic with
+  | Some _ -> ()
+  | None -> assert False
 
 (**
   One verified network-processing step, abstracting over the concrete buffer
@@ -1702,10 +1747,7 @@ fn send
               'sent **
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 ST.server_local_event_input_ready
-                   'st0
-                   ST.LocalSendApplicationData
-                   (Ghost.reveal 'payload_bytes))
+                 server_driver_application_ready 'st0)
   returns status:server_workflow_status
   ensures exists* st1 sent'.
           server_driver_connected
@@ -1762,6 +1804,28 @@ fn send
      (Ghost.reveal 'credential_identity)
      (Ghost.reveal 'received)
      (Ghost.reveal 'sent));
+  assert_norm (SM.max_application_data_fragment_len == 16384);
+  let too_large = SZ.gt payload_len 16384sz;
+  if too_large {
+    assert (pure (SZ.v payload_len > SM.max_application_data_fragment_len));
+    assert (pure (
+      B.length (Ghost.reveal 'payload_bytes) >
+        SM.max_application_data_fragment_len));
+    assert (pure (
+      server_driver_payload_too_large (Ghost.reveal 'payload_bytes)));
+    assert (pure (server_driver_send_correct
+      'st0
+      'st0
+      ServerWorkflowPayloadTooLarge
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal 'sent)
+      (Ghost.reveal 'sent)));
+    ServerWorkflowPayloadTooLarge
+  } else {
+  assert (pure (SZ.v payload_len <= SM.max_application_data_fragment_len));
+  lemma_application_ready_send_ready
+    'st0
+    (Ghost.reveal 'payload_bytes);
   let resp = send_application_data_once d payload payload_len;
   with st1 sent'.
     assert (server_driver_connected
@@ -1810,6 +1874,7 @@ fn send
     ServerWorkflowOk
   } else {
     ServerWorkflowStepFailed
+  }
   }
 }
 
@@ -3032,6 +3097,12 @@ fn receive
     buffered
     buffered_len;
   assert (pure (server_driver_received_log_accounted st1 received'));
+  rewrite (S.connection_exactly d.server_driver_server st1)
+    as (CR.connection_exactly d.server_driver_server st1);
+  let control_snapshot = CQ.get_control_snapshot d.server_driver_server;
+  rewrite (CR.connection_exactly d.server_driver_server st1)
+    as (S.connection_exactly d.server_driver_server st1);
+  assert (pure (CR.control_snapshot_matches control_snapshot st1));
   fold (server_driver_connected_with_app_out
     d
     st1
@@ -3057,6 +3128,29 @@ fn receive
     forget_server_driver_connected_app_out d;
     result
   } else {
+    let closed = control_snapshot.CR.snapshot_control_tag = 4uy;
+    if closed {
+      assert (pure (control_snapshot.CR.snapshot_control_tag == 4uy));
+      lemma_control_snapshot_closed control_snapshot st1;
+      assert (pure (st1.CS.cs_model.CS.model_control == CS.ControlClosed));
+      let result = {
+        server_receive_status = ServerWorkflowClosed;
+        server_receive_len = 0sz;
+      };
+      assert (pure (server_driver_receive_correct
+        'st0
+        st1
+        result
+        loop
+        (Ghost.reveal 'sent)
+        sent'
+        loop_app_out
+        (Ghost.reveal 'out_bytes)));
+      forget_server_driver_connected_app_out d;
+      result
+    } else {
+    assert (pure (control_snapshot.CR.snapshot_control_tag <> 4uy));
+    lemma_control_snapshot_not_closed control_snapshot st1;
     match loop.server_driver_network_loop_last.ST.response.ST.status {
       ST.StepOk -> {
         unfold (server_driver_connected_with_app_out
@@ -3294,6 +3388,7 @@ fn receive
         forget_server_driver_connected_app_out d;
         result
       }
+    }
     }
   }
 }

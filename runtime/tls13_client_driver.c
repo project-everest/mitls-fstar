@@ -38,6 +38,8 @@ static const char *driver_status_message(
       return "workflow exhausted fuel";
     case TLS13_Impl_Client_Driver_DriverWorkflowClosed:
       return "TLS channel closed";
+    case TLS13_Impl_Client_Driver_DriverWorkflowPayloadTooLarge:
+      return "payload exceeds the single-record limit (16384 bytes)";
     default:
       return "unknown verified driver status";
   }
@@ -56,6 +58,15 @@ static int driver_fail_status(
         driver_status_message(status));
   }
   return 1;
+}
+
+/* abort has no application-ready precondition, so it is the only safe cleanup
+ * operation after a non-retryable verified workflow status. */
+static void abort_connected_driver(tls13_client_driver *driver) {
+  if (driver != NULL && driver->connected) {
+    TLS13_Impl_Client_Driver_abort(driver->verified_driver);
+    driver->connected = false;
+  }
 }
 
 int tls13_client_driver_connect(
@@ -133,16 +144,43 @@ int tls13_client_driver_send_application_data(
     return driver_fail(driver, "send: TLS channel is closed");
   }
 
+  /* The verified [send] entry point is total for any [payload_len]: it
+   * performs the authoritative single-record (<=16384 byte) length test
+   * itself and reports [DriverWorkflowPayloadTooLarge] rather than sending
+   * an oversized payload, so this wrapper submits the caller's buffer
+   * directly with no C-side fragmentation or length pre-check. */
   uint8_t empty_payload = 0u;
   uint8_t *payload_input =
       payload_len == 0u ? &empty_payload : (uint8_t *)(void *)payload;
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_send(
           driver->verified_driver, payload_input, payload_len);
-  if (status != TLS13_Impl_Client_Driver_DriverWorkflowOk) {
-    return driver_fail_status(driver, "send", status);
+  if (status == TLS13_Impl_Client_Driver_DriverWorkflowOk) {
+    return 0;
   }
-  return 0;
+  (void)driver_fail_status(driver, "send", status);
+  if (status == TLS13_Impl_Client_Driver_DriverWorkflowPayloadTooLarge) {
+    /* The verified contract preserves the connected, application-ready state
+     * and the exact sent/received logs for this outcome, so the connection
+     * remains usable: the caller may retry with a payload split into
+     * single-record (<=16384 byte) chunks. */
+    return 1;
+  }
+  /* Any other non-Ok status is a real protocol failure: release the
+   * transport rather than leaving the C wrapper marked connected. */
+  abort_connected_driver(driver);
+  return 1;
+}
+
+static bool receive_status_is_retryable(
+    TLS13_Impl_Client_Driver_driver_workflow_status status) {
+  return status == TLS13_Impl_Client_Driver_DriverWorkflowNeedMoreInput ||
+         status == TLS13_Impl_Client_Driver_DriverWorkflowExhausted;
+}
+
+static bool receive_status_is_closed(
+    TLS13_Impl_Client_Driver_driver_workflow_status status) {
+  return status == TLS13_Impl_Client_Driver_DriverWorkflowClosed;
 }
 
 int tls13_client_driver_receive_application_data(
@@ -169,12 +207,25 @@ int tls13_client_driver_receive_application_data(
           TLS13_DRIVER_LOCAL_FUEL,
           TLS13_DRIVER_WORKFLOW_FUEL);
   *out_len = result.client_receive_len;
-  if (result.client_receive_status !=
+  if (result.client_receive_status ==
       TLS13_Impl_Client_Driver_DriverWorkflowOk) {
-    return driver_fail_status(
-        driver, "receive", result.client_receive_status);
+    return 0;
   }
-  return 0;
+  (void)driver_fail_status(driver, "receive", result.client_receive_status);
+  if (receive_status_is_retryable(result.client_receive_status)) {
+    /* The verified receive contract preserves application readiness for these
+     * bounded-progress outcomes, so callers may retry. */
+    return 1;
+  }
+  if (receive_status_is_closed(result.client_receive_status)) {
+    /* A peer close_notify reaches ControlClosed.  Release the still-owned TCP
+     * transport rather than leaving the C wrapper marked connected. */
+    abort_connected_driver(driver);
+    return 1;
+  }
+  /* StepFailed (and any future unknown status) is non-retryable. */
+  abort_connected_driver(driver);
+  return 1;
 }
 
 int tls13_client_driver_close(
@@ -211,7 +262,7 @@ void tls13_client_driver_free(tls13_client_driver *driver) {
     return;
   }
   if (driver->connected) {
-    (void)tls13_client_driver_close(driver, false);
+    abort_connected_driver(driver);
   }
   free(driver);
 }

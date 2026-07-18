@@ -40,6 +40,8 @@ static const char *driver_status_message(
       return "workflow exhausted fuel";
     case TLS13_Impl_Server_Driver_ServerWorkflowClosed:
       return "TLS channel closed";
+    case TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge:
+      return "payload exceeds the single-record limit (16384 bytes)";
     default:
       return "unknown verified server driver status";
   }
@@ -150,12 +152,16 @@ int tls13_server_driver_send_application_data(
   TLS13_Impl_Server_Driver_server_workflow_status status =
       TLS13_Impl_Server_Driver_send(
           driver->verified_driver, payload_input, payload_len);
-  if (status != TLS13_Impl_Server_Driver_ServerWorkflowOk) {
-    (void)driver_fail_status(driver, "send", status);
-    abort_connected_driver(driver);
+  if (status == TLS13_Impl_Server_Driver_ServerWorkflowOk) {
+    return 0;
+  }
+  (void)driver_fail_status(driver, "send", status);
+  if (status ==
+      TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge) {
     return 1;
   }
-  return 0;
+  abort_connected_driver(driver);
+  return 1;
 }
 
 int tls13_server_driver_receive_application_data(

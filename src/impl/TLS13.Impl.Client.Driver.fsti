@@ -14,6 +14,7 @@ module CT = TLS13.Impl.Client.Types
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -152,6 +153,7 @@ type driver_workflow_status =
   | DriverWorkflowStepFailed
   | DriverWorkflowExhausted
   | DriverWorkflowClosed
+  | DriverWorkflowPayloadTooLarge
 
 noextract
 let client_driver_send_status_correct
@@ -162,6 +164,19 @@ let client_driver_send_status_correct
   then status == DriverWorkflowOk
   else status == DriverWorkflowStepFailed
 
+(**
+  TLS 1.3 bounds a single application-data record's plaintext at
+  [SM.max_application_data_fragment_len] (2^14 = 16384) bytes.  [send]
+  performs this authoritative length test itself, so any caller-supplied
+  payload longer than the bound is unambiguously rejected up front without
+  attempting to process it.
+**)
+noextract
+let client_driver_payload_too_large
+  (payload:B.bytes)
+  : prop =
+  B.length payload > SM.max_application_data_fragment_len
+
 noextract
 let client_driver_send_correct
   (st0:CS.connection_state)
@@ -171,16 +186,22 @@ let client_driver_send_correct
   (sent:B.bytes)
   (sent':B.bytes)
   : prop =
-  exists resp.
-    client_driver_local_write_correct
-      st0
-      st1
-      resp
-      CT.LocalSendApplicationData
-      payload
-      sent
-      sent' /\
-    client_driver_send_status_correct status resp
+  if status == DriverWorkflowPayloadTooLarge
+  then
+    st1 == st0 /\
+    Seq.equal sent' sent /\
+    client_driver_payload_too_large payload
+  else
+    exists resp.
+      client_driver_local_write_correct
+        st0
+        st1
+        resp
+        CT.LocalSendApplicationData
+        payload
+        sent
+        sent' /\
+      client_driver_send_status_correct status resp
 
 noextract
 let client_driver_close_status_correct
@@ -241,7 +262,20 @@ let client_receive_observation_network_correct
         old_app_out
         observed_app_out /\
       (obs.client_receive_observed_status == DriverWorkflowOk ==>
-        st_network == st1 /\ Seq.equal observed_app_out app_out)
+        st_network == st1 /\ Seq.equal observed_app_out app_out) /\
+      (**
+        A peer close_notify is detected as a StepOk network step that both
+        produces zero application bytes and drives the connection to
+        [CS.ControlClosed]. When [receive] reports [DriverWorkflowClosed], the
+        final connection state is exactly that closed state and no
+        application bytes were produced by this step, so callers can safely
+        stop retrying and release the transport (e.g. via [abort]) instead of
+        looping until fuel is exhausted.
+      **)
+      (obs.client_receive_observed_status == DriverWorkflowClosed ==>
+        st_network == st1 /\
+        st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
+        obs.client_receive_observed_response.CT.response.CT.app_out_len == 0sz)
 
 noextract
 let client_driver_receive_status_correct
@@ -366,32 +400,38 @@ fn connect
            | _ ->
              client_driver_closed d st1)
 
+(**
+  Sends [payload] as application data over the connection.  This function is
+  total for any [payload_len]: the only preconditions are ownership of the
+  payload array (with a matching length) and an application-ready connected
+  driver.  A payload whose length exceeds the single-record limit
+  ([SM.max_application_data_fragment_len] = 16384 bytes) is rejected with
+  [DriverWorkflowPayloadTooLarge] without being sent, leaving the connection
+  state, sent log, and received accounting exactly as they were -- see
+  [client_driver_send_correct].
+**)
 fn send
   (d:client_driver)
   (payload:array U8.t)
   (payload_len:SZ.t)
   requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to payload 'payload_bytes **
-           pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 CT.local_input_wf
-                  'st0
-                  CT.LocalSendApplicationData
-                  (Ghost.reveal 'payload_bytes))
+           pure (B.length 'payload_bytes == SZ.v payload_len)
   returns status:driver_workflow_status
   ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
           client_driver_connected d st1 received1 sent1 **
           pure (client_driver_send_correct
-                  'st0
-                  st1
-                  status
-                  (Ghost.reveal 'payload_bytes)
-                  (Ghost.reveal 'sent0)
-                  sent1 /\
-                  st1.CS.cs_model.CS.model_config ==
-                    'st0.CS.cs_model.CS.model_config /\
-                  client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                  client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+                 'st0
+                 st1
+                 status
+                 (Ghost.reveal 'payload_bytes)
+                 (Ghost.reveal 'sent0)
+                 sent1 /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
+                 client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                 client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                  client_driver_sent_log_exact st1 sent1 /\
                  client_driver_received_log_accounted st1 received1)
 
@@ -443,3 +483,13 @@ fn close
               st_close_notify
               status
               wait_for_peer))
+
+(**
+  Safely disposes a connected transport after a workflow failure.  Unlike
+  [close], this does not require the protocol state to remain
+  application-ready and does not attempt to send close_notify.
+**)
+fn abort
+  (d:client_driver)
+  requires client_driver_connected d 'st0 'received0 'sent0
+  ensures client_driver_closed d 'st0
