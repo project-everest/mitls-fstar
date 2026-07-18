@@ -255,6 +255,23 @@ ghost fn server_driver_endpoint_connected_valid_byte_trace
 noextract
 let server_driver_closed = DS.server_driver_closed
 
+noextract
+let server_driver_endpoint_send_event
+  (payload:B.bytes)
+  : CTypes.server_local_event =
+  CTypes.ServerAPI {
+    CTypes.server_local_kind = ST.LocalSendApplicationData;
+    CTypes.server_local_payload = payload;
+  }
+
+noextract
+let server_driver_endpoint_close_event
+  : CTypes.server_local_event =
+  CTypes.ServerAPI {
+    CTypes.server_local_kind = ST.LocalSendCloseNotify;
+    CTypes.server_local_payload = B.empty;
+  }
+
 let lemma_server_local_process_correct_received_unchanged
   (initial:ES.server_initial_state)
   (ev:CTypes.server_local_event)
@@ -635,6 +652,22 @@ let lemma_control_snapshot_app_ready
   | CS.ControlApplicationData -> ()
   | _ -> assert False
 
+let lemma_control_snapshot_closed
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        CR.control_snapshot_matches snapshot st /\
+        snapshot.CR.snapshot_control_tag == 4uy)
+      (ensures
+        st.CS.cs_model.CS.model_control == CS.ControlClosed)
+=
+  assert_norm (U8.v 4uy == 4);
+  assert (U8.v snapshot.CR.snapshot_control_tag == 4);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlClosed -> ()
+  | _ -> assert False
+
 let lemma_application_ready_close_notify_ready
   (st:CS.connection_state)
   : Lemma
@@ -662,6 +695,41 @@ let lemma_application_ready_close_notify_ready
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
     assert False
 
+(**
+  One verified network-processing step, abstracting over the concrete buffer
+  response and sent-log prefix/suffix.  This is the single-step relation whose
+  reflexive-transitive closure is [server_driver_network_reaches].
+**)
+noextract
+let server_driver_network_step
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : prop =
+  exists (r:ST.server_buffer_response) (s s':B.bytes).
+    server_driver_network_process_correct st0 st1 r s s'
+
+(**
+  Concrete witness for [server_driver_network_reaches]: a path [st0 -> ... -> st1]
+  where each hop is a verified network-processing step.  The empty path witnesses
+  reflexivity ([st0 == st1]).
+**)
+noextract
+let rec is_network_path
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (path:list CS.connection_state)
+  : Tot prop (decreases path) =
+  match path with
+  | [] -> st0 == st1
+  | hd :: tl -> server_driver_network_step st0 hd /\ is_network_path hd st1 tl
+
+(* Realises the abstract [server_driver_network_reaches] from the interface. *)
+let server_driver_network_reaches
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : prop =
+  exists (path:list CS.connection_state). is_network_path st0 st1 path
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -671,9 +739,7 @@ fn new_server
   requires pts_to certificate_chain 'certificate_chain_bytes **
            pts_to private_key 'private_key_bytes **
            pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
-                 B.length 'private_key_bytes == SZ.v private_key_len /\
-                 B.length 'certificate_chain_bytes <=
-                   Bounds.max_server_certificate_chain_len)
+                 B.length 'private_key_bytes == SZ.v private_key_len)
   returns result: option server_driver
   ensures pts_to certificate_chain 'certificate_chain_bytes **
           pts_to private_key 'private_key_bytes **
@@ -704,14 +770,37 @@ fn new_server
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
                          credential_identity) /\
+                     B.length 'certificate_chain_bytes <=
+                       Bounds.max_server_certificate_chain_len /\
                      Ghost.reveal
                        (server_driver_canonical d).SP.canonical_server_initial ==
                        CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
                          credential_identity)
            | None ->
-             emp)
+             emp) **
+          pure
+           (not (B.length 'certificate_chain_bytes <=
+                   Bounds.max_server_certificate_chain_len) ==>
+            result == None)
 {
+  (* Totalization: accept an arbitrary-length certificate chain at the API
+     boundary and reject (as [None], with all input resources preserved) any
+     chain that exceeds the authoritative [max_server_certificate_chain_len]
+     bound.  The check runs BEFORE any allocation or credential construction, so
+     the oversized path frees nothing and simply returns the untouched inputs.
+     On the in-bound path [within_bound == true] gives
+     [SZ.v certificate_chain_len <= SZ.v max_server_certificate_chain_len_sz],
+     and the [max_server_certificate_chain_len_sz] refinement rewrites the RHS to
+     [max_server_certificate_chain_len]; together with the [requires] equation
+     [B.length 'certificate_chain_bytes == SZ.v certificate_chain_len] this
+     re-establishes the bound that the credential/state constructors and the
+     strengthened [Some] postcondition rely on. *)
+  let within_bound =
+    SZ.lte certificate_chain_len Bounds.max_server_certificate_chain_len_sz;
+  if within_bound {
+  assert (pure (B.length 'certificate_chain_bytes <=
+                Bounds.max_server_certificate_chain_len));
   let material_payload = V.alloc 0uy DS.driver_material_capacity;
   V.to_array_pts_to material_payload;
   let material_ok =
@@ -917,6 +1006,11 @@ fn new_server
       Some d
     }
   }
+  }
+  } else {
+    (* Oversized certificate chain: nothing has been allocated yet, so return
+       [None] with the (untouched) input resources preserved. *)
+    None
   }
 }
 
@@ -2839,6 +2933,10 @@ fn receive
                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_sent_log_exact st1 sent' /\
                 server_driver_received_log_accounted st1 received' /\
+                (server_driver_application_ready 'st0 /\
+                 (result.server_receive_status == ServerWorkflowExhausted \/
+                  result.server_receive_status == ServerWorkflowNeedMoreInput) ==>
+                 server_driver_application_ready st1) /\
                 (exists loop app_out.
                   server_driver_receive_correct
                     'st0
@@ -2894,6 +2992,9 @@ fn receive
       loop_app_out **
       pure (st1.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config /\
+      (loop.server_driver_network_loop_exhausted == true ==>
+        st1 == 'st0 /\
+        Seq.equal sent' (Ghost.reveal 'sent)) /\
       (loop.server_driver_network_loop_exhausted == false ==>
         loop.server_driver_network_loop_last.ST.response.ST.status <>
           ST.NeedMoreInput /\
@@ -3197,6 +3298,213 @@ fn receive
   }
 }
 
+(**
+  Reflexive-transitive-closure lemmas for [server_driver_network_reaches].  They
+  are proved once here, in pure F*, so the Pulse [close] workflow only needs to
+  chain lemma calls rather than reason about the existential path witness.
+**)
+let server_driver_network_reaches_refl (st:CS.connection_state)
+  : Lemma (ensures server_driver_network_reaches st st)
+=
+  introduce exists (path:list CS.connection_state). is_network_path st st path
+  with [] and ()
+
+let server_driver_network_step_intro
+  (st0 st1:CS.connection_state)
+  (r:ST.server_buffer_response)
+  (s s':B.bytes)
+  : Lemma
+      (requires server_driver_network_process_correct st0 st1 r s s')
+      (ensures server_driver_network_step st0 st1)
+=
+  introduce
+    exists (r0:ST.server_buffer_response) (s0 s0':B.bytes).
+      server_driver_network_process_correct st0 st1 r0 s0 s0'
+  with r s s' and ()
+
+#push-options "--split_queries always"
+let server_driver_network_reaches_step
+  (st0 st1 st2:CS.connection_state)
+  : Lemma
+      (requires server_driver_network_step st0 st1 /\
+                server_driver_network_reaches st1 st2)
+      (ensures server_driver_network_reaches st0 st2)
+=
+  eliminate exists (path:list CS.connection_state). is_network_path st1 st2 path
+  returns server_driver_network_reaches st0 st2
+  with _. (
+    introduce
+      exists (path':list CS.connection_state). is_network_path st0 st2 path'
+    with (st1 :: path) and ()
+  )
+#pop-options
+
+(**
+  Constructs [server_driver_close_final_correct] for the [close] workflow:
+  [st_cn] is the close_notify state, [st_final] is reached from it by verified
+  network processing, and when the caller did not ask to wait the two coincide,
+  recovering the historical exact-state guarantee.
+**)
+let lemma_close_final_correct
+  (wait_for_peer:bool)
+  (st0 st_cn st_final:CS.connection_state)
+  (sent:B.bytes)
+  : Lemma
+      (requires
+        server_driver_close_correct st0 st_cn sent /\
+        server_driver_network_reaches st_cn st_final /\
+        (wait_for_peer == false ==> st_final == st_cn))
+      (ensures server_driver_close_final_correct wait_for_peer st0 st_final sent)
+=
+  introduce
+    exists st_close_notify.
+      server_driver_close_correct st0 st_close_notify sent /\
+      server_driver_network_reaches st_close_notify st_final
+  with st_cn and ()
+
+(**
+  Drains the peer's records looking for its close_notify, reporting a status.
+
+  The status is one of [ServerWorkflowClosed] (the peer's close_notify was
+  observed, so the connection reached [CS.ControlClosed]),
+  [ServerWorkflowExhausted] (the network fuel ran out first) or
+  [ServerWorkflowStepFailed] (a nonrecoverable control-failure state or a
+  nonrecoverable record-processing failure was observed).
+
+  Liveness/regression fix: the helper snapshots the control state *before* every
+  read.  If the connection is already closed or already in a control-failure
+  state it stops without issuing another (potentially blocking) read.  After a
+  read-and-process step it only recurses when the step status is recoverable
+  ([ST.StepOk] or [ST.NeedMoreInput]); any other status is a nonrecoverable
+  failure and is reported as [ServerWorkflowStepFailed] rather than being
+  ignored and collapsed into [ServerWorkflowExhausted].
+**)
+fn rec wait_for_peer_close_notify
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  returns status:server_workflow_status
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent' **
+          pure (st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
+                server_driver_network_reaches 'st0 st1 /\
+                (status == ServerWorkflowClosed \/
+                 status == ServerWorkflowExhausted \/
+                 status == ServerWorkflowStepFailed) /\
+                (SZ.v fuel == 0 ==> status == ServerWorkflowExhausted) /\
+                (status == ServerWorkflowClosed ==>
+                  st1.CS.cs_model.CS.model_control == CS.ControlClosed))
+  decreases (SZ.v fuel)
+{
+  if (fuel = 0sz) {
+    server_driver_network_reaches_refl 'st0;
+    ServerWorkflowExhausted
+  } else {
+    let snapshot = server_driver_control_snapshot d;
+    assert (pure (CR.control_snapshot_matches snapshot 'st0));
+    let closed = snapshot.CR.snapshot_control_tag = 4uy;
+    if closed {
+      assert (pure (snapshot.CR.snapshot_control_tag == 4uy));
+      lemma_control_snapshot_closed snapshot 'st0;
+      assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlClosed));
+      server_driver_network_reaches_refl 'st0;
+      ServerWorkflowClosed
+    } else {
+      let failed = snapshot.CR.snapshot_control_tag = 5uy;
+      if failed {
+        (* The connection is already in a nonrecoverable control-failure state
+           (e.g. a fatal alert was received). Report the failure without issuing
+           another blocking read. *)
+        server_driver_network_reaches_refl 'st0;
+        ServerWorkflowStepFailed
+      } else {
+        assert (pure (0 < SZ.v fuel));
+        let step = read_and_process_network_once d;
+        with st1 received' sent' step_app_out.
+          assert (server_driver_connected_with_app_out
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent'
+            step_app_out **
+          pure (server_driver_network_process_correct
+            'st0
+            st1
+            step
+            (Ghost.reveal 'sent)
+            sent'));
+        lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          step
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
+        server_driver_network_step_intro
+          'st0
+          st1
+          step
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (server_driver_network_step 'st0 st1));
+        forget_server_driver_connected_app_out d;
+        let step_ok = step.ST.response.ST.status = ST.StepOk;
+        let step_need_more = step.ST.response.ST.status = ST.NeedMoreInput;
+        let recoverable = step_ok || step_need_more;
+        if recoverable {
+          let next_fuel = SZ.sub fuel 1sz;
+          assert (pure (SZ.v next_fuel < SZ.v fuel));
+          let status = wait_for_peer_close_notify d next_fuel;
+          with st2 received2 sent2.
+            assert (server_driver_connected
+              d
+              st2
+              'certificate_chain
+              'credential_identity
+              received2
+              sent2 **
+            pure (st2.CS.cs_model.CS.model_config ==
+              st1.CS.cs_model.CS.model_config /\
+            server_driver_network_reaches st1 st2 /\
+            (status == ServerWorkflowClosed \/
+             status == ServerWorkflowExhausted \/
+             status == ServerWorkflowStepFailed) /\
+            (status == ServerWorkflowClosed ==>
+              st2.CS.cs_model.CS.model_control == CS.ControlClosed)));
+          assert (pure (st2.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
+          server_driver_network_reaches_step 'st0 st1 st2;
+          assert (pure (server_driver_network_reaches 'st0 st2));
+          status
+        } else {
+          (* Nonrecoverable failure while processing the peer's record. Stop
+             immediately instead of blocking on another read. *)
+          server_driver_network_reaches_refl st1;
+          server_driver_network_reaches_step 'st0 st1 st1;
+          assert (pure (server_driver_network_reaches 'st0 st1));
+          ServerWorkflowStepFailed
+        }
+      }
+    }
+  }
+}
+
 fn close
   (d:server_driver)
   (wait_for_peer:bool)
@@ -3212,15 +3520,18 @@ fn close
   returns status:server_workflow_status
   ensures exists* st1.
           server_driver_closed d st1 'certificate_chain 'credential_identity **
-          pure (status == ServerWorkflowClosed /\
-                st1.CS.cs_model.CS.model_config ==
+          pure (st1.CS.cs_model.CS.model_config ==
                   'st0.CS.cs_model.CS.model_config /\
                 server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-                server_driver_close_correct
+                server_driver_close_final_correct
+                  wait_for_peer
                   'st0
                   st1
-                  (Ghost.reveal 'sent))
+                  (Ghost.reveal 'sent) /\
+                server_driver_close_status_correct wait_for_peer status /\
+                server_driver_close_wait_correct wait_for_peer status st1 /\
+                server_driver_close_fuel_correct wait_for_peer network_fuel status)
 {
   unfold (server_driver_connected
    d
@@ -3256,47 +3567,152 @@ fn close
    (Ghost.reveal 'sent));
   lemma_application_ready_close_notify_ready 'st0;
   let resp = DL.send_close_notify_once d;
-  with st1 sent'.
+  with st_cn sent'.
     assert (server_driver_connected
       d
-      st1
+      st_cn
       'certificate_chain
       'credential_identity
       'received
       sent');
   lemma_server_driver_local_write_correct_preserves_config
     'st0
-    st1
+    st_cn
     resp
     ST.LocalSendCloseNotify
     B.empty
     (Ghost.reveal 'sent)
     sent';
+  assert (pure (st_cn.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   assert (pure (server_driver_close_correct
     'st0
-    st1
+    st_cn
     (Ghost.reveal 'sent)));
-  close_transport_once d;
-  assert (server_driver_closed d st1 'certificate_chain 'credential_identity);
-  assert (pure (ServerWorkflowClosed == ServerWorkflowClosed /\
-    st1.CS.cs_model.CS.model_config ==
-      'st0.CS.cs_model.CS.model_config /\
-    server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-    server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-    server_driver_close_correct
+  if wait_for_peer {
+    let status = wait_for_peer_close_notify d network_fuel;
+    with st_wait received_w sent_w.
+      assert (server_driver_connected
+        d
+        st_wait
+        'certificate_chain
+        'credential_identity
+        received_w
+        sent_w **
+      pure (st_wait.CS.cs_model.CS.model_config ==
+              st_cn.CS.cs_model.CS.model_config /\
+            server_driver_network_reaches st_cn st_wait /\
+            (status == ServerWorkflowClosed \/
+             status == ServerWorkflowExhausted \/
+             status == ServerWorkflowStepFailed) /\
+            (SZ.v network_fuel == 0 ==> status == ServerWorkflowExhausted) /\
+            (status == ServerWorkflowClosed ==>
+              st_wait.CS.cs_model.CS.model_control == CS.ControlClosed)));
+    assert (pure (st_wait.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
+    lemma_close_final_correct
+      wait_for_peer
       'st0
-      st1
-      (Ghost.reveal 'sent)));
-  assert (exists* st_after.
-    server_driver_closed d st_after 'certificate_chain 'credential_identity **
-    pure (ServerWorkflowClosed == ServerWorkflowClosed /\
-          st_after.CS.cs_model.CS.model_config ==
-            'st0.CS.cs_model.CS.model_config /\
-          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-          server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-          server_driver_close_correct
-            'st0
-            st_after
-            (Ghost.reveal 'sent)));
-  ServerWorkflowClosed
+      st_cn
+      st_wait
+      (Ghost.reveal 'sent);
+    assert (pure (server_driver_close_final_correct
+      wait_for_peer 'st0 st_wait (Ghost.reveal 'sent)));
+    close_transport_once d;
+    assert (server_driver_closed d st_wait 'certificate_chain 'credential_identity);
+    if (status = ServerWorkflowClosed) {
+      assert (pure (st_wait.CS.cs_model.CS.model_control == CS.ControlClosed));
+      assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowClosed));
+      assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st_wait));
+      assert (pure (SZ.v network_fuel <> 0));
+      assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+      assert (exists* st1.
+        server_driver_closed d st1 'certificate_chain 'credential_identity **
+        pure (st1.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config /\
+              server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+              server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+              server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+              server_driver_close_status_correct wait_for_peer ServerWorkflowClosed /\
+              server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st1 /\
+              server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+      ServerWorkflowClosed
+    } else if (status = ServerWorkflowExhausted) {
+      assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowExhausted));
+      assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowExhausted st_wait));
+      assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowExhausted));
+      assert (exists* st1.
+        server_driver_closed d st1 'certificate_chain 'credential_identity **
+        pure (st1.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config /\
+              server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+              server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+              server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+              server_driver_close_status_correct wait_for_peer ServerWorkflowExhausted /\
+              server_driver_close_wait_correct wait_for_peer ServerWorkflowExhausted st1 /\
+              server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowExhausted));
+      ServerWorkflowExhausted
+    } else {
+      (* The only remaining possibility is [ServerWorkflowStepFailed]: a
+         nonrecoverable failure was observed while draining the peer. Because the
+         waiting helper reports [Exhausted] on zero fuel, [StepFailed] implies
+         nonzero network fuel, so the fuel-boundary guarantee still holds. *)
+      assert (pure (status == ServerWorkflowStepFailed));
+      assert (pure (SZ.v network_fuel <> 0));
+      assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowStepFailed));
+      assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowStepFailed st_wait));
+      assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowStepFailed));
+      assert (exists* st1.
+        server_driver_closed d st1 'certificate_chain 'credential_identity **
+        pure (st1.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config /\
+              server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+              server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+              server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+              server_driver_close_status_correct wait_for_peer ServerWorkflowStepFailed /\
+              server_driver_close_wait_correct wait_for_peer ServerWorkflowStepFailed st1 /\
+              server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowStepFailed));
+      ServerWorkflowStepFailed
+    }
+  } else {
+    server_driver_network_reaches_refl st_cn;
+    lemma_close_final_correct
+      wait_for_peer
+      'st0
+      st_cn
+      st_cn
+      (Ghost.reveal 'sent);
+    assert (pure (server_driver_close_final_correct
+      wait_for_peer 'st0 st_cn (Ghost.reveal 'sent)));
+    close_transport_once d;
+    assert (server_driver_closed d st_cn 'certificate_chain 'credential_identity);
+    assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowClosed));
+    assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st_cn));
+    assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+    assert (exists* st1.
+      server_driver_closed d st1 'certificate_chain 'credential_identity **
+      pure (st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config /\
+            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+            server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+            server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+            server_driver_close_status_correct wait_for_peer ServerWorkflowClosed /\
+            server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st1 /\
+            server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+    ServerWorkflowClosed
+  }
+}
+
+fn abort
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
+{
+  close_transport_once d;
 }

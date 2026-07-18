@@ -2325,6 +2325,9 @@ fn rec read_process_network_until_ready
            app_out_bytes **
           pure (st1.CS.cs_model.CS.model_config ==
                  'st0.CS.cs_model.CS.model_config /\
+            (result.server_driver_network_loop_exhausted == true ==>
+              st1 == 'st0 /\
+              Seq.equal sent' (Ghost.reveal 'sent)) /\
             (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
               ST.NeedMoreInput /\
@@ -2411,6 +2414,9 @@ fn rec read_process_network_until_ready
           result_app_out **
         pure (st2.CS.cs_model.CS.model_config ==
           st1.CS.cs_model.CS.model_config /\
+        (result.server_driver_network_loop_exhausted == true ==>
+          st2 == st1 /\
+          Seq.equal sent2 sent') /\
         (result.server_driver_network_loop_exhausted == false ==>
           result.server_driver_network_loop_last.ST.response.ST.status <>
             ST.NeedMoreInput /\
@@ -2429,6 +2435,9 @@ fn rec read_process_network_until_ready
                 result_app_out)));
       assert (pure (st2.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config));
+      assert (pure (result.server_driver_network_loop_exhausted == true ==>
+        st2 == 'st0 /\
+        Seq.equal sent2 (Ghost.reveal 'sent)));
       assert (pure (result.server_driver_network_loop_exhausted == false ==>
         server_driver_network_process_correct
             'st0
