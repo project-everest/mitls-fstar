@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.Finished
 
-type handshake_body_finished = finished
+noextract type handshake_body_finished = finished
 
 inline_for_extraction noextract let handshake_body_finished_parser_kind = LP.strong_parser_kind 35 35 None
 

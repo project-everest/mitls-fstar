@@ -35,14 +35,14 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.ProtocolNameList
 
-type extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation = x:protocolNameList{let l = (protocolNameList_bytesize (x)) in 0 <= l /\ l <= 65535}
+noextract type extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation = x:protocolNameList{let l = (protocolNameList_bytesize (x)) in 0 <= l /\ l <= 65535}
 
-type extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation' = LP.parse_bounded_vldata_strong_t 0 65535 protocolNameList_serializer
+noextract type extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation' = LP.parse_bounded_vldata_strong_t 0 65535 protocolNameList_serializer
 
-inline_for_extraction let synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation (x: extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation') : Tot extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation =
+inline_for_extraction noextract let synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation (x: extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation') : Tot extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation =
   [@inline_let] let _ = (protocolNameList_bytesize_eq (x)) in x
 
-inline_for_extraction let synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_recip (x: extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation) : Tot extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation' =
+inline_for_extraction noextract let synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_recip (x: extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation) : Tot extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation' =
   [@inline_let] let _ = (protocolNameList_bytesize_eq (x)) in x
 
 inline_for_extraction noextract let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_parser_kind = LP.strong_parser_kind 6 65537 None

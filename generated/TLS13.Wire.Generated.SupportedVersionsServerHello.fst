@@ -35,27 +35,25 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let supportedVersionsServerHello_parser = protocolVersion_parser
 
 noextract let supportedVersionsServerHello_serializer = protocolVersion_serializer
 
 let supportedVersionsServerHello_bytesize_eq x = ()
 
-let supportedVersionsServerHello_validator = protocolVersion_validator
+let supportedVersionsServerHello_validator = fun input poffset #offset #pm #v -> (protocolVersion_validator) input poffset #offset #pm #v
 
-let supportedVersionsServerHello_reader = protocolVersion_reader
+let supportedVersionsServerHello_reader = fun input #pm #v -> (protocolVersion_reader) input #pm #v
 
-let supportedVersionsServerHello_writer = protocolVersion_writer
+let supportedVersionsServerHello_writer = fun x out offset #v -> (protocolVersion_writer) x out offset #v
 
-let supportedVersionsServerHello_leaf_size = protocolVersion_leaf_size
+let supportedVersionsServerHello_leaf_size = fun x -> (protocolVersion_leaf_size) x
 
-let read_supportedVersionsServerHello : PPB.copyful_parse supportedVersionsServerHello_vmatch supportedVersionsServerHello_parser supportedVersionsServerHello_conv = read_protocolVersion
+let read_supportedVersionsServerHello : PPB.copyful_parse supportedVersionsServerHello_vmatch supportedVersionsServerHello_parser supportedVersionsServerHello_conv = fun input #pm #v -> (read_protocolVersion) input #pm #v
 
-let free_supportedVersionsServerHello : PPB.free_t supportedVersionsServerHello_vmatch = free_protocolVersion
+let free_supportedVersionsServerHello : PPB.free_t supportedVersionsServerHello_vmatch = fun x #v -> (free_protocolVersion) x #v
 
-let write_supportedVersionsServerHello : PPB.l2r_safe_writer supportedVersionsServerHello_vmatch supportedVersionsServerHello_serializer supportedVersionsServerHello_conv = write_protocolVersion
+let write_supportedVersionsServerHello : PPB.l2r_safe_writer supportedVersionsServerHello_vmatch supportedVersionsServerHello_serializer supportedVersionsServerHello_conv = fun x #y out #v perr -> (write_protocolVersion) x #y out #v perr
 
 let supportedVersionsServerHello_bytesize_eqn x = (protocolVersion_bytesize_eq (x))
 

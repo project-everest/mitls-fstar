@@ -1025,6 +1025,7 @@ let lemma_client_local_step_ok_process_correct
       raw_received
       network_out
       app_out;
+    Seq.lemma_eq_elim raw_received B.empty;
     CL.lemma_append_empty_right st0.CS.cs_wire_log.CL.raw_received;
     Seq.lemma_eq_elim received0 st0.CS.cs_wire_log.CL.raw_received;
     Seq.lemma_eq_elim sent0 st0.CS.cs_wire_log.CL.raw_sent;
@@ -1062,6 +1063,30 @@ let lemma_client_local_step_ok_process_correct
           CS.delta_raw_received = raw_received';
         }
         st1);
+    assert (client_api_event_matches
+      st0
+      (CTypes.client_local_event_api local_ev)
+      ev);
+    assert (CS.legal_connection_delta
+      st0
+      {
+        CS.delta_event = ev;
+        CS.delta_raw_sent = raw_sent;
+        CS.delta_raw_received = B.empty;
+      }
+      st1);
+    assert (SMRep.sent_event_nonempty_seal_projection
+      st0.CS.cs_model
+      ev
+      raw_sent);
+    lemma_client_step_from_local_witness
+      st0
+      st1
+      local_ev
+      ev
+      raw_sent
+      wire_outputs
+      local_outputs;
     assert (client_step
       st0
       (SM.LocalEvent local_ev)
@@ -3770,6 +3795,7 @@ let lemma_client_local_fail_network_process_correct
 // cases: both are modeled as a purely local [LocalFail err] event with empty
 // raw_sent/raw_received deltas, so [consumed] and [produced] are both empty
 // and the [network_error_refines_state_machine] LocalEvent disjunct applies.
+#push-options "--z3rlimit 100"
 let lemma_client_local_fail_bridge_result
   (initial:client_initial_state)
   (received0:B.bytes)
@@ -3942,6 +3968,7 @@ let lemma_client_local_fail_bridge_result
     initial received0 sent0 st0 input_contents input_len
     old_network_out network_out out_len base st1 app_out buffer_resp
     consumed wire_outputs local_outputs
+#pop-options
 
 let lemma_client_network_decode_error_bridge_result
   (initial:client_initial_state)

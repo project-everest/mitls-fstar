@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field key_exchange*)
 open TLS13.Wire.Generated.KeyShareEntry_key_exchange
 
@@ -91,7 +89,7 @@ let read_keyShareEntry : PPB.copyful_parse keyShareEntry_vmatch keyShareEntry_pa
   assert_norm (keyShareEntry_parser_kind == keyShareEntry'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair namedGroup_jumper read_namedGroup () read_keyShareEntry_key_exchange) synth_keyShareEntry synth_keyShareEntry_recip
 
-let free_keyShareEntry : PPB.free_t keyShareEntry_vmatch = (PPC.free_pair free_namedGroup free_keyShareEntry_key_exchange)
+let free_keyShareEntry : PPB.free_t keyShareEntry_vmatch = fun x #v -> ((PPC.free_pair free_namedGroup free_keyShareEntry_key_exchange)) x #v
 
 let write_keyShareEntry : PPB.l2r_safe_writer keyShareEntry_vmatch keyShareEntry_serializer keyShareEntry_conv =
   synth_keyShareEntry_injective ();
@@ -100,7 +98,7 @@ let write_keyShareEntry : PPB.l2r_safe_writer keyShareEntry_vmatch keyShareEntry
 
 let size_keyShareEntry : PPB.l2r_safe_size keyShareEntry_vmatch keyShareEntry_serializer keyShareEntry_conv =
   synth_keyShareEntry_injective ();
-  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair fits_u64_squash size_namedGroup () size_keyShareEntry_key_exchange) synth_keyShareEntry synth_keyShareEntry_recip
+  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair size_namedGroup () size_keyShareEntry_key_exchange) synth_keyShareEntry synth_keyShareEntry_recip
 
 let keyShareEntry_bytesize_eqn x =
   [@inline_let] let _ = synth_keyShareEntry_injective () in

@@ -35,14 +35,14 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.Certificate
 
-type handshake_body_certificate = x:certificate{let l = (certificate_bytesize (x)) in 0 <= l /\ l <= 16777215}
+noextract type handshake_body_certificate = x:certificate{let l = (certificate_bytesize (x)) in 0 <= l /\ l <= 16777215}
 
-type handshake_body_certificate' = LP.parse_bounded_vldata_strong_t 0 16777215 certificate_serializer
+noextract type handshake_body_certificate' = LP.parse_bounded_vldata_strong_t 0 16777215 certificate_serializer
 
-inline_for_extraction let synth_handshake_body_certificate (x: handshake_body_certificate') : Tot handshake_body_certificate =
+inline_for_extraction noextract let synth_handshake_body_certificate (x: handshake_body_certificate') : Tot handshake_body_certificate =
   [@inline_let] let _ = (certificate_bytesize_eq (x)) in x
 
-inline_for_extraction let synth_handshake_body_certificate_recip (x: handshake_body_certificate) : Tot handshake_body_certificate' =
+inline_for_extraction noextract let synth_handshake_body_certificate_recip (x: handshake_body_certificate) : Tot handshake_body_certificate' =
   [@inline_let] let _ = (certificate_bytesize_eq (x)) in x
 
 inline_for_extraction noextract let handshake_body_certificate_parser_kind = LP.strong_parser_kind 7 16777218 None

@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.ClientHello
 
-type handshake_body_client_hello = clientHello
+noextract type handshake_body_client_hello = clientHello
 
 inline_for_extraction noextract let handshake_body_client_hello_parser_kind = LP.strong_parser_kind 54 131399 None
 

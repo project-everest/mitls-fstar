@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 private let pre : squash (LP.vldata_vlarray_precond 2 65534 signatureScheme_parser 1 32767 == true) = _ by (FStar.Tactics.trefl ())
 
 let signatureSchemeList_parser =
@@ -48,10 +46,10 @@ let signatureSchemeList_serializer =
 let signatureSchemeList_bytesize_eq x = ()
 
 let signatureSchemeList_validator =
- PPAR.validate_vlarray 2 65534 signatureScheme_serializer signatureScheme_validator 1 32767 () (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+ PPAR.validate_vlarray 2 65534 signatureScheme_serializer signatureScheme_validator 1 32767 () (PPBI.leaf_read_bounded_integer_2 ()) ()
 
 let signatureSchemeList_jumper =
- PPAR.jump_vlarray 2 65534 signatureScheme_serializer 1 32767 () (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65534)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+ PPAR.jump_vlarray 2 65534 signatureScheme_serializer 1 32767 () (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65534)) (PPBI.leaf_read_bounded_integer_2 ())) ()
 
 let signatureSchemeList_bytesize_eqn x = LP.length_serialize_vlarray 2 65534 signatureScheme_serializer 1 32767 () x
 
@@ -63,7 +61,7 @@ let read_signatureSchemeList : PPB.copyful_parse signatureSchemeList_vmatch sign
   PPC.copyful_parse_synth
     (PPVD.copyful_parse_bounded_vldata_strong_payload 2 65534 (LP.serialize_list _ signatureScheme_serializer)
        (PPLS.copyful_parse_list read_signatureScheme signatureScheme_jumper ())
-       (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+       (PPBI.leaf_read_bounded_integer_2 ()))
     (LP.vldata_to_vlarray 2 65534 signatureScheme_serializer 1 32767 ())
     (LP.vlarray_to_vldata 2 65534 signatureScheme_serializer 1 32767 ())
 
@@ -76,8 +74,8 @@ let write_signatureSchemeList : PPB.l2r_safe_writer signatureSchemeList_vmatch s
   assert_norm ((LP.get_parser_kind signatureScheme_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
   assert_norm ((LP.get_parser_kind signatureScheme_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 (LSeqB.mk_seq_sizet 2 fits_u64_squash) 65534 (LSeqB.mk_seq_sizet 65534 fits_u64_squash) 2 2sz (LP.serialize_list _ signatureScheme_serializer)
-       (PPLS.l2r_safe_writer_list signatureScheme_serializer write_signatureScheme ()) fits_u64_squash) <: PPB.l2r_safe_writer _ (LP.serialize_bounded_vldata_strong 2 65534 (LP.serialize_list _ signatureScheme_serializer)) _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 2ul 65534 65534ul 2 2sz (LP.serialize_list _ signatureScheme_serializer)
+       (PPLS.l2r_safe_writer_list signatureScheme_serializer write_signatureScheme ())) <: PPB.l2r_safe_writer _ (LP.serialize_bounded_vldata_strong 2 65534 (LP.serialize_list _ signatureScheme_serializer)) _)
     (LP.vldata_to_vlarray 2 65534 signatureScheme_serializer 1 32767 ())
     (LP.vlarray_to_vldata 2 65534 signatureScheme_serializer 1 32767 ())
 
