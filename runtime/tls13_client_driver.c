@@ -28,17 +28,17 @@ static int driver_fail(tls13_client_driver *driver, const char *message) {
 static const char *driver_status_message(
     TLS13_Impl_Client_Driver_driver_workflow_status status) {
   switch (status) {
-    case TLS13_Impl_Client_Driver_DriverWorkflowOk:
+    case TLS13_Impl_Client_Driver_State_DriverWorkflowOk:
       return "ok";
-    case TLS13_Impl_Client_Driver_DriverWorkflowNeedMoreInput:
+    case TLS13_Impl_Client_Driver_State_DriverWorkflowNeedMoreInput:
       return "needs more input";
-    case TLS13_Impl_Client_Driver_DriverWorkflowStepFailed:
+    case TLS13_Impl_Client_Driver_State_DriverWorkflowStepFailed:
       return "verified protocol step failed";
-    case TLS13_Impl_Client_Driver_DriverWorkflowExhausted:
+    case TLS13_Impl_Client_Driver_State_DriverWorkflowExhausted:
       return "workflow exhausted fuel";
-    case TLS13_Impl_Client_Driver_DriverWorkflowClosed:
+    case TLS13_Impl_Client_Driver_State_DriverWorkflowClosed:
       return "TLS channel closed";
-    case TLS13_Impl_Client_Driver_DriverWorkflowPayloadTooLarge:
+    case TLS13_Impl_Client_Driver_State_DriverWorkflowPayloadTooLarge:
       return "payload exceeds the single-record limit (16384 bytes)";
     default:
       return "unknown verified driver status";
@@ -119,7 +119,7 @@ int tls13_client_driver_connect(
           port,
           TLS13_DRIVER_LOCAL_FUEL,
           TLS13_DRIVER_WORKFLOW_FUEL);
-  if (status != TLS13_Impl_Client_Driver_DriverWorkflowOk) {
+  if (status != TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
     (void)driver_fail_status(driver, "connect", status);
     free(driver);
     return 1;
@@ -155,11 +155,11 @@ int tls13_client_driver_send_application_data(
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_send(
           driver->verified_driver, payload_input, payload_len);
-  if (status == TLS13_Impl_Client_Driver_DriverWorkflowOk) {
+  if (status == TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
     return 0;
   }
   (void)driver_fail_status(driver, "send", status);
-  if (status == TLS13_Impl_Client_Driver_DriverWorkflowPayloadTooLarge) {
+  if (status == TLS13_Impl_Client_Driver_State_DriverWorkflowPayloadTooLarge) {
     /* The verified contract preserves the connected, application-ready state
      * and the exact sent/received logs for this outcome, so the connection
      * remains usable: the caller may retry with a payload split into
@@ -174,13 +174,13 @@ int tls13_client_driver_send_application_data(
 
 static bool receive_status_is_retryable(
     TLS13_Impl_Client_Driver_driver_workflow_status status) {
-  return status == TLS13_Impl_Client_Driver_DriverWorkflowNeedMoreInput ||
-         status == TLS13_Impl_Client_Driver_DriverWorkflowExhausted;
+  return status == TLS13_Impl_Client_Driver_State_DriverWorkflowNeedMoreInput ||
+         status == TLS13_Impl_Client_Driver_State_DriverWorkflowExhausted;
 }
 
 static bool receive_status_is_closed(
     TLS13_Impl_Client_Driver_driver_workflow_status status) {
-  return status == TLS13_Impl_Client_Driver_DriverWorkflowClosed;
+  return status == TLS13_Impl_Client_Driver_State_DriverWorkflowClosed;
 }
 
 int tls13_client_driver_receive_application_data(
@@ -208,7 +208,7 @@ int tls13_client_driver_receive_application_data(
           TLS13_DRIVER_WORKFLOW_FUEL);
   *out_len = result.client_receive_len;
   if (result.client_receive_status ==
-      TLS13_Impl_Client_Driver_DriverWorkflowOk) {
+      TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
     return 0;
   }
   (void)driver_fail_status(driver, "receive", result.client_receive_status);
@@ -244,7 +244,7 @@ int tls13_client_driver_close(
           wait_for_peer_close_notify,
           TLS13_DRIVER_WORKFLOW_FUEL);
   driver->connected = false;
-  if (status != TLS13_Impl_Client_Driver_DriverWorkflowClosed) {
+  if (status != TLS13_Impl_Client_Driver_State_DriverWorkflowClosed) {
     return driver_fail_status(driver, "close", status);
   }
   return 0;
