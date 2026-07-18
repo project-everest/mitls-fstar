@@ -180,6 +180,22 @@ let lemma_http_parse_serialize_exact (m:http_message)
     assert (http_parse input == Some (Msg_body p, Seq.empty))
 #pop-options
 
+(* ─── Body parse-correspondence (receive side) ─────────────────────────────── *)
+(* A body_ok segment parses to exactly the Msg_body carrying it, with no residual.
+   This is the receive-side analog of `lemma_parse_chunk_parts` (Chunked): the
+   driver reads `len` body bytes into a buffer and this certifies the decode. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+let lemma_parse_body_exact (p:TCP.bytes)
+  : Lemma (requires body_ok p)
+          (ensures http_parse p == Some (Msg_body p, Seq.empty #U8.t))
+= (if Seq.length p >= 4 then begin
+     assert (Seq.index p 0 <> 0x47uy /\ Seq.index p 0 <> 0x48uy);
+     lemma_bseq_neq_first (Seq.slice p 0 4) lit_get
+   end);
+  (if Seq.length p >= 9 then
+     lemma_bseq_neq_first (Seq.slice p 0 9) resp_prefix)
+#pop-options
+
 (* ─── The wire_format instance ─────────────────────────────────────────────── *)
 noextract
 let http_wire_format : WF.wire_format http_message =
