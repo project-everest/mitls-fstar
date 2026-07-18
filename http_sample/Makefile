@@ -102,7 +102,7 @@ check-admits:
 # primitives + the hand-written HTTP.Wire spec it proves against), so KaRaMeL
 # bundles away the FStar/Pulse/Prims support and emits one C file with unprefixed
 # function names — the ABI the interop wrappers (P5) link against.
-IMPL_MODULES = HTTP.Impl.Codec
+IMPL_MODULES = HTTP.Impl.Codec.Chunked
 
 KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES)))
 
@@ -113,12 +113,12 @@ $(EXTRACT_DIR):
 	@mkdir -p $@
 
 # ── Phase 1: F* → .krml ────────────────────────────────────────────
-$(OUTPUT_DIR)/HTTP_Impl_Codec.krml: verify | $(OUTPUT_DIR)
-	@echo "Extracting HTTP.Impl.Codec to .krml"
+$(OUTPUT_DIR)/HTTP_Impl_Codec_Chunked.krml: verify | $(OUTPUT_DIR)
+	@echo "Extracting HTTP.Impl.Codec.Chunked to .krml"
 	@$(FSTAR) --codegen krml \
-	  --extract_module HTTP.Impl.Codec \
+	  --extract_module HTTP.Impl.Codec.Chunked \
 	  --odir $(OUTPUT_DIR) \
-	  $(IMPL_DIR)/HTTP.Impl.Codec.fst --krmloutput $@
+	  $(IMPL_DIR)/HTTP.Impl.Codec.Chunked.fst --krmloutput $@
 
 extract-krml: $(KRML_FILES)
 	@echo "All implementation modules extracted to .krml"
@@ -130,28 +130,28 @@ extract-c: extract-krml | $(EXTRACT_DIR)
 	  -tmpdir $(EXTRACT_DIR) \
 	  -skip-compilation \
 	  -warn-error -2-9-17 \
-	  -bundle 'HTTP.Impl.Codec=[rename=HTTP_Impl_Codec]' \
-	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
-	  -no-prefix HTTP.Impl.Codec \
+	  -bundle 'HTTP.Impl.Codec.Chunked=[rename=HTTP_Impl_Codec_Chunked]' \
+	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims,HTTP.Wire.Common,HTTP.Wire.Chunked' \
+	  -no-prefix HTTP.Impl.Codec.Chunked \
 	  $(KRML_FILES)
 	@echo "C code generated in $(EXTRACT_DIR)/"
-	@ls -lh $(EXTRACT_DIR)/HTTP_Impl_Codec.c 2>/dev/null || true
+	@ls -lh $(EXTRACT_DIR)/HTTP_Impl_Codec_Chunked.c 2>/dev/null || true
 
 extract: extract-c
 
 # ═══════════════════════════════════════════════════════════════════
-# Verified driver loops → C + end-to-end (verified-loop) test
+# Verified driver loop → C + end-to-end (verified-loop) test
 # ═══════════════════════════════════════════════════════════════════
-# Extract the VERIFIED HTTP driver loops (http_client_run / http_server_run in
-# HTTP.Impl.{Client,Server}.Loop) — which reuse the verified codec leaves and
-# the CanonicalProtocol process_network/process_local — to one self-contained C
-# bundle (_extract/HTTP_Verified.c), then link a socketpair test harness that
-# runs a real file transfer through them (verified sender -> verified receiver)
-# and checks the reconstructed bytes.  Unlike YMODEM, the socketpair is
-# SOCK_DGRAM (each Common_TCP_read returns exactly one datagram), realizing the
-# one-datagram-per-read discipline HTTP's implicit-length DATA relies on.
-# pulse_array_shim.c is the trusted C realization of the Pulse library's verified
-# memcpy_l (as the TCP stub is the trusted realization of read/write).
+# Extract the VERIFIED HTTP chunked send loop (http_server_run in
+# HTTP.Impl.Server.Loop) — which reuses the verified codec leaves
+# (http_emit_chunk / http_emit_empty_chunk) and the verified Common.TCP
+# interface — to one self-contained C bundle (_extract/HTTP_Verified.c), then
+# link a socketpair test harness (verified sender -> plain-C chunked receiver)
+# that transfers a file body and checks the reconstructed bytes.  The socketpair
+# is SOCK_STREAM: HTTP runs over TCP and chunked framing is self-delimiting
+# (each chunk carries its own hex4 length prefix), so no datagram boundaries are
+# needed.  The verified loop uses only Common.TCP write/close, so no Pulse array
+# shim is required (the codec copies via a verified index loop, not memcpy_l).
 VERIFIED_DIR = verified
 STUBS_DIR    = ../c_stubs
 KRML_INCLUDE = $(KRML_HOME)/include
@@ -164,17 +164,17 @@ CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
   -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I$(STUBS_DIR)
 
 extract-loops: verify
-	@echo "Extracting the verified HTTP driver loops to C ..."
+	@echo "Extracting the verified HTTP driver loop to C ..."
 	@EVERPARSE_HOME=$(EVERPARSE_HOME) bash extract_loops.sh
 
 vloop-test: extract-loops
 	@echo "Building the verified-loop transfer test ..."
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
-	  $(VERIFIED_DIR)/vloop_test.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/HTTP_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(VERIFIED_DIR)/vloop_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
-	@echo " Verified server loop  ->  verified client loop  (over a SOCK_DGRAM socketpair)"
+	@echo " Verified server send loop  ->  C chunked receiver  (over a SOCK_STREAM socketpair)"
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/vloop_test $(VERIFIED_DIR)/dummy.txt
 

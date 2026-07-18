@@ -25,10 +25,10 @@ module ML  = FStar.Math.Lemmas
 module TCP = Common.TCP
 
 (* ─── ASCII byte constants ─────────────────────────────────────────────────── *)
-let bSP    : U8.t = 0x20uy  (* ' '  *)
-let bCR    : U8.t = 0x0Duy  (* '\r' *)
-let bLF    : U8.t = 0x0Auy  (* '\n' *)
-let bColon : U8.t = 0x3Auy  (* ':'  *)
+inline_for_extraction let bSP    : U8.t = 0x20uy  (* ' '  *)
+inline_for_extraction let bCR    : U8.t = 0x0Duy  (* '\r' *)
+inline_for_extraction let bLF    : U8.t = 0x0Auy  (* '\n' *)
+inline_for_extraction let bColon : U8.t = 0x3Auy  (* ':'  *)
 let bZero  : U8.t = 0x30uy  (* '0'  *)
 
 (* CRLF, the HTTP line terminator. *)
