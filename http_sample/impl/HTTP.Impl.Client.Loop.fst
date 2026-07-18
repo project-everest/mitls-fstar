@@ -67,8 +67,7 @@ fn http_client_run
 {
   let _n1 = TCP.read_full ch hdr 6sz;
   let pr = Codec.http_peek_chunk_size hdr;
-  let okh = fst pr;
-  let n16 = snd pr;
+  let (okh, n16) = pr;
   let nn = SZ.uint16_to_sizet n16;
   if (okh && SZ.eq nn flen) {
     Codec.lemma_fits32 (SZ.v flen + 2);

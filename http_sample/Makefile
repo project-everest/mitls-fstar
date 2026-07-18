@@ -174,7 +174,7 @@ vloop-test: extract-loops
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
-	@echo " Verified server send loop  ->  C chunked receiver  (over a SOCK_STREAM socketpair)"
+	@echo " Verified server send loop  ->  Verified client receive loop  (over a SOCK_STREAM socketpair)"
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/vloop_test $(VERIFIED_DIR)/dummy.txt
 

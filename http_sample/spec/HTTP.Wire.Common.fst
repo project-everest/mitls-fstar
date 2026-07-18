@@ -48,6 +48,7 @@ let lemma_dig_undig (d:nat{d < 10})
 = ()
 
 (* ─── Single hex digit (lowercase) ─────────────────────────────────────────── *)
+inline_for_extraction
 let is_hex (b:U8.t) : bool =
   (0x30uy `U8.lte` b && b `U8.lte` 0x39uy) ||   (* '0'..'9' *)
   (0x61uy `U8.lte` b && b `U8.lte` 0x66uy)      (* 'a'..'f' *)

@@ -294,6 +294,7 @@ fn http_emit_empty_chunk
    payload length (so the caller knows how many more bytes -- n payload + 2 CRLF
    -- to read). *)
 #push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+inline_for_extraction
 fn http_peek_chunk_size (hdr: array U8.t)
   requires
     pts_to hdr 'h **
