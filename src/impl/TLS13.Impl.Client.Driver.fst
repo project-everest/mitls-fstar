@@ -5006,7 +5006,7 @@ fn rec driver_handshake
   }
 }
 
-#push-options "--z3refresh --z3rlimit 40 --split_queries always --z3seed 17"
+#push-options "--z3refresh --z3rlimit 10 --split_queries always --z3seed 17"
 fn rec driver_receive_application_data
   (d:top_driver)
   (empty_payload:array U8.t)
@@ -6922,6 +6922,23 @@ fn send
     }
   }
 }
+
+noextract
+let client_driver_endpoint_send_event
+  (payload:B.bytes)
+  : CTypes.client_local_event =
+  CTypes.ClientAPI {
+    CTypes.client_local_kind = CT.LocalSendApplicationData;
+    CTypes.client_local_payload = payload;
+  }
+
+noextract
+let client_driver_endpoint_close_event
+  : CTypes.client_local_event =
+  CTypes.ClientAPI {
+    CTypes.client_local_kind = CT.LocalSendCloseNotify;
+    CTypes.client_local_payload = B.empty;
+  }
 
 noextract
 let client_endpoint_send_frame_remainder
