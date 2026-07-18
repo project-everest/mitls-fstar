@@ -181,7 +181,43 @@ let lemma_http_parse_serialize_exact (m:http_message)
     assert (http_parse input == Some (Msg_chunk p, Seq.empty))
 #pop-options
 
-(* ─── The wire_format instance ─────────────────────────────────────────────── *)
+(* ─── Receive-side correspondence: parsing a chunk read as (header, body) ───── *)
+(* A hex digit is never 'G' (0x47) or 'H' (0x48), so a buffer whose first byte is
+   a hex digit is dispatched by `http_parse` to `parse_chunk` (not request /
+   response). *)
+let lemma_is_hex_not_GH (c:U8.t)
+  : Lemma (requires W.is_hex c) (ensures c =!= 0x47uy /\ c =!= 0x48uy) = ()
+
+(* If a 6-byte header `h` is a well-formed  hex4 | CRLF  decoding to `n`, and a
+   body `b` is  <n bytes> | CRLF, then `http_parse (h ++ b)` yields exactly the
+   chunk carrying those n payload bytes and consumes the whole frame.  This is
+   the spec the verified receive codec is checked against. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+let lemma_parse_chunk_parts (h b:TCP.bytes) (n:nat)
+  : Lemma
+    (requires
+      Seq.length h == 6 /\ W.hex4_ok (Seq.slice h 0 4) /\
+      Seq.equal (Seq.slice h 4 6) W.crlf /\
+      W.dec_hex4 (Seq.slice h 0 4) == n /\ n <= 65535 /\
+      Seq.length b == n + 2 /\ Seq.equal (Seq.slice b n (n + 2)) W.crlf)
+    (ensures
+      http_parse (Seq.append h b) ==
+        Some (Msg_chunk (Seq.slice b 0 n), Seq.empty #U8.t))
+= let f = Seq.append h b in
+  SP.append_slices h b;
+  (* slice f 0 4 == slice h 0 4, slice f 4 6 == slice h 4 6,
+     slice f 6 (6+n) == slice b 0 n, slice f (6+n) (8+n) == slice b n (n+2) *)
+  Seq.lemma_index_slice h 0 4 0;               (* index (slice h 0 4) 0 == index h 0 *)
+  lemma_is_hex_not_GH (Seq.index (Seq.slice h 0 4) 0);
+  lemma_bseq_neq_first (Seq.slice f 0 4) lit_get;
+  (if Seq.length f >= 9 then lemma_bseq_neq_first (Seq.slice f 0 9) resp_prefix);
+  (* the two CRLF checks in parse_chunk *)
+  W.lemma_bseq_eq (Seq.slice f 4 6) W.crlf;
+  W.lemma_bseq_eq (Seq.slice f (6 + n) (8 + n)) W.crlf;
+  ()
+#pop-options
+
+
 noextract
 let http_wire_format : WF.wire_format http_message =
 {

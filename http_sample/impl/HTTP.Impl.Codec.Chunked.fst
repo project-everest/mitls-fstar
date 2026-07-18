@@ -56,6 +56,13 @@ let lemma_hexdig_byte (d:U8.t{U8.v d < 16})
   : Lemma (hexdig_byte d == W.hexdig (U8.v d))
 = ()
 
+(* Executable inverse of `hexdig`: decode a hex-digit byte to its value 0..15,
+   returned as a U16 refined to equal the spec `unhex`. *)
+let unhex_byte (b:U8.t{W.is_hex b}) : (x:U16.t{U16.v x == W.unhex b}) =
+  if U8.lte b 0x39uy
+  then Cast.uint8_to_uint16 (U8.sub b 0x30uy)
+  else Cast.uint8_to_uint16 (U8.add (U8.sub b 0x61uy) 10uy)
+
 (* The four hex digits of a chunk size (executable), as U8 values 0..15. *)
 let hx (n:SZ.t) (p:SZ.t{SZ.v p > 0}) : U8.t =
   Cast.uint32_to_uint8 (Cast.uint64_to_uint32 (SZ.sizet_to_uint64 (SZ.rem (SZ.div n p) 16sz)))
@@ -277,3 +284,107 @@ fn http_emit_empty_chunk
 }
 #pop-options
 
+
+(* ------------------------------------------------------------------------ *)
+(* The verified receive leaves.                                              *)
+(* ------------------------------------------------------------------------ *)
+
+(* Decode a 6-byte chunk header  hex4 | CRLF  read off the stream: returns
+   (ok, n) where `ok` certifies the header is well-formed and `n` is the decoded
+   payload length (so the caller knows how many more bytes -- n payload + 2 CRLF
+   -- to read). *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_peek_chunk_size (hdr: array U8.t)
+  requires
+    pts_to hdr 'h **
+    pure (Seq.length 'h == 6)
+  returns r: (bool & U16.t)
+  ensures
+    pts_to hdr 'h **
+    pure (fst r == true ==>
+            (Seq.length 'h == 6 /\
+             W.hex4_ok (Seq.slice 'h 0 4) /\
+             Seq.equal (Seq.slice 'h 4 6) W.crlf /\
+             W.dec_hex4 (Seq.slice 'h 0 4) == U16.v (snd r)))
+{
+  let c0 = hdr.(0sz);
+  let c1 = hdr.(1sz);
+  let c2 = hdr.(2sz);
+  let c3 = hdr.(3sz);
+  let c4 = hdr.(4sz);
+  let c5 = hdr.(5sz);
+  let okhex = W.is_hex c0 && W.is_hex c1 && W.is_hex c2 && W.is_hex c3;
+  let okcrlf = U8.eq c4 W.bCR && U8.eq c5 W.bLF;
+  if (okhex && okcrlf) {
+    Seq.lemma_index_slice 'h 0 4 0;
+    Seq.lemma_index_slice 'h 0 4 1;
+    Seq.lemma_index_slice 'h 0 4 2;
+    Seq.lemma_index_slice 'h 0 4 3;
+    let n = U16.add (U16.add (U16.add
+              (U16.mul (unhex_byte c0) 4096us)
+              (U16.mul (unhex_byte c1) 256us))
+              (U16.mul (unhex_byte c2) 16us))
+              (unhex_byte c3);
+    Seq.lemma_eq_intro (Seq.slice 'h 4 6) W.crlf;
+    (true, n)
+  } else {
+    (false, 0us)
+  }
+}
+#pop-options
+
+(* Given a well-formed header `hdr` (already validated to decode to `n` by
+   http_peek_chunk_size) and a `body` buffer holding the n payload bytes plus the
+   trailing CRLF, copy the payload into `out` and validate the trailing CRLF.
+   When the CRLF checks out, the whole frame `hdr ++ body` parses (per the spec
+   `http_parse`) to exactly the chunk carrying the copied payload. *)
+#push-options "--z3rlimit 120 --fuel 2 --ifuel 2"
+fn http_recv_chunk (hdr: array U8.t) (body: array U8.t) (out: array U8.t) (n: SZ.t)
+  requires
+    pts_to hdr 'h ** pts_to body 'b ** pts_to out 'o **
+    pure (Seq.length 'h == 6 /\ Seq.length 'b == SZ.v n + 2 /\ Seq.length 'o == SZ.v n /\
+          SZ.v n <= 65535 /\
+          W.hex4_ok (Seq.slice 'h 0 4) /\ Seq.equal (Seq.slice 'h 4 6) W.crlf /\
+          W.dec_hex4 (Seq.slice 'h 0 4) == SZ.v n)
+  returns crlf_ok: bool
+  ensures
+    pts_to hdr 'h ** pts_to body 'b **
+    (exists* (o':Seq.seq U8.t).
+       pts_to out o' **
+       pure (Seq.length o' == SZ.v n /\
+             (crlf_ok == true ==>
+                (SZ.v n <= 65535 /\
+                 http_parse (Seq.append 'h 'b) ==
+                   Some (Msg_chunk o', Seq.empty #U8.t)))))
+{
+  let mut i = 0sz;
+  while (SZ.lt !i n)
+  invariant exists* (vi:SZ.t) (ov:Seq.seq U8.t).
+    R.pts_to i vi **
+    pts_to hdr 'h ** pts_to body 'b ** pts_to out ov **
+    pure (
+      SZ.v vi <= SZ.v n /\
+      Seq.length 'b == SZ.v n + 2 /\
+      Seq.length ov == SZ.v n /\
+      (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'b j))
+  {
+    let vi = !i;
+    let dv = body.(vi);
+    out.(vi) <- dv;
+    i := SZ.add vi 1sz;
+  };
+  lemma_fits32 (SZ.v n + 1);
+  let e0 = body.(n);
+  let e1 = body.(SZ.add n 1sz);
+  let crlf_ok = U8.eq e0 W.bCR && U8.eq e1 W.bLF;
+  with ov. assert (pts_to out ov);
+  Seq.lemma_eq_intro ov (Seq.slice 'b 0 (SZ.v n));
+  if crlf_ok {
+    Seq.lemma_eq_intro (Seq.slice 'b (SZ.v n) (SZ.v n + 2)) W.crlf;
+    lemma_parse_chunk_parts 'h 'b (SZ.v n);
+    crlf_ok
+  } else {
+    crlf_ok
+  }
+}
+#pop-options
