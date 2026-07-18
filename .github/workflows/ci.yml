@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - agentic
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ── 1. Build (or reuse) the dev container ─────────────────────────────────
+  # Builds the .devcontainer image and runs ./setup.sh inside it to build the
+  # heavy EverParse/F*/KaRaMeL toolchain (tools/everparse, gitignored) and fetch
+  # the project dependencies, then commits the prepared container to a
+  # self-contained image and stores it in the GitHub Actions cache (not as a
+  # build artifact).  The cache is keyed on the files that determine the image
+  # contents — the Dockerfile (base OS + apt packages, incl. lrzsz/tftp and the
+  # in.tftpd setcap) and the toolchain build scripts (setup.sh + the pinned
+  # EverParse commit in scripts/build-everparse.sh) — so the ~1h build only
+  # re-runs when one of those changes; ordinary source edits reuse the cache.
+  # A lookup-only restore checks whether the image already exists; the build and
+  # cache-save steps run only on a miss.
+  devcontainer:
+    name: Build devcontainer (cached)
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Look up cached dev container image
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: devcontainer.tgz
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh') }}
+          lookup-only: true
+
+      - name: Build the dev container image + toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          docker build -t agentic-tls-base -f .devcontainer/Dockerfile .
+          # Prepare a container, copy the checked-out repo in (as the vscode user
+          # the image runs as), and build the toolchain + fetch deps there — the
+          # devcontainer.json onCreateCommand, run by hand.
+          docker run -d --name prep agentic-tls-base sleep infinity
+          docker exec -u root prep mkdir -p /workspaces/agentic-tls
+          docker cp . prep:/workspaces/agentic-tls
+          docker exec -u root prep chown -R vscode:vscode /workspaces
+          docker exec -u vscode -w /workspaces/agentic-tls prep \
+            bash -lc './setup.sh --jobs "$(nproc)"'
+          # Keep only the built toolchain (tools/everparse) and fetched deps
+          # (third_party); the project source is injected fresh by each test job,
+          # so the cached image is a pure toolchain image that never carries
+          # stale source across the many commits that reuse it.
+          docker exec -u root prep bash -c \
+            'cd /workspaces/agentic-tls && find . -mindepth 1 -maxdepth 1 \
+               ! -name tools ! -name third_party -exec rm -rf {} +'
+          docker exec -u root prep rm -rf /workspaces/agentic-tls/tools/everparse/.git
+          docker commit -c 'WORKDIR /workspaces/agentic-tls' prep agentic-tls-ci
+          docker rm -f prep
+          docker save agentic-tls-ci | gzip > devcontainer.tgz
+
+      - name: Save dev container image to cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: devcontainer.tgz
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh') }}
+
+  # ── 2. Parallel test jobs ─────────────────────────────────────────────────
+  # Each matrix leg restores the cached toolchain image and injects the FRESH
+  # checked-out source into it (the cached image is toolchain-only — see above —
+  # so the committed code is exactly what gets tested).  The freshly checked-out
+  # tree does not contain the gitignored tools/everparse or third_party/rfc, so
+  # injecting it leaves the cached toolchain and fetched RFCs untouched.
+  # fail-fast: false so every target reports independently; the ci-success gate
+  # still needs all of them.
+  #
+  # The tls-root leg additionally caches the F* verification of the generated
+  # TLS13.Wire.Generated.* parsers/serializers (a ~9-min step).  Those .checked
+  # files are a pure function of the wire spec (tls.qd.rfc) and the pinned
+  # toolchain (scripts/build-everparse.sh), so the cache is keyed on the hash of
+  # exactly those two files; the Makefile save-/restore-generated-cache targets
+  # export/import them as a single tarball moved in/out of the container.
+  tests:
+    name: ${{ matrix.name }}
+    needs: devcontainer
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: tls-root (make test)
+            cmd: make -j"$(nproc)" _cache/TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.fst.checked && make -j"$(nproc)" test
+            cache_generated: true
+          - name: calc (test-c)
+            cmd: make -j"$(nproc)" -C calc_sample test-c
+          - name: ftp (verify)
+            cmd: make -j"$(nproc)" -C ftp_sample
+          - name: ymodem (vloop-test + interop)
+            cmd: make -j"$(nproc)" -C ymodem_sample vloop-test && make -j"$(nproc)" -C ymodem_sample/interop
+          - name: tftp (vloop-test + interop)
+            cmd: make -j"$(nproc)" -C tftp_sample vloop-test && make -j"$(nproc)" -C tftp_sample/interop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+            /usr/local/share/boost "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
+          df -h /
+
+      - name: Restore cached dev container image
+        uses: actions/cache/restore@v4
+        with:
+          path: devcontainer.tgz
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh') }}
+          fail-on-cache-miss: true
+
+      - name: Load the dev container image
+        run: |
+          gunzip -c devcontainer.tgz | docker load
+          rm -f devcontainer.tgz
+
+      # Cache the generated-parser/serializer verification for the tls-root leg
+      # only.  Keyed on the wire spec + pinned toolchain, the two inputs that
+      # fully determine the generated TLS13.Wire.Generated.* modules and their
+      # .checked files.  On a miss the run step below recomputes and exports them
+      # (restored/saved via the tarball); actions/cache stores it post-job.  No
+      # restore-keys: a prefix-matched (stale) cache could carry .checked that no
+      # longer match the sources, so we only ever reuse an exact-input match.
+      - name: Cache generated-parser verification (tls-root)
+        id: gencache
+        if: ${{ matrix.cache_generated }}
+        uses: actions/cache@v4
+        with:
+          path: generated-checked.tar.gz
+          key: agentic-tls-generated-checked-${{ hashFiles('scripts/build-everparse.sh', 'tls.qd.rfc') }}
+
+      - name: Run ${{ matrix.name }}
+        env:
+          CMD: ${{ matrix.cmd }}
+          CACHE_GENERATED: ${{ matrix.cache_generated }}
+          CACHE_HIT: ${{ steps.gencache.outputs.cache-hit }}
+        run: |
+          container=$(docker run -d agentic-tls-ci sleep infinity)
+          # Inject the freshly checked-out source into the toolchain-only image
+          # so the committed code is what gets tested.  tools/everparse and the
+          # fetched RFCs are gitignored (absent from the checkout), so the cached
+          # toolchain and deps are left intact.  The generated-verification cache
+          # tarball is injected separately (below), so exclude it here.
+          tar c --exclude=./.git --exclude=./generated-checked.tar.gz . \
+            | docker exec -i -w /workspaces/agentic-tls "$container" tar --overwrite -x
+          # tls-root only: restore the cached generated-module verification so
+          # `make` skips re-verifying the TLS13.Wire.Generated.* parsers.  A miss
+          # (no tarball) is a no-op and the modules are verified from scratch.
+          if [ -n "$CACHE_GENERATED" ]; then
+            if [ -f generated-checked.tar.gz ]; then
+              docker cp generated-checked.tar.gz "$container":/workspaces/agentic-tls/
+            fi
+            docker exec -w /workspaces/agentic-tls "$container" make restore-generated-cache
+          fi
+          docker exec -w /workspaces/agentic-tls "$container" bash -lc "$CMD"
+          # On a miss, export the freshly-computed verification to the host so the
+          # post-job actions/cache save stores it under the content-hash key.
+          if [ -n "$CACHE_GENERATED" ] && [ "$CACHE_HIT" != "true" ]; then
+            docker exec -w /workspaces/agentic-tls "$container" make save-generated-cache
+            docker cp "$container":/workspaces/agentic-tls/generated-checked.tar.gz .
+          fi
+          docker rm -f "$container"
+
+  # ── 3. Overall gate ───────────────────────────────────────────────────────
+  # Succeeds only if the build and every parallel test job succeeded, giving a
+  # single status check to require on the branch/PR.
+  ci-success:
+    name: CI success
+    if: always()
+    needs: [devcontainer, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all jobs succeeded
+        run: |
+          echo "devcontainer: ${{ needs.devcontainer.result }}"
+          echo "tests:        ${{ needs.tests.result }}"
+          if [ "${{ needs.devcontainer.result }}" != "success" ] \
+             || [ "${{ needs.tests.result }}" != "success" ]; then
+            echo "One or more CI jobs failed."
+            exit 1
+          fi
+          echo "All CI jobs passed."

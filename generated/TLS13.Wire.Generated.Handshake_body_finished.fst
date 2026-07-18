@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let handshake_body_finished_parser =
   LP.parse_bounded_vldata 0 16777215 finished_parser
 
@@ -46,17 +44,17 @@ let handshake_body_finished_serializer =
 let handshake_body_finished_bytesize_eq x = ()
 
 let handshake_body_finished_validator =
-  PPVD.validate_bounded_vldata 0 16777215 finished_validator (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata 0 16777215 finished_validator (PPBI.leaf_read_bounded_integer_3 ())
 
-let handshake_body_finished_accessor = PPVD.accessor_bounded_vldata_payload 0 16777215 (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+let handshake_body_finished_accessor = PPVD.accessor_bounded_vldata_payload 0 16777215 (PPBI.leaf_read_bounded_integer_3 ())
 
 let read_handshake_body_finished : PPB.copyful_parse handshake_body_finished_vmatch handshake_body_finished_parser handshake_body_finished_conv =
-  PPVD.copyful_parse_bounded_vldata_payload 0 16777215 read_finished (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+  PPVD.copyful_parse_bounded_vldata_payload 0 16777215 read_finished (PPBI.leaf_read_bounded_integer_3 ())
 
-let free_handshake_body_finished : PPB.free_t handshake_body_finished_vmatch = free_finished
+let free_handshake_body_finished : PPB.free_t handshake_body_finished_vmatch = fun x #v -> (free_finished) x #v
 
 let write_handshake_body_finished : PPB.l2r_safe_writer handshake_body_finished_vmatch handshake_body_finished_serializer handshake_body_finished_conv =
-  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0sz 16777215 (LSeqB.mk_seq_sizet 16777215 fits_u64_squash) finished_serializer write_finished fits_u64_squash
+  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0ul 16777215 16777215ul 3 3sz finished_serializer write_finished
 
 let handshake_body_finished_bytesize_eqn x =
   (finished_bytesize_eq (x))

@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let clientHello_legacy_session_id_parser = LP.parse_bounded_seq_vlbytes 0 32
 
 noextract let clientHello_legacy_session_id_serializer = LP.serialize_bounded_seq_vlbytes 0 32
 
 let clientHello_legacy_session_id_bytesize_eq x = ()
 
-let clientHello_legacy_session_id_validator = LSeqB.validate_bounded_seq_vlbytes 0 32 (PPBI.leaf_read_bounded_integer_1 fits_u64_squash) fits_u64_squash
+let clientHello_legacy_session_id_validator = LSeqB.validate_bounded_seq_vlbytes 0 32 (PPBI.leaf_read_bounded_integer_1 ())
 
-let clientHello_legacy_session_id_jumper = LSeqB.jump_bounded_seq_vlbytes 0 32 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 32)) (PPBI.leaf_read_bounded_integer_1 fits_u64_squash)) fits_u64_squash
+let clientHello_legacy_session_id_jumper = LSeqB.jump_bounded_seq_vlbytes 0 32 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 32)) (PPBI.leaf_read_bounded_integer_1 ()))
 
-let read_clientHello_legacy_session_id = LSeqB.copyful_parse_bounded_seq_vlbytes 0 32 (PPBI.leaf_read_bounded_integer_1 fits_u64_squash) fits_u64_squash
+let read_clientHello_legacy_session_id = LSeqB.copyful_parse_bounded_seq_vlbytes 0 32 (PPBI.leaf_read_bounded_integer_1 ())
 
 let free_clientHello_legacy_session_id : PPB.free_t clientHello_legacy_session_id_vmatch = fun x #v -> LSeqB.free_copy_seqbytes x #(Ghost.hide (Ghost.reveal v <: Seq.seq FStar.UInt8.t))
 
-let write_clientHello_legacy_session_id = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 32 (LSeqB.mk_seq_sizet 32 fits_u64_squash) 1sz fits_u64_squash
+let write_clientHello_legacy_session_id = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 0ul 32 32ul 1sz
 
-let size_clientHello_legacy_session_id = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 32 (LSeqB.mk_seq_sizet 32 fits_u64_squash) 1sz fits_u64_squash
+let size_clientHello_legacy_session_id = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 0ul 32 32ul 1sz
 
 let clientHello_legacy_session_id_bytesize_eqn x = LP.length_serialize_bounded_seq_vlbytes 0 32 x
 

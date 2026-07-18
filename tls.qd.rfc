@@ -49,8 +49,10 @@ enum {
     (255)
 } ContentType;
 
-enum {
-    /* [covered: this is the only suite emitted/accepted] */
+enum /*@open*/ {
+    /* [covered: 0x1303 selected; others (e.g. the 0x00FF SCSV that OpenSSL
+       always includes) must round-trip as unsupported so a peer ClientHello
+       offering extra suites still parses] */
     TLS_CHACHA20_POLY1305_SHA256(0x1303),
     (0xFFFF)
 } CipherSuite;

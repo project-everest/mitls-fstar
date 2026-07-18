@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let alertDescription_repr_parser = LPI.parse_u8
 
 noextract let alertDescription_repr_serializer = LPI.serialize_u8
@@ -49,9 +47,9 @@ inline_for_extraction noextract let alertDescription_repr_reader = (PPB.leaf_rea
 
 inline_for_extraction noextract let alertDescription_repr_writer = (LPPI.l2r_leaf_write_u8 ())
 
-inline_for_extraction let synth_alertDescription (x: LP.enum_key alertDescription_enum) : Tot alertDescription = x
+inline_for_extraction noextract let synth_alertDescription (x: LP.enum_key alertDescription_enum) : Tot alertDescription = x
 
-inline_for_extraction let synth_alertDescription_inv (x: alertDescription) : Tot (LP.enum_key alertDescription_enum) =
+inline_for_extraction noextract let synth_alertDescription_inv (x: alertDescription) : Tot (LP.enum_key alertDescription_enum) =
   [@inline_let] let _ : squash (LP.list_mem x (LP.list_map fst alertDescription_enum)) =
     _ by (LP.synth_maybe_enum_key_inv_unknown_tac x)
   in

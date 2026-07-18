@@ -35,23 +35,21 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let keyShareServerHello_parser = keyShareEntry_parser
 
 noextract let keyShareServerHello_serializer = keyShareEntry_serializer
 
 let keyShareServerHello_bytesize_eq x = ()
 
-let keyShareServerHello_validator = keyShareEntry_validator
+let keyShareServerHello_validator = fun input poffset #offset #pm #v -> (keyShareEntry_validator) input poffset #offset #pm #v
 
-let keyShareServerHello_jumper = keyShareEntry_jumper
+let keyShareServerHello_jumper = fun input offset #pm #v -> (keyShareEntry_jumper) input offset #pm #v
 
-let read_keyShareServerHello : PPB.copyful_parse keyShareServerHello_vmatch keyShareServerHello_parser keyShareServerHello_conv = read_keyShareEntry
+let read_keyShareServerHello : PPB.copyful_parse keyShareServerHello_vmatch keyShareServerHello_parser keyShareServerHello_conv = fun input #pm #v -> (read_keyShareEntry) input #pm #v
 
-let free_keyShareServerHello : PPB.free_t keyShareServerHello_vmatch = free_keyShareEntry
+let free_keyShareServerHello : PPB.free_t keyShareServerHello_vmatch = fun x #v -> (free_keyShareEntry) x #v
 
-let write_keyShareServerHello : PPB.l2r_safe_writer keyShareServerHello_vmatch keyShareServerHello_serializer keyShareServerHello_conv = write_keyShareEntry
+let write_keyShareServerHello : PPB.l2r_safe_writer keyShareServerHello_vmatch keyShareServerHello_serializer keyShareServerHello_conv = fun x #y out #v perr -> (write_keyShareEntry) x #y out #v perr
 
 let keyShareServerHello_bytesize_eqn x = (keyShareEntry_bytesize_eq (x))
 

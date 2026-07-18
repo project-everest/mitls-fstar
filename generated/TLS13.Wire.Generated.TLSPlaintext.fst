@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field fragment*)
 open TLS13.Wire.Generated.TLSPlaintext_fragment
 
@@ -91,7 +89,7 @@ let read_tLSPlaintext : PPB.copyful_parse tLSPlaintext_vmatch tLSPlaintext_parse
   assert_norm (tLSPlaintext_parser_kind == tLSPlaintext'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair (LPC.jump_nondep_then contentType_jumper protocolVersion_jumper) (PPC.copyful_parse_pair contentType_jumper read_contentType () read_protocolVersion) () read_tLSPlaintext_fragment) synth_tLSPlaintext synth_tLSPlaintext_recip
 
-let free_tLSPlaintext : PPB.free_t tLSPlaintext_vmatch = (PPC.free_pair (PPC.free_pair free_contentType free_protocolVersion) free_tLSPlaintext_fragment)
+let free_tLSPlaintext : PPB.free_t tLSPlaintext_vmatch = fun x #v -> ((PPC.free_pair (PPC.free_pair free_contentType free_protocolVersion) free_tLSPlaintext_fragment)) x #v
 
 let write_tLSPlaintext : PPB.l2r_safe_writer tLSPlaintext_vmatch tLSPlaintext_serializer tLSPlaintext_conv =
   synth_tLSPlaintext_injective ();
@@ -100,7 +98,7 @@ let write_tLSPlaintext : PPB.l2r_safe_writer tLSPlaintext_vmatch tLSPlaintext_se
 
 let size_tLSPlaintext : PPB.l2r_safe_size tLSPlaintext_vmatch tLSPlaintext_serializer tLSPlaintext_conv =
   synth_tLSPlaintext_injective ();
-  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair fits_u64_squash (PPC.l2r_safe_size_pair fits_u64_squash size_contentType () size_protocolVersion) () size_tLSPlaintext_fragment) synth_tLSPlaintext synth_tLSPlaintext_recip
+  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair (PPC.l2r_safe_size_pair size_contentType () size_protocolVersion) () size_tLSPlaintext_fragment) synth_tLSPlaintext synth_tLSPlaintext_recip
 
 let tLSPlaintext_bytesize_eqn x =
   [@inline_let] let _ = synth_tLSPlaintext_injective () in

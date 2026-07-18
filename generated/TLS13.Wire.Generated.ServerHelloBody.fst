@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field legacy_session_id_echo*)
 open TLS13.Wire.Generated.ServerHelloBody_legacy_session_id_echo
 
@@ -94,7 +92,7 @@ let read_serverHelloBody : PPB.copyful_parse serverHelloBody_vmatch serverHelloB
   assert_norm (serverHelloBody_parser_kind == serverHelloBody'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair (LPC.jump_nondep_then serverHelloBody_legacy_session_id_echo_jumper cipherSuite_jumper) (PPC.copyful_parse_pair serverHelloBody_legacy_session_id_echo_jumper read_serverHelloBody_legacy_session_id_echo () read_cipherSuite) () (PPC.copyful_parse_pair LPPI.jump_u8 (PPB.copyful_parse_leaf (PPB.leaf_reader_of_serialized (LPPI.read_u8' ()))) () read_serverHelloBody_extensions)) synth_serverHelloBody synth_serverHelloBody_recip
 
-let free_serverHelloBody : PPB.free_t serverHelloBody_vmatch = (PPC.free_pair (PPC.free_pair free_serverHelloBody_legacy_session_id_echo free_cipherSuite) (PPC.free_pair (PPB.free_leaf #U8.t) free_serverHelloBody_extensions))
+let free_serverHelloBody : PPB.free_t serverHelloBody_vmatch = fun x #v -> ((PPC.free_pair (PPC.free_pair free_serverHelloBody_legacy_session_id_echo free_cipherSuite) (PPC.free_pair (PPB.free_leaf #U8.t) free_serverHelloBody_extensions))) x #v
 
 let write_serverHelloBody : PPB.l2r_safe_writer serverHelloBody_vmatch serverHelloBody_serializer serverHelloBody_conv =
   synth_serverHelloBody_injective ();

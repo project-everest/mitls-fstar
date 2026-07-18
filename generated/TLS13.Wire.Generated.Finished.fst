@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let finished_parser = LP.parse_lseq_bytes 32
 
 noextract let finished_serializer = LP.serialize_lseq_bytes 32

@@ -37,8 +37,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 // Need high Z3 limits for large sum types
 #set-options "--z3rlimit 360"
 
@@ -113,7 +111,7 @@ noextract inline_for_extraction let synth_ymodem_message_cases_recip (k:LP.enum_
   | Crc_c -> [@inline_let] let _ = synth_ymodem_message_cases_recip_pre_intro Crc_c x in
     (match x with Body_crc_c y -> (from_ymodem_message_case_of_ymodem_tag Crc_c y))
 
-inline_for_extraction let ymodem_message_sum = LP.make_sum' ymodem_tag_enum key_of_ymodem_message
+inline_for_extraction noextract let ymodem_message_sum = LP.make_sum' ymodem_tag_enum key_of_ymodem_message
   ymodem_message_case_of_ymodem_tag synth_ymodem_message_cases synth_ymodem_message_cases_recip
   (_ by (LP.make_sum_synth_case_recip_synth_case_tac ()))
   (_ by (LP.synth_case_synth_case_recip_tac ()))

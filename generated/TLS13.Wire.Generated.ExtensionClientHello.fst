@@ -37,8 +37,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 // Need high Z3 limits for large sum types
 #set-options "--z3rlimit 360"
 
@@ -170,7 +168,7 @@ noextract inline_for_extraction let synth_extensionClientHello_cases_recip (k:LP
       (match x with Extension_data_application_layer_protocol_negotiation y -> extensionClientHello_known_case k' Application_layer_protocol_negotiation y)
    | _ -> [@inline_let] let _ = synth_extensionClientHello_cases_recip_pre_intro (LP.Known k') in false_elim ()
 
-inline_for_extraction let extensionClientHello_sum : LP.dsum = LP.make_dsum' extensionType_enum key_of_extensionClientHello
+inline_for_extraction noextract let extensionClientHello_sum : LP.dsum = LP.make_dsum' extensionType_enum key_of_extensionClientHello
   extensionClientHello_case_of_extensionType extensionClientHello_extension_data_default synth_extensionClientHello_cases synth_extensionClientHello_cases_recip
   (_ by (LP.make_dsum_synth_case_recip_synth_case_known_tac ()))
   (_ by (LP.make_dsum_synth_case_recip_synth_case_unknown_tac ()))

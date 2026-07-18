@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let serverHelloBody_extensions_list_bytesize_nil = LP.serialize_list_nil extensionServerHello_parser extensionServerHello_serializer
 
 let serverHelloBody_extensions_list_bytesize_cons x y = LP.serialize_list_cons extensionServerHello_parser extensionServerHello_serializer x y; (extensionServerHello_bytesize_eq (x))
@@ -54,12 +52,12 @@ let serverHelloBody_extensions_serializer = LP.serialize_synth _ synth_serverHel
 let serverHelloBody_extensions_bytesize_eq x = ()
 
 inline_for_extraction let serverHelloBody_extensions'_validator : LPS.validator serverHelloBody_extensions'_parser =
-  PPVD.validate_bounded_vldata_strong 6 65535 (LP.serialize_list _ extensionServerHello_serializer) (PPLS.validate_list extensionServerHello_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 6 65535 (LP.serialize_list _ extensionServerHello_serializer) (PPLS.validate_list extensionServerHello_validator ()) (PPBI.leaf_read_bounded_integer_2 ())
 
 let serverHelloBody_extensions_validator = LPC.validate_synth serverHelloBody_extensions'_validator synth_serverHelloBody_extensions
 
 inline_for_extraction let serverHelloBody_extensions'_jumper : LPS.jumper serverHelloBody_extensions'_parser =
-  PPVD.jump_bounded_vldata_strong 6 65535 (LP.serialize_list _ extensionServerHello_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 6 65535 (LP.serialize_list _ extensionServerHello_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let serverHelloBody_extensions_jumper = LPC.jump_synth serverHelloBody_extensions'_jumper synth_serverHelloBody_extensions
 
@@ -76,7 +74,7 @@ let read_serverHelloBody_extensions : PPB.copyful_parse serverHelloBody_extensio
   PPC.copyful_parse_synth
     (PPVD.copyful_parse_bounded_vldata_strong_payload 6 65535 (LP.serialize_list _ extensionServerHello_serializer)
        (PPLS.copyful_parse_list read_extensionServerHello extensionServerHello_jumper ())
-       (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+       (PPBI.leaf_read_bounded_integer_2 ()))
     synth_serverHelloBody_extensions synth_serverHelloBody_extensions_recip
 
 let free_serverHelloBody_extensions : PPB.free_t serverHelloBody_extensions_vmatch =
@@ -88,7 +86,7 @@ let write_serverHelloBody_extensions : PPB.l2r_safe_writer serverHelloBody_exten
   assert_norm ((LP.get_parser_kind extensionServerHello_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
   assert_norm ((LP.get_parser_kind extensionServerHello_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 6 (LSeqB.mk_seq_sizet 6 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ extensionServerHello_serializer)
-       (PPLS.l2r_safe_writer_list extensionServerHello_serializer write_extensionServerHello ()) fits_u64_squash) <: PPB.l2r_safe_writer _ serverHelloBody_extensions'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 6 6ul 65535 65535ul 2 2sz (LP.serialize_list _ extensionServerHello_serializer)
+       (PPLS.l2r_safe_writer_list extensionServerHello_serializer write_extensionServerHello ())) <: PPB.l2r_safe_writer _ serverHelloBody_extensions'_serializer _)
     synth_serverHelloBody_extensions synth_serverHelloBody_extensions_recip
 

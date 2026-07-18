@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let protocolNameList_list_bytesize_nil = LP.serialize_list_nil protocolName_parser protocolName_serializer
 
 let protocolNameList_list_bytesize_cons x y = LP.serialize_list_cons protocolName_parser protocolName_serializer x y; (protocolName_bytesize_eq (x))
@@ -54,12 +52,12 @@ let protocolNameList_serializer = LP.serialize_synth _ synth_protocolNameList pr
 let protocolNameList_bytesize_eq x = ()
 
 inline_for_extraction let protocolNameList'_validator : LPS.validator protocolNameList'_parser =
-  PPVD.validate_bounded_vldata_strong 2 65535 (LP.serialize_list _ protocolName_serializer) (PPLS.validate_list protocolName_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 2 65535 (LP.serialize_list _ protocolName_serializer) (PPLS.validate_list protocolName_validator ()) (PPBI.leaf_read_bounded_integer_2 ())
 
 let protocolNameList_validator = LPC.validate_synth protocolNameList'_validator synth_protocolNameList
 
 inline_for_extraction let protocolNameList'_jumper : LPS.jumper protocolNameList'_parser =
-  PPVD.jump_bounded_vldata_strong 2 65535 (LP.serialize_list _ protocolName_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 2 65535 (LP.serialize_list _ protocolName_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let protocolNameList_jumper = LPC.jump_synth protocolNameList'_jumper synth_protocolNameList
 
@@ -76,7 +74,7 @@ let read_protocolNameList : PPB.copyful_parse protocolNameList_vmatch protocolNa
   PPC.copyful_parse_synth
     (PPVD.copyful_parse_bounded_vldata_strong_payload 2 65535 (LP.serialize_list _ protocolName_serializer)
        (PPLS.copyful_parse_list read_protocolName protocolName_jumper ())
-       (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+       (PPBI.leaf_read_bounded_integer_2 ()))
     synth_protocolNameList synth_protocolNameList_recip
 
 let free_protocolNameList : PPB.free_t protocolNameList_vmatch =
@@ -88,7 +86,7 @@ let write_protocolNameList : PPB.l2r_safe_writer protocolNameList_vmatch protoco
   assert_norm ((LP.get_parser_kind protocolName_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
   assert_norm ((LP.get_parser_kind protocolName_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 (LSeqB.mk_seq_sizet 2 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ protocolName_serializer)
-       (PPLS.l2r_safe_writer_list protocolName_serializer write_protocolName ()) fits_u64_squash) <: PPB.l2r_safe_writer _ protocolNameList'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 2ul 65535 65535ul 2 2sz (LP.serialize_list _ protocolName_serializer)
+       (PPLS.l2r_safe_writer_list protocolName_serializer write_protocolName ())) <: PPB.l2r_safe_writer _ protocolNameList'_serializer _)
     synth_protocolNameList synth_protocolNameList_recip
 

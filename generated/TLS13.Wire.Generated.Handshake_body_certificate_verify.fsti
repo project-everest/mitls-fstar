@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.CertificateVerify
 
-type handshake_body_certificate_verify = certificateVerify
+noextract type handshake_body_certificate_verify = certificateVerify
 
 inline_for_extraction noextract let handshake_body_certificate_verify_parser_kind = LP.strong_parser_kind 7 65542 None
 

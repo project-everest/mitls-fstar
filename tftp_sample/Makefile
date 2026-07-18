@@ -28,7 +28,7 @@
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME ?= $(FSTAR_HOME)/karamel
+KRML_HOME ?= $(EVERPARSE_HOME)/opt/karamel
 KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/src/lowparse

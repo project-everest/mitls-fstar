@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.KeyShareEntry
 
-type keyShareServerHello = keyShareEntry
+noextract type keyShareServerHello = keyShareEntry
 
 inline_for_extraction noextract let keyShareServerHello_parser_kind = LP.strong_parser_kind 5 65539 None
 

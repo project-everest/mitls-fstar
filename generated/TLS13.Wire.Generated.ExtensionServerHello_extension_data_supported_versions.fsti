@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.SupportedVersionsServerHello
 
-type extensionServerHello_extension_data_supported_versions = supportedVersionsServerHello
+noextract type extensionServerHello_extension_data_supported_versions = supportedVersionsServerHello
 
 inline_for_extraction noextract let extensionServerHello_extension_data_supported_versions_parser_kind = LP.strong_parser_kind 4 4 None
 
