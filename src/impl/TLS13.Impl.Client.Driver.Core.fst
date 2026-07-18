@@ -962,6 +962,42 @@ fn driver_process_buffered_network_bytes_once
   result
 }
 
+noextract
+let lemma_compact_buffer_prefix_step
+  (original raw_before raw_after:B.bytes)
+  (i consumed:nat)
+  : Lemma
+    (requires
+      B.length raw_before == B.length original /\
+      B.length raw_after == B.length original /\
+      i + consumed < B.length original /\
+      (forall (k:nat). k < i ==>
+        Seq.index raw_before k == Seq.index original (k + consumed)) /\
+      Seq.index raw_after i == Seq.index original (i + consumed) /\
+      (forall (k:nat). k < i ==>
+        Seq.index raw_after k == Seq.index raw_before k))
+    (ensures
+      forall (k:nat). k < i + 1 ==>
+        Seq.index raw_after k == Seq.index original (k + consumed))
+=
+  let index_proof
+    (k:nat { k < i + 1 })
+    : Lemma
+      (Seq.index raw_after k == Seq.index original (k + consumed))
+  =
+    if k < i then (
+      assert (Seq.index raw_after k == Seq.index raw_before k);
+      assert (Seq.index raw_before k == Seq.index original (k + consumed))
+    ) else (
+      assert (k == i)
+    )
+  in
+  FStar.Classical.forall_intro
+    #(k:nat { k < i + 1 })
+    #(fun k ->
+      Seq.index raw_after k == Seq.index original (k + consumed))
+    index_proof
+
 fn compact_buffer_suffix
   (raw:array U8.t)
   (raw_capacity:SZ.t)
@@ -1038,10 +1074,20 @@ fn compact_buffer_suffix
         assert (pts_to raw raw_after_write);
       assert (pure (B.length raw_after_write == SZ.v raw_capacity));
       assert (pure (Seq.index raw_after_write (SZ.v vi) == b));
+      assert (pure (
+        Seq.index raw_after_write (SZ.v vi) ==
+        Seq.index (Ghost.reveal 'raw_bytes)
+          (SZ.v vi + SZ.v consumed_len)));
       assert (pure (forall (k:nat). k < SZ.v vi ==>
         Seq.index raw_after_write k == Seq.index raw_before_read k));
       assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
         Seq.index raw_after_write k == Seq.index raw_before_read k));
+      lemma_compact_buffer_prefix_step
+        (Ghost.reveal 'raw_bytes)
+        raw_before_read
+        raw_after_write
+        (SZ.v vi)
+        (SZ.v consumed_len);
       assert (pure (forall (k:nat). k < SZ.v vi + 1 ==>
         Seq.index raw_after_write k ==
         Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
