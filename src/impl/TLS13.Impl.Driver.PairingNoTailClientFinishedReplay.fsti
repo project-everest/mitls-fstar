@@ -6,7 +6,9 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GFin  = TLS13.Wire.Generated.Finished
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
@@ -55,10 +57,10 @@ let client_finished_staged_replay_fragment
   (w:PCB.handshake_complete_boundary_witnesses)
   (r:client_finished_replay_witnesses)
   : prop =
-  CS.record_key_iv_material_agrees
-    (CS.record_material_of_traffic_material
+  TLS13.Spec.StateMachine.KeyMaterial.record_key_iv_material_agrees
+    (TLS13.Spec.StateMachine.KeyMaterial.record_material_of_traffic_material
       r.cfr_client_finished_client_write_material)
-    (CS.record_material_of_traffic_material
+    (TLS13.Spec.StateMachine.KeyMaterial.record_material_of_traffic_material
       r.cfr_client_finished_server_read_material) /\
   CS.step_model
     r.cfr_client_finished_write_install_source
@@ -127,7 +129,7 @@ let client_finished_staged_replay_fragment
       CL.message_direction = CL.Received;
       CL.message_value = M.TlsHandshake w.PCB.hcb_received_msg4;
     }) == Some w.PCB.hcb_cf_server_after_finished /\
-  CS.conn_events_sent_seal_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
     r.cfr_client_finished_sender
     (CS.ConnLocalEvent (CS.LocalVerifyFinished w.PCB.hcb_verified_server_finished) ::
      CS.ConnLocalEvent
@@ -149,7 +151,7 @@ let client_finished_staged_replay_fragment
     r.cfr_client_finished_raw_sent
     r.cfr_client_finished_raw_received
     r.cfr_client_finished_final /\
-  CS.conn_events_received_decode_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
     r.cfr_client_finished_receiver
     (CS.ConnLocalEvent
        (CS.LocalInstallTrafficKeysForRole {
@@ -250,7 +252,7 @@ let client_finished_exact_suffix_sent_seal_replay_slice
     Seq.equal
       client.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       (CS.initial_model client.CS.cs_model.CS.model_config)
       (CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
        CS.ConnNetworkEvent ({
@@ -286,7 +288,7 @@ let client_finished_exact_suffix_sent_seal_replay_slice
       prefix_sent
       prefix_received
       model12 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -357,7 +359,7 @@ let client_finished_exact_suffix_sent_seal_raw_record_slice
     Seq.equal
       client.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       (CS.initial_model client.CS.cs_model.CS.model_config)
       (CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
        CS.ConnNetworkEvent ({
@@ -393,7 +395,7 @@ let client_finished_exact_suffix_sent_seal_raw_record_slice
       prefix_sent
       prefix_received
       model12 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -445,7 +447,7 @@ let client_finished_exact_suffix_sent_seal_head_step_slice
     suffix_sent
     suffix_received.
     PNTCAS.client_no_tail_application_install_cover e13 e14 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -482,7 +484,7 @@ let client_finished_canonical_sent_seal_replay_slice
     (client_app_read_material:CS.traffic_key_material)
     suffix_sent
     suffix_received.
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
      model12
      (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
       CS.ConnLocalEvent
@@ -538,7 +540,7 @@ val lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
   : Lemma
       (requires
         PNTCFS.paired_no_tail_client_finished_staged_milestone client server /\
-        CS.connection_state_sent_seal_replay_consistent client)
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client)
       (ensures
         client_finished_exact_suffix_sent_seal_replay_slice client)
 
@@ -558,7 +560,7 @@ val lemma_client_finished_sent_seal_suffix_head_steps
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model12
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
            e13 ::
@@ -587,8 +589,8 @@ val lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
       (ensures client_finished_exact_suffix_sent_seal_head_step_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_seal_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -610,8 +612,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_se
         client_finished_exact_suffix_sent_seal_replay_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_seal_raw_record_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -633,8 +635,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_se
         client_finished_exact_suffix_sent_seal_raw_record_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_seal_head_step_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -662,8 +664,8 @@ val lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
       (ensures client_finished_canonical_sent_seal_replay_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_canonical_sent_seal_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -718,8 +720,8 @@ val lemma_clean16_client_finished_staged_replay_fragment_from_completion
           client_finished_staged_replay_fragment client server w r)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_replay_fragment_from_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

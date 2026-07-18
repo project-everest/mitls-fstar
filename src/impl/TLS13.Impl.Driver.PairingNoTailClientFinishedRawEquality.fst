@@ -6,7 +6,9 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GFin  = TLS13.Wire.Generated.Finished
@@ -25,7 +27,7 @@ let lemma_paired_no_tail_client_finished_staged_milestone_client_finished_raw_re
       (ensures paired_client_finished_raw_record_equality client server)
 =
   assert (PNTCSR.client_sent_cleartext_and_finished_raw_slices client);
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   eliminate exists (ch:GCH.clientHello) (cf:GFin.finished) client_ch_raw client_finished_raw.
     Seq.equal
       client.CS.cs_wire_log.CL.raw_sent
@@ -50,8 +52,8 @@ let lemma_paired_no_tail_client_finished_staged_milestone_client_finished_raw_re
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_client_finished_raw_record_equality
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

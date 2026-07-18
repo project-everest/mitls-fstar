@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
 module GEE   = TLS13.Wire.Generated.EncryptedExtensions
@@ -58,7 +58,7 @@ let rec lemma_server_window_stuck_without_server_application_traffic
         model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
-        CS.conn_events_raw_replay model events raw_sent raw_received final_model)
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model events raw_sent raw_received final_model)
       (ensures ~ (final_model.CS.model_control == CS.ControlApplicationData))
       (decreases events)
 =
@@ -67,21 +67,21 @@ let rec lemma_server_window_stuck_without_server_application_traffic
     assert (final_model == model)
   | ev :: rest ->
     assert_norm (
-      CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
       (exists model1 delta_sent delta_received tail_sent tail_received.
         CS.legal_event model ev /\
         CS.step_model model ev == Some model1 /\
         CS.event_raw_delta_legal model ev delta_sent delta_received /\
         Seq.equal raw_sent (B.append delta_sent tail_sent) /\
         Seq.equal raw_received (B.append delta_received tail_received) /\
-        CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model));
     eliminate exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 rest tail_sent tail_received final_model
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
     returns
       ~ (final_model.CS.model_control == CS.ControlApplicationData)
     with _.
@@ -170,7 +170,7 @@ let rec lemma_server_window_stuck_without_server_application_traffic
 
 (**
   [get_replay_step] : an internal helper that turns one recursive unfolding
-  of [CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received
+  of [TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received
   final_model] into concrete values (rather than a classical existential
   elimination).
 
@@ -193,7 +193,7 @@ let get_model1
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
   : Ghost CS.connection_model
-      (requires CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model)
+      (requires TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model)
       (ensures fun model1 ->
         CS.legal_event model ev /\
         CS.step_model model ev == Some model1 /\
@@ -201,17 +201,17 @@ let get_model1
           CS.event_raw_delta_legal model ev delta_sent delta_received /\
           Seq.equal raw_sent (B.append delta_sent tail_sent) /\
           Seq.equal raw_received (B.append delta_received tail_received) /\
-          CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model))
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model))
 =
   assert_norm (
-    CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model ==
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model ==
     (exists model1 delta_sent delta_received tail_sent tail_received.
       CS.legal_event model ev /\
       CS.step_model model ev == Some model1 /\
       CS.event_raw_delta_legal model ev delta_sent delta_received /\
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
-      CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model));
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model));
   ID.indefinite_description_ghost CS.connection_model
     (fun m ->
       exists delta_sent delta_received tail_sent tail_received.
@@ -220,7 +220,7 @@ let get_model1
         CS.event_raw_delta_legal model ev delta_sent delta_received /\
         Seq.equal raw_sent (B.append delta_sent tail_sent) /\
         Seq.equal raw_received (B.append delta_received tail_received) /\
-        CS.conn_events_raw_replay m tl tail_sent tail_received final_model)
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay m tl tail_sent tail_received final_model)
 
 private
 let get_deltas
@@ -236,12 +236,12 @@ let get_deltas
           CS.event_raw_delta_legal model ev delta_sent delta_received /\
           Seq.equal raw_sent (B.append delta_sent tail_sent) /\
           Seq.equal raw_received (B.append delta_received tail_received) /\
-          CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
       (ensures fun (delta_sent, delta_received) ->
         exists tail_sent tail_received.
           Seq.equal raw_sent (B.append delta_sent tail_sent) /\
           Seq.equal raw_received (B.append delta_received tail_received) /\
-          CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
 =
   let delta_sent =
     ID.indefinite_description_ghost B.bytes
@@ -250,7 +250,7 @@ let get_deltas
           CS.event_raw_delta_legal model ev ds delta_received /\
           Seq.equal raw_sent (B.append ds tail_sent) /\
           Seq.equal raw_received (B.append delta_received tail_received) /\
-          CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model) in
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model) in
   let delta_received =
     ID.indefinite_description_ghost B.bytes
       (fun dr ->
@@ -258,7 +258,7 @@ let get_deltas
           CS.event_raw_delta_legal model ev delta_sent dr /\
           Seq.equal raw_sent (B.append delta_sent tail_sent) /\
           Seq.equal raw_received (B.append dr tail_received) /\
-          CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model) in
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model) in
   (delta_sent, delta_received)
 
 private
@@ -272,9 +272,9 @@ let get_tail_pair
         exists tail_sent tail_received.
           Seq.equal raw_sent (B.append delta_sent tail_sent) /\
           Seq.equal raw_received (B.append delta_received tail_received) /\
-          CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
       (ensures fun (tail_sent, tail_received) ->
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
 =
   let tail_sent =
     ID.indefinite_description_ghost B.bytes
@@ -282,13 +282,13 @@ let get_tail_pair
         exists tail_received.
           Seq.equal raw_sent (B.append delta_sent ts) /\
           Seq.equal raw_received (B.append delta_received tail_received) /\
-          CS.conn_events_raw_replay model1 tl ts tail_received final_model) in
+          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl ts tail_received final_model) in
   let tail_received =
     ID.indefinite_description_ghost B.bytes
       (fun tr ->
         Seq.equal raw_sent (B.append delta_sent tail_sent) /\
         Seq.equal raw_received (B.append delta_received tr) /\
-        CS.conn_events_raw_replay model1 tl tail_sent tr final_model) in
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tr final_model) in
   (tail_sent, tail_received)
 
 private
@@ -300,11 +300,11 @@ let get_replay_step
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
   : Ghost (CS.connection_model & B.bytes & B.bytes)
-      (requires CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model)
+      (requires TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model)
       (ensures fun (model1, tail_sent, tail_received) ->
         CS.legal_event model ev /\
         CS.step_model model ev == Some model1 /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model)
 =
   let model1 = get_model1 model ev tl raw_sent raw_received final_model in
   let (delta_sent, delta_received) = get_deltas model1 ev model tl raw_sent raw_received final_model in
@@ -354,7 +354,7 @@ let get_flight_step0
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
         FStar.List.Tot.length tl == 8 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (ee, model1, tail_sent, tail_received) ->
@@ -362,7 +362,7 @@ let get_flight_step0
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
         } /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -457,7 +457,7 @@ let get_flight_step1
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
         FStar.List.Tot.length tl == 7 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (cert, model1, tail_sent, tail_received) ->
@@ -465,7 +465,7 @@ let get_flight_step1
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.Certificate cert);
         } /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -555,12 +555,12 @@ let get_flight_step2
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
         FStar.List.Tot.length tl == 6 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (cv, model1, tail_sent, tail_received) ->
         ev == CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv) /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -649,7 +649,7 @@ let get_flight_step3
         model.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
         FStar.List.Tot.length tl == 5 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (model1, tail_sent, tail_received) ->
@@ -657,7 +657,7 @@ let get_flight_step3
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
         } /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -745,7 +745,7 @@ let get_flight_step4
         Some? model.CS.model_handshake.CS.hs_certificate_verify /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == true /\
         FStar.List.Tot.length tl == 4 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (sf, model1, tail_sent, tail_received) ->
@@ -753,7 +753,7 @@ let get_flight_step4
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.Finished sf);
         } /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -860,7 +860,7 @@ let get_flight_step5
         model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
         FStar.List.Tot.length tl == 3 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (server_app_write_material, model1, tail_sent, tail_received) ->
@@ -873,7 +873,7 @@ let get_flight_step5
               CS.install_material = server_app_write_material;
             };
           }) /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -969,7 +969,7 @@ let get_flight_step6
         Some? model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
         FStar.List.Tot.length tl == 2 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (cf, model1, tail_sent, tail_received) ->
@@ -977,7 +977,7 @@ let get_flight_step6
           CL.message_direction = CL.Received;
           CL.message_value = M.TlsHandshake (M.Finished cf);
         } /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -1062,7 +1062,7 @@ let get_flight_step7
         Some? model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
         FStar.List.Tot.length tl == 1 /\
-        CS.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: tl) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun (server_app_read_material, model1, tail_sent, tail_received) ->
@@ -1075,7 +1075,7 @@ let get_flight_step7
               CS.install_material = server_app_read_material;
             };
           }) /\
-        CS.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 tl tail_sent tail_received final_model /\
         model1.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         model1.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived /\
         Some? model1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
@@ -1165,7 +1165,7 @@ let get_flight_step8
         model.CS.model_handshake.CS.hs_client_finished == Some cf /\
         Some? model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
         Some? model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
-        CS.conn_events_raw_replay model [ev] raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model [ev] raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         PNTWHR.server_hello_window_rank final_model == 0)
       (ensures fun () ->
@@ -1181,7 +1181,7 @@ let get_flight_step8
     (match msg.CL.message_value with
     | M.TlsChangeCipherSpec ->
       assert (model1 == model);
-      assert_norm (CS.conn_events_raw_replay model1 [] tail_sent tail_received final_model ==
+      assert_norm (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 [] tail_sent tail_received final_model ==
         (Seq.equal tail_sent B.empty /\ Seq.equal tail_received B.empty /\ final_model == model1));
       assert (final_model == model1);
       assert (final_model.CS.model_control ==
@@ -1248,7 +1248,7 @@ let lemma_flight_core
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
         rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8] /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           rest
           raw_sent
@@ -1819,7 +1819,7 @@ let lemma_server_post_two_handshake_installs_tail_order_from_replay
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
         FStar.List.Tot.length rest == 9 /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           rest
           raw_sent

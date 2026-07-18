@@ -46,11 +46,14 @@ EXTRACT_DIR = _extract
 HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
 HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
+SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(GENERATED_DIR) \
+  $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include common \
-  --include src/spec \
+  $(addprefix --include ,$(SPEC_DIRS)) \
   --include src/impl \
   --include $(GENERATED_DIR) \
   --include $(LOWPARSE_HOME) \
@@ -95,9 +98,13 @@ FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
-SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
+SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
+ROOT_FILES = \
+  src/impl/TLS13.System.Temporal.fst \
+  src/impl/TLS13.Impl.Client.Driver.fst \
+  src/impl/TLS13.Impl.Server.Driver.fst
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
@@ -233,7 +240,7 @@ restore-generated-cache:
 # order-only $(GENERATED_STAMP) prerequisite produces them first (without forcing
 # a needless `.depend` rebuild once present).
 .depend: $(ALL_FILES) Makefile | check-toolchain $(GENERATED_STAMP)
-	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ALL_FILES) --output_deps_to $@
+	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ROOT_FILES) --output_deps_to $@
 
 # Do NOT pull in .depend (and, through it, the order-only $(GENERATED_STAMP)
 # prerequisite) for the generated-pipeline phony goals or clean.  `parsers` runs
@@ -295,13 +302,12 @@ check-admits:
 # ── Extraction Bundles ─────────────────────────────────────────────
 # List of modules to extract (dotted names)
 EXTRACT_MODULES = \
-  $(BUNDLE_IMPL_MODULES) \
-  TLS13.Extract.Smoke
+  $(BUNDLE_IMPL_MODULES)
 
 # Convert module names to .krml filenames
 KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(EXTRACT_MODULES)))
 
-.PHONY: extract-krml extract-connection extract-smoke \
+.PHONY: extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle
 
 extract-krml: $(KRML_FILES)
@@ -324,7 +330,6 @@ SERIALIZER_MODULES = \
   TLS13.Impl.Serializer.Handshake \
   TLS13.Impl.Serializer.Finished \
   TLS13.Impl.Serializer.EncryptedExtensions \
-  TLS13.Impl.Serializer.CertificateVerify \
   TLS13.Impl.Serializer.ServerHello \
   TLS13.Impl.Serializer.Certificate \
   TLS13.Impl.Serializer.ProtectedRecord \
@@ -334,7 +339,7 @@ SERIALIZER_INTERNAL_MODULES = \
   TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Handshake,\
   TLS13.Impl.Serializer.Finished,\
   TLS13.Impl.Serializer.EncryptedExtensions,\
-  TLS13.Impl.Serializer.CertificateVerify,TLS13.Impl.Serializer.ServerHello,\
+  TLS13.Impl.Serializer.ServerHello,\
   TLS13.Impl.Serializer.Certificate,TLS13.Impl.Serializer.ProtectedRecord,\
   TLS13.Impl.Serializer
 
@@ -401,7 +406,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.KeySchedule,TLS13.Record
 
 # Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, Common.TCP
+# TLS13.Crypto, TLS13.OpenSSL, Common.TCP
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 
@@ -423,12 +428,11 @@ COMMON_ENDPOINT_MODULES = \
   Common.WireFormat \
   Common.WireFormatStateMachine \
   Common.ProtocolImplementation \
-  Common.ProtocolEndpoint \
-  Common.ProtocolDriver
+  Common.ProtocolEndpoint
 TLS13_SHARED_ENDPOINT_MODULES = \
   TLS13.Impl.ConnectionStateQuery \
   TLS13.Impl.CanonicalTypes \
-  TLS13.Impl.CanonicalWire
+  TLS13.Spec.Endpoint.Wire
 TLS13_CLIENT_ENDPOINT_MODULES = \
   $(TLS13_SHARED_ENDPOINT_MODULES) \
   TLS13.Impl.Client.CanonicalProtocol \
@@ -476,14 +480,12 @@ DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
   -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*,\
-  -TLS13.X509,-TLS13.MachineTypes
+  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 SERVER_DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
   -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*,\
-  -TLS13.X509,-TLS13.MachineTypes
+  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
 SERVER_DRIVER_MODULES = \
   $(COMMON_ENDPOINT_MODULES) \
@@ -527,9 +529,11 @@ SERVER_DRIVER_KRML_FILES = \
   $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
+GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 TLS13_BUNDLE_KRML_FILES = \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
 # Extract FStar.Pervasives.Native for tuple support
@@ -597,7 +601,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@target_base=$$(basename "$@" .krml); \
 	module=; src=; \
 	for ext in fst fsti; do \
-	  for dir in common src/spec src/impl $(GENERATED_DIR) $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse \
+	  for dir in $(SOURCE_DIRS) \
 	      $(FSTAR_ULIB) $(FSTAR_PULSE_COMMON) $(FSTAR_PULSE_LIB); do \
 	    test -d "$$dir" || continue; \
 	    for candidate in "$$dir"/*.$$ext; do \
@@ -628,7 +632,7 @@ extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
 extract-tls13-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
 
-$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | $(OUTPUT_DIR)
+$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify $(OUTPUT_DIR)
 	$(MAKE) $(TLS13_BUNDLE_KRML_FILES)
 	@touch $@
 
@@ -657,10 +661,10 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library TLS13.X509 -library Common.TCP \
+	  -library TLS13.Crypto -library Common.TCP \
 	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
-	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
+	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
@@ -671,22 +675,6 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  "$@" "$$status" "$$((end-start))" "$$(date -Is)"; \
 	exit $$status
 	@touch $@
-
-# ── Smoke Test Extraction ───────────────────────────────────────────────
-
-SMOKE_DIR = $(EXTRACT_DIR)/smoke
-SMOKE_KRML = $(OUTPUT_DIR)/TLS13_Extract_Smoke.krml
-SMOKE_C = $(SMOKE_DIR)/TLS13_Extract_Smoke.c
-SMOKE_H = $(SMOKE_DIR)/TLS13_Extract_Smoke.h
-
-$(SMOKE_DIR):
-	mkdir -p $@
-
-$(SMOKE_C) $(SMOKE_H): $(SMOKE_KRML) | $(SMOKE_DIR)
-	$(KRML_EXE) -skip-compilation -skip-makefiles \
-	  -tmpdir $(SMOKE_DIR) $(SMOKE_KRML)
-
-extract-smoke: $(SMOKE_C) $(SMOKE_H)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # C Stubs and Dependencies
@@ -761,9 +749,14 @@ check-c-stubs: | check-deps
 	  $(ECHO_STUB_SOURCES)
 
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
-test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: \
-  scripts/generate-test-certs.sh
+TEST_CERT_STAMP = test/certs/.generated
+
+$(TEST_CERT_STAMP): scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
+	touch $@
+
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: $(TEST_CERT_STAMP)
+	@test -f $@
 
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
@@ -856,10 +849,6 @@ check-deps:
 	@scripts/check-openssl.sh >/dev/null
 	@test -d third_party/hacl-star/dist/gcc-compatible || \
 	  { echo "Missing HACL* C snapshot; run scripts/fetch-hacl-star.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8446.txt || \
-	  { echo "Missing RFC 8446 cache; run scripts/fetch-rfcs.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8448.txt || \
-	  { echo "Missing RFC 8448 cache; run scripts/fetch-rfcs.sh"; exit 1; }
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
@@ -867,10 +856,11 @@ clean:
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
 	  test/openssl_echo_server.port \
-	  test/openssl_echo_server.log
+	  test/openssl_echo_server.log \
+	  $(TEST_CERT_STAMP)
 	find src test -name '*.checked' -delete
 
-.PHONY: all verify test extract-krml extract-connection extract-smoke \
+.PHONY: all verify test extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-openssl-sclient \

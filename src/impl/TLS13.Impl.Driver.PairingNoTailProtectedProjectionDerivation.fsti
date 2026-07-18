@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GFin  = TLS13.Wire.Generated.Finished
 module Pairing = TLS13.Impl.Driver.Pairing
@@ -199,7 +199,7 @@ unfold let installed_protected_projection_replay_inputs
     R.next_seq server_after2.CS.model_record.CS.record_write /\
   client_after3.CS.model_record.CS.record_read ==
     R.next_seq client_after_verify_skip.CS.model_record.CS.record_read /\
-  CS.conn_events_sent_seal_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
     server_flight_sender
     (CS.ConnNetworkEvent {
        CL.message_direction = CL.Sent;
@@ -217,7 +217,7 @@ unfold let installed_protected_projection_replay_inputs
     server_raw_sent
     server_raw_received
     server_final /\
-  CS.conn_events_received_decode_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
     server_flight_receiver
     (CS.ConnNetworkEvent {
        CL.message_direction = CL.Received;
@@ -284,7 +284,7 @@ unfold let installed_protected_projection_replay_inputs
       CL.message_direction = CL.Received;
       CL.message_value = M.TlsHandshake received_msg4;
     }) == Some cf_server_after_finished /\
-  CS.conn_events_sent_seal_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
     client_finished_sender
     (CS.ConnLocalEvent (CS.LocalVerifyFinished verified_server_finished) ::
      CS.ConnLocalEvent
@@ -306,7 +306,7 @@ unfold let installed_protected_projection_replay_inputs
     client_finished_raw_sent
     client_finished_raw_received
     client_finished_final /\
-  CS.conn_events_received_decode_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
     client_finished_receiver
     (CS.ConnLocalEvent
        (CS.LocalInstallTrafficKeysForRole {

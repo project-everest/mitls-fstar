@@ -1347,7 +1347,7 @@ The **layered log specification pattern** provides:
 | Calc sample | TLS client |
 | --- | --- |
 | `Calc.Wire` request/response bytes | TLS records, handshake messages, alerts, and application-data bytes in `TLS13.Wire.Spec` |
-| `Calc.Spec.step` over stack requests | TLS client state-machine transitions in `TLS13.StateMachine` |
+| `Calc.Spec.step` over stack requests | TLS client state-machine transitions in `TLS13.Spec.StateMachine` |
 | `Calc.Log.log_consistent` | `TLS13.ConnectionLog.connection_view_consistent` tying buffers to records, messages, traces, and app projection |
 | `server_exactly` | A Pulse `client_core`/connection predicate relating heap state to a ghost connection view |
 | `process_request` with input/output buffers | TLS buffer-oriented `process_request` over network/app input buffers and network/app output buffers |

@@ -11,10 +11,12 @@ module CPI = Common.ProtocolImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module CQueries = TLS13.Impl.Client.CanonicalQueries
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
+module EC = TLS13.Spec.Endpoint.Client
 module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
 module EP = TLS13.Impl.Client.Endpoint
 module IO = Common.TCP
@@ -56,7 +58,7 @@ val client_driver_endpoint_workflow_frame
 
 noextract
 val client_driver_wire_logs_match
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
   (buffered:B.bytes)
@@ -66,7 +68,7 @@ val client_driver_wire_logs_match
 noextract
 val client_driver_live
   (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   : slprop
 
 noextract
@@ -80,7 +82,7 @@ noextract
 **)
 val client_driver_connected
   (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (received:B.bytes)
   (sent:B.bytes)
   : slprop
@@ -88,7 +90,7 @@ val client_driver_connected
 noextract
 val client_driver_endpoint_live
   (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   : slprop
 
 noextract
@@ -121,7 +123,7 @@ val client_driver_endpoint_connected
   (d:client_driver)
   (cfg:CQueries.client_next_local_action_config)
   (frame:EP.client_endpoint_frame)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   (canonical_received:B.bytes)
   (canonical_sent:B.bytes)
   : slprop
@@ -149,7 +151,7 @@ ghost fn client_driver_endpoint_connected_valid_byte_trace
             (Ghost.reveal canonical_received)
             (Ghost.reveal canonical_sent) **
           pure (WFSM.valid_byte_trace
-            (CP.client_system
+            (EC.client_system #CTypes.client_local_event
               (Ghost.reveal
                 (client_driver_canonical d).CP.canonical_client_initial))
             (Ghost.reveal canonical_received)
@@ -160,7 +162,7 @@ ghost fn client_driver_endpoint_connected_valid_byte_trace
 noextract
 val client_driver_closed
   (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
+  (st:TLS13.Spec.StateMachine.connection_state)
   : slprop
 
 noextract
@@ -521,9 +523,9 @@ fn send_endpoint
            pure (exists (old_out:B.bytes)
                        (out_contents:B.bytes)
                        (wire_outputs:list CW.wire_message)
-                       (local_outputs:list CTypes.local_output).
+                       (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (CP.client_system
+               (EC.client_system #CTypes.client_local_event
                  (Ghost.reveal
                   (client_driver_canonical d).CP.canonical_client_initial))
                (client_driver_endpoint_send_event payload_bytes)
@@ -607,9 +609,9 @@ fn close_endpoint
            pure (exists (old_out:B.bytes)
                         (out_contents:B.bytes)
                         (wire_outputs:list CW.wire_message)
-                        (local_outputs:list CTypes.local_output).
+                        (local_outputs:list EAPI.local_output).
              CPI.local_process_correct
-               (CP.client_system
+               (EC.client_system #CTypes.client_local_event
                  (Ghost.reveal
                   (client_driver_canonical d).CP.canonical_client_initial))
                client_driver_endpoint_close_event

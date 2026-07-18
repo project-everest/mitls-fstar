@@ -4,8 +4,8 @@ This note explains the audit-facing theorem
 `TLS13.Impl.Driver.Pairing.lemma_client_server_driver_end_to_end_key_material_agrees`.
 It is grounded in the current code in
 `src/impl/TLS13.Impl.Driver.Pairing.{fsti,fst}` and the supporting pure
-connection-state lemmas in `src/spec/TLS13.Spec.ConnectionState.fst` and
-`src/spec/TLS13.ConnectionState.Lemmas.{fsti,fst}`.
+state-machine definitions in `src/spec/core/TLS13.Spec.StateMachine.fst` and
+supporting lemmas in `src/spec/properties/TLS13.ConnectionState.Lemmas.{fsti,fst}`.
 
 The short version: the theorem is a compositional bridge. Given two
 application-ready client/server model states, matching external transport byte
@@ -109,7 +109,7 @@ where:
   both endpoints' current application traffic material matches the expected
   derived application traffic key/IV material
   (`Pairing.fsti:402-408`,
-  `TLS13.Spec.ConnectionState.fst:2084-2090`).
+  `TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees`).
 
 So the theorem assumes, rather than proves from raw bytes, that:
 
@@ -486,7 +486,7 @@ paired no-tail valid byte traces
 The old `15`-event client shape had to be treated skeptically.  The
 abstract legality condition for sending the client Finished requires
 `ks_client_handshake_traffic` as well as both application traffic secrets
-(`TLS13.Spec.ConnectionState.legal_handshake_message`, the
+(`TLS13.Spec.StateMachine.legal_handshake_message`, the
 `CL.Sent, M.Finished, HsServerFinishedVerified` case).  The legacy
 client suffix installs the server handshake read traffic keys but does not
 include a separate client handshake write-key install before sending Finished.

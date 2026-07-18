@@ -7,9 +7,11 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
-module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module CTypes = TLS13.Impl.CanonicalTypes
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -22,8 +24,9 @@ module PWL = TLS13.ConnectionState.ProtectedWireBase
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
-module ServerCP = TLS13.Impl.Server.CanonicalProtocol
 module WFSM = Common.WireFormatStateMachine
+
+open TLS13.Spec.Pairing.SemanticTrace
 
 noextract
 let paired_successful_handshake_complete_event_log_shape_inputs
@@ -239,7 +242,7 @@ let paired_successful_handshake_complete_state_trace
   : prop =
   CD.client_driver_application_ready client /\
   SD.server_driver_application_ready server /\
-  CS.paired_wire_logs client server /\
+  TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
@@ -270,13 +273,13 @@ val lemma_client_server_application_record_material_agrees_from_successful_hands
   : Lemma
       (requires paired_successful_handshake_complete_semantic_state_trace client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
@@ -286,42 +289,15 @@ val lemma_client_server_application_record_material_agrees_from_successful_hands
   : Lemma
       (requires paired_successful_handshake_complete_state_trace client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
-
-(**
-  Pure semantic trace pairing, independent of raw record bytes.
-
-  [client_trace] and [server_trace] are connection-event traces, not TCP byte
-  traces.  The two equalities say that every TLS message semantically sent by
-  one side is exactly the TLS message semantically received by the peer, in
-  trace order.  This is the state-machine-level counterpart of paired wire
-  logs; it deliberately avoids parser/canonical-serialization questions.
-
-  The theorem below is the already-proved key-agreement backend with explicit
-  [tc]/[ts] trace parameters.  The remaining inversion theorem we want next is
-  precisely to derive [Pairing.paired_handshake_message_states client server]
-  from this semantic I/O pairing plus role-local no-tail application-ready trace
-  inversion.
-**)
-noextract
-let paired_semantic_tls_io_traces
-  (client_trace:list CS.conn_event)
-  (server_trace:list CS.conn_event)
-  : prop =
-  CS.tls_messages_correspond
-    (CS.sent_tls_messages client_trace)
-    (CS.received_tls_messages server_trace) /\
-  CS.tls_messages_correspond
-    (CS.sent_tls_messages server_trace)
-    (CS.received_tls_messages client_trace)
 
 noextract
 let paired_application_ready_semantic_traces_with_message_states
@@ -354,20 +330,20 @@ val lemma_client_server_application_record_material_agrees_from_paired_applicati
           client_trace
           server_trace)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
 noextract
 let paired_valid_byte_traces_with_successful_handshake_complete_state_trace
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -376,13 +352,13 @@ let paired_valid_byte_traces_with_successful_handshake_complete_state_trace
   (server_sent:B.bytes)
   : prop =
   WFSM.valid_byte_trace
-    (ClientCP.client_system client_initial)
+    (EC.client_system #CTypes.client_local_event client_initial)
     client_received
     client
     client_sent
     Seq.empty /\
   WFSM.valid_byte_trace
-    (ServerCP.server_system server_initial)
+    (ES.server_system #CTypes.server_local_event server_initial)
     server_received
     server
     server_sent
@@ -392,8 +368,8 @@ let paired_valid_byte_traces_with_successful_handshake_complete_state_trace
   paired_successful_handshake_complete_state_trace client server
 
 val lemma_client_server_application_record_material_agrees_from_valid_paired_byte_traces_with_successful_handshake_complete_state_trace
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -412,12 +388,12 @@ val lemma_client_server_application_record_material_agrees_from_valid_paired_byt
           server_received
           server_sent)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)

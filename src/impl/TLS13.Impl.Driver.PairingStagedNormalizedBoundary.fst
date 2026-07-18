@@ -4,7 +4,7 @@ module TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 
 open Pulse.Lib.Pervasives
 
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module Pairing = TLS13.Impl.Driver.Pairing
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PR = TLS13.Impl.Driver.PairingProtectedReplay
@@ -15,13 +15,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_proje
   : Lemma
       (requires paired_supported_normalized_projection_boundary_core client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -29,13 +29,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_proje
     (w:normalized_projection_boundary_witnesses).
     paired_supported_normalized_projection_boundary_core_inputs client server w
   returns
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.
@@ -59,13 +59,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_proje
   : Lemma
       (requires paired_supported_normalized_projection_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -73,13 +73,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_proje
     (w:PCB.handshake_complete_boundary_witnesses).
     paired_supported_normalized_projection_boundary_inputs client server w
   returns
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.
@@ -103,13 +103,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_stage
   : Lemma
       (requires paired_supported_normalized_staged_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -118,13 +118,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_stage
     (s:staged_replay_witnesses).
     paired_supported_normalized_staged_replay_boundary_inputs client server w s
   returns
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.

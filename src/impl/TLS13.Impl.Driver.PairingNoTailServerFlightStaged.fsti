@@ -6,7 +6,9 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module PNTCRR = TLS13.Impl.Driver.PairingNoTailClientReceivedRawShape
 module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
@@ -57,7 +59,7 @@ let clean16_server_encrypted_flight_staged_milestone
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
-  CS.paired_wire_logs client server /\
+  TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
   PNTN.paired_no_tail_normalized_cleartext_replay_suffixes_clean16
     client
     server /\
@@ -81,8 +83,8 @@ val lemma_server_post_server_hello_sent_certificate_verify_split
         server_post_server_hello_sent_certificate_verify_split server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_encrypted_flight_staged_milestone
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

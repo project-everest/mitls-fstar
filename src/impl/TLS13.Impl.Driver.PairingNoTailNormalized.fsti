@@ -6,8 +6,10 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
-module ClientCP = TLS13.Impl.Client.CanonicalProtocol
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module CTypes = TLS13.Impl.CanonicalTypes
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module CSL = TLS13.ConnectionState.Lemmas
 module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module CL = TLS13.ConnectionLog
@@ -40,7 +42,6 @@ module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module Seq = FStar.Seq
 module SCVE = TLS13.ConnectionState.ServerCertificateVerifyEvent
 module SM = Common.StateMachine
-module ServerCP = TLS13.Impl.Server.CanonicalProtocol
 module T = TLS13.Types
 module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
@@ -60,8 +61,8 @@ module WFL = TLS13.Spec.WireFormatLemmas
 **)
 noextract
 let paired_supported_no_tail_valid_byte_traces_clean
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -72,13 +73,13 @@ let paired_supported_no_tail_valid_byte_traces_clean
   client_initial == CS.initial client_initial.CS.cs_model.CS.model_config /\
   server_initial == CS.initial server_initial.CS.cs_model.CS.model_config /\
   WFSM.valid_byte_trace
-    (ClientCP.client_system client_initial)
+    (EC.client_system #CTypes.client_local_event client_initial)
     client_received
     client
     client_sent
     Seq.empty /\
   WFSM.valid_byte_trace
-    (ServerCP.server_system server_initial)
+    (ES.server_system #CTypes.server_local_event server_initial)
     server_received
     server
     server_sent
@@ -94,8 +95,8 @@ let paired_supported_no_tail_valid_byte_traces_clean
 
 noextract
 let paired_supported_no_tail_valid_byte_traces_clean16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -106,13 +107,13 @@ let paired_supported_no_tail_valid_byte_traces_clean16
   client_initial == CS.initial client_initial.CS.cs_model.CS.model_config /\
   server_initial == CS.initial server_initial.CS.cs_model.CS.model_config /\
   WFSM.valid_byte_trace
-    (ClientCP.client_system client_initial)
+    (EC.client_system #CTypes.client_local_event client_initial)
     client_received
     client
     client_sent
     Seq.empty /\
   WFSM.valid_byte_trace
-    (ServerCP.server_system server_initial)
+    (ES.server_system #CTypes.server_local_event server_initial)
     server_received
     server
     server_sent
@@ -127,8 +128,8 @@ let paired_supported_no_tail_valid_byte_traces_clean16
     server
 
 val lemma_clean_no_tail_valid_byte_traces_preserve_connection_state_consistent
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -147,12 +148,12 @@ val lemma_clean_no_tail_valid_byte_traces_preserve_connection_state_consistent
           server_received
           server_sent)
       (ensures
-        CS.connection_state_consistent client /\
-        CS.connection_state_consistent server)
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent client /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent server)
 
 val lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -171,12 +172,12 @@ val lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
           server_received
           server_sent)
       (ensures
-        CS.connection_state_consistent client /\
-        CS.connection_state_consistent server)
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent client /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent server)
 
 val lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_replay_consistent
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -195,10 +196,10 @@ val lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_replay_con
           server_received
           server_sent)
       (ensures
-        CS.connection_state_sent_seal_replay_consistent client /\
-        CS.connection_state_received_decode_replay_consistent client /\
-        CS.connection_state_sent_seal_replay_consistent server /\
-        CS.connection_state_received_decode_replay_consistent server)
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server)
 
 noextract
 let paired_no_tail_role_local_start_and_final_witnesses
@@ -437,8 +438,8 @@ let server_sent_certificate_verify_event_split
       } :: suffix)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -459,8 +460,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_start_spine16
       (ensures paired_no_tail_role_local_start_spine16 client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_start_and_final_witnesses16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -481,8 +482,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_start_and_final_witnesses
       (ensures paired_no_tail_role_local_start_and_final_witnesses16 client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -506,8 +507,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_inst
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_cover_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -531,8 +532,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_receive_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -556,8 +557,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_re
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_receive_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -581,8 +582,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_r
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_validated_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -606,8 +607,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_valida
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_verify_received_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -631,8 +632,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_verify
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_signature_verified_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -656,8 +657,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_signat
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_received_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -681,8 +682,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_re
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_verified_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -706,8 +707,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_ve
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_application_installs_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -731,8 +732,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_application_instal
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -756,8 +757,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_serv
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_sent_cleartext_and_finished_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -778,8 +779,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_sent_cleartext_and_finished_r
       (ensures PNTCSR.client_sent_cleartext_and_finished_raw_slices client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_received_cleartext_and_server_flight_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -842,8 +843,8 @@ let server_received_cleartext_and_client_finished_raw_slices
     CS.raw_records_exactly client_finished_raw T.Application_data 1
 
 val lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_flight_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -864,8 +865,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
       (ensures server_sent_cleartext_and_server_flight_raw_slices server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client_finished_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -896,8 +897,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client
   rule out extra no-op records in the clean/canonical trace.
 **)
 val lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -918,8 +919,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
       (ensures Some? client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -940,8 +941,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_e
       (ensures CVE.contains_received_certificate_verify client.CS.cs_event_log)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event_split
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -962,8 +963,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_e
       (ensures client_received_certificate_verify_event_split client)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_sent_certificate_verify_event
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -984,8 +985,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_sent_certificate_verify_event
       (ensures SCVE.contains_sent_certificate_verify server.CS.cs_event_log)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_sent_certificate_verify_event_split
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1016,8 +1017,8 @@ let paired_no_tail_role_local_client_two_handshake_installs_server_start_spine16
   Some? client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_start_spine16_and_client_certificate_verify_witness
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1254,8 +1255,8 @@ let paired_no_tail_role_local_client_two_handshake_installs_server_hello_prefix
         server_rest)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_start_and_final_witnesses
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1277,8 +1278,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_start_and_final_witnesses
         paired_no_tail_role_local_start_and_final_witnesses client server)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_cleartext_prefixes
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1300,8 +1301,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_cleartext_prefixes
         paired_no_tail_role_local_cleartext_prefixes client server)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1323,8 +1324,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_prefix
         paired_no_tail_role_local_client_shared_prefix client server)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_selection_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1346,8 +1347,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_select
         paired_no_tail_role_local_client_shared_server_selection_prefix client server)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1369,8 +1370,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_shared
         paired_no_tail_role_local_client_shared_server_shared_prefix client server)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_server_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1394,8 +1395,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_se
           server)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1419,8 +1420,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_se
           server)
 
 val lemma_clean_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1444,8 +1445,8 @@ val lemma_clean_no_tail_valid_byte_traces_role_local_client_two_handshake_instal
           server)
 
 val lemma_clean_no_tail_valid_byte_traces_client_supported_hello_profile
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1466,8 +1467,8 @@ val lemma_clean_no_tail_valid_byte_traces_client_supported_hello_profile
       (ensures WFL.state_supported_client_hello_wire_profile client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_supported_hello_profile
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1488,8 +1489,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_supported_hello_profile
       (ensures WFL.state_supported_client_hello_wire_profile client)
 
 val lemma_clean_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1510,33 +1511,33 @@ val lemma_clean_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
       (ensures
         exists client_trace server_trace.
           SM.trace_reaches
-            (ClientCP.client_state_machine client_initial)
+            (EC.client_state_machine #CTypes.client_local_event client_initial)
             client_initial
             client_trace
             client /\
           SM.trace_reaches
-            (ServerCP.server_state_machine server_initial)
+            (ES.server_state_machine #CTypes.server_local_event server_initial)
             server_initial
             server_trace
             server /\
           Seq.equal
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (SM.trace_wire_outputs client_trace))
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (WFSM.trace_input_messages server_trace)) /\
           Seq.equal
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (SM.trace_wire_outputs server_trace))
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (WFSM.trace_input_messages client_trace)))
 
 val lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1557,33 +1558,33 @@ val lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
       (ensures
         exists client_trace server_trace.
           SM.trace_reaches
-            (ClientCP.client_state_machine client_initial)
+            (EC.client_state_machine #CTypes.client_local_event client_initial)
             client_initial
             client_trace
             client /\
           SM.trace_reaches
-            (ServerCP.server_state_machine server_initial)
+            (ES.server_state_machine #CTypes.server_local_event server_initial)
             server_initial
             server_trace
             server /\
           Seq.equal
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (SM.trace_wire_outputs client_trace))
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (WFSM.trace_input_messages server_trace)) /\
           Seq.equal
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (SM.trace_wire_outputs server_trace))
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (WFSM.trace_input_messages client_trace)))
 
 val lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1604,12 +1605,12 @@ val lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
       (ensures
         exists client_trace server_trace.
           SM.trace_reaches
-            (ClientCP.client_state_machine client_initial)
+            (EC.client_state_machine #CTypes.client_local_event client_initial)
             client_initial
             client_trace
             client /\
           SM.trace_reaches
-            (ServerCP.server_state_machine server_initial)
+            (ES.server_state_machine #CTypes.server_local_event server_initial)
             server_initial
             server_trace
             server /\
@@ -1619,8 +1620,8 @@ val lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
             WFSM.trace_input_messages client_trace)
 
 val lemma_clean_no_tail_valid_byte_traces_paired_wire_logs
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1638,11 +1639,11 @@ val lemma_clean_no_tail_valid_byte_traces_paired_wire_logs
           client_sent
           server_received
           server_sent)
-      (ensures CS.paired_wire_logs client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_paired_wire_logs
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1660,11 +1661,11 @@ val lemma_clean16_no_tail_valid_byte_traces_paired_wire_logs
           client_sent
           server_received
           server_sent)
-      (ensures CS.paired_wire_logs client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1685,8 +1686,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_ciphe
       (ensures server_second_event_not_change_cipher_spec16 server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1707,8 +1708,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher
       (ensures server_third_event_not_change_cipher_spec16 server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_fourth_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1729,8 +1730,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_fourth_event_not_change_ciphe
       (ensures server_fourth_event_not_change_cipher_spec16 server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1751,8 +1752,8 @@ val lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
       (ensures server_fifth_event_not_change_cipher_spec16 server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1773,8 +1774,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
       (ensures paired_no_tail_role_local_client_shared_prefix client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_selection_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1795,8 +1796,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_sele
       (ensures paired_no_tail_role_local_client_shared_server_selection_prefix client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1817,8 +1818,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_shar
       (ensures paired_no_tail_role_local_client_shared_server_shared_prefix client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1842,8 +1843,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1867,8 +1868,8 @@ val lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_inst
           server)
 
 val lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1918,8 +1919,8 @@ val lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_f
           server_sh)
 
 val lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2061,25 +2062,25 @@ let paired_no_tail_normalized_cleartext_replay_suffixes_clean16
       client_rest == client.CS.cs_event_log /\
     Seq.equal server_suffix_sent client_suffix_received /\
     Seq.equal client_suffix_sent server_suffix_received /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       server_mid
       server_rest
       server_suffix_sent
       server_suffix_received
       server.CS.cs_model /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       server_mid
       server_rest
       server_suffix_sent
       server_suffix_received
       server.CS.cs_model /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       client_mid
       client_rest
       client_suffix_sent
       client_suffix_received
       client.CS.cs_model /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       client_mid
       client_rest
       client_suffix_sent
@@ -2087,8 +2088,8 @@ let paired_no_tail_normalized_cleartext_replay_suffixes_clean16
       client.CS.cs_model
 
 val lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2112,8 +2113,8 @@ val lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2137,8 +2138,8 @@ val lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
           server)
 
 val lemma_paired_successful_handshake_normalized_replay_shape_from_clean_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2163,8 +2164,8 @@ val lemma_paired_successful_handshake_normalized_replay_shape_from_clean_no_tail
           server)
 
 val lemma_paired_successful_handshake_normalized_replay_shape_from_clean16_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2189,8 +2190,8 @@ val lemma_paired_successful_handshake_normalized_replay_shape_from_clean16_no_ta
           server)
 
 val lemma_client_server_application_record_material_agrees_from_clean_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2210,19 +2211,19 @@ val lemma_client_server_application_record_material_agrees_from_clean_no_tail_va
           server_sent /\
         PNB.paired_supported_normalized_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
 val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2242,19 +2243,19 @@ val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_sent /\
         PNB.paired_supported_normalized_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
 val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_staged_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2274,12 +2275,12 @@ val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_sent /\
         PSNB.paired_supported_normalized_staged_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)

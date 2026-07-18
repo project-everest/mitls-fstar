@@ -4,7 +4,7 @@ module TLS13.Impl.Server.Schedule
 
 open Pulse.Lib.Pervasives
 
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CR = TLS13.Impl.ConnectionState.Repr
 module ST = TLS13.Impl.Server.Types
 

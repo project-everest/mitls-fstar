@@ -6,7 +6,9 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GFin  = TLS13.Wire.Generated.Finished
 module PNTCAS = TLS13.Impl.Driver.PairingNoTailClientAppShape
@@ -25,7 +27,7 @@ let client_finished_model12_replay_slice
     Some? model12.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
     Some? model12.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
     FStar.List.Tot.length rest8 == 4 /\
-    CS.conn_events_raw_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       model12
       rest8
       tail_sent
@@ -51,7 +53,7 @@ let client_finished_model12_exact_suffix_replay_slice
     model12.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
     model12.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
     PNTCAS.client_no_tail_application_install_cover e13 e14 /\
-    CS.conn_events_raw_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -75,7 +77,7 @@ let paired_no_tail_client_finished_staged_milestone
   PNTCAS.client_no_tail_finished_sent_shape client /\
   PNTCSR.client_sent_cleartext_and_finished_raw_slices client /\
   PNTN.server_received_cleartext_and_client_finished_raw_slices server /\
-  CS.paired_wire_logs client server
+  TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server
 
 noextract
 let client_finished_model12_exact_suffix_raw_record_slice
@@ -97,7 +99,7 @@ let client_finished_model12_exact_suffix_raw_record_slice
     model12.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None /\
     model12.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
     PNTCAS.client_no_tail_application_install_cover e13 e14 /\
-    CS.conn_events_raw_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -120,8 +122,8 @@ val lemma_client_finished_model12_exact_suffix_raw_record_slice
       (ensures client_finished_model12_exact_suffix_raw_record_slice client)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_milestone
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -145,8 +147,8 @@ val lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_milestone
           server)
 
 val lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_raw_record_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

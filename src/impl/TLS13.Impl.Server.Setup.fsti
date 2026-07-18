@@ -8,7 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CLH = TLS13.Impl.ConnectionState.LocalHandshake

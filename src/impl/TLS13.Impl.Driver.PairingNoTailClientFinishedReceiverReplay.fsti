@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -134,7 +136,7 @@ let server_client_finished_received_decode_suffix_replay_slice
     Seq.equal
       suffix_received
       (B.append server_flight_received client_finished_received) /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       (CS.initial_model server.CS.cs_model.CS.model_config)
       (PWSeg.server_cleartext_handshake_prefix_events
         ch
@@ -144,13 +146,13 @@ let server_client_finished_received_decode_suffix_replay_slice
       prefix_sent
       prefix_received
       model5 /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       model5
       server_flight_prefix
       server_flight_sent
       server_flight_received
       after_server_flight /\
-    CS.conn_events_received_decode_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
       after_server_flight
       client_finished_suffix
       client_finished_sent
@@ -164,8 +166,8 @@ val lemma_server_client_finished_received_decode_suffix_replay_slice_from_ordere
       (ensures server_client_finished_received_decode_suffix_replay_slice server)
 
 val lemma_clean16_no_tail_valid_byte_traces_server_client_finished_received_decode_suffix_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

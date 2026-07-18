@@ -4,7 +4,7 @@
 #
 # `make quackyducky` in the EverParse tree builds everything we need:
 #   - the F* binary           at opt/FStar/out/bin/fstar.exe (symlinked opt/FStar/bin/fstar.exe)
-#   - the KaRaMeL binary       at opt/FStar/karamel/out/bin/krml
+#   - the KaRaMeL binary       at opt/karamel/out/bin/krml
 #   - the QuackyDucky compiler at bin/qd.exe
 #   - the verified LowParse + LowParse.Pulse .checked libraries under src/lowparse
 #
@@ -37,8 +37,10 @@ for cmd in git make opam; do
   fi
 done
 
-if [ -x "$fstar_exe" ] && [ -x "$krml_exe" ] && [ -x "$qd_exe" ]; then
-  echo "EverParse toolchain already built in $EVERPARSE_HOME"
+if [ -d "$EVERPARSE_HOME/.git" ] &&
+   [ -x "$fstar_exe" ] && [ -x "$krml_exe" ] && [ -x "$qd_exe" ] &&
+   [ "$(git -C "$EVERPARSE_HOME" rev-parse HEAD)" = "$EVERPARSE_COMMIT" ]; then
+  echo "EverParse toolchain already built at $EVERPARSE_COMMIT in $EVERPARSE_HOME"
   exit 0
 fi
 

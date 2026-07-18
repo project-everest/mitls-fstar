@@ -8,7 +8,7 @@ module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -175,10 +175,10 @@ let paired_supported_handshake_complete_boundary_inputs
     FStar.List.Tot.append server_prefix server_suffix /\
   client.CS.cs_event_log ==
     FStar.List.Tot.append client_prefix client_suffix /\
-  CS.connection_state_sent_seal_replay_consistent server /\
-  CS.connection_state_received_decode_replay_consistent server /\
-  CS.connection_state_sent_seal_replay_consistent client /\
-  CS.connection_state_received_decode_replay_consistent client /\
+  TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server /\
+  TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server /\
+  TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client /\
+  TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client /\
   CS.step_model
     server_model0
     (CS.ConnLocalEvent CS.LocalStartServer) == Some w.hcb_server_model1 /\
@@ -432,12 +432,12 @@ val lemma_client_server_application_record_material_agrees_from_clean_boundary
   : Lemma
       (requires paired_supported_handshake_complete_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)

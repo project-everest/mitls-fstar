@@ -124,7 +124,6 @@ enum { update_not_requested(0), update_requested(1), (255) } KeyUpdateRequest;
 opaque HostName<1..2^16-1>;
 opaque UnknownName<1..2^16-1>;
 opaque ProtocolName<1..2^8-1>;        /* ALPN protocol identifier */
-opaque UnknownExtension<0..2^16-1>;   /* extension_data we do not interpret */
 
 struct { opaque random[32]; } Random;
 

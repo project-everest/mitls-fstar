@@ -11,7 +11,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
@@ -35,7 +35,7 @@ module O = TLS13.OpenSSL
 module P = TLS13.Impl.Parser
 module R = TLS13.Record.Spec
 module Ser = TLS13.Impl.Serializer
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module T = TLS13.Types
@@ -276,7 +276,7 @@ fn process_client_finished
                    'st0
                    (Ghost.reveal fin)
                    (Ghost.reveal 'raw_bytes) /\
-                 CS.received_event_nonempty_decode_projection
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
                      (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
@@ -456,7 +456,7 @@ fn process_application_data
                    'st0
                    (M.TlsApplicationData (Ghost.reveal app_payload))
                    (Ghost.reveal 'raw_bytes) /\
-                 CS.received_event_nonempty_decode_projection
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
                      (M.TlsApplicationData (Ghost.reveal app_payload)))
@@ -663,7 +663,7 @@ fn process_close_notify
                    'st0
                    (M.TlsAlert T.Close_notify)
                    (Ghost.reveal 'raw_bytes) /\
-                 CS.received_event_nonempty_decode_projection
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
                      (M.TlsAlert T.Close_notify))
@@ -830,7 +830,7 @@ fn process_alert_failure
                    'st0
                    (M.TlsAlert (Ghost.reveal alert))
                    (Ghost.reveal 'raw_bytes) /\
-                 CS.received_event_nonempty_decode_projection
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
                      (M.TlsAlert (Ghost.reveal alert)))
@@ -1854,7 +1854,7 @@ fn process_network_bytes
                 'st0
                 raw_record_bytes
                 (M.TlsHandshake (M.Finished fin));
-              assert (pure (CS.received_event_nonempty_decode_projection
+              assert (pure (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                 'st0.CS.cs_model
                 (ST.received_message_event
                   (M.TlsHandshake (M.Finished fin)))
@@ -1926,7 +1926,7 @@ fn process_network_bytes
                   app_out_bytes));
                 ST.lemma_server_state_correct_record_read_key_schedule_projection
                   'st0;
-                assert (pure (CS.record_read_key_schedule_projection_for_role
+                assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_read_key_schedule_projection_for_role
                   CS.ServerEndpoint
                   'st0.CS.cs_model));
                 assert (pure (ST.server_protected_record_decode_uses_scheduled_read_key
@@ -2084,7 +2084,7 @@ fn process_network_bytes
               'st0
               raw_record_bytes
               (M.TlsApplicationData mapp);
-            assert (pure (CS.received_event_nonempty_decode_projection
+            assert (pure (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
               'st0.CS.cs_model
               (ST.received_message_event
                 (M.TlsApplicationData mapp))
@@ -2167,7 +2167,7 @@ fn process_network_bytes
                   app_out_bytes));
                 ST.lemma_server_state_correct_record_read_key_schedule_projection
                   'st0;
-                assert (pure (CS.record_read_key_schedule_projection_for_role
+                assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_read_key_schedule_projection_for_role
                   CS.ServerEndpoint
                   'st0.CS.cs_model));
                 assert (pure (ST.server_protected_record_decode_uses_scheduled_read_key
@@ -2319,7 +2319,7 @@ fn process_network_bytes
                 'st0
                 raw_record_bytes
                 (M.TlsAlert T.Close_notify);
-              assert (pure (CS.received_event_nonempty_decode_projection
+              assert (pure (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                 'st0.CS.cs_model
                 (ST.received_message_event
                   (M.TlsAlert T.Close_notify))
@@ -2387,7 +2387,7 @@ fn process_network_bytes
                   app_out_bytes));
                 ST.lemma_server_state_correct_record_read_key_schedule_projection
                   'st0;
-                assert (pure (CS.record_read_key_schedule_projection_for_role
+                assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_read_key_schedule_projection_for_role
                   CS.ServerEndpoint
                   'st0.CS.cs_model));
                 assert (pure (ST.server_protected_record_decode_uses_scheduled_read_key
@@ -2501,7 +2501,7 @@ fn process_network_bytes
                 'st0
                 raw_record_bytes
                 (M.TlsAlert (Ghost.reveal parsed_alert));
-              assert (pure (CS.received_event_nonempty_decode_projection
+              assert (pure (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                 'st0.CS.cs_model
                 (ST.received_message_event
                   (M.TlsAlert (Ghost.reveal parsed_alert)))

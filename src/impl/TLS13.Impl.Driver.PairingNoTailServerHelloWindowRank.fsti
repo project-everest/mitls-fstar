@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -48,7 +48,7 @@ module PNI = TLS13.Impl.Driver.PairingNoTailInversion
   *exactly* 1 on every one of the 11 events of the minimal completion path to
   [CS.ControlApplicationData], with zero slack anywhere -- this was checked
   by hand against every legal transition in
-  [TLS13.Spec.ConnectionState.legal_event]/[step_model] for the
+  [TLS13.Spec.StateMachine.legal_event]/[step_model] for the
   [ServerEndpoint] role at these stages (see
   [lemma_server_hello_window_rank_step]).
 
@@ -258,7 +258,7 @@ val lemma_server_hello_window_rank_replay_lower_bound
          model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent \/
          model.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived \/
          model.CS.model_control == CS.ControlApplicationData) /\
-        CS.conn_events_raw_replay model events raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model events raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         server_hello_window_rank final_model == 0)
       (ensures
@@ -283,7 +283,7 @@ val lemma_server_hello_window_rank_replay_lower_bound
   it can *never* become installed afterwards, which makes it permanently
   impossible to satisfy the [Some? ks_client_handshake_traffic] precondition
   of [Received Finished @ HsServerFinishedSent]
-  ([TLS13.Spec.ConnectionState.legal_handshake_message]) -- the connection
+  ([TLS13.Spec.StateMachine.legal_handshake_message]) -- the connection
   can then only stall forever on [TlsChangeCipherSpec] no-ops or eventually
   fail, but can never legally reach [CS.ControlApplicationData].
 **)
@@ -299,7 +299,7 @@ val lemma_server_hello_window_stuck_without_client_handshake_traffic
         (model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent \/
          model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent) /\
         model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic == None /\
-        CS.conn_events_raw_replay model events raw_sent raw_received final_model)
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model events raw_sent raw_received final_model)
       (ensures ~ (final_model.CS.model_control == CS.ControlApplicationData))
 
 (**
@@ -341,7 +341,7 @@ val lemma_server_hello_window_tight_next_event_handshake_traffic_install
         model.CS.model_handshake.CS.hs_certificate == None /\
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
-        CS.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model /\
         final_model.CS.model_control == CS.ControlApplicationData /\
         server_hello_window_rank final_model == 0 /\
         server_hello_window_rank model == FStar.List.Tot.length rest + 1)
@@ -366,7 +366,7 @@ val lemma_server_hello_window_tight_next_two_events_handshake_traffic_installs
         model.CS.model_handshake.CS.hs_certificate == None /\
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           (ev0 :: ev1 :: rest)
           raw_sent

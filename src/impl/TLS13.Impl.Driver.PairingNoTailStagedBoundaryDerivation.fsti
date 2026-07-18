@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module C = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module CD = TLS13.Impl.Client.Driver
 module M = TLS13.Messages
 module Pairing = TLS13.Impl.Driver.Pairing
@@ -25,6 +27,7 @@ module PNTSFS = TLS13.Impl.Driver.PairingNoTailServerFlightStaged
 module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
 module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 module SD = TLS13.Impl.Server.Driver
+module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 
 noextract
@@ -57,6 +60,7 @@ let clean16_cleartext_final_hello_slot_milestone
       server_sh
       server_rest /\
     WFL.supported_client_hello_wire_profile client_ch /\
+    B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640 /\
     PNTRB.normalized_cleartext_raw_wire_bridge
       client_ch
       server_ch
@@ -129,10 +133,10 @@ let clean16_staged_boundary_derivation_milestones
   PNTCFRE.paired_client_finished_raw_record_equality
     client
     server /\
-  CS.connection_state_sent_seal_replay_consistent client /\
-  CS.connection_state_received_decode_replay_consistent client /\
-  CS.connection_state_sent_seal_replay_consistent server /\
-  CS.connection_state_received_decode_replay_consistent server
+  TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client /\
+  TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client /\
+  TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server /\
+  TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server
 
 (**
   The precise remaining local/staged completion lemma.
@@ -243,8 +247,8 @@ let clean16_installed_protected_projection_replay_completion
     server
 
 val lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -266,8 +270,8 @@ val lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
         clean16_cleartext_final_hello_slot_milestone client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_staged_boundary_derivation_milestones
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -355,8 +359,8 @@ val lemma_normalized_replay_boundary_inputs_with_clean16_fragment_completions
         PSNB.paired_supported_normalized_staged_replay_boundary client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_normalized_staged_replay_boundary_from_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -379,8 +383,8 @@ val lemma_clean16_no_tail_valid_byte_traces_normalized_staged_replay_boundary_fr
         PSNB.paired_supported_normalized_staged_replay_boundary client server)
 
 val lemma_clean16_no_tail_valid_byte_traces_normalized_projection_boundary_from_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -455,8 +459,8 @@ val lemma_clean16_projection_boundary_completion_from_cleartext_and_installed_re
           server)
 
 val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_projection_boundary_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -476,19 +480,19 @@ val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
          server_sent /\
         clean16_projection_boundary_completion client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-         (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+         (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
          client
          server /\
-        CS.peer_record_material_agrees
-         (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+         (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
          client
          server)
 
 val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_staged_boundary_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -508,13 +512,13 @@ val lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_sent /\
         clean16_staged_boundary_completion client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
@@ -529,8 +533,8 @@ val lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
         PNTPPD.installed_protected_projection_replay_witnesses client server)
 
 val lemma_paired_protected_witnesses_from_clean16_valid_byte_traces_and_hello_key_shares
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

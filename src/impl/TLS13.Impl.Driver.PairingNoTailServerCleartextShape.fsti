@@ -5,7 +5,7 @@ module TLS13.Impl.Driver.PairingNoTailServerCleartextShape
 open Pulse.Lib.Pervasives
 
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module SD = TLS13.Impl.Server.Driver
 

@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module CTypes = TLS13.Impl.CanonicalTypes
+module ES = TLS13.Spec.Endpoint.Server
 module IO = Common.TCP
 module IM = TLS13.Impl.Messages
 module O = TLS13.OpenSSL
@@ -51,8 +53,9 @@ noeq type server_driver = {
   server_driver_app_out: V.vec U8.t;
   server_driver_local_app_out: V.vec U8.t;
   // Ghost/erased fields — zero-cost in C extraction
-  server_driver_progress: MR.mref SP.server_progress_preorder;
-  server_driver_initial: Ghost.erased CS.connection_state;
+  server_driver_progress:
+    MR.mref (ES.server_progress_preorder #CTypes.server_local_event);
+  server_driver_initial: Ghost.erased ES.server_initial_state;
   server_driver_supported_profile:
     Ghost.erased
       (SP.server_supported_profile_proof (Ghost.reveal server_driver_initial));

@@ -13,7 +13,7 @@ module TLS13.Impl.Parser.DecoderWF
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module ID = FStar.IndefiniteDescription
