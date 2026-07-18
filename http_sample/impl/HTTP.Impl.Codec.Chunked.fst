@@ -245,3 +245,35 @@ fn http_emit_chunk
   ()
 }
 #pop-options
+
+(* The RFC last-chunk  "0000" CRLF CRLF  (an empty chunk).  Its bytes coincide
+   with `ser_chunk` of the empty payload, so it terminates a chunked body. *)
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
+fn http_emit_empty_chunk
+  (out: array U8.t)
+  requires
+    pts_to out 'o **
+    pure (Seq.length 'o == 8)
+  ensures
+    (exists* (o':Seq.seq U8.t).
+       pts_to out o' **
+       pure (Seq.length o' == 8 /\
+             (exists (pl:chunk_payload).
+                (pl <: Seq.seq U8.t) == Seq.empty #U8.t /\
+                o' == ser_chunk pl)))
+{
+  out.(0sz) <- 0x30uy;
+  out.(1sz) <- 0x30uy;
+  out.(2sz) <- 0x30uy;
+  out.(3sz) <- 0x30uy;
+  out.(4sz) <- W.bCR;
+  out.(5sz) <- W.bLF;
+  out.(6sz) <- W.bCR;
+  out.(7sz) <- W.bLF;
+  with sf. assert (pts_to out sf);
+  assert_norm (W.hexdig 0 == 0x30uy);
+  emit_chunk_exists (Seq.empty #U8.t) sf;
+  ()
+}
+#pop-options
+
