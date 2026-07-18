@@ -178,6 +178,20 @@ vloop-test: extract-loops
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/vloop_test $(VERIFIED_DIR)/dummy.txt
 
+vloop-length-test: extract-loops
+	@echo "Building the verified Content-Length transfer test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_test \
+	  $(VERIFIED_DIR)/vloop_length_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified server send loop  ->  Verified client receive loop  (Content-Length body, SOCK_STREAM)"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/vloop_length_test $(VERIFIED_DIR)/dummy.txt
+
+# Run both framings' verified<->verified interop tests.
+vloop-tests: vloop-test vloop-length-test
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -192,6 +206,8 @@ help:
 	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
 	@echo "  make extract       - verify + extract-krml + extract-c"
 	@echo "  make extract-loops - Extract the verified driver loops (_extract/HTTP_Verified.c)"
-	@echo "  make vloop-test    - Build + run the verified server->client transfer test"
+	@echo "  make vloop-test    - Build + run the verified chunked server->client transfer test"
+	@echo "  make vloop-length-test - Build + run the verified Content-Length transfer test"
+	@echo "  make vloop-tests   - Run both framings' verified<->verified interop tests"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  (no 'gen' target: the HTTP wire format is hand-written, not QuackyDucky)"
