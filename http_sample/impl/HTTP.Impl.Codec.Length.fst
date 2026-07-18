@@ -28,7 +28,11 @@ open Pulse.Lib.Array.PtsTo
 
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module U16 = FStar.UInt16
+module U32 = FStar.UInt32
+module Cast = FStar.Int.Cast
 module Seq = FStar.Seq
+module SP = FStar.Seq.Properties
 module R = Pulse.Lib.Reference
 
 module W = HTTP.Wire.Common
@@ -117,6 +121,217 @@ let lemma_lit_get_byte (k:SZ.t{SZ.v k < 4})
   assert_norm (Seq.index lit_get 1 == 0x45uy);
   assert_norm (Seq.index lit_get 2 == 0x54uy);
   assert_norm (Seq.index lit_get 3 == 0x20uy)
+
+(* ======================================================================== *)
+(* Response head  "HTTP/1.1 " ddd " \r\nContent-Length: " dddddddd "\r\n\r\n"  *)
+(* ======================================================================== *)
+
+(* Executable single decimal digit byte (0..9 -> '0'..'9'). *)
+let dig_byte (d:U8.t{U8.v d < 10}) : U8.t = U8.add 0x30uy d
+let lemma_dig_byte (d:U8.t{U8.v d < 10}) : Lemma (dig_byte d == W.dig (U8.v d)) = ()
+
+(* Extract a decimal digit (already < 10) from a U16 / U32 as its ASCII byte,
+   carrying the spec correspondence in the refined return type. *)
+let u16_digit (x:U16.t{U16.v x < 10}) : (b:U8.t{b == W.dig (U16.v x)})
+= let d = Cast.uint16_to_uint8 x in lemma_dig_byte d; dig_byte d
+
+let u32_digit (x:U32.t{U32.v x < 10}) : (b:U8.t{b == W.dig (U32.v x)})
+= let d = Cast.uint32_to_uint8 x in lemma_dig_byte d; dig_byte d
+
+(* Per-position bytes of the response-head fixed literals. *)
+let lemma_enc_dec3_index (c:nat{c<1000})
+  : Lemma (Seq.index (W.enc_dec3 c) 0 == W.dig (c/100) /\
+           Seq.index (W.enc_dec3 c) 1 == W.dig ((c/10)%10) /\
+           Seq.index (W.enc_dec3 c) 2 == W.dig (c%10))
+= ()
+
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
+let lemma_enc_dec8_index (n:nat{n < W.max_len8})
+  : Lemma
+    (let hi = n/10000 in let lo = n%10000 in
+     Seq.index (W.enc_dec8 n) 0 == W.dig ((hi/1000)%10) /\
+     Seq.index (W.enc_dec8 n) 1 == W.dig ((hi/100)%10) /\
+     Seq.index (W.enc_dec8 n) 2 == W.dig ((hi/10)%10) /\
+     Seq.index (W.enc_dec8 n) 3 == W.dig (hi%10) /\
+     Seq.index (W.enc_dec8 n) 4 == W.dig ((lo/1000)%10) /\
+     Seq.index (W.enc_dec8 n) 5 == W.dig ((lo/100)%10) /\
+     Seq.index (W.enc_dec8 n) 6 == W.dig ((lo/10)%10) /\
+     Seq.index (W.enc_dec8 n) 7 == W.dig (lo%10))
+= SP.append_slices (W.enc_dec4 (n/10000)) (W.enc_dec4 (n%10000))
+#pop-options
+
+(* Runtime k-th byte of resp_prefix "HTTP/1.1 ". *)
+inline_for_extraction
+let resp_prefix_byte (k:SZ.t{SZ.v k < 9}) : U8.t =
+  if      SZ.eq k 0sz then 0x48uy else if SZ.eq k 1sz then 0x54uy
+  else if SZ.eq k 2sz then 0x54uy else if SZ.eq k 3sz then 0x50uy
+  else if SZ.eq k 4sz then 0x2Fuy else if SZ.eq k 5sz then 0x31uy
+  else if SZ.eq k 6sz then 0x2Euy else if SZ.eq k 7sz then 0x31uy
+  else                     0x20uy
+
+let lemma_resp_prefix_byte (k:SZ.t{SZ.v k < 9})
+  : Lemma (resp_prefix_byte k == Seq.index resp_prefix (SZ.v k))
+= assert_norm (Seq.index resp_prefix 0 == 0x48uy);
+  assert_norm (Seq.index resp_prefix 1 == 0x54uy);
+  assert_norm (Seq.index resp_prefix 2 == 0x54uy);
+  assert_norm (Seq.index resp_prefix 3 == 0x50uy);
+  assert_norm (Seq.index resp_prefix 4 == 0x2Fuy);
+  assert_norm (Seq.index resp_prefix 5 == 0x31uy);
+  assert_norm (Seq.index resp_prefix 6 == 0x2Euy);
+  assert_norm (Seq.index resp_prefix 7 == 0x31uy);
+  assert_norm (Seq.index resp_prefix 8 == 0x20uy)
+
+(* Runtime k-th byte of cl_tail_pre " \r\nContent-Length: ". *)
+inline_for_extraction
+let cl_pre_byte (k:SZ.t{SZ.v k < 19}) : U8.t =
+  if      SZ.eq k 0sz  then 0x20uy else if SZ.eq k 1sz  then 0x0Duy
+  else if SZ.eq k 2sz  then 0x0Auy else if SZ.eq k 3sz  then 0x43uy
+  else if SZ.eq k 4sz  then 0x6Fuy else if SZ.eq k 5sz  then 0x6Euy
+  else if SZ.eq k 6sz  then 0x74uy else if SZ.eq k 7sz  then 0x65uy
+  else if SZ.eq k 8sz  then 0x6Euy else if SZ.eq k 9sz  then 0x74uy
+  else if SZ.eq k 10sz then 0x2Duy else if SZ.eq k 11sz then 0x4Cuy
+  else if SZ.eq k 12sz then 0x65uy else if SZ.eq k 13sz then 0x6Euy
+  else if SZ.eq k 14sz then 0x67uy else if SZ.eq k 15sz then 0x74uy
+  else if SZ.eq k 16sz then 0x68uy else if SZ.eq k 17sz then 0x3Auy
+  else                      0x20uy
+
+(* seq_of_list index reduction gets stuck for deep indices (>~12) into a long
+   literal; route through List.Tot.index (which does reduce) via
+   lemma_seq_of_list_index over the underlying list. *)
+let cl_pre_list : list U8.t =
+  [0x20uy;0x0Duy;0x0Auy;0x43uy;0x6Fuy;0x6Euy;0x74uy;0x65uy;0x6Euy;0x74uy;
+   0x2Duy;0x4Cuy;0x65uy;0x6Euy;0x67uy;0x74uy;0x68uy;0x3Auy;0x20uy]
+
+let lemma_cl_pre_byte (k:SZ.t{SZ.v k < 19})
+  : Lemma (requires Seq.length cl_tail_pre == 19)
+          (ensures cl_pre_byte k == Seq.index cl_tail_pre (SZ.v k))
+= assert_norm (cl_tail_pre == Seq.seq_of_list cl_pre_list);
+  assert_norm (List.Tot.length cl_pre_list == 19);
+  FStar.Seq.Properties.lemma_seq_of_list_index cl_pre_list (SZ.v k);
+  assert_norm (List.Tot.index cl_pre_list 0  == 0x20uy);
+  assert_norm (List.Tot.index cl_pre_list 1  == 0x0Duy);
+  assert_norm (List.Tot.index cl_pre_list 2  == 0x0Auy);
+  assert_norm (List.Tot.index cl_pre_list 3  == 0x43uy);
+  assert_norm (List.Tot.index cl_pre_list 4  == 0x6Fuy);
+  assert_norm (List.Tot.index cl_pre_list 5  == 0x6Euy);
+  assert_norm (List.Tot.index cl_pre_list 6  == 0x74uy);
+  assert_norm (List.Tot.index cl_pre_list 7  == 0x65uy);
+  assert_norm (List.Tot.index cl_pre_list 8  == 0x6Euy);
+  assert_norm (List.Tot.index cl_pre_list 9  == 0x74uy);
+  assert_norm (List.Tot.index cl_pre_list 10 == 0x2Duy);
+  assert_norm (List.Tot.index cl_pre_list 11 == 0x4Cuy);
+  assert_norm (List.Tot.index cl_pre_list 12 == 0x65uy);
+  assert_norm (List.Tot.index cl_pre_list 13 == 0x6Euy);
+  assert_norm (List.Tot.index cl_pre_list 14 == 0x67uy);
+  assert_norm (List.Tot.index cl_pre_list 15 == 0x74uy);
+  assert_norm (List.Tot.index cl_pre_list 16 == 0x68uy);
+  assert_norm (List.Tot.index cl_pre_list 17 == 0x3Auy);
+  assert_norm (List.Tot.index cl_pre_list 18 == 0x20uy)
+
+(* Runtime k-th byte of cl_tail_post "\r\n\r\n". *)
+inline_for_extraction
+let cl_post_byte (k:SZ.t{SZ.v k < 4}) : U8.t =
+  if      SZ.eq k 0sz then 0x0Duy else if SZ.eq k 1sz then 0x0Auy
+  else if SZ.eq k 2sz then 0x0Duy else 0x0Auy
+
+let lemma_cl_post_byte (k:SZ.t{SZ.v k < 4})
+  : Lemma (cl_post_byte k == Seq.index cl_tail_post (SZ.v k))
+= assert_norm (Seq.index cl_tail_post 0 == 0x0Duy);
+  assert_norm (Seq.index cl_tail_post 1 == 0x0Auy);
+  assert_norm (Seq.index cl_tail_post 2 == 0x0Duy);
+  assert_norm (Seq.index cl_tail_post 3 == 0x0Auy)
+
+
+(* Bridge FStar.UInt.mod (= a - (a/b)*b) to Prims % so U16.rem / U32.rem digit
+   values connect to the enc_dec3 / enc_dec8 spec (which use Prims / and %). *)
+let lemma_uint_mod (n:nat) (a:nat{a < pow2 n}) (b:pos{b < pow2 n})
+  : Lemma (FStar.UInt.mod #n a b == a % b)
+= FStar.Math.Lemmas.euclidean_division_definition a b
+
+(* Opaque view of the whole response head, so z3 does not unfold ser_response
+   (and its enc_dec3 / enc_dec8 arithmetic) while `Seq.index (respbytes ..) j`
+   is carried unchanged through the copy-loop invariants.  All the byte-level
+   facts we ever need are exposed once, up front, by `lemma_respbytes_index`. *)
+[@@ "opaque_to_smt"]
+let respbytes (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+              (len:U32.t{U32.v len < W.max_len8}) : Seq.seq U8.t
+= ser_response (code <: status_code) (U32.v len <: content_len)
+
+let lemma_respbytes_reveal
+      (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+      (len:U32.t{U32.v len < W.max_len8})
+  : Lemma (respbytes code len == ser_response (code <: status_code) (U32.v len <: content_len))
+= reveal_opaque (`%respbytes) (respbytes code len)
+
+(* The full per-position byte inventory of the response head, exposed once.
+   The five append segments give the literal facts (SMT-patterned index-append
+   lemmas fire on the revealed ser_response), and enc_dec3 / enc_dec8 index
+   lemmas turn the two digit runs into explicit W.dig terms. *)
+#push-options "--z3rlimit 60 --fuel 4 --ifuel 2 --split_queries always"
+let lemma_respbytes_index
+      (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+      (len:U32.t{U32.v len < W.max_len8})
+  : Lemma
+    (ensures (
+       let s = respbytes code len in
+       let c = U16.v code in let n = U32.v len in
+       let hi = n / 10000 in let lo = n % 10000 in
+       Seq.length s == 43 /\
+       (forall (k:nat). k < 9  ==> Seq.index s k == Seq.index resp_prefix k) /\
+       Seq.index s 9  == W.dig (c / 100) /\
+       Seq.index s 10 == W.dig ((c / 10) % 10) /\
+       Seq.index s 11 == W.dig (c % 10) /\
+       (forall (k:nat). k < 19 ==> Seq.index s (12 + k) == Seq.index cl_tail_pre k) /\
+       Seq.index s 31 == W.dig ((hi / 1000) % 10) /\
+       Seq.index s 32 == W.dig ((hi / 100) % 10) /\
+       Seq.index s 33 == W.dig ((hi / 10) % 10) /\
+       Seq.index s 34 == W.dig (hi % 10) /\
+       Seq.index s 35 == W.dig ((lo / 1000) % 10) /\
+       Seq.index s 36 == W.dig ((lo / 100) % 10) /\
+       Seq.index s 37 == W.dig ((lo / 10) % 10) /\
+       Seq.index s 38 == W.dig (lo % 10) /\
+       (forall (k:nat). k < 4  ==> Seq.index s (39 + k) == Seq.index cl_tail_post k)))
+= reveal_opaque (`%respbytes) (respbytes code len);
+  assert_norm (Seq.length resp_prefix == 9);
+  assert_norm (Seq.length cl_tail_pre == 19);
+  assert_norm (Seq.length cl_tail_post == 4);
+  lemma_enc_dec3_index (U16.v code);
+  lemma_enc_dec8_index (U32.v len)
+#pop-options
+
+(* Lightweight per-region literal facts, carrying NO digit arithmetic, used to
+   discharge the copy-loop invariants without dragging enc_dec3 / enc_dec8 into
+   the (per-iteration) preservation queries. *)
+let lemma_respbytes_len
+      (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+      (len:U32.t{U32.v len < W.max_len8})
+  : Lemma (Seq.length (respbytes code len) == 43)
+= lemma_respbytes_reveal code len;
+  assert_norm (Seq.length resp_prefix == 9);
+  assert_norm (Seq.length cl_tail_pre == 19);
+  assert_norm (Seq.length cl_tail_post == 4)
+
+(* rem-by-10 bridge for U32. *)
+let lemma_mod10_32 (x:U32.t) : Lemma (U32.v (U32.rem x 10ul) == (U32.v x) % 10)
+= assert_norm (U32.v 10ul == 10);
+  lemma_uint_mod 32 (U32.v x) (U32.v 10ul)
+
+(* Finalize: a fully-filled buffer equal to `respbytes code len` is
+   `ser_response` of the (coerced) code/len, packaged as the existential the
+   Pulse fn advertises. *)
+let lemma_emit_response_final
+      (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+      (len:U32.t{U32.v len < W.max_len8})
+      (s:Seq.seq U8.t)
+  : Lemma
+    (requires s == respbytes code len)
+    (ensures (exists (co:status_code) (ln:content_len).
+                U16.v co == U16.v code /\ ln == U32.v len /\ s == ser_response co ln))
+= lemma_respbytes_reveal code len;
+  introduce exists (co:status_code) (ln:content_len).
+    U16.v co == U16.v code /\ ln == U32.v len /\ s == ser_response co ln
+  with (code <: status_code) (U32.v len <: content_len) and ()
+
 
 open Pulse.Lib.BoundedIntegers
 
@@ -333,6 +548,122 @@ fn http_emit_request
   };
   with sf. assert (pts_to out sf);
   emit_request_exists 't sf;
+  ()
+}
+#pop-options
+
+(* Executable k-th byte of the whole response head.  A single straight-line
+   dispatch: literal regions via the per-index literal helpers, the 3 status
+   digits and 8 Content-Length digits via u16_digit / u32_digit. *)
+inline_for_extraction
+let head_byte (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+              (len:U32.t{U32.v len < W.max_len8})
+              (k:SZ.t{SZ.v k < 43}) : U8.t =
+  if SZ.lt k 9sz then resp_prefix_byte k
+  else if SZ.lt k 12sz then
+    (if SZ.eq k 9sz then u16_digit (U16.div code 100us)
+     else if SZ.eq k 10sz then u16_digit (U16.rem (U16.div code 10us) 10us)
+     else u16_digit (U16.rem code 10us))
+  else if SZ.lt k 31sz then cl_pre_byte (SZ.sub k 12sz)
+  else if SZ.lt k 39sz then
+    (let hi = U32.div len 10000ul in
+     let lo = U32.rem len 10000ul in
+     if SZ.eq k 31sz then u32_digit (U32.rem (U32.div hi 1000ul) 10ul)
+     else if SZ.eq k 32sz then u32_digit (U32.rem (U32.div hi 100ul) 10ul)
+     else if SZ.eq k 33sz then u32_digit (U32.rem (U32.div hi 10ul) 10ul)
+     else if SZ.eq k 34sz then u32_digit (U32.rem hi 10ul)
+     else if SZ.eq k 35sz then u32_digit (U32.rem (U32.div lo 1000ul) 10ul)
+     else if SZ.eq k 36sz then u32_digit (U32.rem (U32.div lo 100ul) 10ul)
+     else if SZ.eq k 37sz then u32_digit (U32.rem (U32.div lo 10ul) 10ul)
+     else u32_digit (U32.rem lo 10ul))
+  else cl_post_byte (SZ.sub k 39sz)
+
+(* head_byte agrees with `respbytes code len` at every position.  All the
+   digit arithmetic (UInt.mod -> % bridges) lives here; the caller loop stays
+   trivial.  Split up front so each range/case is a small, cheap query. *)
+#push-options "--z3rlimit 300 --fuel 4 --ifuel 2 --split_queries always"
+let lemma_head_byte (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+                    (len:U32.t{U32.v len < W.max_len8})
+                    (k:SZ.t{SZ.v k < 43})
+  : Lemma (Seq.length (respbytes code len) == 43 /\
+           head_byte code len k == Seq.index (respbytes code len) (SZ.v k))
+= lemma_respbytes_index code len;
+  assert_norm (Seq.length resp_prefix == 9);
+  assert_norm (Seq.length cl_tail_pre == 19);
+  assert_norm (Seq.length cl_tail_post == 4);
+  assert_norm (U16.v 100us == 100);
+  assert_norm (U16.v 10us == 10);
+  assert_norm (U32.v 10000ul == 10000);
+  assert_norm (U32.v 1000ul == 1000);
+  assert_norm (U32.v 100ul == 100);
+  assert_norm (U32.v 10ul == 10);
+  if SZ.lt k 9sz then lemma_resp_prefix_byte k
+  else if SZ.lt k 12sz then begin
+    lemma_uint_mod 16 (U16.v (U16.div code 10us)) (U16.v 10us);
+    lemma_uint_mod 16 (U16.v code) (U16.v 10us);
+    lemma_enc_dec3_index (U16.v code)
+  end
+  else if SZ.lt k 31sz then lemma_cl_pre_byte (SZ.sub k 12sz)
+  else if SZ.lt k 39sz then begin
+    let hi = U32.div len 10000ul in
+    let lo = U32.rem len 10000ul in
+    lemma_mod10_32 (U32.div hi 1000ul);
+    lemma_mod10_32 (U32.div hi 100ul);
+    lemma_mod10_32 (U32.div hi 10ul);
+    lemma_mod10_32 hi;
+    lemma_mod10_32 (U32.div lo 1000ul);
+    lemma_mod10_32 (U32.div lo 100ul);
+    lemma_mod10_32 (U32.div lo 10ul);
+    lemma_mod10_32 lo;
+    lemma_enc_dec8_index (U32.v len)
+  end
+  else lemma_cl_post_byte (SZ.sub k 39sz)
+#pop-options
+
+(* Build the HTTP response head  "HTTP/1.1 " ddd " \r\nContent-Length: " dddddddd
+   "\r\n\r\n"  into `out` (length 43), proved equal to `ser_response code len`.
+   One copy loop drives the whole head from `head_byte`, carrying a single
+   correspondence invariant `out == respbytes code len` up to the filled index. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_emit_response
+  (code: U16.t)
+  (len: U32.t)
+  (out: array U8.t)
+  requires
+    pts_to out 'o **
+    pure (Prims.op_LessThanOrEqual 100 (U16.v code) /\
+          Prims.op_LessThan (U16.v code) 1000 /\
+          Prims.op_LessThan (U32.v len) W.max_len8 /\
+          Seq.length 'o == 43)
+  ensures
+    (exists* (o':Seq.seq U8.t).
+       pts_to out o' **
+       pure (Seq.length o' == 43 /\
+             ((Prims.op_LessThanOrEqual 100 (U16.v code) /\
+               Prims.op_LessThan (U16.v code) 1000 /\
+               Prims.op_LessThan (U32.v len) W.max_len8) ==>
+              (exists (co:status_code) (ln:content_len).
+                 U16.v co == U16.v code /\ ln == U32.v len /\
+                 o' == ser_response co ln))))
+{
+  lemma_respbytes_len code len;
+  let mut i = 0sz;
+  while (SZ.lt !i 43sz)
+  invariant exists* (vi:SZ.t) (sv:Seq.seq U8.t).
+    R.pts_to i vi ** pts_to out sv **
+    pure (SZ.v vi <= 43 /\ Seq.length sv == 43 /\ Seq.length (respbytes code len) == 43 /\
+      (forall (k:nat). k < SZ.v vi ==> Seq.index sv k == Seq.index (respbytes code len) k))
+  {
+    let vi = !i;
+    lemma_head_byte code len vi;
+    let bt = head_byte code len vi;
+    out.(vi) <- bt;
+    i := SZ.add vi 1sz;
+  };
+  with sf. assert (pts_to out sf);
+  lemma_respbytes_len code len;
+  Seq.lemma_eq_intro sf (respbytes code len);
+  lemma_emit_response_final code len sf;
   ()
 }
 #pop-options
