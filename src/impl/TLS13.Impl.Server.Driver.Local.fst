@@ -126,7 +126,6 @@ fn start_server_once
     app_out_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
   assert (pure (st1 == CM.started_server_state 'st0));
-  unfold (server_driver_canonical_progress d 'st0);
   SP.lemma_server_local_event_progress
     'st0
     st1
@@ -135,8 +134,8 @@ fn start_server_once
     empty_payload
     network_out_bytes
     app_out_bytes;
-  MR.update d.server_driver_progress st1;
-  fold (server_driver_canonical_progress d st1);
+  advance_server_driver_canonical_progress
+    d 'st0 st1;
   rewrite
     (server_driver_canonical_progress d st1)
     as
@@ -873,7 +872,6 @@ fn process_local_event_and_write_once
     network_out_bytes
     app_out_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
-  unfold (server_driver_canonical_progress d 'st0);
   SP.lemma_server_local_event_progress
     'st0
     st1
@@ -882,8 +880,8 @@ fn process_local_event_and_write_once
     (Ghost.reveal 'payload_bytes)
     network_out_bytes
     app_out_bytes;
-  MR.update d.server_driver_progress st1;
-  fold (server_driver_canonical_progress d st1);
+  advance_server_driver_canonical_progress
+    d 'st0 st1;
   lemma_local_event_wire_lengths
     'st0
     st1
@@ -1433,7 +1431,6 @@ fn process_empty_local_event_exact_network_len_and_write_once
     network_out_bytes
     app_out_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
-  unfold (server_driver_canonical_progress d 'st0);
   SP.lemma_server_local_event_progress
     'st0
     st1
@@ -1442,8 +1439,8 @@ fn process_empty_local_event_exact_network_len_and_write_once
     B.empty
     network_out_bytes
     app_out_bytes;
-  MR.update d.server_driver_progress st1;
-  fold (server_driver_canonical_progress d st1);
+  advance_server_driver_canonical_progress
+    d 'st0 st1;
   lemma_local_event_wire_lengths
     'st0
     st1

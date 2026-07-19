@@ -57,8 +57,6 @@ module SS = TLS13.Impl.Server.Send
 module TChannel = TLS13.Impl.Channel
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
-type server_driver = DS.server_driver
-
 noextract
 let server_driver_canonical = DS.server_driver_canonical
 

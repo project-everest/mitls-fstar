@@ -1620,7 +1620,6 @@ fn process_buffered_network_bytes_compact_once
     current_len
     network_out
     driver_network_out_capacity));
-  unfold (server_driver_canonical_progress d 'st0);
   SP.lemma_server_network_event_progress
     (Ghost.reveal d.server_driver_initial)
     'st0
@@ -1632,8 +1631,8 @@ fn process_buffered_network_bytes_compact_once
     network_out_bytes
     driver_network_out_capacity
     app_out_bytes;
-  MR.update d.server_driver_progress st1;
-  fold (server_driver_canonical_progress d st1);
+  advance_server_driver_canonical_progress
+    d 'st0 st1;
 
   A.to_mask raw_prefix_array;
   with raw_prefix_mask_after.

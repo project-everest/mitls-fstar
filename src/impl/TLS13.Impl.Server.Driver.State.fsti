@@ -89,6 +89,22 @@ let server_driver_canonical_progress
     st.CS.cs_model.CS.model_config ==
       (Ghost.reveal d.server_driver_initial).CS.cs_model.CS.model_config)
 
+ghost fn advance_server_driver_canonical_progress
+  (d:server_driver)
+  (st0:Ghost.erased CS.connection_state)
+  (st1:Ghost.erased CS.connection_state)
+  requires
+    server_driver_canonical_progress d (Ghost.reveal st0) **
+    pure (
+      ES.server_progress_preorder
+        #CTypes.server_local_event
+        (Ghost.reveal st0)
+        (Ghost.reveal st1) /\
+      (Ghost.reveal st1).CS.cs_model.CS.model_config ==
+        (Ghost.reveal st0).CS.cs_model.CS.model_config)
+  ensures
+    server_driver_canonical_progress d (Ghost.reveal st1)
+
 noextract
 val server_driver_endpoint_config
   (d: server_driver)

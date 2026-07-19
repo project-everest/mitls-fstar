@@ -5483,8 +5483,17 @@ let lemma_server_network_event_progress
           network_out
           app_out)
       (ensures
-        server_progress_preorder #CTypes.server_local_event st0 st1)
+        server_progress_preorder #CTypes.server_local_event st0 st1 /\
+        st1.CS.cs_model.CS.model_config ==
+          st0.CS.cs_model.CS.model_config)
 =
+  ST.lemma_server_network_bytes_preserves_config
+    st0
+    st1
+    buffer_resp
+    input
+    network_out
+    app_out;
   let result = CTypes.server_process_result buffer_resp in
   let consumed = ST.server_network_consumed_prefix buffer_resp input in
   let wire_outputs =
@@ -5699,8 +5708,18 @@ let lemma_server_local_event_progress
           network_out
           app_out)
       (ensures
-        server_progress_preorder #CTypes.server_local_event st0 st1)
+        server_progress_preorder #CTypes.server_local_event st0 st1 /\
+        st1.CS.cs_model.CS.model_config ==
+          st0.CS.cs_model.CS.model_config)
 =
+  ST.lemma_server_local_event_preserves_config
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
   let api : CTypes.server_api_event = {
     CTypes.server_local_kind = kind;
     CTypes.server_local_payload = payload;

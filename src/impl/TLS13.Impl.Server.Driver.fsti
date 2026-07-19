@@ -27,7 +27,7 @@ module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
-val server_driver : Type0
+type server_driver = DState.server_driver
 
 noextract
 val server_driver_canonical
@@ -514,7 +514,7 @@ fn send
   (payload:array U8.t)
   (payload_bytes:Ghost.erased B.bytes)
   (payload_len:SZ.t)
-  requires DS.server_channel_inv
+  requires DState.server_channel_inv
              d
              (Ghost.reveal raw_received0)
              (Ghost.reveal raw_sent0)
@@ -523,7 +523,7 @@ fn send
            pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
   returns status:server_workflow_status
   ensures exists* raw_received1 raw_sent1 app_log1.
-          DS.server_channel_inv d raw_received1 raw_sent1 app_log1 **
+          DState.server_channel_inv d raw_received1 raw_sent1 app_log1 **
           pts_to payload (Ghost.reveal payload_bytes) **
           pure (
             CI.send_transition
