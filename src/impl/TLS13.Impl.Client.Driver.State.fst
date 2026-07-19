@@ -738,7 +738,6 @@ let client_channel_terminal
         buffered_len /\
       app_log == TChannel.application_log st)
 
-[@@pulse_unfold]
 let client_channel_inv
   (d:client_driver)
   (raw_received:B.bytes)
@@ -762,8 +761,7 @@ let client_channel_inv
         transport_sent
         buffered
         buffered_len /\
-      app_log == TChannel.application_log st /\
-      client_driver_application_ready st)
+      app_log == TChannel.application_log st)
 
 noextract
 let client_channel_snapshot

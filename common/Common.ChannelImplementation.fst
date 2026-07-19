@@ -179,13 +179,6 @@ class channel_implementation
     application_log message ->
     slprop;
 
-  ci_terminal:
-    impl ->
-    TCP.bytes ->
-    TCP.bytes ->
-    application_log message ->
-    slprop;
-
   ci_snapshot:
     impl ->
     TCP.bytes ->
@@ -196,13 +189,7 @@ class channel_implementation
   ci_send_succeeded:
     send_status -> GTot bool;
 
-  ci_send_reusable:
-    send_status -> GTot bool;
-
   ci_receive_succeeded:
-    receive_result -> GTot bool;
-
-  ci_receive_reusable:
     receive_result -> GTot bool;
 
   ci_receive_length:
@@ -319,9 +306,7 @@ class channel_implementation
          pure (Seq.length (Ghost.reveal payload_bytes) == SZ.v payload_len))
         (fun status ->
           exists* raw_received1 raw_sent1 app_log1.
-            (if ci_send_reusable status
-             then ci_channel_inv i raw_received1 raw_sent1 app_log1
-             else ci_terminal i raw_received1 raw_sent1 app_log1) **
+            ci_channel_inv i raw_received1 raw_sent1 app_log1 **
             pts_to payload (Ghost.reveal payload_bytes) **
             pure (
               send_transition
@@ -356,9 +341,7 @@ class channel_implementation
          pure (Seq.length (Ghost.reveal old_output) == SZ.v out_len))
         (fun result ->
           exists* raw_received1 raw_sent1 app_log1 output.
-            (if ci_receive_reusable result
-             then ci_channel_inv i raw_received1 raw_sent1 app_log1
-             else ci_terminal i raw_received1 raw_sent1 app_log1) **
+            ci_channel_inv i raw_received1 raw_sent1 app_log1 **
             pts_to out output **
             pure (
               Seq.length output == SZ.v out_len /\

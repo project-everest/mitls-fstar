@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module CI = Common.ChannelImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
@@ -86,6 +87,13 @@ let client_driver_receive_copyout_correct =
 noextract
 let client_driver_receive_correct = DS.client_driver_receive_correct
 
+let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
+
+let channel_send_succeeded (status:driver_workflow_status) : bool =
+  match status with
+  | DS.DriverWorkflowOk -> true
+  | _ -> false
+
 fn new_client
   (server_name:array U8.t)
   (server_name_len:SZ.t)
@@ -153,30 +161,35 @@ fn connect
 **)
 fn send
   (d:client_driver)
+  (raw_received0:Ghost.erased B.bytes)
+  (raw_sent0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
   (payload:array U8.t)
+  (payload_bytes:Ghost.erased B.bytes)
   (payload_len:SZ.t)
-  requires client_driver_connected d 'st0 'received0 'sent0 **
-           pts_to payload 'payload_bytes **
-           pure (B.length 'payload_bytes == SZ.v payload_len)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal raw_received0)
+             (Ghost.reveal raw_sent0)
+             (Ghost.reveal app_log0) **
+           pts_to payload (Ghost.reveal payload_bytes) **
+           pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
   returns status:driver_workflow_status
-  ensures exists* st1 received1 sent1.
-          pts_to payload 'payload_bytes **
-          client_driver_connected d st1 received1 sent1 **
-          pure (client_driver_send_correct
-                 'st0
-                 st1
-                 status
-                 (Ghost.reveal 'payload_bytes)
-                 (Ghost.reveal 'sent0)
-                 sent1 /\
-                st1.CS.cs_model.CS.model_config ==
-                  'st0.CS.cs_model.CS.model_config /\
-                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                client_driver_received_log_accounted
-                  'st0
-                  (Ghost.reveal 'received0) /\
-                client_driver_sent_log_exact st1 sent1 /\
-                client_driver_received_log_accounted st1 received1)
+  ensures exists* raw_received1 raw_sent1 app_log1.
+          DS.client_channel_inv d raw_received1 raw_sent1 app_log1 **
+          pts_to payload (Ghost.reveal payload_bytes) **
+          pure (
+            CI.send_transition
+              channel_message_of_bytes
+              channel_send_succeeded
+              status
+              (Ghost.reveal payload_bytes)
+              (Ghost.reveal raw_received0)
+              (Ghost.reveal raw_sent0)
+              (Ghost.reveal app_log0)
+              raw_received1
+              raw_sent1
+              app_log1)
 
 fn receive
   (d:client_driver)
