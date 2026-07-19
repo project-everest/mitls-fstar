@@ -62,13 +62,13 @@ let channel_state_valid
   (raw_sent:TCP.bytes)
   (app_log:application_log message)
   : prop =
-  exists st.
+  exists st residual_input.
     WFSM.valid_byte_trace
       (protocol.CPI.pi_system (protocol_impl_of i))
       raw_received
       st
       raw_sent
-      Seq.empty /\
+      residual_input /\
     app_log == project st
 
 let channel_snapshot_ahead

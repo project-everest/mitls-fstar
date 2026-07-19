@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
+module CChannel = TLS13.Impl.Client.ChannelImplementation
 module DC = TLS13.Impl.Client.Driver.Connect
 module DClose = TLS13.Impl.Client.Driver.Close
 module DNew = TLS13.Impl.Client.Driver.New

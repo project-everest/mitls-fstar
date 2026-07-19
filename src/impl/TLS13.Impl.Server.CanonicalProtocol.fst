@@ -31,6 +31,7 @@ module SS = TLS13.Impl.Server.Send
 module Seq = FStar.Seq
 module SM = Common.StateMachine
 module ST = TLS13.Impl.Server.Types
+module TChannel = TLS13.Impl.Channel
 module SZ = FStar.SizeT
 module TCP = Common.TCP
 module T = TLS13.Types
@@ -1518,7 +1519,10 @@ let lemma_server_legal_delta_histories_ahead
           st1.CS.cs_wire_log.CL.raw_received /\
         TCP.bytes_extends
           st0.CS.cs_wire_log.CL.raw_sent
-          st1.CS.cs_wire_log.CL.raw_sent)
+          st1.CS.cs_wire_log.CL.raw_sent /\
+        TChannel.event_log_extends
+          st0.CS.cs_event_log
+          st1.CS.cs_event_log)
 =
   assert (Seq.equal
     st1.CS.cs_wire_log.CL.raw_received
@@ -1533,7 +1537,12 @@ let lemma_server_legal_delta_histories_ahead
   CPI.lemma_bytes_extends_append_equal
     st0.CS.cs_wire_log.CL.raw_sent
     st1.CS.cs_wire_log.CL.raw_sent
-    delta.CS.delta_raw_sent
+    delta.CS.delta_raw_sent;
+  assert (st1.CS.cs_event_log ==
+    st0.CS.cs_event_log @ [delta.CS.delta_event]);
+  TChannel.lemma_event_log_extends_snoc
+    st0.CS.cs_event_log
+    delta.CS.delta_event
 
 let lemma_server_step_histories_ahead
   (st0:CS.connection_state)
@@ -1548,7 +1557,10 @@ let lemma_server_step_histories_ahead
           st1.CS.cs_wire_log.CL.raw_received /\
         TCP.bytes_extends
           st0.CS.cs_wire_log.CL.raw_sent
-          st1.CS.cs_wire_log.CL.raw_sent)
+          st1.CS.cs_wire_log.CL.raw_sent /\
+        TChannel.event_log_extends
+          st0.CS.cs_event_log
+          st1.CS.cs_event_log)
 =
   match ev with
   | SM.WireEvent wire ->
@@ -1652,7 +1664,10 @@ let lemma_server_canonical_step_rel_histories_ahead
           st1.CS.cs_wire_log.CL.raw_received /\
         TCP.bytes_extends
           st0.CS.cs_wire_log.CL.raw_sent
-          st1.CS.cs_wire_log.CL.raw_sent)
+          st1.CS.cs_wire_log.CL.raw_sent /\
+        TChannel.event_log_extends
+          st0.CS.cs_event_log
+          st1.CS.cs_event_log)
 =
   let ev =
     ID.indefinite_description_ghost
@@ -1675,7 +1690,10 @@ let lemma_server_progress_histories_ahead
           st1.CS.cs_wire_log.CL.raw_received /\
         TCP.bytes_extends
           st0.CS.cs_wire_log.CL.raw_sent
-          st1.CS.cs_wire_log.CL.raw_sent)
+          st1.CS.cs_wire_log.CL.raw_sent /\
+        TChannel.event_log_extends
+          st0.CS.cs_event_log
+          st1.CS.cs_event_log)
 =
   RTC.induct
     (server_canonical_step_rel #CTypes.server_local_event)
@@ -1685,10 +1703,14 @@ let lemma_server_progress_histories_ahead
         y.CS.cs_wire_log.CL.raw_received /\
       TCP.bytes_extends
         x.CS.cs_wire_log.CL.raw_sent
-        y.CS.cs_wire_log.CL.raw_sent)
+        y.CS.cs_wire_log.CL.raw_sent /\
+      TChannel.event_log_extends
+        x.CS.cs_event_log
+        y.CS.cs_event_log)
     (fun x ->
       CPI.lemma_bytes_extends_refl x.CS.cs_wire_log.CL.raw_received;
-      CPI.lemma_bytes_extends_refl x.CS.cs_wire_log.CL.raw_sent)
+      CPI.lemma_bytes_extends_refl x.CS.cs_wire_log.CL.raw_sent;
+      TChannel.lemma_event_log_extends_refl x.CS.cs_event_log)
     (fun x y ->
       lemma_server_canonical_step_rel_histories_ahead x y)
     (fun x y z ->
@@ -1699,7 +1721,11 @@ let lemma_server_progress_histories_ahead
       CPI.lemma_bytes_extends_trans
         x.CS.cs_wire_log.CL.raw_sent
         y.CS.cs_wire_log.CL.raw_sent
-        z.CS.cs_wire_log.CL.raw_sent)
+        z.CS.cs_wire_log.CL.raw_sent;
+      TChannel.lemma_event_log_extends_trans
+        x.CS.cs_event_log
+        y.CS.cs_event_log
+        z.CS.cs_event_log)
     st0
     st1
     ()
@@ -2090,7 +2116,10 @@ ensures server_snapshot
       (Ghost.reveal snapshot_received)
       (Ghost.reveal snapshot_sent)
       (Ghost.reveal current_received)
-      (Ghost.reveal current_sent))
+      (Ghost.reveal current_sent) /\
+    TChannel.event_log_extends
+      (Ghost.reveal snapshot_state).CS.cs_event_log
+      (Ghost.reveal current_state).CS.cs_event_log)
 {
   unfold (server_snapshot
     srv
@@ -2147,6 +2176,57 @@ ensures server_snapshot
     (Ghost.reveal snapshot_received)
     (Ghost.reveal snapshot_sent)
     (Ghost.reveal snapshot_state))
+}
+
+ghost fn recall_server_snapshot_for_protocol
+  (srv:canonical_server)
+  (snapshot_received:Ghost.erased B.bytes)
+  (snapshot_sent:Ghost.erased B.bytes)
+  (snapshot_state:Ghost.erased CS.connection_state)
+  (current_received:Ghost.erased B.bytes)
+  (current_sent:Ghost.erased B.bytes)
+  (current_state:Ghost.erased CS.connection_state)
+requires server_snapshot
+  srv
+  (Ghost.reveal snapshot_received)
+  (Ghost.reveal snapshot_sent)
+  (Ghost.reveal snapshot_state) **
+  server_invariant
+    srv
+    (Ghost.reveal current_received)
+    (Ghost.reveal current_sent)
+    (Ghost.reveal current_state)
+ensures server_snapshot
+  srv
+  (Ghost.reveal snapshot_received)
+  (Ghost.reveal snapshot_sent)
+  (Ghost.reveal snapshot_state) **
+  server_invariant
+    srv
+    (Ghost.reveal current_received)
+    (Ghost.reveal current_sent)
+    (Ghost.reveal current_state) **
+  pure (
+    CPI.state_ahead
+      (server_system
+        #CTypes.server_local_event
+        (Ghost.reveal srv.canonical_server_initial))
+      (Ghost.reveal snapshot_state)
+      (Ghost.reveal current_state) /\
+    CPI.histories_ahead
+      (Ghost.reveal snapshot_received)
+      (Ghost.reveal snapshot_sent)
+      (Ghost.reveal current_received)
+      (Ghost.reveal current_sent))
+{
+  recall_server_snapshot
+    srv
+    snapshot_received
+    snapshot_sent
+    snapshot_state
+    current_received
+    current_sent
+    current_state
 }
 
 let server_network_frame_post_fact
@@ -6770,7 +6850,7 @@ let server_protocol_implementation
     CPI.pi_local_frame_post = server_local_bridge_frame_post;
     CPI.pi_invariant_valid = server_invariant_valid;
     CPI.pi_take_snapshot = take_server_snapshot;
-    CPI.pi_recall_snapshot = recall_server_snapshot;
+    CPI.pi_recall_snapshot = recall_server_snapshot_for_protocol;
     CPI.pi_process_network = server_process_network;
     CPI.pi_process_local = server_process_local;
   }
