@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
+module CChannel = TLS13.Impl.Client.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
@@ -31,6 +32,7 @@ module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module SM = TLS13.Spec.StateMachine.ClientTrace
 module SZ = FStar.SizeT
+module TChannel = TLS13.Impl.Channel
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
@@ -738,7 +740,20 @@ fn driver_process_buffered_network_bytes_once
                   app_out_bytes /\
                  (result.network_read_buffer_resp.CT.response.CT.status ==
                   CT.NeedMoreInput ==>
+                  CT.response_stuttered
+                    'st0
+                    st1
+                    result.network_read_buffer_resp.CT.response
+                    (Ghost.reveal 'old_network_out)
+                    network_out_bytes
+                    (Ghost.reveal 'old_app_out)
+                    app_out_bytes) /\
+                 (result.network_read_buffer_resp.CT.response.CT.status ==
+                  CT.NeedMoreInput ==>
                   result.network_read_buffer_resp.CT.consumed_len == 0sz) /\
+                 (SZ.v result.network_read_buffer_resp.CT.response.CT.app_out_len > 0 ==>
+                  result.network_read_buffer_resp.CT.response.CT.status == CT.StepOk /\
+                  result.network_read_buffer_resp.CT.response.CT.network_out_len == 0sz) /\
                  (result.network_read_buffer_resp.CT.response.CT.status ==
                  CT.StepOk ==>
                  SZ.v result.network_read_written <=
@@ -746,6 +761,10 @@ fn driver_process_buffered_network_bytes_once
 {
   unfold (driver_exactly d 'st0 'buffered buffered_len);
   unfold (driver_canonical_progress d 'st0);
+  assert (pure (
+    'st0.CS.cs_model.CS.model_config ==
+      (Ghost.reveal d.driver_initial).CS.cs_model.CS.model_config /\
+    CP.client_initial_wire_logs_empty (Ghost.reveal d.driver_initial)));
   A.pts_to_len raw;
   assert (pure (A.length raw == SZ.v raw_capacity));
   A.to_mask raw;
@@ -795,7 +814,28 @@ fn driver_process_buffered_network_bytes_once
     (Ghost.reveal 'old_app_out)
     app_out_bytes));
   assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+    CT.response_stuttered
+      'st0
+      st1
+      buffer_resp.CT.response
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes));
+  CT.lemma_network_bytes_end_to_end_correct_preserves_config
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes;
+  assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
     buffer_resp.CT.consumed_len == 0sz));
+  assert (pure (SZ.v buffer_resp.CT.response.CT.app_out_len > 0 ==>
+    buffer_resp.CT.response.CT.status == CT.StepOk /\
+    buffer_resp.CT.response.CT.network_out_len == 0sz));
   lemma_network_bytes_wire_lengths
     'st0
     st1
@@ -1253,6 +1293,19 @@ fn driver_process_buffered_network_bytes_compact_once
                   (Ghost.reveal 'old_app_out)
                   app_out_bytes /\
                  (result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status ==
+                  CT.NeedMoreInput ==>
+                  CT.response_stuttered
+                    'st0
+                    st1
+                    result.buffered_network_read.network_read_buffer_resp.CT.response
+                    (Ghost.reveal 'old_network_out)
+                    network_out_bytes
+                    (Ghost.reveal 'old_app_out)
+                    app_out_bytes) /\
+                 (SZ.v result.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len > 0 ==>
+                  result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status == CT.StepOk /\
+                  result.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len == 0sz) /\
+                 (result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status ==
                  CT.StepOk ==>
                  SZ.v result.buffered_network_read.network_read_written <=
                  SZ.v result.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len))
@@ -1288,6 +1341,21 @@ fn driver_process_buffered_network_bytes_compact_once
     network_out_bytes
     (Ghost.reveal 'old_app_out)
     app_out_bytes));
+  assert (pure (
+    read_result.network_read_buffer_resp.CT.response.CT.status ==
+      CT.NeedMoreInput ==>
+    CT.response_stuttered
+      'st0
+      st1
+      read_result.network_read_buffer_resp.CT.response
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes));
+  assert (pure (
+    SZ.v read_result.network_read_buffer_resp.CT.response.CT.app_out_len > 0 ==>
+    read_result.network_read_buffer_resp.CT.response.CT.status == CT.StepOk /\
+    read_result.network_read_buffer_resp.CT.response.CT.network_out_len == 0sz));
   assert (pure (SZ.v read_result.network_read_buffer_resp.CT.consumed_len <=
     B.length (Ghost.reveal read_result.network_read_prefix)));
   assert (pure (SZ.v read_result.network_read_buffer_resp.CT.consumed_len <=
@@ -1444,7 +1512,16 @@ fn driver_read_buffered_network_bytes_compact_once
                   (Ghost.reveal 'old_network_out)
                   network_out_bytes
                   (Ghost.reveal 'old_app_out)
-                  app_out_bytes)
+                  app_out_bytes /\
+                  (SZ.v
+                   result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len > 0 ==>
+                  result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.status == CT.StepOk /\
+                  result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len == 0sz) /\
+                  (result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.status == CT.StepOk ==>
+                  SZ.v
+                    result.buffered_network_io_buffered.buffered_network_read.network_read_written <=
+                  SZ.v
+                    result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len))
 {
   unfold (driver_exactly d 'st0 'buffered buffered_len);
   A.pts_to_len raw;
@@ -1624,6 +1701,14 @@ fn driver_read_buffered_network_bytes_compact_once
     network_out_bytes
     (Ghost.reveal 'old_app_out)
     app_out_bytes));
+  assert (pure (
+    SZ.v buffered_result.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len > 0 ==>
+    buffered_result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status == CT.StepOk /\
+    buffered_result.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len == 0sz));
+  assert (pure (
+    buffered_result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status == CT.StepOk ==>
+    SZ.v buffered_result.buffered_network_read.network_read_written <=
+      SZ.v buffered_result.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len));
   {
     buffered_network_io_read_len = read_len;
     buffered_network_io_buffered = buffered_result;
@@ -2192,6 +2277,32 @@ fn driver_progress_buffered_network_step
                    result
                    network_out_bytes
                    app_out_bytes /\
+                 B.length
+                   (CT.response_app_out
+                     result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response
+                     app_out_bytes) ==
+                   SZ.v
+                     result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len /\
+                 (SZ.v
+                   result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len > 0 ==>
+                  result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.status == CT.StepOk /\
+                  result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len == 0sz) /\
+                 (result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.status == CT.StepOk ==>
+                  SZ.v
+                    result.buffered_network_io_buffered.buffered_network_read.network_read_written <=
+                  SZ.v
+                    result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len) /\
+                 TChannel.application_log st1 ==
+                   (let output =
+                      CT.response_app_out
+                        result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response
+                        app_out_bytes in
+                    if B.length output == 0
+                    then TChannel.application_log 'st0
+                    else
+                      Common.ChannelImplementation.append_received
+                        (TChannel.application_log 'st0)
+                        output) /\
                  st1.CS.cs_model.CS.model_config ==
                    'st0.CS.cs_model.CS.model_config /\
                  (CT.client_end_to_end_invariant 'st0 ==>
@@ -2226,6 +2337,26 @@ fn driver_progress_buffered_network_step
       (Ghost.reveal 'old_app_out)
       app_out_bytes));
     CT.lemma_network_bytes_end_to_end_correct_preserves_config
+      'st0
+      st1
+      read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes;
+    CChannel.lemma_network_response_app_out_length
+      'st0
+      st1
+      read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes;
+    CChannel.lemma_network_bytes_application_log
       'st0
       st1
       read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -2277,6 +2408,24 @@ fn driver_progress_buffered_network_step
       network_out_bytes
       (Ghost.reveal 'old_app_out)
       app_out_bytes;
+    CChannel.lemma_network_response_app_out_length
+      'st0
+      st1
+      processed.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal processed.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes;
+    CChannel.lemma_network_bytes_application_log
+      'st0
+      st1
+      processed.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal processed.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes;
     assert (pure (CT.client_end_to_end_invariant 'st0 ==>
       CT.client_end_to_end_invariant st1));
     assert (pure (B.length raw_bytes == SZ.v raw_capacity));
@@ -2286,6 +2435,14 @@ fn driver_progress_buffered_network_step
       processed.buffered_network_read.network_read_buffer_resp.CT.response.CT.status =
       CT.NeedMoreInput;
     if need_more {
+      assert (pure (CT.response_stuttered
+        'st0
+        st1
+        processed.buffered_network_read.network_read_buffer_resp.CT.response
+        (Ghost.reveal 'old_network_out)
+        network_out_bytes
+        (Ghost.reveal 'old_app_out)
+        app_out_bytes));
       assert (pure (Seq.equal buffered_after
         (Seq.slice raw_bytes 0 (SZ.v processed.buffered_network_new_len))));
       let read_result =
@@ -2324,6 +2481,45 @@ fn driver_progress_buffered_network_step
         network_out_bytes2
         app_out_bytes
         app_out_bytes2;
+      CChannel.lemma_network_response_app_out_length
+        st1
+        st2
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+        (Ghost.reveal
+          read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+        network_out_bytes
+        network_out_bytes2
+        app_out_bytes
+        app_out_bytes2;
+      CChannel.lemma_network_bytes_application_log
+        st1
+        st2
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+        (Ghost.reveal
+          read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+        network_out_bytes
+        network_out_bytes2
+        app_out_bytes
+        app_out_bytes2;
+      assert (pure (
+        B.length
+          (CT.response_app_out
+            processed.buffered_network_read.network_read_buffer_resp.CT.response
+            app_out_bytes) == 0));
+      assert (pure (
+        TChannel.application_log st1 == TChannel.application_log 'st0));
+      assert (pure (
+        TChannel.application_log st2 ==
+          (let output =
+             CT.response_app_out
+               read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response
+               app_out_bytes2 in
+           if B.length output == 0
+           then TChannel.application_log 'st0
+           else
+             Common.ChannelImplementation.append_received
+               (TChannel.application_log 'st0)
+               output)));
       assert (pure (st2.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config));
       assert (pure (client_buffered_network_io_step_correct
@@ -2417,7 +2613,9 @@ fn top_driver_process_one_local_action
                  (result.ready_local_processed ==>
                   (CT.client_end_to_end_invariant 'st0 ==>
                    CT.client_end_to_end_invariant st1)) /\
-                 (result.ready_local_processed == false ==> st1 == 'st0))
+                 (result.ready_local_processed == false ==> st1 == 'st0) /\
+                 TChannel.application_log st1 ==
+                   TChannel.application_log 'st0)
 {
   unfold (top_driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let step =
@@ -2443,6 +2641,22 @@ fn top_driver_process_one_local_action
     (CT.client_end_to_end_invariant 'st0 ==>
      CT.client_end_to_end_invariant st1)));
   assert (pure (step.ready_local_processed == false ==> st1 == 'st0));
+  assert (pure (step.ready_local_processed ==>
+    step.ready_local_action.CT.next_local_kind <>
+      CT.LocalDeliverApplicationData /\
+    step.ready_local_action.CT.next_local_kind <>
+      CT.LocalSendApplicationData));
+  CChannel.lemma_optional_receive_local_application_log
+    'st0
+    st1
+    step.ready_local_processed
+    step.ready_local_resp
+    step.ready_local_action.CT.next_local_kind
+    (Ghost.reveal 'empty_payload_bytes)
+    network_out_bytes
+    app_out_bytes;
+  assert (pure (
+    TChannel.application_log st1 == TChannel.application_log 'st0));
   if step.ready_local_processed {
     fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
     step
@@ -2548,6 +2762,17 @@ fn top_driver_process_one_local_action
               CT.client_end_to_end_invariant st2));
             assert (pure (CT.client_end_to_end_invariant 'st0 ==>
               CT.client_end_to_end_invariant st2));
+            CChannel.lemma_receive_local_application_log
+              st1
+              st2
+              write_result.local_write_resp
+              CT.LocalValidateCertificate
+              auth_payload_prefix_bytes
+              network_out_bytes2
+              app_out_bytes2;
+            assert (pure (
+              TChannel.application_log st2 ==
+                TChannel.application_log 'st0));
             A.to_mask auth_payload_prefix;
             with auth_payload_prefix_mask_after.
               assert (A.pts_to_mask auth_payload_prefix #1.0R auth_payload_prefix_mask_after (fun _ -> True));
@@ -2708,6 +2933,17 @@ fn top_driver_process_one_local_action
               CT.client_end_to_end_invariant st2));
             assert (pure (CT.client_end_to_end_invariant 'st0 ==>
               CT.client_end_to_end_invariant st2));
+            CChannel.lemma_receive_local_application_log
+              st1
+              st2
+              write_result.local_write_resp
+              CT.LocalVerifyCertificateSignature
+              (Ghost.reveal 'empty_payload_bytes)
+              network_out_bytes2
+              app_out_bytes2;
+            assert (pure (
+              TChannel.application_log st2 ==
+                TChannel.application_log 'st0));
             fold (top_driver_exactly d st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
             {
               ready_local_action = step.ready_local_action;

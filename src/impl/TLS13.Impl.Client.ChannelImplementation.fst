@@ -15,8 +15,10 @@ module CSL = TLS13.Spec.StateMachine.Log
 module CT = TLS13.Impl.Client.Types
 module DS = TLS13.Impl.Client.Driver.State
 module ID = FStar.IndefiniteDescription
+module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
 module Seq = FStar.Seq
+module SZ = FStar.SizeT
 module TChannel = TLS13.Impl.Channel
 
 let message_of_bytes (bytes:B.bytes) : B.bytes = bytes
@@ -327,6 +329,474 @@ let lemma_driver_send_application_log
       st0 st1 resp payload network_out app_out
   )
 
+let lemma_legal_response_observable_receive_log
+  (st0 st1:CS.connection_state)
+  (resp:CT.client_response)
+  (ev:CS.conn_event)
+  (raw_sent raw_received network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        CT.legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CSL.conn_event_app_sent_delta ev == [])
+      (ensures
+        (let output = CT.response_app_out resp app_out in
+         TChannel.application_log st1 ==
+           (if B.length output == 0
+            then TChannel.application_log st0
+            else CI.append_received (TChannel.application_log st0) output)))
+=
+  CT.lemma_legal_response_for_event_app_log_delta
+    st0 st1 resp ev raw_sent raw_received network_out app_out;
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Sent, M.TlsApplicationData _ ->
+       assert False
+     | CL.Received, M.TlsApplicationData bytes ->
+       assert (Seq.equal (CT.response_app_out resp app_out) bytes);
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [bytes]
+     | _, _ ->
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [])
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData bytes ->
+       assert (Seq.equal (CT.response_app_out resp app_out) bytes);
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [bytes]
+     | _ ->
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [])
+
+let lemma_non_application_local_event_deltas
+  (st:CS.connection_state)
+  (kind:CT.local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        CT.local_event_kind_matches st kind payload ev /\
+        kind <> CT.LocalDeliverApplicationData /\
+        kind <> CT.LocalSendApplicationData)
+      (ensures
+        CSL.conn_event_app_sent_delta ev == [] /\
+        CSL.conn_event_app_received_delta ev == [])
+=
+  match kind, ev with
+  | CT.LocalDeliverApplicationData, _ -> assert False
+  | CT.LocalSendApplicationData, _ -> assert False
+  | _, _ -> ()
+
+#push-options "--split_queries always --z3refresh --z3rlimit 50"
+let lemma_network_response_app_out_length
+  (st0 st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input old_network_out network_out old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        CT.network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+      (ensures
+        B.length (CT.response_app_out buffer_resp.CT.response app_out) ==
+          SZ.v buffer_resp.CT.response.CT.app_out_len)
+=
+  let resp = buffer_resp.CT.response in
+  assert (CT.network_bytes_step_correct
+    st0 st1 buffer_resp network_input
+    old_network_out network_out old_app_out app_out);
+  if CT.response_stuttered
+       st0 st1 resp old_network_out network_out old_app_out app_out
+  then (
+    Seq.lemma_len_slice app_out 0 0
+  ) else (
+    assert (CT.some_legal_response st0 st1 resp network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          CT.legal_response_for_event
+            st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          CT.legal_response_for_event
+            st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          CT.legal_response_for_event
+            st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    assert (CT.response_wf resp network_out app_out);
+    Seq.lemma_len_slice app_out 0 (SZ.v resp.CT.app_out_len)
+  )
+
+let lemma_receive_observation_app_out_length
+  (st0 st1:CS.connection_state)
+  (obs:DS.client_receive_observation)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        DS.client_receive_observation_network_correct st0 st1 obs app_out)
+      (ensures
+        obs.DS.client_receive_observed_status == DS.DriverWorkflowOk ==>
+        B.length
+          (CT.response_app_out
+            obs.DS.client_receive_observed_response.CT.response
+            app_out) ==
+          SZ.v
+            obs.DS.client_receive_observed_response.CT.response.CT.app_out_len)
+=
+  if obs.DS.client_receive_observed_status == DS.DriverWorkflowOk then (
+    assert (exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
+      CT.network_bytes_end_to_end_correct
+        st_before
+        st_network
+        obs.DS.client_receive_observed_response
+        input
+        old_network_out
+        network_out
+        old_app_out
+        observed_app_out /\
+      st_network == st1 /\
+      Seq.equal observed_app_out app_out);
+    let st_before =
+      ID.indefinite_description_ghost
+        CS.connection_state
+        (fun st_before -> exists st_network input old_network_out network_out old_app_out observed_app_out.
+          CT.network_bytes_end_to_end_correct
+            st_before
+            st_network
+            obs.DS.client_receive_observed_response
+            input
+            old_network_out
+            network_out
+            old_app_out
+            observed_app_out /\
+          st_network == st1 /\
+          Seq.equal observed_app_out app_out) in
+    let input =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun input -> exists st_network old_network_out network_out old_app_out observed_app_out.
+          CT.network_bytes_end_to_end_correct
+            st_before
+            st_network
+            obs.DS.client_receive_observed_response
+            input
+            old_network_out
+            network_out
+            old_app_out
+            observed_app_out /\
+          st_network == st1 /\
+          Seq.equal observed_app_out app_out) in
+    let old_network_out =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun old_network_out -> exists st_network network_out old_app_out observed_app_out.
+          CT.network_bytes_end_to_end_correct
+            st_before
+            st_network
+            obs.DS.client_receive_observed_response
+            input
+            old_network_out
+            network_out
+            old_app_out
+            observed_app_out /\
+          st_network == st1 /\
+          Seq.equal observed_app_out app_out) in
+    let network_out =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun network_out -> exists st_network old_app_out observed_app_out.
+          CT.network_bytes_end_to_end_correct
+            st_before
+            st_network
+            obs.DS.client_receive_observed_response
+            input
+            old_network_out
+            network_out
+            old_app_out
+            observed_app_out /\
+          st_network == st1 /\
+          Seq.equal observed_app_out app_out) in
+    let old_app_out =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun old_app_out -> exists st_network observed_app_out.
+          CT.network_bytes_end_to_end_correct
+            st_before
+            st_network
+            obs.DS.client_receive_observed_response
+            input
+            old_network_out
+            network_out
+            old_app_out
+            observed_app_out /\
+          st_network == st1 /\
+          Seq.equal observed_app_out app_out) in
+    let observed_app_out =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun observed_app_out -> exists st_network.
+          CT.network_bytes_end_to_end_correct
+            st_before
+            st_network
+            obs.DS.client_receive_observed_response
+            input
+            old_network_out
+            network_out
+            old_app_out
+            observed_app_out /\
+          st_network == st1 /\
+          Seq.equal observed_app_out app_out) in
+    assert (exists st_network.
+      CT.network_bytes_end_to_end_correct
+        st_before
+        st_network
+        obs.DS.client_receive_observed_response
+        input
+        old_network_out
+        network_out
+        old_app_out
+        observed_app_out /\
+      st_network == st1 /\
+      Seq.equal observed_app_out app_out);
+    let st_network =
+      ID.indefinite_description_ghost
+        CS.connection_state
+        (fun st_network ->
+          CT.network_bytes_end_to_end_correct
+            st_before
+            st_network
+            obs.DS.client_receive_observed_response
+            input
+            old_network_out
+            network_out
+            old_app_out
+            observed_app_out /\
+          st_network == st1 /\
+          Seq.equal observed_app_out app_out) in
+    lemma_network_response_app_out_length
+      st_before
+      st_network
+      obs.DS.client_receive_observed_response
+      input
+      old_network_out
+      network_out
+      old_app_out
+      observed_app_out
+  )
+
+let lemma_receive_local_application_log
+  (st0 st1:CS.connection_state)
+  (resp:CT.client_response)
+  (kind:CT.local_event_kind)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        CT.local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out /\
+        kind <> CT.LocalDeliverApplicationData /\
+        kind <> CT.LocalSendApplicationData)
+      (ensures
+        TChannel.application_log st1 == TChannel.application_log st0)
+=
+  assert (CT.legal_handled_local_response
+    st0 st1 resp kind payload network_out app_out);
+  if resp.CT.status == CT.StepOk then (
+    assert (exists ev raw_sent raw_received.
+      CT.legal_local_response
+        st0 st1 resp kind payload ev raw_sent raw_received network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          CT.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          CT.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          CT.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    assert (CT.local_event_kind_matches st0 kind payload ev);
+    assert (CT.response_app_out_matches_event resp ev app_out);
+    lemma_non_application_local_event_deltas st0 kind payload ev;
+    assert (CSL.conn_event_app_sent_delta ev == []);
+    assert (B.length (CT.response_app_out resp app_out) == 0);
+    lemma_legal_response_observable_receive_log
+      st0 st1 resp ev raw_sent raw_received network_out app_out
+  ) else if CT.unexpected_message_response st0 st1 resp network_out app_out then (
+    assert (B.length (CT.response_app_out resp app_out) == 0);
+    lemma_legal_response_observable_receive_log
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_unexpected_message_error))
+      B.empty
+      B.empty
+      network_out
+      app_out
+  ) else (
+    assert (CT.bad_finished_response st0 st1 resp network_out app_out);
+    assert (B.length (CT.response_app_out resp app_out) == 0);
+    lemma_legal_response_observable_receive_log
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_bad_finished_error))
+      B.empty
+      B.empty
+      network_out
+      app_out
+  )
+
+let lemma_optional_receive_local_application_log
+  (st0 st1:CS.connection_state)
+  (processed:bool)
+  (resp:CT.client_response)
+  (kind:CT.local_event_kind)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        (processed ==>
+          CT.local_event_end_to_end_correct
+            st0 st1 resp kind payload network_out app_out /\
+          kind <> CT.LocalDeliverApplicationData /\
+          kind <> CT.LocalSendApplicationData) /\
+        (processed == false ==> st1 == st0))
+      (ensures
+        TChannel.application_log st1 == TChannel.application_log st0)
+=
+  if processed then
+    lemma_receive_local_application_log
+      st0 st1 resp kind payload network_out app_out
+  else
+    assert (st1 == st0)
+
+let lemma_network_bytes_application_log
+  (st0 st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input old_network_out network_out old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        CT.network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+      (ensures
+        (let output = CT.response_app_out buffer_resp.CT.response app_out in
+         TChannel.application_log st1 ==
+           (if B.length output == 0
+            then TChannel.application_log st0
+            else CI.append_received (TChannel.application_log st0) output)))
+=
+  let resp = buffer_resp.CT.response in
+  assert (CT.network_bytes_step_correct
+    st0 st1 buffer_resp network_input
+    old_network_out network_out old_app_out app_out);
+  if CT.response_stuttered
+       st0 st1 resp old_network_out network_out old_app_out app_out
+  then
+    assert (st1 == st0)
+  else if resp.CT.status == CT.DecodeError then (
+    assert (CT.decode_error_response st0 st1 resp network_out app_out);
+    lemma_legal_response_observable_receive_log
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_decode_error))
+      B.empty
+      B.empty
+      network_out
+      app_out
+  ) else if
+      resp.CT.status == CT.IllegalTransition &&
+      buffer_resp.CT.consumed_len = 0sz
+  then (
+    assert (CT.unexpected_message_response st0 st1 resp network_out app_out);
+    lemma_legal_response_observable_receive_log
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_unexpected_message_error))
+      B.empty
+      B.empty
+      network_out
+      app_out
+  ) else (
+    let raw_received =
+      CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
+    assert (CT.raw_record_parse_success raw_received);
+    if buffer_resp.CT.consumed_len = 0sz then (
+      CT.lemma_raw_record_parse_success_nonempty raw_received;
+      assert (SZ.v buffer_resp.CT.consumed_len == 0);
+      assert (raw_received == Seq.slice network_input 0 0);
+      Seq.lemma_len_slice network_input 0 0;
+      assert (B.length raw_received == 0);
+      assert False
+    );
+    assert (CT.network_bytes_decoded_message_projection
+      st0 st1 buffer_resp network_input network_out app_out);
+    assert (exists content_type fragment msg.
+      CT.network_input_message_projection
+        st0 content_type fragment msg raw_received /\
+      CT.decoded_message_event_projection
+        st0 st1 resp msg raw_received network_out app_out);
+    let msg =
+      ID.indefinite_description_ghost
+        M.tls_message
+        (fun msg -> exists content_type fragment.
+          CT.network_input_message_projection
+            st0 content_type fragment msg raw_received /\
+          CT.decoded_message_event_projection
+            st0 st1 resp msg raw_received network_out app_out) in
+    assert (CT.decoded_message_event_projection
+      st0 st1 resp msg raw_received network_out app_out);
+    if CT.legal_received_tls_response
+         st0 st1 resp msg raw_received network_out app_out
+    then
+      lemma_legal_response_observable_receive_log
+        st0
+        st1
+        resp
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        })
+        B.empty
+        raw_received
+        network_out
+        app_out
+    else (
+      assert (CT.unexpected_message_response st0 st1 resp network_out app_out);
+      lemma_legal_response_observable_receive_log
+        st0
+        st1
+        resp
+        (CS.ConnLocalEvent (CS.LocalFail CT.tls_unexpected_message_error))
+        B.empty
+        B.empty
+        network_out
+        app_out
+    )
+  )
+#pop-options
+
 ghost fn pack_channel_invariant
   (d:DS.client_driver)
   (raw_received:Ghost.erased B.bytes)
@@ -479,9 +949,8 @@ ghost fn open_channel_invariant
     d st transport_received transport_sent)
 }
 
-ghost fn pack_connected_after_send
+ghost fn pack_connected_channel_invariant
   (d:DS.client_driver)
-  (_status:DS.driver_workflow_status)
   (st:Ghost.erased CS.connection_state)
   (transport_received:Ghost.erased B.bytes)
   (transport_sent:Ghost.erased B.bytes)
@@ -542,6 +1011,25 @@ ghost fn pack_connected_after_send
     (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
     (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
     (TChannel.application_log (Ghost.reveal st)))
+}
+
+ghost fn pack_connected_channel
+  (d:DS.client_driver)
+  (st:Ghost.erased CS.connection_state)
+  (transport_received:Ghost.erased B.bytes)
+  (transport_sent:Ghost.erased B.bytes)
+  requires
+    DS.client_driver_connected
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal transport_received)
+      (Ghost.reveal transport_sent)
+  ensures
+    exists* raw_received raw_sent app_log.
+      DS.client_channel_inv d raw_received raw_sent app_log
+{
+  pack_connected_channel_invariant
+    d st transport_received transport_sent
 }
 
 ghost fn pack_channel_snapshot

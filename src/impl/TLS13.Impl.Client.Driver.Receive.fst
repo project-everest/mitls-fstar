@@ -8,6 +8,8 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
+module CI = Common.ChannelImplementation
+module CChannel = TLS13.Impl.Client.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
@@ -31,6 +33,7 @@ module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module SM = TLS13.Spec.StateMachine.ClientTrace
 module SZ = FStar.SizeT
+module TChannel = TLS13.Impl.Channel
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
@@ -38,6 +41,77 @@ module DS = TLS13.Impl.Client.Driver.State
 module DC = TLS13.Impl.Client.Driver.Core
 open TLS13.Impl.Client.Driver.State
 open TLS13.Impl.Client.Driver.Core
+
+noextract
+let client_receive_workflow_application_log
+  (st0 st1:CS.connection_state)
+  (result:driver_workflow_result)
+  (app_out:B.bytes)
+  : prop =
+  let response =
+    result.driver_workflow_network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response in
+  let output = CT.response_app_out response app_out in
+  TChannel.application_log st1 ==
+    (if result.driver_workflow_status == DriverWorkflowOk
+     then CI.append_received (TChannel.application_log st0) output
+     else TChannel.application_log st0)
+
+let lemma_control_snapshot_closed
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        CR.control_snapshot_matches snapshot st /\
+        snapshot.CR.snapshot_control_tag == 4uy)
+      (ensures st.CS.cs_model.CS.model_control == CS.ControlClosed)
+=
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlNew
+  | CS.ControlHandshaking _
+  | CS.ControlApplicationData
+  | CS.ControlClosing
+  | CS.ControlFailed _ ->
+    assert False
+  | CS.ControlClosed ->
+    ()
+
+noextract
+let client_network_step_failed
+  (resp:CT.client_response)
+  (written:SZ.t)
+  : bool =
+  let ok = resp.CT.status = CT.StepOk in
+  let need_more = resp.CT.status = CT.NeedMoreInput in
+  let bad_status = (ok || need_more) = false in
+  let wrote_all = written = resp.CT.network_out_len in
+  let short_write = ok && (wrote_all = false) in
+  bad_status || short_write
+
+let lemma_failed_network_step_app_out_zero
+  (resp:CT.client_response)
+  (written:SZ.t)
+  : Lemma
+      (requires
+        (SZ.v resp.CT.app_out_len > 0 ==>
+          resp.CT.status == CT.StepOk /\
+          resp.CT.network_out_len == 0sz) /\
+        (resp.CT.status == CT.StepOk ==>
+          SZ.v written <= SZ.v resp.CT.network_out_len))
+      (ensures
+        client_network_step_failed resp written == true ==>
+        SZ.v resp.CT.app_out_len == 0)
+=
+  if SZ.v resp.CT.app_out_len > 0
+  then (
+    assert (resp.CT.status == CT.StepOk);
+    assert (resp.CT.network_out_len == 0sz);
+    assert (SZ.v written == 0);
+    assert (written == resp.CT.network_out_len);
+    assert (client_network_step_failed resp written == false)
+  )
+  else
+    ()
+
 #push-options "--z3refresh --z3rlimit 10 --split_queries always --z3seed 17"
 fn rec driver_receive_application_data
   (d:top_driver)
@@ -115,6 +189,8 @@ fn rec driver_receive_application_data
                    st1
                    (client_driver_workflow_observation result)
                    app_out_bytes /\
+                 client_receive_workflow_application_log
+                   'st0 st1 result app_out_bytes /\
                  (CT.client_end_to_end_invariant 'st0 ==>
                   CT.client_end_to_end_invariant st1))
   decreases (SZ.v fuel)
@@ -154,7 +230,7 @@ fn rec driver_receive_application_data
       ready_local_resp = no_op_resp;
       ready_local_written = 0sz;
     };
-    {
+    let result = {
       driver_workflow_status = DriverWorkflowExhausted;
       driver_workflow_rx_len = buffered_len;
       driver_workflow_local = {
@@ -162,7 +238,12 @@ fn rec driver_receive_application_data
         driver_drain_exhausted = false;
       };
       driver_workflow_network = no_op_io;
-    }
+    };
+    assert (pure (client_receive_workflow_application_log
+      'st0 'st0 result (Ghost.reveal 'old_app_out)));
+    rewrite (top_driver_exactly d 'st0 'buffered buffered_len) as
+      (top_driver_exactly d 'st0 'buffered result.driver_workflow_rx_len);
+    result
   } else {
     assert (pure (0 < SZ.v fuel));
     unfold (top_driver_exactly d 'st0 'buffered buffered_len);
@@ -197,6 +278,15 @@ fn rec driver_receive_application_data
       network.buffered_network_io_buffered.buffered_network_new_len);
     assert (pure (CT.client_end_to_end_invariant 'st0 ==>
       CT.client_end_to_end_invariant st_network));
+    assert (pure (
+      TChannel.application_log st_network ==
+        (let output =
+           CT.response_app_out
+             network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response
+             app_out_network in
+         if B.length output == 0
+         then TChannel.application_log 'st0
+         else CI.append_received (TChannel.application_log 'st0) output)));
     let no_op_resp = {
       CT.network_out_len = 0sz;
       CT.app_out_len = 0sz;
@@ -216,13 +306,15 @@ fn rec driver_receive_application_data
     let net_read =
       network.buffered_network_io_buffered.buffered_network_read;
     let net_resp = net_read.network_read_buffer_resp.CT.response;
+    assert (pure (
+      B.length (CT.response_app_out net_resp app_out_network) ==
+        SZ.v net_resp.CT.app_out_len));
+    lemma_failed_network_step_app_out_zero
+      net_resp
+      net_read.network_read_written;
     let net_ok = net_resp.CT.status = CT.StepOk;
-    let net_need_more = net_resp.CT.status = CT.NeedMoreInput;
-    let net_bad_status = (net_ok || net_need_more) = false;
-    let net_wrote_all =
-      net_read.network_read_written = net_resp.CT.network_out_len;
-    let net_short_write = net_ok && (net_wrote_all = false);
-    let net_failed = net_bad_status || net_short_write;
+    let net_failed =
+      client_network_step_failed net_resp net_read.network_read_written;
     if net_failed {
       let result = {
         driver_workflow_status = DriverWorkflowStepFailed;
@@ -270,6 +362,10 @@ fn rec driver_receive_application_data
         app_out_network));
       assert (pure (CT.client_end_to_end_invariant 'st0 ==>
         CT.client_end_to_end_invariant st_network));
+      assert (pure (
+        B.length (CT.response_app_out net_resp app_out_network) == 0));
+      assert (pure (client_receive_workflow_application_log
+        'st0 st_network result app_out_network));
       rewrite (top_driver_exactly
         d
         st_network
@@ -286,6 +382,8 @@ fn rec driver_receive_application_data
       network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len =
       0sz;
     if (app_ready = false) {
+      assert (pure (net_resp.CT.app_out_len <> 0sz));
+      assert (pure (SZ.v net_resp.CT.app_out_len > 0));
       assert (pure (client_buffered_network_io_step_correct
         st_network
         network
@@ -331,6 +429,10 @@ fn rec driver_receive_application_data
       assert (pure (B.length app_out_network == SZ.v app_out_len));
       assert (pure (CT.client_end_to_end_invariant 'st0 ==>
         CT.client_end_to_end_invariant st_network));
+      assert (pure (
+        B.length (CT.response_app_out net_resp app_out_network) > 0));
+      assert (pure (client_receive_workflow_application_log
+        'st0 st_network result app_out_network));
       rewrite (top_driver_exactly
         d
         st_network
@@ -348,7 +450,7 @@ fn rec driver_receive_application_data
          close_notify. Report this to the caller directly instead of
          draining local actions (none is legal once ControlClosed) and
          recursing until [fuel] is exhausted. *)
-      assert (pure (st_network.CS.cs_model.CS.model_control == CS.ControlClosed));
+      lemma_control_snapshot_closed snapshot st_network;
       assert (pure (client_buffered_network_io_step_correct
         st_network
         network
@@ -396,6 +498,15 @@ fn rec driver_receive_application_data
       assert (pure (B.length app_out_network == SZ.v app_out_len));
       assert (pure (CT.client_end_to_end_invariant 'st0 ==>
         CT.client_end_to_end_invariant st_network));
+      assert (pure (net_resp.CT.app_out_len == 0sz));
+      Seq.lemma_len_slice app_out_network 0 0;
+      assert (pure (
+        CT.response_app_out net_resp app_out_network ==
+          Seq.slice app_out_network 0 0));
+      assert (pure (
+        B.length (CT.response_app_out net_resp app_out_network) == 0));
+      assert (pure (client_receive_workflow_application_log
+        'st0 st_network result app_out_network));
       rewrite (top_driver_exactly
         d
         st_network
@@ -408,6 +519,11 @@ fn rec driver_receive_application_data
           result.driver_workflow_rx_len);
       result
     } else {
+      assert (pure (
+        B.length (CT.response_app_out net_resp app_out_network) == 0));
+      assert (pure (
+        TChannel.application_log st_network ==
+          TChannel.application_log 'st0));
       let local =
         top_driver_process_one_local_action
           d
@@ -439,6 +555,12 @@ fn rec driver_receive_application_data
         st_network.CS.cs_model.CS.model_config));
       assert (pure (st_local.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config));
+      assert (pure (
+        TChannel.application_log st_local ==
+          TChannel.application_log st_network));
+      assert (pure (
+        TChannel.application_log st_local ==
+          TChannel.application_log 'st0));
       if local.ready_local_processed {
         assert (pure (local.ready_local_processed == true));
         assert (pure (local.ready_local_processed == true ==>
@@ -511,6 +633,8 @@ fn rec driver_receive_application_data
         assert (pure (B.length app_out_local == SZ.v app_out_len));
         assert (pure (CT.client_end_to_end_invariant 'st0 ==>
           CT.client_end_to_end_invariant st_local));
+        assert (pure (client_receive_workflow_application_log
+          'st0 st_local result app_out_local));
         rewrite (top_driver_exactly
           d
           st_local
@@ -525,6 +649,23 @@ fn rec driver_receive_application_data
       } else {
         let next_fuel = SZ.sub fuel 1sz;
         assert (pure (SZ.v next_fuel < SZ.v fuel));
+        assert (pure (B.length raw_network == SZ.v raw_capacity));
+        assert (pure (
+          SZ.v network.buffered_network_io_buffered.buffered_network_new_len <=
+            SZ.v raw_capacity));
+        assert (pure (
+          B.length buffered_network ==
+            SZ.v network.buffered_network_io_buffered.buffered_network_new_len));
+        assert (pure (Seq.equal buffered_network
+          (Seq.slice raw_network 0
+            (SZ.v network.buffered_network_io_buffered.buffered_network_new_len))));
+        assert (pure (B.length network_out_local == SZ.v network_out_len));
+        assert (pure (B.length auth_leaf_der_local == SZ.v auth_leaf_der_len));
+        assert (pure (
+          B.length auth_payload_local == SZ.v certificate_public_key_len));
+        assert (pure (B.length auth_cv_input_local == SZ.v auth_cv_input_len));
+        assert (pure (B.length auth_signature_local == SZ.v auth_signature_len));
+        assert (pure (B.length app_out_local == SZ.v app_out_len));
         driver_receive_application_data
           d
           empty_payload
@@ -561,7 +702,8 @@ fn run
   (fuel:SZ.t)
   requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to out 'old_out **
-           pure (B.length 'old_out == SZ.v out_len)
+           pure (B.length 'old_out == SZ.v out_len /\
+                 L.max_record_fragment_len <= SZ.v out_len)
   returns result:client_receive_result
   ensures exists* st1 received1 sent1 out_bytes.
           client_driver_connected d st1 received1 sent1 **
@@ -574,6 +716,16 @@ fn run
           client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                 client_driver_sent_log_exact st1 sent1 /\
                 client_driver_received_log_accounted st1 received1 /\
+                TChannel.application_log st1 ==
+                  (if result.client_receive_status == DriverWorkflowOk
+                   then
+                     CI.append_received
+                       (TChannel.application_log 'st0)
+                       (Seq.slice
+                         out_bytes
+                         0
+                         (SZ.v result.client_receive_len))
+                   else TChannel.application_log 'st0) /\
                 (exists obs app_out.
                   client_driver_receive_correct
                    'st0
@@ -716,11 +868,17 @@ fn run
       let app_fits = SZ.lte copy_len out_len;
       let app_src_fits = SZ.lte copy_len driver_app_out_capacity;
       let workflow_ok = workflow.driver_workflow_status = DriverWorkflowOk;
+      CChannel.lemma_receive_observation_app_out_length
+        'st0
+        st1
+        (client_driver_workflow_observation workflow)
+        app_out_bytes;
       if (workflow_ok && app_fits && app_src_fits) {
         A.pts_to_len (V.vec_to_array d.client_driver_app_out);
         A.pts_to_len out;
         assert (pure (SZ.v copy_len <= SZ.v out_len));
-        assert (pure (SZ.v copy_len <= B.length app_out_bytes));
+        assert (pure (workflow_ok ==>
+          SZ.v copy_len <= B.length app_out_bytes));
         assert (pure (A.length (V.vec_to_array d.client_driver_app_out) == B.length app_out_bytes));
         assert (pure (A.length out == SZ.v out_len));
         assert (pure (SZ.v copy_len <= A.length (V.vec_to_array d.client_driver_app_out)));
@@ -730,7 +888,8 @@ fn run
           assert (pts_to out out_bytes);
         A.pts_to_len out;
         assert (pure (B.length out_bytes == SZ.v out_len));
-        assert (pure (SZ.v copy_len <= B.length app_out_bytes));
+        assert (pure (workflow_ok ==>
+          SZ.v copy_len <= B.length app_out_bytes));
         assert (pure (Seq.equal
           (CT.response_app_out response app_out_bytes)
           (Seq.slice app_out_bytes 0 (SZ.v copy_len))));
@@ -760,6 +919,12 @@ fn run
           (client_driver_workflow_observation workflow)
           app_out_bytes
           out_bytes));
+        assert (pure (client_receive_workflow_application_log
+          'st0 st1 workflow app_out_bytes));
+        assert (pure (TChannel.application_log st1 ==
+          CI.append_received
+           (TChannel.application_log 'st0)
+           (Seq.slice out_bytes 0 (SZ.v receive_result.client_receive_len))));
         assert (pure (exists obs app_out.
           client_driver_receive_correct
             'st0
@@ -822,6 +987,23 @@ fn run
             if workflow_ok then DriverWorkflowStepFailed else workflow.driver_workflow_status;
           client_receive_len = 0sz;
         };
+        assert (pure (workflow_ok ==>
+          SZ.v copy_len <= B.length app_out_bytes));
+        assert (pure (
+          B.length app_out_bytes == SZ.v driver_app_out_capacity));
+        assert (pure (
+          SZ.v driver_app_out_capacity == L.max_record_fragment_len));
+        assert (pure (workflow_ok ==> SZ.v copy_len <= SZ.v out_len));
+        assert (pure (workflow_ok ==> app_fits == true));
+        assert (pure (workflow_ok ==> app_src_fits == true));
+        assert (pure (workflow_ok == false));
+        assert (pure (receive_result.client_receive_status ==
+          workflow.driver_workflow_status));
+        assert (pure (client_receive_workflow_application_log
+          'st0 st1 workflow app_out_bytes));
+        assert (pure (
+          TChannel.application_log st1 ==
+            TChannel.application_log 'st0));
         assert (pure (client_driver_receive_status_correct
           receive_result
           (client_driver_workflow_observation workflow)

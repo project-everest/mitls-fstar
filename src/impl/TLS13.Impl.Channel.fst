@@ -9,13 +9,37 @@ module L = FStar.List.Tot
 
 open FStar.List.Tot
 
+let rec observable_received (messages:list B.bytes)
+  : GTot (list B.bytes) (decreases messages)
+=
+  match messages with
+  | [] -> []
+  | message :: rest ->
+    if B.length message == 0
+    then observable_received rest
+    else message :: observable_received rest
+
 let application_log (st:CS.connection_state)
-  : CI.application_log B.bytes =
+  : GTot (CI.application_log B.bytes) =
   {
     CI.sent = st.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent;
     CI.received =
-      st.CS.cs_model.CS.model_application.CS.app_log.CL.app_received;
+      observable_received
+        st.CS.cs_model.CS.model_application.CS.app_log.CL.app_received;
   }
+
+let rec lemma_observable_received_append
+  (left right:list B.bytes)
+  : Lemma
+      (ensures
+        observable_received (left @ right) ==
+          observable_received left @ observable_received right)
+      (decreases left)
+=
+  match left with
+  | [] -> ()
+  | message :: rest ->
+    lemma_observable_received_append rest right
 
 let event_log_extends
   (old_events:list CS.conn_event)
@@ -109,6 +133,9 @@ let lemma_application_log_extends_from_event_logs
   lemma_app_received_messages_append
     st0.CS.cs_event_log
     (Ghost.reveal delta);
+  lemma_observable_received_append
+    (CSL.app_received_messages st0.CS.cs_event_log)
+    (CSL.app_received_messages (Ghost.reveal delta));
   assert (exists sent_delta received_delta.
     (application_log st1).CI.sent ==
       (application_log st0).CI.sent @ sent_delta /\

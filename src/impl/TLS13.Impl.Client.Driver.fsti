@@ -7,10 +7,14 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CI = Common.ChannelImplementation
+module CP = TLS13.Impl.Client.CanonicalProtocol
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
+module CTypes = TLS13.Impl.CanonicalTypes
+module CW = TLS13.Spec.Endpoint.Wire
 module DS = TLS13.Impl.Client.Driver.State
+module EAPI = TLS13.Spec.Endpoint.API
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -94,6 +98,14 @@ let channel_send_succeeded (status:driver_workflow_status) : bool =
   | DS.DriverWorkflowOk -> true
   | _ -> false
 
+let channel_receive_succeeded (result:client_receive_result) : bool =
+  match result.DS.client_receive_status with
+  | DS.DriverWorkflowOk -> true
+  | _ -> false
+
+let channel_receive_length (result:client_receive_result) : SZ.t =
+  result.DS.client_receive_len
+
 fn new_client
   (server_name:array U8.t)
   (server_name_len:SZ.t)
@@ -139,21 +151,13 @@ fn connect
            pts_to connect_host 'connect_host_bytes **
            pure (B.length 'connect_host_bytes == SZ.v connect_host_len)
   returns status:driver_workflow_status
-  ensures exists* st1.
-          pts_to connect_host 'connect_host_bytes **
+  ensures pts_to connect_host 'connect_host_bytes **
           (match status with
            | DS.DriverWorkflowOk ->
-             exists* received sent.
-               client_driver_connected d st1 received sent **
-               pure (client_driver_application_ready st1 /\
-                     st1.CS.cs_model.CS.model_config ==
-                       'st0.CS.cs_model.CS.model_config /\
-                     client_driver_sent_log_exact st1 sent /\
-                     client_driver_received_log_accounted st1 received /\
-                     client_driver_received_log_exact_prefix st1 received /\
-                     client_driver_received_no_read_ahead st1 received)
+             exists* raw_received raw_sent app_log.
+               DS.client_channel_inv d raw_received raw_sent app_log
            | _ ->
-             client_driver_closed d st1)
+             exists* st1. client_driver_closed d st1)
 
 (**
   Sends [payload] as one TLS 1.3 application-data record. Payloads above the
@@ -193,56 +197,64 @@ fn send
 
 fn receive
   (d:client_driver)
+  (raw_received0:Ghost.erased B.bytes)
+  (raw_sent0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
   (out:array U8.t)
+  (old_output:Ghost.erased B.bytes)
   (out_len:SZ.t)
   (local_fuel:SZ.t)
   (fuel:SZ.t)
-  requires client_driver_connected d 'st0 'received0 'sent0 **
-           pts_to out 'old_out **
-           pure (B.length 'old_out == SZ.v out_len)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal raw_received0)
+             (Ghost.reveal raw_sent0)
+             (Ghost.reveal app_log0) **
+           pts_to out (Ghost.reveal old_output) **
+           pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
   returns result:client_receive_result
-  ensures exists* st1 received1 sent1 out_bytes.
-          client_driver_connected d st1 received1 sent1 **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v result.DS.client_receive_len <= SZ.v out_len /\
-                st1.CS.cs_model.CS.model_config ==
-                  'st0.CS.cs_model.CS.model_config /\
-                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                client_driver_received_log_accounted
-                  'st0
-                  (Ghost.reveal 'received0) /\
-                client_driver_sent_log_exact st1 sent1 /\
-                client_driver_received_log_accounted st1 received1 /\
-                (exists obs app_out.
-                  client_driver_receive_correct
-                    'st0
-                    st1
-                    result
-                    obs
-                    app_out
-                    out_bytes))
+  ensures exists* raw_received1 raw_sent1 app_log1 output.
+          DS.client_channel_inv d raw_received1 raw_sent1 app_log1 **
+          pts_to out output **
+          pure (
+            B.length output == SZ.v out_len /\
+            SZ.v result.DS.client_receive_len <= SZ.v out_len /\
+            CI.receive_transition
+              channel_message_of_bytes
+              channel_receive_succeeded
+              channel_receive_length
+              result
+              output
+              (Ghost.reveal raw_received0)
+              (Ghost.reveal raw_sent0)
+              (Ghost.reveal app_log0)
+              raw_received1
+              raw_sent1
+              app_log1)
 
 fn close
   (d:client_driver)
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
   (wait_for_peer:bool)
   (fuel:SZ.t)
-  requires client_driver_connected d 'st0 'received0 'sent0
+  requires DS.client_channel_inv
+    d
+    (Ghost.reveal raw_received)
+    (Ghost.reveal raw_sent)
+    (Ghost.reveal app_log)
   returns status:driver_workflow_status
   ensures exists* st1.
           client_driver_closed d st1 **
-          pure (st1.CS.cs_model.CS.model_config ==
-                  'st0.CS.cs_model.CS.model_config /\
-                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                client_driver_received_log_accounted
-                  'st0
-                  (Ghost.reveal 'received0) /\
-                (exists st_close_notify.
-                  client_driver_close_correct
-                    'st0
-                    st_close_notify
-                    status
-                    wait_for_peer))
+          pure (exists st0 st_close_notify.
+            st1.CS.cs_model.CS.model_config ==
+              st0.CS.cs_model.CS.model_config /\
+            client_driver_close_correct
+              st0
+              st_close_notify
+              status
+              wait_for_peer)
 
 (**
   Safely disposes a connected transport after a workflow failure without
@@ -250,5 +262,26 @@ fn close
 **)
 fn abort
   (d:client_driver)
-  requires client_driver_connected d 'st0 'received0 'sent0
-  ensures client_driver_closed d 'st0
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires DS.client_channel_inv
+    d
+    (Ghost.reveal raw_received)
+    (Ghost.reveal raw_sent)
+    (Ghost.reveal app_log)
+  ensures exists* st. client_driver_closed d st
+
+noextract
+val client_channel_implementation
+  : CI.channel_implementation
+      DS.client_driver
+      CP.canonical_client
+      CS.connection_state
+      CW.wire_message
+      CTypes.client_local_event
+      EAPI.local_output
+      B.bytes
+      DS.driver_workflow_status
+      DS.client_receive_result
+      CP.client_protocol_implementation

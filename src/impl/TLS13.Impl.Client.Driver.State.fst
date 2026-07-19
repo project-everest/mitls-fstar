@@ -107,6 +107,7 @@ type driver_workflow_status =
   | DriverWorkflowExhausted
   | DriverWorkflowClosed
   | DriverWorkflowPayloadTooLarge
+  | DriverWorkflowOutputBufferTooSmall
 
 noextract
 let client_driver_send_status_correct

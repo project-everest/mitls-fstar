@@ -88,4 +88,7 @@ fn handle_application_data
                    resp
                    'old_network_out
                    app_out_bytes) /\
+                (SZ.v resp.CT.app_out_len > 0 ==>
+                 resp.CT.status == CT.StepOk /\
+                 resp.CT.network_out_len == 0sz) /\
                 (resp.CT.status == CT.OutputBufferTooSmall ==> False))
