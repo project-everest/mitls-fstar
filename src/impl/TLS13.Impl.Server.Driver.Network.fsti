@@ -225,6 +225,9 @@ fn read_process_network_until_ready
            app_out_bytes **
           pure (st1.CS.cs_model.CS.model_config ==
                  'st0.CS.cs_model.CS.model_config /\
+            (result.server_driver_network_loop_exhausted == true ==>
+              st1 == 'st0 /\
+              Seq.equal sent' (Ghost.reveal 'sent)) /\
             (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
               ST.NeedMoreInput /\

@@ -6,10 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Spec.Endpoint.Wire
-module EAPI = TLS13.Spec.Endpoint.API
 module ES = TLS13.Spec.Endpoint.Server
 module A = Pulse.Lib.Array
 module Bounds = TLS13.Impl.ConnectionState.Bounds
@@ -22,7 +19,6 @@ module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
-module ID = FStar.IndefiniteDescription
 module IM = TLS13.Impl.Messages
 module IO = Common.TCP
 module Mat = TLS13.Impl.Server.Material
@@ -30,14 +26,13 @@ module M = TLS13.Messages
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module S = TLS13.Impl.Server
 module DS = TLS13.Impl.Server.Driver.State
 module DT = TLS13.Impl.Server.Driver.Transport
 module DN = TLS13.Impl.Server.Driver.Network
 module DL = TLS13.Impl.Server.Driver.Local
 module DH = TLS13.Impl.Server.Driver.Handshake
-module SQueries = TLS13.Impl.Server.CanonicalQueries
-module EP = TLS13.Impl.Server.Endpoint
 module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
@@ -53,7 +48,6 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module SP = TLS13.Impl.Server.CanonicalProtocol
-module WFSM = Common.WireFormatStateMachine
 module SS = TLS13.Impl.Server.Send
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
@@ -66,441 +60,14 @@ noextract
 let server_driver_canonical_progress = DS.server_driver_canonical_progress
 
 noextract
-let server_driver_endpoint_config = DS.server_driver_endpoint_config
-
-noextract
-let server_driver_endpoint_frame = DS.server_driver_endpoint_frame
-
-noextract
-let server_driver_endpoint_workflow_frame
-  (d: server_driver)
-  (certificate_chain_len: SZ.t)
-  (certificate_chain_len_proof:
-    (certificate_chain:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
-  (certificate_chain_len_bound:
-    Ghost.erased
-      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
-  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
-  (private_key: V.vec U8.t)
-  (material_deferred_ready:
-    (st:Ghost.erased CS.connection_state ->
-    action:SQueries.server_deferred_action ->
-      Ghost.erased
-        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
-         EP.server_endpoint_material_bytes_match_state
-           (Ghost.reveal material_spec)
-           (Ghost.reveal st))))
-  : f:EP.server_endpoint_frame{
-      f.EP.server_ep_query.SQueries.server_query_network_app_out ==
-        V.vec_to_array d.server_driver_app_out /\
-      SZ.v f.EP.server_ep_query.SQueries.server_query_network_app_out_len ==
-        SZ.v DS.driver_app_out_capacity /\
-      f.EP.server_ep_query.SQueries.server_query_local_payload ==
-        V.vec_to_array d.server_driver_empty_payload /\
-      SZ.v f.EP.server_ep_query.SQueries.server_query_local_payload_len == 0 /\
-      f.EP.server_ep_query.SQueries.server_query_local_app_out ==
-        V.vec_to_array d.server_driver_local_app_out /\
-      SZ.v f.EP.server_ep_query.SQueries.server_query_local_app_out_len ==
-        SZ.v DS.driver_app_out_capacity /\
-      f.EP.server_ep_raw == d.server_driver_raw /\
-      SZ.v f.EP.server_ep_raw_len == SZ.v DS.driver_rx_capacity /\
-      f.EP.server_ep_network_out == d.server_driver_network_out /\
-      SZ.v f.EP.server_ep_network_out_len == SZ.v DS.driver_network_out_capacity /\
-      f.EP.server_ep_material == d.server_driver_material_payload /\
-      SZ.v f.EP.server_ep_material_len == SZ.v DS.driver_material_capacity /\
-      f.EP.server_ep_material_spec == material_spec /\
-      f.EP.server_ep_private == private_key} =
-  server_driver_endpoint_frame
-    d
-    (V.vec_to_array d.server_driver_app_out)
-    DS.driver_app_out_capacity
-    (V.vec_to_array d.server_driver_empty_payload)
-    0sz
-    (V.vec_to_array d.server_driver_local_app_out)
-    DS.driver_app_out_capacity
-    certificate_chain_len
-    certificate_chain_len_proof
-    certificate_chain_len_bound
-    material_spec
-    private_key
-    material_deferred_ready
-
-noextract
 let server_driver_wire_logs_match = DS.server_driver_wire_logs_match
 
 noextract
 let server_driver_live = DS.server_driver_live
-
-noextract
-let server_driver_endpoint_live
-  (d:server_driver)
-  (st:CS.connection_state)
-  (certificate_chain:B.bytes)
-  (credential_identity:CS.server_credential_identity)
-  (material_spec:Ghost.erased EP.server_endpoint_material_spec)
-  : slprop =
-  SP.server_invariant (server_driver_canonical d) B.empty B.empty st **
-  Box.pts_to d.server_driver_channel DS.no_channel **
-  Box.pts_to d.server_driver_buffered_len 0sz **
-  exists* empty_payload raw network_out material cv_input signature app_out local_app_out.
-    V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
-    V.pts_to d.server_driver_raw #1.0R raw **
-    V.pts_to d.server_driver_network_out #1.0R network_out **
-    V.pts_to d.server_driver_material_payload #1.0R material **
-    V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
-    V.pts_to d.server_driver_signature #1.0R signature **
-    V.pts_to d.server_driver_app_out #1.0R app_out **
-    V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
-    pure (
-      ST.server_end_to_end_invariant st /\
-      DS.server_driver_config_matches_credentials
-        st
-        certificate_chain
-        credential_identity /\
-      DS.server_driver_supported_profile_selection st credential_identity /\
-      server_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
-      st == Ghost.reveal d.server_driver_initial /\
-      B.length empty_payload == 0 /\
-      B.length raw == SZ.v DS.driver_rx_capacity /\
-      B.length network_out == SZ.v DS.driver_network_out_capacity /\
-      B.length material == SZ.v DS.driver_material_capacity /\
-      Seq.equal material (Ghost.reveal material_spec) /\
-      B.length cv_input == SZ.v DS.driver_certificate_verify_input_capacity /\
-      B.length signature == SZ.v DS.driver_signature_capacity /\
-      B.length app_out == SZ.v DS.driver_app_out_capacity /\
-      B.length local_app_out == SZ.v DS.driver_app_out_capacity /\
-      Bounds.max_certificate_verify_input_len <=
-        SZ.v DS.driver_certificate_verify_input_capacity /\
-      IM.max_signature_len <= SZ.v DS.driver_signature_capacity /\
-      IM.max_record_fragment_len <= SZ.v DS.driver_app_out_capacity /\
-      V.is_full_vec d.server_driver_empty_payload /\
-      V.is_full_vec d.server_driver_raw /\
-      V.is_full_vec d.server_driver_network_out /\
-      V.is_full_vec d.server_driver_material_payload /\
-      V.is_full_vec d.server_driver_certificate_verify_input /\
-      V.is_full_vec d.server_driver_signature /\
-      V.is_full_vec d.server_driver_app_out /\
-      V.is_full_vec d.server_driver_local_app_out)
-
 noextract
 let server_driver_connected = DS.server_driver_connected
-
-noextract
-let server_driver_endpoint_connected = DS.server_driver_endpoint_connected
-
-noextract
-ghost fn server_driver_endpoint_connected_valid_byte_trace
-  (d:server_driver)
-  (cfg:SQueries.server_next_local_action_config)
-  (frame:EP.server_endpoint_frame)
-  (canonical_received:Ghost.erased B.bytes)
-  (canonical_sent:Ghost.erased B.bytes)
-  (st:Ghost.erased CS.connection_state)
-  requires DS.server_driver_endpoint_connected
-              d
-              cfg
-              frame
-              (Ghost.reveal st)
-              'certificate_chain
-              'credential_identity
-              (Ghost.reveal canonical_received)
-              (Ghost.reveal canonical_sent)
-  ensures DS.server_driver_endpoint_connected
-            d
-            cfg
-            frame
-            (Ghost.reveal st)
-            'certificate_chain
-            'credential_identity
-            (Ghost.reveal canonical_received)
-            (Ghost.reveal canonical_sent) **
-          pure (WFSM.valid_byte_trace
-            (ES.server_system #CTypes.server_local_event
-              (Ghost.reveal
-                (DS.server_driver_canonical d).SP.canonical_server_initial))
-            (Ghost.reveal canonical_received)
-            (Ghost.reveal st)
-            (Ghost.reveal canonical_sent)
-            Seq.empty)
-{
-  unfold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal canonical_received)
-    (Ghost.reveal canonical_sent));
-  with ch buffered_len cv_input signature. _;
-  SP.server_invariant_valid
-    (DS.server_driver_canonical d)
-    canonical_received
-    canonical_sent
-    st;
-  with ch buffered_len cv_input signature.
-  fold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal canonical_received)
-    (Ghost.reveal canonical_sent))
-}
-
 noextract
 let server_driver_closed = DS.server_driver_closed
-
-let lemma_server_local_process_correct_received_unchanged
-  (initial:ES.server_initial_state)
-  (ev:CTypes.server_local_event)
-  (old_out:B.bytes)
-  (out_contents:B.bytes)
-  (out_len:SZ.t)
-  (received0:B.bytes)
-  (sent0:B.bytes)
-  (st0:CS.connection_state)
-  (result:CPI.process_result)
-  (received1:B.bytes)
-  (sent1:B.bytes)
-  (st1:CS.connection_state)
-  (wire_outputs:list CW.wire_message)
-  (local_outputs:list EAPI.local_output)
-  : Lemma
-      (requires
-        CPI.local_process_correct
-          (ES.server_system #CTypes.server_local_event initial)
-          ev
-          old_out
-          out_contents
-          out_len
-          received0
-          sent0
-          st0
-          result
-          received1
-          sent1
-          st1
-          wire_outputs
-          local_outputs)
-      (ensures Seq.equal received1 received0)
-=
-  match result.CPI.process_status with
-  | CPI.StepOk -> ()
-  | CPI.NeedMoreInput
-  | CPI.ParseFailed ->
-    assert False
-  | CPI.OutputBufferTooSmall -> ()
-  | CPI.DecodeError
-  | CPI.IllegalTransition
-  | CPI.ConnectionFailed -> ()
-
-let lemma_server_driver_endpoint_local_wire_logs_match
-  (initial:ES.server_initial_state)
-  (st0:CS.connection_state)
-  (st1:CS.connection_state)
-  (canonical_received0:B.bytes)
-  (canonical_sent0:B.bytes)
-  (canonical_received1:B.bytes)
-  (canonical_sent1:B.bytes)
-  (transport_received:B.bytes)
-  (transport_sent:B.bytes)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
-  (ev:CTypes.server_local_event)
-  (old_out:B.bytes)
-  (out_contents:B.bytes)
-  (out_len:SZ.t)
-  (result:CPI.process_result)
-  (wire_outputs:list CW.wire_message)
-  (local_outputs:list EAPI.local_output)
-  : Lemma
-      (requires
-        SP.server_invariant_pure
-          initial
-          canonical_received0
-          canonical_sent0
-          st0 /\
-        SP.server_invariant_pure
-          initial
-          canonical_received1
-          canonical_sent1
-          st1 /\
-        ST.server_connection_control_not_failed st0 /\
-        DS.server_driver_wire_logs_match
-          st0
-          transport_received
-          transport_sent
-          buffered
-          buffered_len /\
-        CPI.local_process_correct
-          (ES.server_system #CTypes.server_local_event initial)
-          ev
-          old_out
-          out_contents
-          out_len
-          canonical_received0
-          canonical_sent0
-          st0
-          result
-          canonical_received1
-          canonical_sent1
-          st1
-          wire_outputs
-          local_outputs)
-      (ensures
-        DS.server_driver_wire_logs_match
-          st1
-          transport_received
-          canonical_sent1
-          buffered
-          buffered_len)
-=
-  let consumed =
-    ID.indefinite_description_ghost
-      B.bytes
-      (fun consumed ->
-        DS.server_driver_wire_logs_match_witness
-          st0
-          transport_received
-          transport_sent
-          consumed
-          buffered
-          buffered_len) in
-  assert (DS.server_driver_wire_logs_match_witness
-    st0
-    transport_received
-    transport_sent
-    (Ghost.reveal consumed)
-    buffered
-    buffered_len);
-  assert (Seq.equal
-    st0.CS.cs_wire_log.CL.raw_received
-    (Ghost.reveal consumed));
-  lemma_server_local_process_correct_received_unchanged
-    initial
-    ev
-    old_out
-    out_contents
-    out_len
-    canonical_received0
-    canonical_sent0
-    st0
-    result
-    canonical_received1
-    canonical_sent1
-    st1
-    wire_outputs
-    local_outputs;
-  assert (Seq.equal canonical_received1 canonical_received0);
-  assert (Seq.equal canonical_received0 st0.CS.cs_wire_log.CL.raw_received);
-  assert (Seq.equal canonical_received1 st1.CS.cs_wire_log.CL.raw_received);
-  assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received canonical_received1);
-  assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received st0.CS.cs_wire_log.CL.raw_received);
-  Seq.lemma_eq_elim
-    st1.CS.cs_wire_log.CL.raw_received
-    st0.CS.cs_wire_log.CL.raw_received;
-  assert (DS.logged_received_bytes_accounted
-    st1.CS.cs_wire_log.CL.raw_received
-    (Ghost.reveal consumed));
-  assert (Seq.equal
-    st1.CS.cs_wire_log.CL.raw_received
-    (Ghost.reveal consumed));
-  assert (DS.server_driver_wire_logs_match_witness
-    st1
-    transport_received
-    canonical_sent1
-    (Ghost.reveal consumed)
-    buffered
-    buffered_len);
-  assert (exists consumed1.
-    DS.server_driver_wire_logs_match_witness
-      st1
-      transport_received
-      canonical_sent1
-      consumed1
-      buffered
-      buffered_len)
-
-let lemma_server_driver_wire_logs_match_exists
-  (st:CS.connection_state)
-  (transport_received:B.bytes)
-  (transport_sent:B.bytes)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
-  : Lemma
-      (requires
-        DS.server_driver_wire_logs_match
-          st
-          transport_received
-          transport_sent
-          buffered
-          buffered_len)
-      (ensures
-        exists buffered'.
-          DS.server_driver_wire_logs_match
-            st
-            transport_received
-            transport_sent
-            buffered'
-            buffered_len)
-=
-  introduce exists (buffered':B.bytes).
-    DS.server_driver_wire_logs_match
-      st
-      transport_received
-      transport_sent
-      buffered'
-      buffered_len
-  with buffered
-  and ()
-
-ghost fn expose_server_invariant_pure
-  (srv:SP.canonical_server)
-  (received:Ghost.erased B.bytes)
-  (sent:Ghost.erased B.bytes)
-  (st:Ghost.erased CS.connection_state)
-requires
-  SP.server_invariant
-    srv
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    (Ghost.reveal st)
-ensures
-  SP.server_invariant
-    srv
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    (Ghost.reveal st) **
-  pure (SP.server_invariant_pure
-    (Ghost.reveal srv.SP.canonical_server_initial)
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    (Ghost.reveal st))
-{
-  unfold (SP.server_invariant
-    srv
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    (Ghost.reveal st));
-  with certificate_chain credential_identity. _;
-  assert (pure (SP.server_invariant_pure
-    (Ghost.reveal srv.SP.canonical_server_initial)
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    (Ghost.reveal st)));
-  with certificate_chain credential_identity.
-  fold (SP.server_invariant
-    srv
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    (Ghost.reveal st))
-}
-
 let lemma_server_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
   (received:B.bytes)
@@ -544,79 +111,6 @@ open TLS13.Impl.Server.Driver.State
 open TLS13.Impl.Server.Driver.Transport
 open TLS13.Impl.Server.Driver.Network
 open TLS13.Impl.Server.Driver.Local
-
-ghost fn server_driver_live_to_endpoint_live
-  (d:server_driver)
-  (st:Ghost.erased CS.connection_state)
-  (certificate_chain:Ghost.erased B.bytes)
-  (credential_identity:Ghost.erased CS.server_credential_identity)
-  requires server_driver_live
-             d
-             (Ghost.reveal st)
-             (Ghost.reveal certificate_chain)
-             (Ghost.reveal credential_identity) **
-           server_driver_canonical_progress d (Ghost.reveal st)
-           ** pure (Ghost.reveal st ==
-              Ghost.reveal
-                (server_driver_canonical d).SP.canonical_server_initial)
-  ensures exists* material_spec.
-            server_driver_endpoint_live
-              d
-              (Ghost.reveal st)
-              (Ghost.reveal certificate_chain)
-              (Ghost.reveal credential_identity)
-              material_spec
-{
-  unfold (server_driver_live
-    d
-    (Ghost.reveal st)
-    (Ghost.reveal certificate_chain)
-    (Ghost.reveal credential_identity));
-  unfold (server_driver_canonical_progress d (Ghost.reveal st));
-  unfold (server_driver_buffers d B.empty 0sz);
-  with empty_payload raw network_out material cv_input signature app_out local_app_out.
-    assert (V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
-            V.pts_to d.server_driver_raw #1.0R raw **
-            V.pts_to d.server_driver_network_out #1.0R network_out **
-            V.pts_to d.server_driver_material_payload #1.0R material **
-            V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
-            V.pts_to d.server_driver_signature #1.0R signature **
-            V.pts_to d.server_driver_app_out #1.0R app_out **
-            V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
-            pure (B.length empty_payload == 0 /\
-                  B.length raw == SZ.v driver_rx_capacity /\
-                  B.length network_out == SZ.v driver_network_out_capacity /\
-                  B.length material == SZ.v driver_material_capacity /\
-                  B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
-                  B.length signature == SZ.v driver_signature_capacity /\
-                  B.length app_out == SZ.v driver_app_out_capacity /\
-                  B.length local_app_out == SZ.v driver_app_out_capacity));
-  assert_norm (SZ.v driver_material_capacity == 64);
-  assert (pure (B.length material == 64));
-  let material_spec : Ghost.erased EP.server_endpoint_material_spec = Ghost.hide material;
-  assert (pure (Seq.equal material (Ghost.reveal material_spec)));
-  assert (pure (SP.server_invariant_pure
-    (Ghost.reveal d.server_driver_initial)
-    B.empty
-    B.empty
-    (Ghost.reveal st)));
-  assert (pure (SP.server_config_matches_credentials
-    (Ghost.reveal d.server_driver_initial)
-    (Ghost.reveal certificate_chain)
-    (Ghost.reveal credential_identity)));
-  fold (SP.server_invariant
-    (server_driver_canonical d)
-    B.empty
-    B.empty
-    (Ghost.reveal st));
-  fold (server_driver_endpoint_live
-    d
-    (Ghost.reveal st)
-    (Ghost.reveal certificate_chain)
-    (Ghost.reveal credential_identity)
-    material_spec);
-}
-
 open TLS13.Impl.Server.Driver.Handshake
 
 let lemma_control_snapshot_app_ready
@@ -634,6 +128,40 @@ let lemma_control_snapshot_app_ready
   match st.CS.cs_model.CS.model_control with
   | CS.ControlApplicationData -> ()
   | _ -> assert False
+
+let lemma_control_snapshot_closed
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        CR.control_snapshot_matches snapshot st /\
+        snapshot.CR.snapshot_control_tag == 4uy)
+      (ensures
+        st.CS.cs_model.CS.model_control == CS.ControlClosed)
+=
+  assert_norm (U8.v 4uy == 4);
+  assert (U8.v snapshot.CR.snapshot_control_tag == 4);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlClosed -> ()
+  | _ -> assert False
+
+let lemma_control_snapshot_not_closed
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        CR.control_snapshot_matches snapshot st /\
+        snapshot.CR.snapshot_control_tag <> 4uy)
+      (ensures
+        st.CS.cs_model.CS.model_control <> CS.ControlClosed)
+=
+  assert_norm (U8.v 4uy == 4);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlClosed ->
+    assert (U8.v snapshot.CR.snapshot_control_tag == 4);
+    assert (snapshot.CR.snapshot_control_tag == 4uy);
+    assert False
+  | _ -> ()
 
 let lemma_application_ready_close_notify_ready
   (st:CS.connection_state)
@@ -662,6 +190,67 @@ let lemma_application_ready_close_notify_ready
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
     assert False
 
+let lemma_application_ready_send_ready
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  : Lemma
+      (requires
+        server_driver_application_ready st /\
+        B.length payload <= SM.max_application_data_fragment_len)
+      (ensures
+        ST.server_local_event_input_ready
+          st
+          ST.LocalSendApplicationData
+          payload)
+=
+  assert (ST.server_end_to_end_invariant st);
+  assert (st.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+  assert (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    st.CS.cs_model);
+  assert_norm (CS.traffic_label_for_endpoint_direction
+    CS.ServerEndpoint
+    CS.TrafficWrite == CS.ServerTraffic);
+  match st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic with
+  | Some _ -> ()
+  | None -> assert False
+
+(**
+  One verified network-processing step, abstracting over the concrete buffer
+  response and sent-log prefix/suffix.  This is the single-step relation whose
+  reflexive-transitive closure is [server_driver_network_reaches].
+**)
+noextract
+let server_driver_network_step
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : prop =
+  exists (r:ST.server_buffer_response) (s s':B.bytes).
+    server_driver_network_process_correct st0 st1 r s s'
+
+(**
+  Concrete witness for [server_driver_network_reaches]: a path [st0 -> ... -> st1]
+  where each hop is a verified network-processing step.  The empty path witnesses
+  reflexivity ([st0 == st1]).
+**)
+noextract
+let rec is_network_path
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (path:list CS.connection_state)
+  : Tot prop (decreases path) =
+  match path with
+  | [] -> st0 == st1
+  | hd :: tl -> server_driver_network_step st0 hd /\ is_network_path hd st1 tl
+
+(* Realises the abstract [server_driver_network_reaches] from the interface. *)
+let server_driver_network_reaches
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  : prop =
+  exists (path:list CS.connection_state). is_network_path st0 st1 path
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -671,9 +260,7 @@ fn new_server
   requires pts_to certificate_chain 'certificate_chain_bytes **
            pts_to private_key 'private_key_bytes **
            pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
-                 B.length 'private_key_bytes == SZ.v private_key_len /\
-                 B.length 'certificate_chain_bytes <=
-                   Bounds.max_server_certificate_chain_len)
+                 B.length 'private_key_bytes == SZ.v private_key_len)
   returns result: option server_driver
   ensures pts_to certificate_chain 'certificate_chain_bytes **
           pts_to private_key 'private_key_bytes **
@@ -704,14 +291,37 @@ fn new_server
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
                          credential_identity) /\
+                     B.length 'certificate_chain_bytes <=
+                       Bounds.max_server_certificate_chain_len /\
                      Ghost.reveal
                        (server_driver_canonical d).SP.canonical_server_initial ==
                        CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
                          credential_identity)
            | None ->
-             emp)
+             emp) **
+          pure
+           (not (B.length 'certificate_chain_bytes <=
+                   Bounds.max_server_certificate_chain_len) ==>
+            result == None)
 {
+  (* Totalization: accept an arbitrary-length certificate chain at the API
+     boundary and reject (as [None], with all input resources preserved) any
+     chain that exceeds the authoritative [max_server_certificate_chain_len]
+     bound.  The check runs BEFORE any allocation or credential construction, so
+     the oversized path frees nothing and simply returns the untouched inputs.
+     On the in-bound path [within_bound == true] gives
+     [SZ.v certificate_chain_len <= SZ.v max_server_certificate_chain_len_sz],
+     and the [max_server_certificate_chain_len_sz] refinement rewrites the RHS to
+     [max_server_certificate_chain_len]; together with the [requires] equation
+     [B.length 'certificate_chain_bytes == SZ.v certificate_chain_len] this
+     re-establishes the bound that the credential/state constructors and the
+     strengthened [Some] postcondition rely on. *)
+  let within_bound =
+    SZ.lte certificate_chain_len Bounds.max_server_certificate_chain_len_sz;
+  if within_bound {
+  assert (pure (B.length 'certificate_chain_bytes <=
+                Bounds.max_server_certificate_chain_len));
   let material_payload = V.alloc 0uy DS.driver_material_capacity;
   V.to_array_pts_to material_payload;
   let material_ok =
@@ -918,324 +528,10 @@ fn new_server
     }
   }
   }
-}
-
-noextract
-fn accept_endpoint
-  (d:server_driver)
-  (bind_host:array U8.t)
-  (bind_host_len:SZ.t)
-  (port:U16.t)
-  (fuel:SZ.t)
-  (certificate_chain_len:SZ.t)
-  (certificate_chain_len_proof:
-    (certificate_chain:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
-  (certificate_chain_len_bound:
-    Ghost.erased
-      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
-  (material_spec:Ghost.erased EP.server_endpoint_material_spec)
-  (private_key:V.vec U8.t)
-  (material_deferred_ready:
-    (st:Ghost.erased CS.connection_state ->
-    action:SQueries.server_deferred_action ->
-      Ghost.erased
-        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
-         EP.server_endpoint_material_bytes_match_state
-           (Ghost.reveal material_spec)
-           (Ghost.reveal st))))
-  requires server_driver_endpoint_live d 'st0 'certificate_chain 'credential_identity material_spec **
-           pts_to bind_host 'bind_host_bytes **
-           V.pts_to private_key #1.0R 'private_key_bytes **
-           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
-                 B.length 'private_key_bytes == 32 /\
-                 Seq.equal 'private_key_bytes
-                   (EP.server_endpoint_private_bytes_of_material
-                     (Ghost.reveal material_spec)))
-  returns result:option EP.server_endpoint_run_result
-  ensures pts_to bind_host 'bind_host_bytes **
-          (let cfg = server_driver_endpoint_config d in
-           let frame =
-             server_driver_endpoint_workflow_frame
-               d
-               certificate_chain_len
-               certificate_chain_len_proof
-               certificate_chain_len_bound
-               material_spec
-               private_key
-               material_deferred_ready in
-           match result with
-           | None ->
-             server_driver_endpoint_live d 'st0 'certificate_chain 'credential_identity material_spec **
-             V.pts_to private_key #1.0R 'private_key_bytes
-           | Some _ ->
-             exists* st1 received1 sent1.
-               server_driver_endpoint_connected
-                 d
-                 cfg
-                 frame
-                 st1
-                 'certificate_chain
-                 'credential_identity
-                 received1
-                 sent1)
-{
-  let cfg = server_driver_endpoint_config d;
-  let frame =
-    server_driver_endpoint_workflow_frame
-      d
-      certificate_chain_len
-      certificate_chain_len_proof
-      certificate_chain_len_bound
-      material_spec
-      private_key
-      material_deferred_ready;
-  unfold (server_driver_endpoint_live d 'st0 'certificate_chain 'credential_identity material_spec);
-  with empty_payload raw network_out material cv_input signature app_out local_app_out. _;
-  let listener_opt = IO.listen_tcp bind_host bind_host_len port;
-  match listener_opt {
-    None -> {
-      with empty_payload raw network_out material cv_input signature app_out local_app_out.
-      fold (server_driver_endpoint_live d 'st0 'certificate_chain 'credential_identity material_spec);
-      None
-    }
-    Some listener -> {
-      let ch_opt = IO.accept_tcp listener;
-      IO.close_listener listener;
-      match ch_opt {
-        None -> {
-          with empty_payload raw network_out material cv_input signature app_out local_app_out.
-          fold (server_driver_endpoint_live d 'st0 'certificate_chain 'credential_identity material_spec);
-          None
-        }
-        Some ch -> {
-          Box.(d.server_driver_channel := Some ch);
-          V.to_array_pts_to d.server_driver_empty_payload;
-          V.to_array_pts_to d.server_driver_app_out;
-          V.to_array_pts_to d.server_driver_local_app_out;
-          assert (pure (forall (i:nat{i < B.length empty_payload}).
-            Seq.index empty_payload i == Seq.index B.empty i));
-          Seq.lemma_eq_intro empty_payload B.empty;
-          Seq.lemma_eq_elim empty_payload B.empty;
-          rewrite
-            (pts_to (V.vec_to_array d.server_driver_empty_payload) empty_payload)
-            as
-            (pts_to (V.vec_to_array d.server_driver_empty_payload) B.empty);
-          assert (pure (frame.EP.server_ep_query.SQueries.server_query_network_app_out ==
-            V.vec_to_array d.server_driver_app_out));
-          assert (pure (SZ.v frame.EP.server_ep_query.SQueries.server_query_network_app_out_len ==
-            SZ.v DS.driver_app_out_capacity));
-          assert (pure (frame.EP.server_ep_query.SQueries.server_query_local_payload ==
-            V.vec_to_array d.server_driver_empty_payload));
-          assert (pure (SZ.v frame.EP.server_ep_query.SQueries.server_query_local_payload_len ==
-            0));
-          assert (pure (frame.EP.server_ep_query.SQueries.server_query_local_app_out ==
-            V.vec_to_array d.server_driver_local_app_out));
-          assert (pure (SZ.v frame.EP.server_ep_query.SQueries.server_query_local_app_out_len ==
-            SZ.v DS.driver_app_out_capacity));
-          assert (pure (frame.EP.server_ep_material == d.server_driver_material_payload));
-          assert (pure (SZ.v frame.EP.server_ep_material_len ==
-            SZ.v DS.driver_material_capacity));
-          assert (pure (frame.EP.server_ep_raw == d.server_driver_raw));
-          assert (pure (SZ.v frame.EP.server_ep_raw_len == SZ.v DS.driver_rx_capacity));
-          assert (pure (frame.EP.server_ep_network_out == d.server_driver_network_out));
-          assert (pure (SZ.v frame.EP.server_ep_network_out_len ==
-            SZ.v DS.driver_network_out_capacity));
-          assert (pure (frame.EP.server_ep_material_spec == material_spec));
-          assert (pure (frame.EP.server_ep_private == private_key));
-          assert_norm (SZ.v 32sz == 32);
-          assert (pure (SZ.v frame.EP.server_ep_private_len == 32));
-          rewrite
-            (pts_to (V.vec_to_array d.server_driver_app_out) app_out)
-            as
-            (pts_to
-              frame.EP.server_ep_query.SQueries.server_query_network_app_out
-              app_out);
-          rewrite
-            (pts_to (V.vec_to_array d.server_driver_empty_payload) B.empty)
-            as
-            (pts_to
-              frame.EP.server_ep_query.SQueries.server_query_local_payload
-              B.empty);
-          rewrite
-            (pts_to (V.vec_to_array d.server_driver_local_app_out) local_app_out)
-            as
-            (pts_to
-              frame.EP.server_ep_query.SQueries.server_query_local_app_out
-              local_app_out);
-          with app_out.
-          fold (SQueries.server_network_persistent_resource frame.EP.server_ep_query);
-          with local_app_out.
-          fold (SQueries.server_local_persistent_resource frame.EP.server_ep_query);
-          fold (SQueries.server_next_local_action_frame_ready
-            (server_driver_canonical d)
-            cfg
-            frame.EP.server_ep_query
-            'st0);
-          rewrite
-            (V.pts_to d.server_driver_material_payload #1.0R material)
-            as
-            (V.pts_to frame.EP.server_ep_material #1.0R material);
-          rewrite
-            (V.pts_to d.server_driver_raw #1.0R raw)
-            as
-            (V.pts_to frame.EP.server_ep_raw #1.0R raw);
-          rewrite
-            (V.pts_to d.server_driver_network_out #1.0R network_out)
-            as
-            (V.pts_to frame.EP.server_ep_network_out #1.0R network_out);
-          rewrite
-            (V.pts_to private_key #1.0R 'private_key_bytes)
-            as
-            (V.pts_to
-              frame.EP.server_ep_private
-              #1.0R
-              'private_key_bytes);
-          assert (pure (SZ.v frame.EP.server_ep_material_len == 64));
-          assert (pure (B.length material == SZ.v frame.EP.server_ep_material_len));
-          assert (pure (EP.server_endpoint_material_bytes frame ==
-            Ghost.reveal material_spec));
-          assert (pure (Seq.equal material (EP.server_endpoint_material_bytes frame)));
-          assert (pure (B.length 'private_key_bytes ==
-            SZ.v frame.EP.server_ep_private_len));
-          assert (pure (EP.server_endpoint_private_bytes frame ==
-            EP.server_endpoint_private_bytes_of_material (Ghost.reveal material_spec)));
-          assert (pure (Seq.equal
-            'private_key_bytes
-            (EP.server_endpoint_private_bytes frame)));
-          with material 'private_key_bytes.
-          fold (EP.server_endpoint_payloads_ready frame);
-          fold (EP.server_endpoint_frame_ready
-            (server_driver_canonical d)
-            cfg
-            frame
-            'st0);
-          let empty_received = B.empty;
-          with empty_received raw network_out.
-          fold (EP.server_endpoint_io_ready
-            (server_driver_canonical d)
-            ch
-            frame
-            B.empty
-            B.empty
-            'st0);
-          let run_result =
-            EP.server_endpoint_run_workflow
-              (server_driver_canonical d)
-              cfg
-              frame
-              ch
-              d.server_driver_buffered_len
-              false
-              true
-              false
-              fuel
-              (Ghost.hide B.empty)
-              (Ghost.hide B.empty)
-              'st0;
-          with received1 sent1 st1 buffered_len1.
-            assert (
-              SP.server_invariant
-                (server_driver_canonical d)
-                (Ghost.reveal received1)
-                (Ghost.reveal sent1)
-                (Ghost.reveal st1) **
-              EP.server_endpoint_frame_ready
-                (server_driver_canonical d)
-                cfg
-                frame
-                (Ghost.reveal st1) **
-              EP.server_endpoint_io_ready
-                (server_driver_canonical d)
-                ch
-                frame
-                (Ghost.reveal received1)
-                (Ghost.reveal sent1)
-                (Ghost.reveal st1) **
-              Box.pts_to d.server_driver_buffered_len buffered_len1);
-          expose_server_invariant_pure
-            (server_driver_canonical d)
-            received1
-            sent1
-            st1;
-          assert (pure (ST.server_end_to_end_invariant (Ghost.reveal st1)));
-          assert (pure (DS.server_driver_config_matches_credentials
-            (Ghost.reveal st1)
-            (Ghost.reveal 'certificate_chain)
-            (Ghost.reveal 'credential_identity)));
-          (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_supported_profile)
-            (Ghost.reveal received1)
-            (Ghost.reveal sent1)
-            (Ghost.reveal st1)
-            (Ghost.reveal 'certificate_chain)
-            (Ghost.reveal 'credential_identity);
-          assert (pure (DS.server_driver_supported_profile_selection
-            (Ghost.reveal st1)
-            (Ghost.reveal 'credential_identity)));
-          rewrite
-            (EP.server_endpoint_frame_ready
-              (server_driver_canonical d)
-              cfg
-              frame
-              (Ghost.reveal st1))
-            as
-            (EP.server_endpoint_frame_ready
-              (server_driver_canonical d)
-              (server_driver_endpoint_config d)
-              (server_driver_endpoint_workflow_frame
-                d
-                certificate_chain_len
-                certificate_chain_len_proof
-                certificate_chain_len_bound
-                material_spec
-                private_key
-                material_deferred_ready)
-              (Ghost.reveal st1));
-          rewrite
-            (EP.server_endpoint_io_ready
-              (server_driver_canonical d)
-              ch
-              frame
-              (Ghost.reveal received1)
-              (Ghost.reveal sent1)
-              (Ghost.reveal st1))
-            as
-            (EP.server_endpoint_io_ready
-              (server_driver_canonical d)
-              ch
-              (server_driver_endpoint_workflow_frame
-                d
-                certificate_chain_len
-                certificate_chain_len_proof
-                certificate_chain_len_bound
-                material_spec
-                private_key
-                material_deferred_ready)
-              (Ghost.reveal received1)
-              (Ghost.reveal sent1)
-              (Ghost.reveal st1));
-          with ch buffered_len1 cv_input signature.
-          fold (server_driver_endpoint_connected
-            d
-            (server_driver_endpoint_config d)
-            (server_driver_endpoint_workflow_frame
-              d
-              certificate_chain_len
-              certificate_chain_len_proof
-              certificate_chain_len_bound
-              material_spec
-              private_key
-              material_deferred_ready)
-            (Ghost.reveal st1)
-            (Ghost.reveal 'certificate_chain)
-            (Ghost.reveal 'credential_identity)
-            (Ghost.reveal received1)
-            (Ghost.reveal sent1));
-          Some run_result
-        }
-      }
-    }
+  } else {
+    (* Oversized certificate chain: nothing has been allocated yet, so return
+       [None] with the (untouched) input resources preserved. *)
+    None
   }
 }
 
@@ -1608,10 +904,7 @@ fn send
               'sent **
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 ST.server_local_event_input_ready
-                   'st0
-                   ST.LocalSendApplicationData
-                   (Ghost.reveal 'payload_bytes))
+                 server_driver_application_ready 'st0)
   returns status:server_workflow_status
   ensures exists* st1 sent'.
           server_driver_connected
@@ -1668,6 +961,28 @@ fn send
      (Ghost.reveal 'credential_identity)
      (Ghost.reveal 'received)
      (Ghost.reveal 'sent));
+  assert_norm (SM.max_application_data_fragment_len == 16384);
+  let too_large = SZ.gt payload_len 16384sz;
+  if too_large {
+    assert (pure (SZ.v payload_len > SM.max_application_data_fragment_len));
+    assert (pure (
+      B.length (Ghost.reveal 'payload_bytes) >
+        SM.max_application_data_fragment_len));
+    assert (pure (
+      server_driver_payload_too_large (Ghost.reveal 'payload_bytes)));
+    assert (pure (server_driver_send_correct
+      'st0
+      'st0
+      ServerWorkflowPayloadTooLarge
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal 'sent)
+      (Ghost.reveal 'sent)));
+    ServerWorkflowPayloadTooLarge
+  } else {
+  assert (pure (SZ.v payload_len <= SM.max_application_data_fragment_len));
+  lemma_application_ready_send_ready
+    'st0
+    (Ghost.reveal 'payload_bytes);
   let resp = send_application_data_once d payload payload_len;
   with st1 sent'.
     assert (server_driver_connected
@@ -1717,1094 +1032,9 @@ fn send
   } else {
     ServerWorkflowStepFailed
   }
+  }
 }
 
-
-noextract
-let server_endpoint_send_frame_remainder
-  (frame:EP.server_endpoint_frame)
-  : slprop =
-  SQueries.server_network_persistent_resource frame.EP.server_ep_query **
-  pts_to frame.EP.server_ep_query.SQueries.server_query_local_payload B.empty **
-  EP.server_endpoint_payloads_ready frame **
-  pure (SZ.v frame.EP.server_ep_query.SQueries.server_query_local_payload_len == 0)
-
-noextract
-fn prepare_endpoint_send_api_ready
-  (d:server_driver)
-  (cfg:SQueries.server_next_local_action_config)
-  (frame:EP.server_endpoint_frame)
-  (ch:IO.channel)
-  (payload:array U8.t)
-  (payload_len:SZ.t)
-  (payload_bytes:B.bytes)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (transport_received0:Ghost.erased B.bytes)
-  (transport_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires EP.server_endpoint_frame_ready
-             (DS.server_driver_canonical d)
-             cfg
-             frame
-             (Ghost.reveal st0) **
-           EP.server_endpoint_io_ready
-             (DS.server_driver_canonical d)
-             ch
-             frame
-             (Ghost.reveal transport_received0)
-             (Ghost.reveal transport_sent0)
-             (Ghost.reveal st0) **
-           pts_to payload payload_bytes **
-           pure (B.length payload_bytes == SZ.v payload_len /\
-                 Seq.equal (Ghost.reveal canonical_sent0) (Ghost.reveal transport_sent0) /\
-                 ST.server_local_event_input_ready
-                   (Ghost.reveal st0)
-                   ST.LocalSendApplicationData
-                   payload_bytes)
-  returns local_frame:SP.tls_server_local_bridge_frame
-  ensures EP.server_api_local_action_ready
-            (DS.server_driver_canonical d)
-            ch
-            frame
-            (Ghost.reveal canonical_received0)
-            (Ghost.reveal canonical_sent0)
-            (Ghost.reveal st0)
-            (server_driver_endpoint_send_event payload_bytes)
-            local_frame **
-          server_endpoint_send_frame_remainder frame **
-          pure (
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload == payload /\
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len == payload_len /\
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out ==
-              frame.EP.server_ep_query.SQueries.server_query_local_app_out /\
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len ==
-              frame.EP.server_ep_query.SQueries.server_query_local_app_out_len)
-{
-  let ev = server_driver_endpoint_send_event payload_bytes;
-  unfold (EP.server_endpoint_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame
-    (Ghost.reveal st0));
-  unfold (SQueries.server_next_local_action_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame.EP.server_ep_query
-    (Ghost.reveal st0));
-  unfold (SQueries.server_network_persistent_resource
-    frame.EP.server_ep_query);
-  with network_current. _;
-  unfold (SQueries.server_local_persistent_resource
-    frame.EP.server_ep_query);
-  with local_current. _;
-  let old_local_out = Ghost.hide local_current;
-  let local_base : SP.tls_server_local_frame = {
-    SP.tls_server_local_payload = payload;
-    SP.tls_server_local_payload_len = payload_len;
-    SP.tls_server_local_app_out =
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out;
-    SP.tls_server_local_app_out_len =
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out_len;
-    SP.tls_server_local_old_app_out = old_local_out;
-  };
-  let local_frame : SP.tls_server_local_bridge_frame = {
-    SP.tls_server_local_bridge_base = local_base;
-  };
-  unfold (EP.server_endpoint_io_ready
-    (DS.server_driver_canonical d)
-    ch
-    frame
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0)
-    (Ghost.reveal st0));
-  with raw_received raw_bytes network_out_bytes. _;
-  rewrite
-    (IO.is_channel ch raw_received (Ghost.reveal transport_sent0))
-    as
-    (IO.is_channel ch raw_received (Ghost.reveal canonical_sent0));
-  rewrite
-    (pts_to payload payload_bytes)
-    as
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-      payload_bytes);
-  rewrite
-    (pts_to
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out
-      local_current)
-    as
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
-      (Ghost.reveal old_local_out));
-  fold (SP.server_local_bridge_frame_pre
-    ev
-    local_frame
-    (Ghost.reveal st0)
-    (V.vec_to_array frame.EP.server_ep_network_out)
-    frame.EP.server_ep_network_out_len
-    network_out_bytes);
-  fold (EP.server_api_local_action_ready
-    (DS.server_driver_canonical d)
-    ch
-    frame
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal st0)
-    ev
-    local_frame);
-  fold (SQueries.server_network_persistent_resource
-    frame.EP.server_ep_query);
-  fold (server_endpoint_send_frame_remainder frame);
-  rewrite
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      ev
-      local_frame)
-    as
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      (server_driver_endpoint_send_event payload_bytes)
-      local_frame);
-  local_frame
-}
-
-noextract
-fn send_endpoint
-  (d:server_driver)
-  (cfg:SQueries.server_next_local_action_config)
-  (frame:EP.server_endpoint_frame)
-  (payload:array U8.t)
-  (payload_len:SZ.t)
-  (payload_bytes:B.bytes)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires server_driver_endpoint_connected
-              d
-              cfg
-              frame
-              (Ghost.reveal st0)
-              'certificate_chain
-              'credential_identity
-              (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0) **
-           pts_to payload payload_bytes **
-           pure (B.length payload_bytes == SZ.v payload_len /\
-                 ST.server_connection_control_not_failed (Ghost.reveal st0) /\
-                 ST.server_local_event_input_ready
-                   (Ghost.reveal st0)
-                   ST.LocalSendApplicationData
-                   payload_bytes)
-  returns result:CPI.process_result
-  ensures exists* (canonical_received1:Ghost.erased B.bytes)
-                  (canonical_sent1:Ghost.erased B.bytes)
-                  (st1:Ghost.erased CS.connection_state).
-           server_driver_endpoint_connected
-             d
-             cfg
-             frame
-             (Ghost.reveal st1)
-             'certificate_chain
-             'credential_identity
-             (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1) **
-           pts_to payload payload_bytes **
-           pure (exists (old_out:B.bytes)
-                        (out_contents:B.bytes)
-                        (wire_outputs:list CW.wire_message)
-                        (local_outputs:list EAPI.local_output).
-             CPI.local_process_correct
-               (ES.server_system #CTypes.server_local_event
-                 (Ghost.reveal
-                   (server_driver_canonical d).SP.canonical_server_initial))
-               (server_driver_endpoint_send_event payload_bytes)
-               old_out
-               out_contents
-               frame.EP.server_ep_network_out_len
-               (Ghost.reveal canonical_received0)
-               (Ghost.reveal canonical_sent0)
-               (Ghost.reveal st0)
-               result
-               (Ghost.reveal canonical_received1)
-               (Ghost.reveal canonical_sent1)
-               (Ghost.reveal st1)
-               wire_outputs
-               local_outputs)
-{
-  let ev = server_driver_endpoint_send_event payload_bytes;
-  unfold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st0)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0));
-  with ch buffered_len cv_input signature. _;
-  expose_server_invariant_pure
-    (DS.server_driver_canonical d)
-    canonical_received0
-    canonical_sent0
-    st0;
-  let current_channel = Box.(!d.server_driver_channel);
-  assert (pure (current_channel == Some ch));
-  assert (pure (Some? current_channel));
-  let concrete_ch = Some?.v current_channel;
-  assert (pure (current_channel == Some concrete_ch));
-  assert (pure (Some concrete_ch == Some ch));
-  rewrite
-    (EP.server_endpoint_io_ready
-      (DS.server_driver_canonical d)
-      ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0))
-    as
-    (EP.server_endpoint_io_ready
-      (DS.server_driver_canonical d)
-      concrete_ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0));
-  let local_frame =
-    prepare_endpoint_send_api_ready
-      d
-      cfg
-      frame
-      concrete_ch
-      payload
-      payload_len
-      payload_bytes
-      canonical_received0
-      canonical_sent0
-      canonical_received0
-      canonical_sent0
-      st0;
-  rewrite
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      concrete_ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      (server_driver_endpoint_send_event payload_bytes)
-      local_frame)
-    as
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      concrete_ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      ev
-      local_frame);
-  let result =
-    EP.server_run_api_local_action
-      (DS.server_driver_canonical d)
-      frame
-      concrete_ch
-      ev
-      local_frame
-      canonical_received0
-      canonical_sent0
-      st0;
-  with received1 sent1 st1 old_out out_contents wire_outputs local_outputs.
-    assert (
-      SP.server_invariant
-        (DS.server_driver_canonical d)
-        (Ghost.reveal received1)
-        (Ghost.reveal sent1)
-        (Ghost.reveal st1) **
-      EP.server_endpoint_io_ready
-        (DS.server_driver_canonical d)
-        concrete_ch
-        frame
-        (Ghost.reveal received1)
-        (Ghost.reveal sent1)
-        (Ghost.reveal st1) **
-      SP.server_local_bridge_frame_post
-        ev
-        local_frame
-        result
-        (Ghost.reveal old_out)
-        (Ghost.reveal out_contents)
-        (Ghost.reveal st0)
-        (Ghost.reveal st1)
-        (Ghost.reveal wire_outputs)
-        (Ghost.reveal local_outputs));
-  assert (pure (ev == server_driver_endpoint_send_event payload_bytes));
-  assert (pure (CPI.local_process_correct
-    (ES.server_system #CTypes.server_local_event
-      (Ghost.reveal
-        (server_driver_canonical d).SP.canonical_server_initial))
-    (server_driver_endpoint_send_event payload_bytes)
-    (Ghost.reveal old_out)
-    (Ghost.reveal out_contents)
-    frame.EP.server_ep_network_out_len
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal st0)
-    result
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1)
-    (Ghost.reveal wire_outputs)
-    (Ghost.reveal local_outputs)));
-  expose_server_invariant_pure
-    (DS.server_driver_canonical d)
-    received1
-    sent1
-    st1;
-  unfold (SP.server_local_bridge_frame_post
-    ev
-    local_frame
-    result
-    (Ghost.reveal old_out)
-    (Ghost.reveal out_contents)
-    (Ghost.reveal st0)
-    (Ghost.reveal st1)
-    (Ghost.reveal wire_outputs)
-    (Ghost.reveal local_outputs));
-  with app_out. _;
-  rewrite
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-      payload_bytes)
-    as
-    (pts_to payload payload_bytes);
-  rewrite
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
-      app_out)
-    as
-    (pts_to
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out
-      app_out);
-  unfold (server_endpoint_send_frame_remainder frame);
-  fold (SQueries.server_local_persistent_resource
-    frame.EP.server_ep_query);
-  fold (SQueries.server_network_persistent_resource
-    frame.EP.server_ep_query);
-  fold (SQueries.server_next_local_action_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame.EP.server_ep_query
-    (Ghost.reveal st1));
-  fold (EP.server_endpoint_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame
-    (Ghost.reveal st1));
-  unfold (EP.server_endpoint_io_ready
-    (DS.server_driver_canonical d)
-    concrete_ch
-    frame
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1));
-  with raw_received1 raw_bytes1 network_out_bytes1. _;
-  fold (EP.server_endpoint_io_ready
-    (DS.server_driver_canonical d)
-    concrete_ch
-    frame
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1));
-  rewrite
-    (Box.pts_to d.server_driver_channel (Some ch))
-    as
-    (Box.pts_to d.server_driver_channel (Some concrete_ch));
-  assert (pure (ST.server_end_to_end_invariant (Ghost.reveal st1)));
-  assert (pure (DS.server_driver_config_matches_credentials
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  assert (pure (SP.server_config_matches_credentials
-    (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_initial)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_supported_profile)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity);
-  assert (pure (SP.server_supported_profile_selection
-    (Ghost.reveal st1)
-    (Ghost.reveal 'credential_identity)));
-  assert (pure (DS.server_driver_supported_profile_selection
-    (Ghost.reveal st1)
-    (Ghost.reveal 'credential_identity)));
-  assert (pure (ST.server_end_to_end_invariant (Ghost.reveal st1) /\
-    DS.server_driver_config_matches_credentials
-      (Ghost.reveal st1)
-      (Ghost.reveal 'certificate_chain)
-      (Ghost.reveal 'credential_identity) /\
-    DS.server_driver_supported_profile_selection
-      (Ghost.reveal st1)
-      (Ghost.reveal 'credential_identity) /\
-    SZ.v buffered_len <= SZ.v frame.EP.server_ep_raw_len /\
-    B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
-    B.length signature == SZ.v driver_signature_capacity /\
-    Bounds.max_certificate_verify_input_len <=
-      SZ.v driver_certificate_verify_input_capacity /\
-    IM.max_signature_len <= SZ.v driver_signature_capacity /\
-    V.is_full_vec d.server_driver_certificate_verify_input /\
-    V.is_full_vec d.server_driver_signature));
-  with concrete_ch buffered_len cv_input signature.
-  fold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1));
-  assert (
-    DS.server_driver_endpoint_connected
-      d
-      cfg
-      frame
-      (Ghost.reveal st1)
-      (Ghost.reveal 'certificate_chain)
-      (Ghost.reveal 'credential_identity)
-      (Ghost.reveal received1)
-      (Ghost.reveal sent1) **
-    pts_to payload payload_bytes **
-    pure (CPI.local_process_correct
-      (ES.server_system #CTypes.server_local_event
-        (Ghost.reveal
-          (server_driver_canonical d).SP.canonical_server_initial))
-      (server_driver_endpoint_send_event payload_bytes)
-      (Ghost.reveal old_out)
-      (Ghost.reveal out_contents)
-      frame.EP.server_ep_network_out_len
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      result
-      (Ghost.reveal received1)
-      (Ghost.reveal sent1)
-      (Ghost.reveal st1)
-      (Ghost.reveal wire_outputs)
-      (Ghost.reveal local_outputs)));
-  result
-}
-
-noextract
-fn receive_endpoint
-  (d:server_driver)
-  (cfg:SQueries.server_next_local_action_config)
-  (frame:EP.server_endpoint_frame)
-  (fuel:SZ.t)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires DS.server_driver_endpoint_connected
-              d
-              cfg
-              frame
-              (Ghost.reveal st0)
-              'certificate_chain
-              'credential_identity
-              (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0)
-  returns result:EP.server_endpoint_run_result
-  ensures exists* (canonical_received1:Ghost.erased B.bytes)
-                  (canonical_sent1:Ghost.erased B.bytes)
-                  (st1:Ghost.erased CS.connection_state).
-           DS.server_driver_endpoint_connected
-             d
-             cfg
-             frame
-             (Ghost.reveal st1)
-             'certificate_chain
-             'credential_identity
-             (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1)
-{
-  unfold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st0)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0));
-  with ch buffered_len cv_input signature. _;
-  expose_server_invariant_pure
-    (DS.server_driver_canonical d)
-    canonical_received0
-    canonical_sent0
-    st0;
-  assert (pure (SP.server_config_matches_credentials
-    (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_initial)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  let current_channel = Box.(!d.server_driver_channel);
-  assert (pure (current_channel == Some ch));
-  assert (pure (Some? current_channel));
-  let concrete_ch = Some?.v current_channel;
-  assert (pure (current_channel == Some concrete_ch));
-  assert (pure (Some concrete_ch == Some ch));
-  rewrite
-    (EP.server_endpoint_io_ready
-      (DS.server_driver_canonical d)
-      ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0))
-    as
-    (EP.server_endpoint_io_ready
-      (DS.server_driver_canonical d)
-      concrete_ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0));
-  let result =
-    EP.server_endpoint_run_workflow
-      (DS.server_driver_canonical d)
-      cfg
-      frame
-      concrete_ch
-      d.server_driver_buffered_len
-      true
-      false
-      false
-      fuel
-      canonical_received0
-      canonical_sent0
-      st0;
-  with received1 sent1 st1 buffered_len1. _;
-  expose_server_invariant_pure
-    (DS.server_driver_canonical d)
-    received1
-    sent1
-    st1;
-  assert (pure (ST.server_end_to_end_invariant (Ghost.reveal st1)));
-  assert (pure (SP.server_config_matches_credentials
-    (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_initial)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  assert (pure (DS.server_driver_config_matches_credentials
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_supported_profile)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity);
-  assert (pure (DS.server_driver_supported_profile_selection
-    (Ghost.reveal st1)
-    (Ghost.reveal 'credential_identity)));
-  rewrite
-    (Box.pts_to d.server_driver_channel (Some ch))
-    as
-    (Box.pts_to d.server_driver_channel (Some concrete_ch));
-  with concrete_ch buffered_len1 cv_input signature.
-  fold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1));
-  result
-}
-
-noextract
-fn prepare_endpoint_close_api_ready
-  (d:server_driver)
-  (cfg:SQueries.server_next_local_action_config)
-  (frame:EP.server_endpoint_frame)
-  (ch:IO.channel)
-  (payload:array U8.t)
-  (payload_len:SZ.t)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (transport_received0:Ghost.erased B.bytes)
-  (transport_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires EP.server_endpoint_frame_ready
-             (DS.server_driver_canonical d)
-             cfg
-             frame
-             (Ghost.reveal st0) **
-           EP.server_endpoint_io_ready
-             (DS.server_driver_canonical d)
-             ch
-             frame
-             (Ghost.reveal transport_received0)
-             (Ghost.reveal transport_sent0)
-             (Ghost.reveal st0) **
-           pts_to payload B.empty **
-           pure (SZ.v payload_len == 0 /\
-                 Seq.equal (Ghost.reveal canonical_sent0) (Ghost.reveal transport_sent0) /\
-                 ST.server_local_event_input_ready
-                   (Ghost.reveal st0)
-                   ST.LocalSendCloseNotify
-                   B.empty)
-  returns local_frame:SP.tls_server_local_bridge_frame
-  ensures EP.server_api_local_action_ready
-            (DS.server_driver_canonical d)
-            ch
-            frame
-            (Ghost.reveal canonical_received0)
-            (Ghost.reveal canonical_sent0)
-            (Ghost.reveal st0)
-            server_driver_endpoint_close_event
-            local_frame **
-          server_endpoint_send_frame_remainder frame **
-          pure (
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload == payload /\
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload_len == payload_len /\
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out ==
-              frame.EP.server_ep_query.SQueries.server_query_local_app_out /\
-            local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out_len ==
-              frame.EP.server_ep_query.SQueries.server_query_local_app_out_len)
-{
-  let ev = server_driver_endpoint_close_event;
-  assert (pure (B.length B.empty == SZ.v payload_len));
-  unfold (EP.server_endpoint_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame
-    (Ghost.reveal st0));
-  unfold (SQueries.server_next_local_action_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame.EP.server_ep_query
-    (Ghost.reveal st0));
-  unfold (SQueries.server_network_persistent_resource
-    frame.EP.server_ep_query);
-  with network_current. _;
-  unfold (SQueries.server_local_persistent_resource
-    frame.EP.server_ep_query);
-  with local_current. _;
-  let old_local_out = Ghost.hide local_current;
-  let local_base : SP.tls_server_local_frame = {
-    SP.tls_server_local_payload = payload;
-    SP.tls_server_local_payload_len = payload_len;
-    SP.tls_server_local_app_out =
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out;
-    SP.tls_server_local_app_out_len =
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out_len;
-    SP.tls_server_local_old_app_out = old_local_out;
-  };
-  let local_frame : SP.tls_server_local_bridge_frame = {
-    SP.tls_server_local_bridge_base = local_base;
-  };
-  unfold (EP.server_endpoint_io_ready
-    (DS.server_driver_canonical d)
-    ch
-    frame
-    (Ghost.reveal transport_received0)
-    (Ghost.reveal transport_sent0)
-    (Ghost.reveal st0));
-  with raw_received raw_bytes network_out_bytes. _;
-  rewrite
-    (IO.is_channel ch raw_received (Ghost.reveal transport_sent0))
-    as
-    (IO.is_channel ch raw_received (Ghost.reveal canonical_sent0));
-  rewrite
-    (pts_to payload B.empty)
-    as
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-      B.empty);
-  rewrite
-    (pts_to
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out
-      local_current)
-    as
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
-      (Ghost.reveal old_local_out));
-  fold (SP.server_local_bridge_frame_pre
-    ev
-    local_frame
-    (Ghost.reveal st0)
-    (V.vec_to_array frame.EP.server_ep_network_out)
-    frame.EP.server_ep_network_out_len
-    network_out_bytes);
-  fold (EP.server_api_local_action_ready
-    (DS.server_driver_canonical d)
-    ch
-    frame
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal st0)
-    ev
-    local_frame);
-  fold (SQueries.server_network_persistent_resource
-    frame.EP.server_ep_query);
-  fold (server_endpoint_send_frame_remainder frame);
-  rewrite
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      ev
-      local_frame)
-    as
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      server_driver_endpoint_close_event
-      local_frame);
-  local_frame
-}
-
-noextract
-fn close_endpoint
-  (d:server_driver)
-  (cfg:SQueries.server_next_local_action_config)
-  (frame:EP.server_endpoint_frame)
-  (payload:array U8.t)
-  (payload_len:SZ.t)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires DS.server_driver_endpoint_connected
-              d
-              cfg
-              frame
-              (Ghost.reveal st0)
-              'certificate_chain
-              'credential_identity
-              (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0) **
-           pts_to payload B.empty **
-           pure (SZ.v payload_len == 0 /\
-                 ST.server_connection_control_not_failed (Ghost.reveal st0) /\
-                 ST.server_local_event_input_ready
-                   (Ghost.reveal st0)
-                   ST.LocalSendCloseNotify
-                   B.empty)
-  returns result:CPI.process_result
-  ensures exists* (canonical_received1:Ghost.erased B.bytes)
-                  (canonical_sent1:Ghost.erased B.bytes)
-                  (st1:Ghost.erased CS.connection_state).
-           DS.server_driver_endpoint_connected
-             d
-             cfg
-             frame
-             (Ghost.reveal st1)
-             'certificate_chain
-             'credential_identity
-             (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1) **
-           pts_to payload B.empty **
-           pure (exists (old_out:B.bytes)
-                         (out_contents:B.bytes)
-                         (wire_outputs:list CW.wire_message)
-                         (local_outputs:list EAPI.local_output).
-             CPI.local_process_correct
-               (ES.server_system #CTypes.server_local_event
-                 (Ghost.reveal
-                   (server_driver_canonical d).SP.canonical_server_initial))
-               server_driver_endpoint_close_event
-               old_out
-               out_contents
-               frame.EP.server_ep_network_out_len
-               (Ghost.reveal canonical_received0)
-               (Ghost.reveal canonical_sent0)
-               (Ghost.reveal st0)
-               result
-               (Ghost.reveal canonical_received1)
-               (Ghost.reveal canonical_sent1)
-               (Ghost.reveal st1)
-               wire_outputs
-               local_outputs)
-{
-  let ev = server_driver_endpoint_close_event;
-  unfold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st0)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0));
-  with ch buffered_len cv_input signature. _;
-  expose_server_invariant_pure
-    (DS.server_driver_canonical d)
-    canonical_received0
-    canonical_sent0
-    st0;
-  let current_channel = Box.(!d.server_driver_channel);
-  assert (pure (current_channel == Some ch));
-  assert (pure (Some? current_channel));
-  let concrete_ch = Some?.v current_channel;
-  assert (pure (current_channel == Some concrete_ch));
-  assert (pure (Some concrete_ch == Some ch));
-  rewrite
-    (EP.server_endpoint_io_ready
-      (DS.server_driver_canonical d)
-      ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0))
-    as
-    (EP.server_endpoint_io_ready
-      (DS.server_driver_canonical d)
-      concrete_ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0));
-  let local_frame =
-    prepare_endpoint_close_api_ready
-      d
-      cfg
-      frame
-      concrete_ch
-      payload
-      payload_len
-      canonical_received0
-      canonical_sent0
-      canonical_received0
-      canonical_sent0
-      st0;
-  rewrite
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      concrete_ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      server_driver_endpoint_close_event
-      local_frame)
-    as
-    (EP.server_api_local_action_ready
-      (DS.server_driver_canonical d)
-      concrete_ch
-      frame
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      ev
-      local_frame);
-  let result =
-    EP.server_run_api_local_action
-      (DS.server_driver_canonical d)
-      frame
-      concrete_ch
-      ev
-      local_frame
-      canonical_received0
-      canonical_sent0
-      st0;
-  with received1 sent1 st1 old_out out_contents wire_outputs local_outputs.
-    assert (
-      SP.server_invariant
-        (DS.server_driver_canonical d)
-        (Ghost.reveal received1)
-        (Ghost.reveal sent1)
-        (Ghost.reveal st1) **
-      EP.server_endpoint_io_ready
-        (DS.server_driver_canonical d)
-        concrete_ch
-        frame
-        (Ghost.reveal received1)
-        (Ghost.reveal sent1)
-        (Ghost.reveal st1) **
-      SP.server_local_bridge_frame_post
-        ev
-        local_frame
-        result
-        (Ghost.reveal old_out)
-        (Ghost.reveal out_contents)
-        (Ghost.reveal st0)
-        (Ghost.reveal st1)
-        (Ghost.reveal wire_outputs)
-        (Ghost.reveal local_outputs));
-  assert (pure (ev == server_driver_endpoint_close_event));
-  assert (pure (CPI.local_process_correct
-    (ES.server_system #CTypes.server_local_event
-      (Ghost.reveal
-        (server_driver_canonical d).SP.canonical_server_initial))
-    server_driver_endpoint_close_event
-    (Ghost.reveal old_out)
-    (Ghost.reveal out_contents)
-    frame.EP.server_ep_network_out_len
-    (Ghost.reveal canonical_received0)
-    (Ghost.reveal canonical_sent0)
-    (Ghost.reveal st0)
-    result
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1)
-    (Ghost.reveal wire_outputs)
-    (Ghost.reveal local_outputs)));
-  expose_server_invariant_pure
-    (DS.server_driver_canonical d)
-    received1
-    sent1
-    st1;
-  unfold (SP.server_local_bridge_frame_post
-    ev
-    local_frame
-    result
-    (Ghost.reveal old_out)
-    (Ghost.reveal out_contents)
-    (Ghost.reveal st0)
-    (Ghost.reveal st1)
-    (Ghost.reveal wire_outputs)
-    (Ghost.reveal local_outputs));
-  with app_out. _;
-  rewrite
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_payload
-      B.empty)
-    as
-    (pts_to payload B.empty);
-  rewrite
-    (pts_to
-      local_frame.SP.tls_server_local_bridge_base.SP.tls_server_local_app_out
-      app_out)
-    as
-    (pts_to
-      frame.EP.server_ep_query.SQueries.server_query_local_app_out
-      app_out);
-  unfold (server_endpoint_send_frame_remainder frame);
-  fold (SQueries.server_local_persistent_resource
-    frame.EP.server_ep_query);
-  fold (SQueries.server_network_persistent_resource
-    frame.EP.server_ep_query);
-  fold (SQueries.server_next_local_action_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame.EP.server_ep_query
-    (Ghost.reveal st1));
-  fold (EP.server_endpoint_frame_ready
-    (DS.server_driver_canonical d)
-    cfg
-    frame
-    (Ghost.reveal st1));
-  unfold (EP.server_endpoint_io_ready
-    (DS.server_driver_canonical d)
-    concrete_ch
-    frame
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1));
-  with raw_received1 raw_bytes1 network_out_bytes1. _;
-  fold (EP.server_endpoint_io_ready
-    (DS.server_driver_canonical d)
-    concrete_ch
-    frame
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1));
-  rewrite
-    (Box.pts_to d.server_driver_channel (Some ch))
-    as
-    (Box.pts_to d.server_driver_channel (Some concrete_ch));
-  assert (pure (ST.server_end_to_end_invariant (Ghost.reveal st1)));
-  assert (pure (DS.server_driver_config_matches_credentials
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  assert (pure (SP.server_config_matches_credentials
-    (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_initial)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  (Ghost.reveal (DS.server_driver_canonical d).SP.canonical_server_supported_profile)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1)
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity);
-  assert (pure (SP.server_supported_profile_selection
-    (Ghost.reveal st1)
-    (Ghost.reveal 'credential_identity)));
-  assert (pure (DS.server_driver_supported_profile_selection
-    (Ghost.reveal st1)
-    (Ghost.reveal 'credential_identity)));
-  assert (pure (ST.server_end_to_end_invariant (Ghost.reveal st1) /\
-    DS.server_driver_config_matches_credentials
-      (Ghost.reveal st1)
-      (Ghost.reveal 'certificate_chain)
-      (Ghost.reveal 'credential_identity) /\
-    DS.server_driver_supported_profile_selection
-      (Ghost.reveal st1)
-      (Ghost.reveal 'credential_identity) /\
-    SZ.v buffered_len <= SZ.v frame.EP.server_ep_raw_len /\
-    B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
-    B.length signature == SZ.v driver_signature_capacity /\
-    Bounds.max_certificate_verify_input_len <=
-      SZ.v driver_certificate_verify_input_capacity /\
-    IM.max_signature_len <= SZ.v driver_signature_capacity /\
-    V.is_full_vec d.server_driver_certificate_verify_input /\
-    V.is_full_vec d.server_driver_signature));
-  with concrete_ch buffered_len cv_input signature.
-  fold (DS.server_driver_endpoint_connected
-    d
-    cfg
-    frame
-    (Ghost.reveal st1)
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)
-    (Ghost.reveal received1)
-    (Ghost.reveal sent1));
-  assert (pure (exists (old_out0:B.bytes)
-                       (out_contents0:B.bytes)
-                       (wire_outputs0:list CW.wire_message)
-                       (local_outputs0:list EAPI.local_output).
-    CPI.local_process_correct
-      (ES.server_system #CTypes.server_local_event
-        (Ghost.reveal
-          (server_driver_canonical d).SP.canonical_server_initial))
-      server_driver_endpoint_close_event
-      old_out0
-      out_contents0
-      frame.EP.server_ep_network_out_len
-      (Ghost.reveal canonical_received0)
-      (Ghost.reveal canonical_sent0)
-      (Ghost.reveal st0)
-      result
-      (Ghost.reveal received1)
-      (Ghost.reveal sent1)
-      (Ghost.reveal st1)
-      wire_outputs0
-      local_outputs0));
-  result
-}
 
 fn receive
   (d:server_driver)
@@ -2839,6 +1069,10 @@ fn receive
                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_sent_log_exact st1 sent' /\
                 server_driver_received_log_accounted st1 received' /\
+                (server_driver_application_ready 'st0 /\
+                 (result.server_receive_status == ServerWorkflowExhausted \/
+                  result.server_receive_status == ServerWorkflowNeedMoreInput) ==>
+                 server_driver_application_ready st1) /\
                 (exists loop app_out.
                   server_driver_receive_correct
                     'st0
@@ -2894,6 +1128,9 @@ fn receive
       loop_app_out **
       pure (st1.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config /\
+      (loop.server_driver_network_loop_exhausted == true ==>
+        st1 == 'st0 /\
+        Seq.equal sent' (Ghost.reveal 'sent)) /\
       (loop.server_driver_network_loop_exhausted == false ==>
         loop.server_driver_network_loop_last.ST.response.ST.status <>
           ST.NeedMoreInput /\
@@ -2931,6 +1168,12 @@ fn receive
     buffered
     buffered_len;
   assert (pure (server_driver_received_log_accounted st1 received'));
+  rewrite (S.connection_exactly d.server_driver_server st1)
+    as (CR.connection_exactly d.server_driver_server st1);
+  let control_snapshot = CQ.get_control_snapshot d.server_driver_server;
+  rewrite (CR.connection_exactly d.server_driver_server st1)
+    as (S.connection_exactly d.server_driver_server st1);
+  assert (pure (CR.control_snapshot_matches control_snapshot st1));
   fold (server_driver_connected_with_app_out
     d
     st1
@@ -2956,6 +1199,29 @@ fn receive
     forget_server_driver_connected_app_out d;
     result
   } else {
+    let closed = control_snapshot.CR.snapshot_control_tag = 4uy;
+    if closed {
+      assert (pure (control_snapshot.CR.snapshot_control_tag == 4uy));
+      lemma_control_snapshot_closed control_snapshot st1;
+      assert (pure (st1.CS.cs_model.CS.model_control == CS.ControlClosed));
+      let result = {
+        server_receive_status = ServerWorkflowClosed;
+        server_receive_len = 0sz;
+      };
+      assert (pure (server_driver_receive_correct
+        'st0
+        st1
+        result
+        loop
+        (Ghost.reveal 'sent)
+        sent'
+        loop_app_out
+        (Ghost.reveal 'out_bytes)));
+      forget_server_driver_connected_app_out d;
+      result
+    } else {
+    assert (pure (control_snapshot.CR.snapshot_control_tag <> 4uy));
+    lemma_control_snapshot_not_closed control_snapshot st1;
     match loop.server_driver_network_loop_last.ST.response.ST.status {
       ST.StepOk -> {
         unfold (server_driver_connected_with_app_out
@@ -3194,6 +1460,214 @@ fn receive
         result
       }
     }
+    }
+  }
+}
+
+(**
+  Reflexive-transitive-closure lemmas for [server_driver_network_reaches].  They
+  are proved once here, in pure F*, so the Pulse [close] workflow only needs to
+  chain lemma calls rather than reason about the existential path witness.
+**)
+let server_driver_network_reaches_refl (st:CS.connection_state)
+  : Lemma (ensures server_driver_network_reaches st st)
+=
+  introduce exists (path:list CS.connection_state). is_network_path st st path
+  with [] and ()
+
+let server_driver_network_step_intro
+  (st0 st1:CS.connection_state)
+  (r:ST.server_buffer_response)
+  (s s':B.bytes)
+  : Lemma
+      (requires server_driver_network_process_correct st0 st1 r s s')
+      (ensures server_driver_network_step st0 st1)
+=
+  introduce
+    exists (r0:ST.server_buffer_response) (s0 s0':B.bytes).
+      server_driver_network_process_correct st0 st1 r0 s0 s0'
+  with r s s' and ()
+
+#push-options "--split_queries always"
+let server_driver_network_reaches_step
+  (st0 st1 st2:CS.connection_state)
+  : Lemma
+      (requires server_driver_network_step st0 st1 /\
+                server_driver_network_reaches st1 st2)
+      (ensures server_driver_network_reaches st0 st2)
+=
+  eliminate exists (path:list CS.connection_state). is_network_path st1 st2 path
+  returns server_driver_network_reaches st0 st2
+  with _. (
+    introduce
+      exists (path':list CS.connection_state). is_network_path st0 st2 path'
+    with (st1 :: path) and ()
+  )
+#pop-options
+
+(**
+  Constructs [server_driver_close_final_correct] for the [close] workflow:
+  [st_cn] is the close_notify state, [st_final] is reached from it by verified
+  network processing, and when the caller did not ask to wait the two coincide,
+  recovering the historical exact-state guarantee.
+**)
+let lemma_close_final_correct
+  (wait_for_peer:bool)
+  (st0 st_cn st_final:CS.connection_state)
+  (sent:B.bytes)
+  : Lemma
+      (requires
+        server_driver_close_correct st0 st_cn sent /\
+        server_driver_network_reaches st_cn st_final /\
+        (wait_for_peer == false ==> st_final == st_cn))
+      (ensures server_driver_close_final_correct wait_for_peer st0 st_final sent)
+=
+  introduce
+    exists st_close_notify.
+      server_driver_close_correct st0 st_close_notify sent /\
+      server_driver_network_reaches st_close_notify st_final
+  with st_cn and ()
+
+(**
+  Drains the peer's records looking for its close_notify, reporting a status.
+
+  The status is one of [ServerWorkflowClosed] (the peer's close_notify was
+  observed, so the connection reached [CS.ControlClosed]),
+  [ServerWorkflowExhausted] (the network fuel ran out first) or
+  [ServerWorkflowStepFailed] (a nonrecoverable control-failure state or a
+  nonrecoverable record-processing failure was observed).
+
+  Liveness/regression fix: the helper snapshots the control state *before* every
+  read.  If the connection is already closed or already in a control-failure
+  state it stops without issuing another (potentially blocking) read.  After a
+  read-and-process step it only recurses when the step status is recoverable
+  ([ST.StepOk] or [ST.NeedMoreInput]); any other status is a nonrecoverable
+  failure and is reported as [ServerWorkflowStepFailed] rather than being
+  ignored and collapsed into [ServerWorkflowExhausted].
+**)
+fn rec wait_for_peer_close_notify
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  returns status:server_workflow_status
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent' **
+          pure (st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
+                server_driver_network_reaches 'st0 st1 /\
+                (status == ServerWorkflowClosed \/
+                 status == ServerWorkflowExhausted \/
+                 status == ServerWorkflowStepFailed) /\
+                (SZ.v fuel == 0 ==> status == ServerWorkflowExhausted) /\
+                (status == ServerWorkflowClosed ==>
+                  st1.CS.cs_model.CS.model_control == CS.ControlClosed))
+  decreases (SZ.v fuel)
+{
+  if (fuel = 0sz) {
+    server_driver_network_reaches_refl 'st0;
+    ServerWorkflowExhausted
+  } else {
+    let snapshot = server_driver_control_snapshot d;
+    assert (pure (CR.control_snapshot_matches snapshot 'st0));
+    let closed = snapshot.CR.snapshot_control_tag = 4uy;
+    if closed {
+      assert (pure (snapshot.CR.snapshot_control_tag == 4uy));
+      lemma_control_snapshot_closed snapshot 'st0;
+      assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlClosed));
+      server_driver_network_reaches_refl 'st0;
+      ServerWorkflowClosed
+    } else {
+      let failed = snapshot.CR.snapshot_control_tag = 5uy;
+      if failed {
+        (* The connection is already in a nonrecoverable control-failure state
+           (e.g. a fatal alert was received). Report the failure without issuing
+           another blocking read. *)
+        server_driver_network_reaches_refl 'st0;
+        ServerWorkflowStepFailed
+      } else {
+        assert (pure (0 < SZ.v fuel));
+        let step = read_and_process_network_once d;
+        with st1 received' sent' step_app_out.
+          assert (server_driver_connected_with_app_out
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent'
+            step_app_out **
+          pure (server_driver_network_process_correct
+            'st0
+            st1
+            step
+            (Ghost.reveal 'sent)
+            sent'));
+        lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          step
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
+        server_driver_network_step_intro
+          'st0
+          st1
+          step
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (server_driver_network_step 'st0 st1));
+        forget_server_driver_connected_app_out d;
+        let step_ok = step.ST.response.ST.status = ST.StepOk;
+        let step_need_more = step.ST.response.ST.status = ST.NeedMoreInput;
+        let recoverable = step_ok || step_need_more;
+        if recoverable {
+          let next_fuel = SZ.sub fuel 1sz;
+          assert (pure (SZ.v next_fuel < SZ.v fuel));
+          let status = wait_for_peer_close_notify d next_fuel;
+          with st2 received2 sent2.
+            assert (server_driver_connected
+              d
+              st2
+              'certificate_chain
+              'credential_identity
+              received2
+              sent2 **
+            pure (st2.CS.cs_model.CS.model_config ==
+              st1.CS.cs_model.CS.model_config /\
+            server_driver_network_reaches st1 st2 /\
+            (status == ServerWorkflowClosed \/
+             status == ServerWorkflowExhausted \/
+             status == ServerWorkflowStepFailed) /\
+            (status == ServerWorkflowClosed ==>
+              st2.CS.cs_model.CS.model_control == CS.ControlClosed)));
+          assert (pure (st2.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
+          server_driver_network_reaches_step 'st0 st1 st2;
+          assert (pure (server_driver_network_reaches 'st0 st2));
+          status
+        } else {
+          (* Nonrecoverable failure while processing the peer's record. Stop
+             immediately instead of blocking on another read. *)
+          server_driver_network_reaches_refl st1;
+          server_driver_network_reaches_step 'st0 st1 st1;
+          assert (pure (server_driver_network_reaches 'st0 st1));
+          ServerWorkflowStepFailed
+        }
+      }
+    }
   }
 }
 
@@ -3212,15 +1686,18 @@ fn close
   returns status:server_workflow_status
   ensures exists* st1.
           server_driver_closed d st1 'certificate_chain 'credential_identity **
-          pure (status == ServerWorkflowClosed /\
-                st1.CS.cs_model.CS.model_config ==
+          pure (st1.CS.cs_model.CS.model_config ==
                   'st0.CS.cs_model.CS.model_config /\
                 server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-                server_driver_close_correct
+                server_driver_close_final_correct
+                  wait_for_peer
                   'st0
                   st1
-                  (Ghost.reveal 'sent))
+                  (Ghost.reveal 'sent) /\
+                server_driver_close_status_correct wait_for_peer status /\
+                server_driver_close_wait_correct wait_for_peer status st1 /\
+                server_driver_close_fuel_correct wait_for_peer network_fuel status)
 {
   unfold (server_driver_connected
    d
@@ -3256,47 +1733,152 @@ fn close
    (Ghost.reveal 'sent));
   lemma_application_ready_close_notify_ready 'st0;
   let resp = DL.send_close_notify_once d;
-  with st1 sent'.
+  with st_cn sent'.
     assert (server_driver_connected
       d
-      st1
+      st_cn
       'certificate_chain
       'credential_identity
       'received
       sent');
   lemma_server_driver_local_write_correct_preserves_config
     'st0
-    st1
+    st_cn
     resp
     ST.LocalSendCloseNotify
     B.empty
     (Ghost.reveal 'sent)
     sent';
+  assert (pure (st_cn.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   assert (pure (server_driver_close_correct
     'st0
-    st1
+    st_cn
     (Ghost.reveal 'sent)));
-  close_transport_once d;
-  assert (server_driver_closed d st1 'certificate_chain 'credential_identity);
-  assert (pure (ServerWorkflowClosed == ServerWorkflowClosed /\
-    st1.CS.cs_model.CS.model_config ==
-      'st0.CS.cs_model.CS.model_config /\
-    server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-    server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-    server_driver_close_correct
+  if wait_for_peer {
+    let status = wait_for_peer_close_notify d network_fuel;
+    with st_wait received_w sent_w.
+      assert (server_driver_connected
+        d
+        st_wait
+        'certificate_chain
+        'credential_identity
+        received_w
+        sent_w **
+      pure (st_wait.CS.cs_model.CS.model_config ==
+              st_cn.CS.cs_model.CS.model_config /\
+            server_driver_network_reaches st_cn st_wait /\
+            (status == ServerWorkflowClosed \/
+             status == ServerWorkflowExhausted \/
+             status == ServerWorkflowStepFailed) /\
+            (SZ.v network_fuel == 0 ==> status == ServerWorkflowExhausted) /\
+            (status == ServerWorkflowClosed ==>
+              st_wait.CS.cs_model.CS.model_control == CS.ControlClosed)));
+    assert (pure (st_wait.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
+    lemma_close_final_correct
+      wait_for_peer
       'st0
-      st1
-      (Ghost.reveal 'sent)));
-  assert (exists* st_after.
-    server_driver_closed d st_after 'certificate_chain 'credential_identity **
-    pure (ServerWorkflowClosed == ServerWorkflowClosed /\
-          st_after.CS.cs_model.CS.model_config ==
-            'st0.CS.cs_model.CS.model_config /\
-          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-          server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-          server_driver_close_correct
-            'st0
-            st_after
-            (Ghost.reveal 'sent)));
-  ServerWorkflowClosed
+      st_cn
+      st_wait
+      (Ghost.reveal 'sent);
+    assert (pure (server_driver_close_final_correct
+      wait_for_peer 'st0 st_wait (Ghost.reveal 'sent)));
+    close_transport_once d;
+    assert (server_driver_closed d st_wait 'certificate_chain 'credential_identity);
+    if (status = ServerWorkflowClosed) {
+      assert (pure (st_wait.CS.cs_model.CS.model_control == CS.ControlClosed));
+      assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowClosed));
+      assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st_wait));
+      assert (pure (SZ.v network_fuel <> 0));
+      assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+      assert (exists* st1.
+        server_driver_closed d st1 'certificate_chain 'credential_identity **
+        pure (st1.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config /\
+              server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+              server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+              server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+              server_driver_close_status_correct wait_for_peer ServerWorkflowClosed /\
+              server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st1 /\
+              server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+      ServerWorkflowClosed
+    } else if (status = ServerWorkflowExhausted) {
+      assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowExhausted));
+      assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowExhausted st_wait));
+      assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowExhausted));
+      assert (exists* st1.
+        server_driver_closed d st1 'certificate_chain 'credential_identity **
+        pure (st1.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config /\
+              server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+              server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+              server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+              server_driver_close_status_correct wait_for_peer ServerWorkflowExhausted /\
+              server_driver_close_wait_correct wait_for_peer ServerWorkflowExhausted st1 /\
+              server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowExhausted));
+      ServerWorkflowExhausted
+    } else {
+      (* The only remaining possibility is [ServerWorkflowStepFailed]: a
+         nonrecoverable failure was observed while draining the peer. Because the
+         waiting helper reports [Exhausted] on zero fuel, [StepFailed] implies
+         nonzero network fuel, so the fuel-boundary guarantee still holds. *)
+      assert (pure (status == ServerWorkflowStepFailed));
+      assert (pure (SZ.v network_fuel <> 0));
+      assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowStepFailed));
+      assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowStepFailed st_wait));
+      assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowStepFailed));
+      assert (exists* st1.
+        server_driver_closed d st1 'certificate_chain 'credential_identity **
+        pure (st1.CS.cs_model.CS.model_config ==
+                'st0.CS.cs_model.CS.model_config /\
+              server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+              server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+              server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+              server_driver_close_status_correct wait_for_peer ServerWorkflowStepFailed /\
+              server_driver_close_wait_correct wait_for_peer ServerWorkflowStepFailed st1 /\
+              server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowStepFailed));
+      ServerWorkflowStepFailed
+    }
+  } else {
+    server_driver_network_reaches_refl st_cn;
+    lemma_close_final_correct
+      wait_for_peer
+      'st0
+      st_cn
+      st_cn
+      (Ghost.reveal 'sent);
+    assert (pure (server_driver_close_final_correct
+      wait_for_peer 'st0 st_cn (Ghost.reveal 'sent)));
+    close_transport_once d;
+    assert (server_driver_closed d st_cn 'certificate_chain 'credential_identity);
+    assert (pure (server_driver_close_status_correct wait_for_peer ServerWorkflowClosed));
+    assert (pure (server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st_cn));
+    assert (pure (server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+    assert (exists* st1.
+      server_driver_closed d st1 'certificate_chain 'credential_identity **
+      pure (st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config /\
+            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
+            server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
+            server_driver_close_final_correct wait_for_peer 'st0 st1 (Ghost.reveal 'sent) /\
+            server_driver_close_status_correct wait_for_peer ServerWorkflowClosed /\
+            server_driver_close_wait_correct wait_for_peer ServerWorkflowClosed st1 /\
+            server_driver_close_fuel_correct wait_for_peer network_fuel ServerWorkflowClosed));
+    ServerWorkflowClosed
+  }
+}
+
+fn abort
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
+{
+  close_transport_once d;
 }

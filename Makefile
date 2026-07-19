@@ -423,29 +423,7 @@ TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
-COMMON_ENDPOINT_MODULES = \
-  Common.StateMachine \
-  Common.WireFormat \
-  Common.WireFormatStateMachine \
-  Common.ProtocolImplementation \
-  Common.ProtocolEndpoint
-TLS13_SHARED_ENDPOINT_MODULES = \
-  TLS13.Impl.ConnectionStateQuery \
-  TLS13.Impl.CanonicalTypes \
-  TLS13.Spec.Endpoint.Wire
-TLS13_CLIENT_ENDPOINT_MODULES = \
-  $(TLS13_SHARED_ENDPOINT_MODULES) \
-  TLS13.Impl.Client.CanonicalProtocol \
-  TLS13.Impl.Client.CanonicalQueries \
-  TLS13.Impl.Client.Endpoint
-TLS13_SERVER_ENDPOINT_MODULES = \
-  $(TLS13_SHARED_ENDPOINT_MODULES) \
-  TLS13.Impl.Server.CanonicalProtocol \
-  TLS13.Impl.Server.CanonicalQueries \
-  TLS13.Impl.Server.Endpoint
 CLIENT_DRIVER_IMPL_MODULES = \
-  $(COMMON_ENDPOINT_MODULES) \
-  $(TLS13_CLIENT_ENDPOINT_MODULES) \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -469,7 +447,15 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Messages \
   TLS13.KeySchedule \
   TLS13.Record \
-  TLS13.Impl.Client
+  TLS13.Impl.Client \
+  TLS13.Impl.Client.Driver.State \
+  TLS13.Impl.Client.Driver.New \
+  TLS13.Impl.Client.Driver.Core \
+  TLS13.Impl.Client.Driver.Cleanup \
+  TLS13.Impl.Client.Driver.Connect \
+  TLS13.Impl.Client.Driver.Send \
+  TLS13.Impl.Client.Driver.Receive \
+  TLS13.Impl.Client.Driver.Close
 CLIENT_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES))) \
@@ -479,17 +465,25 @@ CLIENT_DRIVER_KRML_FILES = \
 DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
+  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
+  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
+  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Client.CanonicalProtocol,\
+  -TLS13.Impl.Client.CanonicalQueries,-TLS13.Impl.Client.Endpoint,\
   -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 SERVER_DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
+  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
+  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
+  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Server.CanonicalProtocol,\
+  -TLS13.Impl.Server.CanonicalQueries,-TLS13.Impl.Server.Endpoint,\
   -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
 SERVER_DRIVER_MODULES = \
-  $(COMMON_ENDPOINT_MODULES) \
-  $(TLS13_SERVER_ENDPOINT_MODULES) \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.ConnectionState.Bounds \
   TLS13.Impl.ConnectionState.Model \
