@@ -118,18 +118,74 @@ fn driver_connect
       B.empty
       B.empty
       0sz));
-    fold (channel_open ch
-      (CR.configured_initial_state
+    let initial : Ghost.erased EC.client_initial_state =
+      Ghost.hide
+        (CR.configured_initial_state
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds);
+    assert (pure (Ghost.reveal initial ==
+      CR.configured_initial_state
         (Ghost.reveal 'server_name_bytes)
         (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds)
+        validation_time_seconds));
+    let progress =
+      MR.alloc
+        #_
+        #(EC.client_progress_preorder #CTypes.client_local_event)
+        (Ghost.reveal initial);
+    MR.take_snapshot progress (Ghost.reveal initial);
+    rewrite
+      (C.connection_exactly
+        c
+        (CR.configured_initial_state
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds))
+      as
+      (C.connection_exactly c (Ghost.reveal initial));
+    fold (channel_open ch
+      (Ghost.reveal initial)
       B.empty
       0sz);
+    fold
+      (driver_canonical_progress
+        {
+          driver_client = c;
+          driver_channel = ch;
+          driver_progress = progress;
+          driver_initial = initial;
+        }
+        (Ghost.reveal initial));
     fold
       (driver_exactly
         {
           driver_client = c;
           driver_channel = ch;
+          driver_progress = progress;
+          driver_initial = initial;
+        }
+        (Ghost.reveal initial)
+        B.empty
+        0sz);
+    rewrite
+      (driver_exactly
+        {
+          driver_client = c;
+          driver_channel = ch;
+          driver_progress = progress;
+          driver_initial = initial;
+        }
+        (Ghost.reveal initial)
+        B.empty
+        0sz)
+      as
+      (driver_exactly
+        {
+          driver_client = c;
+          driver_channel = ch;
+          driver_progress = progress;
+          driver_initial = initial;
         }
         (CR.configured_initial_state
           (Ghost.reveal 'server_name_bytes)
@@ -140,6 +196,8 @@ fn driver_connect
     Some {
       driver_client = c;
       driver_channel = ch;
+      driver_progress = progress;
+      driver_initial = initial;
     }
   }
   }
@@ -581,6 +639,7 @@ fn driver_process_local_event
                   SZ.v result.local_write_resp.CT.network_out_len))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  unfold (driver_canonical_progress d 'st0);
   let result =
     process_local_event_and_write_once
       d.driver_client
@@ -605,6 +664,19 @@ fn driver_process_local_event
     (Ghost.reveal 'payload_bytes)
     network_out_bytes
     app_out_bytes;
+  CP.lemma_client_local_progress
+    'st0
+    st1
+    {
+      CTypes.client_local_kind = kind;
+      CTypes.client_local_payload = Ghost.reveal 'payload_bytes;
+    }
+    result.local_write_resp
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.driver_progress st1;
+  assert (pure (CT.client_end_to_end_invariant st1));
+  fold (driver_canonical_progress d st1);
   fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
@@ -673,6 +745,7 @@ fn driver_process_buffered_network_bytes_once
                  SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len))
 {
   unfold (driver_exactly d 'st0 'buffered buffered_len);
+  unfold (driver_canonical_progress d 'st0);
   A.pts_to_len raw;
   assert (pure (A.length raw == SZ.v raw_capacity));
   A.to_mask raw;
@@ -915,6 +988,18 @@ fn driver_process_buffered_network_bytes_once
   assert (pure (SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
   assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
     SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
+  CP.lemma_client_network_progress
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes;
+  MR.update d.driver_progress st1;
+  assert (pure (CT.client_end_to_end_invariant st1));
+  fold (driver_canonical_progress d st1);
   fold (driver_exactly d st1 (Ghost.reveal new_buffered) new_pending);
   assert (pure (B.length raw_prefix == SZ.v buffered_len));
   assert (pure (CT.network_bytes_end_to_end_correct
@@ -1840,6 +1925,39 @@ fn process_ready_internal_local_action_once
   }
 }
 
+let lemma_ready_local_action_progress
+  (st0 st1:CS.connection_state)
+  (result:ready_local_action_result)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        (result.ready_local_processed ==>
+          CT.local_event_end_to_end_correct
+            st0
+            st1
+            result.ready_local_resp
+            result.ready_local_action.CT.next_local_kind
+            payload
+            network_out
+            app_out) /\
+        (result.ready_local_processed == false ==> st1 == st0))
+      (ensures
+        EC.client_progress_preorder #CTypes.client_local_event st0 st1)
+=
+  if result.ready_local_processed then
+    CP.lemma_client_local_progress
+      st0
+      st1
+      {
+        CTypes.client_local_kind = result.ready_local_action.CT.next_local_kind;
+        CTypes.client_local_payload = payload;
+      }
+      result.ready_local_resp
+      network_out
+      app_out
+  else
+    assert (EC.client_progress_preorder #CTypes.client_local_event st0 st1)
+
 fn driver_handshake_step
   (d:driver)
   (empty_payload:array U8.t)
@@ -1891,6 +2009,7 @@ fn driver_handshake_step
                  (result.ready_local_processed == false ==> st1 == 'st0))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  unfold (driver_canonical_progress d 'st0);
   let result =
     process_ready_internal_local_action_once
       d.driver_client
@@ -1917,6 +2036,16 @@ fn driver_handshake_step
     app_out_bytes;
   assert (pure (st1.CS.cs_model.CS.model_config ==
     'st0.CS.cs_model.CS.model_config));
+  lemma_ready_local_action_progress
+    'st0
+    st1
+    result
+    (Ghost.reveal 'empty_payload_bytes)
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.driver_progress st1;
+  assert (pure (CT.client_end_to_end_invariant st1));
+  fold (driver_canonical_progress d st1);
   fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }

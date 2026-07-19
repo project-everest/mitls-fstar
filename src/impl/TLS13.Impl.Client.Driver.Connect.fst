@@ -111,11 +111,23 @@ fn run
       let core = {
         driver_client = d.client_driver_client;
         driver_channel = ch;
+        driver_progress = d.client_driver_progress;
+        driver_initial = d.client_driver_initial;
       };
       let td = {
         top_driver_core = core;
         top_driver_auth = d.client_driver_auth;
       };
+      unfold (client_driver_canonical_progress d 'st0);
+      rewrite
+        (MR.pts_to d.client_driver_progress #1.0R 'st0)
+        as
+        (MR.pts_to core.driver_progress #1.0R 'st0);
+      rewrite
+        (MR.snapshot d.client_driver_progress (Ghost.reveal d.client_driver_initial))
+        as
+        (MR.snapshot core.driver_progress (Ghost.reveal core.driver_initial));
+      fold (driver_canonical_progress core 'st0);
       rewrite (C.connection_exactly d.client_driver_client 'st0) as
         (C.connection_exactly core.driver_client 'st0);
       rewrite (channel_open ch 'st0 B.empty current_buffered_len) as
@@ -163,6 +175,16 @@ fn run
       rewrite (driver_exactly td.top_driver_core st1 buffered_after result.driver_workflow_rx_len) as
         (driver_exactly core st1 buffered_after result.driver_workflow_rx_len);
       unfold (driver_exactly core st1 buffered_after result.driver_workflow_rx_len);
+      unfold (driver_canonical_progress core st1);
+      rewrite
+        (MR.pts_to core.driver_progress #1.0R st1)
+        as
+        (MR.pts_to d.client_driver_progress #1.0R st1);
+      rewrite
+        (MR.snapshot core.driver_progress (Ghost.reveal core.driver_initial))
+        as
+        (MR.snapshot d.client_driver_progress (Ghost.reveal d.client_driver_initial));
+      fold (client_driver_canonical_progress d st1);
       V.to_vec_pts_to d.client_driver_empty_payload;
       V.to_vec_pts_to d.client_driver_raw;
       V.to_vec_pts_to d.client_driver_network_out;

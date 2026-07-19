@@ -1925,12 +1925,11 @@ let client_network_common_witness
     wire_outputs
     local_outputs
 
-// Helper: prove a canonical step exists when the network response is a non-StepOk
-// error and the state changed (st1 != st0).  Covers:
+// Prove a canonical step for every state-changing network response.  Covers:
 //   Case A – DecodeError  → LocalFail (tls_decode_error)
 //   Case B1 – legal_received_tls_response → WireEvent
 //   Case B2 – unexpected_message_response → LocalFail (tls_unexpected_message_error)
-let lemma_client_network_nonstep_canonical_step
+let lemma_client_network_changed_canonical_step
   (st0:CS.connection_state)
   (st1:CS.connection_state)
   (buffer_resp:CT.client_buffer_response)
@@ -1941,7 +1940,6 @@ let lemma_client_network_nonstep_canonical_step
   (app_out:B.bytes)
   : Lemma
       (requires
-        buffer_resp.CT.response.CT.status <> CT.StepOk /\
         st1 <> st0 /\
         CT.client_state_correct st0 /\
         CT.network_bytes_end_to_end_correct
@@ -2289,6 +2287,48 @@ let lemma_client_network_nonstep_canonical_step
     )
   )
 
+let lemma_client_network_progress
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (input_contents:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        CT.client_end_to_end_invariant st0 /\
+        CT.network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          input_contents
+          old_network_out
+          network_out
+          old_app_out
+          app_out)
+      (ensures
+        client_progress_preorder #CTypes.client_local_event st0 st1)
+=
+  if st0 = st1 then
+    assert (client_progress_preorder #CTypes.client_local_event st0 st1)
+  else (
+    lemma_client_network_changed_canonical_step
+      st0
+      st1
+      buffer_resp
+      input_contents
+      old_network_out
+      network_out
+      old_app_out
+      app_out;
+    RTC.closure_step
+      (client_canonical_step_rel #CTypes.client_local_event)
+      st0
+      st1
+  )
+
 let lemma_client_network_common_witness_progress
   (initial:client_initial_state)
   (received0:B.bytes)
@@ -2411,7 +2451,7 @@ let lemma_client_network_common_witness_progress
       assert (client_invariant_pure initial received0 sent0 st0);
       assert (CT.client_end_to_end_invariant st0);
       assert (CT.client_state_correct st0);
-      lemma_client_network_nonstep_canonical_step
+      lemma_client_network_changed_canonical_step
         st0
         st1
         buffer_resp

@@ -325,6 +325,8 @@ noeq type client_driver = {
 noeq type driver = {
   driver_client: C.client;
   driver_channel: IO.channel;
+  driver_progress: MR.mref (EC.client_progress_preorder #CTypes.client_local_event);
+  driver_initial: Ghost.erased EC.client_initial_state;
 }
 
 let lemma_read_append_buffer_matches_raw_prefix_index
@@ -557,6 +559,20 @@ let channel_open
     pure (client_driver_wire_logs_match st received sent buffered buffered_len)
 
 noextract
+let driver_canonical_progress
+  (d:driver)
+  (st:CS.connection_state)
+  : slprop =
+  MR.pts_to
+    d.driver_progress
+    #1.0R
+    st **
+  MR.snapshot
+    d.driver_progress
+    (Ghost.reveal d.driver_initial) **
+  pure (CT.client_end_to_end_invariant st)
+
+noextract
 let driver_exactly
   (d:driver)
   (st:TLS13.Spec.StateMachine.connection_state)
@@ -564,6 +580,7 @@ let driver_exactly
   (buffered_len:SZ.t)
   : slprop =
   C.connection_exactly d.driver_client st **
+  driver_canonical_progress d st **
   channel_open d.driver_channel st buffered buffered_len
 
 noeq type top_driver = {
@@ -628,29 +645,19 @@ let client_driver_buffers
       V.is_full_vec d.client_driver_app_out /\
       V.is_full_vec d.client_driver_local_app_out)
 
-(**
-  Canonical seed carried by every public driver ownership predicate.
-
-  This is deliberately only the initial canonical progress token/snapshot.  The
-  existing public driver workflow below still calls the legacy low-level client
-  operations directly, so it cannot soundly claim that the monotonic reference is
-  at each post-state without routing that step through
-  [TLS13.Impl.Client.Endpoint] (or proving the corresponding canonical progress
-  lemma at the call site).  Keeping this seed in the public predicates preserves
-  the current API resources while making the canonical client identity available
-  for the endpoint-owned helpers below.
-**)
 noextract
-let client_driver_canonical_seed
+let client_driver_canonical_progress
   (d:client_driver)
+  (st:CS.connection_state)
   : slprop =
   MR.pts_to
     d.client_driver_progress
     #1.0R
-    (Ghost.reveal d.client_driver_initial) **
+    st **
   MR.snapshot
     d.client_driver_progress
-    (Ghost.reveal d.client_driver_initial)
+    (Ghost.reveal d.client_driver_initial) **
+  pure (CT.client_end_to_end_invariant st)
 
 noextract
 let client_driver_live
@@ -658,7 +665,7 @@ let client_driver_live
   (st:TLS13.Spec.StateMachine.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
-  client_driver_canonical_seed d **
+  client_driver_canonical_progress d st **
   O.is_auth_context d.client_driver_auth **
   Box.pts_to d.client_driver_channel no_channel **
   client_driver_buffers d B.empty 0sz **
@@ -679,7 +686,7 @@ let client_driver_connected
   (sent:B.bytes)
   : slprop =
   C.connection_exactly d.client_driver_client st **
-  client_driver_canonical_seed d **
+  client_driver_canonical_progress d st **
   O.is_auth_context d.client_driver_auth **
   exists* ch buffered buffered_len.
     Box.pts_to d.client_driver_channel (Some ch) **
@@ -693,7 +700,7 @@ let client_driver_closed
   (st:TLS13.Spec.StateMachine.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
-  client_driver_canonical_seed d
+  client_driver_canonical_progress d st
 
 let lemma_client_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
