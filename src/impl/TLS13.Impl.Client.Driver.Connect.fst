@@ -285,6 +285,10 @@ fn run
           close_failed_connect d ch result.driver_workflow_rx_len;
           DriverWorkflowPayloadTooLarge
         }
+        DriverWorkflowOutputBufferTooSmall -> {
+          close_failed_connect d ch result.driver_workflow_rx_len;
+          DriverWorkflowOutputBufferTooSmall
+        }
       }
     }
   }
