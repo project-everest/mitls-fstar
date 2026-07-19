@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
+module CTypes = TLS13.Impl.CanonicalTypes
 module CS = TLS13.Spec.StateMachine
 module CM = TLS13.Impl.ConnectionState.Model
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -17,10 +18,12 @@ module ID = FStar.IndefiniteDescription
 module IM = TLS13.Impl.Messages
 module IO = Common.TCP
 module M = TLS13.Messages
+module MR = Pulse.Lib.MonotonicGhostRef
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module RS = TLS13.Record.Spec
 module S = TLS13.Impl.Server
+module SP = TLS13.Impl.Server.CanonicalProtocol
 module SSetup = TLS13.Impl.Server.Setup
 module SS = TLS13.Impl.Server.Send
 module ST = TLS13.Impl.Server.Types
@@ -123,6 +126,21 @@ fn start_server_once
     app_out_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
   assert (pure (st1 == CM.started_server_state 'st0));
+  unfold (server_driver_canonical_progress d 'st0);
+  SP.lemma_server_local_event_progress
+    'st0
+    st1
+    resp
+    ST.LocalStartServer
+    empty_payload
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.server_driver_progress st1;
+  fold (server_driver_canonical_progress d st1);
+  rewrite
+    (server_driver_canonical_progress d st1)
+    as
+    (server_driver_canonical_progress d (CM.started_server_state 'st0));
   rewrite (S.connection_exactly d.server_driver_server st1) as
     (S.connection_exactly
       d.server_driver_server
@@ -855,6 +873,17 @@ fn process_local_event_and_write_once
     network_out_bytes
     app_out_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
+  unfold (server_driver_canonical_progress d 'st0);
+  SP.lemma_server_local_event_progress
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.server_driver_progress st1;
+  fold (server_driver_canonical_progress d st1);
   lemma_local_event_wire_lengths
     'st0
     st1
@@ -1404,6 +1433,17 @@ fn process_empty_local_event_exact_network_len_and_write_once
     network_out_bytes
     app_out_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
+  unfold (server_driver_canonical_progress d 'st0);
+  SP.lemma_server_local_event_progress
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.server_driver_progress st1;
+  fold (server_driver_canonical_progress d st1);
   lemma_local_event_wire_lengths
     'st0
     st1

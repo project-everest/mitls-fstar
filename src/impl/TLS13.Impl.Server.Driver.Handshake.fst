@@ -19,8 +19,10 @@ module DN = TLS13.Impl.Server.Driver.Network
 module IO = Common.TCP
 module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
+module MR = Pulse.Lib.MonotonicGhostRef
 module Seq = FStar.Seq
 module S = TLS13.Impl.Server
+module SP = TLS13.Impl.Server.CanonicalProtocol
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
@@ -578,6 +580,17 @@ fn select_default_server_parameters_once
       pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
   assert (pure (B.length network_out_bytes == SZ.v driver_network_out_capacity));
   assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
+  unfold (server_driver_canonical_progress d 'st0);
+  SP.lemma_server_local_event_progress
+    'st0
+    st1
+    resp
+    ST.LocalSelectServerParameters
+    B.empty
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.server_driver_progress st1;
+  fold (server_driver_canonical_progress d st1);
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
   assert (pure (st1.CS.cs_model.CS.model_control ==
@@ -782,6 +795,17 @@ fn select_default_server_parameters_from_payload_once
       pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
   assert (pure (B.length network_out_bytes == SZ.v driver_network_out_capacity));
   assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
+  unfold (server_driver_canonical_progress d 'st0);
+  SP.lemma_server_local_event_progress
+    'st0
+    st1
+    resp
+    ST.LocalSelectServerParameters
+    B.empty
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.server_driver_progress st1;
+  fold (server_driver_canonical_progress d st1);
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
   assert (pure (st1.CS.cs_model.CS.model_control ==
@@ -968,6 +992,17 @@ fn derive_shared_secret_from_payload_once
     network_out_bytes
     app_out_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
+  unfold (server_driver_canonical_progress d 'st0);
+  SP.lemma_server_local_event_progress
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.server_driver_progress st1;
+  fold (server_driver_canonical_progress d st1);
   lemma_local_event_wire_lengths
     'st0
     st1
@@ -1670,6 +1705,17 @@ fn send_server_hello_from_payload_once
    B.empty
    network_out_bytes
    app_out_bytes));
+ unfold (server_driver_canonical_progress d 'st0);
+ SP.lemma_server_local_event_progress
+   'st0
+   st1
+   resp
+   ST.LocalSendServerHello
+   B.empty
+   network_out_bytes
+   app_out_bytes;
+ MR.update d.server_driver_progress st1;
+ fold (server_driver_canonical_progress d st1);
  ST.lemma_local_send_server_hello_payload_irrelevant
    'st0
    st1
@@ -2221,7 +2267,7 @@ fn select_and_derive_shared_secret_once
     'st0
     (Ghost.reveal selection)));
 
-  let _ =
+  let select_resp =
     S.process_select_default_server_parameters_with_derived_public_from_private_array
       d.server_driver_server
       server_random
@@ -2237,6 +2283,17 @@ fn select_and_derive_shared_secret_once
       pts_to server_private_key server_private_key_bytes **
       pts_to (V.vec_to_array d.server_driver_network_out) network_out_bytes **
       pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
+  unfold (server_driver_canonical_progress d 'st0);
+  SP.lemma_server_local_event_progress
+    'st0
+    st1
+    select_resp
+    ST.LocalSelectServerParameters
+    B.empty
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.server_driver_progress st1;
+  fold (server_driver_canonical_progress d st1);
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
   assert (pure (st1.CS.cs_model.CS.model_config ==

@@ -386,6 +386,7 @@ let server_driver_live
     d.server_driver_credentials
     certificate_chain
     credential_identity **
+  server_driver_canonical_progress d st **
   Box.pts_to d.server_driver_channel no_channel **
   server_driver_buffers d B.empty 0sz **
   pure (ST.server_end_to_end_invariant st /\
@@ -411,6 +412,7 @@ let server_driver_connected
     d.server_driver_credentials
     certificate_chain
     credential_identity **
+  server_driver_canonical_progress d st **
   exists* ch buffered buffered_len.
     Box.pts_to d.server_driver_channel (Some ch) **
     IO.is_channel ch received sent **
@@ -425,14 +427,9 @@ let server_driver_connected
 
 noextract
 (**
-  Endpoint-owned connected server state.
-
-  The endpoint frame owns the resources consumed by [Server.Endpoint], including
-  the canonical progress/current-state resource.  It is separate from the legacy
-  public predicate while the driver workflows are still routed through the direct
-  low-level path.  The server endpoint requires a distinct private-key vec, so
-  callers provide that through [frame] instead of treating the 64-byte material
-  vec as a splittable subview.
+  Endpoint-owned connected server state. The server endpoint requires a distinct
+  private-key vec, so callers provide that through [frame] instead of treating
+  the 64-byte material vec as a splittable subview.
 **)
 let server_driver_endpoint_connected
   (d:server_driver)
@@ -498,6 +495,7 @@ let server_driver_connected_with_app_out
     d.server_driver_credentials
     certificate_chain
     credential_identity **
+  server_driver_canonical_progress d st **
   exists* ch buffered buffered_len.
     Box.pts_to d.server_driver_channel (Some ch) **
     IO.is_channel ch received sent **
@@ -560,6 +558,7 @@ let server_driver_closed
     d.server_driver_credentials
     certificate_chain
     credential_identity **
+  server_driver_canonical_progress d st **
   Box.pts_to d.server_driver_channel no_channel **
   exists* buffered buffered_len.
     server_driver_buffers d buffered buffered_len **

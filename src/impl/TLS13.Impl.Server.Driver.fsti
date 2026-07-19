@@ -411,11 +411,6 @@ fn new_server
                    credential_identity)
                  (Ghost.reveal 'certificate_chain_bytes)
                  credential_identity **
-               server_driver_canonical_progress
-                 d
-                 (CR.server_initial_state
-                   (Ghost.reveal 'certificate_chain_bytes)
-                   credential_identity) **
                pure (ST.server_state_correct
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
