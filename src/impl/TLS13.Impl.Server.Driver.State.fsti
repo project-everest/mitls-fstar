@@ -7,6 +7,7 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
+module CI = Common.ChannelImplementation
 module CS = TLS13.Spec.StateMachine
 module CTypes = TLS13.Impl.CanonicalTypes
 module ES = TLS13.Spec.Endpoint.Server
@@ -19,6 +20,7 @@ module S = TLS13.Impl.Server
 module SQueries = TLS13.Impl.Server.CanonicalQueries
 module EP = TLS13.Impl.Server.Endpoint
 module ST = TLS13.Impl.Server.Types
+module TChannel = TLS13.Impl.Channel
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -76,7 +78,16 @@ let server_driver_canonical_progress
   (st: CS.connection_state)
   : slprop =
   MR.pts_to d.server_driver_progress #1.0R st **
-  MR.snapshot d.server_driver_progress (Ghost.reveal d.server_driver_initial)
+  MR.snapshot d.server_driver_progress (Ghost.reveal d.server_driver_initial) **
+  pure (
+    Seq.equal
+      (Ghost.reveal d.server_driver_initial).CS.cs_wire_log.CL.raw_received
+      B.empty /\
+    Seq.equal
+      (Ghost.reveal d.server_driver_initial).CS.cs_wire_log.CL.raw_sent
+      B.empty /\
+    st.CS.cs_model.CS.model_config ==
+      (Ghost.reveal d.server_driver_initial).CS.cs_model.CS.model_config)
 
 noextract
 val server_driver_endpoint_config
@@ -425,6 +436,41 @@ let server_driver_connected
           server_driver_supported_profile_selection st credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
 
+let server_channel_inv
+  (d:server_driver)
+  (raw_received:B.bytes)
+  (raw_sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st received sent ch buffered buffered_len.
+    SP.server_invariant
+      (server_driver_canonical d)
+      raw_received
+      raw_sent
+      st **
+    Box.pts_to d.server_driver_channel (Some ch) **
+    IO.is_channel ch received sent **
+    server_driver_buffers d buffered buffered_len **
+    pure (
+      server_driver_wire_logs_match
+        st received sent buffered buffered_len /\
+      app_log == TChannel.application_log st)
+
+noextract
+let server_channel_snapshot
+  (d:server_driver)
+  (raw_received:B.bytes)
+  (raw_sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st.
+    SP.server_snapshot
+      (server_driver_canonical d)
+      raw_received
+      raw_sent
+      st **
+    pure (app_log == TChannel.application_log st)
+
 noextract
 (**
   Endpoint-owned connected server state. The server endpoint requires a distinct
@@ -506,7 +552,8 @@ let server_driver_connected_with_app_out
            certificate_chain
            credential_identity /\
           server_driver_supported_profile_selection st credential_identity /\
-          server_driver_wire_logs_match st received sent buffered buffered_len)
+          server_driver_wire_logs_match st received sent buffered buffered_len /\
+          B.length app_out == SZ.v driver_app_out_capacity)
 
 fn forget_server_driver_connected_app_out
   (d:server_driver)

@@ -161,7 +161,7 @@ static int run_extracted_server(
   alarm(20);
   tls13_server_driver *server = NULL;
   static const uint8_t expected[] = {'p', 'i', 'n', 'g'};
-  uint8_t received[sizeof expected] = {0};
+  uint8_t received[TLS13_SERVER_DRIVER_RECEIVE_BUFFER_SIZE] = {0};
   size_t received_len = 0;
   int rc = 1;
 

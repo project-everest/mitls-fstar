@@ -6,6 +6,8 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module CI = Common.ChannelImplementation
+module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes
 module ES = TLS13.Spec.Endpoint.Server
 module A = Pulse.Lib.Array
@@ -21,12 +23,14 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
 module IM = TLS13.Impl.Messages
 module IO = Common.TCP
+module ID = FStar.IndefiniteDescription
 module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module SM = TLS13.Spec.StateMachine.ClientTrace
+module SMLog = TLS13.Spec.StateMachine.Log
 module S = TLS13.Impl.Server
 module DS = TLS13.Impl.Server.Driver.State
 module DT = TLS13.Impl.Server.Driver.Transport
@@ -48,7 +52,9 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module SP = TLS13.Impl.Server.CanonicalProtocol
+module SChannel = TLS13.Impl.Server.ChannelImplementation
 module SS = TLS13.Impl.Server.Send
+module TChannel = TLS13.Impl.Channel
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
 type server_driver = DS.server_driver
@@ -530,7 +536,7 @@ fn new_server
   }
 }
 
-fn accept
+fn accept_connected
   (d:server_driver)
   (bind_host:array U8.t)
   (bind_host_len:SZ.t)
@@ -886,7 +892,482 @@ fn accept
   }
 }
 
-fn send
+fn accept
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                 CM.can_start_server 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.Rsa_pss_rsae_sha256 /\
+                    cfg.CS.server_sni_policy == None
+                  | None -> False))
+  returns status:server_workflow_status
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerWorkflowOk ->
+             exists* raw_received raw_sent app_log.
+               DS.server_channel_inv d raw_received raw_sent app_log
+           | ServerWorkflowClosed ->
+             exists* st1.
+               server_driver_closed
+                 d st1 'certificate_chain 'credential_identity
+           | _ ->
+             exists* st1 received sent.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent)
+{
+  let status =
+    accept_connected
+      d bind_host bind_host_len port local_fuel network_fuel;
+  match status {
+    ServerWorkflowOk -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d st1 'certificate_chain 'credential_identity received sent);
+      SChannel.pack_connected_channel
+        d
+        (Ghost.hide st1)
+        (Ghost.hide (Ghost.reveal 'certificate_chain))
+        (Ghost.hide (Ghost.reveal 'credential_identity))
+        (Ghost.hide received)
+        (Ghost.hide sent);
+      ServerWorkflowOk
+    }
+    ServerWorkflowNeedMoreInput -> { ServerWorkflowNeedMoreInput }
+    ServerWorkflowStepFailed -> { ServerWorkflowStepFailed }
+    ServerWorkflowExhausted -> { ServerWorkflowExhausted }
+    ServerWorkflowClosed -> { ServerWorkflowClosed }
+    ServerWorkflowPayloadTooLarge -> { ServerWorkflowPayloadTooLarge }
+    ServerWorkflowOutputBufferTooSmall -> {
+      ServerWorkflowOutputBufferTooSmall
+    }
+  }
+}
+
+let lemma_local_send_application_log
+  (st0 st1:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  (network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.server_local_event_end_to_end_correct
+          st0 st1 resp ST.LocalSendApplicationData payload network_out app_out)
+      (ensures
+        TChannel.application_log st1 ==
+          (if resp.ST.status == ST.StepOk
+           then CI.append_sent (TChannel.application_log st0) payload
+           else TChannel.application_log st0))
+=
+  assert (ST.legal_handled_local_response
+    st0 st1 resp ST.LocalSendApplicationData payload network_out app_out);
+  if resp.ST.status == ST.StepOk then (
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          ST.legal_local_response
+            st0 st1 resp ST.LocalSendApplicationData payload ev
+            raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          ST.legal_local_response
+            st0 st1 resp ST.LocalSendApplicationData payload ev
+            raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          ST.legal_local_response
+            st0 st1 resp ST.LocalSendApplicationData payload ev
+            raw_sent raw_received network_out app_out) in
+    ST.lemma_legal_response_for_event_app_log_delta
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
+    assert (SMLog.conn_event_app_sent_delta ev == [payload]);
+    assert (SMLog.conn_event_app_received_delta ev == [])
+  ) else (
+    assert (ST.unexpected_message_response
+      st0 st1 resp network_out app_out);
+    ST.lemma_legal_response_for_event_app_log_delta
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CM.tls_unexpected_message_error))
+      B.empty
+      B.empty
+      network_out
+      app_out
+  )
+
+let lemma_driver_send_application_log
+  (st0 st1:CS.connection_state)
+  (status:server_workflow_status)
+  (payload sent0 sent1:B.bytes)
+  : Lemma
+      (requires
+        server_driver_send_correct st0 st1 status payload sent0 sent1)
+      (ensures
+        TChannel.application_log st1 ==
+          (if status == ServerWorkflowOk
+           then CI.append_sent (TChannel.application_log st0) payload
+           else TChannel.application_log st0))
+=
+  if status == ServerWorkflowPayloadTooLarge then ()
+  else (
+    let resp =
+      ID.indefinite_description_ghost
+        ST.server_response
+        (fun resp ->
+          DL.server_driver_local_write_correct
+            st0 st1 resp ST.LocalSendApplicationData payload sent0 sent1 /\
+          server_driver_send_status_correct status resp) in
+    let network_out =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun network_out -> exists app_out.
+          ST.server_local_event_end_to_end_correct
+            st0 st1 resp ST.LocalSendApplicationData payload
+            network_out app_out /\
+          Seq.equal sent1
+            (B.append sent0 (ST.response_network_out resp network_out))) in
+    let app_out =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun app_out ->
+          ST.server_local_event_end_to_end_correct
+            st0 st1 resp ST.LocalSendApplicationData payload
+            network_out app_out /\
+          Seq.equal sent1
+            (B.append sent0 (ST.response_network_out resp network_out))) in
+    lemma_local_send_application_log
+      st0 st1 resp payload network_out app_out
+  )
+
+let lemma_legal_response_observable_receive_log
+  (st0 st1:CS.connection_state)
+  (resp:ST.server_response)
+  (ev:CS.conn_event)
+  (raw_sent raw_received network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        SMLog.conn_event_app_sent_delta ev == [])
+      (ensures
+        (let output = ST.response_app_out resp app_out in
+         TChannel.application_log st1 ==
+           (if B.length output == 0
+            then TChannel.application_log st0
+            else CI.append_received (TChannel.application_log st0) output)))
+=
+  ST.lemma_legal_response_for_event_app_log_delta
+    st0 st1 resp ev raw_sent raw_received network_out app_out;
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Sent, M.TlsApplicationData _ ->
+       assert False
+     | CL.Received, M.TlsApplicationData bytes ->
+       assert (Seq.equal (ST.response_app_out resp app_out) bytes);
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [bytes]
+     | _, _ ->
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [])
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData bytes ->
+       assert (Seq.equal (ST.response_app_out resp app_out) bytes);
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [bytes]
+     | _ ->
+       TChannel.lemma_observable_received_append
+         st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+         [])
+
+let lemma_server_network_process_application_log
+  (st0 st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (sent0 sent1 app_out:B.bytes)
+  : Lemma
+      (requires
+        DN.server_driver_network_process_correct_for_app_out
+          st0 st1 buffer_resp sent0 sent1 app_out)
+      (ensures
+        (let output = ST.response_app_out buffer_resp.ST.response app_out in
+         TChannel.application_log st1 ==
+           (if B.length output == 0
+            then TChannel.application_log st0
+            else CI.append_received (TChannel.application_log st0) output) /\
+         (st1.CS.cs_model.CS.model_control == CS.ControlClosed ==>
+           B.length output == 0)))
+=
+  let input =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun input -> exists network_out.
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp input network_out app_out /\
+        ST.server_network_consumed_input_projection
+          st0 st1 buffer_resp input network_out app_out /\
+        Seq.equal sent1
+          (B.append sent0
+            (ST.response_network_out buffer_resp.ST.response network_out))) in
+  let network_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out ->
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp input network_out app_out /\
+        ST.server_network_consumed_input_projection
+          st0 st1 buffer_resp input network_out app_out /\
+        Seq.equal sent1
+          (B.append sent0
+            (ST.response_network_out buffer_resp.ST.response network_out))) in
+  let resp = buffer_resp.ST.response in
+  match resp.ST.status with
+  | ST.StepOk ->
+    let msg =
+      ID.indefinite_description_ghost
+        M.tls_message
+        (fun msg ->
+          CT.received_tls_raw_delta_legal
+            st0 msg (ST.server_network_consumed_prefix buffer_resp input) /\
+          ST.server_decoded_message_event_projection
+            st0 st1 resp msg
+            (ST.server_network_consumed_prefix buffer_resp input)
+            network_out app_out /\
+          (if CS.network_message_is_cleartext CL.Received msg
+           then True
+           else ST.server_protected_record_decode_correct
+             st0 (ST.server_network_consumed_prefix buffer_resp input) msg)) in
+    if ST.legal_network_response
+         st0
+         st1
+         resp
+         msg
+         (ST.server_network_consumed_prefix buffer_resp input)
+         network_out
+         app_out
+    then (
+      lemma_legal_response_observable_receive_log
+        st0
+        st1
+        resp
+        (ST.received_message_event msg)
+        B.empty
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out;
+      if st1.CS.cs_model.CS.model_control == CS.ControlClosed then
+        ST.lemma_legal_response_closed_app_out_empty
+          st0
+          st1
+          resp
+          (ST.received_message_event msg)
+          B.empty
+          (ST.server_network_consumed_prefix buffer_resp input)
+          network_out
+          app_out
+    )
+    else (
+      assert (ST.unexpected_message_response
+        st0 st1 resp network_out app_out);
+      assert False
+    )
+  | ST.ConnectionFailed ->
+    let alert =
+      ID.indefinite_description_ghost
+        T.alert_description
+        (fun alert -> exists raw_received.
+          st1 == CM.received_alert_failure_state st0 alert raw_received /\
+          Seq.equal raw_received
+            (ST.server_network_consumed_prefix buffer_resp input) /\
+          ST.legal_network_response
+            st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out /\
+          TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+            st0.CS.cs_model
+            (ST.received_message_event (M.TlsAlert alert))
+            raw_received) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          st1 == CM.received_alert_failure_state st0 alert raw_received /\
+          Seq.equal raw_received
+            (ST.server_network_consumed_prefix buffer_resp input) /\
+          ST.legal_network_response
+            st0 st1 resp (M.TlsAlert alert) raw_received network_out app_out /\
+          TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+            st0.CS.cs_model
+            (ST.received_message_event (M.TlsAlert alert))
+            raw_received) in
+    lemma_legal_response_observable_receive_log
+      st0
+      st1
+      resp
+      (ST.received_message_event (M.TlsAlert alert))
+      B.empty
+      raw_received
+      network_out
+      app_out;
+    if st1.CS.cs_model.CS.model_control == CS.ControlClosed then
+      ST.lemma_legal_response_closed_app_out_empty
+        st0
+        st1
+        resp
+        (ST.received_message_event (M.TlsAlert alert))
+        B.empty
+        raw_received
+        network_out
+        app_out
+  | ST.DecodeError ->
+    lemma_legal_response_observable_receive_log
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error))
+      B.empty
+      B.empty
+      network_out
+      app_out;
+    if st1.CS.cs_model.CS.model_control == CS.ControlClosed then
+      ST.lemma_legal_response_closed_app_out_empty
+        st0
+        st1
+        resp
+        (CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error))
+        B.empty
+        B.empty
+        network_out
+        app_out
+  | ST.NeedMoreInput -> assert (st1 == st0)
+  | ST.IllegalTransition -> assert (st1 == st0)
+  | ST.OutputBufferTooSmall -> assert False
+
+let lemma_driver_receive_application_log
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  (loop:DN.server_driver_network_loop_result)
+  (sent0 sent1 app_out out_bytes:B.bytes)
+  : Lemma
+      (requires
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes /\
+        B.length out_bytes >= SZ.v DS.driver_app_out_capacity)
+      (ensures
+        TChannel.application_log st1 ==
+          (if channel_receive_succeeded result
+           then
+             CI.append_received
+               (TChannel.application_log st0)
+               (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
+           else TChannel.application_log st0))
+=
+  if loop.DN.server_driver_network_loop_exhausted then
+    assert (st1 == st0)
+  else (
+    lemma_server_network_process_application_log
+      st0
+      st1
+      loop.DN.server_driver_network_loop_last
+      sent0
+      sent1
+      app_out;
+    let resp = loop.DN.server_driver_network_loop_last.ST.response in
+    if result.server_receive_status == ServerWorkflowOk then (
+      assert (resp.ST.status == ST.StepOk);
+      assert (result.server_receive_len == resp.ST.app_out_len);
+      assert (Seq.equal
+        (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
+        (ST.response_app_out resp app_out));
+      if B.length (ST.response_app_out resp app_out) = 0 then (
+        Seq.lemma_len_slice
+          out_bytes 0 (SZ.v result.server_receive_len);
+        Seq.lemma_eq_elim
+          (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
+          (ST.response_app_out resp app_out);
+        assert (SZ.v result.server_receive_len == 0)
+      ) else (
+        Seq.lemma_len_slice
+          out_bytes 0 (SZ.v result.server_receive_len);
+        Seq.lemma_eq_elim
+          (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
+          (ST.response_app_out resp app_out)
+      )
+    ) else (
+      assert (resp.ST.status <> ST.StepOk \/
+        st1.CS.cs_model.CS.model_control == CS.ControlClosed);
+      match resp.ST.status with
+      | ST.StepOk ->
+        assert (st1.CS.cs_model.CS.model_control == CS.ControlClosed);
+        assert (B.length (ST.response_app_out resp app_out) == 0)
+      | _ ->
+        assert (B.length (ST.response_app_out resp app_out) == 0)
+    )
+  )
+
+let lemma_driver_receive_exists_application_log
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  (sent0 sent1 out_bytes:B.bytes)
+  : Lemma
+      (requires
+        (exists loop app_out.
+          server_driver_receive_correct
+            st0 st1 result loop sent0 sent1 app_out out_bytes) /\
+        B.length out_bytes >= SZ.v DS.driver_app_out_capacity)
+      (ensures
+        TChannel.application_log st1 ==
+          (if channel_receive_succeeded result
+           then
+             CI.append_received
+               (TChannel.application_log st0)
+               (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
+           else TChannel.application_log st0))
+=
+  let loop =
+    ID.indefinite_description_ghost
+      DN.server_driver_network_loop_result
+      (fun loop -> exists app_out.
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes) in
+  let app_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_out ->
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes) in
+  lemma_driver_receive_application_log
+    st0 st1 result loop sent0 sent1 app_out out_bytes
+
+fn send_connected
   (d:server_driver)
   (payload:array U8.t)
   (payload_len:SZ.t)
@@ -1030,8 +1511,161 @@ fn send
   }
 }
 
+fn send
+  (d:server_driver)
+  (raw_received0:Ghost.erased B.bytes)
+  (raw_sent0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (payload:array U8.t)
+  (payload_bytes:Ghost.erased B.bytes)
+  (payload_len:SZ.t)
+  requires DS.server_channel_inv
+             d
+             (Ghost.reveal raw_received0)
+             (Ghost.reveal raw_sent0)
+             (Ghost.reveal app_log0) **
+           pts_to payload (Ghost.reveal payload_bytes) **
+           pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
+  returns status:server_workflow_status
+  ensures exists* raw_received1 raw_sent1 app_log1.
+          DS.server_channel_inv d raw_received1 raw_sent1 app_log1 **
+          pts_to payload (Ghost.reveal payload_bytes) **
+          pure (
+            CI.send_transition
+              channel_message_of_bytes
+              channel_send_succeeded
+              status
+              (Ghost.reveal payload_bytes)
+              (Ghost.reveal raw_received0)
+              (Ghost.reveal raw_sent0)
+              (Ghost.reveal app_log0)
+              raw_received1
+              raw_sent1
+              app_log1)
+{
+  SChannel.take_channel_snapshot d raw_received0 raw_sent0 app_log0;
+  SChannel.open_channel_invariant d raw_received0 raw_sent0 app_log0;
+  with st0 certificate_chain credential_identity received0 sent0.
+    assert (server_driver_connected
+      d st0 certificate_chain credential_identity received0 sent0);
+  unfold (server_driver_connected
+    d st0 certificate_chain credential_identity received0 sent0);
+  with ch buffered buffered_len.
+    assert (S.connection_exactly d.server_driver_server st0);
+  rewrite (S.connection_exactly d.server_driver_server st0)
+    as (CR.connection_exactly d.server_driver_server st0);
+  let control_snapshot = CQ.get_control_snapshot d.server_driver_server;
+  let app_keys_ready =
+    CQ.server_application_record_keys_installed_runtime
+      d.server_driver_server;
+  rewrite (CR.connection_exactly d.server_driver_server st0)
+    as (S.connection_exactly d.server_driver_server st0);
+  fold (server_driver_connected
+    d st0 certificate_chain credential_identity received0 sent0);
+  let ready =
+    control_snapshot.CR.snapshot_control_tag = 2uy && app_keys_ready;
+  if ready {
+    lemma_control_snapshot_app_ready control_snapshot st0;
+    assert (pure (CS.application_record_keys_installed_for_role
+      CS.ServerEndpoint
+      st0.CS.cs_model));
+    assert (pure (server_driver_application_ready st0));
+    let status = send_connected d payload payload_len;
+    with st1 sent1.
+      assert (server_driver_connected
+        d st1 certificate_chain credential_identity received0 sent1 **
+        pts_to payload (Ghost.reveal payload_bytes));
+    lemma_driver_send_application_log
+      st0
+      st1
+      status
+      (Ghost.reveal payload_bytes)
+      sent0
+      sent1;
+    SChannel.pack_connected_channel_invariant
+      d
+      (Ghost.hide st1)
+      (Ghost.hide certificate_chain)
+      (Ghost.hide credential_identity)
+      (Ghost.hide received0)
+      (Ghost.hide sent1);
+    SChannel.recall_channel_snapshot
+      d
+      raw_received0
+      raw_sent0
+      app_log0
+      (Ghost.hide st1.CS.cs_wire_log.CL.raw_received)
+      (Ghost.hide st1.CS.cs_wire_log.CL.raw_sent)
+      (Ghost.hide (TChannel.application_log st1));
+    drop_ (DS.server_channel_snapshot
+      d
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      (Ghost.reveal app_log0));
+    assert (
+      DS.server_channel_inv
+        d
+        st1.CS.cs_wire_log.CL.raw_received
+        st1.CS.cs_wire_log.CL.raw_sent
+        (TChannel.application_log st1) **
+      pts_to payload (Ghost.reveal payload_bytes) **
+      pure (CI.send_transition
+        channel_message_of_bytes
+        channel_send_succeeded
+        status
+        (Ghost.reveal payload_bytes)
+        (Ghost.reveal raw_received0)
+        (Ghost.reveal raw_sent0)
+        (Ghost.reveal app_log0)
+        st1.CS.cs_wire_log.CL.raw_received
+        st1.CS.cs_wire_log.CL.raw_sent
+        (TChannel.application_log st1)));
+    status
+  } else {
+    SChannel.pack_connected_channel_invariant
+      d
+      (Ghost.hide st0)
+      (Ghost.hide certificate_chain)
+      (Ghost.hide credential_identity)
+      (Ghost.hide received0)
+      (Ghost.hide sent0);
+    SChannel.recall_channel_snapshot
+      d
+      raw_received0
+      raw_sent0
+      app_log0
+      (Ghost.hide st0.CS.cs_wire_log.CL.raw_received)
+      (Ghost.hide st0.CS.cs_wire_log.CL.raw_sent)
+      (Ghost.hide (TChannel.application_log st0));
+    drop_ (DS.server_channel_snapshot
+      d
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      (Ghost.reveal app_log0));
+    assert (
+      DS.server_channel_inv
+        d
+        st0.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_sent
+        (TChannel.application_log st0) **
+      pts_to payload (Ghost.reveal payload_bytes) **
+      pure (CI.send_transition
+        channel_message_of_bytes
+        channel_send_succeeded
+        ServerWorkflowStepFailed
+        (Ghost.reveal payload_bytes)
+        (Ghost.reveal raw_received0)
+        (Ghost.reveal raw_sent0)
+        (Ghost.reveal app_log0)
+        st0.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_sent
+        (TChannel.application_log st0)));
+    ServerWorkflowStepFailed
+  }
+}
 
-fn receive
+
+fn receive_connected
   (d:server_driver)
   (out:array U8.t)
   (out_len:SZ.t)
@@ -1189,7 +1823,7 @@ fn receive
       loop
       (Ghost.reveal 'sent)
       sent'
-      B.empty
+      loop_app_out
       (Ghost.reveal 'out_bytes)));
     forget_server_driver_connected_app_out d;
     result
@@ -1459,6 +2093,140 @@ fn receive
   }
 }
 
+fn receive
+  (d:server_driver)
+  (raw_received0:Ghost.erased B.bytes)
+  (raw_sent0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (out:array U8.t)
+  (old_output:Ghost.erased B.bytes)
+  (out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires DS.server_channel_inv
+             d
+             (Ghost.reveal raw_received0)
+             (Ghost.reveal raw_sent0)
+             (Ghost.reveal app_log0) **
+           pts_to out (Ghost.reveal old_output) **
+           pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
+  returns result:server_receive_result
+  ensures exists* raw_received1 raw_sent1 app_log1 output.
+          DS.server_channel_inv d raw_received1 raw_sent1 app_log1 **
+          pts_to out output **
+          pure (
+            B.length output == SZ.v out_len /\
+            SZ.v result.server_receive_len <= SZ.v out_len /\
+            CI.receive_transition
+              channel_message_of_bytes
+              channel_receive_succeeded
+              channel_receive_length
+              result
+              output
+              (Ghost.reveal raw_received0)
+              (Ghost.reveal raw_sent0)
+              (Ghost.reveal app_log0)
+              raw_received1
+              raw_sent1
+              app_log1)
+{
+  let output_fits = SZ.lte DS.driver_app_out_capacity out_len;
+  if output_fits {
+    SChannel.take_channel_snapshot d raw_received0 raw_sent0 app_log0;
+    SChannel.open_channel_invariant d raw_received0 raw_sent0 app_log0;
+    with st0 certificate_chain credential_identity received0 sent0.
+      assert (server_driver_connected
+        d st0 certificate_chain credential_identity received0 sent0);
+    let result = receive_connected d out out_len local_fuel network_fuel;
+    with st1 received1 sent1 output.
+      assert (server_driver_connected
+                d st1 certificate_chain credential_identity received1 sent1 **
+              pts_to out output);
+    assert (pure (exists loop app_out.
+      server_driver_receive_correct
+        st0 st1 result loop sent0 sent1 app_out output));
+    assert (pure (B.length output >= SZ.v DS.driver_app_out_capacity));
+    lemma_driver_receive_exists_application_log
+      st0 st1 result sent0 sent1 output;
+    SChannel.pack_connected_channel_invariant
+      d
+      (Ghost.hide st1)
+      (Ghost.hide certificate_chain)
+      (Ghost.hide credential_identity)
+      (Ghost.hide received1)
+      (Ghost.hide sent1);
+    SChannel.recall_channel_snapshot
+      d
+      raw_received0
+      raw_sent0
+      app_log0
+      (Ghost.hide st1.CS.cs_wire_log.CL.raw_received)
+      (Ghost.hide st1.CS.cs_wire_log.CL.raw_sent)
+      (Ghost.hide (TChannel.application_log st1));
+    drop_ (DS.server_channel_snapshot
+      d
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      (Ghost.reveal app_log0));
+    assert (
+      DS.server_channel_inv
+        d
+        st1.CS.cs_wire_log.CL.raw_received
+        st1.CS.cs_wire_log.CL.raw_sent
+        (TChannel.application_log st1) **
+      pts_to out output **
+      pure (
+        B.length output == SZ.v out_len /\
+        SZ.v result.server_receive_len <= SZ.v out_len /\
+        CI.receive_transition
+          channel_message_of_bytes
+          channel_receive_succeeded
+          channel_receive_length
+          result
+          output
+          (Ghost.reveal raw_received0)
+          (Ghost.reveal raw_sent0)
+          (Ghost.reveal app_log0)
+          st1.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_sent
+          (TChannel.application_log st1)));
+    result
+  } else {
+    let result = {
+      server_receive_status = ServerWorkflowOutputBufferTooSmall;
+      server_receive_len = 0sz;
+    };
+    assert (pure (CPI.histories_ahead
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)));
+    assert (
+      DS.server_channel_inv
+        d
+        (Ghost.reveal raw_received0)
+        (Ghost.reveal raw_sent0)
+        (Ghost.reveal app_log0) **
+      pts_to out (Ghost.reveal old_output) **
+      pure (
+        B.length (Ghost.reveal old_output) == SZ.v out_len /\
+        SZ.v result.server_receive_len <= SZ.v out_len /\
+        CI.receive_transition
+          channel_message_of_bytes
+          channel_receive_succeeded
+          channel_receive_length
+          result
+          (Ghost.reveal old_output)
+          (Ghost.reveal raw_received0)
+          (Ghost.reveal raw_sent0)
+          (Ghost.reveal app_log0)
+          (Ghost.reveal raw_received0)
+          (Ghost.reveal raw_sent0)
+          (Ghost.reveal app_log0)));
+    result
+  }
+}
+
 (**
   Reflexive-transitive-closure lemmas for [server_driver_network_reaches].  They
   are proved once here, in pure F*, so the Pulse [close] workflow only needs to
@@ -1666,7 +2434,7 @@ fn rec wait_for_peer_close_notify
   }
 }
 
-fn close
+fn close_connected
   (d:server_driver)
   (wait_for_peer:bool)
   (network_fuel:SZ.t)
@@ -1864,7 +2632,7 @@ fn close
   }
 }
 
-fn abort
+fn abort_connected
   (d:server_driver)
   requires server_driver_connected
               d
@@ -1877,3 +2645,102 @@ fn abort
 {
   close_transport_once d;
 }
+
+fn close
+  (d:server_driver)
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  (wait_for_peer:bool)
+  (network_fuel:SZ.t)
+  requires DS.server_channel_inv
+             d
+             (Ghost.reveal raw_received)
+             (Ghost.reveal raw_sent)
+             (Ghost.reveal app_log)
+  returns status:server_workflow_status
+  ensures exists* st1 certificate_chain credential_identity.
+          server_driver_closed d st1 certificate_chain credential_identity
+{
+  SChannel.open_channel_invariant d raw_received raw_sent app_log;
+  with st0 certificate_chain credential_identity received sent.
+    assert (server_driver_connected
+      d st0 certificate_chain credential_identity received sent);
+  unfold (server_driver_connected
+    d st0 certificate_chain credential_identity received sent);
+  with ch buffered buffered_len.
+    assert (S.connection_exactly d.server_driver_server st0);
+  rewrite (S.connection_exactly d.server_driver_server st0)
+    as (CR.connection_exactly d.server_driver_server st0);
+  let control_snapshot = CQ.get_control_snapshot d.server_driver_server;
+  let app_keys_ready =
+    CQ.server_application_record_keys_installed_runtime
+      d.server_driver_server;
+  rewrite (CR.connection_exactly d.server_driver_server st0)
+    as (S.connection_exactly d.server_driver_server st0);
+  fold (server_driver_connected
+    d st0 certificate_chain credential_identity received sent);
+  let ready =
+    control_snapshot.CR.snapshot_control_tag = 2uy && app_keys_ready;
+  if ready {
+    lemma_control_snapshot_app_ready control_snapshot st0;
+    assert (pure (CS.application_record_keys_installed_for_role
+      CS.ServerEndpoint
+      st0.CS.cs_model));
+    assert (pure (server_driver_application_ready st0));
+    close_connected d wait_for_peer network_fuel
+  } else {
+    abort_connected d;
+    ServerWorkflowClosed
+  }
+}
+
+fn abort
+  (d:server_driver)
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires DS.server_channel_inv
+             d
+             (Ghost.reveal raw_received)
+             (Ghost.reveal raw_sent)
+             (Ghost.reveal app_log)
+  ensures exists* st certificate_chain credential_identity.
+          server_driver_closed d st certificate_chain credential_identity
+{
+  SChannel.open_channel_invariant d raw_received raw_sent app_log;
+  with st certificate_chain credential_identity received sent.
+    assert (server_driver_connected
+      d st certificate_chain credential_identity received sent);
+  abort_connected d
+}
+
+noextract
+let server_channel_implementation
+  : CI.channel_implementation
+      server_driver
+      SP.canonical_server
+      CS.connection_state
+      TLS13.Spec.Endpoint.Wire.wire_message
+      CTypes.server_local_event
+      TLS13.Spec.Endpoint.API.local_output
+      B.bytes
+      server_workflow_status
+      server_receive_result
+      SP.server_protocol_implementation
+  =
+  {
+    CI.ci_protocol_impl = DS.server_driver_canonical;
+    CI.ci_project = TChannel.application_log;
+    CI.ci_message_of_bytes = channel_message_of_bytes;
+    CI.ci_channel_inv = DS.server_channel_inv;
+    CI.ci_snapshot = DS.server_channel_snapshot;
+    CI.ci_send_succeeded = channel_send_succeeded;
+    CI.ci_receive_succeeded = channel_receive_succeeded;
+    CI.ci_receive_length = channel_receive_length;
+    CI.ci_invariant_valid = SChannel.channel_invariant_valid;
+    CI.ci_take_snapshot = SChannel.take_channel_snapshot;
+    CI.ci_recall_snapshot = SChannel.recall_channel_snapshot;
+    CI.ci_send = send;
+    CI.ci_receive = receive;
+  }

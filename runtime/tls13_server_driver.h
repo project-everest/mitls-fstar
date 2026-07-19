@@ -9,6 +9,8 @@
 
 typedef struct tls13_server_driver_s tls13_server_driver;
 
+#define TLS13_SERVER_DRIVER_RECEIVE_BUFFER_SIZE ((size_t)16640u)
+
 int tls13_server_driver_accept(
     tls13_server_driver **out,
     const char *bind_host,
