@@ -36,6 +36,7 @@ let crlf : (b:TCP.bytes{Seq.length b == 2}) =
   Seq.init 2 (fun i -> if i = 0 then bCR else bLF)
 
 (* ─── Single decimal digit ─────────────────────────────────────────────────── *)
+inline_for_extraction
 let is_dec (b:U8.t) : bool = 0x30uy `U8.lte` b && b `U8.lte` 0x39uy
 
 let dig (d:nat{d < 10}) : U8.t = U8.uint_to_t (0x30 + d)
