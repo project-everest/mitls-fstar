@@ -333,6 +333,10 @@ let lemma_emit_response_final
   with (code <: status_code) (U32.v len <: content_len) and ()
 
 
+(* ------------------------------------------------------------------------ *)
+(* Recv: parse the 43-byte response head back into (code, len).             *)
+(* ------------------------------------------------------------------------ *)
+
 open Pulse.Lib.BoundedIntegers
 
 (* size_t is at least 32 bits on every real target; HTTP head buffers can exceed
@@ -665,5 +669,94 @@ fn http_emit_response
   Seq.lemma_eq_intro sf (respbytes code len);
   lemma_emit_response_final code len sf;
   ()
+}
+#pop-options
+
+(* Parse a 43-byte response head `inp` back into a status code and Content-Length.
+   Returns `ok`; when `ok`, `pcode`/`plen` hold values that `http_parse inp`
+   decodes to exactly `Msg_response` of, with no residual.  Strategy: decode the
+   11 digit positions to a candidate (code,len), then verify the WHOLE 43-byte
+   buffer equals `head_byte code len` at every index in one compare loop.  A full
+   match means `inp == respbytes code len == ser_response code (v len)`, so the
+   spec's forward round-trip law (`lemma_http_parse_serialize_exact`) certifies
+   the decode -- no separate parse-inversion proof is needed. *)
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 2"
+fn http_recv_response (inp: array U8.t) (pcode: R.ref U16.t) (plen: R.ref U32.t)
+  requires
+    pts_to inp 'i ** R.pts_to pcode 'c0 ** R.pts_to plen 'l0 **
+    pure (Seq.length 'i == 43)
+  returns ok: bool
+  ensures
+    pts_to inp 'i **
+    (exists* (cv:U16.t) (lv:U32.t).
+       R.pts_to pcode cv ** R.pts_to plen lv **
+       pure (ok == true ==>
+         (Prims.op_LessThanOrEqual 100 (U16.v cv) /\
+          Prims.op_LessThan (U16.v cv) 1000 /\
+          Prims.op_LessThan (U32.v lv) W.max_len8 /\
+          http_parse 'i == Some (Msg_response cv (U32.v lv), Seq.empty #U8.t))))
+{
+  (* decode the 11 digit positions to a candidate (code,len) *)
+  let b9  = inp.(9sz);  let b10 = inp.(10sz); let b11 = inp.(11sz);
+  let b31 = inp.(31sz); let b32 = inp.(32sz); let b33 = inp.(33sz); let b34 = inp.(34sz);
+  let b35 = inp.(35sz); let b36 = inp.(36sz); let b37 = inp.(37sz); let b38 = inp.(38sz);
+  let dok = W.is_dec b9 && W.is_dec b10 && W.is_dec b11 &&
+            W.is_dec b31 && W.is_dec b32 && W.is_dec b33 && W.is_dec b34 &&
+            W.is_dec b35 && W.is_dec b36 && W.is_dec b37 && W.is_dec b38;
+  if dok {
+    let c9  = Cast.uint8_to_uint16 (U8.sub b9  0x30uy);
+    let c10 = Cast.uint8_to_uint16 (U8.sub b10 0x30uy);
+    let c11 = Cast.uint8_to_uint16 (U8.sub b11 0x30uy);
+    let code = U16.add (U16.add (U16.mul 100us c9) (U16.mul 10us c10)) c11;
+    let e31 = Cast.uint8_to_uint32 (U8.sub b31 0x30uy);
+    let e32 = Cast.uint8_to_uint32 (U8.sub b32 0x30uy);
+    let e33 = Cast.uint8_to_uint32 (U8.sub b33 0x30uy);
+    let e34 = Cast.uint8_to_uint32 (U8.sub b34 0x30uy);
+    let e35 = Cast.uint8_to_uint32 (U8.sub b35 0x30uy);
+    let e36 = Cast.uint8_to_uint32 (U8.sub b36 0x30uy);
+    let e37 = Cast.uint8_to_uint32 (U8.sub b37 0x30uy);
+    let e38 = Cast.uint8_to_uint32 (U8.sub b38 0x30uy);
+    let hi4 = U32.add (U32.add (U32.add (U32.mul 1000ul e31) (U32.mul 100ul e32)) (U32.mul 10ul e33)) e34;
+    let lo4 = U32.add (U32.add (U32.add (U32.mul 1000ul e35) (U32.mul 100ul e36)) (U32.mul 10ul e37)) e38;
+    let len = U32.add (U32.mul 10000ul hi4) lo4;
+    if (U16.lte 100us code && U16.lt code 1000us && U32.lt len 100000000ul) {
+      (* verify the whole head equals head_byte code len at every position *)
+      lemma_respbytes_len code len;
+      let mut ok = true;
+      let mut i = 0sz;
+      while (SZ.lt !i 43sz)
+      invariant exists* (vi:SZ.t) (okv:bool).
+        R.pts_to i vi ** R.pts_to ok okv ** pts_to inp 'i **
+        pure (SZ.v vi <= 43 /\ Seq.length 'i == 43 /\
+          Seq.length (respbytes code len) == 43 /\
+          (okv == true ==> (forall (k:nat). k < SZ.v vi ==>
+             Seq.index 'i k == Seq.index (respbytes code len) k)))
+      {
+        let vi = !i;
+        let bv = inp.(vi);
+        lemma_head_byte code len vi;
+        let ev = head_byte code len vi;
+        let eq = U8.eq bv ev;
+        ok := (!ok) && eq;
+        i := SZ.add vi 1sz;
+      };
+      let okv = !ok;
+      if okv {
+        lemma_respbytes_len code len;
+        Seq.lemma_eq_intro ('i <: Seq.seq U8.t) (respbytes code len);
+        lemma_respbytes_reveal code len;
+        lemma_http_parse_serialize_exact (Msg_response code (U32.v len));
+        pcode := code;
+        plen  := len;
+        true
+      } else {
+        false
+      }
+    } else {
+      false
+    }
+  } else {
+    false
+  }
 }
 #pop-options
