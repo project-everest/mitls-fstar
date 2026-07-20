@@ -579,12 +579,24 @@ fn process_network_bytes
                   'old_app_out
                   app_out_bytes /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+                 CT.response_stuttered
+                   'st0
+                   st1
+                   buffer_resp.CT.response
+                   'old_network_out
+                   network_out_bytes
+                   'old_app_out
+                   app_out_bytes) /\
+                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
                  buffer_resp.CT.consumed_len == 0sz /\
                  WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
                 (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
                  buffer_resp.CT.consumed_len == 0sz) /\
                 (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
                  buffer_resp.CT.consumed_len == 0sz) /\
+                (SZ.v buffer_resp.CT.response.CT.app_out_len > 0 ==>
+                 buffer_resp.CT.response.CT.status == CT.StepOk /\
+                 buffer_resp.CT.response.CT.network_out_len == 0sz) /\
                 (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   let decoded = P.decode_network_buffer c raw raw_len;

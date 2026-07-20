@@ -2228,7 +2228,8 @@ let legal_handled_local_response
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
-  (exists ev raw_sent raw_received.
+  (resp.status == StepOk /\
+   exists ev raw_sent raw_received.
      legal_local_response
        st0
        st1

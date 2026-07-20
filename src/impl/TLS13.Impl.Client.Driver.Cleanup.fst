@@ -74,7 +74,7 @@ fn free_disconnected_client_driver
   (d:client_driver)
   (buffered_len:SZ.t)
   requires C.connection_exactly d.client_driver_client 'st0 **
-           client_driver_canonical_seed d **
+           client_driver_canonical_progress d 'st0 **
            O.is_auth_context d.client_driver_auth **
            Box.pts_to d.client_driver_channel no_channel **
            (exists* buffered. client_driver_buffers d buffered buffered_len)
@@ -92,7 +92,7 @@ fn close_failed_connect
   (ch:IO.channel)
   (buffered_len:SZ.t)
   requires C.connection_exactly d.client_driver_client 'st0 **
-           client_driver_canonical_seed d **
+           client_driver_canonical_progress d 'st0 **
            O.is_auth_context d.client_driver_auth **
            channel_open ch 'st0 'buffered buffered_len **
            Box.pts_to d.client_driver_channel no_channel **

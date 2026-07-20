@@ -7,6 +7,8 @@
 
 typedef struct tls13_client_driver_s tls13_client_driver;
 
+#define TLS13_CLIENT_DRIVER_RECEIVE_BUFFER_SIZE ((size_t)16640u)
+
 int tls13_client_driver_connect(
     tls13_client_driver **out,
     const char *connect_host,

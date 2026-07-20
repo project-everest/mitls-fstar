@@ -975,6 +975,63 @@ let legal_response_for_event
   Seq.equal (response_network_out resp network_out) raw_sent /\
   response_app_out_matches_event resp ev app_out
 
+let lemma_legal_response_for_event_app_log_delta
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out)
+      (ensures TLS13.Spec.StateMachine.Log.model_app_log_delta
+        st0.CS.cs_model ev st1.CS.cs_model)
+=
+  CSL.lemma_legal_connection_delta_app_log_delta
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1
+
+let lemma_legal_response_closed_app_out_empty
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        st1.CS.cs_model.CS.model_control == CS.ControlClosed)
+      (ensures B.length (response_app_out resp app_out) == 0)
+=
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsApplicationData _ ->
+       (match msg.CL.message_direction with
+        | CL.Sent -> assert False
+        | CL.Received -> assert False)
+     | _ ->
+       assert (Seq.equal (response_app_out resp app_out) B.empty);
+       Seq.lemma_eq_elim (response_app_out resp app_out) B.empty)
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData _ -> assert False
+     | _ ->
+       assert (Seq.equal (response_app_out resp app_out) B.empty);
+       Seq.lemma_eq_elim (response_app_out resp app_out) B.empty)
+
 noextract
 let unexpected_message_response
   (st0:CS.connection_state)

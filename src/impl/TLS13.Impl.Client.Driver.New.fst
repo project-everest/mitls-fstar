@@ -155,7 +155,7 @@ fn new_client
          (MR.snapshot
            d.client_driver_progress
            (Ghost.reveal d.client_driver_initial));
-      fold (client_driver_canonical_seed d);
+      fold (client_driver_canonical_progress d (Ghost.reveal initial));
       rewrite (Box.pts_to channel no_channel) as
          (Box.pts_to d.client_driver_channel no_channel);
       rewrite (Box.pts_to buffered_len 0sz) as

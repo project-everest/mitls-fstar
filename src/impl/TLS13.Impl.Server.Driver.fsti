@@ -7,23 +7,27 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
+module CI = Common.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module DL = TLS13.Impl.Server.Driver.Local
 module DN = TLS13.Impl.Server.Driver.Network
+module DState = TLS13.Impl.Server.Driver.State
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module SM = TLS13.Spec.StateMachine.ClientTrace
 module SP = TLS13.Impl.Server.CanonicalProtocol
+module SChannel = TLS13.Impl.Server.ChannelImplementation
+module TChannel = TLS13.Impl.Channel
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
-val server_driver : Type0
+type server_driver = DState.server_driver
 
 noextract
 val server_driver_canonical
@@ -75,11 +79,26 @@ type server_workflow_status =
   | ServerWorkflowExhausted
   | ServerWorkflowClosed
   | ServerWorkflowPayloadTooLarge
+  | ServerWorkflowOutputBufferTooSmall
 
 type server_receive_result = {
   server_receive_status: server_workflow_status;
   server_receive_len: SZ.t;
 }
+
+let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
+
+let channel_send_succeeded (status:server_workflow_status) : bool =
+  match status with
+  | ServerWorkflowOk -> true
+  | _ -> false
+
+let channel_receive_succeeded (result:server_receive_result) : GTot bool =
+  result.server_receive_status == ServerWorkflowOk &&
+  result.server_receive_len <> 0sz
+
+let channel_receive_length (result:server_receive_result) : SZ.t =
+  result.server_receive_len
 
 noextract
 let server_driver_send_status_correct
@@ -187,7 +206,11 @@ let server_driver_receive_correct
   (out_bytes:B.bytes)
   : prop =
   server_driver_receive_status_correct result loop st1 app_out out_bytes /\
+  B.length app_out == SZ.v DState.driver_app_out_capacity /\
   SZ.v result.server_receive_len <= B.length out_bytes /\
+  (loop.DN.server_driver_network_loop_exhausted == true ==>
+    st1 == st0 /\
+    Seq.equal sent' sent) /\
   (loop.DN.server_driver_network_loop_exhausted == false ==>
     DN.server_driver_network_process_correct
       st0
@@ -411,11 +434,6 @@ fn new_server
                    credential_identity)
                  (Ghost.reveal 'certificate_chain_bytes)
                  credential_identity **
-               server_driver_canonical_progress
-                 d
-                 (CR.server_initial_state
-                   (Ghost.reveal 'certificate_chain_bytes)
-                   credential_identity) **
                pure (ST.server_state_correct
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
@@ -470,27 +488,14 @@ fn accept
   returns status:server_workflow_status
   ensures pts_to bind_host 'bind_host_bytes **
           (match status with
+           | ServerWorkflowOk ->
+             exists* raw_received raw_sent app_log.
+               DState.server_channel_inv
+                 d raw_received raw_sent app_log
            | ServerWorkflowClosed ->
              exists* st1.
-               server_driver_closed d st1 'certificate_chain 'credential_identity **
-               pure (st1.CS.cs_model.CS.model_config ==
-                 'st0.CS.cs_model.CS.model_config)
-           | ServerWorkflowOk ->
-             exists* st1 received sent.
-               server_driver_connected
-                 d
-                 st1
-                 'certificate_chain
-                 'credential_identity
-                 received
-                 sent **
-               pure (server_driver_application_ready st1 /\
-                    st1.CS.cs_model.CS.model_config ==
-                      'st0.CS.cs_model.CS.model_config /\
-                    server_driver_sent_log_exact st1 sent /\
-                    server_driver_received_log_accounted st1 received /\
-                    server_driver_received_log_exact_prefix st1 received /\
-                    server_driver_received_no_read_ahead st1 received)
+               server_driver_closed
+                 d st1 'certificate_chain 'credential_identity
            | _ ->
              exists* st1 received sent.
                server_driver_connected
@@ -499,123 +504,92 @@ fn accept
                  'certificate_chain
                  'credential_identity
                  received
-                 sent **
-               pure (st1.CS.cs_model.CS.model_config ==
-                 'st0.CS.cs_model.CS.model_config))
+                 sent)
 
 fn send
   (d:server_driver)
+  (raw_received0:Ghost.erased B.bytes)
+  (raw_sent0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
   (payload:array U8.t)
+  (payload_bytes:Ghost.erased B.bytes)
   (payload_len:SZ.t)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent **
-           pts_to payload 'payload_bytes **
-           pure (B.length 'payload_bytes == SZ.v payload_len /\
-                 server_driver_application_ready 'st0)
+  requires DState.server_channel_inv
+             d
+             (Ghost.reveal raw_received0)
+             (Ghost.reveal raw_sent0)
+             (Ghost.reveal app_log0) **
+           pts_to payload (Ghost.reveal payload_bytes) **
+           pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
   returns status:server_workflow_status
-  ensures exists* st1 sent'.
-          server_driver_connected
-            d
-            st1
-            'certificate_chain
-            'credential_identity
-            'received
-            sent' **
-          pts_to payload 'payload_bytes **
-          pure (server_driver_send_correct
-            'st0
-            st1
-            status
-            (Ghost.reveal 'payload_bytes)
-            (Ghost.reveal 'sent)
-            sent' /\
-            st1.CS.cs_model.CS.model_config ==
-              'st0.CS.cs_model.CS.model_config /\
-            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-            server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-            server_driver_sent_log_exact st1 sent' /\
-            server_driver_received_log_accounted st1 (Ghost.reveal 'received))
+  ensures exists* raw_received1 raw_sent1 app_log1.
+          DState.server_channel_inv d raw_received1 raw_sent1 app_log1 **
+          pts_to payload (Ghost.reveal payload_bytes) **
+          pure (
+            CI.send_transition
+              channel_message_of_bytes
+              channel_send_succeeded
+              status
+              (Ghost.reveal payload_bytes)
+              (Ghost.reveal raw_received0)
+              (Ghost.reveal raw_sent0)
+              (Ghost.reveal app_log0)
+              raw_received1
+              raw_sent1
+              app_log1)
 
 fn receive
   (d:server_driver)
+  (raw_received0:Ghost.erased B.bytes)
+  (raw_sent0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
   (out:array U8.t)
+  (old_output:Ghost.erased B.bytes)
   (out_len:SZ.t)
   (local_fuel:SZ.t)
   (network_fuel:SZ.t)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent **
-           pts_to out 'out_bytes **
-           pure (B.length 'out_bytes == SZ.v out_len)
+  requires DState.server_channel_inv
+             d
+             (Ghost.reveal raw_received0)
+             (Ghost.reveal raw_sent0)
+             (Ghost.reveal app_log0) **
+           pts_to out (Ghost.reveal old_output) **
+           pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
   returns result:server_receive_result
-  ensures exists* st1 received' sent' out_bytes.
-          server_driver_connected
-            d
-            st1
-            'certificate_chain
-            'credential_identity
-            received'
-            sent' **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v result.server_receive_len <= SZ.v out_len /\
-                st1.CS.cs_model.CS.model_config ==
-                  'st0.CS.cs_model.CS.model_config /\
-                server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-                server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-                server_driver_sent_log_exact st1 sent' /\
-                server_driver_received_log_accounted st1 received' /\
-                (server_driver_application_ready 'st0 /\
-                 (result.server_receive_status == ServerWorkflowExhausted \/
-                  result.server_receive_status == ServerWorkflowNeedMoreInput) ==>
-                 server_driver_application_ready st1) /\
-                (exists loop app_out.
-                  server_driver_receive_correct
-                    'st0
-                    st1
-                    result
-                    loop
-                    (Ghost.reveal 'sent)
-                    sent'
-                    app_out
-                    out_bytes))
+  ensures exists* raw_received1 raw_sent1 app_log1 output.
+          DState.server_channel_inv d raw_received1 raw_sent1 app_log1 **
+          pts_to out output **
+          pure (
+            B.length output == SZ.v out_len /\
+            SZ.v result.server_receive_len <= SZ.v out_len /\
+            CI.receive_transition
+              channel_message_of_bytes
+              channel_receive_succeeded
+              channel_receive_length
+              result
+              output
+              (Ghost.reveal raw_received0)
+              (Ghost.reveal raw_sent0)
+              (Ghost.reveal app_log0)
+              raw_received1
+              raw_sent1
+              app_log1)
 
 fn close
   (d:server_driver)
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
   (wait_for_peer:bool)
   (network_fuel:SZ.t)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent **
-           pure (server_driver_application_ready 'st0)
+  requires DState.server_channel_inv
+             d
+             (Ghost.reveal raw_received)
+             (Ghost.reveal raw_sent)
+             (Ghost.reveal app_log)
   returns status:server_workflow_status
-  ensures exists* st1.
-          server_driver_closed d st1 'certificate_chain 'credential_identity **
-          pure (st1.CS.cs_model.CS.model_config ==
-                  'st0.CS.cs_model.CS.model_config /\
-                server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
-                server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
-                server_driver_close_final_correct
-                  wait_for_peer
-                  'st0
-                  st1
-                  (Ghost.reveal 'sent) /\
-                server_driver_close_status_correct wait_for_peer status /\
-                server_driver_close_wait_correct wait_for_peer status st1 /\
-                server_driver_close_fuel_correct wait_for_peer network_fuel status)
+  ensures exists* st1 certificate_chain credential_identity.
+          server_driver_closed d st1 certificate_chain credential_identity
 
 (**
   Safely disposes an accepted transport after any workflow failure. Unlike
@@ -623,11 +597,27 @@ fn close
 **)
 fn abort
   (d:server_driver)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent
-  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires DState.server_channel_inv
+             d
+             (Ghost.reveal raw_received)
+             (Ghost.reveal raw_sent)
+             (Ghost.reveal app_log)
+  ensures exists* st certificate_chain credential_identity.
+          server_driver_closed d st certificate_chain credential_identity
+
+noextract
+val server_channel_implementation
+  : CI.channel_implementation
+      server_driver
+      SP.canonical_server
+      CS.connection_state
+      TLS13.Spec.Endpoint.Wire.wire_message
+      TLS13.Impl.CanonicalTypes.server_local_event
+      TLS13.Spec.Endpoint.API.local_output
+      B.bytes
+      server_workflow_status
+      server_receive_result
+      SP.server_protocol_implementation

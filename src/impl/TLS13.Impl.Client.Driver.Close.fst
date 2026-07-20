@@ -282,6 +282,7 @@ fn driver_send_close_notify
                   SZ.v result.local_write_resp.CT.network_out_len))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  unfold (driver_canonical_progress d 'st0);
   assert (pure (CT.local_input_wf
     'st0
     CT.LocalSendCloseNotify
@@ -311,6 +312,19 @@ fn driver_send_close_notify
     (Ghost.reveal 'empty_payload_bytes)
     network_out_bytes
     app_out_bytes;
+  CP.lemma_client_local_progress
+    'st0
+    st1
+    {
+      CTypes.client_local_kind = CT.LocalSendCloseNotify;
+      CTypes.client_local_payload = Ghost.reveal 'empty_payload_bytes;
+    }
+    result.local_write_resp
+    network_out_bytes
+    app_out_bytes;
+  MR.update d.driver_progress st1;
+  assert (pure (CT.client_end_to_end_invariant st1));
+  fold (driver_canonical_progress d st1);
   fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
@@ -344,6 +358,7 @@ fn rec driver_close_workflow
   returns result: driver_workflow_result
   ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
            C.connection_exactly d.top_driver_core.driver_client st1 **
+           driver_canonical_progress d.top_driver_core st1 **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
@@ -662,11 +677,23 @@ fn run
   let core = {
     driver_client = d.client_driver_client;
     driver_channel = concrete_ch;
+    driver_progress = d.client_driver_progress;
+    driver_initial = d.client_driver_initial;
   };
   let td = {
     top_driver_core = core;
     top_driver_auth = d.client_driver_auth;
   };
+  unfold (client_driver_canonical_progress d 'st0);
+  rewrite
+    (MR.pts_to d.client_driver_progress #1.0R 'st0)
+    as
+    (MR.pts_to core.driver_progress #1.0R 'st0);
+  rewrite
+    (MR.snapshot d.client_driver_progress (Ghost.reveal d.client_driver_initial))
+    as
+    (MR.snapshot core.driver_progress (Ghost.reveal core.driver_initial));
+  fold (driver_canonical_progress core 'st0);
   rewrite (C.connection_exactly d.client_driver_client 'st0) as
     (C.connection_exactly core.driver_client 'st0);
   assert (pure (client_driver_wire_logs_match
@@ -698,6 +725,7 @@ fn run
       fuel;
   with st1 raw_bytes network_out_bytes app_out_bytes.
     assert (C.connection_exactly td.top_driver_core.driver_client st1 **
+            driver_canonical_progress td.top_driver_core st1 **
             pts_to (V.vec_to_array d.client_driver_empty_payload) empty_payload **
             pts_to (V.vec_to_array d.client_driver_raw) raw_bytes **
             pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
@@ -706,6 +734,18 @@ fn run
     'st0.CS.cs_model.CS.model_config));
   rewrite (C.connection_exactly td.top_driver_core.driver_client st1) as
     (C.connection_exactly d.client_driver_client st1);
+  unfold (driver_canonical_progress td.top_driver_core st1);
+  rewrite
+    (MR.pts_to td.top_driver_core.driver_progress #1.0R st1)
+    as
+    (MR.pts_to d.client_driver_progress #1.0R st1);
+  rewrite
+    (MR.snapshot
+      td.top_driver_core.driver_progress
+      (Ghost.reveal td.top_driver_core.driver_initial))
+    as
+    (MR.snapshot d.client_driver_progress (Ghost.reveal d.client_driver_initial));
+  fold (client_driver_canonical_progress d st1);
   V.to_vec_pts_to d.client_driver_empty_payload;
   V.to_vec_pts_to d.client_driver_raw;
   V.to_vec_pts_to d.client_driver_network_out;
@@ -749,7 +789,7 @@ fn abort
     (Ghost.reveal 'sent0));
   with ch buffered buffered_len.
     assert (C.connection_exactly d.client_driver_client 'st0 **
-            client_driver_canonical_seed d **
+            client_driver_canonical_progress d 'st0 **
             O.is_auth_context d.client_driver_auth **
             Box.pts_to d.client_driver_channel (Some ch) **
             IO.is_channel ch (Ghost.reveal 'received0) (Ghost.reveal 'sent0) **

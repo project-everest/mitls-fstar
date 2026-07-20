@@ -42,6 +42,8 @@ static const char *driver_status_message(
       return "TLS channel closed";
     case TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge:
       return "payload exceeds the single-record limit (16384 bytes)";
+    case TLS13_Impl_Server_Driver_ServerWorkflowOutputBufferTooSmall:
+      return "output buffer is smaller than the maximum TLS record plaintext";
     default:
       return "unknown verified server driver status";
   }
@@ -196,7 +198,9 @@ int tls13_server_driver_receive_application_data(
   if (result.server_receive_status ==
           TLS13_Impl_Server_Driver_ServerWorkflowExhausted ||
       result.server_receive_status ==
-          TLS13_Impl_Server_Driver_ServerWorkflowNeedMoreInput) {
+          TLS13_Impl_Server_Driver_ServerWorkflowNeedMoreInput ||
+      result.server_receive_status ==
+          TLS13_Impl_Server_Driver_ServerWorkflowOutputBufferTooSmall) {
     /* Verified: application_ready is preserved on exhausted/need-more-input,
        so the connection remains usable for retry. */
     return 1;

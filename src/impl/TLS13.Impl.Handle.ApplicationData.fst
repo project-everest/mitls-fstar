@@ -187,6 +187,9 @@ fn handle_application_data
                     resp
                     'old_network_out
                     app_out_bytes) /\
+                (SZ.v resp.CT.app_out_len > 0 ==>
+                  resp.CT.status == CT.StepOk /\
+                  resp.CT.network_out_len == 0sz) /\
                 (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   let ready = CQ.can_receive_application_data c;
@@ -282,6 +285,9 @@ fn handle_application_data
               app_out_bytes /\
             Seq.equal bytes (CT.response_app_out resp app_out_bytes)));
         assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
+        assert (pure (SZ.v resp.CT.app_out_len > 0 ==>
+          resp.CT.status == CT.StepOk /\
+          resp.CT.network_out_len == 0sz));
     resp
   } else {
     let resp =
@@ -315,6 +321,9 @@ fn handle_application_data
         resp
         'old_network_out
         'old_app_out));
+    assert (pure (SZ.v resp.CT.app_out_len > 0 ==>
+      resp.CT.status == CT.StepOk /\
+      resp.CT.network_out_len == 0sz));
     resp
   }
 }
