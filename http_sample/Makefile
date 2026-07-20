@@ -192,6 +192,17 @@ vloop-length-test: extract-loops
 # Run both framings' verified<->verified interop tests.
 vloop-tests: vloop-test vloop-length-test
 
+head-emit-test: extract-loops
+	@echo "Building the verified head-emitter self-test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/head_emit_test \
+	  $(VERIFIED_DIR)/head_emit_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified http_emit_response / http_emit_request  ->  byte-exact reference"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/head_emit_test
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -209,5 +220,6 @@ help:
 	@echo "  make vloop-test    - Build + run the verified chunked server->client transfer test"
 	@echo "  make vloop-length-test - Build + run the verified Content-Length transfer test"
 	@echo "  make vloop-tests   - Run both framings' verified<->verified interop tests"
+	@echo "  make head-emit-test - Build + run the verified head-emitter byte-exact self-test"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  (no 'gen' target: the HTTP wire format is hand-written, not QuackyDucky)"
