@@ -265,7 +265,7 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated save-generated-cache restore-generated-cache
+.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated save-generated-cache restore-generated-cache benchmark benchmark-build benchmark-profile-build profile
 
 all: verify
 
@@ -716,6 +716,81 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
 
 LDFLAGS_COMMON = -Wl,--gc-sections
 
+# Benchmark builds keep symbols and frame pointers for profiling while using
+# production optimization. Override these variables to compare compiler flags.
+BENCHMARK_CFLAGS ?= -O3 -DNDEBUG -g -fno-omit-frame-pointer
+BENCHMARK_PROFILE_CFLAGS ?= -O2 -DNDEBUG -g -pg -fno-omit-frame-pointer
+BENCHMARK_OBJ_DIR = $(TLS13_BUNDLE_DIR)/benchmark_obj
+BENCHMARK_PROFILE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/benchmark_profile_obj
+BENCHMARK_BUILD_ID := $(shell printf '%s' '$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(TLS13_BUNDLE_INCLUDES) $(LDFLAGS_COMMON)' | cksum | cut -d' ' -f1)
+BENCHMARK_PROFILE_BUILD_ID := $(shell printf '%s' '$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(TLS13_BUNDLE_INCLUDES) $(LDFLAGS_COMMON)' | cksum | cut -d' ' -f1)
+BENCHMARK_OBJ_STAMP = $(BENCHMARK_OBJ_DIR)/.built-$(BENCHMARK_BUILD_ID)
+BENCHMARK_PROFILE_OBJ_STAMP = $(BENCHMARK_PROFILE_OBJ_DIR)/.built-$(BENCHMARK_PROFILE_BUILD_ID)
+BENCHMARK_BINARY = test/perf/tls13_bench
+BENCHMARK_PROFILE_BINARY = test/perf/tls13_bench-gprof
+
+$(BENCHMARK_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+	@rm -rf $(BENCHMARK_OBJ_DIR)
+	@mkdir -p $(BENCHMARK_OBJ_DIR)
+	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	  obj="$(BENCHMARK_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+$(BENCHMARK_PROFILE_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+	@rm -rf $(BENCHMARK_PROFILE_OBJ_DIR)
+	@mkdir -p $(BENCHMARK_PROFILE_OBJ_DIR)
+	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	  obj="$(BENCHMARK_PROFILE_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+define link_benchmark
+	$(CC) $(CFLAGS_COMMON) $(1) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(2)/*.o \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/tls13_client_driver.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/perf/tls13_bench.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) $(1) -lssl -lcrypto -o $(3)
+endef
+
+$(BENCHMARK_BINARY): test/perf/tls13_bench.c $(BENCHMARK_OBJ_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+	$(call link_benchmark,$(BENCHMARK_CFLAGS),$(BENCHMARK_OBJ_DIR),$@)
+
+$(BENCHMARK_PROFILE_BINARY): test/perf/tls13_bench.c \
+  $(BENCHMARK_PROFILE_OBJ_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+	$(call link_benchmark,$(BENCHMARK_PROFILE_CFLAGS),$(BENCHMARK_PROFILE_OBJ_DIR),$@)
+
+benchmark-build: $(BENCHMARK_BINARY) test/certs/ca.pem test/certs/chain.pem \
+  test/certs/leaf.der test/certs/leaf.key
+
+benchmark-profile-build: $(BENCHMARK_PROFILE_BINARY) test/certs/ca.pem \
+  test/certs/chain.pem test/certs/leaf.der test/certs/leaf.key
+
+benchmark: benchmark-build
+	scripts/benchmark-tls13.sh
+
+profile: benchmark-profile-build
+	scripts/profile-tls13.sh
+
 $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile | check-deps
 	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
 	@mkdir -p $(TLS13_BUNDLE_OBJ_DIR)
@@ -849,6 +924,7 @@ clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
+	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
 	  test/openssl_echo_server.log \
 	  $(TEST_CERT_STAMP)
@@ -858,4 +934,5 @@ clean:
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-openssl-sclient \
-  check-c-stubs check-toolchain check-deps clean
+  check-c-stubs check-toolchain check-deps benchmark benchmark-build \
+  benchmark-profile-build profile clean
