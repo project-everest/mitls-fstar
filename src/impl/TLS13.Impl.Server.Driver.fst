@@ -3487,9 +3487,10 @@ let lemma_close_final_correct
   nonrecoverable record-processing failure was observed).
 
   Liveness/regression fix: the helper snapshots the control state *before* every
-  read.  If the connection is already closed or already in a control-failure
-  state it stops without issuing another (potentially blocking) read.  After a
-  read-and-process step it only recurses when the step status is recoverable
+  step.  If the connection is already closed or already in a control-failure
+  state it stops without issuing another (potentially blocking) read.  Each
+  step processes an already-buffered record before reading from the socket and
+  only recurses when the step status is recoverable
   ([ST.StepOk] or [ST.NeedMoreInput]); any other status is a nonrecoverable
   failure and is reported as [ServerWorkflowStepFailed] rather than being
   ignored and collapsed into [ServerWorkflowExhausted].
@@ -3547,7 +3548,7 @@ fn rec wait_for_peer_close_notify
         ServerWorkflowStepFailed
       } else {
         assert (pure (0 < SZ.v fuel));
-        let step = read_and_process_network_once d;
+        let step = process_buffered_or_read_network_once d;
         with st1 received' sent' step_app_out.
           assert (server_driver_connected_with_app_out
             d

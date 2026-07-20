@@ -184,6 +184,39 @@ fn read_and_process_network_once
             sent'
             app_out_bytes)
 
+fn process_buffered_or_read_network_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 received' sent' app_out_bytes.
+          DS.server_driver_connected_with_app_out
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent'
+           app_out_bytes **
+          pure (server_driver_network_process_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'sent)
+           sent' /\
+           server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'sent)
+            sent'
+            app_out_bytes)
+
 fn server_driver_control_snapshot
   (d:DS.server_driver)
   requires DS.server_driver_connected
