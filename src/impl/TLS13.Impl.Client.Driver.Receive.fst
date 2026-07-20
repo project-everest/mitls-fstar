@@ -75,7 +75,6 @@ let lemma_control_snapshot_closed
   | CS.ControlClosed ->
     ()
 
-noextract
 let client_network_step_failed
   (resp:CT.client_response)
   (written:SZ.t)
