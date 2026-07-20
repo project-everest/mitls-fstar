@@ -2279,6 +2279,82 @@ fn read_and_process_network_once
   resp
 }
 
+fn process_buffered_or_read_network_once
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 received' sent' app_out_bytes.
+          server_driver_connected_with_app_out
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent'
+           app_out_bytes **
+          pure (server_driver_network_process_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'sent)
+           sent' /\
+           server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'sent)
+            sent'
+            app_out_bytes)
+{
+  let buffered_step = process_buffered_network_bytes_compact_once d;
+  with st1 sent' buffered_app_out.
+    assert (server_driver_connected_with_app_out
+      d
+      st1
+      'certificate_chain
+      'credential_identity
+      'received
+      sent'
+      buffered_app_out **
+    pure (server_driver_network_process_correct
+      'st0
+      st1
+      buffered_step
+      (Ghost.reveal 'sent)
+      sent' /\
+    server_driver_network_process_correct_for_app_out
+      'st0
+      st1
+      buffered_step
+      (Ghost.reveal 'sent)
+      sent'
+      buffered_app_out));
+  let need_more =
+    buffered_step.ST.response.ST.status = ST.NeedMoreInput;
+  if need_more {
+    lemma_server_driver_network_process_need_more_stutter
+      'st0
+      st1
+      buffered_step
+      (Ghost.reveal 'sent)
+      sent';
+    assert (pure (st1 == 'st0));
+    assert (pure (Seq.equal sent' (Ghost.reveal 'sent)));
+    Seq.lemma_eq_elim sent' (Ghost.reveal 'sent);
+    forget_server_driver_connected_app_out d;
+    let read_step = read_and_process_network_once d;
+    read_step
+  } else {
+    buffered_step
+  }
+}
+
 fn server_driver_control_snapshot
   (d:server_driver)
   requires server_driver_connected
@@ -2386,7 +2462,7 @@ fn rec read_process_network_until_ready
     }
   } else {
     assert (pure (0 < SZ.v fuel));
-    let step = read_and_process_network_once d;
+    let step = process_buffered_or_read_network_once d;
     with st1 received' sent' step_app_out.
       assert (server_driver_connected_with_app_out
         d
