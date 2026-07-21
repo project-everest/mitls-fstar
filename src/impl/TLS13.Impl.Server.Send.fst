@@ -688,6 +688,7 @@ fn server_random_differs_from_cst (material: array U8.t) (#p: perm) (#mb: erased
     Ref.pts_to all_equal ae **
     pure (SZ.v je <= 32 /\ B.length mb >= 32 /\
           (ae <==> (forall (k:nat). k < SZ.v je ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k)))
+  decreases (32 - SZ.v (Ref.read j))
   {
     let jv = Ref.read j;
     let mv = material.(jv);

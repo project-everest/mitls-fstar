@@ -2519,6 +2519,7 @@ fn server_compact_buffer_suffix
               (forall (k:nat). SZ.v (R.read i) <= k /\ k < SZ.v buffered_len ==>
                 Seq.index raw_loop k ==
                 Seq.index (Ghost.reveal 'raw_bytes) k))
+      decreases (SZ.v new_len - SZ.v (R.read i))
     {
       let vi = R.read i;
       assert (pure (SZ.v vi < SZ.v new_len));
@@ -3517,7 +3518,7 @@ fn server_decrement_endpoint_fuel
                  SZ.v (Ghost.reveal 'rem) <= SZ.v fuel)
   ensures exists* rem1.
             R.pts_to remaining rem1 **
-            pure (SZ.v rem1 <= SZ.v fuel)
+            pure (SZ.v rem1 < SZ.v (Ghost.reveal 'rem) /\ SZ.v rem1 <= SZ.v fuel)
 {
   let rem_now = R.read remaining;
   assert (pure (not (rem_now = 0sz)));
@@ -3632,6 +3633,7 @@ fn server_finish_network_result_iteration
             R.pts_to last_status last_status1 **
             R.pts_to remaining rem1 **
             pure (SZ.v buffered_len1 <= SZ.v frame.server_ep_raw_len /\
+                  SZ.v rem1 < SZ.v (Ghost.reveal 'rem) /\
                   SZ.v rem1 <= SZ.v fuel)
 {
   last_status := result.CPI.process_status;
@@ -3791,6 +3793,7 @@ fn server_endpoint_run_workflow
       Box.pts_to buffered_len_ref buffered_len_loop **
       pure (SZ.v buffered_len_loop <= SZ.v frame.server_ep_raw_len /\
             SZ.v (R.read remaining) <= SZ.v fuel)
+  decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
   {
     with received_loop sent_loop st_loop buffered_len_loop.
       assert (

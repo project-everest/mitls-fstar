@@ -1264,6 +1264,7 @@ fn build_ch_cipher_suites
               (RV.reveal_synth_cipher_suites
                 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))) ==
               RV.reveal_synth_cipher_suites (Ghost.reveal cm))
+        decreases (SZ.v count - SZ.v (!i))
         {
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
@@ -1456,6 +1457,7 @@ fn copy_ch_signature_schemes_into
               (RV.reveal_synth_sig_schemes
                 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))) ==
               RV.reveal_synth_sig_schemes (Ghost.reveal cm))
+        decreases (SZ.v count - SZ.v (!i))
         {
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
@@ -2718,6 +2720,7 @@ fn scan_ee_alpn
                     SZ.v al <= 255 /\
                     L.optional_byte_prefix_matches true abytes al
                       (Some?.v (RV.reveal_synth_encrypted_extensions cee)))))
+      decreases %[(if !found then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cee));
@@ -3602,6 +3605,7 @@ fn scan_sh_key_share
             RV.reveal_sh_key_share cext false None ==
             RV.reveal_sh_key_share (RV.list_drop (SZ.v iv) cext) svb kacc)
         )
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cext));
@@ -3954,6 +3958,7 @@ fn scan_ch_supported_versions
           ((not f) ==> (FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm) <==>
                         FStar.List.Tot.mem GPV.TLS_1p3
                           (RV.list_drop (SZ.v iv) (Ghost.reveal cm)))))
+      decreases %[(if !found_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
@@ -4101,6 +4106,7 @@ fn scan_ch_key_share
           ((not d) ==> found == false /\
             TLS13.Wire.Semantics.kse_list_find_x25519 (Ghost.reveal cm) ==
             TLS13.Wire.Semantics.kse_list_find_x25519 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))))
+      decreases %[(if !done_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
@@ -4324,6 +4330,7 @@ fn scan_ch_extensions
             RV.reveal_ch_extensions (Ghost.reveal cext) None None false [] ==
             RV.reveal_ch_extensions (RV.list_drop (SZ.v iv) (Ghost.reveal cext))
               sn_acc key_acc sv (Ghost.reveal sig_acc)))
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         with sn_bytes0 kbytes0 sig_bytes0 sn_acc0 key_acc0 sig_acc0.
@@ -5025,6 +5032,7 @@ fn scan_certificate_chain
                 (RV.reveal_synth_cert_chain (RV.list_drop (SZ.v iv) cm))
                 == RV.reveal_synth_cert_chain cm)))
         )
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         let cntv = !cnt_ref;

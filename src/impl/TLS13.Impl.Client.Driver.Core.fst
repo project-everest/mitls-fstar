@@ -1179,6 +1179,7 @@ fn compact_buffer_suffix
               (forall (k:nat). SZ.v (R.read i) <= k /\ k < SZ.v buffered_len ==>
                 Seq.index raw_loop k ==
                 Seq.index (Ghost.reveal 'raw_bytes) k))
+      decreases (SZ.v new_len - SZ.v (R.read i))
     {
       let vi = R.read i;
       assert (pure (SZ.v vi < SZ.v new_len));
