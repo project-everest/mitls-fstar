@@ -1866,6 +1866,8 @@ let lemma_received_server_finished_state_evolves
                   CS.ClientEndpoint /\
       Some?
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
       CS.event_raw_delta_legal
         st.CS.cs_model
                   (CS.ConnNetworkEvent {

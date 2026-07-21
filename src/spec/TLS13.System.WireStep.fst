@@ -101,7 +101,7 @@ let hellos_shape (m:CS.connection_model) : prop =
   | CS.ControlClosing | CS.ControlClosed | CS.ControlFailed _ -> True
 
 (** A single legal step preserves `hellos_shape` AND the hello field values. **)
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 6 --z3rlimit 120 --split_queries always"
 let lemma_step_model_preserves_hellos
   (m0:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma

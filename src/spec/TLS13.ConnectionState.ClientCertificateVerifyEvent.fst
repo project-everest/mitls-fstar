@@ -183,6 +183,7 @@ let lemma_step_handshake_message_client_certificate_verify_event_log
   : Lemma
       (requires
         client_certificate_verify_event_log_invariant_at model events /\
+        legal_handshake_message model dir msg /\
         step_handshake_message model dir msg == Some model')
       (ensures
         client_certificate_verify_event_log_invariant_at
@@ -201,11 +202,17 @@ let lemma_step_handshake_message_client_certificate_verify_event_log
   | CL.Sent, M.Certificate _, ControlHandshaking HsServerEncryptedFlightSent
   | CL.Sent, M.CertificateVerify _, ControlHandshaking HsServerEncryptedFlightSent
   | CL.Sent, M.Finished _, ControlHandshaking HsServerEncryptedFlightSent
-  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent
   | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
   | CL.Received, M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
     ()
+  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
+    // Fix 1 (atomic server delivery): now lands at ControlApplicationData (a
+    // CertificateVerify-downstream state).  legal_handshake_message forces
+    // config_role == ServerEndpoint, contradicting the ClientEndpoint antecedent
+    // of the (client-local) invariant, so the implication holds vacuously.
+    assert (model.model_config.config_role == ServerEndpoint);
+    assert (model'.model_config == model.model_config)
   | CL.Received, M.CertificateVerify cv, ControlHandshaking HsCertificateValidated ->
     lemma_contains_received_certificate_verify_snoc_intro events cv
   | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified

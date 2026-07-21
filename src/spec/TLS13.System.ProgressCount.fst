@@ -69,31 +69,8 @@ let client_micro_shape (m:CS.connection_model) : prop =
   CS.ControlNew? m.CS.model_control ==>
     keys_all_none m.CS.model_handshake.CS.hs_keys
 
-(** A legal client-role step raises `client_progress` by at most one across the
-    pre-application-data region. **)
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
-let lemma_client_progress_step_bound
-  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
-  : Lemma
-      (requires
-        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        CS.legal_event m ev /\
-        CS.step_model m ev == Some m' /\
-        pre_appdata_control m.CS.model_control /\
-        pre_appdata_control m'.CS.model_control /\
-        client_micro_shape m)
-      (ensures client_progress m' <= client_progress m + 1)
-  = match m.CS.model_control with
-    | CS.ControlNew ->
-      // Only LocalStartHandshake is legal for a client at ControlNew; it moves
-      // to HsStarted keeping the (empty) key schedule, so rank m' == 15.
-      assert (keys_all_none m.CS.model_handshake.CS.hs_keys);
-      ()
-    | CS.ControlHandshaking _ ->
-      // Uniform: client_progress = 16 - rank on both sides; the rank step lemma
-      // gives rank m <= rank m' + 1 (m' is not Failed, being pre-appdata).
-      PNI.lemma_client_application_progress_rank_step m ev m'
-#pop-options
+(* lemma_client_progress_step_bound REMOVED (Phase-1 clean16 removal):
+   relied on PNI rank step-lemma, now false under atomic-delivery model. *)
 
 (** ─────────────────────────────────────────────────────────────────────────
     Server count.
@@ -152,37 +129,8 @@ let server_micro_shape (m:CS.connection_model) : prop =
      hs.CS.hs_certificate_verify == None /\
      hs.CS.hs_certificate_verify_verified == false)
 
-(** A legal server-role step raises `server_progress` by at most one across the
-    pre-application-data region. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
-let lemma_server_progress_step_bound
-  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
-  : Lemma
-      (requires
-        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-        CS.legal_event m ev /\
-        CS.step_model m ev == Some m' /\
-        pre_appdata_control m.CS.model_control /\
-        pre_appdata_control m'.CS.model_control /\
-        server_micro_shape m)
-      (ensures server_progress m' <= server_progress m + 1)
-  = match m.CS.model_control with
-    | CS.ControlNew -> ()
-    | CS.ControlHandshaking CS.HsAwaitingClientHello -> ()
-    | CS.ControlHandshaking CS.HsClientHelloReceived ->
-      // Select / Derive stay in-stage (+1 in the additive count); Sent ServerHello
-      // crosses to a FRESH HsServerHelloSent whose window rank is exactly 11.
-      (match m'.CS.model_control with
-       | CS.ControlHandshaking CS.HsServerHelloSent ->
-         SWR.lemma_server_hello_window_rank_fresh_is_eleven m'
-       | _ -> ())
-    | CS.ControlHandshaking CS.HsServerHelloSent
-    | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
-    | CS.ControlHandshaking CS.HsServerFinishedSent
-    | CS.ControlHandshaking CS.HsClientFinishedReceived ->
-      SWR.lemma_server_hello_window_rank_step m ev m'
-    | _ -> ()
-#pop-options
+(* lemma_server_progress_step_bound REMOVED (Phase-1 clean16 removal):
+   relied on SWR rank step-lemma, now false under atomic-delivery model. *)
 
 (** ─────────────────────────────────────────────────────────────────────────
     Model-level preservation helpers (called from `TLS13.System`).

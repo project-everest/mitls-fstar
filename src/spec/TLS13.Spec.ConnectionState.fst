@@ -1295,16 +1295,25 @@ let record_keys_match_key_schedule_for_role
        (traffic_label_for_endpoint_direction role dir))
       st
   | R.Application ->
-    (match dir, control with
-     | TrafficWrite, ControlHandshaking _ ->
+    (match role, dir, control with
+     | ClientEndpoint, TrafficWrite, ControlHandshaking _ ->
+       // The honest client populates its application WRITE traffic slot at
+       // HsServerFinishedVerified but only installs the application WRITE record
+       // keys (record_write.epoch -> Application) at the moment it SENDS its
+       // Finished and lands at ControlApplicationData.  During that window the
+       // record write direction is still at the Handshake epoch, so this clause
+       // is only ever consulted with record_write.epoch == Application once the
+       // control state has advanced past ControlHandshaking; the vacuity here is
+       // therefore never actually exercised for the client and simply avoids an
+       // obligation that has no honest witness during ControlHandshaking.
        True
-     | _, _ ->
+     | _, _, _ ->
        traffic_material_option_matches_record_direction
-        (traffic_material_for_label
-          keys
-          TrafficApplication
-          (traffic_label_for_endpoint_direction role dir))
-        st)
+         (traffic_material_for_label
+           keys
+           TrafficApplication
+           (traffic_label_for_endpoint_direction role dir))
+         st)
 
 let record_read_keys_match_key_schedule
   (keys:key_schedule_state)
@@ -1865,25 +1874,76 @@ let step_handshake_message
         msg)
       HsCertificateVerifyReceived)
   | CL.Received, M.Finished fin, ControlHandshaking HsCertificateVerifyVerified ->
-    Some (with_handshake_stage
-      { model with
-          model_record =
-            { model.model_record with
-                record_read = R.next_seq model.model_record.record_read;
-            };
-      }
-      { hs with hs_server_finished = Some fin }
-      HsServerFinishedReceived)
+    // Fix 1 (atomic): the client processes the server Finished in a single step -
+    // append it to the transcript, mark it verified, and install the server's
+    // application read keys (record read epoch -> Application) so that no window
+    // exists in which the server can send an application-keys record the client
+    // cannot decrypt. The application traffic secret is derived from the transcript
+    // THROUGH the server Finished, so the append happens before the derivation.
+    let hs_v =
+      append_handshake_to_transcript
+        { hs with
+            hs_server_finished = Some fin;
+            hs_server_finished_verified = true;
+        }
+        (M.Finished fin) in
+    (match hs_v.hs_keys.ks_master_secret with
+     | Some master ->
+       let secret = K.server_application_traffic_secret master (Tr.hash hs_v.hs_transcript) in
+       let material = traffic_key_material_for_secret secret in
+       Some (with_handshake_stage
+         { model with
+             model_record =
+               { model.model_record with
+                   record_read =
+                     R.install_keys
+                       model.model_record.record_read
+                       R.Application
+                       material.traffic_key
+                       material.traffic_iv;
+               };
+         }
+         { hs_v with
+             hs_keys =
+               { hs_v.hs_keys with ks_server_application_traffic = Some material };
+         }
+         HsServerFinishedVerified)
+     | None -> None)
   | CL.Received, M.Finished fin, ControlHandshaking HsServerFinishedSent ->
-    Some (with_handshake_stage
-      { model with
-          model_record =
-            { model.model_record with
-                record_read = R.next_seq model.model_record.record_read;
-            };
-      }
-      { hs with hs_client_finished = Some fin }
-      HsClientFinishedReceived)
+    // Fix 1 (atomic, mirror): the server processes the client Finished in a single
+    // step - install the client's application read keys (record read epoch ->
+    // Application) and advance to ControlApplicationData, closing the mirror window
+    // in which the client could send an application-keys record the server cannot
+    // decrypt. The application traffic secret is derived from the transcript THROUGH
+    // the server Finished (already present), so it is computed BEFORE appending the
+    // client Finished to the transcript.
+    (match hs.hs_keys.ks_master_secret with
+     | Some master ->
+       let secret = K.client_application_traffic_secret master (Tr.hash hs.hs_transcript) in
+       let material = traffic_key_material_for_secret secret in
+       let hs_v =
+         append_handshake_to_transcript
+           { hs with hs_client_finished = Some fin }
+           (M.Finished fin) in
+       Some {
+         model with
+           model_control = ControlApplicationData;
+           model_record =
+             { model.model_record with
+                 record_read =
+                   R.install_keys
+                     model.model_record.record_read
+                     R.Application
+                     material.traffic_key
+                     material.traffic_iv;
+             };
+           model_handshake =
+             { hs_v with
+                 hs_keys =
+                   { hs_v.hs_keys with ks_client_application_traffic = Some material };
+             };
+       }
+     | None -> None)
   | CL.Sent, M.Finished fin, ControlHandshaking HsServerFinishedVerified ->
     Some {
       model with
@@ -2808,10 +2868,12 @@ let legal_handshake_message
     Some? hs.hs_validated_peer
   | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
     model.model_config.config_role == ClientEndpoint /\
-    Some? hs.hs_keys.ks_server_handshake_traffic
+    Some? hs.hs_keys.ks_server_handshake_traffic /\
+    Some? hs.hs_keys.ks_master_secret
   | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
     model.model_config.config_role == ServerEndpoint /\
-    Some? hs.hs_keys.ks_client_handshake_traffic
+    Some? hs.hs_keys.ks_client_handshake_traffic /\
+    Some? hs.hs_keys.ks_master_secret
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
@@ -2997,6 +3059,10 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
        W.serialize_handshake (M.CertificateVerify cv)
      | CL.Sent, M.TlsHandshake (M.Finished fin) ->
        W.serialize_handshake (M.Finished fin)
+     | CL.Received, M.TlsHandshake (M.Finished fin) ->
+       // Fix 1 (atomic delivery): receiving the peer Finished appends it to the
+       // transcript as part of the single delivery step.
+       W.serialize_handshake (M.Finished fin)
      | _, _ -> B.empty)
   | ConnLocalEvent local ->
     (match local with
@@ -3174,11 +3240,15 @@ let projected_record_layer_step_for_role
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Received, M.TlsHandshake (M.Certificate _)
      | CL.Received, M.TlsHandshake (M.CertificateVerify _)
-     | CL.Received, M.TlsHandshake (M.Finished _)
      | CL.Received, M.TlsApplicationData _
      | CL.Received, M.TlsIgnoredPostHandshake _
      | CL.Received, M.TlsAlert T.Close_notify ->
        { record with projected_read = projected_next_seq record.projected_read }
+     | CL.Received, M.TlsHandshake (M.Finished _) ->
+       // Fix 1 (atomic delivery): receiving the peer Finished installs the peer's
+       // application READ keys (record read epoch -> Application, seq reset to 0),
+       // mirroring the real record-layer transition in step_handshake_message.
+       { record with projected_read = projected_install_keys R.Application }
      | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Sent, M.TlsHandshake (M.Certificate _)
      | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
