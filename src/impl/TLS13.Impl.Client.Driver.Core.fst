@@ -252,13 +252,15 @@ fn driver_open
            | None ->
              emp)
 {
-  let auth =
-    O.auth_context_new
+  let auth_config =
+    O.auth_config_new
       server_name
       server_name_len
       trust_anchors
       trust_anchors_len
       validation_time_seconds;
+  let auth = O.auth_context_new auth_config;
+  O.auth_config_free auth_config;
   let connected =
     driver_connect
       connect_host

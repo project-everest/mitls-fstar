@@ -688,18 +688,15 @@ static int openssl_client_handshake_peer(
 
 static int verified_client_once(
     uint16_t port,
-    const struct buffer *ca,
+    const tls13_client_config *config,
     uint64_t *latency_ns) {
   tls13_client_driver *driver = NULL;
   uint64_t start = clock_ns(CLOCK_MONOTONIC_RAW);
-  int result = tls13_client_driver_connect(
+  int result = tls13_client_driver_connect_with_config(
       &driver,
       "127.0.0.1",
       port,
-      "localhost",
-      ca->data,
-      ca->len,
-      0u);
+      config);
   *latency_ns = clock_ns(CLOCK_MONOTONIC_RAW) - start;
   if (result != 0) {
     fprintf(
@@ -740,11 +737,19 @@ static int run_client_handshakes(
       read_file(files->ca_pem, &ca) != 0) {
     return -1;
   }
+  tls13_client_config *verified_config = NULL;
+  if (options->benchmark->implementation == IMPL_VERIFIED &&
+      tls13_client_config_new(
+          &verified_config, "localhost", ca.data, ca.len, 0u) != 0) {
+    free(ca.data);
+    return -1;
+  }
   SSL_CTX *client_context = NULL;
   if (options->benchmark->implementation == IMPL_OPENSSL) {
     client_context = make_client_context(files);
     if (client_context == NULL) {
       ERR_print_errors_fp(stderr);
+      tls13_client_config_free(verified_config);
       free(ca.data);
       return -1;
     }
@@ -755,6 +760,7 @@ static int run_client_handshakes(
   if (reserve_port(&port) != 0 || pipe(ready_pipe) != 0) {
     perror("reserve_port/pipe");
     SSL_CTX_free(client_context);
+    tls13_client_config_free(verified_config);
     free(ca.data);
     return -1;
   }
@@ -762,6 +768,7 @@ static int run_client_handshakes(
   if (child < 0) {
     perror("fork");
     SSL_CTX_free(client_context);
+    tls13_client_config_free(verified_config);
     free(ca.data);
     close(ready_pipe[0]);
     close(ready_pipe[1]);
@@ -781,6 +788,7 @@ static int run_client_handshakes(
     close(ready_pipe[0]);
     (void)wait_child(child);
     SSL_CTX_free(client_context);
+    tls13_client_config_free(verified_config);
     free(ca.data);
     return -1;
   }
@@ -790,7 +798,7 @@ static int run_client_handshakes(
   for (size_t i = 0u; i < options->warmup; ++i) {
     uint64_t ignored = 0u;
     if ((options->benchmark->implementation == IMPL_VERIFIED
-             ? verified_client_once(port, &ca, &ignored)
+             ? verified_client_once(port, verified_config, &ignored)
              : openssl_client_once(client_context, port, &ignored)) != 0) {
       result = -1;
       break;
@@ -802,7 +810,7 @@ static int run_client_handshakes(
   take_snapshot(&start);
   for (size_t i = 0u; result == 0 && i < options->iterations; ++i) {
     if ((options->benchmark->implementation == IMPL_VERIFIED
-             ? verified_client_once(port, &ca, &latencies[i])
+             ? verified_client_once(port, verified_config, &latencies[i])
              : openssl_client_once(client_context, port, &latencies[i])) != 0) {
       result = -1;
     }
@@ -816,6 +824,7 @@ static int run_client_handshakes(
     result = -1;
   }
   SSL_CTX_free(client_context);
+  tls13_client_config_free(verified_config);
   free(ca.data);
   return result;
 }
