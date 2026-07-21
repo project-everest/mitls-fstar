@@ -36,6 +36,7 @@ module R    = Pulse.Lib.Reference
 module W    = HTTP.Wire.Common
 module Req  = HTTP.Impl.Codec.Request
 module Resp = HTTP.Impl.Codec.Response
+module CS   = HTTP.Impl.Codec.Chunked.Stream
 
 (* Read the whole response off `ch` into `buf` (capacity `cap`) until the peer
    closes (read returns 0) or `buf` fills.  `tmp` (capacity `tmpcap > 0`) stages
@@ -161,6 +162,52 @@ fn http_get
   recv_to_eof ch buf cap tmp tmpcap prlen;
   let rl = !prlen;
   let ok = Resp.http_parse_response_head buf rl pcode pchunked phas_cl pcl phead;
+  ok
+}
+#pop-options
+
+(* Decode a chunked response body.  After `http_get` reports `pchunked == true`,
+   the raw chunk-framed body occupies `buf[headlen .. rlen)`.  This copies that
+   span down to a zero-based staging array `raw` and runs the verified chunked
+   stream decoder `HTTP.Impl.Codec.Chunked.Stream.http_decode_chunks`, writing
+   the reassembled payload into `out` and its length into `poutlen`.  Returns
+   the decoder's `ok` (the chunk stream was well-formed and terminated by a
+   0-size last chunk).  Memory-safe; on success `poutlen <= outcap`. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_get_body_chunked
+  (buf: array U8.t) (headlen: SZ.t) (rlen: SZ.t)
+  (raw: array U8.t) (rawcap: SZ.t)
+  (out: array U8.t) (outcap: SZ.t)
+  (poutlen: R.ref SZ.t)
+  requires
+    pts_to buf 'b ** pts_to raw 'r ** pts_to out 'o ** R.pts_to poutlen 'l0 **
+    pure (SZ.v headlen <= SZ.v rlen /\ SZ.v rlen <= Seq.length 'b /\
+          SZ.v rlen - SZ.v headlen <= SZ.v rawcap /\
+          Seq.length 'r == SZ.v rawcap /\ SZ.v rawcap < pow2 32 /\
+          Seq.length 'o == SZ.v outcap /\ SZ.v outcap < pow2 32)
+  returns ok: bool
+  ensures
+    pts_to buf 'b **
+    (exists* (rv:Seq.seq U8.t) (ov:Seq.seq U8.t) (vo:SZ.t).
+       pts_to raw rv ** pts_to out ov ** R.pts_to poutlen vo **
+       pure (Seq.length rv == SZ.v rawcap /\ Seq.length ov == SZ.v outcap /\
+             (ok == true ==> SZ.v vo <= SZ.v outcap)))
+{
+  let bodylen = SZ.sub rlen headlen;
+  (* copy buf[headlen .. rlen) into raw[0 .. bodylen) *)
+  let mut k = 0sz;
+  while (SZ.lt !k bodylen)
+  invariant exists* (vk:SZ.t) (rv:Seq.seq U8.t).
+    R.pts_to k vk ** pts_to buf 'b ** pts_to raw rv **
+    pure (SZ.v vk <= SZ.v bodylen /\ Seq.length rv == SZ.v rawcap /\
+          SZ.v bodylen <= SZ.v rawcap /\ SZ.v headlen + SZ.v bodylen <= Seq.length 'b)
+  {
+    let vk = !k;
+    let dv = buf.(SZ.add headlen vk);
+    raw.(vk) <- dv;
+    k := SZ.add vk 1sz;
+  };
+  let ok = CS.http_decode_chunks raw bodylen out outcap poutlen;
   ok
 }
 #pop-options

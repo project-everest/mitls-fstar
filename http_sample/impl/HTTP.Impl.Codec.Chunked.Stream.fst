@@ -143,14 +143,14 @@ fn http_decode_chunks
     (poff: R.ref SZ.t)
   requires
     pts_to inp 'i ** pts_to out 'o ** R.pts_to poff 'po **
-    pure (Seq.length 'i == SZ.v inlen /\ Seq.length 'o == SZ.v outcap /\
+    pure (SZ.v inlen <= Seq.length 'i /\ Seq.length 'o == SZ.v outcap /\
           SZ.v inlen < pow2 32 /\ SZ.v outcap < pow2 32)
   returns ok: bool
   ensures
     pts_to inp 'i **
     (exists* (ov:Seq.seq U8.t) (vo:SZ.t).
        pts_to out ov ** R.pts_to poff vo **
-       pure (Seq.length ov == SZ.v outcap /\ Seq.length 'i == SZ.v inlen /\
+       pure (Seq.length ov == SZ.v outcap /\ SZ.v inlen <= Seq.length 'i /\
              (ok == true ==>
                 (SZ.v vo <= SZ.v outcap /\
                  (exists (rest:Seq.seq U8.t).
@@ -168,7 +168,7 @@ fn http_decode_chunks
     R.pts_to pos vpos ** R.pts_to off voff ** R.pts_to err verr ** R.pts_to done vdone **
     pts_to inp 'i ** pts_to out ov **
     pure (
-      Seq.length ov == SZ.v outcap /\ Seq.length 'i == SZ.v inlen /\
+      Seq.length ov == SZ.v outcap /\ SZ.v inlen <= Seq.length 'i /\
       SZ.v vpos <= SZ.v inlen /\ SZ.v voff <= SZ.v outcap /\
       (vdone == true ==> verr == false) /\
       (verr == false ==>
@@ -251,6 +251,8 @@ fn http_decode_chunks
                   pure (
                     SZ.v vk <= SZ.v n /\
                     Seq.length ov == SZ.v outcap /\
+                    SZ.v vpos + 8 + SZ.v n <= SZ.v inlen /\
+                    SZ.v inlen <= Seq.length 'i /\
                     SZ.v voff + SZ.v n <= SZ.v outcap /\
                     (forall (j:nat). j < SZ.v voff ==> Seq.index ov j == Seq.index ovold j) /\
                     (forall (j:nat). j < SZ.v vk ==>
