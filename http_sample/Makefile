@@ -280,6 +280,17 @@ get-test: extract-loops
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/get_test
 
+get-live-test: extract-loops
+	@echo "Building the OPTIONAL live GET client smoke test (example.com:80) ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_live_test \
+	  $(VERIFIED_DIR)/get_live_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified http_get  ->  live GET http://example.com/ (guarded)"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/get_live_test
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
