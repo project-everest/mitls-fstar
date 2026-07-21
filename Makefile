@@ -407,7 +407,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.KeySchedule,TLS13.Record
 
 # Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, TLS13.OpenSSL, Common.TCP
+# TLS13.Crypto, TLS13.Lib.Memmove, TLS13.OpenSSL, Common.TCP
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 
@@ -531,6 +531,7 @@ TLS13_BUNDLE_KRML_FILES = \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
+  $(OUTPUT_DIR)/TLS13_Lib_Memmove.krml \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
 # Extract FStar.Pervasives.Native for tuple support
@@ -658,7 +659,7 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library Common.TCP \
+	  -library TLS13.Crypto -library TLS13.Lib.Memmove -library Common.TCP \
 	  -library TLS13.OpenSSL \
 	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
@@ -719,6 +720,7 @@ HACL_SIMD256_PROFILE_OBJECTS =
 endif
 
 ECHO_STUB_SOURCES = \
+  runtime/tls13_lib_memmove.c \
   c_stubs/common_tcp_karamel.c \
   c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
@@ -727,6 +729,7 @@ ECHO_STUB_SOURCES = \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
+  runtime/tls13_lib_memmove.h \
   c_stubs/common_tcp_karamel.h \
   c_stubs/common_tcp_stubs.h \
   c_stubs/tls13_bytes_karamel.h \
@@ -803,6 +806,7 @@ define link_benchmark
 	  $(2)/*.o \
 	  $(4) \
 	  c_stubs/tls13_crypto_external.c \
+	  runtime/tls13_lib_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \
@@ -889,6 +893,7 @@ test/test_extracted_client_openssl_echo: \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_SIMD256_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
+	  runtime/tls13_lib_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \
@@ -940,6 +945,7 @@ test/test_extracted_server_openssl_client: \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_SIMD256_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
+	  runtime/tls13_lib_memmove.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \

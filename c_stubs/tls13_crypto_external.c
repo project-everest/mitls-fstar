@@ -1,7 +1,5 @@
 #include "tls13_crypto_external.h"
 
-#include <string.h>
-
 #include "tls13_hacl_stubs.h"
 
 void TLS13_Crypto_sha256_empty(uint8_t *out) {
@@ -124,15 +122,4 @@ bool TLS13_Crypto_chacha20_poly1305_open(
   }
   return tls13_hacl_chacha20_poly1305_open_combined(
       out, cipher_len - 16, key, nonce, aad, aad_len, cipher, cipher_len);
-}
-
-size_t TLS13_Crypto_move_suffix_to_front(
-    uint8_t *raw,
-    size_t raw_capacity,
-    size_t buffered_len,
-    size_t consumed_len) {
-  (void)raw_capacity;
-  size_t new_len = buffered_len - consumed_len;
-  memmove(raw, raw + consumed_len, new_len);
-  return new_len;
 }
