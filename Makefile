@@ -363,6 +363,7 @@ PULSE_RUNTIME_MODULES = \
 # Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -391,7 +392,7 @@ BUNDLE_IMPL_MODULES = \
 
 # Non-API modules (everything except TLS13.Impl.Client)
 BUNDLE_INTERNAL_MODULES = \
-  TLS13.Impl.Endpoint.Types,TLS13.Impl.Client.Types,\
+  TLS13.Impl.ArrayCopy,TLS13.Impl.Endpoint.Types,TLS13.Impl.Client.Types,\
   TLS13.Impl.ConnectionState.Bounds,\
   TLS13.Impl.ConnectionState.Model,TLS13.Impl.ConnectionState.Tags,\
   TLS13.Impl.ConnectionState.Repr,TLS13.Impl.ConnectionState.Queries,\
@@ -424,6 +425,7 @@ TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
 CLIENT_DRIVER_IMPL_MODULES = \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -484,6 +486,7 @@ SERVER_DRIVER_EXTRACT_SELECTOR = \
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
 SERVER_DRIVER_MODULES = \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.ConnectionState.Bounds \
   TLS13.Impl.ConnectionState.Model \
