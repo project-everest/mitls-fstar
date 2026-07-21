@@ -190,7 +190,18 @@ vloop-length-test: extract-loops
 	@$(EXTRACT_DIR)/vloop_length_test $(VERIFIED_DIR)/dummy.txt
 
 # Run both framings' verified<->verified interop tests.
-vloop-tests: vloop-test vloop-length-test
+vloop-tests: vloop-test vloop-length-test vloop-length-full-test
+
+vloop-length-full-test: extract-loops
+	@echo "Building the verified Content-Length full HEAD+BODY exchange test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_full_test \
+	  $(VERIFIED_DIR)/vloop_length_full_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified server head+body loop  ->  Verified client head-parse+body loop  (Content-Length, SOCK_STREAM)"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/vloop_length_full_test $(VERIFIED_DIR)/dummy.txt
 
 head-emit-test: extract-loops
 	@echo "Building the verified head-emitter self-test ..."

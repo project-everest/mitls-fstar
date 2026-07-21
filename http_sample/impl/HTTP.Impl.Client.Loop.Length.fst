@@ -26,9 +26,18 @@ module SZ    = FStar.SizeT
 module Seq   = FStar.Seq
 module TCP   = Common.TCP
 module U8    = FStar.UInt8
+module U16   = FStar.UInt16
+module U32   = FStar.UInt32
+module R     = Pulse.Lib.Reference
+module W     = HTTP.Wire.Common
 module Codec = HTTP.Impl.Codec.Length
 
 open HTTP.Wire.Length
+
+let lemma_flen_fits (flen:SZ.t)
+  : Lemma (requires SZ.v flen < W.max_len8) (ensures SZ.v flen < pow2 32)
+  = assert_norm (W.max_len8 < pow2 32)
+
 open Pulse.Lib.BoundedIntegers
 
 (* Receive one Content-Length body segment of the agreed length `flen` over `ch`.
@@ -58,5 +67,62 @@ fn http_client_run_length
   let _n1 = TCP.read_full ch body flen;
   let ok = Codec.http_recv_body body out flen;
   ok
+}
+#pop-options
+
+(* Full Content-Length *exchange* receive driver: read the 43-byte response head,
+   parse it via the verified codec leaf `http_recv_response` to recover the status
+   `code` and Content-Length `len`, check that `len` equals the agreed buffer
+   length `flen`, then read+decode the body.  On success the head bytes parse to
+   `Msg_response code len`, `out` holds the body, and it parses to `Msg_body`. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_client_run_length_full
+  (ch: TCP.channel)
+  (headbuf: array U8.t)
+  (pcode: R.ref U16.t)
+  (plen: R.ref U32.t)
+  (body: array U8.t)
+  (out: array U8.t)
+  (flen: SZ.t)
+  requires
+    TCP.is_channel ch 'received 'sent **
+    pts_to headbuf 'hb ** R.pts_to pcode 'c0 ** R.pts_to plen 'l0 **
+    pts_to body 'b ** pts_to out 'o **
+    pure (Seq.length 'hb == 43 /\
+          Seq.length 'b == SZ.v flen /\
+          Seq.length 'o == SZ.v flen /\
+          Prims.op_LessThan (SZ.v flen) W.max_len8)
+  returns ok: bool
+  ensures
+    (exists* (rcv snt:TCP.bytes) (hb' bb o':Seq.seq U8.t) (cv:U16.t) (lv:U32.t).
+       TCP.is_channel ch rcv snt **
+       pts_to headbuf hb' ** R.pts_to pcode cv ** R.pts_to plen lv **
+       pts_to body bb ** pts_to out o' **
+       pure (Seq.length o' == SZ.v flen /\
+             (ok == true ==>
+                (Prims.op_LessThanOrEqual 100 (U16.v cv) /\
+                 Prims.op_LessThan (U16.v cv) 1000 /\
+                 Prims.op_LessThan (U32.v lv) W.max_len8 /\
+                 Prims.op_Equality #nat (U32.v lv) (SZ.v flen) /\
+                 http_parse hb' == Some (Msg_response cv (U32.v lv), Seq.empty #U8.t) /\
+                 body_ok o' /\
+                 http_parse o' == Some (Msg_body o', Seq.empty #U8.t)))))
+{
+  let _nh = TCP.read_full ch headbuf 43sz;
+  let okh = Codec.http_recv_response headbuf pcode plen;
+  if okh {
+    let lv = !plen;
+    let flen32 = SZ.sizet_to_uint32 flen;
+    lemma_flen_fits flen;
+    if U32.eq lv flen32 {
+      let _nb = TCP.read_full ch body flen;
+      let okb = Codec.http_recv_body body out flen;
+      okb
+    } else {
+      false
+    }
+  } else {
+    false
+  }
 }
 #pop-options

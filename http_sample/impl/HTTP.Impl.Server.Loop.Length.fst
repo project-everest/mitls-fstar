@@ -20,6 +20,9 @@ module SZ    = FStar.SizeT
 module Seq   = FStar.Seq
 module TCP   = Common.TCP
 module U8    = FStar.UInt8
+module U16   = FStar.UInt16
+module U32   = FStar.UInt32
+module W     = HTTP.Wire.Common
 module Codec = HTTP.Impl.Codec.Length
 
 open HTTP.Wire.Length
@@ -50,3 +53,42 @@ fn http_server_run_length
   TCP.close ch;
   ()
 }
+
+(* Full Content-Length *exchange* send driver: emit the 43-byte response head
+   (status `code`, Content-Length `file_len`) via the verified codec leaf
+   `http_emit_response`, push it, then send the body verbatim and close.  The
+   companion `http_client_run_length_full` reads the head to learn the length. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_server_run_length_full
+  (ch: TCP.channel)
+  (code: U16.t)
+  (file: array U8.t)
+  (file_len: SZ.t)
+  (headbuf: array U8.t)
+  (scratch: array U8.t)
+  requires
+    TCP.is_channel ch 'received 'sent **
+    pts_to file 'f **
+    pts_to headbuf 'hb **
+    pts_to scratch 's **
+    pure (Seq.length 'f == SZ.v file_len /\
+          Seq.length 'hb == 43 /\
+          Seq.length 's == SZ.v file_len /\
+          body_ok 'f /\
+          Prims.op_LessThanOrEqual 100 (U16.v code) /\
+          Prims.op_LessThan (U16.v code) 1000 /\
+          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+  ensures
+    pts_to file 'f **
+    (exists* (hb' s':Seq.seq U8.t).
+       pts_to headbuf hb' ** pts_to scratch s')
+{
+  let flen32 = SZ.sizet_to_uint32 file_len;
+  Codec.http_emit_response code flen32 headbuf;
+  let nh = TCP.write ch headbuf 43sz;
+  Codec.http_emit_body file file_len scratch;
+  let nb = TCP.write ch scratch file_len;
+  TCP.close ch;
+  ()
+}
+#pop-options
