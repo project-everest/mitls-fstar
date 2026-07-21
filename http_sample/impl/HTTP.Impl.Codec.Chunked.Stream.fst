@@ -309,3 +309,184 @@ fn http_decode_chunks
   }
 }
 #pop-options
+
+(* ------------------------------------------------------------------------ *)
+(* Variable-width (RFC 9112) chunk-size decoder.                              *)
+(*                                                                            *)
+(* Unlike http_decode_chunks above — which assumes the fixed 4-hex-digit size *)
+(* header emitted by our own encoder — real origin servers write a           *)
+(* minimal-width hex chunk size (e.g. "1cf\r\n").  This decoder parses a      *)
+(* size of ANY number of hex digits followed by CRLF, then `size` payload     *)
+(* bytes and a trailing CRLF, repeating until the size-0 last chunk.  It      *)
+(* deliberately carries only a MEMORY-SAFETY contract (every array access is  *)
+(* proved in-bounds and the output length stays <= outcap) — not the full     *)
+(* parse_chunks spec relation, which is defined only for the fixed-width      *)
+(* header — matching the client-leaf philosophy of parsing untrusted server   *)
+(* output safely.  (Chunk extensions after the size and a trailing-header     *)
+(* section after the last chunk are not interpreted; a size line with a ';'   *)
+(* extension or a non-CRLF terminator is rejected as malformed.)             *)
+
+(* size_t is >= 64 bits; the size accumulator stays <= inlen < pow2 32, so the
+   intermediate s*16 (+ a hex digit) stays below pow2 40, comfortably inside. *)
+let lemma_fits_wide (x:nat)
+  : Lemma (requires x < pow2 40) (ensures SZ.fits x)
+= assume (FStar.SizeT.fits_u64);
+  assert_norm (pow2 40 < pow2 64);
+  FStar.SizeT.fits_u64_implies_fits x
+
+(* s <= inl < pow2 32  ==>  s*16 and s*16+16 stay below pow2 40. *)
+let lemma_size_mul (s inl:nat)
+  : Lemma (requires s <= inl /\ inl < pow2 32)
+          (ensures s * 16 + 16 < pow2 40)
+= ML.lemma_mult_le_right 16 s inl;
+  ML.lemma_mult_lt_right 16 inl (pow2 32);
+  assert_norm (pow2 32 * 16 == pow2 36);
+  assert_norm (pow2 36 + 16 < pow2 40)
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
+fn http_decode_chunks_var
+    (inp: array U8.t) (inlen: SZ.t)
+    (out: array U8.t) (outcap: SZ.t)
+    (poff: R.ref SZ.t)
+  requires
+    pts_to inp 'i ** pts_to out 'o ** R.pts_to poff 'po **
+    pure (SZ.v inlen <= Seq.length 'i /\ Seq.length 'o == SZ.v outcap /\
+          SZ.v inlen < pow2 32 /\ SZ.v outcap < pow2 32)
+  returns ok: bool
+  ensures
+    pts_to inp 'i **
+    (exists* (ov:Seq.seq U8.t) (vo:SZ.t).
+       pts_to out ov ** R.pts_to poff vo **
+       pure (Seq.length ov == SZ.v outcap /\
+             (ok == true ==> SZ.v vo <= SZ.v outcap)))
+{
+  let mut pos = 0sz;
+  let mut off = 0sz;
+  let mut err = false;
+  let mut done = false;
+  while (not !done && not !err)
+  invariant exists* (vpos voff:SZ.t) (verr vdone:bool) (ov:Seq.seq U8.t).
+    R.pts_to pos vpos ** R.pts_to off voff ** R.pts_to err verr ** R.pts_to done vdone **
+    pts_to inp 'i ** pts_to out ov **
+    pure (Seq.length ov == SZ.v outcap /\
+          SZ.v vpos <= SZ.v inlen /\ SZ.v voff <= SZ.v outcap /\
+          SZ.v inlen < pow2 32 /\ SZ.v outcap < pow2 32)
+  {
+    let vpos = !pos;
+    (* ── parse the variable-width hex size line starting at vpos ─────────── *)
+    let mut np = vpos;
+    let mut size = 0sz;
+    let mut hexcount = 0sz;
+    let mut scanning = true;
+    while (!scanning)
+    invariant exists* (vnp vsize vhc:SZ.t) (vsc:bool).
+      R.pts_to np vnp ** R.pts_to size vsize ** R.pts_to hexcount vhc **
+      R.pts_to scanning vsc ** pts_to inp 'i **
+      pure (SZ.v vnp <= SZ.v inlen /\ SZ.v vsize <= SZ.v inlen /\
+            SZ.v vhc <= SZ.v vnp /\ SZ.v inlen < pow2 32)
+    {
+      let vnp = !np;
+      if SZ.lt vnp inlen {
+        let c = inp.(vnp);
+        if W.is_hex c {
+          let d = SZ.uint16_to_sizet (CC.unhex_byte c);
+          let s = !size;
+          lemma_size_mul (SZ.v s) (SZ.v inlen);
+          lemma_fits_wide (SZ.v s * 16);
+          let s16 = SZ.mul s 16sz;
+          lemma_fits_wide (SZ.v s16 + SZ.v d);
+          let s' = SZ.add s16 d;
+          if SZ.gt s' inlen {
+            (* a chunk larger than the whole input is malformed; stop *)
+            scanning := false;
+          } else {
+            let vhc = !hexcount;
+            lemma_fits_small (SZ.v vhc + 1);
+            size := s';
+            hexcount := SZ.add vhc 1sz;
+            np := SZ.add vnp 1sz;
+          }
+        } else {
+          scanning := false;
+        }
+      } else {
+        scanning := false;
+      }
+    };
+    (* ── validate the size line and consume the frame ───────────────────── *)
+    let vnp = !np;
+    let vhc = !hexcount;
+    if SZ.eq vhc 0sz {
+      err := true;                       (* no hex digits: malformed *)
+    } else {
+      lemma_fits_small (SZ.v vnp + 1);
+      if SZ.gte (SZ.add vnp 1sz) inlen {
+        err := true;                     (* no room for the size-line CRLF *)
+      } else {
+        let h0 = inp.(vnp);
+        let h1 = inp.(SZ.add vnp 1sz);
+        if not (U8.eq h0 W.bCR && U8.eq h1 W.bLF) {
+          err := true;                   (* size not terminated by CRLF *)
+        } else {
+          let vsize = !size;
+          let datastart = SZ.add vnp 2sz;
+          if SZ.eq vsize 0sz {
+            done := true;                (* last chunk: terminate *)
+          } else {
+            assert_norm (pow2 32 + pow2 32 + 4 < pow2 40);
+            lemma_fits_wide (SZ.v datastart + SZ.v vsize + 2);
+            let vposn = !pos;
+            let voff = !off;
+            if SZ.gt (SZ.add (SZ.add datastart vsize) 2sz) inlen {
+              err := true;               (* frame body overruns input *)
+            } else {
+              assert_norm (pow2 32 + pow2 32 < pow2 40);
+              lemma_fits_wide (SZ.v voff + SZ.v vsize);
+              if SZ.gt (SZ.add voff vsize) outcap {
+                err := true;             (* reassembly overruns output *)
+              } else {
+                (* copy vsize payload bytes inp[datastart..) -> out[voff..) *)
+                let mut k = 0sz;
+                while (SZ.lt !k vsize)
+                invariant exists* (vk:SZ.t) (ov:Seq.seq U8.t).
+                  R.pts_to k vk ** pts_to out ov ** pts_to inp 'i **
+                  pure (SZ.v vk <= SZ.v vsize /\ Seq.length ov == SZ.v outcap /\
+                        SZ.v voff + SZ.v vsize <= SZ.v outcap /\
+                        SZ.v datastart + SZ.v vsize + 2 <= SZ.v inlen /\
+                        SZ.v inlen <= Seq.length 'i)
+                {
+                  let vk = !k;
+                  lemma_fits_small (SZ.v datastart + SZ.v vk);
+                  lemma_fits_small (SZ.v voff + SZ.v vk);
+                  let dv = inp.(SZ.add datastart vk);
+                  out.(SZ.add voff vk) <- dv;
+                  lemma_fits_small (SZ.v vk + 1);
+                  k := SZ.add vk 1sz;
+                };
+                (* trailing CRLF of the frame body *)
+                let e0 = inp.(SZ.add datastart vsize);
+                lemma_fits_small (SZ.v datastart + SZ.v vsize + 1);
+                let e1 = inp.(SZ.add (SZ.add datastart vsize) 1sz);
+                if not (U8.eq e0 W.bCR && U8.eq e1 W.bLF) {
+                  err := true;
+                } else {
+                  pos := SZ.add (SZ.add datastart vsize) 2sz;
+                  off := SZ.add voff vsize;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+  let vdone = !done;
+  let voff = !off;
+  poff := voff;
+  if vdone {
+    true
+  } else {
+    false
+  }
+}
+#pop-options
