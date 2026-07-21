@@ -336,17 +336,20 @@ fn is_crlf_at (inp: array U8.t) (n: SZ.t) (vi: SZ.t)
 
 fn http_parse_framing
   (inp: array U8.t) (n: SZ.t)
-  (pchunked: R.ref bool) (phas_cl: R.ref bool) (pcl: R.ref U32.t)
+  (pchunked: R.ref bool) (phas_cl: R.ref bool) (pcl: R.ref U32.t) (phead: R.ref SZ.t)
   requires
     pts_to inp 'i **
     R.pts_to pchunked 'ch0 ** R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 **
+    R.pts_to phead 'hd0 **
     pure (SZ.v n <= Seq.length 'i /\ SZ.v n + 18 < pow2 32)
   returns ended: bool
   ensures
     pts_to inp 'i **
-    (exists* (ch:bool) (hc:bool) (cl:U32.t).
+    (exists* (ch:bool) (hc:bool) (cl:U32.t) (hd:SZ.t).
        R.pts_to pchunked ch ** R.pts_to phas_cl hc ** R.pts_to pcl cl **
-       pure (U32.v cl < CW.max_len8))
+       R.pts_to phead hd **
+       pure (U32.v cl < CW.max_len8 /\
+             (ended == true ==> SZ.v hd <= SZ.v n)))
 {
   let mut i = 0sz;
   let mut sol = false;     (* is index i the start of a header line? *)
@@ -354,13 +357,15 @@ fn http_parse_framing
   pchunked := false;
   phas_cl  := false;
   pcl      := 0ul;
+  phead    := 0sz;
   while (SZ.lt !i n && not !ended)
-  invariant exists* (vi:SZ.t) (vsol:bool) (ve:bool) (ch:bool) (hc:bool) (cl:U32.t).
+  invariant exists* (vi:SZ.t) (vsol:bool) (ve:bool) (ch:bool) (hc:bool) (cl:U32.t) (hd:SZ.t).
     R.pts_to i vi ** R.pts_to sol vsol ** R.pts_to ended ve **
     R.pts_to pchunked ch ** R.pts_to phas_cl hc ** R.pts_to pcl cl **
+    R.pts_to phead hd **
     pts_to inp 'i **
     pure (SZ.v vi <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n + 18 < pow2 32 /\
-          U32.v cl < CW.max_len8)
+          U32.v cl < CW.max_len8 /\ (ve == true ==> SZ.v hd <= SZ.v n))
   {
     let vi = !i;
     let vsol = !sol;
@@ -371,6 +376,7 @@ fn http_parse_framing
     let crlf = is_crlf_at inp n vi;
     if crlf {
       if vsol {
+        phead := SZ.add vi 2sz;     (* body begins just past the CRLF-CRLF *)
         ended := true;              (* empty line at a line start: end of head *)
       } else {
         sol := true;                (* next line (at vi+2) is a header line *)
@@ -411,32 +417,34 @@ fn http_parse_framing
 fn http_parse_response_head
   (inp: array U8.t) (n: SZ.t)
   (pcode: R.ref U16.t) (pchunked: R.ref bool) (phas_cl: R.ref bool) (pcl: R.ref U32.t)
+  (phead: R.ref SZ.t)
   requires
     pts_to inp 'i **
     R.pts_to pcode 'c0 ** R.pts_to pchunked 'ch0 **
-    R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 **
+    R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 ** R.pts_to phead 'hd0 **
     pure (SZ.v n <= Seq.length 'i /\ SZ.v n + 18 < pow2 32)
   returns ok: bool
   ensures
     pts_to inp 'i **
-    (exists* (code:U16.t) (ch:bool) (hc:bool) (cl:U32.t).
+    (exists* (code:U16.t) (ch:bool) (hc:bool) (cl:U32.t) (hd:SZ.t).
        R.pts_to pcode code ** R.pts_to pchunked ch **
-       R.pts_to phas_cl hc ** R.pts_to pcl cl **
+       R.pts_to phas_cl hc ** R.pts_to pcl cl ** R.pts_to phead hd **
        pure (U32.v cl < CW.max_len8 /\
          (ok == true ==>
-           (SZ.v n <= Seq.length 'i /\ 13 <= SZ.v n /\
+           (SZ.v n <= Seq.length 'i /\ 13 <= SZ.v n /\ SZ.v hd <= SZ.v n /\
             100 <= U16.v code /\ U16.v code < 1000 /\
             CW.dec3_ok (Seq.slice 'i 9 12) /\
             Prims.op_Equality #nat (U16.v code) (CW.dec_dec3 (Seq.slice 'i 9 12))))))
 {
   let sok = http_parse_status_line inp n pcode;
   if sok {
-    let ended = http_parse_framing inp n pchunked phas_cl pcl;
+    let ended = http_parse_framing inp n pchunked phas_cl pcl phead;
     ended
   } else {
     pchunked := false;
     phas_cl  := false;
     pcl      := 0ul;
+    phead    := 0sz;
     false
   }
 }

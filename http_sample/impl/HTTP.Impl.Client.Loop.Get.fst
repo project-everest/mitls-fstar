@@ -121,12 +121,13 @@ fn http_get
   (tmp: array U8.t) (tmpcap: SZ.t)
   (prlen: R.ref SZ.t)
   (pcode: R.ref U16.t) (pchunked: R.ref bool) (phas_cl: R.ref bool) (pcl: R.ref U32.t)
+  (phead: R.ref SZ.t)
   requires
     TCP.is_channel ch 'received 'sent **
     pts_to target 't ** pts_to host 'hst ** pts_to reqbuf 'rq **
     pts_to buf 'b ** pts_to tmp 'tm ** R.pts_to prlen 'l0 **
     R.pts_to pcode 'c0 ** R.pts_to pchunked 'ch0 **
-    R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 **
+    R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 ** R.pts_to phead 'hd0 **
     pure (Seq.length 't == SZ.v target_len /\ Seq.length 'hst == SZ.v host_len /\
           W.space_free 't /\ W.space_free 'hst /\
           SZ.v target_len + SZ.v host_len + 44 < pow2 32 /\
@@ -137,14 +138,15 @@ fn http_get
   ensures
     pts_to target 't ** pts_to host 'hst **
     (exists* (rcv snt:TCP.bytes) (rq' bv tv:Seq.seq U8.t) (rl:SZ.t)
-             (code:U16.t) (chk hc:bool) (cl:U32.t).
+             (code:U16.t) (chk hc:bool) (cl:U32.t) (hd:SZ.t).
        TCP.is_channel ch rcv snt **
        pts_to reqbuf rq' ** pts_to buf bv ** pts_to tmp tv **
        R.pts_to prlen rl ** R.pts_to pcode code ** R.pts_to pchunked chk **
-       R.pts_to phas_cl hc ** R.pts_to pcl cl **
+       R.pts_to phas_cl hc ** R.pts_to pcl cl ** R.pts_to phead hd **
        pure (Seq.length bv == SZ.v cap /\ SZ.v rl <= SZ.v cap /\ U32.v cl < W.max_len8 /\
              (ok == true ==>
-               (13 <= SZ.v rl /\ SZ.v rl <= SZ.v cap /\ Seq.length bv == SZ.v cap /\
+               (13 <= SZ.v rl /\ SZ.v rl <= SZ.v cap /\ SZ.v hd <= SZ.v rl /\
+                Seq.length bv == SZ.v cap /\
                 100 <= U16.v code /\ U16.v code < 1000 /\
                 W.dec3_ok (Seq.slice bv 9 12) /\
                 Prims.op_Equality #nat (U16.v code) (W.dec_dec3 (Seq.slice bv 9 12))))))
@@ -158,7 +160,7 @@ fn http_get
   let _nw = TCP.write ch reqbuf rlen_req;
   recv_to_eof ch buf cap tmp tmpcap prlen;
   let rl = !prlen;
-  let ok = Resp.http_parse_response_head buf rl pcode pchunked phas_cl pcl;
+  let ok = Resp.http_parse_response_head buf rl pcode pchunked phas_cl pcl phead;
   ok
 }
 #pop-options

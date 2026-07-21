@@ -82,10 +82,11 @@ int main(void) {
   bool     chunked = false;
   bool     has_cl  = false;
   uint32_t cl      = 0;
+  size_t   headlen = 0;
 
   bool ok = http_get(ch, target, target_len, host, host_len,
                      reqbuf, buf, cap, tmp, tmpcap,
-                     &rlen, &code, &chunked, &has_cl, &cl);
+                     &rlen, &code, &chunked, &has_cl, &cl, &headlen);
 
   Common_TCP_close(ch);
 
@@ -93,15 +94,30 @@ int main(void) {
   waitpid(pid, &status, 0);
 
   size_t expected_rlen = sizeof(RESP) - 1;
+  /* head is everything up to and including the CRLF-CRLF terminator */
+  const char *hdr_end = strstr(RESP, "\r\n\r\n");
+  size_t expected_head = (size_t)(hdr_end - RESP) + 4;
+  const char BODY[] = "Hello, world!";
+  size_t body_len = sizeof(BODY) - 1;
+
+  /* the verified client reports the body span as buf[headlen .. rlen) */
+  int body_ok = ok
+             && headlen <= rlen
+             && (rlen - headlen) == body_len
+             && memcmp(buf + headlen, BODY, body_len) == 0;
+
   int pass = ok
           && code == 200
           && !chunked
           && has_cl
           && cl == 13
-          && rlen == expected_rlen;
+          && rlen == expected_rlen
+          && headlen == expected_head
+          && body_ok;
 
-  printf("verified GET: ok=%d code=%u chunked=%d has_cl=%d cl=%u rlen=%zu (expected code=200 has_cl=1 cl=13 rlen=%zu) => %s\n",
-         ok, code, chunked, has_cl, cl, rlen, expected_rlen,
+  printf("verified GET: ok=%d code=%u chunked=%d has_cl=%d cl=%u rlen=%zu headlen=%zu body_ok=%d (expected code=200 cl=13 rlen=%zu headlen=%zu) => %s\n",
+         ok, code, chunked, has_cl, cl, rlen, headlen, body_ok,
+         expected_rlen, expected_head,
          pass ? "PASS" : "FAIL");
 
   free(reqbuf); free(buf); free(tmp);

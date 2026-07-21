@@ -42,7 +42,8 @@ static void check(const char *head, bool exp_ok, uint16_t exp_code,
   uint16_t code = 0;
   bool chunked = false, has_cl = false;
   uint32_t cl = 0;
-  bool ok = http_parse_response_head(buf, n, &code, &chunked, &has_cl, &cl);
+  size_t headlen = 0;
+  bool ok = http_parse_response_head(buf, n, &code, &chunked, &has_cl, &cl, &headlen);
   int fr = framing_of(chunked, has_cl);
 
   int bad = 0;
