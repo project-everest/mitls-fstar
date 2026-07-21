@@ -82,4 +82,10 @@ bool TLS13_Crypto_chacha20_poly1305_open(
     size_t cipher_len,
     uint8_t *out);
 
+size_t TLS13_Crypto_move_suffix_to_front(
+    uint8_t *raw,
+    size_t raw_capacity,
+    size_t buffered_len,
+    size_t consumed_len);
+
 #endif

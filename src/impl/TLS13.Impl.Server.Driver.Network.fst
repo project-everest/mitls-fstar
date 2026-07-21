@@ -15,6 +15,7 @@ module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
+module Crypto = TLS13.Crypto
 module CQ = TLS13.Impl.ConnectionState.Queries
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
@@ -91,92 +92,10 @@ fn compact_buffer_suffix
                      (SZ.v consumed_len)
                      (SZ.v buffered_len)))
 {
-  let new_len = SZ.sub buffered_len consumed_len;
+  let new_len =
+    Crypto.move_suffix_to_front raw raw_capacity buffered_len consumed_len;
   assert (pure (new_len == pending_after_consumed buffered_len consumed_len));
-  assert (pure (SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len));
-  assert (pure (SZ.v new_len <= SZ.v buffered_len));
-  let no_shift = consumed_len = 0sz;
-  if no_shift {
-    assert (pure (new_len == buffered_len));
-    assert (pure (Seq.equal
-      (Seq.slice (Ghost.reveal 'raw_bytes) 0 (SZ.v new_len))
-      (Seq.slice (Ghost.reveal 'raw_bytes)
-        (SZ.v consumed_len)
-        (SZ.v buffered_len))));
-    new_len
-  } else {
-    let mut i = 0sz;
-    while ((R.read i) `SZ.lt` new_len)
-      invariant live i
-      invariant exists* raw_loop.
-        pts_to raw raw_loop **
-        pure (B.length raw_loop == SZ.v raw_capacity /\
-              SZ.v (R.read i) <= SZ.v new_len /\
-              SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len /\
-              SZ.v new_len <= SZ.v buffered_len /\
-              SZ.v consumed_len <= SZ.v buffered_len /\
-              SZ.v buffered_len <= SZ.v raw_capacity /\
-              (forall (k:nat). k < SZ.v (R.read i) ==>
-                Seq.index raw_loop k ==
-                Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)) /\
-              (forall (k:nat). SZ.v (R.read i) <= k /\ k < SZ.v buffered_len ==>
-                Seq.index raw_loop k ==
-                Seq.index (Ghost.reveal 'raw_bytes) k))
-    {
-      let vi = R.read i;
-      assert (pure (SZ.v vi < SZ.v new_len));
-      assert (pure (SZ.v vi + SZ.v consumed_len < SZ.v buffered_len));
-      assert (pure (SZ.v vi + SZ.v consumed_len < SZ.v raw_capacity));
-      SZ.fits_lte (SZ.v vi + SZ.v consumed_len) (SZ.v raw_capacity);
-      let src_idx = vi `SZ.add` consumed_len;
-      assert (pure (SZ.v src_idx < SZ.v raw_capacity));
-      with raw_before_read.
-        assert (pts_to raw raw_before_read);
-      assert (pure (B.length raw_before_read == SZ.v raw_capacity));
-      let b = raw.(src_idx);
-      assert (pure (b == Seq.index (Ghost.reveal 'raw_bytes)
-        (SZ.v vi + SZ.v consumed_len)));
-      assert (pure (SZ.v vi < SZ.v raw_capacity));
-      raw.(vi) <- b;
-      with raw_after_write.
-        assert (pts_to raw raw_after_write);
-      assert (pure (B.length raw_after_write == SZ.v raw_capacity));
-      assert (pure (Seq.index raw_after_write (SZ.v vi) == b));
-      assert (pure (forall (k:nat). k < SZ.v vi ==>
-        Seq.index raw_after_write k == Seq.index raw_before_read k));
-      assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
-        Seq.index raw_after_write k == Seq.index raw_before_read k));
-      assert (pure (forall (k:nat). k < SZ.v vi + 1 ==>
-        Seq.index raw_after_write k ==
-        Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
-      assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
-        Seq.index raw_after_write k ==
-        Seq.index (Ghost.reveal 'raw_bytes) k));
-      assert (pure (SZ.v vi + 1 <= SZ.v new_len));
-      SZ.fits_lte (SZ.v vi + 1) (SZ.v new_len);
-      let next_i = vi `SZ.add` 1sz;
-      R.write i next_i;
-    };
-    with raw_done.
-      assert (pts_to raw raw_done);
-    assert (pure (B.length raw_done == SZ.v raw_capacity));
-    assert (pure (forall (k:nat). k < SZ.v new_len ==>
-      Seq.index raw_done k ==
-      Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
-    Seq.lemma_len_slice raw_done 0 (SZ.v new_len);
-    Seq.lemma_len_slice (Ghost.reveal 'raw_bytes)
-      (SZ.v consumed_len)
-      (SZ.v buffered_len);
-    assert (pure (forall (k:nat). k < B.length (Seq.slice raw_done 0 (SZ.v new_len)) ==>
-      Seq.index (Seq.slice raw_done 0 (SZ.v new_len)) k ==
-      Seq.index
-        (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len))
-        k));
-    Seq.lemma_eq_intro
-      (Seq.slice raw_done 0 (SZ.v new_len))
-      (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len));
-    new_len
-  }
+  new_len
 }
 
 let lemma_server_driver_network_process_correct_intro
