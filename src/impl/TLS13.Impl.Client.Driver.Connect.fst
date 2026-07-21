@@ -40,6 +40,18 @@ module DCleanup = TLS13.Impl.Client.Driver.Cleanup
 open TLS13.Impl.Client.Driver.State
 open TLS13.Impl.Client.Driver.Core
 open TLS13.Impl.Client.Driver.Cleanup
+
+let lemma_application_data_control_not_failed
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        st.CS.cs_model.CS.model_control == CS.ControlApplicationData)
+      (ensures CT.connection_control_not_failed st)
+=
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlApplicationData -> ()
+  | _ -> assert False
+
 fn run
   (d:client_driver)
   (connect_host:array U8.t)
@@ -86,6 +98,16 @@ fn run
       DriverWorkflowStepFailed
     }
     Some ch -> {
+      assert (IO.is_channel
+        ch
+        (Seq.create 0 0uy)
+        (Seq.create 0 0uy));
+      Seq.lemma_eq_intro (Seq.create 0 0uy) B.empty;
+      Seq.lemma_eq_elim (Seq.create 0 0uy) B.empty;
+      rewrite
+        (IO.is_channel ch (Seq.create 0 0uy) (Seq.create 0 0uy))
+        as
+        (IO.is_channel ch B.empty B.empty);
       assert (pure (client_driver_wire_logs_match 'st0 B.empty B.empty B.empty current_buffered_len));
       fold (channel_open ch 'st0 B.empty current_buffered_len);
       unfold (client_driver_buffers d B.empty buffered_len);
@@ -219,6 +241,7 @@ fn run
              result.driver_workflow_rx_len;
            assert (pure (client_driver_received_log_accounted st1 received));
            assert (pure (st1.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+           lemma_application_data_control_not_failed st1;
            assert (pure (CT.connection_control_not_failed st1));
            lemma_client_driver_wire_logs_match_received_exact_prefix
              st1
@@ -285,7 +308,7 @@ fn run
           close_failed_connect d ch result.driver_workflow_rx_len;
           DriverWorkflowPayloadTooLarge
         }
-        DriverWorkflowOutputBufferTooSmall -> {
+        _ -> {
           close_failed_connect d ch result.driver_workflow_rx_len;
           DriverWorkflowOutputBufferTooSmall
         }

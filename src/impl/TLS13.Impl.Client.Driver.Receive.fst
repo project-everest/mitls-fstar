@@ -42,6 +42,56 @@ module DC = TLS13.Impl.Client.Driver.Core
 open TLS13.Impl.Client.Driver.State
 open TLS13.Impl.Client.Driver.Core
 
+let lemma_memcpy_prefix
+  (src dst:B.bytes)
+  (copy_len:nat)
+  : Lemma
+      (requires copy_len <= B.length src /\ copy_len <= B.length dst)
+      (ensures Seq.equal
+        (Seq.slice
+          (B.append
+            (Seq.slice src 0 copy_len)
+            (Seq.slice dst copy_len (B.length dst)))
+          0
+          copy_len)
+        (Seq.slice src 0 copy_len))
+=
+  let prefix = Seq.slice src 0 copy_len in
+  let suffix = Seq.slice dst copy_len (B.length dst) in
+  Seq.lemma_len_slice src 0 copy_len;
+  Seq.lemma_len_slice dst copy_len (B.length dst);
+  Seq.lemma_len_append prefix suffix;
+  Seq.lemma_len_slice (B.append prefix suffix) 0 copy_len;
+  assert (forall (i:nat{i < copy_len}).
+    Seq.index (Seq.slice (B.append prefix suffix) 0 copy_len) i ==
+      Seq.index prefix i);
+  Seq.lemma_eq_intro
+    (Seq.slice (B.append prefix suffix) 0 copy_len)
+    prefix
+
+let lemma_response_app_out_length_fits_if
+  (ok:bool)
+  (resp:CT.client_response)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ok == true ==>
+          B.length (CT.response_app_out resp app_out) ==
+            SZ.v resp.CT.app_out_len)
+      (ensures
+        ok == true ==>
+          SZ.v resp.CT.app_out_len <= B.length app_out)
+=
+  if ok then (
+    if SZ.v resp.CT.app_out_len <= B.length app_out then ()
+    else (
+      assert (CT.response_app_out resp app_out == B.empty);
+      assert (B.length (CT.response_app_out resp app_out) == 0);
+      assert (SZ.v resp.CT.app_out_len == 0);
+      assert False
+    )
+  )
+
 noextract
 let client_receive_workflow_application_log
   (st0 st1:CS.connection_state)
@@ -872,6 +922,15 @@ fn run
         st1
         (client_driver_workflow_observation workflow)
         app_out_bytes;
+      assert (pure (workflow_ok ==>
+        B.length (CT.response_app_out response app_out_bytes) ==
+          SZ.v copy_len));
+      lemma_response_app_out_length_fits_if
+        workflow_ok
+        response
+        app_out_bytes;
+      assert (pure (workflow_ok ==>
+        SZ.v copy_len <= B.length app_out_bytes));
       if (workflow_ok && app_fits && app_src_fits) {
         A.pts_to_len (V.vec_to_array d.client_driver_app_out);
         A.pts_to_len out;
@@ -889,6 +948,10 @@ fn run
         assert (pure (B.length out_bytes == SZ.v out_len));
         assert (pure (workflow_ok ==>
           SZ.v copy_len <= B.length app_out_bytes));
+        lemma_memcpy_prefix
+          app_out_bytes
+          (Ghost.reveal 'old_out)
+          (SZ.v copy_len);
         assert (pure (Seq.equal
           (CT.response_app_out response app_out_bytes)
           (Seq.slice app_out_bytes 0 (SZ.v copy_len))));

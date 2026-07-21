@@ -38,6 +38,60 @@ module DS = TLS13.Impl.Client.Driver.State
 module DC = TLS13.Impl.Client.Driver.Core
 open TLS13.Impl.Client.Driver.State
 open TLS13.Impl.Client.Driver.Core
+
+let lemma_client_driver_send_correct_from_local
+  (st0 st1:CS.connection_state)
+  (status:driver_workflow_status)
+  (payload sent sent':B.bytes)
+  (resp:CT.client_response)
+  : Lemma
+      (requires
+        status <> DriverWorkflowPayloadTooLarge /\
+        client_driver_local_write_correct
+          st0
+          st1
+          resp
+          CT.LocalSendApplicationData
+          payload
+          sent
+          sent' /\
+        client_driver_send_status_correct status resp /\
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          st0.CS.cs_wire_log.CL.raw_received)
+      (ensures client_driver_send_correct
+        st0 st1 status payload sent sent')
+=
+  assert (exists response.
+    client_driver_local_write_correct
+      st0
+      st1
+      response
+      CT.LocalSendApplicationData
+      payload
+      sent
+      sent' /\
+    client_driver_send_status_correct status response);
+  assert (client_driver_send_correct st0 st1 status payload sent sent')
+
+let lemma_client_driver_send_failed_status
+  (resp:CT.client_response)
+  : Lemma
+      (requires not (resp.CT.status == CT.StepOk))
+      (ensures client_driver_send_status_correct
+        DriverWorkflowStepFailed resp)
+=
+  if resp.CT.status = CT.StepOk
+  then assert False
+  else ()
+
+let lemma_send_application_data_local_input_wf
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  : Lemma (CT.local_input_wf st CT.LocalSendApplicationData payload)
+=
+  ()
+
 fn send_application_data_once
   (c:C.client)
   (ch:IO.channel)
@@ -319,6 +373,9 @@ fn run
     DriverWorkflowPayloadTooLarge
   } else {
     assert (pure (SZ.v payload_len <= SM.max_application_data_fragment_len));
+    lemma_send_application_data_local_input_wf
+      'st0
+      (Ghost.reveal 'payload_bytes);
     assert (pure (CT.local_input_wf
       'st0
       CT.LocalSendApplicationData
@@ -468,18 +525,29 @@ fn run
         (Ghost.reveal 'payload_bytes)
         (Ghost.reveal 'sent0)
         sent1));
+      assert (pure (Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        'st0.CS.cs_wire_log.CL.raw_received));
       assert (pure (result.local_write_written ==
         result.local_write_resp.CT.network_out_len));
       fold (client_driver_connected d st1 received1 sent1);
       let ok = result.local_write_resp.CT.status = CT.StepOk;
       let wrote_all = result.local_write_written = result.local_write_resp.CT.network_out_len;
       assert (pure (wrote_all == true));
-      if (ok && wrote_all) {
+      if ok {
         assert (pure (ok == true));
         assert (pure (result.local_write_resp.CT.status == CT.StepOk));
         assert (pure (client_driver_send_status_correct
           DriverWorkflowOk
           result.local_write_resp));
+        lemma_client_driver_send_correct_from_local
+          'st0
+          st1
+          DriverWorkflowOk
+          (Ghost.reveal 'payload_bytes)
+          (Ghost.reveal 'sent0)
+          sent1
+          result.local_write_resp;
         assert (pure (client_driver_send_correct
           'st0
           st1
@@ -491,9 +559,18 @@ fn run
       } else {
         assert (pure (ok == false));
         assert (pure (not (result.local_write_resp.CT.status == CT.StepOk)));
+        lemma_client_driver_send_failed_status result.local_write_resp;
         assert (pure (client_driver_send_status_correct
           DriverWorkflowStepFailed
           result.local_write_resp));
+        lemma_client_driver_send_correct_from_local
+          'st0
+          st1
+          DriverWorkflowStepFailed
+          (Ghost.reveal 'payload_bytes)
+          (Ghost.reveal 'sent0)
+          sent1
+          result.local_write_resp;
         assert (pure (client_driver_send_correct
           'st0
           st1

@@ -456,7 +456,7 @@ fn rec driver_close_workflow
   let close_wrote_all =
     close_result.local_write_written = close_result.local_write_resp.CT.network_out_len;
   assert (pure (close_wrote_all == true));
-  let close_failed = (close_ok && close_wrote_all) = false;
+  let close_failed = close_ok = false;
   if close_failed {
    assert (pure (close_ok == false));
    assert (pure (close_result.local_write_resp.CT.status <> CT.StepOk));
@@ -491,7 +491,10 @@ fn rec driver_close_workflow
       };
       driver_workflow_network = no_op_io;
     }
-  } else if wait_for_peer {
+  } else {
+    assert (pure (close_failed == false));
+    assert (pure (close_ok == true));
+    if wait_for_peer {
     let waited =
       driver_await_peer_close_notify
         d.top_driver_core
@@ -546,7 +549,7 @@ fn rec driver_close_workflow
         };
         driver_workflow_network = waited.driver_workflow_network;
       }
-    } else {
+      } else {
       assert (pure (close_ok == true));
       assert (pure (client_driver_close_status_correct
         wait_for_peer
@@ -571,8 +574,8 @@ fn rec driver_close_workflow
           driver_drain_exhausted = false;
         };
         driver_workflow_network = waited.driver_workflow_network;
+        }
       }
-    }
   } else {
    unfold (driver_exactly d.top_driver_core st_after_close_notify 'buffered buffered_len);
    unfold (channel_open d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
@@ -608,6 +611,7 @@ fn rec driver_close_workflow
       driver_workflow_network = no_op_io;
     }
   }
+}
 }
 
 
@@ -756,6 +760,10 @@ fn run
   assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
   let close_buffered =
     Ghost.hide (Seq.slice raw_bytes 0 (SZ.v workflow.driver_workflow_rx_len));
+  Ghost.reveal_hide
+    (Seq.slice raw_bytes 0 (SZ.v workflow.driver_workflow_rx_len));
+  assert (pure (Ghost.reveal close_buffered ==
+    Seq.slice raw_bytes 0 (SZ.v workflow.driver_workflow_rx_len)));
   Seq.lemma_len_slice raw_bytes 0 (SZ.v workflow.driver_workflow_rx_len);
   fold (client_driver_buffers d (Ghost.reveal close_buffered) workflow.driver_workflow_rx_len);
   free_client_driver_buffers d workflow.driver_workflow_rx_len;
