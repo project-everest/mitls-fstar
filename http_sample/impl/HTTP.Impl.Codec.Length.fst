@@ -333,6 +333,55 @@ let lemma_emit_response_final
   with (code <: status_code) (U32.v len <: content_len) and ()
 
 
+(* A byte sequence with no embedded space (0x20) is `space_free` (a W.token).
+   Induction over the recursive `space_free`, which peels one byte at a time. *)
+let rec lemma_space_free_no_space (b:Seq.seq U8.t)
+  : Lemma (requires (forall (j:nat). j < Seq.length b ==> Seq.index b j <> W.bSP))
+          (ensures W.space_free b)
+          (decreases Seq.length b)
+= if Seq.length b = 0 then ()
+  else begin
+    let tl = Seq.slice b 1 (Seq.length b) in
+    assert (forall (j:nat). j < Seq.length tl ==> Seq.index tl j == Seq.index b (j + 1));
+    lemma_space_free_no_space tl
+  end
+
+(* Parse-inversion for the request head.  Given a buffer `inp` whose bytes match
+   the request-line layout "GET " target " HTTP/1.1\r\n\r\n" with the FIRST space
+   at position `sp` (so target = inp[4..sp] is space-free) and the 12-byte tail
+   `req_tail` filling inp[sp+1..], `inp == ser_request target`, so the spec's
+   forward round-trip law certifies `http_parse inp == Some (Msg_request target,
+   empty)`.  Reuses `emit_request_serialize`. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+let lemma_recv_request_ok (inp:Seq.seq U8.t) (sp:nat)
+  : Lemma
+    (requires
+       4 <= sp /\ sp + 13 == Seq.length inp /\
+       (forall (k:nat). k < 4 ==> Seq.index inp k == Seq.index lit_get k) /\
+       (forall (j:nat). 4 <= j /\ j < sp ==> Seq.index inp j =!= W.bSP) /\
+       Seq.index inp sp == W.bSP /\
+       (forall (k:nat). k < 12 ==>
+          Seq.index inp (sp + 1 + k) == Seq.index (Seq.cons W.bSP req_tail) (k + 1)))
+    (ensures (exists (tk:W.token).
+       (tk <: Seq.seq U8.t) == Seq.slice inp 4 sp /\
+       http_parse inp == Some (Msg_request tk, Seq.empty #U8.t)))
+= let target = Seq.slice inp 4 sp in
+  assert (Seq.length target == sp - 4);
+  assert (forall (m:nat). m < Seq.length target ==> Seq.index target m == Seq.index inp (4 + m));
+  lemma_space_free_no_space target;
+  let tail = Seq.cons W.bSP req_tail in
+  assert_norm (Seq.length tail == 13);
+  assert (Seq.index tail 0 == W.bSP);
+  assert (forall (k:nat). k < 13 ==>
+            Seq.index inp (4 + Seq.length target + k) == Seq.index tail k);
+  emit_request_serialize (target <: W.token) inp;
+  lemma_http_parse_serialize_exact (Msg_request (target <: W.token));
+  introduce exists (tk:W.token).
+      (tk <: Seq.seq U8.t) == Seq.slice inp 4 sp /\
+      http_parse inp == Some (Msg_request tk, Seq.empty #U8.t)
+  with (target <: W.token) and ()
+#pop-options
+
 (* ------------------------------------------------------------------------ *)
 (* Recv: parse the 43-byte response head back into (code, len).             *)
 (* ------------------------------------------------------------------------ *)
@@ -757,6 +806,95 @@ fn http_recv_response (inp: array U8.t) (pcode: R.ref U16.t) (plen: R.ref U32.t)
     }
   } else {
     false
+  }
+}
+#pop-options
+
+(* Parse a request head  "GET " target " HTTP/1.1\r\n\r\n"  in `inp` (logical
+   length `n`).  Returns `ok`; when `ok`, `ptlen` holds the target length `tl`,
+   the recovered space-free target is `Seq.slice inp 4 (4 + tl)`, and
+   `http_parse inp == Some (Msg_request target, empty)`.  Mirrors the recv-head
+   strategy: locate the FIRST space (which bounds the target and makes it
+   space-free), verify the "GET " prefix and the 12-byte tail, then let the
+   spec's forward round-trip law -- via lemma_recv_request_ok -- certify it. *)
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 2"
+fn http_recv_request (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
+  requires
+    pts_to inp 'i ** R.pts_to ptlen 't0 **
+    pure (Seq.length 'i == SZ.v n)
+  returns ok: bool
+  ensures
+    pts_to inp 'i **
+    (exists* (tl:SZ.t).
+       R.pts_to ptlen tl **
+       pure (ok == true ==>
+         (exists (tk:W.token).
+            Seq.length 'i == SZ.v n /\
+            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v n) /\
+            (tk <: Seq.seq U8.t) == Seq.slice 'i 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            http_parse 'i == Some (Msg_request tk, Seq.empty #U8.t))))
+{
+  if SZ.lt n 17sz {
+    false
+  } else {
+    (* literal prefix "GET " *)
+    let p0 = inp.(0sz); let p1 = inp.(1sz); let p2 = inp.(2sz); let p3 = inp.(3sz);
+    let lit_ok = U8.eq p0 0x47uy && U8.eq p1 0x45uy && U8.eq p2 0x54uy && U8.eq p3 0x20uy;
+    (* scan for the first space at or after index 4 *)
+    let mut i = 4sz;
+    let mut fnd = false;
+    while (SZ.lt !i n && not !fnd)
+    invariant exists* (vi:SZ.t) (vf:bool).
+      R.pts_to i vi ** R.pts_to fnd vf ** pts_to inp 'i **
+      pure (4 <= SZ.v vi /\ SZ.v vi <= SZ.v n /\ Seq.length 'i == SZ.v n /\
+        (forall (j:nat). 4 <= j /\ j < SZ.v vi ==> Seq.index 'i j =!= W.bSP) /\
+        (vf == true ==> (SZ.v vi < SZ.v n /\ Seq.index 'i (SZ.v vi) == W.bSP)))
+    {
+      let vi = !i;
+      let c = inp.(vi);
+      if U8.eq c 0x20uy {
+        fnd := true;
+      } else {
+        i := SZ.add vi 1sz;
+      }
+    };
+    let sp = !i;
+    let vfnd = !fnd;
+    if (vfnd && lit_ok && SZ.eq (SZ.sub n sp) 13sz) {
+      (* verify the 12-byte tail  "HTTP/1.1\r\n\r\n"  after the space *)
+      let mut k = 0sz;
+      let mut tok = true;
+      while (SZ.lt !k 12sz)
+      invariant exists* (vk:SZ.t) (vt:bool).
+        R.pts_to k vk ** R.pts_to tok vt ** pts_to inp 'i **
+        pure (SZ.v vk <= 12 /\ Seq.length 'i == SZ.v n /\
+          4 <= SZ.v sp /\ Prims.op_Addition (SZ.v sp) 13 == SZ.v n /\
+          Seq.index 'i (SZ.v sp) == W.bSP /\
+          (vt == true ==> (forall (kk:nat). kk < SZ.v vk ==>
+             Seq.index 'i (Prims.op_Addition (Prims.op_Addition (SZ.v sp) 1) kk)
+               == Seq.index (Seq.cons W.bSP req_tail) (Prims.op_Addition kk 1))))
+      {
+        let vk = !k;
+        let bv = inp.(SZ.add (SZ.add sp 1sz) vk);
+        lemma_req_tail_byte (SZ.add vk 1sz);
+        let ev = req_tail_byte (SZ.add vk 1sz);
+        let eq = U8.eq bv ev;
+        tok := (!tok) && eq;
+        k := SZ.add vk 1sz;
+      };
+      let vtok = !tok;
+      if vtok {
+        lemma_recv_request_ok ('i <: Seq.seq U8.t) (SZ.v sp);
+        ptlen := SZ.sub sp 4sz;
+        true
+      } else {
+        ptlen := 0sz;
+        false
+      }
+    } else {
+      ptlen := 0sz;
+      false
+    }
   }
 }
 #pop-options

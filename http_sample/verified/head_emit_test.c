@@ -100,8 +100,39 @@ static void check_request(const char *target) {
   if (memcmp(out, ref, olen) != 0) {
     fails++;
     fprintf(stderr, "  MISMATCH request target=\"%s\"\n", target);
+    return;
+  }
+
+  /* Round-trip: the verified parser must recover the target length, and the
+     target bytes are out[4 .. 4+rtlen]. */
+  size_t rtlen = 0;
+  if (!http_recv_request(out, olen, &rtlen)) {
+    fails++;
+    fprintf(stderr, "  RECV rejected a valid request target=\"%s\"\n", target);
+    return;
+  }
+  if (rtlen != tlen || memcmp(out + 4, target, tlen) != 0) {
+    fails++;
+    fprintf(stderr, "  RECV request mismatch: target=\"%s\" but parsed len=%zu\n",
+            target, rtlen);
+    return;
+  }
+  printf("  ok  request  target=\"%s\" -> recv len=%zu\n", target, rtlen);
+}
+
+/* A request head with a corrupted region must be rejected by the parser. */
+static void check_reject_request(const char *target, int pos, uint8_t val) {
+  size_t tlen = strlen(target);
+  size_t olen = 4 + tlen + 13;
+  uint8_t buf[512];
+  http_emit_request((uint8_t *)target, tlen, buf);
+  buf[pos] = val;
+  size_t rtlen = 0;
+  if (http_recv_request(buf, olen, &rtlen)) {
+    fails++;
+    fprintf(stderr, "  RECV accepted a corrupted request (pos=%d val=%02x)\n", pos, val);
   } else {
-    printf("  ok  request  target=\"%s\" -> \"GET %s HTTP/1.1\\r\\n\\r\\n\"\n", target, target);
+    printf("  ok  reject corrupted request pos=%d val=%02x\n", pos, val);
   }
 }
 
@@ -127,6 +158,11 @@ int main(void) {
   check_request("/");
   check_request("/index.html");
   check_request("/a/b/c?q=1");
+
+  /* Corrupted request heads must be rejected. */
+  check_reject_request("/index.html", 0, 'P');   /* wrong method byte      */
+  check_reject_request("/index.html", 4 + 11, 'X'); /* clobber the space -> tail shifts */
+  check_reject_request("/index.html", 4 + 11 + 1, 'x'); /* wrong tail byte  */
 
   if (fails == 0) {
     printf("head-emitter self-test: ALL PASS\n");
