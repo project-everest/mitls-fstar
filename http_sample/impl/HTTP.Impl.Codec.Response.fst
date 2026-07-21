@@ -48,14 +48,14 @@ module W    = HTTP.Wire.Common
 fn http_parse_status_line (inp: array U8.t) (n: SZ.t) (pcode: R.ref U16.t)
   requires
     pts_to inp 'i ** R.pts_to pcode 'c0 **
-    pure (Seq.length 'i == SZ.v n)
+    pure (SZ.v n <= Seq.length 'i)
   returns ok: bool
   ensures
     pts_to inp 'i **
     (exists* (cv:U16.t).
        R.pts_to pcode cv **
        pure (ok == true ==>
-         (Seq.length 'i == SZ.v n /\ 13 <= SZ.v n /\
+         (SZ.v n <= Seq.length 'i /\ 13 <= SZ.v n /\
           100 <= U16.v cv /\ U16.v cv < 1000 /\
           W.dec3_ok (Seq.slice 'i 9 12) /\
           Prims.op_Equality #nat (U16.v cv) (W.dec_dec3 (Seq.slice 'i 9 12)))))
@@ -109,9 +109,9 @@ let to_lower (b:U8.t) : U8.t =
 fn match_ci_at
   (inp: array U8.t) (n: SZ.t) (pos: SZ.t) (len: SZ.t)
   (name_byte: (k:SZ.t) -> U8.t)
-  requires pts_to inp 'i ** pure (Seq.length 'i == SZ.v n /\ SZ.v pos <= SZ.v n)
+  requires pts_to inp 'i ** pure (SZ.v n <= Seq.length 'i /\ SZ.v pos <= SZ.v n)
   returns b: bool
-  ensures pts_to inp 'i ** pure (Seq.length 'i == SZ.v n)
+  ensures pts_to inp 'i ** pure (SZ.v n <= Seq.length 'i)
 {
   if SZ.lt (SZ.sub n pos) len {
     false
@@ -121,7 +121,7 @@ fn match_ci_at
     while (SZ.lt !k len && !ok)
     invariant exists* (vk:SZ.t) (vok:bool).
       R.pts_to k vk ** R.pts_to ok vok ** pts_to inp 'i **
-      pure (SZ.v vk <= SZ.v len /\ Seq.length 'i == SZ.v n /\
+      pure (SZ.v vk <= SZ.v len /\ SZ.v n <= Seq.length 'i /\
             SZ.v pos + SZ.v len <= SZ.v n)
     {
       let vk = !k;
@@ -177,7 +177,7 @@ let chunked_byte (k:SZ.t) : U8.t =
 fn parse_dec_at (inp: array U8.t) (n: SZ.t) (start: SZ.t) (pval: R.ref U32.t)
   requires
     pts_to inp 'i ** R.pts_to pval 'v0 **
-    pure (Seq.length 'i == SZ.v n /\ SZ.v start <= SZ.v n)
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v start <= SZ.v n)
   returns found: bool
   ensures
     pts_to inp 'i **
@@ -189,7 +189,7 @@ fn parse_dec_at (inp: array U8.t) (n: SZ.t) (start: SZ.t) (pval: R.ref U32.t)
   while (!sgo)
   invariant exists* (vj:SZ.t) (vs:bool).
     R.pts_to j vj ** R.pts_to sgo vs ** pts_to inp 'i **
-    pure (SZ.v vj <= SZ.v n /\ Seq.length 'i == SZ.v n)
+    pure (SZ.v vj <= SZ.v n /\ SZ.v n <= Seq.length 'i)
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -205,7 +205,7 @@ fn parse_dec_at (inp: array U8.t) (n: SZ.t) (start: SZ.t) (pval: R.ref U32.t)
   invariant exists* (vj:SZ.t) (va:U32.t) (vy:bool) (vg:bool).
     R.pts_to j vj ** R.pts_to acc va ** R.pts_to any vy ** R.pts_to dgo vg **
     pts_to inp 'i **
-    pure (SZ.v vj <= SZ.v n /\ Seq.length 'i == SZ.v n /\ U32.v va < CW.max_len8)
+    pure (SZ.v vj <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ U32.v va < CW.max_len8)
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -226,9 +226,9 @@ fn parse_dec_at (inp: array U8.t) (n: SZ.t) (start: SZ.t) (pval: R.ref U32.t)
 (* Scan the current header line (from `start` up to CRLF or `n`) for a
    case-insensitive "chunked" token.  Memory-safe. *)
 fn line_has_chunked (inp: array U8.t) (n: SZ.t) (start: SZ.t)
-  requires pts_to inp 'i ** pure (Seq.length 'i == SZ.v n /\ SZ.v start <= SZ.v n)
+  requires pts_to inp 'i ** pure (SZ.v n <= Seq.length 'i /\ SZ.v start <= SZ.v n)
   returns b: bool
-  ensures pts_to inp 'i ** pure (Seq.length 'i == SZ.v n)
+  ensures pts_to inp 'i ** pure (SZ.v n <= Seq.length 'i)
 {
   let mut j = start;
   let mut found = false;
@@ -236,7 +236,7 @@ fn line_has_chunked (inp: array U8.t) (n: SZ.t) (start: SZ.t)
   while (!go)
   invariant exists* (vj:SZ.t) (vf:bool) (vg:bool).
     R.pts_to j vj ** R.pts_to found vf ** R.pts_to go vg ** pts_to inp 'i **
-    pure (SZ.v vj <= SZ.v n /\ Seq.length 'i == SZ.v n)
+    pure (SZ.v vj <= SZ.v n /\ SZ.v n <= Seq.length 'i)
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -258,7 +258,7 @@ fn try_content_length
   (phas_cl: R.ref bool) (pcl: R.ref U32.t)
   requires
     pts_to inp 'i ** R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 **
-    pure (Seq.length 'i == SZ.v n /\ SZ.v vi <= SZ.v n /\ SZ.v n + 18 < pow2 32 /\
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v vi <= SZ.v n /\ SZ.v n + 18 < pow2 32 /\
           U32.v 'cl0 < CW.max_len8)
   ensures
     pts_to inp 'i **
@@ -285,7 +285,7 @@ fn try_transfer_encoding
   (inp: array U8.t) (n: SZ.t) (vi: SZ.t) (pchunked: R.ref bool)
   requires
     pts_to inp 'i ** R.pts_to pchunked 'ch0 **
-    pure (Seq.length 'i == SZ.v n /\ SZ.v vi <= SZ.v n /\ SZ.v n + 18 < pow2 32)
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v vi <= SZ.v n /\ SZ.v n + 18 < pow2 32)
   ensures
     pts_to inp 'i ** (exists* (ch:bool). R.pts_to pchunked ch)
 {
@@ -320,10 +320,10 @@ fn try_transfer_encoding
 
 #push-options "--z3rlimit 80 --fuel 2 --ifuel 2"
 fn is_crlf_at (inp: array U8.t) (n: SZ.t) (vi: SZ.t)
-  requires pts_to inp 'i ** pure (Seq.length 'i == SZ.v n /\ SZ.v vi < SZ.v n)
+  requires pts_to inp 'i ** pure (SZ.v n <= Seq.length 'i /\ SZ.v vi < SZ.v n)
   returns b: bool
   ensures pts_to inp 'i **
-    pure (Seq.length 'i == SZ.v n /\ (b == true ==> SZ.v vi + 1 < SZ.v n))
+    pure (SZ.v n <= Seq.length 'i /\ (b == true ==> SZ.v vi + 1 < SZ.v n))
 {
   if SZ.lt (SZ.add vi 1sz) n {
     let a = inp.(vi);
@@ -340,7 +340,7 @@ fn http_parse_framing
   requires
     pts_to inp 'i **
     R.pts_to pchunked 'ch0 ** R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 **
-    pure (Seq.length 'i == SZ.v n /\ SZ.v n + 18 < pow2 32)
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n + 18 < pow2 32)
   returns ended: bool
   ensures
     pts_to inp 'i **
@@ -359,7 +359,7 @@ fn http_parse_framing
     R.pts_to i vi ** R.pts_to sol vsol ** R.pts_to ended ve **
     R.pts_to pchunked ch ** R.pts_to phas_cl hc ** R.pts_to pcl cl **
     pts_to inp 'i **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length 'i == SZ.v n /\ SZ.v n + 18 < pow2 32 /\
+    pure (SZ.v vi <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n + 18 < pow2 32 /\
           U32.v cl < CW.max_len8)
   {
     let vi = !i;
@@ -415,7 +415,7 @@ fn http_parse_response_head
     pts_to inp 'i **
     R.pts_to pcode 'c0 ** R.pts_to pchunked 'ch0 **
     R.pts_to phas_cl 'hc0 ** R.pts_to pcl 'cl0 **
-    pure (Seq.length 'i == SZ.v n /\ SZ.v n + 18 < pow2 32)
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n + 18 < pow2 32)
   returns ok: bool
   ensures
     pts_to inp 'i **
@@ -424,7 +424,7 @@ fn http_parse_response_head
        R.pts_to phas_cl hc ** R.pts_to pcl cl **
        pure (U32.v cl < CW.max_len8 /\
          (ok == true ==>
-           (Seq.length 'i == SZ.v n /\ 13 <= SZ.v n /\
+           (SZ.v n <= Seq.length 'i /\ 13 <= SZ.v n /\
             100 <= U16.v code /\ U16.v code < 1000 /\
             CW.dec3_ok (Seq.slice 'i 9 12) /\
             Prims.op_Equality #nat (U16.v code) (CW.dec_dec3 (Seq.slice 'i 9 12))))))
