@@ -8,6 +8,7 @@ module B = TLS13.Bytes
 module C = TLS13.Impl.Client
 module DS = TLS13.Impl.Client.Driver.State
 module IO = Common.TCP
+module MR = Pulse.Lib.MonotonicGhostRef
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
@@ -27,6 +28,7 @@ fn free_disconnected_client_driver
            DS.client_driver_canonical_progress d 'st0 **
            O.is_auth_context d.DS.client_driver_auth **
            Box.pts_to d.DS.client_driver_channel DS.no_channel **
+           (exists* h. MR.pts_to d.DS.client_driver_tcp_history #1.0R h) **
            (exists* buffered.
              DS.client_driver_buffers d buffered buffered_len)
   ensures DS.client_driver_closed d 'st0
@@ -39,7 +41,7 @@ fn close_failed_connect
   requires C.connection_exactly d.DS.client_driver_client 'st0 **
            DS.client_driver_canonical_progress d 'st0 **
            O.is_auth_context d.DS.client_driver_auth **
-           DS.channel_open ch 'st0 'buffered buffered_len **
+           DS.channel_open d.DS.client_driver_tcp_history ch 'st0 'buffered buffered_len **
            Box.pts_to d.DS.client_driver_channel DS.no_channel **
            DS.client_driver_buffers d (Ghost.reveal 'buffered) buffered_len
   ensures DS.client_driver_closed d 'st0

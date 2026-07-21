@@ -77,6 +77,7 @@ fn free_disconnected_client_driver
            client_driver_canonical_progress d 'st0 **
            O.is_auth_context d.client_driver_auth **
            Box.pts_to d.client_driver_channel no_channel **
+           (exists* h. MR.pts_to d.client_driver_tcp_history #1.0R h) **
            (exists* buffered. client_driver_buffers d buffered buffered_len)
   ensures client_driver_closed d 'st0
 {
@@ -94,12 +95,12 @@ fn close_failed_connect
   requires C.connection_exactly d.client_driver_client 'st0 **
            client_driver_canonical_progress d 'st0 **
            O.is_auth_context d.client_driver_auth **
-           channel_open ch 'st0 'buffered buffered_len **
+           channel_open d.client_driver_tcp_history ch 'st0 'buffered buffered_len **
            Box.pts_to d.client_driver_channel no_channel **
            client_driver_buffers d (Ghost.reveal 'buffered) buffered_len
   ensures client_driver_closed d 'st0
 {
-  unfold (channel_open ch 'st0 'buffered buffered_len);
+  unfold (channel_open d.client_driver_tcp_history ch 'st0 'buffered buffered_len);
   with received sent.
     assert (IO.is_channel ch received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));

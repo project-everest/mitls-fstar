@@ -39,259 +39,6 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module DS = TLS13.Impl.Client.Driver.State
 open TLS13.Impl.Client.Driver.State
-fn driver_connect
-  (connect_host:array U8.t)
-  (connect_host_len:SZ.t)
-  (port:U16.t)
-  (server_name:array U8.t)
-  (server_name_len:SZ.t)
-  (trust_anchors:array U8.t)
-  (trust_anchors_len:SZ.t)
-  (validation_time_seconds:SZ.t)
-  requires pts_to connect_host 'connect_host_bytes **
-           pts_to server_name 'server_name_bytes **
-           pts_to trust_anchors 'trust_anchors_bytes **
-           pure (B.length 'connect_host_bytes == SZ.v connect_host_len /\
-                 B.length 'server_name_bytes == SZ.v server_name_len /\
-                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
-                 SZ.v server_name_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
-                 SZ.v trust_anchors_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
-  returns result: option driver
-  ensures pts_to connect_host 'connect_host_bytes **
-          pts_to server_name 'server_name_bytes **
-          pts_to trust_anchors 'trust_anchors_bytes **
-          (match result with
-           | Some d ->
-             driver_exactly
-               d
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds)
-               B.empty
-               0sz **
-             pure (CT.client_state_correct
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) /\
-                   CT.client_end_to_end_invariant
-                     (CR.configured_initial_state
-                       (Ghost.reveal 'server_name_bytes)
-                       (Ghost.reveal 'trust_anchors_bytes)
-                       validation_time_seconds))
-           | None ->
-             emp)
-{
-  let ch_opt = IO.connect_tcp connect_host connect_host_len port;
-  match ch_opt {
-    None -> {
-    None
-  }
-    Some ch -> {
-    let c =
-      C.new_client
-        server_name
-        server_name_len
-        trust_anchors
-        trust_anchors_len
-        validation_time_seconds;
-    rewrite
-      (CR.connection_exactly
-        c
-        (CR.configured_initial_state
-          (Ghost.reveal 'server_name_bytes)
-          (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds))
-      as
-      (C.connection_exactly
-        c
-        (CR.configured_initial_state
-          (Ghost.reveal 'server_name_bytes)
-          (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds));
-    establish_initial_wire_logs_match
-      (CR.configured_connection_config
-        (Ghost.reveal 'server_name_bytes)
-        (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds);
-    let initial : Ghost.erased EC.client_initial_state =
-      Ghost.hide
-        (CS.initial
-          (CR.configured_connection_config
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds));
-    assert (pure (Ghost.reveal initial ==
-      CR.configured_initial_state
-        (Ghost.reveal 'server_name_bytes)
-        (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds));
-    let progress =
-      MR.alloc
-        #_
-        #(EC.client_progress_preorder #CTypes.client_local_event)
-        (Ghost.reveal initial);
-    MR.take_snapshot progress (Ghost.reveal initial);
-    rewrite
-      (C.connection_exactly
-        c
-        (CR.configured_initial_state
-          (Ghost.reveal 'server_name_bytes)
-          (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds))
-      as
-      (C.connection_exactly c (Ghost.reveal initial));
-    fold (channel_open ch
-      (Ghost.reveal initial)
-      B.empty
-      0sz);
-    fold
-      (driver_canonical_progress
-        {
-          driver_client = c;
-          driver_channel = ch;
-          driver_progress = progress;
-          driver_initial = initial;
-        }
-        (Ghost.reveal initial));
-    fold
-      (driver_exactly
-        {
-          driver_client = c;
-          driver_channel = ch;
-          driver_progress = progress;
-          driver_initial = initial;
-        }
-        (Ghost.reveal initial)
-        B.empty
-        0sz);
-    rewrite
-      (driver_exactly
-        {
-          driver_client = c;
-          driver_channel = ch;
-          driver_progress = progress;
-          driver_initial = initial;
-        }
-        (Ghost.reveal initial)
-        B.empty
-        0sz)
-      as
-      (driver_exactly
-        {
-          driver_client = c;
-          driver_channel = ch;
-          driver_progress = progress;
-          driver_initial = initial;
-        }
-        (CR.configured_initial_state
-          (Ghost.reveal 'server_name_bytes)
-          (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds)
-        B.empty
-        0sz);
-    Some {
-      driver_client = c;
-      driver_channel = ch;
-      driver_progress = progress;
-      driver_initial = initial;
-    }
-  }
-  }
-}
-
-fn driver_open
-  (connect_host:array U8.t)
-  (connect_host_len:SZ.t)
-  (port:U16.t)
-  (server_name:array U8.t)
-  (server_name_len:SZ.t)
-  (trust_anchors:array U8.t)
-  (trust_anchors_len:SZ.t)
-  (validation_time_seconds:SZ.t)
-  requires pts_to connect_host 'connect_host_bytes **
-           pts_to server_name 'server_name_bytes **
-           pts_to trust_anchors 'trust_anchors_bytes **
-           pure (B.length 'connect_host_bytes == SZ.v connect_host_len /\
-                 B.length 'server_name_bytes == SZ.v server_name_len /\
-                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
-                 SZ.v server_name_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
-                 SZ.v trust_anchors_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
-  returns result: option top_driver
-  ensures pts_to connect_host 'connect_host_bytes **
-          pts_to server_name 'server_name_bytes **
-          pts_to trust_anchors 'trust_anchors_bytes **
-          (match result with
-           | Some d ->
-             top_driver_exactly
-               d
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds)
-               B.empty
-               0sz **
-             pure (CT.client_state_correct
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) /\
-                   CT.client_end_to_end_invariant
-                     (CR.configured_initial_state
-                       (Ghost.reveal 'server_name_bytes)
-                       (Ghost.reveal 'trust_anchors_bytes)
-                       validation_time_seconds))
-           | None ->
-             emp)
-{
-  let auth =
-    O.auth_context_new
-      server_name
-      server_name_len
-      trust_anchors
-      trust_anchors_len
-      validation_time_seconds;
-  let connected =
-    driver_connect
-      connect_host
-      connect_host_len
-      port
-      server_name
-      server_name_len
-      trust_anchors
-      trust_anchors_len
-      validation_time_seconds;
-  match connected {
-    None -> {
-      O.auth_context_free auth;
-      None
-    }
-    Some d -> {
-      fold
-        (top_driver_exactly
-          {
-            top_driver_core = d;
-            top_driver_auth = auth;
-          }
-          (CR.configured_initial_state
-            (Ghost.reveal 'server_name_bytes)
-            (Ghost.reveal 'trust_anchors_bytes)
-            validation_time_seconds)
-          B.empty
-          0sz);
-      Some {
-        top_driver_core = d;
-        top_driver_auth = auth;
-      }
-    }
-  }
-}
-
 fn driver_control_snapshot
   (d:driver)
   requires driver_exactly d 'st0 'buffered 'pending_len
@@ -432,6 +179,7 @@ fn driver_copy_certificate_verify_signature
 fn process_local_event_and_write_once
   (c:C.client)
   (ch:IO.channel)
+  (hist:MR.mref CI.io_history_preorder)
   (kind:CT.local_event_kind)
   (payload:array U8.t)
   (payload_len:SZ.t)
@@ -440,7 +188,7 @@ fn process_local_event_and_write_once
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           channel_open ch 'st0 'buffered 'pending_len **
+           channel_open hist ch 'st0 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -454,7 +202,7 @@ fn process_local_event_and_write_once
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
-           channel_open ch st1 'buffered 'pending_len **
+           channel_open hist ch st1 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -519,7 +267,7 @@ fn process_local_event_and_write_once
     app_out_bytes;
   assert (pure (CT.response_wf resp network_out_bytes app_out_bytes));
   assert (pure (SZ.v resp.CT.network_out_len <= B.length network_out_bytes));
-  unfold (channel_open ch 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  unfold (channel_open hist ch 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   with received sent.
     assert (IO.is_channel ch received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len)));
@@ -531,6 +279,13 @@ fn process_local_event_and_write_once
     (Ghost.reveal 'buffered)
     (Ghost.reveal 'pending_len);
   let written = IO.write ch network_out resp.CT.network_out_len;
+  tcp_history_note_write
+    hist
+    received
+    sent
+    (Ghost.hide (if SZ.v written <= B.length network_out_bytes
+                 then Seq.slice network_out_bytes 0 (SZ.v written)
+                 else B.empty));
   assert (pure (written == resp.CT.network_out_len));
   assert (pure (SZ.v written <= B.length network_out_bytes));
   Seq.lemma_len_append sent (Seq.slice network_out_bytes 0 (SZ.v written));
@@ -566,17 +321,6 @@ fn process_local_event_and_write_once
     (Ghost.reveal old_consumed)
     (Ghost.reveal 'buffered)
     (Ghost.reveal 'pending_len);
-  assert (pure (CI.ordered_subsequence
-    st1.CS.cs_wire_log.CL.raw_received
-    (Ghost.reveal old_consumed)));
-  assert (pure (CI.channel_io_history_matches
-    st1.CS.cs_wire_log.CL.raw_received
-    st1.CS.cs_wire_log.CL.raw_sent
-    received
-    (B.append sent
-      (if SZ.v written <= B.length network_out_bytes
-       then Seq.slice network_out_bytes 0 (SZ.v written)
-       else B.empty))));
   assert (pure (client_driver_wire_logs_match_witness
     st1
     received
@@ -609,7 +353,7 @@ fn process_local_event_and_write_once
        else B.empty))
     (Ghost.reveal 'buffered)
     (Ghost.reveal 'pending_len)));
-  fold (channel_open ch st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  fold (channel_open hist ch st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   assert (pure (SZ.v written <= SZ.v resp.CT.network_out_len));
   assert (pure (resp.CT.status == CT.StepOk ==>
     SZ.v written <= SZ.v resp.CT.network_out_len));
@@ -667,6 +411,7 @@ fn driver_process_local_event
     process_local_event_and_write_once
       d.driver_client
       d.driver_channel
+      d.driver_tcp_history
       kind
       payload
       payload_len
@@ -929,7 +674,7 @@ fn driver_process_buffered_network_bytes_once
   assert (pure (Seq.equal raw_bytes (Ghost.reveal 'old_raw)));
   assert (pure (CT.response_wf buffer_resp.CT.response network_out_bytes app_out_bytes));
   assert (pure (SZ.v buffer_resp.CT.response.CT.network_out_len <= B.length network_out_bytes));
-  unfold (channel_open d.driver_channel 'st0 'buffered buffered_len);
+  unfold (channel_open d.driver_tcp_history d.driver_channel 'st0 'buffered buffered_len);
   with received sent.
     assert (IO.is_channel d.driver_channel received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
@@ -979,31 +724,18 @@ fn driver_process_buffered_network_bytes_once
     (Ghost.reveal 'old_app_out)
     app_out_bytes
     (Ghost.reveal old_consumed);
-  lemma_network_bytes_logged_received_ordered
-    'st0
-    st1
-    buffer_resp
-    raw_prefix
-    (Ghost.reveal 'old_network_out)
-    network_out_bytes
-    (Ghost.reveal 'old_app_out)
-    app_out_bytes
-    (Ghost.reveal old_consumed);
   Seq.append_assoc (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix) (Ghost.reveal new_buffered);
   assert (pure (Seq.equal
     (B.append (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix)) (Ghost.reveal new_buffered))
     received));
-  assert (pure (CI.ordered_subsequence
-    st1.CS.cs_wire_log.CL.raw_received
-    (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))));
-  CI.lemma_ordered_subsequence_append_right
-    st1.CS.cs_wire_log.CL.raw_received
-    (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))
-    (Ghost.reveal new_buffered);
-  assert (pure (CI.ordered_subsequence
-    st1.CS.cs_wire_log.CL.raw_received
-    received));
   let written = IO.write d.driver_channel network_out buffer_resp.CT.response.CT.network_out_len;
+  tcp_history_note_write
+    d.driver_tcp_history
+    received
+    sent
+    (Ghost.hide (if SZ.v written <= B.length network_out_bytes
+                 then Seq.slice network_out_bytes 0 (SZ.v written)
+                 else B.empty));
   assert (pure (written == buffer_resp.CT.response.CT.network_out_len));
   assert (pure (SZ.v written <= B.length network_out_bytes));
   Seq.lemma_len_append sent (Seq.slice network_out_bytes 0 (SZ.v written));
@@ -1039,14 +771,6 @@ fn driver_process_buffered_network_bytes_once
       st1.CS.cs_wire_log.CL.raw_received
       (B.append (Ghost.reveal old_consumed)
         (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len))));
-  assert (pure (CI.channel_io_history_matches
-    st1.CS.cs_wire_log.CL.raw_received
-    st1.CS.cs_wire_log.CL.raw_sent
-    received
-    (B.append sent
-      (if SZ.v written <= B.length network_out_bytes
-       then Seq.slice network_out_bytes 0 (SZ.v written)
-       else B.empty))));
   assert (pure (client_driver_wire_logs_match_witness
     st1
     received
@@ -1066,7 +790,7 @@ fn driver_process_buffered_network_bytes_once
        else B.empty))
     (Ghost.reveal new_buffered)
     new_pending));
-  fold (channel_open d.driver_channel st1 (Ghost.reveal new_buffered) new_pending);
+  fold (channel_open d.driver_tcp_history d.driver_channel st1 (Ghost.reveal new_buffered) new_pending);
   assert (pure (SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
   assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
     SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
@@ -1586,7 +1310,7 @@ fn driver_read_buffered_network_bytes_compact_once
   with raw_tail.
     assert (pts_to raw_tail_array raw_tail);
   assert (pure (B.length raw_tail == SZ.v available));
-  unfold (channel_open d.driver_channel 'st0 'buffered buffered_len);
+  unfold (channel_open d.driver_tcp_history d.driver_channel 'st0 'buffered buffered_len);
   with received sent.
     assert (IO.is_channel d.driver_channel received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
@@ -1601,6 +1325,11 @@ fn driver_read_buffered_network_bytes_compact_once
   with raw_tail_after read_chunk.
     assert (IO.is_channel d.driver_channel (B.append received read_chunk) sent **
             pts_to raw_tail_array raw_tail_after);
+  tcp_history_note_read
+    d.driver_tcp_history
+    received
+    sent
+    read_chunk;
   Seq.lemma_len_append received read_chunk;
   assert (pure (B.length read_chunk == SZ.v read_len));
   assert (pure (SZ.v buffered_len + SZ.v read_len <= SZ.v raw_capacity));
@@ -1612,8 +1341,6 @@ fn driver_read_buffered_network_bytes_compact_once
     Ghost.hide (B.append (Ghost.reveal 'buffered) read_chunk);
   Seq.lemma_len_append (Ghost.reveal 'buffered) read_chunk;
   Seq.append_assoc (Ghost.reveal old_consumed) (Ghost.reveal 'buffered) read_chunk;
-  CI.lemma_ordered_subsequence_append_right
-    'st0.CS.cs_wire_log.CL.raw_received received read_chunk;
   assert (pure (client_driver_wire_logs_match_witness
     'st0
     (B.append received read_chunk)
@@ -1627,7 +1354,7 @@ fn driver_read_buffered_network_bytes_compact_once
     sent
     (Ghost.reveal new_buffered)
     total_len));
-  fold (channel_open d.driver_channel 'st0 (Ghost.reveal new_buffered) total_len);
+  fold (channel_open d.driver_tcp_history d.driver_channel 'st0 (Ghost.reveal new_buffered) total_len);
   assert (pure (B.length raw_tail_after == SZ.v available));
   assert (pure (SZ.v read_len <= SZ.v available));
   A.to_mask raw_tail_array;
@@ -1924,6 +1651,7 @@ fn rec driver_process_buffered_network_records
 fn process_ready_internal_local_action_once
   (c:C.client)
   (ch:IO.channel)
+  (hist:MR.mref CI.io_history_preorder)
   (empty_payload:array U8.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
@@ -1932,17 +1660,17 @@ fn process_ready_internal_local_action_once
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           channel_open ch 'st0 'buffered 'pending_len **
-           pts_to empty_payload 'empty_payload_bytes **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'empty_payload_bytes == 0 /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len)
+          channel_open hist ch 'st0 'buffered 'pending_len **
+          pts_to empty_payload 'empty_payload_bytes **
+          pts_to network_out 'old_network_out **
+          pts_to app_out 'old_app_out **
+          pure (B.length 'empty_payload_bytes == 0 /\
+                B.length 'old_network_out == SZ.v network_out_len /\
+                B.length 'old_app_out == SZ.v app_out_len)
   returns result: ready_local_action_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
-           channel_open ch st1 'buffered 'pending_len **
+           channel_open hist ch st1 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -2030,6 +1758,7 @@ fn process_ready_internal_local_action_once
         process_local_event_and_write_once
           c
           ch
+          hist
           action.CT.next_local_kind
           empty_payload
           0sz
@@ -2164,6 +1893,7 @@ fn driver_handshake_step
     process_ready_internal_local_action_once
       d.driver_client
       d.driver_channel
+      d.driver_tcp_history
       empty_payload
       network_out
       network_out_len
@@ -2173,7 +1903,7 @@ fn driver_handshake_step
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
     assert (C.connection_exactly d.driver_client st1 **
-            channel_open d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
+            channel_open d.driver_tcp_history d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);

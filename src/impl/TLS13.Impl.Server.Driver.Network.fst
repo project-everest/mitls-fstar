@@ -1912,14 +1912,6 @@ fn process_buffered_network_bytes_compact_once
       st1.CS.cs_wire_log.CL.raw_received
       (B.append (Ghost.reveal old_consumed)
         (ST.server_network_consumed_prefix buffer_resp buffered))));
-  NO.lemma_logged_received_ordered
-    'st0
-    st1
-    buffer_resp
-    buffered
-    network_out_bytes
-    app_out_bytes
-    (Ghost.reveal old_consumed);
   Seq.lemma_eq_elim
     (Ghost.reveal consumed_prefix)
     (ST.server_network_consumed_prefix buffer_resp buffered);
@@ -1940,34 +1932,15 @@ fn process_buffered_network_bytes_compact_once
   assert (pure (logged_received_bytes_accounted
     st1.CS.cs_wire_log.CL.raw_received
     (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))));
-  assert (pure (CI.ordered_subsequence
-    st1.CS.cs_wire_log.CL.raw_received
-    (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))));
   assert (pure (ST.server_connection_control_not_failed st1 ==>
     Seq.equal
       st1.CS.cs_wire_log.CL.raw_received
       (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))));
-  CI.lemma_ordered_subsequence_append_right
-    st1.CS.cs_wire_log.CL.raw_received
-    (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))
-    (Ghost.reveal new_buffered);
   Seq.lemma_eq_elim
     (B.append
       (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))
       (Ghost.reveal new_buffered))
     (Ghost.reveal 'received);
-  assert (pure (CI.ordered_subsequence
-    st1.CS.cs_wire_log.CL.raw_received
-    (Ghost.reveal 'received)));
-  assert (pure (CI.channel_io_history_matches
-    st1.CS.cs_wire_log.CL.raw_received
-    st1.CS.cs_wire_log.CL.raw_sent
-    (Ghost.reveal 'received)
-    (B.append
-      (Ghost.reveal 'sent)
-      (if SZ.v written <= B.length network_out_bytes
-       then Seq.slice network_out_bytes 0 (SZ.v written)
-       else B.empty))));
   assert (pure (server_driver_wire_logs_match_witness
     st1
     (Ghost.reveal 'received)
@@ -2044,6 +2017,22 @@ fn process_buffered_network_bytes_compact_once
   assert (pure (server_driver_supported_profile_selection
     st1
     (Ghost.reveal 'credential_identity)));
+  CPI.lemma_bytes_extends_refl (Ghost.reveal 'received);
+  CPI.lemma_bytes_extends_append
+    (Ghost.reveal 'sent)
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty);
+  advance_server_driver_io_history
+    d
+    'received
+    'sent
+    'received
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
   fold (server_driver_connected_with_app_out
     d
     st1
@@ -2286,20 +2275,6 @@ fn read_and_process_network_once
   assert (pure (Seq.equal
     (B.append (Ghost.reveal old_consumed) (Ghost.reveal new_buffered))
     (B.append (Ghost.reveal 'received) read_chunk)));
-  assert (pure (CI.channel_io_history_matches
-    'st0.CS.cs_wire_log.CL.raw_received
-    'st0.CS.cs_wire_log.CL.raw_sent
-    (Ghost.reveal 'received)
-    (Ghost.reveal 'sent)));
-  CI.lemma_ordered_subsequence_append_right
-    'st0.CS.cs_wire_log.CL.raw_received
-    (Ghost.reveal 'received)
-    read_chunk;
-  assert (pure (CI.channel_io_history_matches
-    'st0.CS.cs_wire_log.CL.raw_received
-    'st0.CS.cs_wire_log.CL.raw_sent
-    (B.append (Ghost.reveal 'received) read_chunk)
-    (Ghost.reveal 'sent)));
   assert_spinoff (server_driver_wire_logs_match_witness
     'st0
     (B.append (Ghost.reveal 'received) read_chunk)
@@ -2441,6 +2416,14 @@ fn read_and_process_network_once
   Box.(d.server_driver_buffered_len := total_len);
   V.to_vec_pts_to d.server_driver_raw;
   fold (server_driver_buffers d (Ghost.reveal new_buffered) total_len);
+  CPI.lemma_bytes_extends_append (Ghost.reveal 'received) read_chunk;
+  CPI.lemma_bytes_extends_refl (Ghost.reveal 'sent);
+  advance_server_driver_io_history
+    d
+    'received
+    'sent
+    (B.append (Ghost.reveal 'received) read_chunk)
+    'sent;
   fold (server_driver_connected
     d
     'st0

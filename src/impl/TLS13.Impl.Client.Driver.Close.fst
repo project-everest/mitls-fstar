@@ -291,6 +291,7 @@ fn driver_send_close_notify
     process_local_event_and_write_once
       d.driver_client
       d.driver_channel
+      d.driver_tcp_history
       CT.LocalSendCloseNotify
       empty_payload
       0sz
@@ -300,7 +301,7 @@ fn driver_send_close_notify
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
     assert (C.connection_exactly d.driver_client st1 **
-            channel_open d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
+            channel_open d.driver_tcp_history d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -359,6 +360,8 @@ fn rec driver_close_workflow
   ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
            C.connection_exactly d.top_driver_core.driver_client st1 **
            driver_canonical_progress d.top_driver_core st1 **
+           (exists* h.
+             MR.pts_to d.top_driver_core.driver_tcp_history #1.0R h) **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
@@ -476,7 +479,7 @@ fn rec driver_close_workflow
        DriverWorkflowStepFailed
        wait_for_peer));
    unfold (driver_exactly d.top_driver_core st_after_close_notify 'buffered buffered_len);
-   unfold (channel_open d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
+   unfold (channel_open d.top_driver_core.driver_tcp_history d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
    with received sent.
      assert (IO.is_channel d.top_driver_core.driver_channel received sent **
              pure (client_driver_wire_logs_match st_after_close_notify received sent 'buffered buffered_len));
@@ -516,7 +519,7 @@ fn rec driver_close_workflow
     assert (pure (st_wait.CS.cs_model.CS.model_config ==
       'st0.CS.cs_model.CS.model_config));
     unfold (driver_exactly d.top_driver_core st_wait buffered_wait waited.driver_workflow_rx_len);
-    unfold (channel_open d.top_driver_core.driver_channel st_wait buffered_wait waited.driver_workflow_rx_len);
+    unfold (channel_open d.top_driver_core.driver_tcp_history d.top_driver_core.driver_channel st_wait buffered_wait waited.driver_workflow_rx_len);
     with received sent.
      assert (IO.is_channel d.top_driver_core.driver_channel received sent **
              pure (client_driver_wire_logs_match st_wait received sent buffered_wait waited.driver_workflow_rx_len));
@@ -578,7 +581,7 @@ fn rec driver_close_workflow
       }
   } else {
    unfold (driver_exactly d.top_driver_core st_after_close_notify 'buffered buffered_len);
-   unfold (channel_open d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
+   unfold (channel_open d.top_driver_core.driver_tcp_history d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
    with received sent.
      assert (IO.is_channel d.top_driver_core.driver_channel received sent **
              pure (client_driver_wire_logs_match st_after_close_notify received sent 'buffered buffered_len));
@@ -681,6 +684,7 @@ fn run
   let core = {
     driver_client = d.client_driver_client;
     driver_channel = concrete_ch;
+    driver_tcp_history = d.client_driver_tcp_history;
     driver_progress = d.client_driver_progress;
     driver_initial = d.client_driver_initial;
   };
@@ -706,9 +710,9 @@ fn run
     (Ghost.reveal 'sent0)
     buffered
     current_buffered_len));
-  fold (channel_open ch 'st0 buffered current_buffered_len);
-  rewrite (channel_open ch 'st0 buffered current_buffered_len) as
-    (channel_open core.driver_channel 'st0 buffered current_buffered_len);
+  fold (channel_open d.client_driver_tcp_history ch 'st0 buffered current_buffered_len);
+  rewrite (channel_open d.client_driver_tcp_history ch 'st0 buffered current_buffered_len) as
+    (channel_open core.driver_tcp_history core.driver_channel 'st0 buffered current_buffered_len);
   fold (driver_exactly core 'st0 buffered current_buffered_len);
   rewrite (driver_exactly core 'st0 buffered current_buffered_len) as
     (driver_exactly td.top_driver_core 'st0 buffered current_buffered_len);
@@ -736,6 +740,10 @@ fn run
             pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
   assert (pure (st1.CS.cs_model.CS.model_config ==
     'st0.CS.cs_model.CS.model_config));
+  with h_tracker.
+    assert (MR.pts_to td.top_driver_core.driver_tcp_history #1.0R h_tracker);
+  rewrite (MR.pts_to td.top_driver_core.driver_tcp_history #1.0R h_tracker) as
+    (MR.pts_to d.client_driver_tcp_history #1.0R h_tracker);
   rewrite (C.connection_exactly td.top_driver_core.driver_client st1) as
     (C.connection_exactly d.client_driver_client st1);
   unfold (driver_canonical_progress td.top_driver_core st1);
@@ -825,6 +833,6 @@ fn abort
   assert (pure (current_buffered_len == buffered_len));
   fold (client_driver_buffers d buffered current_buffered_len);
   Box.(d.client_driver_channel := no_channel);
-  fold (channel_open concrete_ch 'st0 buffered current_buffered_len);
+  fold (channel_open d.client_driver_tcp_history concrete_ch 'st0 buffered current_buffered_len);
   close_failed_connect d concrete_ch current_buffered_len;
 }

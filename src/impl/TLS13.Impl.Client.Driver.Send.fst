@@ -22,6 +22,7 @@ module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module CI = Common.ChannelImplementation
 module MR = Pulse.Lib.MonotonicGhostRef
 module Sem = TLS13.Wire.Semantics
 module O = TLS13.OpenSSL
@@ -95,6 +96,7 @@ let lemma_send_application_data_local_input_wf
 fn send_application_data_once
   (c:C.client)
   (ch:IO.channel)
+  (hist:MR.mref CI.io_history_preorder)
   (payload:array U8.t)
   (payload_len:SZ.t)
   (network_out:array U8.t)
@@ -102,7 +104,7 @@ fn send_application_data_once
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           channel_open ch 'st0 'buffered 'pending_len **
+           channel_open hist ch 'st0 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -116,7 +118,7 @@ fn send_application_data_once
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
-           channel_open ch st1 'buffered 'pending_len **
+           channel_open hist ch st1 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -141,6 +143,7 @@ fn send_application_data_once
   process_local_event_and_write_once
     c
     ch
+    hist
     CT.LocalSendApplicationData
     payload
     payload_len
@@ -199,6 +202,7 @@ fn driver_send_application_data
     send_application_data_once
       d.driver_client
       d.driver_channel
+      d.driver_tcp_history
       payload
       payload_len
       network_out
@@ -207,7 +211,7 @@ fn driver_send_application_data
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
     assert (C.connection_exactly d.driver_client st1 **
-            channel_open d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
+            channel_open d.driver_tcp_history d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to payload 'payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -306,7 +310,8 @@ fn run
   (payload_len:SZ.t)
   requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to payload 'payload_bytes **
-           pure (B.length 'payload_bytes == SZ.v payload_len)
+           pure (B.length 'payload_bytes == SZ.v payload_len) **
+           pure (CT.connection_control_not_failed 'st0)
   returns status:driver_workflow_status
   ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
@@ -323,7 +328,9 @@ fn run
                  client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
                  client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                  client_driver_sent_log_exact st1 sent1 /\
-                 client_driver_received_log_accounted st1 received1)
+                 client_driver_received_log_accounted st1 received1 /\
+                 ((status == DriverWorkflowOk \/ status == DriverWorkflowPayloadTooLarge) ==>
+                   CT.connection_control_not_failed st1))
 {
   unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
   with ch buffered buffered_len.
@@ -404,6 +411,7 @@ fn run
       let core = {
         driver_client = d.client_driver_client;
         driver_channel = concrete_ch;
+        driver_tcp_history = d.client_driver_tcp_history;
         driver_progress = d.client_driver_progress;
         driver_initial = d.client_driver_initial;
       };
@@ -430,9 +438,9 @@ fn run
         (Ghost.reveal 'sent0)
         buffered
         current_buffered_len));
-      fold (channel_open ch 'st0 buffered current_buffered_len);
-      rewrite (channel_open ch 'st0 buffered current_buffered_len) as
-        (channel_open core.driver_channel 'st0 buffered current_buffered_len);
+      fold (channel_open d.client_driver_tcp_history ch 'st0 buffered current_buffered_len);
+      rewrite (channel_open d.client_driver_tcp_history ch 'st0 buffered current_buffered_len) as
+        (channel_open core.driver_tcp_history core.driver_channel 'st0 buffered current_buffered_len);
       fold (driver_exactly core 'st0 buffered current_buffered_len);
       rewrite (driver_exactly core 'st0 buffered current_buffered_len) as
         (driver_exactly td.top_driver_core 'st0 buffered current_buffered_len);
@@ -472,12 +480,12 @@ fn run
       V.to_vec_pts_to d.client_driver_app_out;
       rewrite (C.connection_exactly core.driver_client st1) as
         (C.connection_exactly d.client_driver_client st1);
-      rewrite (channel_open core.driver_channel st1 buffered current_buffered_len) as
-        (channel_open ch st1 buffered current_buffered_len);
+      rewrite (channel_open core.driver_tcp_history core.driver_channel st1 buffered current_buffered_len) as
+        (channel_open d.client_driver_tcp_history ch st1 buffered current_buffered_len);
       rewrite (O.is_auth_context td.top_driver_auth) as
         (O.is_auth_context d.client_driver_auth);
       fold (client_driver_buffers d buffered current_buffered_len);
-      unfold (channel_open ch st1 buffered current_buffered_len);
+      unfold (channel_open d.client_driver_tcp_history ch st1 buffered current_buffered_len);
       with received1 sent1.
         assert (IO.is_channel ch received1 sent1 **
                 pure (client_driver_wire_logs_match st1 received1 sent1 buffered current_buffered_len));
@@ -537,6 +545,14 @@ fn run
       if ok {
         assert (pure (ok == true));
         assert (pure (result.local_write_resp.CT.status == CT.StepOk));
+        CT.lemma_local_send_application_data_stepok_preserves_not_failed
+          'st0
+          st1
+          result.local_write_resp
+          (Ghost.reveal 'payload_bytes)
+          network_out_bytes
+          app_out_bytes;
+        assert (pure (CT.connection_control_not_failed st1));
         assert (pure (client_driver_send_status_correct
           DriverWorkflowOk
           result.local_write_resp));

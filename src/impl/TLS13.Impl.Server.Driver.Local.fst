@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CI = Common.ChannelImplementation
+module CPI = Common.ProtocolImplementation
 module A = Pulse.Lib.Array
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
@@ -1189,6 +1190,22 @@ fn process_local_event_and_write_once
   V.to_vec_pts_to d.server_driver_network_out;
   V.to_vec_pts_to d.server_driver_app_out;
   fold (server_driver_buffers d buffered buffered_len);
+  CPI.lemma_bytes_extends_refl (Ghost.reveal 'received);
+  CPI.lemma_bytes_extends_append
+    (Ghost.reveal 'sent)
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty);
+  advance_server_driver_io_history
+    d
+    'received
+    'sent
+    'received
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
   fold (server_driver_connected
     d
     st1
@@ -1810,6 +1827,22 @@ fn process_empty_local_event_exact_network_len_and_write_once
   V.to_vec_pts_to d.server_driver_network_out;
   V.to_vec_pts_to d.server_driver_app_out;
   fold (server_driver_buffers d buffered buffered_len);
+  CPI.lemma_bytes_extends_refl (Ghost.reveal 'received);
+  CPI.lemma_bytes_extends_append
+    (Ghost.reveal 'sent)
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty);
+  advance_server_driver_io_history
+    d
+    'received
+    'sent
+    'received
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
   fold (server_driver_connected
     d
     st1

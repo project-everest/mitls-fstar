@@ -25,7 +25,8 @@ fn run
   (payload_len:SZ.t)
   requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to payload 'payload_bytes **
-           pure (B.length 'payload_bytes == SZ.v payload_len)
+           pure (B.length 'payload_bytes == SZ.v payload_len) **
+           pure (CT.connection_control_not_failed 'st0)
   returns status:driver_workflow_status
   ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
@@ -44,4 +45,6 @@ fn run
                   'st0
                   (Ghost.reveal 'received0) /\
                 client_driver_sent_log_exact st1 sent1 /\
-                client_driver_received_log_accounted st1 received1)
+                client_driver_received_log_accounted st1 received1 /\
+                ((status == DriverWorkflowOk \/ status == DriverWorkflowPayloadTooLarge) ==>
+                  CT.connection_control_not_failed st1))

@@ -12,6 +12,7 @@ module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.StateMachine
 module CM = TLS13.Impl.ConnectionState.Model
+module CPI = Common.ProtocolImplementation
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
 module ID = FStar.IndefiniteDescription
@@ -1630,6 +1631,22 @@ fn derive_shared_secret_from_payload_once
   V.to_vec_pts_to d.server_driver_network_out;
   V.to_vec_pts_to d.server_driver_app_out;
   fold (server_driver_buffers d buffered buffered_len);
+  CPI.lemma_bytes_extends_refl (Ghost.reveal 'received);
+  CPI.lemma_bytes_extends_append
+    (Ghost.reveal 'sent)
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty);
+  advance_server_driver_io_history
+    d
+    'received
+    'sent
+    'received
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
   fold (server_driver_connected
     d
     st1
@@ -2341,6 +2358,22 @@ fn send_server_hello_from_payload_once
 
  V.to_vec_pts_to d.server_driver_app_out;
  fold (server_driver_buffers d buffered buffered_len);
+ CPI.lemma_bytes_extends_refl (Ghost.reveal 'received);
+ CPI.lemma_bytes_extends_append
+   (Ghost.reveal 'sent)
+   (if SZ.v written <= B.length network_out_bytes
+    then Seq.slice network_out_bytes 0 (SZ.v written)
+    else B.empty);
+ advance_server_driver_io_history
+   d
+   'received
+   'sent
+   'received
+   (B.append
+     (Ghost.reveal 'sent)
+     (if SZ.v written <= B.length network_out_bytes
+      then Seq.slice network_out_bytes 0 (SZ.v written)
+      else B.empty));
  fold (server_driver_connected
    d
    st1

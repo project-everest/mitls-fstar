@@ -85,8 +85,8 @@ fn connect
   ensures pts_to connect_host 'connect_host_bytes **
           (match status with
            | DS.DriverWorkflowOk ->
-             exists* raw_received raw_sent app_log.
-               DS.client_channel_inv d raw_received raw_sent app_log
+             exists* wire_received wire_sent pending app_log.
+               DS.client_channel_inv d wire_received wire_sent pending app_log
            | _ ->
              exists* st1. DS.client_driver_closed d st1)
 {
@@ -96,6 +96,10 @@ fn connect
     DS.DriverWorkflowOk -> {
       with st1 received sent.
         assert (DS.client_driver_connected d st1 received sent);
+      assert (pure (DS.client_driver_application_ready st1));
+      assert (pure (st1.CS.cs_model.CS.model_control ==
+        CS.ControlApplicationData));
+      assert (pure (CT.connection_control_not_failed st1));
       CChannel.pack_connected_channel
         d
         (Ghost.hide st1)
@@ -116,22 +120,28 @@ fn connect
 
 fn send
   (d:client_driver)
-  (raw_received0:Ghost.erased B.bytes)
-  (raw_sent0:Ghost.erased B.bytes)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
   (app_log0:Ghost.erased (CI.application_log B.bytes))
   (payload:array U8.t)
   (payload_bytes:Ghost.erased B.bytes)
   (payload_len:SZ.t)
   requires DS.client_channel_inv
              d
-             (Ghost.reveal raw_received0)
-             (Ghost.reveal raw_sent0)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
              (Ghost.reveal app_log0) **
            pts_to payload (Ghost.reveal payload_bytes) **
            pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
   returns status:driver_workflow_status
-  ensures exists* raw_received1 raw_sent1 app_log1.
-          DS.client_channel_inv d raw_received1 raw_sent1 app_log1 **
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          (if channel_send_reusable status
+           then
+             DS.client_channel_inv d wire_received1 wire_sent1 pending1 app_log1
+           else
+             DS.client_channel_terminal d wire_received1 wire_sent1 app_log1) **
           pts_to payload (Ghost.reveal payload_bytes) **
           pure (
             CI.send_transition
@@ -139,20 +149,22 @@ fn send
               channel_send_succeeded
               status
               (Ghost.reveal payload_bytes)
-              (Ghost.reveal raw_received0)
-              (Ghost.reveal raw_sent0)
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
               (Ghost.reveal app_log0)
-              raw_received1
-              raw_sent1
+              wire_received1
+              wire_sent1
               app_log1)
 {
   CChannel.take_channel_snapshot
-    d raw_received0 raw_sent0 app_log0;
+    d wire_received0 wire_sent0 pending0 app_log0;
   CChannel.open_channel_invariant
-    d raw_received0 raw_sent0 app_log0;
-  with st0 transport_received0 transport_sent0.
+    d wire_received0 wire_sent0 pending0 app_log0;
+  with st0.
     assert (DS.client_driver_connected
-      d st0 transport_received0 transport_sent0);
+      d st0 (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+  assert (pure (CT.connection_control_not_failed st0));
+  assert (pure ((Ghost.reveal app_log0) == TChannel.application_log st0));
   let status = DSend.run d payload payload_len;
   with st1 transport_received1 transport_sent1.
     assert (DS.client_driver_connected
@@ -163,58 +175,99 @@ fn send
     st1
     status
     (Ghost.reveal payload_bytes)
-    transport_sent0
+    (Ghost.reveal wire_sent0)
     transport_sent1));
+  CChannel.recall_tcp_history
+    d
+    wire_received0
+    wire_sent0
+    app_log0
+    (Ghost.hide st1)
+    (Ghost.hide transport_received1)
+    (Ghost.hide transport_sent1);
+  drop_ (DS.client_channel_snapshot
+    d
+    (Ghost.reveal wire_received0)
+    (Ghost.reveal wire_sent0)
+    (Ghost.reveal app_log0));
   CChannel.lemma_driver_send_application_log
     st0
     st1
     status
     (Ghost.reveal payload_bytes)
-    transport_sent0
+    (Ghost.reveal wire_sent0)
     transport_sent1;
-  CChannel.pack_connected_channel_invariant
-    d
-    (Ghost.hide st1)
-    (Ghost.hide transport_received1)
-    (Ghost.hide transport_sent1);
-  CChannel.recall_channel_snapshot
-    d
-    raw_received0
-    raw_sent0
-    app_log0
-    (Ghost.hide st1.CS.cs_wire_log.CL.raw_received)
-    (Ghost.hide st1.CS.cs_wire_log.CL.raw_sent)
-    (Ghost.hide (TChannel.application_log st1));
-  drop_ (DS.client_channel_snapshot
-    d
-    (Ghost.reveal raw_received0)
-    (Ghost.reveal raw_sent0)
-    (Ghost.reveal app_log0));
-  assert (
-    DS.client_channel_inv
+  if channel_send_reusable status {
+    assert (pure (status == DS.DriverWorkflowOk \/
+                  status == DS.DriverWorkflowPayloadTooLarge));
+    assert (pure (CT.connection_control_not_failed st1));
+    CChannel.pack_connected_channel_invariant
       d
-      st1.CS.cs_wire_log.CL.raw_received
-      st1.CS.cs_wire_log.CL.raw_sent
-      (TChannel.application_log st1) **
-    pts_to payload (Ghost.reveal payload_bytes) **
-    pure (CI.send_transition
+      (Ghost.hide st1)
+      (Ghost.hide transport_received1)
+      (Ghost.hide transport_sent1);
+    with pending1.
+      assert (DS.client_channel_inv
+        d transport_received1 transport_sent1 pending1
+        (TChannel.application_log st1));
+    assert (pure (CI.send_transition
       channel_message_of_bytes
       channel_send_succeeded
       status
       (Ghost.reveal payload_bytes)
-      (Ghost.reveal raw_received0)
-      (Ghost.reveal raw_sent0)
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
       (Ghost.reveal app_log0)
-      st1.CS.cs_wire_log.CL.raw_received
-      st1.CS.cs_wire_log.CL.raw_sent
+      transport_received1
+      transport_sent1
       (TChannel.application_log st1)));
-  status
+    rewrite (DS.client_channel_inv
+      d transport_received1 transport_sent1 pending1
+      (TChannel.application_log st1))
+      as (if channel_send_reusable status
+          then DS.client_channel_inv
+            d transport_received1 transport_sent1 pending1
+            (TChannel.application_log st1)
+          else DS.client_channel_terminal
+            d transport_received1 transport_sent1
+            (TChannel.application_log st1));
+    status
+  } else {
+    CChannel.pack_connected_channel_terminal
+      d
+      (Ghost.hide st1)
+      (Ghost.hide transport_received1)
+      (Ghost.hide transport_sent1);
+    assert (pure (CI.send_transition
+      channel_message_of_bytes
+      channel_send_succeeded
+      status
+      (Ghost.reveal payload_bytes)
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0)
+      transport_received1
+      transport_sent1
+      (TChannel.application_log st1)));
+    rewrite (DS.client_channel_terminal
+      d transport_received1 transport_sent1
+      (TChannel.application_log st1))
+      as (if channel_send_reusable status
+          then DS.client_channel_inv
+            d transport_received1 transport_sent1 transport_received1
+            (TChannel.application_log st1)
+          else DS.client_channel_terminal
+            d transport_received1 transport_sent1
+            (TChannel.application_log st1));
+    status
+  }
 }
 
 fn receive
   (d:client_driver)
-  (raw_received0:Ghost.erased B.bytes)
-  (raw_sent0:Ghost.erased B.bytes)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
   (app_log0:Ghost.erased (CI.application_log B.bytes))
   (out:array U8.t)
   (old_output:Ghost.erased B.bytes)
@@ -223,14 +276,19 @@ fn receive
   (fuel:SZ.t)
   requires DS.client_channel_inv
              d
-             (Ghost.reveal raw_received0)
-             (Ghost.reveal raw_sent0)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
              (Ghost.reveal app_log0) **
            pts_to out (Ghost.reveal old_output) **
            pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
   returns result:client_receive_result
-  ensures exists* raw_received1 raw_sent1 app_log1 output.
-          DS.client_channel_inv d raw_received1 raw_sent1 app_log1 **
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1 output.
+          (if channel_receive_reusable result
+           then
+             DS.client_channel_inv d wire_received1 wire_sent1 pending1 app_log1
+           else
+             DS.client_channel_terminal d wire_received1 wire_sent1 app_log1) **
           pts_to out output **
           pure (
             B.length output == SZ.v out_len /\
@@ -241,22 +299,24 @@ fn receive
               channel_receive_length
               result
               output
-              (Ghost.reveal raw_received0)
-              (Ghost.reveal raw_sent0)
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
               (Ghost.reveal app_log0)
-              raw_received1
-              raw_sent1
+              wire_received1
+              wire_sent1
               app_log1)
 {
   let output_fits = SZ.lte DS.driver_app_out_capacity out_len;
   if output_fits {
     CChannel.take_channel_snapshot
-      d raw_received0 raw_sent0 app_log0;
+      d wire_received0 wire_sent0 pending0 app_log0;
     CChannel.open_channel_invariant
-      d raw_received0 raw_sent0 app_log0;
-    with st0 transport_received0 transport_sent0.
+      d wire_received0 wire_sent0 pending0 app_log0;
+    with st0.
       assert (DS.client_driver_connected
-        d st0 transport_received0 transport_sent0);
+        d st0 (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+    assert (pure (CT.connection_control_not_failed st0));
+    assert (pure ((Ghost.reveal app_log0) == TChannel.application_log st0));
     assert (pure (
       L.max_record_fragment_len <= SZ.v DS.driver_app_out_capacity));
     assert (pure (L.max_record_fragment_len <= SZ.v out_len));
@@ -272,60 +332,103 @@ fn receive
            (TChannel.application_log st0)
            (FStar.Seq.slice output 0 (SZ.v result.client_receive_len))
        else TChannel.application_log st0)));
-    CChannel.pack_connected_channel_invariant
+    CChannel.recall_tcp_history
       d
+      wire_received0
+      wire_sent0
+      app_log0
       (Ghost.hide st1)
       (Ghost.hide transport_received1)
       (Ghost.hide transport_sent1);
-    CChannel.recall_channel_snapshot
-      d
-      raw_received0
-      raw_sent0
-      app_log0
-      (Ghost.hide st1.CS.cs_wire_log.CL.raw_received)
-      (Ghost.hide st1.CS.cs_wire_log.CL.raw_sent)
-      (Ghost.hide (TChannel.application_log st1));
     drop_ (DS.client_channel_snapshot
       d
-      (Ghost.reveal raw_received0)
-      (Ghost.reveal raw_sent0)
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
       (Ghost.reveal app_log0));
-    assert (
-      DS.client_channel_inv
+    if channel_receive_reusable result {
+      assert (pure (result.DS.client_receive_status <> DS.DriverWorkflowStepFailed /\
+                    result.DS.client_receive_status <> DS.DriverWorkflowClosed));
+      assert (pure (CT.connection_control_not_failed st1));
+      CChannel.pack_connected_channel_invariant
         d
-        st1.CS.cs_wire_log.CL.raw_received
-        st1.CS.cs_wire_log.CL.raw_sent
-        (TChannel.application_log st1) **
-      pts_to out output **
-      pure (
-        CI.receive_transition
-          channel_message_of_bytes
-          channel_receive_succeeded
-          channel_receive_length
-          result
-          output
-          (Ghost.reveal raw_received0)
-          (Ghost.reveal raw_sent0)
-          (Ghost.reveal app_log0)
-          st1.CS.cs_wire_log.CL.raw_received
-          st1.CS.cs_wire_log.CL.raw_sent
-          (TChannel.application_log st1)));
-    result
+        (Ghost.hide st1)
+        (Ghost.hide transport_received1)
+        (Ghost.hide transport_sent1);
+      with pending1.
+        assert (DS.client_channel_inv
+          d transport_received1 transport_sent1 pending1
+          (TChannel.application_log st1));
+      assert (pure (CI.receive_transition
+        channel_message_of_bytes
+        channel_receive_succeeded
+        channel_receive_length
+        result
+        output
+        (Ghost.reveal wire_received0)
+        (Ghost.reveal wire_sent0)
+        (Ghost.reveal app_log0)
+        transport_received1
+        transport_sent1
+        (TChannel.application_log st1)));
+      rewrite (DS.client_channel_inv
+        d transport_received1 transport_sent1 pending1
+        (TChannel.application_log st1))
+        as (if channel_receive_reusable result
+            then DS.client_channel_inv
+              d transport_received1 transport_sent1 pending1
+              (TChannel.application_log st1)
+            else DS.client_channel_terminal
+              d transport_received1 transport_sent1
+              (TChannel.application_log st1));
+      result
+    } else {
+      CChannel.pack_connected_channel_terminal
+        d
+        (Ghost.hide st1)
+        (Ghost.hide transport_received1)
+        (Ghost.hide transport_sent1);
+      assert (pure (CI.receive_transition
+        channel_message_of_bytes
+        channel_receive_succeeded
+        channel_receive_length
+        result
+        output
+        (Ghost.reveal wire_received0)
+        (Ghost.reveal wire_sent0)
+        (Ghost.reveal app_log0)
+        transport_received1
+        transport_sent1
+        (TChannel.application_log st1)));
+      rewrite (DS.client_channel_terminal
+        d transport_received1 transport_sent1
+        (TChannel.application_log st1))
+        as (if channel_receive_reusable result
+            then DS.client_channel_inv
+              d transport_received1 transport_sent1 transport_received1
+              (TChannel.application_log st1)
+            else DS.client_channel_terminal
+              d transport_received1 transport_sent1
+              (TChannel.application_log st1));
+      result
+    }
   } else {
     let result = {
       DS.client_receive_status = DS.DriverWorkflowOutputBufferTooSmall;
       DS.client_receive_len = 0sz;
     };
+    CPI.lemma_bytes_extends_refl (Ghost.reveal wire_received0);
+    CPI.lemma_bytes_extends_refl (Ghost.reveal wire_sent0);
     assert (pure (CPI.histories_ahead
-      (Ghost.reveal raw_received0)
-      (Ghost.reveal raw_sent0)
-      (Ghost.reveal raw_received0)
-      (Ghost.reveal raw_sent0)));
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)));
     assert (
       DS.client_channel_inv
         d
-        (Ghost.reveal raw_received0)
-        (Ghost.reveal raw_sent0)
+        (Ghost.reveal wire_received0)
+        (Ghost.reveal wire_sent0)
+        (Ghost.reveal pending0)
         (Ghost.reveal app_log0) **
       pts_to out (Ghost.reveal old_output) **
       pure (
@@ -335,27 +438,47 @@ fn receive
           channel_receive_length
           result
           (Ghost.reveal old_output)
-          (Ghost.reveal raw_received0)
-          (Ghost.reveal raw_sent0)
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
           (Ghost.reveal app_log0)
-          (Ghost.reveal raw_received0)
-          (Ghost.reveal raw_sent0)
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
           (Ghost.reveal app_log0)));
+    rewrite (DS.client_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal pending0)
+      (Ghost.reveal app_log0))
+      as (if channel_receive_reusable result
+          then DS.client_channel_inv
+            d
+            (Ghost.reveal wire_received0)
+            (Ghost.reveal wire_sent0)
+            (Ghost.reveal pending0)
+            (Ghost.reveal app_log0)
+          else DS.client_channel_terminal
+            d
+            (Ghost.reveal wire_received0)
+            (Ghost.reveal wire_sent0)
+            (Ghost.reveal app_log0));
     result
   }
 }
 
 fn close
   (d:client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
   (app_log:Ghost.erased (CI.application_log B.bytes))
   (wait_for_peer:bool)
   (fuel:SZ.t)
   requires DS.client_channel_inv
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
     (Ghost.reveal app_log)
   returns status:driver_workflow_status
   ensures exists* st1.
@@ -370,24 +493,43 @@ fn close
               wait_for_peer)
 {
   CChannel.open_channel_invariant
-    d raw_received raw_sent app_log;
+    d wire_received wire_sent pending app_log;
   DClose.run d wait_for_peer fuel
 }
 
 fn abort
   (d:client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
   (app_log:Ghost.erased (CI.application_log B.bytes))
   requires DS.client_channel_inv
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
     (Ghost.reveal app_log)
   ensures exists* st. DS.client_driver_closed d st
 {
   CChannel.open_channel_invariant
-    d raw_received raw_sent app_log;
+    d wire_received wire_sent pending app_log;
+  DClose.abort d
+}
+
+fn abort_terminal
+  (d:client_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires DS.client_channel_terminal
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal app_log)
+  ensures exists* st. DS.client_driver_closed d st
+{
+  CChannel.open_terminal
+    d wire_received wire_sent app_log;
   DClose.abort d
 }
 
@@ -410,10 +552,13 @@ let client_channel_implementation
     CI.ci_project = TChannel.application_log;
     CI.ci_message_of_bytes = channel_message_of_bytes;
     CI.ci_channel_inv = DS.client_channel_inv;
+    CI.ci_terminal_inv = DS.client_channel_terminal;
     CI.ci_io_frame = DS.client_channel_io_frame;
     CI.ci_snapshot = DS.client_channel_snapshot;
     CI.ci_send_succeeded = channel_send_succeeded;
+    CI.ci_send_usable = channel_send_reusable;
     CI.ci_receive_succeeded = channel_receive_succeeded;
+    CI.ci_receive_usable = channel_receive_reusable;
     CI.ci_receive_length = channel_receive_length;
     CI.ci_open_io_channel = CChannel.open_io_channel;
     CI.ci_close_io_channel = CChannel.close_io_channel;

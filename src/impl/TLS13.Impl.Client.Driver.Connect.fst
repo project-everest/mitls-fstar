@@ -109,7 +109,7 @@ fn run
         as
         (IO.is_channel ch B.empty B.empty);
       assert (pure (client_driver_wire_logs_match 'st0 B.empty B.empty B.empty current_buffered_len));
-      fold (channel_open ch 'st0 B.empty current_buffered_len);
+      fold (channel_open d.client_driver_tcp_history ch 'st0 B.empty current_buffered_len);
       unfold (client_driver_buffers d B.empty buffered_len);
       with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
@@ -133,6 +133,7 @@ fn run
       let core = {
         driver_client = d.client_driver_client;
         driver_channel = ch;
+        driver_tcp_history = d.client_driver_tcp_history;
         driver_progress = d.client_driver_progress;
         driver_initial = d.client_driver_initial;
       };
@@ -152,8 +153,8 @@ fn run
       fold (driver_canonical_progress core 'st0);
       rewrite (C.connection_exactly d.client_driver_client 'st0) as
         (C.connection_exactly core.driver_client 'st0);
-      rewrite (channel_open ch 'st0 B.empty current_buffered_len) as
-        (channel_open core.driver_channel 'st0 B.empty current_buffered_len);
+      rewrite (channel_open d.client_driver_tcp_history ch 'st0 B.empty current_buffered_len) as
+        (channel_open core.driver_tcp_history core.driver_channel 'st0 B.empty current_buffered_len);
       fold (driver_exactly core 'st0 B.empty current_buffered_len);
       rewrite (driver_exactly core 'st0 B.empty current_buffered_len) as
         (driver_exactly td.top_driver_core 'st0 B.empty current_buffered_len);
@@ -220,13 +221,13 @@ fn run
       fold (client_driver_buffers d buffered_after result.driver_workflow_rx_len);
       rewrite (C.connection_exactly core.driver_client st1) as
         (C.connection_exactly d.client_driver_client st1);
-      rewrite (channel_open core.driver_channel st1 buffered_after result.driver_workflow_rx_len) as
-        (channel_open ch st1 buffered_after result.driver_workflow_rx_len);
+      rewrite (channel_open core.driver_tcp_history core.driver_channel st1 buffered_after result.driver_workflow_rx_len) as
+        (channel_open d.client_driver_tcp_history ch st1 buffered_after result.driver_workflow_rx_len);
       rewrite (O.is_auth_context td.top_driver_auth) as
         (O.is_auth_context d.client_driver_auth);
       match result.driver_workflow_status {
         DriverWorkflowOk -> {
-         unfold (channel_open ch st1 buffered_after result.driver_workflow_rx_len);
+         unfold (channel_open d.client_driver_tcp_history ch st1 buffered_after result.driver_workflow_rx_len);
          with received sent.
            assert (IO.is_channel ch received sent **
                    pure (client_driver_wire_logs_match st1 received sent buffered_after result.driver_workflow_rx_len));
@@ -275,12 +276,12 @@ fn run
              fold (client_driver_connected d st1 received sent);
              DriverWorkflowOk
            } else {
-             fold (channel_open ch st1 buffered_after result.driver_workflow_rx_len);
+             fold (channel_open d.client_driver_tcp_history ch st1 buffered_after result.driver_workflow_rx_len);
              close_failed_connect d ch result.driver_workflow_rx_len;
              DriverWorkflowStepFailed
            }
          } else {
-           fold (channel_open ch st1 buffered_after result.driver_workflow_rx_len);
+           fold (channel_open d.client_driver_tcp_history ch st1 buffered_after result.driver_workflow_rx_len);
            close_failed_connect d ch result.driver_workflow_rx_len;
            DriverWorkflowStepFailed
          }

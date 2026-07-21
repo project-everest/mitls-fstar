@@ -93,9 +93,36 @@ let channel_send_succeeded (status:server_workflow_status) : bool =
   | ServerWorkflowOk -> true
   | _ -> false
 
+(**
+  A send leaves the channel in the live invariant only for the two benign
+  outcomes ([ServerWorkflowOk] appended a record; [ServerWorkflowPayloadTooLarge]
+  rejected an oversized payload without touching the connection).  Any other
+  outcome (hard protocol failure) passes ownership to the terminal invariant.
+**)
+let channel_send_usable (status:server_workflow_status) : GTot bool =
+  match status with
+  | ServerWorkflowOk -> true
+  | ServerWorkflowPayloadTooLarge -> true
+  | _ -> false
+
 let channel_receive_succeeded (result:server_receive_result) : GTot bool =
   result.server_receive_status == ServerWorkflowOk &&
   result.server_receive_len <> 0sz
+
+(**
+  A receive leaves the channel in the live invariant only for outcomes that keep
+  the connection retryable ([ServerWorkflowOk] / [ServerWorkflowNeedMoreInput] /
+  [ServerWorkflowExhausted] / [ServerWorkflowOutputBufferTooSmall]).  Both a
+  peer close ([ServerWorkflowClosed]) and a hard failure
+  ([ServerWorkflowStepFailed]) pass ownership to the terminal invariant.
+**)
+let channel_receive_usable (result:server_receive_result) : GTot bool =
+  match result.server_receive_status with
+  | ServerWorkflowOk -> true
+  | ServerWorkflowNeedMoreInput -> true
+  | ServerWorkflowExhausted -> true
+  | ServerWorkflowOutputBufferTooSmall -> true
+  | _ -> false
 
 let channel_receive_length (result:server_receive_result) : SZ.t =
   result.server_receive_len
@@ -489,9 +516,9 @@ fn accept
   ensures pts_to bind_host 'bind_host_bytes **
           (match status with
            | ServerWorkflowOk ->
-             exists* raw_received raw_sent app_log.
+             exists* wire_received wire_sent pending app_log.
                DState.server_channel_inv
-                 d raw_received raw_sent app_log
+                 d wire_received wire_sent pending app_log
            | ServerWorkflowClosed ->
              exists* st1.
                server_driver_closed
@@ -508,22 +535,30 @@ fn accept
 
 fn send
   (d:server_driver)
-  (raw_received0:Ghost.erased B.bytes)
-  (raw_sent0:Ghost.erased B.bytes)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
   (app_log0:Ghost.erased (CI.application_log B.bytes))
   (payload:array U8.t)
   (payload_bytes:Ghost.erased B.bytes)
   (payload_len:SZ.t)
   requires DState.server_channel_inv
              d
-             (Ghost.reveal raw_received0)
-             (Ghost.reveal raw_sent0)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
              (Ghost.reveal app_log0) **
            pts_to payload (Ghost.reveal payload_bytes) **
            pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
   returns status:server_workflow_status
-  ensures exists* raw_received1 raw_sent1 app_log1.
-          DState.server_channel_inv d raw_received1 raw_sent1 app_log1 **
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          (if channel_send_usable status
+           then
+             DState.server_channel_inv
+               d wire_received1 wire_sent1 pending1 app_log1
+           else
+             DState.server_channel_terminal
+               d wire_received1 wire_sent1 app_log1) **
           pts_to payload (Ghost.reveal payload_bytes) **
           pure (
             CI.send_transition
@@ -531,17 +566,18 @@ fn send
               channel_send_succeeded
               status
               (Ghost.reveal payload_bytes)
-              (Ghost.reveal raw_received0)
-              (Ghost.reveal raw_sent0)
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
               (Ghost.reveal app_log0)
-              raw_received1
-              raw_sent1
+              wire_received1
+              wire_sent1
               app_log1)
 
 fn receive
   (d:server_driver)
-  (raw_received0:Ghost.erased B.bytes)
-  (raw_sent0:Ghost.erased B.bytes)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
   (app_log0:Ghost.erased (CI.application_log B.bytes))
   (out:array U8.t)
   (old_output:Ghost.erased B.bytes)
@@ -550,14 +586,21 @@ fn receive
   (network_fuel:SZ.t)
   requires DState.server_channel_inv
              d
-             (Ghost.reveal raw_received0)
-             (Ghost.reveal raw_sent0)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
              (Ghost.reveal app_log0) **
            pts_to out (Ghost.reveal old_output) **
            pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
   returns result:server_receive_result
-  ensures exists* raw_received1 raw_sent1 app_log1 output.
-          DState.server_channel_inv d raw_received1 raw_sent1 app_log1 **
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1 output.
+          (if channel_receive_usable result
+           then
+             DState.server_channel_inv
+               d wire_received1 wire_sent1 pending1 app_log1
+           else
+             DState.server_channel_terminal
+               d wire_received1 wire_sent1 app_log1) **
           pts_to out output **
           pure (
             B.length output == SZ.v out_len /\
@@ -568,24 +611,26 @@ fn receive
               channel_receive_length
               result
               output
-              (Ghost.reveal raw_received0)
-              (Ghost.reveal raw_sent0)
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
               (Ghost.reveal app_log0)
-              raw_received1
-              raw_sent1
+              wire_received1
+              wire_sent1
               app_log1)
 
 fn close
   (d:server_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
   (app_log:Ghost.erased (CI.application_log B.bytes))
   (wait_for_peer:bool)
   (network_fuel:SZ.t)
   requires DState.server_channel_inv
              d
-             (Ghost.reveal raw_received)
-             (Ghost.reveal raw_sent)
+             (Ghost.reveal wire_received)
+             (Ghost.reveal wire_sent)
+             (Ghost.reveal pending)
              (Ghost.reveal app_log)
   returns status:server_workflow_status
   ensures exists* st1 certificate_chain credential_identity.
@@ -597,16 +642,59 @@ fn close
 **)
 fn abort
   (d:server_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
   (app_log:Ghost.erased (CI.application_log B.bytes))
   requires DState.server_channel_inv
              d
-             (Ghost.reveal raw_received)
-             (Ghost.reveal raw_sent)
+             (Ghost.reveal wire_received)
+             (Ghost.reveal wire_sent)
+             (Ghost.reveal pending)
              (Ghost.reveal app_log)
   ensures exists* st certificate_chain credential_identity.
           server_driver_closed d st certificate_chain credential_identity
+
+(**
+  Disposes a channel that a non-usable [send]/[receive] outcome left in the
+  terminal invariant (i.e. [channel_send_usable] / [channel_receive_usable] is
+  false).  For [receive] this covers both a hard protocol failure
+  ([ServerWorkflowStepFailed]) and a peer close ([ServerWorkflowClosed]); for
+  [send] it covers [ServerWorkflowStepFailed].  This is the cleanup entry point
+  the runtime C shim must call in those branches so terminal ownership is never
+  left unconsumable.  Unlike [abort]/[close] it consumes the terminal invariant
+  rather than the live channel invariant.
+**)
+fn abort_terminal
+  (d:server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires DState.server_channel_terminal
+             d
+             (Ghost.reveal wire_received)
+             (Ghost.reveal wire_sent)
+             (Ghost.reveal app_log)
+  ensures exists* st certificate_chain credential_identity.
+          server_driver_closed d st certificate_chain credential_identity
+
+(**
+  Disposes a driver that is in the lower-level [server_driver_connected] state
+  rather than a channel invariant — in particular the state a non-Ok / non-Closed
+  [accept] outcome returns.  This is the cleanup entry point the runtime C shim
+  must call after an accept failure, since that path holds the connected
+  predicate, not the live channel invariant consumed by [abort]/[close].
+**)
+fn abort_connected
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
 
 noextract
 val server_channel_implementation

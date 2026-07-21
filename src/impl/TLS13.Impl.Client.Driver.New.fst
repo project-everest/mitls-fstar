@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
+module CI = Common.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
@@ -85,6 +86,8 @@ fn new_client
   let progress =
     MR.alloc #_ #(EC.client_progress_preorder #CTypes.client_local_event) (Ghost.reveal initial);
   MR.take_snapshot progress (Ghost.reveal initial);
+  let tcp_history =
+    MR.alloc #_ #CI.io_history_preorder (wire_history B.empty B.empty);
   let c =
     C.new_client
       server_name
@@ -122,6 +125,7 @@ fn new_client
     client_driver_initial = initial;
     client_driver_auth = auth;
     client_driver_channel = channel;
+    client_driver_tcp_history = tcp_history;
     client_driver_buffered_len = buffered_len;
     client_driver_empty_payload = empty_payload;
     client_driver_raw = raw;
@@ -156,6 +160,8 @@ fn new_client
            d.client_driver_progress
            (Ghost.reveal d.client_driver_initial));
       fold (client_driver_canonical_progress d (Ghost.reveal initial));
+      rewrite (MR.pts_to tcp_history #1.0R (wire_history B.empty B.empty)) as
+         (MR.pts_to d.client_driver_tcp_history #1.0R (wire_history B.empty B.empty));
       rewrite (Box.pts_to channel no_channel) as
          (Box.pts_to d.client_driver_channel no_channel);
       rewrite (Box.pts_to buffered_len 0sz) as

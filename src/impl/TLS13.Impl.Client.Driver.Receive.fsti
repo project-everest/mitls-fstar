@@ -27,7 +27,8 @@ fn run
   requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len /\
-                 L.max_record_fragment_len <= SZ.v out_len)
+                 L.max_record_fragment_len <= SZ.v out_len) **
+           pure (CT.connection_control_not_failed 'st0)
   returns result:client_receive_result
   ensures exists* st1 received1 sent1 out_bytes.
           client_driver_connected d st1 received1 sent1 **
@@ -59,4 +60,7 @@ fn run
                     result
                     obs
                     app_out
-                    out_bytes))
+                    out_bytes) /\
+                ((result.DS.client_receive_status <> DriverWorkflowStepFailed /\
+                  result.DS.client_receive_status <> DriverWorkflowClosed) ==>
+                  CT.connection_control_not_failed st1))

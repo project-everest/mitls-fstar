@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
+module CI = Common.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine
@@ -60,6 +61,33 @@ ghost fn advance_server_driver_canonical_progress
       (Ghost.reveal d.server_driver_initial).CS.cs_model.CS.model_config));
   MR.update d.server_driver_progress (Ghost.reveal st1);
   fold (server_driver_canonical_progress d (Ghost.reveal st1))
+}
+
+ghost fn advance_server_driver_io_history
+  (d:server_driver)
+  (received0:Ghost.erased B.bytes)
+  (sent0:Ghost.erased B.bytes)
+  (received1:Ghost.erased B.bytes)
+  (sent1:Ghost.erased B.bytes)
+  requires
+    server_driver_io_history d (Ghost.reveal received0) (Ghost.reveal sent0) **
+    pure (
+      IO.bytes_extends (Ghost.reveal received0) (Ghost.reveal received1) /\
+      IO.bytes_extends (Ghost.reveal sent0) (Ghost.reveal sent1))
+  ensures
+    server_driver_io_history d (Ghost.reveal received1) (Ghost.reveal sent1)
+{
+  unfold (server_driver_io_history d (Ghost.reveal received0) (Ghost.reveal sent0));
+  assert (pure (IO.history_extends
+    (server_driver_history (Ghost.reveal received0) (Ghost.reveal sent0))
+    (server_driver_history (Ghost.reveal received1) (Ghost.reveal sent1))));
+  CI.lemma_io_history_preorder_of_extends
+    (server_driver_history (Ghost.reveal received0) (Ghost.reveal sent0))
+    (server_driver_history (Ghost.reveal received1) (Ghost.reveal sent1));
+  MR.update
+    d.server_driver_tcp_history
+    (server_driver_history (Ghost.reveal received1) (Ghost.reveal sent1));
+  fold (server_driver_io_history d (Ghost.reveal received1) (Ghost.reveal sent1))
 }
 
 noextract
@@ -227,40 +255,6 @@ let lemma_server_driver_wire_logs_match_received_accounted
     (Ghost.reveal consumed)
     buffered
 
-let lemma_server_driver_wire_logs_match_io_history
-  (st:CS.connection_state)
-  (received:B.bytes)
-  (sent:B.bytes)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
-  : Lemma
-      (requires server_driver_wire_logs_match st received sent buffered buffered_len)
-      (ensures
-        Common.ChannelImplementation.channel_io_history_matches
-          st.CS.cs_wire_log.CL.raw_received
-          st.CS.cs_wire_log.CL.raw_sent
-          received
-          sent)
-=
-  let consumed =
-    ID.indefinite_description_ghost
-      B.bytes
-      (fun consumed ->
-        server_driver_wire_logs_match_witness
-          st
-          received
-          sent
-          consumed
-          buffered
-          buffered_len) in
-  assert (server_driver_wire_logs_match_witness
-    st
-    received
-    sent
-    (Ghost.reveal consumed)
-    buffered
-    buffered_len)
-
 let lemma_server_driver_wire_logs_match_nonfailed_stutter
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -331,7 +325,6 @@ let lemma_initial_wire_logs_match
 =
   Seq.lemma_eq_elim st.CS.cs_wire_log.CL.raw_received B.empty;
   Seq.lemma_eq_elim st.CS.cs_wire_log.CL.raw_sent B.empty;
-  Common.ChannelImplementation.lemma_ordered_subsequence_empty B.empty;
   FStar.Classical.exists_intro
     (fun consumed ->
       server_driver_wire_logs_match_witness
@@ -717,60 +710,6 @@ let lemma_logged_received_bytes_accounted_append_delta
   ) else (
     Seq.lemma_eq_elim raw_delta consumed_delta
   )
-
-ghost fn expose_server_driver_io_history
-  (d:server_driver)
-  (st:Ghost.erased CS.connection_state)
-  (certificate_chain:Ghost.erased B.bytes)
-  (credential_identity:Ghost.erased CS.server_credential_identity)
-  (received:Ghost.erased B.bytes)
-  (sent:Ghost.erased B.bytes)
-  requires
-    server_driver_connected
-      d
-      (Ghost.reveal st)
-      (Ghost.reveal certificate_chain)
-      (Ghost.reveal credential_identity)
-      (Ghost.reveal received)
-      (Ghost.reveal sent)
-  ensures
-    server_driver_connected
-      d
-      (Ghost.reveal st)
-      (Ghost.reveal certificate_chain)
-      (Ghost.reveal credential_identity)
-      (Ghost.reveal received)
-      (Ghost.reveal sent) **
-    pure (
-      Common.ChannelImplementation.channel_io_history_matches
-        (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
-        (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
-        (Ghost.reveal received)
-        (Ghost.reveal sent))
-{
-  unfold (server_driver_connected
-    d
-    (Ghost.reveal st)
-    (Ghost.reveal certificate_chain)
-    (Ghost.reveal credential_identity)
-    (Ghost.reveal received)
-    (Ghost.reveal sent));
-  with ch buffered buffered_len.
-    assert (server_driver_buffers d buffered buffered_len);
-  lemma_server_driver_wire_logs_match_io_history
-    (Ghost.reveal st)
-    (Ghost.reveal received)
-    (Ghost.reveal sent)
-    buffered
-    buffered_len;
-  fold (server_driver_connected
-    d
-    (Ghost.reveal st)
-    (Ghost.reveal certificate_chain)
-    (Ghost.reveal credential_identity)
-    (Ghost.reveal received)
-    (Ghost.reveal sent))
-}
 
 fn forget_server_driver_connected_app_out
   (d:server_driver)

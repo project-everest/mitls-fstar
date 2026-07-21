@@ -57,6 +57,12 @@ noeq type server_driver = {
   // Ghost/erased fields — zero-cost in C extraction
   server_driver_progress:
     MR.mref (ES.server_progress_preorder #CTypes.server_local_event);
+  // Monotonic witness of the exact full TCP receive/send histories.  Snapshots
+  // of the channel are indexed by the complete transport histories, so proving
+  // monotonicity across snapshots requires remembering that the histories only
+  // ever grow (Common.ChannelImplementation.io_history_preorder).
+  server_driver_tcp_history:
+    MR.mref CI.io_history_preorder;
   server_driver_initial: Ghost.erased ES.server_initial_state;
   server_driver_supported_profile:
     Ghost.erased
@@ -71,6 +77,58 @@ let server_driver_canonical (d: server_driver) : SP.canonical_server = {
   SP.canonical_server_initial = d.server_driver_initial;
   SP.canonical_server_supported_profile = d.server_driver_supported_profile;
 }
+
+noextract
+let server_driver_history (received sent:B.bytes) : IO.history =
+  { IO.tcp_received = received; IO.tcp_sent = sent }
+
+(**
+  Full-permission ownership of the monotonic TCP-history witness at the given
+  exact receive/send histories.
+**)
+noextract
+let server_driver_io_history
+  (d:server_driver)
+  (received:B.bytes)
+  (sent:B.bytes)
+  : slprop =
+  MR.pts_to
+    d.server_driver_tcp_history
+    #1.0R
+    (server_driver_history received sent)
+
+(**
+  Duplicable snapshot recording that the TCP histories had reached at least the
+  given receive/send histories.
+**)
+noextract
+let server_driver_io_history_snapshot
+  (d:server_driver)
+  (received:B.bytes)
+  (sent:B.bytes)
+  : slprop =
+  MR.snapshot
+    d.server_driver_tcp_history
+    (server_driver_history received sent)
+
+(**
+  Advance the TCP-history witness to strictly-or-equally longer histories.
+  Called after every IO.read (which appends to [received]) and IO.write (which
+  appends to [sent]).
+**)
+ghost fn advance_server_driver_io_history
+  (d:server_driver)
+  (received0:Ghost.erased B.bytes)
+  (sent0:Ghost.erased B.bytes)
+  (received1:Ghost.erased B.bytes)
+  (sent1:Ghost.erased B.bytes)
+  requires
+    server_driver_io_history d (Ghost.reveal received0) (Ghost.reveal sent0) **
+    pure (
+      IO.bytes_extends (Ghost.reveal received0) (Ghost.reveal received1) /\
+      IO.bytes_extends (Ghost.reveal sent0) (Ghost.reveal sent1))
+  ensures
+    server_driver_io_history d (Ghost.reveal received1) (Ghost.reveal sent1)
 
 noextract
 let server_driver_canonical_progress
@@ -184,14 +242,8 @@ let server_driver_wire_logs_match_witness
   B.length buffered == SZ.v buffered_len /\
   Seq.equal (B.append consumed buffered) received /\
   logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
-  CI.ordered_subsequence st.CS.cs_wire_log.CL.raw_received consumed /\
   (ST.server_connection_control_not_failed st ==>
-    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed) /\
-  CI.channel_io_history_matches
-    st.CS.cs_wire_log.CL.raw_received
-    st.CS.cs_wire_log.CL.raw_sent
-    received
-    sent
+    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed)
 
 noextract
 let server_driver_wire_logs_match
@@ -258,21 +310,6 @@ val lemma_server_driver_wire_logs_match_received_accounted
         (forall b.
           SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
           SeqP.count b received))
-
-val lemma_server_driver_wire_logs_match_io_history
-  (st:CS.connection_state)
-  (received:B.bytes)
-  (sent:B.bytes)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
-  : Lemma
-      (requires server_driver_wire_logs_match st received sent buffered buffered_len)
-      (ensures
-        CI.channel_io_history_matches
-          st.CS.cs_wire_log.CL.raw_received
-          st.CS.cs_wire_log.CL.raw_sent
-          received
-          sent)
 
 val lemma_server_driver_wire_logs_match_nonfailed_stutter
   (st0:CS.connection_state)
@@ -496,6 +533,7 @@ let server_driver_live
     credential_identity **
   server_driver_canonical_progress d st **
   Box.pts_to d.server_driver_channel no_channel **
+  server_driver_io_history d B.empty B.empty **
   server_driver_buffers d B.empty 0sz **
   pure (ST.server_end_to_end_invariant st /\
         server_driver_config_matches_credentials
@@ -524,6 +562,7 @@ let server_driver_connected
   exists* ch buffered buffered_len.
     Box.pts_to d.server_driver_channel (Some ch) **
     IO.is_channel ch received sent **
+    server_driver_io_history d received sent **
     server_driver_buffers d buffered buffered_len **
     pure (ST.server_end_to_end_invariant st /\
           server_driver_config_matches_credentials
@@ -533,97 +572,99 @@ let server_driver_connected
           server_driver_supported_profile_selection st credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
 
-ghost fn expose_server_driver_io_history
+let server_channel_terminal
   (d:server_driver)
-  (st:Ghost.erased CS.connection_state)
-  (certificate_chain:Ghost.erased B.bytes)
-  (credential_identity:Ghost.erased CS.server_credential_identity)
-  (received:Ghost.erased B.bytes)
-  (sent:Ghost.erased B.bytes)
-  requires
-    server_driver_connected
-      d
-      (Ghost.reveal st)
-      (Ghost.reveal certificate_chain)
-      (Ghost.reveal credential_identity)
-      (Ghost.reveal received)
-      (Ghost.reveal sent)
-  ensures
-    server_driver_connected
-      d
-      (Ghost.reveal st)
-      (Ghost.reveal certificate_chain)
-      (Ghost.reveal credential_identity)
-      (Ghost.reveal received)
-      (Ghost.reveal sent) **
-    pure (
-      CI.channel_io_history_matches
-        (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
-        (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
-        (Ghost.reveal received)
-        (Ghost.reveal sent))
-
-let server_channel_inv
-  (d:server_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
-  exists* st received sent ch buffered buffered_len.
+  exists* st ch buffered buffered_len.
     SP.server_invariant
       (server_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
     Box.pts_to d.server_driver_channel (Some ch) **
-    IO.is_channel ch received sent **
+    IO.is_channel ch wire_received wire_sent **
+    server_driver_io_history d wire_received wire_sent **
     server_driver_buffers d buffered buffered_len **
     pure (
       server_driver_wire_logs_match
-        st received sent buffered buffered_len /\
-      CI.channel_io_history_matches
-        raw_received
-        raw_sent
-        received
-        sent /\
+        st wire_received wire_sent buffered buffered_len /\
+      app_log == TChannel.application_log st)
+
+noextract
+let server_channel_inv
+  (d:server_driver)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st ch buffered buffered_len.
+    SP.server_invariant
+      (server_driver_canonical d)
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
+      st **
+    Box.pts_to d.server_driver_channel (Some ch) **
+    IO.is_channel ch wire_received wire_sent **
+    server_driver_io_history d wire_received wire_sent **
+    server_driver_buffers d buffered buffered_len **
+    pure (
+      server_driver_wire_logs_match
+        st wire_received wire_sent buffered buffered_len /\
+      ST.server_connection_control_not_failed st /\
+      Seq.equal pending buffered /\
+      Seq.equal
+        wire_received
+        (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+      Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
       app_log == TChannel.application_log st)
 
 noextract
 let server_channel_io_frame
   (d:server_driver)
   (ch:IO.channel)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
-  (received:B.bytes)
-  (sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
   exists* st buffered buffered_len.
     SP.server_invariant
       (server_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
     Box.pts_to d.server_driver_channel (Some ch) **
+    server_driver_io_history d wire_received wire_sent **
     server_driver_buffers d buffered buffered_len **
     pure (
       server_driver_wire_logs_match
-        st received sent buffered buffered_len /\
+        st wire_received wire_sent buffered buffered_len /\
+      ST.server_connection_control_not_failed st /\
+      Seq.equal pending buffered /\
+      Seq.equal
+        wire_received
+        (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+      Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
       app_log == TChannel.application_log st)
 
 noextract
 let server_channel_snapshot
   (d:server_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
   exists* st.
     SP.server_snapshot
       (server_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
+    server_driver_io_history_snapshot d wire_received wire_sent **
     pure (app_log == TChannel.application_log st)
 
 noextract
@@ -700,6 +741,7 @@ let server_driver_connected_with_app_out
   exists* ch buffered buffered_len.
     Box.pts_to d.server_driver_channel (Some ch) **
     IO.is_channel ch received sent **
+    server_driver_io_history d received sent **
     server_driver_buffers_with_app_out d buffered buffered_len app_out **
     pure (ST.server_end_to_end_invariant st /\
           server_driver_config_matches_credentials
@@ -762,7 +804,8 @@ let server_driver_closed
     credential_identity **
   server_driver_canonical_progress d st **
   Box.pts_to d.server_driver_channel no_channel **
-  exists* buffered buffered_len.
+  exists* received sent buffered buffered_len.
+    server_driver_io_history d received sent **
     server_driver_buffers d buffered buffered_len **
     pure (ST.server_end_to_end_invariant st)
 

@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
+module CPI = Common.ProtocolImplementation
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -316,6 +317,7 @@ noeq type client_driver = {
   client_driver_initial: Ghost.erased EC.client_initial_state;
   client_driver_auth: O.auth_context;
   client_driver_channel: Box.box (option IO.channel);
+  client_driver_tcp_history: MR.mref CI.io_history_preorder;
   client_driver_buffered_len: Box.box SZ.t;
   client_driver_empty_payload: V.vec U8.t;
   client_driver_raw: V.vec U8.t;
@@ -338,6 +340,7 @@ let client_driver_canonical (d:client_driver) : CP.canonical_client = {
 noeq type driver = {
   driver_client: C.client;
   driver_channel: IO.channel;
+  driver_tcp_history: MR.mref CI.io_history_preorder;
   driver_progress: MR.mref (EC.client_progress_preorder #CTypes.client_local_event);
   driver_initial: Ghost.erased EC.client_initial_state;
 }
@@ -627,14 +630,8 @@ let client_driver_wire_logs_match_witness
   B.length buffered == SZ.v buffered_len /\
   Seq.equal (B.append consumed buffered) received /\
   logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
-  CI.ordered_subsequence st.CS.cs_wire_log.CL.raw_received consumed /\
   (CT.connection_control_not_failed st ==>
-    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed) /\
-  CI.channel_io_history_matches
-    st.CS.cs_wire_log.CL.raw_received
-    st.CS.cs_wire_log.CL.raw_sent
-    received
-    sent
+    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed)
 
 noextract
 let client_driver_wire_logs_match
@@ -702,7 +699,6 @@ ghost fn establish_initial_wire_logs_match
     CT.client_end_to_end_invariant (CS.initial cfg))
 {
   lemma_empty_received_bytes_accounted ();
-  CI.lemma_ordered_subsequence_empty B.empty;
   assert (pure (client_driver_wire_logs_match_witness
     (CS.initial cfg)
     B.empty
@@ -782,7 +778,12 @@ let lemma_client_driver_wire_logs_match_received_accounted
   lemma_logged_received_bytes_accounted_transport st received (Ghost.reveal consumed) buffered
 
 noextract
+let wire_history (received sent:B.bytes) : IO.history =
+  { IO.tcp_received = received; IO.tcp_sent = sent }
+
+noextract
 let channel_open
+  (hist:MR.mref CI.io_history_preorder)
   (ch:IO.channel)
   (st:TLS13.Spec.StateMachine.connection_state)
   (buffered:B.bytes)
@@ -790,7 +791,47 @@ let channel_open
   : slprop =
   exists* received sent.
     IO.is_channel ch received sent **
+    MR.pts_to hist #1.0R (wire_history received sent) **
     pure (client_driver_wire_logs_match st received sent buffered buffered_len)
+
+(** After a physical [IO.read] appends [chunk] to the received history, the
+    monotonic ghost TCP-history tracker advances accordingly. The step is
+    justified because appending only extends the physical receive history. *)
+ghost
+fn tcp_history_note_read
+  (hist:MR.mref CI.io_history_preorder)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (chunk:Ghost.erased B.bytes)
+  requires MR.pts_to hist #1.0R (wire_history received sent)
+  ensures MR.pts_to hist #1.0R (wire_history (Seq.append received chunk) sent)
+{
+  CPI.lemma_bytes_extends_append received chunk;
+  CPI.lemma_bytes_extends_refl sent;
+  CI.lemma_io_history_preorder_of_extends
+    (wire_history received sent)
+    (wire_history (Seq.append received chunk) sent);
+  MR.update hist (wire_history (Seq.append received chunk) sent)
+}
+
+(** After a physical [IO.write] appends [chunk] to the sent history, the
+    monotonic ghost TCP-history tracker advances accordingly. *)
+ghost
+fn tcp_history_note_write
+  (hist:MR.mref CI.io_history_preorder)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (chunk:Ghost.erased B.bytes)
+  requires MR.pts_to hist #1.0R (wire_history received sent)
+  ensures MR.pts_to hist #1.0R (wire_history received (Seq.append sent chunk))
+{
+  CPI.lemma_bytes_extends_refl received;
+  CPI.lemma_bytes_extends_append sent chunk;
+  CI.lemma_io_history_preorder_of_extends
+    (wire_history received sent)
+    (wire_history received (Seq.append sent chunk));
+  MR.update hist (wire_history received (Seq.append sent chunk))
+}
 
 noextract
 let driver_canonical_progress
@@ -819,7 +860,7 @@ let driver_exactly
   : slprop =
   C.connection_exactly d.driver_client st **
   driver_canonical_progress d st **
-  channel_open d.driver_channel st buffered buffered_len
+  channel_open d.driver_tcp_history d.driver_channel st buffered buffered_len
 
 noeq type top_driver = {
   top_driver_core: driver;
@@ -911,6 +952,7 @@ let client_driver_live
   client_driver_canonical_progress d st **
   O.is_auth_context d.client_driver_auth **
   Box.pts_to d.client_driver_channel no_channel **
+  MR.pts_to d.client_driver_tcp_history #1.0R (wire_history B.empty B.empty) **
   client_driver_buffers d B.empty 0sz **
   pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
         st == Ghost.reveal d.client_driver_initial /\
@@ -934,106 +976,120 @@ let client_driver_connected
   exists* ch buffered buffered_len.
     Box.pts_to d.client_driver_channel (Some ch) **
     IO.is_channel ch received sent **
+    MR.pts_to d.client_driver_tcp_history #1.0R (wire_history received sent) **
     client_driver_buffers d buffered buffered_len **
     pure (client_driver_wire_logs_match st received sent buffered buffered_len)
 
 noextract
 let client_channel_terminal
   (d:client_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
-  exists* st transport_received transport_sent ch buffered buffered_len.
+  exists* st ch buffered buffered_len.
     CP.client_invariant
       (client_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
     O.is_auth_context d.client_driver_auth **
     Box.pts_to d.client_driver_channel (Some ch) **
-    IO.is_channel ch transport_received transport_sent **
+    IO.is_channel ch wire_received wire_sent **
+    MR.pts_to d.client_driver_tcp_history #1.0R (wire_history wire_received wire_sent) **
     client_driver_buffers d buffered buffered_len **
     pure (
       client_driver_wire_logs_match
         st
-        transport_received
-        transport_sent
+        wire_received
+        wire_sent
         buffered
         buffered_len /\
       app_log == TChannel.application_log st)
 
 let client_channel_inv
   (d:client_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
-  exists* st transport_received transport_sent ch buffered buffered_len.
+  exists* st ch buffered buffered_len.
     CP.client_invariant
       (client_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
     O.is_auth_context d.client_driver_auth **
     Box.pts_to d.client_driver_channel (Some ch) **
-    IO.is_channel ch transport_received transport_sent **
+    IO.is_channel ch wire_received wire_sent **
+    MR.pts_to d.client_driver_tcp_history #1.0R (wire_history wire_received wire_sent) **
     client_driver_buffers d buffered buffered_len **
     pure (
       client_driver_wire_logs_match
         st
-        transport_received
-        transport_sent
+        wire_received
+        wire_sent
         buffered
         buffered_len /\
-      CI.channel_io_history_matches
-        raw_received
-        raw_sent
-        transport_received
-        transport_sent /\
+      CT.connection_control_not_failed st /\
+      Seq.equal pending buffered /\
+      Seq.equal
+        wire_received
+        (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+      Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
       app_log == TChannel.application_log st)
 
 noextract
 let client_channel_io_frame
   (d:client_driver)
   (ch:IO.channel)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
-  (transport_received:B.bytes)
-  (transport_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
   exists* st buffered buffered_len.
     CP.client_invariant
       (client_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
     O.is_auth_context d.client_driver_auth **
     Box.pts_to d.client_driver_channel (Some ch) **
+    MR.pts_to d.client_driver_tcp_history #1.0R (wire_history wire_received wire_sent) **
     client_driver_buffers d buffered buffered_len **
     pure (
       client_driver_wire_logs_match
         st
-        transport_received
-        transport_sent
+        wire_received
+        wire_sent
         buffered
         buffered_len /\
+      CT.connection_control_not_failed st /\
+      Seq.equal pending buffered /\
+      Seq.equal
+        wire_received
+        (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+      Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
       app_log == TChannel.application_log st)
 
 noextract
 let client_channel_snapshot
   (d:client_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
   exists* st.
     CP.client_snapshot
       (client_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
+    MR.snapshot
+      d.client_driver_tcp_history
+      (wire_history wire_received wire_sent) **
     pure (app_log == TChannel.application_log st)
 
 noextract
@@ -1042,7 +1098,8 @@ let client_driver_closed
   (st:TLS13.Spec.StateMachine.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
-  client_driver_canonical_progress d st
+  client_driver_canonical_progress d st **
+  (exists* h. MR.pts_to d.client_driver_tcp_history #1.0R h)
 
 let lemma_client_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
@@ -1857,139 +1914,6 @@ let lemma_network_bytes_logged_received_accounted
       old_consumed
       raw_received
       (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
-  )
-
-let lemma_network_bytes_logged_received_ordered
-  (st0:CS.connection_state)
-  (st1:CS.connection_state)
-  (buffer_resp:CT.client_buffer_response)
-  (network_input:B.bytes)
-  (old_network_out:B.bytes)
-  (network_out:B.bytes)
-  (old_app_out:B.bytes)
-  (app_out:B.bytes)
-  (old_consumed:B.bytes)
-  : Lemma
-      (requires
-        CT.network_bytes_end_to_end_correct
-          st0 st1 buffer_resp network_input
-          old_network_out network_out old_app_out app_out /\
-        CI.ordered_subsequence
-          st0.CS.cs_wire_log.CL.raw_received
-          old_consumed)
-      (ensures
-        CI.ordered_subsequence
-          st1.CS.cs_wire_log.CL.raw_received
-          (B.append old_consumed
-            (CT.network_consumed_prefix
-              network_input
-              buffer_resp.CT.consumed_len)))
-=
-  let resp = buffer_resp.CT.response in
-  assert (CI.ordered_subsequence
-    st0.CS.cs_wire_log.CL.raw_received
-    old_consumed);
-  assert (CT.network_bytes_step_correct
-    st0 st1 buffer_resp network_input
-    old_network_out network_out old_app_out app_out);
-  if CT.response_stuttered
-       st0 st1 resp old_network_out network_out old_app_out app_out
-  then (
-    assert (st1 == st0);
-    CI.lemma_ordered_subsequence_append_right
-      st0.CS.cs_wire_log.CL.raw_received
-      old_consumed
-      (CT.network_consumed_prefix
-        network_input
-        buffer_resp.CT.consumed_len)
-  ) else (
-    assert (CT.some_legal_response_for_network_prefix
-      st0 st1 resp network_input
-      buffer_resp.CT.consumed_len network_out app_out);
-    let ev =
-      ID.indefinite_description_ghost
-        CS.conn_event
-        (fun ev -> exists raw_sent raw_received.
-          CT.legal_response_for_event
-            st0 st1 resp ev raw_sent raw_received network_out app_out /\
-          CT.raw_received_matches_network_input
-            raw_received
-            (CT.network_consumed_prefix
-              network_input
-              buffer_resp.CT.consumed_len)) in
-    let raw_sent =
-      ID.indefinite_description_ghost
-        B.bytes
-        (fun raw_sent -> exists raw_received.
-          CT.legal_response_for_event
-            st0 st1 resp ev raw_sent raw_received network_out app_out /\
-          CT.raw_received_matches_network_input
-            raw_received
-            (CT.network_consumed_prefix
-              network_input
-              buffer_resp.CT.consumed_len)) in
-    let raw_received =
-      ID.indefinite_description_ghost
-        B.bytes
-        (fun raw_received ->
-          CT.legal_response_for_event
-            st0 st1 resp ev raw_sent raw_received network_out app_out /\
-          CT.raw_received_matches_network_input
-            raw_received
-            (CT.network_consumed_prefix
-              network_input
-              buffer_resp.CT.consumed_len)) in
-    assert (CT.legal_response_for_event
-      st0 st1 resp ev raw_sent raw_received network_out app_out);
-    assert (CT.raw_received_matches_network_input
-      raw_received
-      (CT.network_consumed_prefix
-        network_input
-        buffer_resp.CT.consumed_len));
-    lemma_legal_response_for_event_wire_lengths
-      st0 st1 resp ev raw_sent raw_received network_out app_out;
-    assert (Seq.equal
-      st1.CS.cs_wire_log.CL.raw_received
-      (B.append st0.CS.cs_wire_log.CL.raw_received raw_received));
-    if Seq.equal raw_received B.empty then (
-      Seq.lemma_eq_elim raw_received B.empty;
-      Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received;
-      assert (Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        st0.CS.cs_wire_log.CL.raw_received);
-      Seq.lemma_eq_elim
-        st1.CS.cs_wire_log.CL.raw_received
-        st0.CS.cs_wire_log.CL.raw_received;
-      CI.lemma_ordered_subsequence_append_right
-        st0.CS.cs_wire_log.CL.raw_received
-        old_consumed
-        (CT.network_consumed_prefix
-          network_input
-          buffer_resp.CT.consumed_len);
-      assert (CI.ordered_subsequence
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append old_consumed
-          (CT.network_consumed_prefix
-            network_input
-            buffer_resp.CT.consumed_len)))
-    ) else (
-      Seq.lemma_eq_elim raw_received
-        (CT.network_consumed_prefix
-          network_input
-          buffer_resp.CT.consumed_len);
-      CI.lemma_ordered_subsequence_append_both
-        st0.CS.cs_wire_log.CL.raw_received
-        old_consumed
-        (CT.network_consumed_prefix
-          network_input
-          buffer_resp.CT.consumed_len);
-      assert (CI.ordered_subsequence
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append old_consumed
-          (CT.network_consumed_prefix
-            network_input
-            buffer_resp.CT.consumed_len)))
-    )
   )
 
 let lemma_network_bytes_zero_consumed_raw_received_unchanged
