@@ -190,7 +190,18 @@ vloop-length-test: extract-loops
 	@$(EXTRACT_DIR)/vloop_length_test $(VERIFIED_DIR)/dummy.txt
 
 # Run both framings' verified<->verified interop tests.
-vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test
+vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test vloop-chunk-stream-test
+
+vloop-chunk-stream-test: extract-loops
+	@echo "Building the verified chunked streaming transfer test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_chunk_stream_test \
+	  $(VERIFIED_DIR)/vloop_chunk_stream_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified server send-stream loop  ->  Verified client recv+reassemble loop  (chunked, SOCK_STREAM)"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/vloop_chunk_stream_test $(VERIFIED_DIR)/dummy.txt
 
 vloop-length-exchange-test: extract-loops
 	@echo "Building the verified Content-Length request/response round-trip test ..."
