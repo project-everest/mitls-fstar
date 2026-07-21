@@ -126,3 +126,61 @@ fn http_client_run_length_full
   }
 }
 #pop-options
+
+(* Full Content-Length request/response *round trip* (client side): emit a
+   `GET <target> HTTP/1.1...` request head via the verified codec leaf
+   `http_emit_request`, send it, then receive the response head+body exactly as
+   `http_client_run_length_full` does (parse the head to learn the length, check
+   it against `flen`, read+decode the body).  On success `out` holds the response
+   body and the head/body parse facts hold, mirroring `http_client_run_length_full`. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_client_exchange_length
+  (ch: TCP.channel)
+  (target: array U8.t)
+  (target_len: SZ.t)
+  (reqbuf: array U8.t)
+  (headbuf: array U8.t)
+  (pcode: R.ref U16.t)
+  (plen: R.ref U32.t)
+  (body: array U8.t)
+  (out: array U8.t)
+  (flen: SZ.t)
+  requires
+    TCP.is_channel ch 'received 'sent **
+    pts_to target 't ** pts_to reqbuf 'rq **
+    pts_to headbuf 'hb ** R.pts_to pcode 'c0 ** R.pts_to plen 'l0 **
+    pts_to body 'b ** pts_to out 'o **
+    pure (Seq.length 't == SZ.v target_len /\ W.space_free 't /\
+          SZ.v target_len + 17 < pow2 32 /\
+          Seq.length 'rq == 4 + SZ.v target_len + 13 /\
+          Seq.length 'hb == 43 /\
+          Seq.length 'b == SZ.v flen /\
+          Seq.length 'o == SZ.v flen /\
+          Prims.op_LessThan (SZ.v flen) W.max_len8)
+  returns ok: bool
+  ensures
+    pts_to target 't **
+    (exists* (rcv snt:TCP.bytes) (rq' hb' bb o':Seq.seq U8.t) (cv:U16.t) (lv:U32.t).
+       TCP.is_channel ch rcv snt **
+       pts_to reqbuf rq' ** pts_to headbuf hb' **
+       R.pts_to pcode cv ** R.pts_to plen lv **
+       pts_to body bb ** pts_to out o' **
+       pure (Seq.length o' == SZ.v flen /\
+             (ok == true ==>
+                (Prims.op_LessThanOrEqual 100 (U16.v cv) /\
+                 Prims.op_LessThan (U16.v cv) 1000 /\
+                 Prims.op_LessThan (U32.v lv) W.max_len8 /\
+                 Prims.op_Equality #nat (U32.v lv) (SZ.v flen) /\
+                 http_parse hb' == Some (Msg_response cv (U32.v lv), Seq.empty #U8.t) /\
+                 body_ok o' /\
+                 http_parse o' == Some (Msg_body o', Seq.empty #U8.t)))))
+{
+  Codec.http_emit_request target target_len reqbuf;
+  Codec.lemma_fits32 (Prims.op_Addition 4 (SZ.v target_len));
+  Codec.lemma_fits32 (Prims.op_Addition (Prims.op_Addition 4 (SZ.v target_len)) 13);
+  let rlen = SZ.add (SZ.add 4sz target_len) 13sz;
+  let _nw = TCP.write ch reqbuf rlen;
+  let ok = http_client_run_length_full ch headbuf pcode plen body out flen;
+  ok
+}
+#pop-options

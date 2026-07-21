@@ -22,6 +22,7 @@ module TCP   = Common.TCP
 module U8    = FStar.UInt8
 module U16   = FStar.UInt16
 module U32   = FStar.UInt32
+module R     = Pulse.Lib.Reference
 module W     = HTTP.Wire.Common
 module Codec = HTTP.Impl.Codec.Length
 
@@ -90,5 +91,54 @@ fn http_server_run_length_full
   let nb = TCP.write ch scratch file_len;
   TCP.close ch;
   ()
+}
+#pop-options
+
+(* Full Content-Length request/response *round trip* (server side): read the
+   `reqlen`-byte request head, parse it via the verified codec leaf
+   `http_recv_request` to recover the request target (its length reported in
+   `ptlen`), then send the response head+body exactly as
+   `http_server_run_length_full` does, closing the channel.  On `okr` the received
+   request bytes parse to `Msg_request tk` with `tk` the recovered target slice. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_server_exchange_length
+  (ch: TCP.channel)
+  (reqbuf: array U8.t)
+  (reqlen: SZ.t)
+  (ptlen: R.ref SZ.t)
+  (code: U16.t)
+  (file: array U8.t)
+  (file_len: SZ.t)
+  (headbuf: array U8.t)
+  (scratch: array U8.t)
+  requires
+    TCP.is_channel ch 'received 'sent **
+    pts_to reqbuf 'rq ** R.pts_to ptlen 't0 **
+    pts_to file 'f ** pts_to headbuf 'hb ** pts_to scratch 's **
+    pure (Seq.length 'rq == SZ.v reqlen /\
+          Seq.length 'f == SZ.v file_len /\
+          Seq.length 'hb == 43 /\
+          Seq.length 's == SZ.v file_len /\
+          body_ok 'f /\
+          Prims.op_LessThanOrEqual 100 (U16.v code) /\
+          Prims.op_LessThan (U16.v code) 1000 /\
+          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+  returns okr: bool
+  ensures
+    pts_to file 'f **
+    (exists* (rq' hb' s':Seq.seq U8.t) (tl:SZ.t).
+       pts_to reqbuf rq' ** R.pts_to ptlen tl **
+       pts_to headbuf hb' ** pts_to scratch s' **
+       pure (okr == true ==>
+         (exists (tk:W.token).
+            Seq.length rq' == SZ.v reqlen /\
+            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v reqlen) /\
+            (tk <: Seq.seq U8.t) == Seq.slice rq' 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            http_parse rq' == Some (Msg_request tk, Seq.empty #U8.t))))
+{
+  let _nr = TCP.read_full ch reqbuf reqlen;
+  let okr = Codec.http_recv_request reqbuf reqlen ptlen;
+  http_server_run_length_full ch code file file_len headbuf scratch;
+  okr
 }
 #pop-options
