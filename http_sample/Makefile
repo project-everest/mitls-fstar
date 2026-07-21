@@ -190,7 +190,7 @@ vloop-length-test: extract-loops
 	@$(EXTRACT_DIR)/vloop_length_test $(VERIFIED_DIR)/dummy.txt
 
 # Run both framings' verified<->verified interop tests.
-vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test
+vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test
 
 vloop-length-exchange-test: extract-loops
 	@echo "Building the verified Content-Length request/response round-trip test ..."
@@ -225,6 +225,17 @@ head-emit-test: extract-loops
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/head_emit_test
 
+chunk-stream-test: extract-loops
+	@echo "Building the verified multi-chunk reassembly self-test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/chunk_stream_test \
+	  $(VERIFIED_DIR)/chunk_stream_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified http_emit_chunk/empty  ->  Verified http_decode_chunks reassembly"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/chunk_stream_test
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -243,5 +254,6 @@ help:
 	@echo "  make vloop-length-test - Build + run the verified Content-Length transfer test"
 	@echo "  make vloop-tests   - Run both framings' verified<->verified interop tests"
 	@echo "  make head-emit-test - Build + run the verified head-emitter byte-exact self-test"
+	@echo "  make chunk-stream-test - Build + run the verified multi-chunk reassembly self-test"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  (no 'gen' target: the HTTP wire format is hand-written, not QuackyDucky)"
