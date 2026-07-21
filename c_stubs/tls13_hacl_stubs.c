@@ -5,6 +5,9 @@
 #include <string.h>
 
 #include "Hacl_AEAD_Chacha20Poly1305.h"
+#if TLS13_HACL_HAS_SIMD256
+#include "Hacl_AEAD_Chacha20Poly1305_Simd256.h"
+#endif
 #include "Hacl_Curve25519_51.h"
 #include "Hacl_HKDF.h"
 #include "Hacl_HMAC.h"
@@ -14,6 +17,12 @@
 static bool fits_u32(size_t len) {
   return len <= UINT32_MAX;
 }
+
+#if TLS13_HACL_HAS_SIMD256
+static bool tls13_hacl_has_simd256(void) {
+  return __builtin_cpu_supports("avx2");
+}
+#endif
 
 bool tls13_hacl_random_bytes(uint8_t *out, size_t out_len) {
   if (out_len != 0 && out == NULL) {
@@ -155,15 +164,30 @@ static bool tls13_hacl_chacha20_poly1305_seal(
       !fits_u32(aad_len) || !fits_u32(plaintext_len)) {
     return false;
   }
-  Hacl_AEAD_Chacha20Poly1305_encrypt(
-      ciphertext,
-      tag,
-      (uint8_t *)plaintext,
-      (uint32_t)plaintext_len,
-      (uint8_t *)aad,
-      (uint32_t)aad_len,
-      (uint8_t *)key,
-      (uint8_t *)nonce);
+#if TLS13_HACL_HAS_SIMD256
+  if (tls13_hacl_has_simd256()) {
+    Hacl_AEAD_Chacha20Poly1305_Simd256_encrypt(
+        ciphertext,
+        tag,
+        (uint8_t *)plaintext,
+        (uint32_t)plaintext_len,
+        (uint8_t *)aad,
+        (uint32_t)aad_len,
+        (uint8_t *)key,
+        (uint8_t *)nonce);
+  } else
+#endif
+  {
+    Hacl_AEAD_Chacha20Poly1305_encrypt(
+        ciphertext,
+        tag,
+        (uint8_t *)plaintext,
+        (uint32_t)plaintext_len,
+        (uint8_t *)aad,
+        (uint32_t)aad_len,
+        (uint8_t *)key,
+        (uint8_t *)nonce);
+  }
   return true;
 }
 
@@ -181,15 +205,28 @@ static bool tls13_hacl_chacha20_poly1305_open(
       !fits_u32(aad_len) || !fits_u32(ciphertext_len)) {
     return false;
   }
+#if TLS13_HACL_HAS_SIMD256
+  if (tls13_hacl_has_simd256()) {
+    return Hacl_AEAD_Chacha20Poly1305_Simd256_decrypt(
+               plaintext,
+               (uint8_t *)ciphertext,
+               (uint32_t)ciphertext_len,
+               (uint8_t *)aad,
+               (uint32_t)aad_len,
+               (uint8_t *)key,
+               (uint8_t *)nonce,
+               (uint8_t *)tag) == 0;
+  }
+#endif
   return Hacl_AEAD_Chacha20Poly1305_decrypt(
-             plaintext,
-             (uint8_t *)ciphertext,
-             (uint32_t)ciphertext_len,
-             (uint8_t *)aad,
-             (uint32_t)aad_len,
-             (uint8_t *)key,
-             (uint8_t *)nonce,
-             (uint8_t *)tag) == 0;
+           plaintext,
+           (uint8_t *)ciphertext,
+           (uint32_t)ciphertext_len,
+           (uint8_t *)aad,
+           (uint32_t)aad_len,
+           (uint8_t *)key,
+           (uint8_t *)nonce,
+           (uint8_t *)tag) == 0;
 }
 
 bool tls13_hacl_chacha20_poly1305_seal_combined(

@@ -688,6 +688,36 @@ HACL_WRAPPER_SOURCES = \
   $(HACL_DIR)/Hacl_MAC_Poly1305.c \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
 
+HACL_SIMD256 ?= $(shell \
+  printf '%s\n' '#include <immintrin.h>' \
+    'int main(void) { __m256i x = _mm256_setzero_si256(); return __builtin_cpu_supports("avx2") ? _mm256_extract_epi32(x, 0) : 0; }' | \
+  $(CC) -mavx2 -x c -c -o /dev/null - >/dev/null 2>&1 && echo 1 || echo 0)
+HACL_SIMD256_CFLAGS = -mavx2 -DHACL_CAN_COMPILE_VEC256=1
+HACL_SIMD256_SOURCES = \
+  $(HACL_DIR)/Hacl_Chacha20_Vec256.c \
+  $(HACL_DIR)/Hacl_MAC_Poly1305_Simd256.c \
+  $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305_Simd256.c
+HACL_SIMD256_MODULES = \
+  Hacl_Chacha20_Vec256 \
+  Hacl_MAC_Poly1305_Simd256 \
+  Hacl_AEAD_Chacha20Poly1305_Simd256
+HACL_SIMD256_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_obj
+HACL_SIMD256_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_benchmark_obj
+HACL_SIMD256_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_profile_obj
+
+ifeq ($(HACL_SIMD256),1)
+HACL_SIMD256_TEST_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_TEST_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+HACL_SIMD256_BENCHMARK_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_BENCHMARK_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+HACL_SIMD256_PROFILE_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_PROFILE_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+else
+HACL_SIMD256_TEST_OBJECTS =
+HACL_SIMD256_BENCHMARK_OBJECTS =
+HACL_SIMD256_PROFILE_OBJECTS =
+endif
+
 ECHO_STUB_SOURCES = \
   c_stubs/common_tcp_karamel.c \
   c_stubs/common_tcp_stubs.c \
@@ -708,6 +738,7 @@ ECHO_STUB_HEADERS = \
 # Common C flags for all test builds
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -ffunction-sections -fdata-sections \
+  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
   -I c_stubs \
   -I runtime \
   -I $(KRML_HOME)/include \
@@ -718,6 +749,20 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -I $(HACL_KL)
 
 LDFLAGS_COMMON = -Wl,--gc-sections
+
+$(HACL_SIMD256_TEST_OBJ_DIR) \
+$(HACL_SIMD256_BENCHMARK_OBJ_DIR) \
+$(HACL_SIMD256_PROFILE_OBJ_DIR):
+	mkdir -p $@
+
+$(HACL_SIMD256_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_TEST_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_SIMD256_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_BENCHMARK_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_SIMD256_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_PROFILE_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
 
 # Benchmark builds keep symbols and frame pointers for profiling while using
 # production optimization. Override these variables to compare compiler flags.
@@ -756,6 +801,7 @@ define link_benchmark
 	$(CC) $(CFLAGS_COMMON) $(1) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(2)/*.o \
+	  $(4) \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
@@ -772,15 +818,17 @@ endef
 $(BENCHMARK_BINARY): test/perf/tls13_bench.c $(BENCHMARK_OBJ_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
-	$(call link_benchmark,$(BENCHMARK_CFLAGS),$(BENCHMARK_OBJ_DIR),$@)
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_SIMD256_BENCHMARK_OBJECTS) | check-deps
+	$(call link_benchmark,$(BENCHMARK_CFLAGS),$(BENCHMARK_OBJ_DIR),$@,$(HACL_SIMD256_BENCHMARK_OBJECTS))
 
 $(BENCHMARK_PROFILE_BINARY): test/perf/tls13_bench.c \
   $(BENCHMARK_PROFILE_OBJ_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
-	$(call link_benchmark,$(BENCHMARK_PROFILE_CFLAGS),$(BENCHMARK_PROFILE_OBJ_DIR),$@)
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_SIMD256_PROFILE_OBJECTS) | check-deps
+	$(call link_benchmark,$(BENCHMARK_PROFILE_CFLAGS),$(BENCHMARK_PROFILE_OBJ_DIR),$@,$(HACL_SIMD256_PROFILE_OBJECTS))
 
 benchmark-build: $(BENCHMARK_BINARY) test/certs/ca.pem test/certs/chain.pem \
   test/certs/leaf.der test/certs/leaf.key
@@ -815,6 +863,7 @@ test: verify check-c-stubs test-openssl-echo test-openssl-sclient
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: | check-deps
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
+	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
 	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \
 	  -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
@@ -833,10 +882,12 @@ test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: 
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_SIMD256_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_SIMD256_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/common_tcp_karamel.c \
@@ -882,10 +933,12 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 test/test_extracted_server_openssl_client: \
   test/unit/test_extracted_server_openssl_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_SIMD256_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_SIMD256_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \

@@ -131,6 +131,17 @@ def main():
     server_handshake = summarize_functions(
         profiles["verified-server-handshake"]
     )
+    simd256 = any(
+        "double_round_256" in entry["name"]
+        for entries in profiles.values()
+        for entry in entries
+    )
+    crypto_backend = (
+        "The verified build selected HACL*'s AVX2 SIMD256 backend, with a "
+        "runtime-dispatched scalar fallback."
+        if simd256
+        else "The verified build selected portable scalar HACL*."
+    )
     lines.extend(
         [
             "",
@@ -139,13 +150,13 @@ def main():
             "1. **Application-data crypto:** ChaCha20 `double_round` and "
             f"Poly1305 account for {client_send_crypto:.1f}% of client-send "
             f"and {server_send_crypto:.1f}% of server-send self CPU with "
-            f"{message_size}-byte records. The verified build uses portable "
-            "scalar HACL* while OpenSSL uses architecture-optimized code.",
+            f"{message_size}-byte records. {crypto_backend}",
             "2. **Receive copies and compaction:** plaintext copying plus "
             f"buffer compaction account for {client_receive_copy:.1f}% of "
             f"client-receive and {server_receive_copy:.1f}% of server-receive "
-            "self CPU. Avoiding a plaintext copy and suffix compaction are the "
-            "highest-value non-crypto optimizations in this run.",
+            "self CPU. Direct caller output, ciphertext-view parsing, and "
+            "`memmove` compaction have moved these costs below gprof's sampling "
+            "resolution; a persistent sliding window is not justified by this run.",
             f"3. **Client-handshake leaders:** {client_handshake}.",
             f"4. **Server-handshake leaders:** {server_handshake}. The public "
             "server API also reparses credentials and recreates its listener "

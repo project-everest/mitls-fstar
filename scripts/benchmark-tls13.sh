@@ -25,6 +25,7 @@ make -j"$(nproc)" --no-print-directory benchmark-build
   echo "openssl=$(openssl version)"
   echo "kernel=$(uname -srmo)"
   echo "benchmark_cflags=${BENCHMARK_CFLAGS:--O3 -DNDEBUG -g -fno-omit-frame-pointer}"
+  echo "hacl_simd256=${HACL_SIMD256:-auto-runtime-dispatch}"
   lscpu | grep -E '^(Architecture|CPU\(s\)|Model name|Thread|Core|Socket|CPU max MHz|L1d cache|L1i cache|L2 cache|L3 cache):'
   size "$binary"
 } >"$output_dir/system.txt"

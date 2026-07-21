@@ -5,6 +5,11 @@ OpenSSL/OpenSSL baseline. All cases use TLS 1.3,
 `TLS_CHACHA20_POLY1305_SHA256`, X25519, RSA-PSS/SHA-256 authentication, the
 same generated certificate, disabled session resumption, and loopback TCP.
 
+On x86 builds where the compiler accepts AVX2, the harness links HACL*'s
+verified SIMD256 ChaCha20-Poly1305 implementation and selects it at runtime on
+AVX2-capable CPUs. Other CPUs use the scalar HACL* implementation. Set
+`HACL_SIMD256=0` when invoking Make to build only the scalar fallback.
+
 ```sh
 make -j"$(nproc)" benchmark-build
 test/perf/tls13_bench --case verified-client-handshake \

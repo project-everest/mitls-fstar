@@ -20,6 +20,7 @@ make -j"$(nproc)" --no-print-directory benchmark-profile-build
   echo "git_dirty=$(test -n "$(git status --short)" && echo yes || echo no)"
   echo "compiler=$(${CC:-cc} --version | head -1)"
   echo "profile_cflags=${BENCHMARK_PROFILE_CFLAGS:--O2 -DNDEBUG -g -pg -fno-omit-frame-pointer}"
+  echo "hacl_simd256=${HACL_SIMD256:-auto-runtime-dispatch}"
   echo "handshakes=$handshakes"
   echo "transfer_bytes=$transfer_bytes"
   echo "message_size=$message_size"
