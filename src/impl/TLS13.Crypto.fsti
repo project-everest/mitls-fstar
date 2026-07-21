@@ -236,33 +236,3 @@ fn chacha20_poly1305_open
                          out_bytes == Some?.v (C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes)) /\
                 (not ok ==> C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes == None /\
                             out_bytes == 'old))
-
-fn move_suffix_to_front
-  (raw: array U8.t)
-  (raw_capacity: SZ.t)
-  (buffered_len: SZ.t)
-  (consumed_len: SZ.t)
-  requires pts_to raw 'raw_bytes **
-           pure (B.length 'raw_bytes == SZ.v raw_capacity /\
-                 SZ.v consumed_len <= SZ.v buffered_len /\
-                 SZ.v buffered_len <= SZ.v raw_capacity)
-  returns new_len: SZ.t
-  ensures exists* raw_after.
-          pts_to raw raw_after **
-          pure (B.length raw_after == SZ.v raw_capacity /\
-                B.length (Ghost.reveal 'raw_bytes) == SZ.v raw_capacity /\
-                SZ.fits (SZ.v raw_capacity) /\
-                SZ.fits (SZ.v buffered_len) /\
-                SZ.fits (SZ.v new_len) /\
-                0 <= SZ.v new_len /\
-                SZ.v consumed_len <= SZ.v buffered_len /\
-                SZ.v buffered_len <= SZ.v raw_capacity /\
-                SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len /\
-                SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
-                SZ.v new_len <= SZ.v buffered_len /\
-                Seq.equal
-                  (Seq.slice raw_after 0 (SZ.v new_len))
-                  (Seq.slice
-                    (Ghost.reveal 'raw_bytes)
-                    (SZ.v consumed_len)
-                    (SZ.v buffered_len)))

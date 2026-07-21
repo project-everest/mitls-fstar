@@ -14,7 +14,7 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
-module Crypto = TLS13.Crypto
+module Memmove = TLS13.Lib.Memmove
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
@@ -914,8 +914,8 @@ fn compact_buffer_suffix
                      (SZ.v consumed_len)
                      (SZ.v buffered_len)))
 {
-  let new_len =
-    Crypto.move_suffix_to_front raw raw_capacity buffered_len consumed_len;
+  let new_len = SZ.sub buffered_len consumed_len;
+  Memmove.memmove raw 0sz consumed_len new_len;
   assert (pure (new_len == pending_after_consumed buffered_len consumed_len));
   new_len
 }
