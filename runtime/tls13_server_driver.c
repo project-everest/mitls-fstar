@@ -125,6 +125,7 @@ int tls13_server_driver_accept(
     } else {
       driver->state = TLS13_SERVER_DRIVER_CLOSED;
     }
+    TLS13_Impl_Server_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
   }
@@ -244,5 +245,6 @@ void tls13_server_driver_free(tls13_server_driver *driver) {
   if (driver->state == TLS13_SERVER_DRIVER_READY) {
     (void)tls13_server_driver_close(driver, false);
   }
+  TLS13_Impl_Server_Driver_free(driver->verified_driver);
   free(driver);
 }

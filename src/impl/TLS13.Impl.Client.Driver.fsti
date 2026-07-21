@@ -34,6 +34,14 @@ noextract
 let client_driver_closed = DS.client_driver_closed
 
 noextract
+let client_driver_released
+  (d:client_driver)
+  (st:CS.connection_state)
+  : slprop =
+  CR.connection_released d.DS.client_driver_client st **
+  DS.client_driver_canonical_progress d st
+
+noextract
 let client_driver_application_ready = DS.client_driver_application_ready
 
 noextract
@@ -271,6 +279,10 @@ fn abort
     (Ghost.reveal raw_sent)
     (Ghost.reveal app_log)
   ensures exists* st. client_driver_closed d st
+
+fn free (d:client_driver)
+  requires client_driver_closed d 'st
+  ensures client_driver_released d 'st
 
 noextract
 val client_channel_implementation

@@ -72,6 +72,14 @@ noextract
 let server_driver_connected = DS.server_driver_connected
 noextract
 let server_driver_closed = DS.server_driver_closed
+noextract
+let server_driver_released
+  (d:server_driver)
+  (st:CS.connection_state)
+  : slprop =
+  CR.connection_released d.DS.server_driver_server st **
+  DS.server_driver_canonical_progress d st
+
 let lemma_server_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
   (received:B.bytes)
@@ -1306,8 +1314,12 @@ let lemma_driver_receive_application_log
         (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
         (ST.response_app_out resp app_out));
       if B.length (ST.response_app_out resp app_out) = 0 then (
+        assert (SZ.v result.server_receive_len <= B.length out_bytes);
         Seq.lemma_len_slice
           out_bytes 0 (SZ.v result.server_receive_len);
+        assert (B.length
+          (Seq.slice out_bytes 0 (SZ.v result.server_receive_len)) ==
+          SZ.v result.server_receive_len);
         Seq.lemma_eq_elim
           (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
           (ST.response_app_out resp app_out);
@@ -2712,6 +2724,43 @@ fn abort
     assert (server_driver_connected
       d st certificate_chain credential_identity received sent);
   abort_connected d
+}
+
+inline_for_extraction
+fn free_server_driver_buffers
+  (d:server_driver)
+  requires exists* buffered buffered_len.
+    DS.server_driver_buffers d buffered buffered_len
+  ensures emp
+{
+  with buffered buffered_len.
+    unfold (DS.server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out local_app_out. _;
+  V.free d.DS.server_driver_empty_payload;
+  V.free d.DS.server_driver_raw;
+  V.free d.DS.server_driver_network_out;
+  V.free d.DS.server_driver_material_payload;
+  V.free d.DS.server_driver_certificate_verify_input;
+  V.free d.DS.server_driver_signature;
+  V.free d.DS.server_driver_app_out;
+  V.free d.DS.server_driver_local_app_out;
+  Box.free d.DS.server_driver_buffered_len;
+}
+
+fn free
+  (d:server_driver)
+  requires server_driver_closed d 'st 'certificate_chain 'credential_identity
+  ensures server_driver_released d 'st
+{
+  unfold (server_driver_closed d 'st 'certificate_chain 'credential_identity);
+  with buffered buffered_len. _;
+  rewrite (S.connection_exactly d.DS.server_driver_server 'st)
+    as (CR.connection_exactly d.DS.server_driver_server 'st);
+  CR.free_connection d.DS.server_driver_server;
+  O.server_credentials_free d.DS.server_driver_credentials;
+  Box.free d.DS.server_driver_channel;
+  free_server_driver_buffers d;
+  fold (server_driver_released d 'st);
 }
 
 noextract

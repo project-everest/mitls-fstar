@@ -72,6 +72,12 @@ val server_driver_closed
   (credential_identity:CS.server_credential_identity)
   : slprop
 
+noextract
+val server_driver_released
+  (d:server_driver)
+  (st:CS.connection_state)
+  : slprop
+
 type server_workflow_status =
   | ServerWorkflowOk
   | ServerWorkflowNeedMoreInput
@@ -607,6 +613,11 @@ fn abort
              (Ghost.reveal app_log)
   ensures exists* st certificate_chain credential_identity.
           server_driver_closed d st certificate_chain credential_identity
+
+fn free
+  (d:server_driver)
+  requires server_driver_closed d 'st 'certificate_chain 'credential_identity
+  ensures server_driver_released d 'st
 
 noextract
 val server_channel_implementation

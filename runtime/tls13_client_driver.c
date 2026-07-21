@@ -123,6 +123,7 @@ int tls13_client_driver_connect(
           TLS13_DRIVER_WORKFLOW_FUEL);
   if (status != TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
     (void)driver_fail_status(driver, "connect", status);
+    TLS13_Impl_Client_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
   }
@@ -268,5 +269,6 @@ void tls13_client_driver_free(tls13_client_driver *driver) {
   if (driver->connected) {
     abort_connected_driver(driver);
   }
+  TLS13_Impl_Client_Driver_free(driver->verified_driver);
   free(driver);
 }

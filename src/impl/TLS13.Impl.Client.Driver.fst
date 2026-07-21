@@ -391,6 +391,19 @@ fn abort
   DClose.abort d
 }
 
+fn free (d:client_driver)
+  requires DS.client_driver_closed d 'st
+  ensures client_driver_released d 'st
+{
+  unfold (DS.client_driver_closed d 'st);
+  rewrite (TLS13.Impl.Client.connection_exactly
+    d.DS.client_driver_client
+    'st)
+    as (CR.connection_exactly d.DS.client_driver_client 'st);
+  CR.free_connection d.DS.client_driver_client;
+  fold (client_driver_released d 'st);
+}
+
 noextract
 let client_channel_implementation
   : CI.channel_implementation
