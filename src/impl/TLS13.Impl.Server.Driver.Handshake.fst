@@ -36,6 +36,36 @@ module SS = TLS13.Impl.Server.Send
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
 open TLS13.Impl.Server.Driver.State
+
+let lemma_client_hello_received_selection_present
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        st.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsClientHelloReceived)
+      (ensures server_driver_selection_present_when_required st)
+=
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking stage ->
+    match stage with
+    | CS.HsClientHelloReceived -> ()
+    | _ -> assert False
+
+let lemma_client_hello_received_not_failed
+    (st:CS.connection_state)
+    : Lemma
+        (requires
+          st.CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsClientHelloReceived)
+        (ensures ST.server_connection_control_not_failed st)
+=
+    match st.CS.cs_model.CS.model_control with
+    | CS.ControlHandshaking stage ->
+      match stage with
+      | CS.HsClientHelloReceived -> ()
+      | _ -> assert False
+    | _ -> assert False
+  | _ -> assert False
 open TLS13.Impl.Server.Driver.Transport
 open TLS13.Impl.Server.Driver.Network
 open TLS13.Impl.Server.Driver.Local
@@ -533,6 +563,16 @@ fn select_default_server_parameters_once
   assert (pure (Seq.equal
     server_private_key_bytes
     (CL.raw_slice material_bytes 32 64)));
+  Seq.lemma_eq_elim
+    server_random_bytes
+    (CL.raw_slice material_bytes 0 32);
+  Seq.lemma_eq_elim
+    server_private_key_bytes
+    (CL.raw_slice material_bytes 32 64);
+  Seq.lemma_len_slice material_bytes 0 32;
+  Seq.lemma_len_slice material_bytes 32 64;
+  assert (pure (B.length (CL.raw_slice material_bytes 0 32) == 32));
+  assert (pure (B.length (CL.raw_slice material_bytes 32 64) == 32));
   assert (pure (CR.server_selection_absent
     'st0.CS.cs_model.CS.model_handshake));
   assert (pure (
@@ -558,9 +598,33 @@ fn select_default_server_parameters_once
     CS.server_selected_credential =
       (Ghost.reveal server_cfg).CS.server_credential_identity;
   };
+  assert (pure (
+    (Ghost.reveal selection).CS.server_selected_signature_scheme ==
+      T.Rsa_pss_rsae_sha256));
+  assert (pure (
+    (Ghost.reveal selection).CS.server_selected_credential ==
+      'credential_identity));
   assert (pure (CM.can_select_server_parameters
     'st0
     (Ghost.reveal selection)));
+  assert (pure (CM.can_select_server_parameters
+    'st0
+    {
+      CS.server_selected_client_hello =
+        Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello;
+      CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      CS.server_selected_group = T.X25519;
+      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+      CS.server_random = CL.raw_slice material_bytes 0 32;
+      CS.server_key_share_private =
+        Some (CL.raw_slice material_bytes 32 64);
+      CS.server_key_share_public =
+        CryptoSpec.x25519_public_from_private
+          (CL.raw_slice material_bytes 32 64);
+      CS.server_selected_credential =
+        (Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server).
+          CS.server_credential_identity;
+    }));
 
   let resp =
     S.process_select_default_server_parameters_with_derived_public_from_private_array
@@ -592,6 +656,18 @@ fn select_default_server_parameters_once
     d 'st0 st1;
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
+  Ghost.reveal_hide {
+    CS.server_selected_client_hello = Ghost.reveal selected_ch;
+    CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    CS.server_selected_group = T.X25519;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+    CS.server_random = server_random_bytes;
+    CS.server_key_share_private = Some server_private_key_bytes;
+    CS.server_key_share_public =
+      CryptoSpec.x25519_public_from_private server_private_key_bytes;
+    CS.server_selected_credential =
+      (Ghost.reveal server_cfg).CS.server_credential_identity;
+  };
   assert (pure (st1.CS.cs_model.CS.model_control ==
     CS.ControlHandshaking CS.HsClientHelloReceived));
   assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
@@ -631,22 +707,50 @@ fn select_default_server_parameters_once
   assert (pure (Seq.equal
     server_private_key_bytes
     (CL.raw_slice material_bytes 32 64)));
-  Seq.lemma_eq_elim
-    server_private_key_bytes
-    (CL.raw_slice material_bytes 32 64);
-  assert (pure (
-    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
-      CL.raw_slice material_bytes 32 64));
   assert (pure (ST.server_end_to_end_invariant st1));
 
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_sent;
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_received;
+  assert (pure ('st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived));
+  lemma_client_hello_received_not_failed 'st0;
+  lemma_client_hello_received_not_failed st1;
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received));
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    'st0.CS.cs_wire_log.CL.raw_sent));
+  lemma_server_driver_wire_logs_match_nonfailed_stutter
+    'st0
+    st1
+    'received
+    'sent
+    buffered
+    buffered_len;
   assert (pure (server_driver_wire_logs_match
     st1
     'received
     'sent
     buffered
     buffered_len));
+  assert (pure (server_driver_config_matches_credentials
+    st1
+    'certificate_chain
+    'credential_identity));
+  assert (pure (CS.signature_scheme_offered
+    st1.CS.cs_model.CS.model_config.CS.config_signature_schemes
+    T.Rsa_pss_rsae_sha256));
+  lemma_client_hello_received_selection_present st1;
+  assert (pure (
+    (Ghost.reveal selection).CS.server_selected_signature_scheme ==
+      T.Rsa_pss_rsae_sha256));
+  assert (pure (
+    (Ghost.reveal selection).CS.server_selected_credential ==
+      'credential_identity));
+  assert (pure (server_driver_supported_profile_selection
+    st1
+    'credential_identity));
 
   V.to_vec_pts_to d.server_driver_material_payload;
   V.to_vec_pts_to d.server_driver_network_out;
@@ -806,6 +910,18 @@ fn select_default_server_parameters_from_payload_once
     d 'st0 st1;
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
+  Ghost.reveal_hide {
+    CS.server_selected_client_hello = Ghost.reveal selected_ch;
+    CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    CS.server_selected_group = T.X25519;
+    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+    CS.server_random = server_random_bytes;
+    CS.server_key_share_private = Some server_private_key_bytes;
+    CS.server_key_share_public =
+      CryptoSpec.x25519_public_from_private server_private_key_bytes;
+    CS.server_selected_credential =
+      (Ghost.reveal server_cfg).CS.server_credential_identity;
+  };
   assert (pure (st1.CS.cs_model.CS.model_control ==
     CS.ControlHandshaking CS.HsClientHelloReceived));
   assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
@@ -868,6 +984,23 @@ fn select_default_server_parameters_from_payload_once
 
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_sent;
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_received;
+  assert (pure ('st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived));
+  lemma_client_hello_received_not_failed 'st0;
+  lemma_client_hello_received_not_failed st1;
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received));
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    'st0.CS.cs_wire_log.CL.raw_sent));
+  lemma_server_driver_wire_logs_match_nonfailed_stutter
+    'st0
+    st1
+    'received
+    'sent
+    buffered
+    buffered_len;
   assert (pure (server_driver_wire_logs_match
     st1
     'received
@@ -1050,16 +1183,12 @@ fn derive_shared_secret_from_payload_once
      else B.empty)
     (ST.response_network_out resp network_out_bytes)));
   let old_consumed =
-    Ghost.hide (ID.indefinite_description_ghost
-      B.bytes
-      (fun consumed ->
-        server_driver_wire_logs_match_witness
-          'st0
-          (Ghost.reveal 'received)
-          (Ghost.reveal 'sent)
-          consumed
-          buffered
-          buffered_len));
+    choose_server_driver_wire_logs_consumed
+      'st0
+      (Ghost.reveal 'received)
+      (Ghost.reveal 'sent)
+      buffered
+      buffered_len;
   assert (pure (server_driver_wire_logs_match_witness
     'st0
     (Ghost.reveal 'received)
@@ -1779,16 +1908,12 @@ fn send_server_hello_from_payload_once
     else B.empty)
    (ST.response_network_out resp network_out_bytes)));
  let old_consumed =
-   Ghost.hide (ID.indefinite_description_ghost
-     B.bytes
-     (fun consumed ->
-       server_driver_wire_logs_match_witness
-         'st0
-         (Ghost.reveal 'received)
-         (Ghost.reveal 'sent)
-         consumed
-         buffered
-         buffered_len));
+   choose_server_driver_wire_logs_consumed
+     'st0
+     (Ghost.reveal 'received)
+     (Ghost.reveal 'sent)
+     buffered
+     buffered_len;
  assert (pure (server_driver_wire_logs_match_witness
    'st0
    (Ghost.reveal 'received)

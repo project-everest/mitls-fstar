@@ -184,8 +184,14 @@ let server_driver_wire_logs_match_witness
   B.length buffered == SZ.v buffered_len /\
   Seq.equal (B.append consumed buffered) received /\
   logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
+  CI.ordered_subsequence st.CS.cs_wire_log.CL.raw_received consumed /\
   (ST.server_connection_control_not_failed st ==>
-    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed)
+    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed) /\
+  CI.channel_io_history_matches
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    received
+    sent
 
 noextract
 let server_driver_wire_logs_match
@@ -204,6 +210,25 @@ let server_driver_wire_logs_match
       consumed
       buffered
       buffered_len
+
+val choose_server_driver_wire_logs_consumed
+  : st:CS.connection_state ->
+    received:B.bytes ->
+    sent:B.bytes ->
+    buffered:B.bytes ->
+    buffered_len:SZ.t ->
+    Ghost (Ghost.erased B.bytes)
+      (requires
+        server_driver_wire_logs_match
+          st received sent buffered buffered_len)
+      (ensures fun consumed ->
+        server_driver_wire_logs_match_witness
+          st
+          received
+          sent
+          (Ghost.reveal consumed)
+          buffered
+          buffered_len)
 
 val lemma_logged_received_bytes_accounted_transport
   (st:CS.connection_state)
@@ -233,6 +258,54 @@ val lemma_server_driver_wire_logs_match_received_accounted
         (forall b.
           SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
           SeqP.count b received))
+
+val lemma_server_driver_wire_logs_match_io_history
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires server_driver_wire_logs_match st received sent buffered buffered_len)
+      (ensures
+        CI.channel_io_history_matches
+          st.CS.cs_wire_log.CL.raw_received
+          st.CS.cs_wire_log.CL.raw_sent
+          received
+          sent)
+
+val lemma_server_driver_wire_logs_match_nonfailed_stutter
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        server_driver_wire_logs_match
+          st0 received sent buffered buffered_len /\
+        ST.server_connection_control_not_failed st0 /\
+        ST.server_connection_control_not_failed st1 /\
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          st0.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_sent
+          st0.CS.cs_wire_log.CL.raw_sent)
+      (ensures
+        server_driver_wire_logs_match
+          st1 received sent buffered buffered_len)
+
+val lemma_initial_wire_logs_match
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        Seq.equal st.CS.cs_wire_log.CL.raw_received B.empty /\
+        Seq.equal st.CS.cs_wire_log.CL.raw_sent B.empty)
+      (ensures
+        server_driver_wire_logs_match
+          st B.empty B.empty B.empty 0sz)
 
 val lemma_server_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
@@ -314,6 +387,14 @@ let server_driver_supported_profile_selection
      selection.CS.server_selected_credential == credential_identity
    | None ->
      True)
+
+val lemma_supported_profile_selection_driver
+  (st:CS.connection_state)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires SP.server_supported_profile_selection st credential_identity)
+      (ensures
+        server_driver_supported_profile_selection st credential_identity)
 
 noextract
 let server_driver_buffers
@@ -452,6 +533,36 @@ let server_driver_connected
           server_driver_supported_profile_selection st credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
 
+ghost fn expose_server_driver_io_history
+  (d:server_driver)
+  (st:Ghost.erased CS.connection_state)
+  (certificate_chain:Ghost.erased B.bytes)
+  (credential_identity:Ghost.erased CS.server_credential_identity)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  requires
+    server_driver_connected
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal certificate_chain)
+      (Ghost.reveal credential_identity)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+  ensures
+    server_driver_connected
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal certificate_chain)
+      (Ghost.reveal credential_identity)
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    pure (
+      CI.channel_io_history_matches
+        (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+        (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
+        (Ghost.reveal received)
+        (Ghost.reveal sent))
+
 let server_channel_inv
   (d:server_driver)
   (raw_received:B.bytes)
@@ -466,6 +577,34 @@ let server_channel_inv
       st **
     Box.pts_to d.server_driver_channel (Some ch) **
     IO.is_channel ch received sent **
+    server_driver_buffers d buffered buffered_len **
+    pure (
+      server_driver_wire_logs_match
+        st received sent buffered buffered_len /\
+      CI.channel_io_history_matches
+        raw_received
+        raw_sent
+        received
+        sent /\
+      app_log == TChannel.application_log st)
+
+noextract
+let server_channel_io_frame
+  (d:server_driver)
+  (ch:IO.channel)
+  (raw_received:B.bytes)
+  (raw_sent:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st buffered buffered_len.
+    SP.server_invariant
+      (server_driver_canonical d)
+      raw_received
+      raw_sent
+      st **
+    Box.pts_to d.server_driver_channel (Some ch) **
     server_driver_buffers d buffered buffered_len **
     pure (
       server_driver_wire_logs_match

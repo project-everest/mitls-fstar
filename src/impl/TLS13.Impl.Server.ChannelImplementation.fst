@@ -159,9 +159,120 @@ ghost fn open_channel_invariant
     st
     certificate_chain
     credential_identity;
+  DS.lemma_supported_profile_selection_driver st credential_identity;
   fold (DS.server_driver_canonical_progress d st);
+  assert (pure (ST.server_end_to_end_invariant st));
+  assert (pure (DS.server_driver_config_matches_credentials
+    st certificate_chain credential_identity));
+  assert (pure (DS.server_driver_supported_profile_selection
+    st credential_identity));
   fold (DS.server_driver_connected
     d st certificate_chain credential_identity received sent)
+}
+
+ghost fn open_io_channel
+  (d:DS.server_driver)
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.server_channel_inv
+      d
+      (Ghost.reveal raw_received)
+      (Ghost.reveal raw_sent)
+      (Ghost.reveal app_log)
+  returns ch:Common.TCP.channel
+  ensures
+    exists* received sent.
+      Common.TCP.is_channel ch received sent **
+      DS.server_channel_io_frame
+        d
+        ch
+        (Ghost.reveal raw_received)
+        (Ghost.reveal raw_sent)
+        received
+        sent
+        (Ghost.reveal app_log) **
+      pure (
+        CI.channel_io_history_matches
+          (Ghost.reveal raw_received)
+          (Ghost.reveal raw_sent)
+          received
+          sent)
+{
+  unfold (DS.server_channel_inv
+    d
+    (Ghost.reveal raw_received)
+    (Ghost.reveal raw_sent)
+    (Ghost.reveal app_log));
+  with st received sent ch buffered buffered_len.
+    assert (
+      Common.TCP.is_channel ch received sent **
+      pure (
+        CI.channel_io_history_matches
+          (Ghost.reveal raw_received)
+          (Ghost.reveal raw_sent)
+          received
+          sent));
+  fold (DS.server_channel_io_frame
+    d
+    ch
+    (Ghost.reveal raw_received)
+    (Ghost.reveal raw_sent)
+    received
+    sent
+    (Ghost.reveal app_log));
+  ch
+}
+
+ghost fn close_io_channel
+  (d:DS.server_driver)
+  (ch:Common.TCP.channel)
+  (raw_received:Ghost.erased B.bytes)
+  (raw_sent:Ghost.erased B.bytes)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    Common.TCP.is_channel
+      ch
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    DS.server_channel_io_frame
+      d
+      ch
+      (Ghost.reveal raw_received)
+      (Ghost.reveal raw_sent)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Ghost.reveal app_log) **
+    pure (
+      CI.channel_io_history_matches
+        (Ghost.reveal raw_received)
+        (Ghost.reveal raw_sent)
+        (Ghost.reveal received)
+        (Ghost.reveal sent))
+  ensures
+    DS.server_channel_inv
+      d
+      (Ghost.reveal raw_received)
+      (Ghost.reveal raw_sent)
+      (Ghost.reveal app_log)
+{
+  unfold (DS.server_channel_io_frame
+    d
+    ch
+    (Ghost.reveal raw_received)
+    (Ghost.reveal raw_sent)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal app_log));
+  with st buffered buffered_len. _;
+  fold (DS.server_channel_inv
+    d
+    (Ghost.reveal raw_received)
+    (Ghost.reveal raw_sent)
+    (Ghost.reveal app_log))
 }
 
 ghost fn pack_connected_channel_invariant
@@ -186,6 +297,8 @@ ghost fn pack_connected_channel_invariant
       (Ghost.reveal st).CS.cs_wire_log.TLS13.ConnectionLog.raw_sent
       (TChannel.application_log (Ghost.reveal st))
 {
+  DS.expose_server_driver_io_history
+    d st certificate_chain credential_identity received sent;
   unfold (DS.server_driver_connected
     d
     (Ghost.reveal st)

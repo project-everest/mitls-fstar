@@ -18,6 +18,7 @@ module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CTypes = TLS13.Impl.CanonicalTypes
+module CI = Common.ChannelImplementation
 module EC = TLS13.Spec.Endpoint.Client
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
@@ -111,21 +112,18 @@ fn driver_connect
           (Ghost.reveal 'server_name_bytes)
           (Ghost.reveal 'trust_anchors_bytes)
           validation_time_seconds));
-    assert (pure (client_driver_wire_logs_match
-      (CR.configured_initial_state
+    establish_initial_wire_logs_match
+      (CR.configured_connection_config
         (Ghost.reveal 'server_name_bytes)
         (Ghost.reveal 'trust_anchors_bytes)
-        validation_time_seconds)
-      B.empty
-      B.empty
-      B.empty
-      0sz));
+        validation_time_seconds);
     let initial : Ghost.erased EC.client_initial_state =
       Ghost.hide
-        (CR.configured_initial_state
-          (Ghost.reveal 'server_name_bytes)
-          (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds);
+        (CS.initial
+          (CR.configured_connection_config
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds));
     assert (pure (Ghost.reveal initial ==
       CR.configured_initial_state
         (Ghost.reveal 'server_name_bytes)
@@ -526,23 +524,12 @@ fn process_local_event_and_write_once
     assert (IO.is_channel ch received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len)));
   let old_consumed =
-    Ghost.hide (ID.indefinite_description_ghost
-      B.bytes
-      (fun consumed ->
-        client_driver_wire_logs_match_witness
-          'st0
-          received
-          sent
-          consumed
-          (Ghost.reveal 'buffered)
-          (Ghost.reveal 'pending_len)));
-  assert (pure (client_driver_wire_logs_match_witness
+    choose_wire_logs_match_witness
     'st0
     received
     sent
-    (Ghost.reveal old_consumed)
     (Ghost.reveal 'buffered)
-    (Ghost.reveal 'pending_len)));
+    (Ghost.reveal 'pending_len);
   let written = IO.write ch network_out resp.CT.network_out_len;
   assert (pure (written == resp.CT.network_out_len));
   assert (pure (SZ.v written <= B.length network_out_bytes));
@@ -579,6 +566,40 @@ fn process_local_event_and_write_once
     (Ghost.reveal old_consumed)
     (Ghost.reveal 'buffered)
     (Ghost.reveal 'pending_len);
+  assert (pure (CI.ordered_subsequence
+    st1.CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal old_consumed)));
+  assert (pure (CI.channel_io_history_matches
+    st1.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_sent
+    received
+    (B.append sent
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))));
+  assert (pure (client_driver_wire_logs_match_witness
+    st1
+    received
+    (B.append sent
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'pending_len)));
+  FStar.Classical.exists_intro
+    (fun consumed ->
+      client_driver_wire_logs_match_witness
+        st1
+        received
+        (B.append sent
+          (if SZ.v written <= B.length network_out_bytes
+           then Seq.slice network_out_bytes 0 (SZ.v written)
+           else B.empty))
+        consumed
+        (Ghost.reveal 'buffered)
+        (Ghost.reveal 'pending_len))
+    (Ghost.reveal old_consumed);
   assert (pure (client_driver_wire_logs_match
     st1
     received
@@ -913,29 +934,22 @@ fn driver_process_buffered_network_bytes_once
     assert (IO.is_channel d.driver_channel received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
   let old_consumed =
-    Ghost.hide (ID.indefinite_description_ghost
-      B.bytes
-      (fun consumed ->
-        client_driver_wire_logs_match_witness
-          'st0
-          received
-          sent
-          consumed
-          (Ghost.reveal 'buffered)
-          buffered_len));
-  assert (pure (client_driver_wire_logs_match_witness
+    choose_wire_logs_match_witness
     'st0
     received
     sent
-    (Ghost.reveal old_consumed)
     (Ghost.reveal 'buffered)
-    buffered_len));
+    buffered_len;
   let consumed_prefix =
     Ghost.hide (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len);
   let new_buffered =
     Ghost.hide (Seq.slice (Ghost.reveal 'buffered)
       (SZ.v buffer_resp.CT.consumed_len)
       (SZ.v buffered_len));
+  assert (pure (Ghost.reveal new_buffered ==
+    Seq.slice (Ghost.reveal 'buffered)
+      (SZ.v buffer_resp.CT.consumed_len)
+      (SZ.v buffered_len)));
   Seq.lemma_len_slice
     (Ghost.reveal 'buffered)
     (SZ.v buffer_resp.CT.consumed_len)
@@ -946,6 +960,9 @@ fn driver_process_buffered_network_bytes_once
   assert (pure (Seq.equal
     (Ghost.reveal consumed_prefix)
     (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len)));
+  Seq.lemma_eq_elim
+    (Ghost.reveal consumed_prefix)
+    (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len);
   lemma_slice_append_full
     (Ghost.reveal 'buffered)
     (SZ.v buffer_resp.CT.consumed_len);
@@ -962,9 +979,29 @@ fn driver_process_buffered_network_bytes_once
     (Ghost.reveal 'old_app_out)
     app_out_bytes
     (Ghost.reveal old_consumed);
+  lemma_network_bytes_logged_received_ordered
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes
+    (Ghost.reveal old_consumed);
   Seq.append_assoc (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix) (Ghost.reveal new_buffered);
   assert (pure (Seq.equal
     (B.append (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix)) (Ghost.reveal new_buffered))
+    received));
+  assert (pure (CI.ordered_subsequence
+    st1.CS.cs_wire_log.CL.raw_received
+    (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))));
+  CI.lemma_ordered_subsequence_append_right
+    st1.CS.cs_wire_log.CL.raw_received
+    (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))
+    (Ghost.reveal new_buffered);
+  assert (pure (CI.ordered_subsequence
+    st1.CS.cs_wire_log.CL.raw_received
     received));
   let written = IO.write d.driver_channel network_out buffer_resp.CT.response.CT.network_out_len;
   assert (pure (written == buffer_resp.CT.response.CT.network_out_len));
@@ -1002,9 +1039,14 @@ fn driver_process_buffered_network_bytes_once
       st1.CS.cs_wire_log.CL.raw_received
       (B.append (Ghost.reveal old_consumed)
         (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len))));
-  Seq.lemma_eq_elim
-    (Ghost.reveal consumed_prefix)
-    (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len);
+  assert (pure (CI.channel_io_history_matches
+    st1.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_sent
+    received
+    (B.append sent
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))));
   assert (pure (client_driver_wire_logs_match_witness
     st1
     received
@@ -1072,19 +1114,18 @@ fn driver_process_buffered_network_bytes_once
      SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len)));
   assert (pure (new_pending ==
     pending_after_consumed buffered_len buffer_resp.CT.consumed_len));
-  let result = {
+  assert (pure (pending_after_consumed buffered_len
+    buffer_resp.CT.consumed_len == new_pending));
+  rewrite (driver_exactly d st1 (Ghost.reveal new_buffered) new_pending) as
+    (driver_exactly d st1 (Ghost.reveal new_buffered)
+      (pending_after_consumed buffered_len
+        buffer_resp.CT.consumed_len));
+  {
     network_read_len = buffered_len;
     network_read_buffer_resp = buffer_resp;
     network_read_written = written;
     network_read_prefix = Ghost.hide raw_prefix;
-  };
-  assert (pure (pending_after_consumed buffered_len
-    result.network_read_buffer_resp.CT.consumed_len == new_pending));
-  rewrite (driver_exactly d st1 (Ghost.reveal new_buffered) new_pending) as
-    (driver_exactly d st1 (Ghost.reveal new_buffered)
-      (pending_after_consumed buffered_len
-        result.network_read_buffer_resp.CT.consumed_len));
-  result
+  }
 }
 
 noextract
@@ -1550,23 +1591,12 @@ fn driver_read_buffered_network_bytes_compact_once
     assert (IO.is_channel d.driver_channel received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
   let old_consumed =
-    Ghost.hide (ID.indefinite_description_ghost
-      B.bytes
-      (fun consumed ->
-        client_driver_wire_logs_match_witness
-          'st0
-          received
-          sent
-          consumed
-          (Ghost.reveal 'buffered)
-          buffered_len));
-  assert (pure (client_driver_wire_logs_match_witness
+    choose_wire_logs_match_witness
     'st0
     received
     sent
-    (Ghost.reveal old_consumed)
     (Ghost.reveal 'buffered)
-    buffered_len));
+    buffered_len;
   let read_len = IO.read d.driver_channel raw_tail_array available;
   with raw_tail_after read_chunk.
     assert (IO.is_channel d.driver_channel (B.append received read_chunk) sent **
@@ -1582,6 +1612,8 @@ fn driver_read_buffered_network_bytes_compact_once
     Ghost.hide (B.append (Ghost.reveal 'buffered) read_chunk);
   Seq.lemma_len_append (Ghost.reveal 'buffered) read_chunk;
   Seq.append_assoc (Ghost.reveal old_consumed) (Ghost.reveal 'buffered) read_chunk;
+  CI.lemma_ordered_subsequence_append_right
+    'st0.CS.cs_wire_log.CL.raw_received received read_chunk;
   assert (pure (client_driver_wire_logs_match_witness
     'st0
     (B.append received read_chunk)
@@ -1628,11 +1660,18 @@ fn driver_read_buffered_network_bytes_compact_once
       (fun k ->
         (True /\ ~(SZ.v buffered_len <= k /\ k < SZ.v raw_capacity)) \/
         (SZ.v buffered_len <= k /\ k < SZ.v raw_capacity /\ True)));
+  assert (pure (Seq.length raw_joined_mask == Seq.length raw_mask));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Seq.index raw_joined_mask i ==
+      (if SZ.v buffered_len <= i && i < SZ.v raw_capacity
+       then Seq.index raw_tail_mask_after (i - SZ.v buffered_len)
+       else Seq.index raw_mask i)));
   assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
     ((True /\ ~(SZ.v buffered_len <= i /\ i < SZ.v raw_capacity)) \/
      (SZ.v buffered_len <= i /\ i < SZ.v raw_capacity /\ True))));
-  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
-    Some? (Seq.index raw_joined_mask i)));
+  DS.lemma_joined_mask_is_some
+    raw_mask raw_tail_mask_after raw_joined_mask
+    (SZ.v buffered_len) (SZ.v raw_capacity);
   A.from_mask raw;
   with raw_after_read.
     assert (pts_to raw raw_after_read);
@@ -1642,6 +1681,32 @@ fn driver_read_buffered_network_bytes_compact_once
   assert (pure (Seq.equal read_chunk
     (Seq.slice raw_tail_after 0 (SZ.v read_len))));
   assert (pure (forall (i:nat). i < B.length raw_after_read ==>
+    Some (Seq.index raw_after_read i) == Seq.index raw_joined_mask i));
+  assert (pure (forall (i:nat). i < SZ.v read_len ==>
+    SZ.v buffered_len <= SZ.v buffered_len + i /\
+    SZ.v buffered_len + i < SZ.v raw_capacity /\
+    (SZ.v buffered_len + i) - SZ.v buffered_len == i));
+  assert (pure (forall (i:nat). i < SZ.v read_len ==>
+    SZ.v buffered_len + i < B.length raw_after_read));
+  DS.lemma_mask_values_at_offset
+    raw_after_read raw_joined_mask
+    (SZ.v buffered_len) (SZ.v read_len);
+  DS.lemma_joined_mask_values_at_offset
+    raw_mask raw_tail_mask_after raw_joined_mask
+    (SZ.v buffered_len) (SZ.v raw_capacity) (SZ.v read_len);
+  assert (pure (forall (i:nat). i < SZ.v read_len ==>
+    Seq.index raw_tail_mask_after i ==
+      Some (Seq.index raw_tail_after i)));
+  assert (pure (forall (i:nat). i < SZ.v buffered_len ==>
+    i < SZ.v raw_capacity /\
+    ~(SZ.v buffered_len <= i /\ i < SZ.v raw_capacity)));
+  DS.lemma_joined_mask_values_before_offset
+    raw_mask raw_tail_mask_after raw_joined_mask
+    (SZ.v buffered_len) (SZ.v raw_capacity) (SZ.v buffered_len);
+  assert (pure (forall (i:nat). i < SZ.v buffered_len ==>
+    Seq.index raw_mask i ==
+      Some (Seq.index (Ghost.reveal 'old_raw) i)));
+  assert (pure (forall (i:nat). i < SZ.v buffered_len ==>
     Some (Seq.index raw_after_read i) == Seq.index raw_joined_mask i));
   assert (pure (forall (i:nat). i < SZ.v buffered_len ==>
     Seq.index raw_after_read i == Seq.index (Ghost.reveal 'old_raw) i));

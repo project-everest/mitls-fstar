@@ -37,6 +37,7 @@ module DT = TLS13.Impl.Server.Driver.Transport
 module DN = TLS13.Impl.Server.Driver.Network
 module DL = TLS13.Impl.Server.Driver.Local
 module DH = TLS13.Impl.Server.Driver.Handshake
+module ET = TLS13.Impl.Endpoint.Types
 module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
@@ -68,6 +69,25 @@ let server_driver_wire_logs_match = DS.server_driver_wire_logs_match
 
 noextract
 let server_driver_live = DS.server_driver_live
+
+let lemma_server_initial_can_start
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (CM.can_start_server
+        (CR.server_initial_state certificate_chain credential_identity))
+=
+  ()
+
+let lemma_server_application_keys_control_not_failed
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        st.CS.cs_model.CS.model_control == CS.ControlApplicationData)
+      (ensures ST.server_connection_control_not_failed st)
+=
+  ()
+
 noextract
 let server_driver_connected = DS.server_driver_connected
 noextract
@@ -511,6 +531,25 @@ fn new_server
         as
         (MR.snapshot d.server_driver_progress
           (Ghost.reveal d.server_driver_initial));
+      DS.lemma_initial_wire_logs_match
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity);
+      assert (pure (ST.server_end_to_end_invariant
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity)));
+      assert (pure (DS.server_driver_config_matches_credentials
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity)
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity));
+      assert (pure (DS.server_driver_supported_profile_selection
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity)
+        credential_identity));
       fold (server_driver_canonical_progress d
         (CR.server_initial_state
           (Ghost.reveal 'certificate_chain_bytes)
@@ -523,6 +562,26 @@ fn new_server
           credential_identity)
         (Ghost.reveal 'certificate_chain_bytes)
         credential_identity);
+      lemma_server_initial_can_start
+        (Ghost.reveal 'certificate_chain_bytes)
+        credential_identity;
+      assert (pure (ST.server_state_correct
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity)));
+      assert (pure (CM.can_start_server
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity)));
+      assert (pure (ST.server_end_to_end_invariant
+        (CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity)));
+      assert (pure (Ghost.reveal
+        (server_driver_canonical d).SP.canonical_server_initial ==
+        CR.server_initial_state
+          (Ghost.reveal 'certificate_chain_bytes)
+          credential_identity));
       Some d
     }
   }
@@ -818,6 +877,7 @@ fn accept_connected
                               st3.CS.cs_model));
                             CSL.lemma_server_application_ready_stable_x25519_key_share_projection
                               st3;
+                            lemma_server_application_keys_control_not_failed st3;
                             assert (pure (server_driver_sent_log_exact st3 sent3));
                             lemma_server_driver_wire_logs_match_received_accounted
                               st3
@@ -1033,7 +1093,8 @@ let lemma_driver_send_application_log
            then CI.append_sent (TChannel.application_log st0) payload
            else TChannel.application_log st0))
 =
-  if status == ServerWorkflowPayloadTooLarge then ()
+  if status == ServerWorkflowPayloadTooLarge then   ()
+
   else (
     let resp =
       ID.indefinite_description_ghost
@@ -1063,6 +1124,365 @@ let lemma_driver_send_application_log
     lemma_local_send_application_log
       st0 st1 resp payload network_out app_out
   )
+
+let lemma_server_send_correct_from_local
+  (st0 st1:CS.connection_state)
+  (status:server_workflow_status)
+  (resp:ST.server_response)
+  (payload sent sent':B.bytes)
+  : Lemma
+      (requires
+        status <> ServerWorkflowPayloadTooLarge /\
+        DL.server_driver_local_write_correct
+          st0 st1 resp ST.LocalSendApplicationData payload sent sent' /\
+        server_driver_send_status_correct status resp)
+      (ensures
+        server_driver_send_correct st0 st1 status payload sent sent')
+=
+  FStar.Classical.exists_intro
+    (fun response ->
+      DL.server_driver_local_write_correct
+        st0 st1 response ST.LocalSendApplicationData payload sent sent' /\
+      server_driver_send_status_correct status response)
+    resp
+
+let server_workflow_status_of_response
+  (resp:ST.server_response)
+  : server_workflow_status =
+  match resp.ST.status with
+  | ST.StepOk -> ServerWorkflowOk
+  | _ -> ServerWorkflowStepFailed
+
+let lemma_server_workflow_status_of_response_correct
+  (resp:ST.server_response)
+  : Lemma
+      (server_workflow_status_of_response resp <>
+         ServerWorkflowPayloadTooLarge /\
+       server_driver_send_status_correct
+         (server_workflow_status_of_response resp)
+         resp)
+=
+  match resp.ST.status with
+  | ST.StepOk -> ()
+  | ST.NeedMoreInput -> ()
+  | ST.DecodeError -> ()
+  | ST.IllegalTransition -> ()
+  | ST.OutputBufferTooSmall -> ()
+  | ST.ConnectionFailed -> ()
+
+let lemma_channel_send_log
+  (status:server_workflow_status)
+  (payload:B.bytes)
+  (base_log old_log new_log:CI.application_log B.bytes)
+  : Lemma
+      (requires
+        old_log == base_log /\
+        new_log ==
+          (if status == ServerWorkflowOk
+           then CI.append_sent base_log payload
+           else base_log))
+      (ensures
+        new_log ==
+          (if channel_send_succeeded status
+           then
+             CI.append_sent old_log (channel_message_of_bytes payload)
+           else old_log))
+=
+  match status with
+  | ServerWorkflowOk -> ()
+  | ServerWorkflowNeedMoreInput -> ()
+  | ServerWorkflowStepFailed -> ()
+  | ServerWorkflowExhausted -> ()
+  | ServerWorkflowClosed -> ()
+  | ServerWorkflowPayloadTooLarge -> ()
+  | ServerWorkflowOutputBufferTooSmall -> ()
+
+let lemma_server_send_transition_intro
+  (status:server_workflow_status)
+  (payload old_received old_sent:B.bytes)
+  (old_log:CI.application_log B.bytes)
+  (new_received new_sent:B.bytes)
+  (new_log:CI.application_log B.bytes)
+  : Lemma
+      (requires
+        CPI.histories_ahead
+          old_received old_sent new_received new_sent /\
+        new_log ==
+          (if channel_send_succeeded status
+           then
+             CI.append_sent old_log (channel_message_of_bytes payload)
+           else old_log))
+      (ensures
+        CI.send_transition
+          channel_message_of_bytes
+          channel_send_succeeded
+          status
+          payload
+          old_received
+          old_sent
+          old_log
+          new_received
+          new_sent
+          new_log)
+=
+  ()
+
+let lemma_slice_from_zero_length
+  (bytes:B.bytes)
+  (len:nat)
+  : Lemma
+      (requires len <= B.length bytes)
+      (ensures B.length (Seq.slice bytes 0 len) == len)
+=
+  Seq.lemma_len_slice bytes 0 len
+
+let lemma_server_receive_correct_exists
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  (loop:DN.server_driver_network_loop_result)
+  (sent0 sent1 app_out out_bytes:B.bytes)
+  : Lemma
+      (requires
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes)
+      (ensures
+        exists loop' app_out'.
+          server_driver_receive_correct
+            st0 st1 result loop' sent0 sent1 app_out' out_bytes)
+=
+  FStar.Classical.exists_intro
+    (fun app_out' ->
+      server_driver_receive_correct
+        st0 st1 result loop sent0 sent1 app_out' out_bytes)
+    app_out;
+  FStar.Classical.exists_intro
+    (fun loop' -> exists app_out'.
+      server_driver_receive_correct
+        st0 st1 result loop' sent0 sent1 app_out' out_bytes)
+    loop
+
+let lemma_server_receive_nonretry_ready_implication
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  : Lemma
+      (requires
+        (result.server_receive_status == ServerWorkflowOk \/
+         result.server_receive_status == ServerWorkflowStepFailed \/
+         result.server_receive_status == ServerWorkflowClosed \/
+         result.server_receive_status == ServerWorkflowPayloadTooLarge \/
+         result.server_receive_status == ServerWorkflowOutputBufferTooSmall))
+      (ensures
+        server_driver_application_ready st0 /\
+        (result.server_receive_status == ServerWorkflowExhausted \/
+         result.server_receive_status == ServerWorkflowNeedMoreInput) ==>
+        server_driver_application_ready st1)
+=
+  match result.server_receive_status with
+  | ServerWorkflowOk -> ()
+  | ServerWorkflowNeedMoreInput -> ()
+  | ServerWorkflowStepFailed -> ()
+  | ServerWorkflowExhausted -> ()
+  | ServerWorkflowClosed -> ()
+  | ServerWorkflowPayloadTooLarge -> ()
+  | ServerWorkflowOutputBufferTooSmall -> ()
+
+let lemma_server_receive_step_failed_correct
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  (loop:DN.server_driver_network_loop_result)
+  (sent0 sent1 app_out out_bytes:B.bytes)
+  (app_fits app_src_fits:bool)
+  : Lemma
+      (requires
+        loop.DN.server_driver_network_loop_exhausted == false /\
+        st1.CS.cs_model.CS.model_control <> CS.ControlClosed /\
+        loop.DN.server_driver_network_loop_last.ST.response.ST.status ==
+          ST.StepOk /\
+        app_fits ==
+          (SZ.v
+             loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len
+             <= B.length out_bytes) /\
+        app_src_fits ==
+          (SZ.v
+             loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len
+             <= B.length app_out) /\
+        (app_fits && app_src_fits) == false /\
+        result.server_receive_status == ServerWorkflowStepFailed /\
+        result.server_receive_len == 0sz /\
+        B.length app_out == SZ.v DState.driver_app_out_capacity /\
+        DN.server_driver_network_process_correct
+          st0
+          st1
+          loop.DN.server_driver_network_loop_last
+          sent0
+          sent1 /\
+        DN.server_driver_network_process_correct_for_app_out
+          st0
+          st1
+          loop.DN.server_driver_network_loop_last
+          sent0
+          sent1
+          app_out)
+      (ensures
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes)
+=
+  ()
+
+let lemma_server_receive_endpoint_failed_correct
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  (loop:DN.server_driver_network_loop_result)
+  (sent0 sent1 app_out out_bytes:B.bytes)
+  : Lemma
+      (requires
+        loop.DN.server_driver_network_loop_exhausted == false /\
+        st1.CS.cs_model.CS.model_control <> CS.ControlClosed /\
+        (loop.DN.server_driver_network_loop_last.ST.response.ST.status ==
+           ST.DecodeError \/
+         loop.DN.server_driver_network_loop_last.ST.response.ST.status ==
+           ST.IllegalTransition \/
+         loop.DN.server_driver_network_loop_last.ST.response.ST.status ==
+           ST.OutputBufferTooSmall \/
+         loop.DN.server_driver_network_loop_last.ST.response.ST.status ==
+           ST.ConnectionFailed) /\
+        result.server_receive_status == ServerWorkflowStepFailed /\
+        result.server_receive_len == 0sz /\
+        B.length app_out == SZ.v DState.driver_app_out_capacity /\
+        DN.server_driver_network_process_correct
+          st0
+          st1
+          loop.DN.server_driver_network_loop_last
+          sent0
+          sent1 /\
+        DN.server_driver_network_process_correct_for_app_out
+          st0
+          st1
+          loop.DN.server_driver_network_loop_last
+          sent0
+          sent1
+          app_out)
+      (ensures
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes)
+=
+  match loop.DN.server_driver_network_loop_last.ST.response.ST.status with
+  | ST.StepOk -> ()
+  | ST.NeedMoreInput -> ()
+  | ST.DecodeError -> ()
+  | ST.IllegalTransition -> ()
+  | ST.OutputBufferTooSmall -> ()
+  | ST.ConnectionFailed -> ()
+
+let lemma_server_receive_closed_correct
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  (loop:DN.server_driver_network_loop_result)
+  (sent0 sent1 app_out out_bytes:B.bytes)
+  : Lemma
+      (requires
+        loop.DN.server_driver_network_loop_exhausted == false /\
+        st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
+        result.server_receive_status == ServerWorkflowClosed /\
+        result.server_receive_len == 0sz /\
+        B.length app_out == SZ.v DState.driver_app_out_capacity /\
+        DN.server_driver_network_process_correct
+          st0
+          st1
+          loop.DN.server_driver_network_loop_last
+          sent0
+          sent1 /\
+        DN.server_driver_network_process_correct_for_app_out
+          st0
+          st1
+          loop.DN.server_driver_network_loop_last
+          sent0
+          sent1
+          app_out)
+      (ensures
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes)
+=
+  ()
+
+let lemma_server_receive_exhausted_correct
+  (st0 st1:CS.connection_state)
+  (result:server_receive_result)
+  (loop:DN.server_driver_network_loop_result)
+  (sent0 sent1 app_out out_bytes:B.bytes)
+  : Lemma
+      (requires
+        loop.DN.server_driver_network_loop_exhausted == true /\
+        result.server_receive_status == ServerWorkflowExhausted /\
+        result.server_receive_len == 0sz /\
+        st1 == st0 /\
+        Seq.equal sent1 sent0 /\
+        B.length app_out == SZ.v DState.driver_app_out_capacity)
+      (ensures
+        server_driver_receive_correct
+          st0 st1 result loop sent0 sent1 app_out out_bytes)
+=
+  ()
+
+let lemma_server_receive_copyout_ok
+  (result:server_receive_result)
+  (resp:ST.server_response)
+  (app_out out_bytes:B.bytes)
+  : Lemma
+      (requires
+        result.server_receive_status == ServerWorkflowOk /\
+        SZ.v result.server_receive_len <= B.length out_bytes /\
+        result.server_receive_len == resp.ST.app_out_len /\
+        Seq.equal
+          (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
+          (ST.response_app_out resp app_out))
+      (ensures
+        server_driver_receive_copyout_correct
+          result resp app_out out_bytes)
+=
+  ()
+
+let lemma_server_receive_status_ok
+  (result:server_receive_result)
+  (loop:DN.server_driver_network_loop_result)
+  (st1:CS.connection_state)
+  (app_out out_bytes:B.bytes)
+  : Lemma
+      (requires
+        loop.DN.server_driver_network_loop_exhausted == false /\
+        st1.CS.cs_model.CS.model_control <> CS.ControlClosed /\
+        loop.DN.server_driver_network_loop_last.ST.response.ST.status ==
+          ST.StepOk /\
+        SZ.v
+          loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len
+          <= B.length out_bytes /\
+        SZ.v
+          loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len
+          <= B.length app_out /\
+        result.server_receive_status == ServerWorkflowOk /\
+        result.server_receive_len ==
+          loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len)
+      (ensures
+        server_driver_receive_status_correct
+          result loop st1 app_out out_bytes)
+=
+  ()
+
+fn sizet_gt_refined (x y:SZ.t)
+  requires emp
+  returns b:bool
+  ensures pure (b == (SZ.v x > SZ.v y))
+{
+  SZ.gt x y
+}
+
+fn sizet_lte_refined (x y:SZ.t)
+  requires emp
+  returns b:bool
+  ensures pure (b == (SZ.v x <= SZ.v y))
+{
+  SZ.lte x y
+}
 
 let lemma_legal_response_observable_receive_log
   (st0 st1:CS.connection_state)
@@ -1306,15 +1726,23 @@ let lemma_driver_receive_application_log
         (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
         (ST.response_app_out resp app_out));
       if B.length (ST.response_app_out resp app_out) = 0 then (
-        Seq.lemma_len_slice
-          out_bytes 0 (SZ.v result.server_receive_len);
+        assert (SZ.v result.server_receive_len <= B.length out_bytes);
         Seq.lemma_eq_elim
           (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
           (ST.response_app_out resp app_out);
+        assert (B.length
+          (Seq.slice out_bytes 0 (SZ.v result.server_receive_len)) == 0);
+        lemma_slice_from_zero_length
+          out_bytes
+          (SZ.v result.server_receive_len);
+        assert (B.length
+          (Seq.slice out_bytes 0 (SZ.v result.server_receive_len)) ==
+          SZ.v result.server_receive_len);
         assert (SZ.v result.server_receive_len == 0)
       ) else (
-        Seq.lemma_len_slice
-          out_bytes 0 (SZ.v result.server_receive_len);
+        lemma_slice_from_zero_length
+          out_bytes
+          (SZ.v result.server_receive_len);
         Seq.lemma_eq_elim
           (Seq.slice out_bytes 0 (SZ.v result.server_receive_len))
           (ST.response_app_out resp app_out)
@@ -1436,8 +1864,10 @@ fn send_connected
      (Ghost.reveal 'received)
      (Ghost.reveal 'sent));
   assert_norm (SM.max_application_data_fragment_len == 16384);
-  let too_large = SZ.gt payload_len 16384sz;
+  let too_large = sizet_gt_refined payload_len 16384sz;
   if too_large {
+    assert (pure (SZ.v payload_len > 16384));
+    assert_norm (SM.max_application_data_fragment_len == 16384);
     assert (pure (SZ.v payload_len > SM.max_application_data_fragment_len));
     assert (pure (
       B.length (Ghost.reveal 'payload_bytes) >
@@ -1501,11 +1931,17 @@ fn send_connected
     'credential_identity
     (Ghost.reveal 'received)
     sent');
-  if (resp.ST.status = ST.StepOk) {
-    ServerWorkflowOk
-  } else {
-    ServerWorkflowStepFailed
-  }
+  let status = server_workflow_status_of_response resp;
+  lemma_server_workflow_status_of_response_correct resp;
+  lemma_server_send_correct_from_local
+    'st0
+    st1
+    status
+    resp
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    sent';
+  status
   }
 }
 
@@ -1546,6 +1982,14 @@ fn send
   with st0 certificate_chain credential_identity received0 sent0.
     assert (server_driver_connected
       d st0 certificate_chain credential_identity received0 sent0);
+  Seq.lemma_eq_elim
+    (Ghost.reveal raw_received0)
+    st0.CS.cs_wire_log.CL.raw_received;
+  Seq.lemma_eq_elim
+    (Ghost.reveal raw_sent0)
+    st0.CS.cs_wire_log.CL.raw_sent;
+  assert (pure (
+    (Ghost.reveal app_log0) == TChannel.application_log st0));
   unfold (server_driver_connected
     d st0 certificate_chain credential_identity received0 sent0);
   with ch buffered buffered_len.
@@ -1580,6 +2024,12 @@ fn send
       (Ghost.reveal payload_bytes)
       sent0
       sent1;
+    lemma_channel_send_log
+      status
+      (Ghost.reveal payload_bytes)
+      (TChannel.application_log st0)
+      (Ghost.reveal app_log0)
+      (TChannel.application_log st1);
     SChannel.pack_connected_channel_invariant
       d
       (Ghost.hide st1)
@@ -1595,6 +2045,20 @@ fn send
       (Ghost.hide st1.CS.cs_wire_log.CL.raw_received)
       (Ghost.hide st1.CS.cs_wire_log.CL.raw_sent)
       (Ghost.hide (TChannel.application_log st1));
+    assert (pure (CPI.histories_ahead
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent));
+    lemma_server_send_transition_intro
+      status
+      (Ghost.reveal payload_bytes)
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      (Ghost.reveal app_log0)
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      (TChannel.application_log st1);
     drop_ (DS.server_channel_snapshot
       d
       (Ghost.reveal raw_received0)
@@ -1635,6 +2099,26 @@ fn send
       (Ghost.hide st0.CS.cs_wire_log.CL.raw_received)
       (Ghost.hide st0.CS.cs_wire_log.CL.raw_sent)
       (Ghost.hide (TChannel.application_log st0));
+    assert (pure (CPI.histories_ahead
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      st0.CS.cs_wire_log.CL.raw_received
+      st0.CS.cs_wire_log.CL.raw_sent));
+    lemma_channel_send_log
+      ServerWorkflowStepFailed
+      (Ghost.reveal payload_bytes)
+      (TChannel.application_log st0)
+      (Ghost.reveal app_log0)
+      (TChannel.application_log st0);
+    lemma_server_send_transition_intro
+      ServerWorkflowStepFailed
+      (Ghost.reveal payload_bytes)
+      (Ghost.reveal raw_received0)
+      (Ghost.reveal raw_sent0)
+      (Ghost.reveal app_log0)
+      st0.CS.cs_wire_log.CL.raw_received
+      st0.CS.cs_wire_log.CL.raw_sent
+      (TChannel.application_log st0);
     drop_ (DS.server_channel_snapshot
       d
       (Ghost.reveal raw_received0)
@@ -1814,7 +2298,16 @@ fn receive_connected
       server_receive_status = ServerWorkflowExhausted;
       server_receive_len = 0sz;
     };
-    assert (pure (server_driver_receive_correct
+    assert_norm (
+      result.server_receive_status == ServerWorkflowExhausted);
+    assert_norm (result.server_receive_len == 0sz);
+    assert (pure (
+      loop.server_driver_network_loop_exhausted == true));
+    assert (pure (st1 == 'st0));
+    assert (pure (Seq.equal sent' (Ghost.reveal 'sent)));
+    assert (pure (
+      B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+    lemma_server_receive_exhausted_correct
       'st0
       st1
       result
@@ -1822,7 +2315,46 @@ fn receive_connected
       (Ghost.reveal 'sent)
       sent'
       loop_app_out
-      (Ghost.reveal 'out_bytes)));
+      (Ghost.reveal 'out_bytes);
+    assert (pure (B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+    assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+    assert (pure (
+      st1.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
+    assert (pure (
+      server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+    assert (pure (
+      server_driver_received_log_accounted 'st0 (Ghost.reveal 'received)));
+    assert (pure (server_driver_sent_log_exact st1 sent'));
+    assert (pure (server_driver_received_log_accounted st1 received'));
+    assert (pure (
+      server_driver_application_ready 'st0 /\
+      (result.server_receive_status == ServerWorkflowExhausted \/
+       result.server_receive_status == ServerWorkflowNeedMoreInput) ==>
+      server_driver_application_ready st1));
+    FStar.Classical.exists_intro
+      (fun app_out -> server_driver_receive_correct
+        'st0
+        st1
+        result
+        loop
+        (Ghost.reveal 'sent)
+        sent'
+        app_out
+        (Ghost.reveal 'out_bytes))
+      loop_app_out;
+    FStar.Classical.exists_intro
+      (fun loop' -> exists app_out.
+        server_driver_receive_correct
+          'st0
+          st1
+          result
+          loop'
+          (Ghost.reveal 'sent)
+          sent'
+          app_out
+          (Ghost.reveal 'out_bytes))
+      loop;
     forget_server_driver_connected_app_out d;
     result
   } else {
@@ -1835,7 +2367,27 @@ fn receive_connected
         server_receive_status = ServerWorkflowClosed;
         server_receive_len = 0sz;
       };
-      assert (pure (server_driver_receive_correct
+      assert_norm (
+        result.server_receive_status == ServerWorkflowClosed);
+      assert_norm (result.server_receive_len == 0sz);
+      assert (pure (
+        loop.server_driver_network_loop_exhausted == false));
+      assert (pure (
+        B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+      assert (pure (server_driver_network_process_correct
+        'st0
+        st1
+        loop.server_driver_network_loop_last
+        (Ghost.reveal 'sent)
+        sent'));
+      assert (pure (server_driver_network_process_correct_for_app_out
+        'st0
+        st1
+        loop.server_driver_network_loop_last
+        (Ghost.reveal 'sent)
+        sent'
+        loop_app_out));
+      lemma_server_receive_closed_correct
         'st0
         st1
         result
@@ -1843,14 +2395,53 @@ fn receive_connected
         (Ghost.reveal 'sent)
         sent'
         loop_app_out
-        (Ghost.reveal 'out_bytes)));
+        (Ghost.reveal 'out_bytes);
+      assert (pure (B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+      assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+      assert (pure (
+        st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
+      assert (pure (
+        server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+      assert (pure (
+        server_driver_received_log_accounted 'st0 (Ghost.reveal 'received)));
+      assert (pure (server_driver_sent_log_exact st1 sent'));
+      assert (pure (server_driver_received_log_accounted st1 received'));
+      assert_norm (
+        result.server_receive_status == ServerWorkflowClosed);
+      lemma_server_receive_nonretry_ready_implication 'st0 st1 result;
+      FStar.Classical.exists_intro
+        (fun app_out -> server_driver_receive_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          app_out
+          (Ghost.reveal 'out_bytes))
+        loop_app_out;
+      FStar.Classical.exists_intro
+        (fun loop' -> exists app_out.
+          server_driver_receive_correct
+            'st0
+            st1
+            result
+            loop'
+            (Ghost.reveal 'sent)
+            sent'
+            app_out
+            (Ghost.reveal 'out_bytes))
+        loop;
       forget_server_driver_connected_app_out d;
       result
     } else {
     assert (pure (control_snapshot.CR.snapshot_control_tag <> 4uy));
     lemma_control_snapshot_not_closed control_snapshot st1;
-    match loop.server_driver_network_loop_last.ST.response.ST.status {
-      ST.StepOk -> {
+    let endpoint_status:ET.endpoint_status =
+      loop.server_driver_network_loop_last.ST.response.ST.status;
+    match endpoint_status {
+      ET.StepOk -> {
         unfold (server_driver_connected_with_app_out
           d
           st1
@@ -1884,8 +2475,9 @@ fn receive_connected
             V.pts_to d.server_driver_app_out #1.0R loop_app_out **
             V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
         let copy_len = loop.server_driver_network_loop_last.ST.response.ST.app_out_len;
-        let app_fits = SZ.lte copy_len out_len;
-        let app_src_fits = SZ.lte copy_len DS.driver_app_out_capacity;
+        let app_fits = sizet_lte_refined copy_len out_len;
+        let app_src_fits =
+          sizet_lte_refined copy_len DS.driver_app_out_capacity;
         if (app_fits && app_src_fits) {
           V.to_array_pts_to d.server_driver_app_out;
           A.pts_to_len (V.vec_to_array d.server_driver_app_out);
@@ -1911,16 +2503,30 @@ fn receive_connected
             (Seq.slice loop_app_out 0 (SZ.v copy_len))));
           Seq.lemma_len_slice out_bytes 0 (SZ.v copy_len);
           Seq.lemma_len_slice loop_app_out 0 (SZ.v copy_len);
-          assert (pure (Seq.equal
+          Seq.lemma_eq_refl
             out_bytes
             (Seq.append
               (Seq.slice loop_app_out 0 (SZ.v copy_len))
-              (Seq.slice (Ghost.reveal 'out_bytes) (SZ.v copy_len) (A.length out)))));
-          Seq.lemma_len_slice loop_app_out 0 (SZ.v copy_len);
+              (Seq.slice
+                (Ghost.reveal 'out_bytes)
+                (SZ.v copy_len)
+                (A.length out)));
+          lemma_slice_from_zero_length loop_app_out (SZ.v copy_len);
           assert (pure (Seq.length (Seq.slice loop_app_out 0 (SZ.v copy_len)) == SZ.v copy_len));
           SeqP.append_slices
             (Seq.slice loop_app_out 0 (SZ.v copy_len))
             (Seq.slice (Ghost.reveal 'out_bytes) (SZ.v copy_len) (A.length out));
+          Seq.lemma_eq_elim
+            (Seq.slice loop_app_out 0 (SZ.v copy_len))
+            (Seq.slice
+              (Seq.append
+                (Seq.slice loop_app_out 0 (SZ.v copy_len))
+                (Seq.slice
+                  (Ghost.reveal 'out_bytes)
+                  (SZ.v copy_len)
+                  (A.length out)))
+              0
+              (Seq.length (Seq.slice loop_app_out 0 (SZ.v copy_len))));
           Seq.lemma_eq_elim
             out_bytes
             (Seq.append
@@ -1929,6 +2535,19 @@ fn receive_connected
           assert (pure (Seq.equal
             (Seq.slice out_bytes 0 (SZ.v copy_len))
             (Seq.slice loop_app_out 0 (SZ.v copy_len))));
+          Seq.lemma_eq_elim
+            (Seq.slice out_bytes 0 (SZ.v copy_len))
+            (Seq.slice loop_app_out 0 (SZ.v copy_len));
+          Seq.lemma_eq_elim
+            (ST.response_app_out
+              loop.server_driver_network_loop_last.ST.response
+              loop_app_out)
+            (Seq.slice loop_app_out 0 (SZ.v copy_len));
+          assert (pure (Seq.equal
+            (Seq.slice out_bytes 0 (SZ.v copy_len))
+            (ST.response_app_out
+              loop.server_driver_network_loop_last.ST.response
+              loop_app_out)));
           V.to_vec_pts_to d.server_driver_app_out;
           fold (server_driver_buffers_with_app_out
             d
@@ -1947,6 +2566,28 @@ fn receive_connected
             server_receive_status = ServerWorkflowOk;
             server_receive_len = copy_len;
           };
+          assert_norm (
+            result.server_receive_status == ServerWorkflowOk);
+          assert_norm (result.server_receive_len == copy_len);
+          assert (pure (
+            result.server_receive_len ==
+              loop.server_driver_network_loop_last.ST.response.ST.app_out_len));
+          assert (pure (
+            loop.server_driver_network_loop_exhausted == false));
+          assert (pure (
+            st1.CS.cs_model.CS.model_control <> CS.ControlClosed));
+          lemma_server_receive_status_ok
+            result loop st1 loop_app_out out_bytes;
+          assert (pure (
+            B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+          assert (pure (
+            SZ.v result.server_receive_len <= B.length out_bytes));
+          assert (pure (server_driver_network_process_correct
+            'st0
+            st1
+            loop.server_driver_network_loop_last
+            (Ghost.reveal 'sent)
+            sent'));
           assert (pure (server_driver_network_process_correct_for_app_out
             'st0
             st1
@@ -1954,11 +2595,11 @@ fn receive_connected
             (Ghost.reveal 'sent)
             sent'
             loop_app_out));
-          assert (pure (server_driver_receive_copyout_correct
+          lemma_server_receive_copyout_ok
             result
             loop.server_driver_network_loop_last.ST.response
             loop_app_out
-            out_bytes));
+            out_bytes;
           assert (pure (server_driver_receive_correct
             'st0
             st1
@@ -1968,6 +2609,31 @@ fn receive_connected
             sent'
             loop_app_out
             out_bytes));
+          assert (pure (B.length out_bytes == SZ.v out_len));
+          assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+          assert_norm (
+            result.server_receive_status == ServerWorkflowOk);
+          assert (pure (
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config));
+          assert (pure (
+            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+          assert (pure (
+            server_driver_received_log_accounted
+              'st0
+              (Ghost.reveal 'received)));
+          assert (pure (server_driver_sent_log_exact st1 sent'));
+          assert (pure (server_driver_received_log_accounted st1 received'));
+          lemma_server_receive_nonretry_ready_implication 'st0 st1 result;
+          lemma_server_receive_correct_exists
+            'st0
+            st1
+            result
+            loop
+            (Ghost.reveal 'sent)
+            sent'
+            loop_app_out
+            out_bytes;
           forget_server_driver_connected_app_out d;
           result
         } else {
@@ -1988,7 +2654,38 @@ fn receive_connected
             server_receive_status = ServerWorkflowStepFailed;
             server_receive_len = 0sz;
           };
-          assert (pure (server_driver_receive_correct
+          assert (pure (
+            B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+          assert (pure (
+            B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+          assert (pure (
+            app_fits ==
+              (SZ.v copy_len <= B.length (Ghost.reveal 'out_bytes))));
+          assert (pure (
+            app_src_fits ==
+              (SZ.v copy_len <= B.length loop_app_out)));
+          assert (pure ((app_fits && app_src_fits) == false));
+          assert (pure (
+            loop.server_driver_network_loop_exhausted == false));
+          assert (pure (
+            st1.CS.cs_model.CS.model_control <> CS.ControlClosed));
+          assert_norm (
+            result.server_receive_status == ServerWorkflowStepFailed);
+          assert_norm (result.server_receive_len == 0sz);
+          assert (pure (server_driver_network_process_correct
+            'st0
+            st1
+            loop.server_driver_network_loop_last
+            (Ghost.reveal 'sent)
+            sent'));
+          assert (pure (server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            loop.server_driver_network_loop_last
+            (Ghost.reveal 'sent)
+            sent'
+            loop_app_out));
+          lemma_server_receive_step_failed_correct
             'st0
             st1
             result
@@ -1996,12 +2693,38 @@ fn receive_connected
             (Ghost.reveal 'sent)
             sent'
             loop_app_out
-            (Ghost.reveal 'out_bytes)));
+            (Ghost.reveal 'out_bytes)
+            app_fits
+            app_src_fits;
+          assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+          assert (pure (
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config));
+          assert (pure (
+            server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+          assert (pure (
+            server_driver_received_log_accounted
+              'st0
+              (Ghost.reveal 'received)));
+          assert (pure (server_driver_sent_log_exact st1 sent'));
+          assert (pure (server_driver_received_log_accounted st1 received'));
+          assert_norm (
+            result.server_receive_status == ServerWorkflowStepFailed);
+          lemma_server_receive_nonretry_ready_implication 'st0 st1 result;
+          lemma_server_receive_correct_exists
+            'st0
+            st1
+            result
+            loop
+            (Ghost.reveal 'sent)
+            sent'
+            loop_app_out
+            (Ghost.reveal 'out_bytes);
           forget_server_driver_connected_app_out d;
           result
         }
       }
-      ST.NeedMoreInput -> {
+      ET.NeedMoreInput -> {
         let result = {
           server_receive_status = ServerWorkflowNeedMoreInput;
           server_receive_len = 0sz;
@@ -2015,15 +2738,46 @@ fn receive_connected
           sent'
           loop_app_out
           (Ghost.reveal 'out_bytes)));
-        forget_server_driver_connected_app_out d;
-        result
-      }
-      ST.DecodeError -> {
-        let result = {
-          server_receive_status = ServerWorkflowStepFailed;
-          server_receive_len = 0sz;
-        };
-        assert (pure (server_driver_receive_correct
+        assert (pure (
+          loop.server_driver_network_loop_exhausted == false));
+        assert (pure (server_driver_network_process_correct
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'));
+        DN.lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (
+          B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+        assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+        assert (pure (
+          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+        assert (pure (
+          server_driver_received_log_accounted
+            'st0
+            (Ghost.reveal 'received)));
+        assert (pure (server_driver_sent_log_exact st1 sent'));
+        assert (pure (server_driver_received_log_accounted st1 received'));
+        assert_norm (
+          result.server_receive_status == ServerWorkflowNeedMoreInput);
+        DN.lemma_server_driver_network_process_need_more_stutter
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (st1 == 'st0));
+        assert (pure (
+          server_driver_application_ready 'st0 /\
+          (result.server_receive_status == ServerWorkflowExhausted \/
+           result.server_receive_status == ServerWorkflowNeedMoreInput) ==>
+          server_driver_application_ready st1));
+        lemma_server_receive_correct_exists
           'st0
           st1
           result
@@ -2031,16 +2785,41 @@ fn receive_connected
           (Ghost.reveal 'sent)
           sent'
           loop_app_out
-          (Ghost.reveal 'out_bytes)));
+          (Ghost.reveal 'out_bytes);
         forget_server_driver_connected_app_out d;
         result
       }
-      ST.IllegalTransition -> {
+      ET.DecodeError -> {
         let result = {
           server_receive_status = ServerWorkflowStepFailed;
           server_receive_len = 0sz;
         };
-        assert (pure (server_driver_receive_correct
+        assert_norm (
+          result.server_receive_status == ServerWorkflowStepFailed);
+        assert_norm (result.server_receive_len == 0sz);
+        assert (pure (
+          loop.server_driver_network_loop_exhausted == false));
+        assert (pure (
+          st1.CS.cs_model.CS.model_control <> CS.ControlClosed));
+        assert_norm (
+          loop.server_driver_network_loop_last.ST.response.ST.status ==
+            ST.DecodeError);
+        assert (pure (
+          B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+        assert (pure (server_driver_network_process_correct
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'));
+        assert (pure (server_driver_network_process_correct_for_app_out
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out));
+        lemma_server_receive_endpoint_failed_correct
           'st0
           st1
           result
@@ -2048,16 +2827,28 @@ fn receive_connected
           (Ghost.reveal 'sent)
           sent'
           loop_app_out
-          (Ghost.reveal 'out_bytes)));
-        forget_server_driver_connected_app_out d;
-        result
-      }
-      ST.OutputBufferTooSmall -> {
-        let result = {
-          server_receive_status = ServerWorkflowStepFailed;
-          server_receive_len = 0sz;
-        };
-        assert (pure (server_driver_receive_correct
+          (Ghost.reveal 'out_bytes);
+        DN.lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (
+          B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+        assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+        assert (pure (
+          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+        assert (pure (
+          server_driver_received_log_accounted
+            'st0
+            (Ghost.reveal 'received)));
+        assert (pure (server_driver_sent_log_exact st1 sent'));
+        assert (pure (server_driver_received_log_accounted st1 received'));
+        assert_norm (
+          result.server_receive_status == ServerWorkflowStepFailed);
+        lemma_server_receive_nonretry_ready_implication 'st0 st1 result;
+        lemma_server_receive_correct_exists
           'st0
           st1
           result
@@ -2065,16 +2856,41 @@ fn receive_connected
           (Ghost.reveal 'sent)
           sent'
           loop_app_out
-          (Ghost.reveal 'out_bytes)));
+          (Ghost.reveal 'out_bytes);
         forget_server_driver_connected_app_out d;
         result
       }
-      ST.ConnectionFailed -> {
+      ET.IllegalTransition -> {
         let result = {
           server_receive_status = ServerWorkflowStepFailed;
           server_receive_len = 0sz;
         };
-        assert (pure (server_driver_receive_correct
+        assert_norm (
+          result.server_receive_status == ServerWorkflowStepFailed);
+        assert_norm (result.server_receive_len == 0sz);
+        assert (pure (
+          loop.server_driver_network_loop_exhausted == false));
+        assert (pure (
+          st1.CS.cs_model.CS.model_control <> CS.ControlClosed));
+        assert_norm (
+          loop.server_driver_network_loop_last.ST.response.ST.status ==
+            ST.IllegalTransition);
+        assert (pure (
+          B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+        assert (pure (server_driver_network_process_correct
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'));
+        assert (pure (server_driver_network_process_correct_for_app_out
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out));
+        lemma_server_receive_endpoint_failed_correct
           'st0
           st1
           result
@@ -2082,7 +2898,173 @@ fn receive_connected
           (Ghost.reveal 'sent)
           sent'
           loop_app_out
-          (Ghost.reveal 'out_bytes)));
+          (Ghost.reveal 'out_bytes);
+        DN.lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (
+          B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+        assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+        assert (pure (
+          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+        assert (pure (
+          server_driver_received_log_accounted
+            'st0
+            (Ghost.reveal 'received)));
+        assert (pure (server_driver_sent_log_exact st1 sent'));
+        assert (pure (server_driver_received_log_accounted st1 received'));
+        lemma_server_receive_nonretry_ready_implication 'st0 st1 result;
+        lemma_server_receive_correct_exists
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes);
+        forget_server_driver_connected_app_out d;
+        result
+      }
+      ET.OutputBufferTooSmall -> {
+        let result = {
+          server_receive_status = ServerWorkflowStepFailed;
+          server_receive_len = 0sz;
+        };
+        assert_norm (
+          result.server_receive_status == ServerWorkflowStepFailed);
+        assert_norm (result.server_receive_len == 0sz);
+        assert (pure (
+          loop.server_driver_network_loop_exhausted == false));
+        assert (pure (
+          st1.CS.cs_model.CS.model_control <> CS.ControlClosed));
+        assert_norm (
+          loop.server_driver_network_loop_last.ST.response.ST.status ==
+            ST.OutputBufferTooSmall);
+        assert (pure (
+          B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+        assert (pure (server_driver_network_process_correct
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'));
+        assert (pure (server_driver_network_process_correct_for_app_out
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out));
+        lemma_server_receive_endpoint_failed_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes)
+          ;
+        DN.lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (
+          B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+        assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+        assert (pure (
+          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+        assert (pure (
+          server_driver_received_log_accounted
+            'st0
+            (Ghost.reveal 'received)));
+        assert (pure (server_driver_sent_log_exact st1 sent'));
+        assert (pure (server_driver_received_log_accounted st1 received'));
+        lemma_server_receive_nonretry_ready_implication 'st0 st1 result;
+        lemma_server_receive_correct_exists
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes);
+        forget_server_driver_connected_app_out d;
+        result
+      }
+      ET.ConnectionFailed -> {
+        let result = {
+          server_receive_status = ServerWorkflowStepFailed;
+          server_receive_len = 0sz;
+        };
+        assert_norm (
+          result.server_receive_status == ServerWorkflowStepFailed);
+        assert_norm (result.server_receive_len == 0sz);
+        assert (pure (
+          loop.server_driver_network_loop_exhausted == false));
+        assert (pure (
+          st1.CS.cs_model.CS.model_control <> CS.ControlClosed));
+        assert_norm (
+          loop.server_driver_network_loop_last.ST.response.ST.status ==
+            ST.ConnectionFailed);
+        assert (pure (
+          B.length loop_app_out == SZ.v DS.driver_app_out_capacity));
+        assert (pure (server_driver_network_process_correct
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'));
+        assert (pure (server_driver_network_process_correct_for_app_out
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out));
+        lemma_server_receive_endpoint_failed_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes);
+        DN.lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent';
+        assert (pure (
+          B.length (Ghost.reveal 'out_bytes) == SZ.v out_len));
+        assert (pure (SZ.v result.server_receive_len <= SZ.v out_len));
+        assert (pure (
+          server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent)));
+        assert (pure (
+          server_driver_received_log_accounted
+            'st0
+            (Ghost.reveal 'received)));
+        assert (pure (server_driver_sent_log_exact st1 sent'));
+        assert (pure (server_driver_received_log_accounted st1 received'));
+        lemma_server_receive_nonretry_ready_implication 'st0 st1 result;
+        lemma_server_receive_correct_exists
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes);
         forget_server_driver_connected_app_out d;
         result
       }
@@ -2732,10 +3714,13 @@ let server_channel_implementation
     CI.ci_project = TChannel.application_log;
     CI.ci_message_of_bytes = channel_message_of_bytes;
     CI.ci_channel_inv = DS.server_channel_inv;
+    CI.ci_io_frame = DS.server_channel_io_frame;
     CI.ci_snapshot = DS.server_channel_snapshot;
     CI.ci_send_succeeded = channel_send_succeeded;
     CI.ci_receive_succeeded = channel_receive_succeeded;
     CI.ci_receive_length = channel_receive_length;
+    CI.ci_open_io_channel = SChannel.open_io_channel;
+    CI.ci_close_io_channel = SChannel.close_io_channel;
     CI.ci_invariant_valid = SChannel.channel_invariant_valid;
     CI.ci_take_snapshot = SChannel.take_channel_snapshot;
     CI.ci_recall_snapshot = SChannel.recall_channel_snapshot;

@@ -410,10 +410,13 @@ let client_channel_implementation
     CI.ci_project = TChannel.application_log;
     CI.ci_message_of_bytes = channel_message_of_bytes;
     CI.ci_channel_inv = DS.client_channel_inv;
+    CI.ci_io_frame = DS.client_channel_io_frame;
     CI.ci_snapshot = DS.client_channel_snapshot;
     CI.ci_send_succeeded = channel_send_succeeded;
     CI.ci_receive_succeeded = channel_receive_succeeded;
     CI.ci_receive_length = channel_receive_length;
+    CI.ci_open_io_channel = CChannel.open_io_channel;
+    CI.ci_close_io_channel = CChannel.close_io_channel;
     CI.ci_invariant_valid = CChannel.channel_invariant_valid;
     CI.ci_take_snapshot = CChannel.take_channel_snapshot;
     CI.ci_recall_snapshot = CChannel.recall_channel_snapshot;

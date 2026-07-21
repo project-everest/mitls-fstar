@@ -140,22 +140,25 @@ let client_driver_send_correct
   (sent:B.bytes)
   (sent':B.bytes)
   : prop =
-  if status == DriverWorkflowPayloadTooLarge
-  then
-    st1 == st0 /\
-    Seq.equal sent' sent /\
-    client_driver_payload_too_large payload
-  else
-    exists resp.
-      client_driver_local_write_correct
-        st0
-        st1
-        resp
-        CT.LocalSendApplicationData
-        payload
-        sent
-        sent' /\
-      client_driver_send_status_correct status resp
+  (if status == DriverWorkflowPayloadTooLarge
+   then
+     st1 == st0 /\
+     Seq.equal sent' sent /\
+     client_driver_payload_too_large payload
+   else
+     exists resp.
+       client_driver_local_write_correct
+         st0
+         st1
+         resp
+         CT.LocalSendApplicationData
+         payload
+         sent
+         sent' /\
+       client_driver_send_status_correct status resp) /\
+  Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    st0.CS.cs_wire_log.CL.raw_received
 
 noextract
 let client_driver_close_status_correct
@@ -463,6 +466,141 @@ let lemma_rejoined_raw_mask_matches_old
       Seq.index raw_joined_mask i == Some (Seq.index old_raw i))
     index_proof
 
+let lemma_mask_values_at_offset
+  (bytes:B.bytes)
+  (mask:Seq.seq (option U8.t))
+  (offset count:nat)
+  : Lemma
+    (requires
+      offset + count <= B.length bytes /\
+      Seq.length mask == B.length bytes /\
+      (forall (i:nat). i < B.length bytes ==>
+        Some (Seq.index bytes i) == Seq.index mask i))
+    (ensures
+      forall (i:nat). i < count ==>
+        Some (Seq.index bytes (offset + i)) ==
+          Seq.index mask (offset + i))
+=
+  let index_proof
+    (i:nat { i < count })
+    : Lemma
+      (Some (Seq.index bytes (offset + i)) ==
+        Seq.index mask (offset + i))
+  =
+    assert (offset + i < B.length bytes)
+  in
+  FStar.Classical.forall_intro
+    #(i:nat { i < count })
+    #(fun i ->
+      Some (Seq.index bytes (offset + i)) ==
+        Seq.index mask (offset + i))
+    index_proof
+
+let lemma_joined_mask_values_at_offset
+  (base replacement joined:Seq.seq (option U8.t))
+  (offset upper count:nat)
+  : Lemma
+    (requires
+      offset <= upper /\
+      offset + count <= upper /\
+      upper <= Seq.length joined /\
+      Seq.length base == Seq.length joined /\
+      upper - offset <= Seq.length replacement /\
+      count <= Seq.length replacement /\
+      (forall (i:nat). i < Seq.length joined ==>
+        Seq.index joined i ==
+          (if offset <= i && i < upper
+           then Seq.index replacement (i - offset)
+           else Seq.index base i)))
+    (ensures
+      forall (i:nat). i < count ==>
+        Seq.index joined (offset + i) == Seq.index replacement i)
+=
+  let index_proof
+    (i:nat { i < count })
+    : Lemma
+      (Seq.index joined (offset + i) == Seq.index replacement i)
+  =
+    assert (offset <= offset + i);
+    assert (offset + i < upper);
+    assert ((offset + i) - offset == i)
+  in
+  FStar.Classical.forall_intro
+    #(i:nat { i < count })
+    #(fun i ->
+      Seq.index joined (offset + i) == Seq.index replacement i)
+    index_proof
+
+let lemma_joined_mask_values_before_offset
+  (base replacement joined:Seq.seq (option U8.t))
+  (offset upper count:nat)
+  : Lemma
+    (requires
+      count <= offset /\
+      offset <= upper /\
+      upper <= Seq.length joined /\
+      Seq.length base == Seq.length joined /\
+      upper - offset <= Seq.length replacement /\
+      (forall (i:nat). i < Seq.length joined ==>
+        Seq.index joined i ==
+          (if offset <= i && i < upper
+           then Seq.index replacement (i - offset)
+           else Seq.index base i)))
+    (ensures
+      forall (i:nat). i < count ==>
+        Seq.index joined i == Seq.index base i)
+=
+  let index_proof
+    (i:nat { i < count })
+    : Lemma
+      (Seq.index joined i == Seq.index base i)
+  =
+    assert (i < offset);
+    assert (~(offset <= i))
+  in
+  FStar.Classical.forall_intro
+    #(i:nat { i < count })
+    #(fun i -> Seq.index joined i == Seq.index base i)
+    index_proof
+
+let lemma_joined_mask_is_some
+  (base replacement joined:Seq.seq (option U8.t))
+  (offset upper:nat)
+  : Lemma
+    (requires
+      offset <= upper /\
+      upper <= Seq.length joined /\
+      Seq.length base == Seq.length joined /\
+      upper - offset <= Seq.length replacement /\
+      (forall (i:nat). i < Seq.length base ==>
+        Some? (Seq.index base i)) /\
+      (forall (i:nat). i < Seq.length replacement ==>
+        Some? (Seq.index replacement i)) /\
+      (forall (i:nat). i < Seq.length joined ==>
+        Seq.index joined i ==
+          (if offset <= i && i < upper
+           then Seq.index replacement (i - offset)
+           else Seq.index base i)))
+    (ensures
+      forall (i:nat). i < Seq.length joined ==>
+        Some? (Seq.index joined i))
+=
+  let index_proof
+    (i:nat { i < Seq.length joined })
+    : Lemma (Some? (Seq.index joined i))
+  =
+    if offset <= i && i < upper then (
+      assert (i - offset < upper - offset);
+      assert (i - offset < Seq.length replacement)
+    ) else (
+      assert (i < Seq.length base)
+    )
+  in
+  FStar.Classical.forall_intro
+    #(i:nat { i < Seq.length joined })
+    #(fun i -> Some? (Seq.index joined i))
+    index_proof
+
 noextract
 let logged_received_bytes_accounted
   (logged:B.bytes)
@@ -470,6 +608,11 @@ let logged_received_bytes_accounted
   : prop =
   B.length logged <= B.length consumed /\
   (forall b. SeqP.count b logged <= SeqP.count b consumed)
+
+let lemma_empty_received_bytes_accounted ()
+  : Lemma (logged_received_bytes_accounted B.empty B.empty)
+=
+  ()
 
 noextract
 let client_driver_wire_logs_match_witness
@@ -484,8 +627,14 @@ let client_driver_wire_logs_match_witness
   B.length buffered == SZ.v buffered_len /\
   Seq.equal (B.append consumed buffered) received /\
   logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
+  CI.ordered_subsequence st.CS.cs_wire_log.CL.raw_received consumed /\
   (CT.connection_control_not_failed st ==>
-    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed)
+    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed) /\
+  CI.channel_io_history_matches
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    received
+    sent
 
 noextract
 let client_driver_wire_logs_match
@@ -503,6 +652,81 @@ let client_driver_wire_logs_match
       consumed
       buffered
       buffered_len
+
+let choose_wire_logs_match_witness
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Ghost (Ghost.erased B.bytes)
+      (requires
+        client_driver_wire_logs_match
+          st received sent buffered buffered_len)
+      (ensures fun consumed ->
+        client_driver_wire_logs_match_witness
+          st
+          received
+          sent
+          (Ghost.reveal consumed)
+          buffered
+          buffered_len)
+=
+  assert_norm (
+    client_driver_wire_logs_match
+      st received sent buffered buffered_len ==
+    (exists consumed.
+      client_driver_wire_logs_match_witness
+        st received sent consumed buffered buffered_len));
+  let consumed =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        client_driver_wire_logs_match_witness
+          st received sent consumed buffered buffered_len) in
+  Ghost.hide consumed
+
+ghost fn establish_initial_wire_logs_match
+  (cfg:CS.connection_config{
+    cfg.CS.config_role == CS.ClientEndpoint
+  })
+  requires emp
+  ensures pure (
+    client_driver_wire_logs_match
+      (CS.initial cfg)
+      B.empty
+      B.empty
+      B.empty
+      0sz /\
+    CT.client_state_correct (CS.initial cfg) /\
+    CT.client_end_to_end_invariant (CS.initial cfg))
+{
+  lemma_empty_received_bytes_accounted ();
+  CI.lemma_ordered_subsequence_empty B.empty;
+  assert (pure (client_driver_wire_logs_match_witness
+    (CS.initial cfg)
+    B.empty
+    B.empty
+    B.empty
+    B.empty
+    0sz));
+  CT.lemma_initial_client_end_to_end_invariant cfg;
+  assert (pure (client_driver_wire_logs_match
+    (CS.initial cfg)
+    B.empty
+    B.empty
+    B.empty
+    0sz));
+  assert (pure (
+    client_driver_wire_logs_match
+      (CS.initial cfg)
+      B.empty
+      B.empty
+      B.empty
+      0sz /\
+    CT.client_state_correct (CS.initial cfg) /\
+    CT.client_end_to_end_invariant (CS.initial cfg)))
+}
 
 let lemma_logged_received_bytes_accounted_transport
   (st:TLS13.Spec.StateMachine.connection_state)
@@ -762,6 +986,39 @@ let client_channel_inv
         transport_sent
         buffered
         buffered_len /\
+      CI.channel_io_history_matches
+        raw_received
+        raw_sent
+        transport_received
+        transport_sent /\
+      app_log == TChannel.application_log st)
+
+noextract
+let client_channel_io_frame
+  (d:client_driver)
+  (ch:IO.channel)
+  (raw_received:B.bytes)
+  (raw_sent:B.bytes)
+  (transport_received:B.bytes)
+  (transport_sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st buffered buffered_len.
+    CP.client_invariant
+      (client_driver_canonical d)
+      raw_received
+      raw_sent
+      st **
+    O.is_auth_context d.client_driver_auth **
+    Box.pts_to d.client_driver_channel (Some ch) **
+    client_driver_buffers d buffered buffered_len **
+    pure (
+      client_driver_wire_logs_match
+        st
+        transport_received
+        transport_sent
+        buffered
+        buffered_len /\
       app_log == TChannel.application_log st)
 
 noextract
@@ -865,6 +1122,9 @@ let lemma_client_driver_wire_logs_match_received_no_read_ahead
   Seq.lemma_eq_elim st.CS.cs_wire_log.CL.raw_received (Ghost.reveal consumed);
   Seq.lemma_eq_elim (B.append st.CS.cs_wire_log.CL.raw_received buffered) received;
   assert (B.length buffered == 0);
+  Seq.lemma_eq_intro buffered B.empty;
+  Seq.lemma_eq_elim buffered B.empty;
+  Seq.append_empty_r st.CS.cs_wire_log.CL.raw_received;
   assert (B.length received == B.length st.CS.cs_wire_log.CL.raw_received)
 
 type local_write_result = {
@@ -1597,6 +1857,139 @@ let lemma_network_bytes_logged_received_accounted
       old_consumed
       raw_received
       (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+  )
+
+let lemma_network_bytes_logged_received_ordered
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  (old_consumed:B.bytes)
+  : Lemma
+      (requires
+        CT.network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out /\
+        CI.ordered_subsequence
+          st0.CS.cs_wire_log.CL.raw_received
+          old_consumed)
+      (ensures
+        CI.ordered_subsequence
+          st1.CS.cs_wire_log.CL.raw_received
+          (B.append old_consumed
+            (CT.network_consumed_prefix
+              network_input
+              buffer_resp.CT.consumed_len)))
+=
+  let resp = buffer_resp.CT.response in
+  assert (CI.ordered_subsequence
+    st0.CS.cs_wire_log.CL.raw_received
+    old_consumed);
+  assert (CT.network_bytes_step_correct
+    st0 st1 buffer_resp network_input
+    old_network_out network_out old_app_out app_out);
+  if CT.response_stuttered
+       st0 st1 resp old_network_out network_out old_app_out app_out
+  then (
+    assert (st1 == st0);
+    CI.lemma_ordered_subsequence_append_right
+      st0.CS.cs_wire_log.CL.raw_received
+      old_consumed
+      (CT.network_consumed_prefix
+        network_input
+        buffer_resp.CT.consumed_len)
+  ) else (
+    assert (CT.some_legal_response_for_network_prefix
+      st0 st1 resp network_input
+      buffer_resp.CT.consumed_len network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          CT.legal_response_for_event
+            st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix
+              network_input
+              buffer_resp.CT.consumed_len)) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          CT.legal_response_for_event
+            st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix
+              network_input
+              buffer_resp.CT.consumed_len)) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          CT.legal_response_for_event
+            st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix
+              network_input
+              buffer_resp.CT.consumed_len)) in
+    assert (CT.legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    assert (CT.raw_received_matches_network_input
+      raw_received
+      (CT.network_consumed_prefix
+        network_input
+        buffer_resp.CT.consumed_len));
+    lemma_legal_response_for_event_wire_lengths
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received raw_received));
+    if Seq.equal raw_received B.empty then (
+      Seq.lemma_eq_elim raw_received B.empty;
+      Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received;
+      assert (Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_received);
+      Seq.lemma_eq_elim
+        st1.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_received;
+      CI.lemma_ordered_subsequence_append_right
+        st0.CS.cs_wire_log.CL.raw_received
+        old_consumed
+        (CT.network_consumed_prefix
+          network_input
+          buffer_resp.CT.consumed_len);
+      assert (CI.ordered_subsequence
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append old_consumed
+          (CT.network_consumed_prefix
+            network_input
+            buffer_resp.CT.consumed_len)))
+    ) else (
+      Seq.lemma_eq_elim raw_received
+        (CT.network_consumed_prefix
+          network_input
+          buffer_resp.CT.consumed_len);
+      CI.lemma_ordered_subsequence_append_both
+        st0.CS.cs_wire_log.CL.raw_received
+        old_consumed
+        (CT.network_consumed_prefix
+          network_input
+          buffer_resp.CT.consumed_len);
+      assert (CI.ordered_subsequence
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append old_consumed
+          (CT.network_consumed_prefix
+            network_input
+            buffer_resp.CT.consumed_len)))
+    )
   )
 
 let lemma_network_bytes_zero_consumed_raw_received_unchanged

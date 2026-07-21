@@ -266,8 +266,8 @@ fn run
                   sent1 /\
                   st1.CS.cs_model.CS.model_config ==
                     'st0.CS.cs_model.CS.model_config /\
-                  client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                  client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+                 client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                 client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                  client_driver_sent_log_exact st1 sent1 /\
                  client_driver_received_log_accounted st1 received1)
 {

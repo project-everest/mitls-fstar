@@ -204,6 +204,17 @@ fn new_client
           (Ghost.reveal initial));
       rewrite (O.is_auth_context auth) as (O.is_auth_context d.client_driver_auth);
       fold (client_driver_buffers d B.empty 0sz);
+      assert (pure (Ghost.reveal initial ==
+        CS.initial
+          (CR.configured_connection_config
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds)));
+      establish_initial_wire_logs_match
+        (CR.configured_connection_config
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds);
       assert (pure (client_driver_wire_logs_match
         (Ghost.reveal initial)
         B.empty
@@ -212,6 +223,21 @@ fn new_client
         0sz));
       assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_received));
       assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_sent));
+      Seq.lemma_eq_elim
+        B.empty
+        (Ghost.reveal initial).CS.cs_wire_log.CL.raw_received;
+      Seq.lemma_eq_elim
+        B.empty
+        (Ghost.reveal initial).CS.cs_wire_log.CL.raw_sent;
+      CT.lemma_initial_client_end_to_end_invariant
+        (CR.configured_connection_config
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds);
+      assert (pure (CT.client_end_to_end_invariant
+        (Ghost.reveal initial)));
+      assert (pure (CP.client_initial_wire_logs_empty
+        (Ghost.reveal initial)));
       assert (pure (CP.client_invariant_pure
         (Ghost.reveal initial)
         B.empty
