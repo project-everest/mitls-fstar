@@ -212,7 +212,8 @@ let server_driver_receive_correct
   (out_bytes:B.bytes)
   : prop =
   server_driver_receive_status_correct result loop st1 app_out out_bytes /\
-  B.length app_out == SZ.v DState.driver_app_out_capacity /\
+  B.length app_out >= SZ.v DState.driver_app_out_capacity /\
+  B.length app_out <= B.length out_bytes /\
   SZ.v result.server_receive_len <= B.length out_bytes /\
   (loop.DN.server_driver_network_loop_exhausted == true ==>
     st1 == st0 /\
