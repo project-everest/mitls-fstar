@@ -46,8 +46,9 @@ EXTRACT_DIR = _extract
 HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
 HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
-SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(GENERATED_DIR) \
+SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
   $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse
 
 # ── F* Flags ───────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ INCLUDES = \
   --include common \
   $(addprefix --include ,$(SPEC_DIRS)) \
   --include src/impl \
+  --include $(EXTERN_DIR) \
   --include $(GENERATED_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse
@@ -100,7 +102,8 @@ FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
 SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
+EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
+ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 ROOT_FILES = \
   src/impl/TLS13.System.Temporal.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
@@ -406,8 +409,8 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Messages,\
   TLS13.KeySchedule,TLS13.Record
 
-# Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, TLS13.Lib.Memmove, TLS13.OpenSSL, Common.TCP
+# Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
+# models remain under src/spec/assumptions.
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 
