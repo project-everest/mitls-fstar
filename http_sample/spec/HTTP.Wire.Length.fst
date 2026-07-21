@@ -45,6 +45,13 @@ let resp_prefix  : TCP.bytes = W.lit [0x48uy;0x54uy;0x54uy;0x50uy;0x2Fuy;0x31uy;
 let cl_tail_pre  : TCP.bytes = W.lit [0x20uy;0x0Duy;0x0Auy;0x43uy;0x6Fuy;0x6Euy;0x74uy;0x65uy;0x6Euy;0x74uy;0x2Duy;0x4Cuy;0x65uy;0x6Euy;0x67uy;0x74uy;0x68uy;0x3Auy;0x20uy]  (* " \r\nContent-Length: " *)
 let cl_tail_post : TCP.bytes = W.lit [0x0Duy;0x0Auy;0x0Duy;0x0Auy]  (* "\r\n\r\n" *)
 
+(* Literals for a *real* origin-server request line carrying a Host header (and
+   Connection: close so the peer closes after the response, delimiting the body
+   for a read-to-EOF client).  Layout:
+     "GET " target " HTTP/1.1\r\nHost: " host "\r\nConnection: close\r\n\r\n"  *)
+let req_host_mid  : TCP.bytes = W.lit [0x20uy;0x48uy;0x54uy;0x54uy;0x50uy;0x2Fuy;0x31uy;0x2Euy;0x31uy;0x0Duy;0x0Auy;0x48uy;0x6Fuy;0x73uy;0x74uy;0x3Auy;0x20uy]  (* " HTTP/1.1\r\nHost: " *)
+let req_host_tail : TCP.bytes = W.lit [0x0Duy;0x0Auy;0x43uy;0x6Fuy;0x6Euy;0x6Euy;0x65uy;0x63uy;0x74uy;0x69uy;0x6Fuy;0x6Euy;0x3Auy;0x20uy;0x63uy;0x6Cuy;0x6Fuy;0x73uy;0x65uy;0x0Duy;0x0Auy;0x0Duy;0x0Auy]  (* "\r\nConnection: close\r\n\r\n" *)
+
 (* ─── Message union ────────────────────────────────────────────────────────── *)
 type status_code = c:U16.t{100 <= U16.v c /\ U16.v c < 1000}
 type content_len = n:nat{n < W.max_len8}
@@ -63,6 +70,13 @@ type http_message =
 (* ─── Serialization ────────────────────────────────────────────────────────── *)
 let ser_request (target:W.token) : TCP.bytes =
   Seq.append lit_get (Seq.append target (Seq.cons W.bSP req_tail))
+
+(* A real origin-server GET request line with a Host header. *)
+let ser_request_host (target host:W.token) : TCP.bytes =
+  Seq.append lit_get
+    (Seq.append target
+      (Seq.append req_host_mid
+        (Seq.append host req_host_tail)))
 
 let ser_response (code:status_code) (len:content_len) : TCP.bytes =
   Seq.append resp_prefix

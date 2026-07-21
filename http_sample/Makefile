@@ -190,7 +190,7 @@ vloop-length-test: extract-loops
 	@$(EXTRACT_DIR)/vloop_length_test $(VERIFIED_DIR)/dummy.txt
 
 # Run both framings' verified<->verified interop tests.
-vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test vloop-chunk-stream-test
+vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test vloop-chunk-stream-test request-emit-test
 
 vloop-chunk-stream-test: extract-loops
 	@echo "Building the verified chunked streaming transfer test ..."
@@ -246,6 +246,17 @@ chunk-stream-test: extract-loops
 	@echo " Verified http_emit_chunk/empty  ->  Verified http_decode_chunks reassembly"
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/chunk_stream_test
+
+request-emit-test: extract-loops
+	@echo "Building the verified GET-request-with-Host emitter self-test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_emit_test \
+	  $(VERIFIED_DIR)/request_emit_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified http_emit_request_host  ->  byte-exact reference"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/request_emit_test
 
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
