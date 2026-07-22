@@ -708,6 +708,96 @@ fn peek_open_application
   }
 }
 
+fn peek_open_application_suffix
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (raw: array U8.t)
+  (raw_len: SZ.t)
+  (cipher_offset: SZ.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to raw 'raw_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'raw_bytes == SZ.v raw_len /\
+                 SZ.fits (SZ.v raw_len) /\
+                 SZ.v cipher_offset <= SZ.v raw_len /\
+                 SZ.v cipher_offset + SZ.v cipher_len == SZ.v raw_len /\
+                 B.length 'old + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_record_state st 's **
+          pts_to aad 'aad_bytes **
+          pts_to raw 'raw_bytes **
+          pts_to out out_bytes **
+          pure (B.length 'raw_bytes == SZ.v raw_len /\
+                SZ.fits (SZ.v raw_len) /\
+                SZ.v cipher_offset <= SZ.v raw_len /\
+                B.length out_bytes == B.length 'old /\
+                (ok ==> Some? (R.open_record 's
+                                  (Ghost.reveal 'aad_bytes)
+                                  (Seq.slice
+                                    (Ghost.reveal 'raw_bytes)
+                                    (SZ.v cipher_offset)
+                                    (SZ.v raw_len))) /\
+                         (let opened = Some?.v (R.open_record 's
+                                                (Ghost.reveal 'aad_bytes)
+                                                (Seq.slice
+                                                  (Ghost.reveal 'raw_bytes)
+                                                  (SZ.v cipher_offset)
+                                                  (SZ.v raw_len))) in
+                          out_bytes == fst opened)) /\
+                (not ok ==> out_bytes == 'old /\
+                            R.open_record 's
+                              (Ghost.reveal 'aad_bytes)
+                              (Seq.slice
+                                (Ghost.reveal 'raw_bytes)
+                                (SZ.v cipher_offset)
+                                (SZ.v raw_len)) == None))
+{
+  Arr.pts_to_len raw;
+  Arr.to_mask raw;
+  with raw_mask.
+    assert (Arr.pts_to_mask raw #1.0R raw_mask (fun _ -> True));
+  let cipher = Arr.sub raw cipher_offset (SZ.v raw_len);
+  Arr.from_mask cipher;
+  with cipher_bytes. assert (pts_to cipher cipher_bytes);
+  assert (pure (Seq.equal cipher_bytes
+    (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v cipher_offset) (SZ.v raw_len))));
+  Seq.lemma_eq_elim cipher_bytes
+    (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v cipher_offset) (SZ.v raw_len));
+  let ok = peek_open_application st aad aad_len cipher cipher_len out;
+  Arr.to_mask cipher;
+  with cipher_mask_after.
+    assert (Arr.pts_to_mask
+      (Arr.gsub raw (SZ.v cipher_offset) (SZ.v raw_len))
+      #1.0R
+      cipher_mask_after
+      (fun _ -> True));
+  Arr.return_sub
+    raw
+    #1.0R
+    #raw_mask
+    #cipher_mask_after
+    #(fun k ->
+      True /\ ~(SZ.v cipher_offset <= k /\ k < SZ.v raw_len))
+    #(fun _ -> True)
+    #(SZ.v cipher_offset)
+    #(SZ.v raw_len);
+  Arr.from_mask raw;
+  with raw_after. assert (pts_to raw raw_after);
+  assert (pure (Seq.length raw_after == Seq.length (Ghost.reveal 'raw_bytes)));
+  assert (pure (forall (i:nat). i < Seq.length raw_after ==>
+    Seq.index raw_after i == Seq.index (Ghost.reveal 'raw_bytes) i));
+  Seq.lemma_eq_intro raw_after (Ghost.reveal 'raw_bytes);
+  Seq.lemma_eq_elim raw_after (Ghost.reveal 'raw_bytes);
+  rewrite (pts_to raw raw_after) as (pts_to raw 'raw_bytes);
+  ok
+}
+
 fn open_application_runtime
   (st: record_state)
   (aad: array U8.t)

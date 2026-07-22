@@ -7,6 +7,7 @@
 
 typedef struct tls13_peer_identity_s tls13_peer_identity;
 typedef struct tls13_server_credentials_s tls13_server_credentials;
+typedef struct tls13_trust_store_s tls13_trust_store;
 
 #define TLS13_SIG_RSA_PSS_RSAE_SHA256 ((uint16_t)0x0804u)
 
@@ -14,6 +15,18 @@ bool tls13_openssl_validate_leaf_der(
     const char *hostname,
     const uint8_t *trust_anchor_pem,
     size_t trust_anchor_pem_len,
+    const uint8_t *leaf_der,
+    size_t leaf_der_len,
+    tls13_peer_identity **out_peer);
+
+tls13_trust_store *tls13_openssl_trust_store_new(
+    const uint8_t *trust_anchor_pem,
+    size_t trust_anchor_pem_len);
+
+bool tls13_openssl_validate_leaf_der_with_store(
+    const char *hostname,
+    const tls13_trust_store *trust_store,
+    size_t validation_time_seconds,
     const uint8_t *leaf_der,
     size_t leaf_der_len,
     tls13_peer_identity **out_peer);
@@ -47,6 +60,8 @@ bool tls13_openssl_server_copy_certificate_chain(
     size_t *out_len);
 
 void tls13_openssl_peer_identity_free(tls13_peer_identity *peer);
+
+void tls13_openssl_trust_store_free(tls13_trust_store *trust_store);
 
 void tls13_openssl_server_credentials_free(tls13_server_credentials *creds);
 

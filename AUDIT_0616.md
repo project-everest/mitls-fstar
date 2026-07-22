@@ -38,11 +38,11 @@ The current theorem is intentionally narrow:
 7. TCB interfaces:
    - `src/impl/TLS13.Impl.Parser.fsti`
    - `src/impl/TLS13.Impl.Serializer.fsti`
-   - `src/spec/TLS13.Crypto.Spec.fsti`
-   - `src/impl/TLS13.Crypto.fsti`
-   - `src/spec/TLS13.X509.Spec.fsti`
+   - `src/spec/assumptions/TLS13.Crypto.Spec.fsti`
+   - `src/impl/extern/TLS13.Crypto.fsti`
+   - `src/spec/assumptions/TLS13.X509.Spec.fsti`
    - `src/impl/TLS13.X509.fsti`
-   - `src/impl/TLS13.OpenSSL.fsti`
+   - `src/impl/extern/TLS13.OpenSSL.fsti`
    - `src/impl/TLS13.IO.fsti`
 
 ## Top-level client driver API audit
@@ -385,9 +385,9 @@ Sign-off questions:
 
 ## Crypto TCB audit
 
-Pure spec file: `src/spec/TLS13.Crypto.Spec.fsti`.
+Pure spec file: `src/spec/assumptions/TLS13.Crypto.Spec.fsti`.
 
-Implementation interface: `src/impl/TLS13.Crypto.fsti`.
+Implementation interface: `src/impl/extern/TLS13.Crypto.fsti`.
 
 Trusted operations:
 
@@ -421,9 +421,9 @@ Sign-off questions:
 
 ## Certificate and signature TCB audit
 
-Pure spec file: `src/spec/TLS13.X509.Spec.fsti`.
+Pure spec file: `src/spec/assumptions/TLS13.X509.Spec.fsti`.
 
-Pulse/OpenSSL boundary: `src/impl/TLS13.OpenSSL.fsti`.
+Pulse/OpenSSL boundary: `src/impl/extern/TLS13.OpenSSL.fsti`.
 
 Additional implementation interface: `src/impl/TLS13.X509.fsti`.
 

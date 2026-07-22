@@ -14,6 +14,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define APPLICATION_RECORD_COUNT 16u
+
 static int read_file(const char *path, uint8_t **out, size_t *out_len) {
   FILE *f = fopen(path, "rb");
   if (f == NULL) {
@@ -162,7 +164,6 @@ static int run_extracted_server(
   tls13_server_driver *server = NULL;
   static const uint8_t expected[] = {'p', 'i', 'n', 'g'};
   uint8_t received[TLS13_SERVER_DRIVER_RECEIVE_BUFFER_SIZE] = {0};
-  size_t received_len = 0;
   int rc = 1;
 
   if (tls13_server_driver_accept(
@@ -172,23 +173,36 @@ static int run_extracted_server(
           certificate_chain,
           certificate_chain_len,
           private_key,
-          private_key_len) == 0 &&
-      tls13_server_driver_receive_application_data(
-          server,
-          received,
-          sizeof received,
-          &received_len) == 0 &&
-      received_len == sizeof expected &&
-      memcmp(received, expected, sizeof expected) == 0 &&
-      tls13_server_driver_send_application_data(server, received, received_len) == 0 &&
-      tls13_server_driver_close(server, false) == 0) {
+          private_key_len) != 0) {
+    goto failed;
+  }
+  for (size_t i = 0u; i < APPLICATION_RECORD_COUNT; ++i) {
+    size_t received_len = 0u;
+    if (tls13_server_driver_receive_application_data(
+            server,
+            received,
+            sizeof received,
+            &received_len) != 0 ||
+        received_len != sizeof expected ||
+        memcmp(received, expected, sizeof expected) != 0 ||
+        tls13_server_driver_send_application_data(
+            server, received, received_len) != 0) {
+      goto failed;
+    }
+  }
+  if (tls13_server_driver_close(server, true) == 0) {
     rc = 0;
-  } else if (server != NULL) {
+    goto done;
+  }
+
+failed:
+  if (server != NULL) {
     fprintf(stderr, "extracted server failed: %s\n", tls13_server_driver_last_error(server));
   } else {
     fprintf(stderr, "extracted server failed during accept\n");
   }
 
+done:
   tls13_server_driver_free(server);
   return rc;
 }
@@ -247,18 +261,29 @@ static int run_openssl_client(uint16_t port, const char *ca_path) {
   }
 
   static const uint8_t ping[] = {'p', 'i', 'n', 'g'};
-  uint8_t received[sizeof ping] = {0};
-  if (SSL_write(ssl, ping, sizeof ping) != (int)sizeof ping) {
+  for (size_t i = 0u; i < APPLICATION_RECORD_COUNT; ++i) {
+    if (SSL_write(ssl, ping, sizeof ping) != (int)sizeof ping) {
+      ERR_print_errors_fp(stderr);
+      goto done;
+    }
+  }
+  if (SSL_shutdown(ssl) < 0) {
     ERR_print_errors_fp(stderr);
     goto done;
   }
-  int n = SSL_read(ssl, received, sizeof received);
-  if (n != (int)sizeof ping || memcmp(received, ping, sizeof ping) != 0) {
-    ERR_print_errors_fp(stderr);
-    goto done;
+  for (size_t i = 0u; i < APPLICATION_RECORD_COUNT; ++i) {
+    uint8_t received[sizeof ping] = {0};
+    int n = SSL_read(ssl, received, sizeof received);
+    if (n != (int)sizeof ping || memcmp(received, ping, sizeof ping) != 0) {
+      ERR_print_errors_fp(stderr);
+      goto done;
+    }
   }
 
-  (void)SSL_shutdown(ssl);
+  if (SSL_shutdown(ssl) < 0) {
+    ERR_print_errors_fp(stderr);
+    goto done;
+  }
   rc = 0;
 
 done:

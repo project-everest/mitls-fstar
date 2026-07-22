@@ -6152,7 +6152,8 @@ fn validate_generated_record
    On success returns the inner content-type byte, an owned copy of the inner
    payload, its length, and (in [pure]) the [protected_decoder_fragment_relation]
    that ties the payload to [WS.parse_record]/[R.open_record]/[WS.parse_plaintext].
-   Frees all scratch buffers (aad, cipher, opened) on every path. *)
+   The ciphertext is passed as a verified view into [raw], so only the small
+   header and opened-plaintext scratch buffers are allocated. *)
 fn peek_decrypt_record
   (c: CR.connection_state)
   (raw: array U8.t)
@@ -6195,36 +6196,29 @@ fn peek_decrypt_record
   } else {
     let out_len = SZ.sub flen 16sz;
     let aad_vec = alloc_copy_slice raw raw_len 0sz 5sz;
-    let cipher_vec = alloc_copy_slice raw raw_len 5sz flen;
     let out_vec = V.alloc 0uy out_len;
     with aad_bytes. assert (V.pts_to aad_vec aad_bytes);
-    with cipher_bytes. assert (V.pts_to cipher_vec cipher_bytes);
     assert (pure (Seq.equal aad_bytes (CT.record_header_aad (Ghost.reveal raw_bytes))));
-    assert (pure (Seq.equal cipher_bytes
-      (Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen))));
     V.to_array_pts_to aad_vec;
-    V.to_array_pts_to cipher_vec;
     V.to_array_pts_to out_vec;
     (* Reach the read record-key state inside the connection. *)
     unfold (CR.connection_exactly c st0);
     unfold (CR.connection_model_exactly c st0.CS.cs_model);
     unfold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
-    let ok = Rec.peek_open_application c.records.read
+    let ok = Rec.peek_open_application_suffix c.records.read
                (V.vec_to_array aad_vec) 5sz
-               (V.vec_to_array cipher_vec) flen
+               raw raw_len 5sz flen
                (V.vec_to_array out_vec);
     (* peek does not mutate the connection: re-fold unchanged. *)
     fold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
     fold (CR.connection_model_exactly c st0.CS.cs_model);
     fold (CR.connection_exactly c st0);
     V.to_vec_pts_to aad_vec;
-    V.to_vec_pts_to cipher_vec;
-    V.to_vec_pts_to out_vec;
     if ok {
-      with out_bytes. assert (V.pts_to out_vec out_bytes);
+      with out_bytes. assert (pts_to (V.vec_to_array out_vec) out_bytes);
+      assert (pure (B.length out_bytes == SZ.v out_len));
+      assert (pure (SZ.fits (SZ.v out_len)));
       V.free aad_vec;
-      V.free cipher_vec;
-      V.to_array_pts_to out_vec;
       let inner = decode_inner_plaintext (V.vec_to_array out_vec) out_len;
       V.to_vec_pts_to out_vec;
       match inner {
@@ -6247,7 +6241,7 @@ fn peek_decrypt_record
       }
     } else {
       V.free aad_vec;
-      V.free cipher_vec;
+      V.to_vec_pts_to out_vec;
       V.free out_vec;
       None #decoded_fragment
     }

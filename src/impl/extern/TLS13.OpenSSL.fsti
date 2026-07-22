@@ -15,9 +15,16 @@ module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
+val auth_config : Type0
 val auth_context : Type0
 val server_credentials : Type0
 
+val is_auth_config :
+  auth_config ->
+  server_name:B.bytes ->
+  trust_anchors:B.bytes ->
+  validation_time_seconds:SZ.t ->
+  slprop
 val is_auth_context : auth_context -> slprop
 val is_server_credentials:
   server_credentials ->
@@ -25,7 +32,7 @@ val is_server_credentials:
   credential_identity:CS.server_credential_identity ->
   slprop
 
-fn auth_context_new
+fn auth_config_new
   (server_name:array U8.t)
   (server_name_len:SZ.t)
   (trust_anchors:array U8.t)
@@ -35,10 +42,37 @@ fn auth_context_new
            pts_to trust_anchors 'trust_anchors_bytes **
            pure (B.length 'server_name_bytes == SZ.v server_name_len /\
                  B.length 'trust_anchors_bytes == SZ.v trust_anchors_len)
-  returns ctx: auth_context
+  returns config: auth_config
   ensures pts_to server_name 'server_name_bytes **
           pts_to trust_anchors 'trust_anchors_bytes **
+          is_auth_config
+            config
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds
+
+fn auth_context_new
+  (config:auth_config)
+  requires is_auth_config
+    config
+    'server_name_bytes
+    'trust_anchors_bytes
+    'validation_time_seconds
+  returns ctx: auth_context
+  ensures is_auth_config
+           config
+           'server_name_bytes
+           'trust_anchors_bytes
+           'validation_time_seconds **
           is_auth_context ctx
+
+fn auth_config_free (config:auth_config)
+  requires is_auth_config
+    config
+    'server_name_bytes
+    'trust_anchors_bytes
+    'validation_time_seconds
+  ensures emp
 
 fn server_credentials_new
   (certificate_chain:array U8.t)
@@ -60,6 +94,12 @@ fn server_credentials_new
                (Ghost.reveal 'certificate_chain_bytes)
                credential_identity
            | None -> emp)
+
+fn server_credentials_clone (creds:server_credentials)
+  requires is_server_credentials creds 'certificate_chain 'credential_identity
+  returns clone: server_credentials
+  ensures is_server_credentials creds 'certificate_chain 'credential_identity **
+          is_server_credentials clone 'certificate_chain 'credential_identity
 
 fn sign_certificate_verify
   (creds:server_credentials)
