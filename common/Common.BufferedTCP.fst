@@ -48,13 +48,14 @@ module Common.BufferedTCP
   scheduling / read-authorisation layer that consumes these specs lives in
   [Common.BufferedStream], which depends on this module (never the reverse).
 
-  NOTE on the read side: an imperative [append_read] helper is deliberately *not*
-  provided here.  In the drivers the read path is intertwined with the channel
-  [Common.TCP.read], the masked-sub-array machinery and per-endpoint ownership;
-  abstracting it into a generic helper cannot be done without weakening that
-  ownership.  The append-read step is instead specified at the contract level in
-  [Common.BufferedStream] (the [bse_read] field of the relational adapter), which
-  the concrete endpoint implements against its own resources.
+  The imperative [read_append] helper below owns the complete masked-sub-array
+  borrow/read/rejoin proof.  Its caller supplies a concrete one-shot
+  [read_permit], indexed by the exact pre-read physical buffer.  The scheduling
+  layer in [Common.BufferedStream] issues this zero-runtime-cost capability only
+  after the protocol reports [NeedMore] with positive free space; [read_append]
+  consumes it before invoking [Common.TCP.read].  The ticket representation
+  lives here to preserve the dependency direction:
+  [Common.BufferedStream] depends on this transport layer, never the reverse.
 
 **)
 
@@ -68,6 +69,7 @@ module A   = Pulse.Lib.Array
 module TCP = Common.TCP
 module CPI = Common.ProtocolImplementation
 module Memmove = Common.Memmove
+module GR = Pulse.Lib.GhostReference
 
 (* ------------------------------------------------------------------ *)
 (*  Pure sequence helpers                                             *)
@@ -131,6 +133,15 @@ type phys_buffer = {
   pb_data   : TCP.bytes;
   pb_filled : nat;
 }
+
+(** One-shot ghost capability consumed by [read_append]. *)
+type read_ticket = GR.ref phys_buffer
+
+let read_permit
+  (ticket:read_ticket)
+  (b:phys_buffer)
+  : slprop =
+  GR.pts_to ticket #1.0R b
 
 (** Well-formedness: the live count never exceeds the physical capacity. *)
 let buffer_wf (b:phys_buffer) : prop =
@@ -555,12 +566,15 @@ type read_append_result = {
   the TLS drivers) is entirely internal here.
 **)
 fn read_append
+  (ticket:read_ticket)
   (ch: TCP.channel)
   (raw: array U8.t)
   (capacity: SZ.t)
   (filled: SZ.t)
   (#received #sent: Ghost.erased TCP.bytes)
-  requires TCP.is_channel ch received sent **
+  requires read_permit ticket
+             (mk_phys_buffer (Ghost.reveal 'raw_before) (SZ.v filled)) **
+           TCP.is_channel ch received sent **
            pts_to raw 'raw_before **
            pure (Seq.length (Ghost.reveal 'raw_before) == SZ.v capacity /\
                  SZ.v filled < SZ.v capacity)
@@ -589,6 +603,9 @@ fn read_append
              Seq.equal (pending (mk_phys_buffer raw_after (SZ.v res.ra_total)))
                        (Seq.append (pending (mk_phys_buffer (Ghost.reveal 'raw_before) (SZ.v filled))) chunk))
 {
+  unfold (read_permit ticket
+    (mk_phys_buffer (Ghost.reveal 'raw_before) (SZ.v filled)));
+  GR.free ticket;
   A.to_mask raw;
   with raw_mask. assert (A.pts_to_mask raw #1.0R raw_mask (fun _ -> True));
   assert (pure (Seq.length raw_mask == SZ.v capacity));

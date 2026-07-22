@@ -60,16 +60,14 @@ module Common.BufferedStream
     * [bse_terminal e st received] is terminal ownership after a fatal (Reject)
       decision — the endpoint is done (matches TLS [ConnectionFailed]).
 
-    * [bse_read_auth e st received b] is an abstract *linear read-authorisation
-      resource* indexed by the exact live configuration ([received], [st], [b]),
-      so it goes stale the instant a read changes the history/buffer.  It is
-      *produced* only by the NeedMore case of [bse_process] and *consumed* by
-      [bse_read]; being abstract, a client cannot fabricate it, so
-      process-before-read is enforced at the type level.
+    * [read_permit ticket b] is a concrete one-shot *linear read-authorisation
+      resource*, indexed by the exact physical buffer [b].  It is produced only
+      from a [NeedMore] decision with positive free space and consumed by
+      [bse_read], so process-before-read adds no runtime state.
 
     * [bse_process] classifies the current pending RELATIONALLY, threading the
       received history UNCHANGED through the live cases (processing does not read
-      the network): NeedMore is an *exact stutter* — it yields [bse_read_auth]
+      the       network): NeedMore is an *exact stutter* — it yields a [read_permit]
       only when the buffer still has free space ([BT.free_space b' > 0]); if the
       buffer is FULL it instead goes to [bse_buffer_full] (a scheduler failure)
       and NEVER yields read authorisation (no zero-length reads).  Progress/Yield
@@ -89,6 +87,7 @@ open Pulse.Lib.Pervasives
 module Seq = FStar.Seq
 module TCP = Common.TCP
 module BT  = Common.BufferedTCP
+module GR  = Pulse.Lib.GhostReference
 
 (* ================================================================== *)
 (*  Layer 1: pure classifier model                                    *)
@@ -130,6 +129,42 @@ let produces_output (#output #error:Type0) (d:classification output error) : boo
   match d with
   | Yield _ _ -> true
   | _ -> false
+
+(**
+  A one-shot, erasable read ticket indexed by the exact physical buffer for
+  which a [NeedMore] decision authorized reading.  Its ownership is a full
+  ghost-reference permission, so it is linear: it cannot be duplicated and a
+  transport read can consume it without adding runtime state.
+**)
+type read_ticket = BT.read_ticket
+
+let read_permit
+  (ticket:read_ticket)
+  (b:BT.phys_buffer)
+  : slprop =
+  BT.read_permit ticket b
+
+(**
+  Issue a one-shot ticket only after an actual [NeedMore] decision and only
+  when the indexed buffer has positive free space.  A full buffer therefore
+  cannot acquire authority for a zero-length transport read.
+**)
+ghost fn issue_read_permit
+  (#output #error:Type0)
+  (d:Ghost.erased (classification output error))
+  (b:Ghost.erased BT.phys_buffer)
+  requires pure (
+    Ghost.reveal d == NeedMore /\
+    BT.buffer_wf (Ghost.reveal b) /\
+    BT.can_read (Ghost.reveal b))
+  returns ticket:read_ticket
+  ensures read_permit ticket (Ghost.reveal b)
+{
+  let ticket = GR.alloc (Ghost.reveal b);
+  fold (BT.read_permit ticket (Ghost.reveal b));
+  fold (read_permit ticket (Ghost.reveal b));
+  ticket
+}
 
 (* ------------------------------------------------------------------ *)
 (*  The stream-processor classifier laws                              *)
@@ -242,7 +277,7 @@ let lemma_progress_positive
   for the *exact* [st] and [pending].  It is a duplicable PURE fact — the
   process-before-read gate — NOT a linear capability and NOT "consumed" by
   reading.  The non-duplicable right to read is the caller's stream ownership
-  (Layer 2, [bse_owns] / [bse_read_auth]).
+  (Layer 2, [bse_owns] / [read_permit]).
 **)
 let needs_more
   (#state #output #error:Type0)
@@ -527,7 +562,7 @@ let lemma_needmore_apply_noop
 
   This is a *pure fact*, NOT a linear capability and NOT "consumed" by reading.
   It records that a read is warranted; the non-duplicable *right* to perform it
-  is the caller's stream ownership — the [bse_read_auth] token of the Layer-2
+  is the caller's stream ownership plus the [read_permit] ticket of the Layer-2
   relational adapter [buffered_stream_endpoint].
 **)
 let read_warranted
@@ -823,7 +858,7 @@ let lemma_read_delivers_preserves
 (**
   The relational buffered-stream endpoint contract that a concrete effectful
   endpoint (e.g. a TLS 1.3 driver) instantiates.  See the module header for the
-  semantics; in particular [bse_read_auth] is the linear read-authorisation
+  semantics; in particular [read_permit] is the linear read-authorisation
   resource that makes process-before-read type-enforced, and there is NO pure
   pre-classifier.
 
@@ -866,12 +901,6 @@ class buffered_stream_endpoint
      REFUSED here (never fabricated at a full buffer). *)
   bse_buffer_full:
     endpoint -> state -> TCP.bytes -> slprop;
-
-  (* Linear read-authorisation resource, indexed by the exact LIVE configuration
-     (received history, state, buffer) so it goes stale as soon as a read changes
-     the history/buffer. *)
-  bse_read_auth:
-    endpoint -> state -> TCP.bytes -> BT.phys_buffer -> slprop;
 
   (* Live ownership entails the real transport invariant. *)
   bse_owns_wf:
@@ -917,8 +946,9 @@ class buffered_stream_endpoint
               // NeedMore stutters (b' == b), so this is exactly [BT.can_read b']:
               (if BT.free_space (Ghost.reveal b) > 0
                then
-                 bse_owns e st' (Ghost.reveal received) committed' b' **
-                 bse_read_auth e st' (Ghost.reveal received) b'
+                 (exists* ticket.
+                   bse_owns e st' (Ghost.reveal received) committed' b' **
+                   read_permit ticket b')
                else
                  bse_buffer_full e st' (Ghost.reveal received)))
           | Progress _ ->
@@ -936,13 +966,14 @@ class buffered_stream_endpoint
      append-read buffer.  This is what enforces process-before-read. *)
   bse_read:
     e:endpoint ->
+    ticket:read_ticket ->
     st:Ghost.erased state ->
     received:Ghost.erased TCP.bytes ->
     committed:Ghost.erased TCP.bytes ->
     b:Ghost.erased BT.phys_buffer ->
       stt unit
         (bse_owns e (Ghost.reveal st) (Ghost.reveal received) (Ghost.reveal committed) (Ghost.reveal b) **
-         bse_read_auth e (Ghost.reveal st) (Ghost.reveal received) (Ghost.reveal b) **
+         read_permit ticket (Ghost.reveal b) **
          pure (BT.buffer_wf (Ghost.reveal b) /\ BT.can_read (Ghost.reveal b)))
         (fun _ ->
           exists* received' b'.
