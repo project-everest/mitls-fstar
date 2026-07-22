@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
+module BT = Common.BufferedTCP
 module C = TLS13.Impl.Client
 module CChannel = TLS13.Impl.Client.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
@@ -14,7 +15,6 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
-module Memmove = Common.Memmove
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
@@ -889,37 +889,6 @@ let lemma_compact_buffer_prefix_step
       Seq.index raw_after k == Seq.index original (k + consumed))
     index_proof
 
-fn compact_buffer_suffix
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (buffered_len:SZ.t)
-  (consumed_len:SZ.t)
-  requires pts_to raw 'raw_bytes **
-           pure (B.length 'raw_bytes == SZ.v raw_capacity /\
-                 SZ.v consumed_len <= SZ.v buffered_len /\
-                 SZ.v buffered_len <= SZ.v raw_capacity)
-  returns new_len:SZ.t
-  ensures exists* raw_after.
-           pts_to raw raw_after **
-           pure (B.length raw_after == SZ.v raw_capacity /\
-                 B.length (Ghost.reveal 'raw_bytes) == SZ.v raw_capacity /\
-                 SZ.v consumed_len <= SZ.v buffered_len /\
-                 SZ.v buffered_len <= SZ.v raw_capacity /\
-                 new_len == pending_after_consumed buffered_len consumed_len /\
-                 SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
-                 SZ.v new_len <= SZ.v buffered_len /\
-                 Seq.equal
-                   (Seq.slice raw_after 0 (SZ.v new_len))
-                   (Seq.slice (Ghost.reveal 'raw_bytes)
-                     (SZ.v consumed_len)
-                     (SZ.v buffered_len)))
-{
-  let new_len = SZ.sub buffered_len consumed_len;
-  Memmove.memmove raw 0sz consumed_len new_len;
-  assert (pure (new_len == pending_after_consumed buffered_len consumed_len));
-  new_len
-}
-
 fn driver_process_buffered_network_bytes_compact_once
   (d:driver)
   (raw:array U8.t)
@@ -1065,7 +1034,7 @@ fn driver_process_buffered_network_bytes_compact_once
     }
   } else {
     let new_len =
-      compact_buffer_suffix
+      BT.compact_buffer_suffix
         raw
         raw_capacity
         buffered_len
