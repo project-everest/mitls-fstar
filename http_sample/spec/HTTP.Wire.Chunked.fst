@@ -218,6 +218,133 @@ let lemma_parse_chunk_parts (h b:TCP.bytes) (n:nat)
 #pop-options
 
 
+(* ─── Variable-width (RFC 9112) single-chunk parser ────────────────────────── *)
+(* Real origin servers write a minimal-width hex chunk size (`chunk-size =
+   1*HEXDIG`, RFC 9112 §7.1), e.g. "1cf\r\n", instead of our encoder's fixed
+   4-hex-digit size.  `parse_chunk_var` consumes ONE such frame off the front of
+   `input`:  <1+ hex digits> CRLF <size payload bytes> CRLF , returning the
+   payload together with the residual bytes.  The size token is the MAXIMAL hex
+   run at the front (`hex_prefix_len`), so parsing is deterministic; chunk
+   extensions (`;name=val` after the size) are NOT accepted — the byte after the
+   size run must be CR.  Returns `(payload, rest)` directly (no 65535 cap, so it
+   is not tied to the `chunk_payload` refinement used by the fixed-width union). *)
+let parse_chunk_var (input:TCP.bytes) : GTot (option (TCP.bytes & TCP.bytes)) =
+  let len = Seq.length input in
+  let k = W.hex_prefix_len input in
+  if k = 0 then None
+  else begin
+    W.lemma_hex_prefix_len_bound input;      (* k <= len, so the slice below is well-formed *)
+    let hs = Seq.slice input 0 k in
+    if not (W.all_hex hs) then None           (* always true for the maximal run; refines hs *)
+    else
+      let n = W.dec_hex_var hs in
+      if len < k + 2 then None
+      else if not (W.bseq_eq (Seq.slice input k (k + 2)) W.crlf) then None
+      else if n = 0 then
+        (* last chunk `1*"0" CRLF`: consume only the size line (trailers, if any,
+           and the final CRLF are left in the residual — not interpreted here). *)
+        Some (Seq.empty #U8.t, Seq.slice input (k + 2) len)
+      else if len < k + 2 + n + 2 then None
+      else if not (W.bseq_eq (Seq.slice input (k + 2 + n) (k + 2 + n + 2)) W.crlf) then None
+      else
+        let payload = Seq.slice input (k + 2) (k + 2 + n) in
+        let rest    = Seq.slice input (k + 2 + n + 2) len in
+        Some (payload, rest)
+  end
+
+(* The maximal hex prefix of `hs ++ rest` is exactly `hs` when `hs` is all-hex
+   and the first byte of `rest` (if any) is not a hex digit. *)
+let rec lemma_hex_prefix_len_app (hs rest:TCP.bytes)
+  : Lemma
+    (requires
+      W.all_hex hs /\
+      (Seq.length rest == 0 \/ (Seq.length rest > 0 /\ not (W.is_hex (Seq.index rest 0)))))
+    (ensures W.hex_prefix_len (Seq.append hs rest) == Seq.length hs)
+    (decreases Seq.length hs)
+= let f = Seq.append hs rest in
+  if Seq.length hs = 0 then
+    Seq.lemma_eq_intro f rest
+  else begin
+    let hs' = Seq.slice hs 1 (Seq.length hs) in
+    Seq.lemma_index_app1 hs rest 0;                                   (* index f 0 == index hs 0 *)
+    Seq.lemma_eq_intro (Seq.slice f 1 (Seq.length f)) (Seq.append hs' rest);
+    lemma_hex_prefix_len_app hs' rest
+  end
+
+(* CR (the first byte of CRLF) is not a hex digit — so a size run is never
+   extended across the size-line terminator. *)
+let lemma_cr_not_hex (_:unit)
+  : Lemma (not (W.is_hex W.bCR) /\ Seq.index W.crlf 0 == W.bCR)
+= assert_norm (not (W.is_hex W.bCR));
+  assert_norm (Seq.index W.crlf 0 == W.bCR)
+
+(* One well-formed variable-width frame `hs ++ CRLF ++ payload ++ CRLF ++ suffix`
+   (hs a non-empty hex run decoding to n, payload of n bytes) is consumed off the
+   front, yielding `(payload, suffix)`.  The spec relation the verified
+   variable-width decoder is checked against. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+let lemma_parse_chunk_var_prefix (hs payload suffix:TCP.bytes) (n:nat)
+  : Lemma
+    (requires
+      W.all_hex hs /\ Seq.length hs > 0 /\
+      W.dec_hex_var hs == n /\ 0 < n /\ Seq.length payload == n)
+    (ensures
+      parse_chunk_var
+        (Seq.append hs (Seq.append W.crlf (Seq.append payload (Seq.append W.crlf suffix)))) ==
+        Some (payload, suffix))
+= let c    = Seq.append W.crlf suffix in
+  let b    = Seq.append payload c in
+  let a    = Seq.append W.crlf b in
+  let f    = Seq.append hs a in
+  let k    = Seq.length hs in
+  lemma_cr_not_hex ();
+  (* A starts with CR, so the maximal hex run of f is exactly hs. *)
+  Seq.lemma_index_app1 W.crlf b 0;                (* index a 0 == index crlf 0 == CR *)
+  lemma_hex_prefix_len_app hs a;                  (* hex_prefix_len f == k *)
+  (* relate f-slices to the components via right-nested append_slices *)
+  SP.append_slices hs a;                          (* slice f 0 k == hs;  slice f (k+i)(k+j) == slice a i j *)
+  SP.append_slices W.crlf b;                      (* slice a 0 2 == crlf; slice a (2+i)(2+j) == slice b i j *)
+  SP.append_slices payload c;                     (* slice b 0 n == payload; slice b (n+i)(n+j) == slice c i j *)
+  SP.append_slices W.crlf suffix;                 (* slice c 0 2 == crlf; slice c 2 (2+|suffix|) == suffix *)
+  (* the size token slice equals hs, so all_hex holds and its value is n *)
+  Seq.lemma_eq_elim hs (Seq.slice f 0 k);
+  (* the two CRLF checks: bridge Seq.equal to boolean bseq_eq *)
+  Seq.lemma_eq_intro (Seq.slice f k (k + 2)) W.crlf;
+  Seq.lemma_eq_intro (Seq.slice f (k + 2 + n) (k + 2 + n + 2)) W.crlf;
+  W.lemma_bseq_eq (Seq.slice f k (k + 2)) W.crlf;
+  W.lemma_bseq_eq (Seq.slice f (k + 2 + n) (k + 2 + n + 2)) W.crlf;
+  (* the payload and residual slices *)
+  Seq.lemma_eq_intro (Seq.slice f (k + 2) (k + 2 + n)) payload;
+  Seq.lemma_eq_intro (Seq.slice f (k + 2 + n + 2) (Seq.length f)) suffix;
+  ()
+#pop-options
+
+(* The size-0 last chunk `hs ++ CRLF ++ suffix` (hs decoding to 0) is consumed as
+   the terminator: empty reassembly with the whole `suffix` (trailers + final
+   CRLF) as residual. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+let lemma_parse_chunk_var_end (hs suffix:TCP.bytes)
+  : Lemma
+    (requires W.all_hex hs /\ Seq.length hs > 0 /\ W.dec_hex_var hs == 0)
+    (ensures
+      parse_chunk_var (Seq.append hs (Seq.append W.crlf suffix)) ==
+        Some (Seq.empty #U8.t, suffix))
+= let a = Seq.append W.crlf suffix in
+  let f = Seq.append hs a in
+  let k = Seq.length hs in
+  lemma_cr_not_hex ();
+  Seq.lemma_index_app1 W.crlf suffix 0;           (* index a 0 == CR *)
+  lemma_hex_prefix_len_app hs a;                  (* hex_prefix_len f == k *)
+  SP.append_slices hs a;                          (* slice f 0 k == hs; slice f (k+i)(k+j) == slice a i j *)
+  SP.append_slices W.crlf suffix;                 (* slice a 0 2 == crlf; slice a 2 (2+|suffix|) == suffix *)
+  Seq.lemma_eq_elim hs (Seq.slice f 0 k);
+  Seq.lemma_eq_intro (Seq.slice f k (k + 2)) W.crlf;
+  W.lemma_bseq_eq (Seq.slice f k (k + 2)) W.crlf;
+  Seq.lemma_eq_intro (Seq.slice f (k + 2) (Seq.length f)) suffix;
+  ()
+#pop-options
+
+
 noextract
 let http_wire_format : WF.wire_format http_message =
 {

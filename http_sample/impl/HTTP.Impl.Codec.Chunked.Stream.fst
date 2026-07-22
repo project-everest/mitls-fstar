@@ -318,13 +318,16 @@ fn http_decode_chunks
 (* minimal-width hex chunk size (e.g. "1cf\r\n").  This decoder parses a      *)
 (* size of ANY number of hex digits followed by CRLF, then `size` payload     *)
 (* bytes and a trailing CRLF, repeating until the size-0 last chunk.  It      *)
-(* deliberately carries only a MEMORY-SAFETY contract (every array access is  *)
-(* proved in-bounds and the output length stays <= outcap) — not the full     *)
-(* parse_chunks spec relation, which is defined only for the fixed-width      *)
-(* header — matching the client-leaf philosophy of parsing untrusted server   *)
-(* output safely.  (Chunk extensions after the size and a trailing-header     *)
-(* section after the last chunk are not interpreted; a size line with a ';'   *)
-(* extension or a non-CRLF terminator is rejected as malformed.)             *)
+(* is proved MEMORY-SAFE (every array access is in-bounds, output length      *)
+(* stays <= outcap) AND SPEC-CORRECT: on success the reassembled output       *)
+(* [0..vo) equals the body reconstructed by the variable-width spec relation  *)
+(* `parse_chunks_var` (HTTP.Wire.Chunked.Stream), i.e.                        *)
+(*   parse_chunks_var (inp[0..inlen)) == Some (out[0..vo), rest)              *)
+(* for some residual `rest`.  This mirrors the fixed-width http_decode_chunks *)
+(* above but against the RFC-9112 minimal-width `parse_chunk_var` frame.      *)
+(* (Chunk extensions after the size and a trailing-header section after the   *)
+(* last chunk are not interpreted; a size line with a ';' extension or a      *)
+(* non-CRLF terminator is rejected as malformed.)                            *)
 
 (* size_t is >= 64 bits; the size accumulator stays <= inlen < pow2 32, so the
    intermediate s*16 (+ a hex digit) stays below pow2 40, comfortably inside. *)
@@ -343,7 +346,227 @@ let lemma_size_mul (s inl:nat)
   assert_norm (pow2 32 * 16 == pow2 36);
   assert_norm (pow2 36 + 16 < pow2 40)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
+(* ── spec-carrying plumbing for the variable-width decoder ─────────────────── *)
+
+(* A hex run extends by one byte at its right end. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+let lemma_slice_snoc (i:Seq.seq U8.t) (a b:nat)
+  : Lemma (requires a <= b /\ b < Seq.length i)
+          (ensures Seq.slice i a (b + 1) ==
+             Seq.append (Seq.slice i a b) (Seq.create 1 (Seq.index i b)))
+= Seq.lemma_eq_intro (Seq.slice i a (b + 1))
+    (Seq.append (Seq.slice i a b) (Seq.create 1 (Seq.index i b)))
+#pop-options
+
+(* A 2-byte CR|LF slice equals the CRLF literal, from its two bytes. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+let lemma_crlf_at (i:Seq.seq U8.t) (p:nat)
+  : Lemma (requires p + 2 <= Seq.length i /\
+                    Seq.index i p == W.bCR /\ Seq.index i (p + 1) == W.bLF)
+          (ensures Seq.slice i p (p + 2) == W.crlf)
+= Seq.lemma_index_slice i p (p + 2) 0;
+  Seq.lemma_index_slice i p (p + 2) 1;
+  Seq.lemma_eq_intro (Seq.slice i p (p + 2)) W.crlf
+#pop-options
+
+(* Right-nested 3-piece decomposition:  slice a e == hs ++ (crlf ++ suffix). *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+let lemma_slice3r (i:Seq.seq U8.t) (a m1 m2 e:nat)
+  : Lemma (requires a <= m1 /\ m1 <= m2 /\ m2 <= e /\ e <= Seq.length i)
+          (ensures Seq.slice i a e ==
+             Seq.append (Seq.slice i a m1)
+                        (Seq.append (Seq.slice i m1 m2) (Seq.slice i m2 e)))
+= Seq.lemma_eq_intro (Seq.slice i a e)
+    (Seq.append (Seq.slice i a m1)
+                (Seq.append (Seq.slice i m1 m2) (Seq.slice i m2 e)))
+#pop-options
+
+(* Right-nested 5-piece decomposition:
+   slice a e == hs ++ (crlf ++ (payload ++ (crlf ++ suffix))). *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 80"
+let lemma_slice5r (i:Seq.seq U8.t) (a m1 m2 m3 m4 e:nat)
+  : Lemma (requires a <= m1 /\ m1 <= m2 /\ m2 <= m3 /\ m3 <= m4 /\ m4 <= e /\ e <= Seq.length i)
+          (ensures Seq.slice i a e ==
+             Seq.append (Seq.slice i a m1)
+               (Seq.append (Seq.slice i m1 m2)
+                 (Seq.append (Seq.slice i m2 m3)
+                   (Seq.append (Seq.slice i m3 m4) (Seq.slice i m4 e)))))
+= Seq.lemma_eq_intro (Seq.slice i a e)
+    (Seq.append (Seq.slice i a m1)
+       (Seq.append (Seq.slice i m1 m2)
+         (Seq.append (Seq.slice i m2 m3)
+           (Seq.append (Seq.slice i m3 m4) (Seq.slice i m4 e)))))
+#pop-options
+
+(* ── composite per-chunk spec-update lemmas ───────────────────────────────── *)
+(* These bundle the frame algebra + `parse_chunks_var` step/end + `recon`
+   composition into a single pure lemma each, so the Pulse decoder discharges the
+   spec bookkeeping with ONE lemma call per branch (keeping its VC small). *)
+
+(* Non-terminal chunk: extend the reassembly invariant by one payload. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+let lemma_step_update
+  (i ovold ovnew:Seq.seq U8.t) (vpos vnp vsize voff inlen:nat)
+  : Lemma
+    (requires
+      inlen <= Seq.length i /\ vpos < vnp /\ 0 < vsize /\
+      vnp + 2 + vsize + 2 <= inlen /\ voff + vsize <= Seq.length ovnew /\
+      voff <= Seq.length ovold /\
+      W.all_hex (Seq.slice i vpos vnp) /\
+      W.dec_hex_var (Seq.slice i vpos vnp) == vsize /\
+      Seq.slice i vnp (vnp + 2) == W.crlf /\
+      Seq.slice i (vnp + 2 + vsize) (vnp + 2 + vsize + 2) == W.crlf /\
+      Seq.slice ovnew voff (voff + vsize) == Seq.slice i (vnp + 2) (vnp + 2 + vsize) /\
+      Seq.slice ovnew 0 voff == Seq.slice ovold 0 voff /\
+      (S.parse_chunks_var (Seq.slice i 0 inlen) ==
+        S.recon (Seq.slice ovold 0 voff) (S.parse_chunks_var (Seq.slice i vpos inlen))))
+    (ensures
+      S.parse_chunks_var (Seq.slice i 0 inlen) ==
+        S.recon (Seq.slice ovnew 0 (voff + vsize))
+                (S.parse_chunks_var (Seq.slice i (vnp + 2 + vsize + 2) inlen)))
+= let hs      = Seq.slice i vpos vnp in
+  let payload = Seq.slice i (vnp + 2) (vnp + 2 + vsize) in
+  let suffix  = Seq.slice i (vnp + 2 + vsize + 2) inlen in
+  (* frame algebra: slice i vpos inlen == hs ++ crlf ++ payload ++ crlf ++ suffix *)
+  lemma_slice5r i vpos vnp (vnp + 2) (vnp + 2 + vsize) (vnp + 2 + vsize + 2) inlen;
+  S.lemma_parse_chunks_var_step hs payload suffix vsize;
+  (* recon composition and the extended output prefix *)
+  S.lemma_recon_compose (Seq.slice ovold 0 voff) payload (S.parse_chunks_var suffix);
+  lemma_prefix_extend ovnew ovnew voff vsize;
+  ()
+#pop-options
+
+(* Size-0 last chunk: close the reassembly — the copied `off` bytes are the body. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+let lemma_end_update
+  (i ov:Seq.seq U8.t) (vpos vnp voff inlen:nat)
+  : Lemma
+    (requires
+      inlen <= Seq.length i /\ vpos < vnp /\ vnp + 2 <= inlen /\
+      voff <= Seq.length ov /\
+      W.all_hex (Seq.slice i vpos vnp) /\
+      W.dec_hex_var (Seq.slice i vpos vnp) == 0 /\
+      Seq.slice i vnp (vnp + 2) == W.crlf /\
+      (S.parse_chunks_var (Seq.slice i 0 inlen) ==
+        S.recon (Seq.slice ov 0 voff) (S.parse_chunks_var (Seq.slice i vpos inlen))))
+    (ensures
+      (exists (rest:Seq.seq U8.t).
+         S.parse_chunks_var (Seq.slice i 0 inlen) == Some (Seq.slice ov 0 voff, rest)))
+= let hs     = Seq.slice i vpos vnp in
+  let suffix = Seq.slice i (vnp + 2) inlen in
+  lemma_slice3r i vpos vnp (vnp + 2) inlen;
+  S.lemma_parse_chunks_var_end hs suffix;
+  Seq.append_empty_r (Seq.slice ov 0 voff);
+  ()
+#pop-options
+
+(* Scan the maximal hex-digit run at `vpos`, returning its end index `vnp` and
+   writing its decoded value to `psize`.  Carries the spec facts the decoder
+   needs: the scanned span is all-hex and decodes to `size`.  (The overflow
+   guard `size > inlen` stops the scan early on an oversized chunk; the caller's
+   CRLF check then rejects it, so early stop never loses soundness.) *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+fn scan_hex_size (inp: array U8.t) (inlen: SZ.t) (vpos: SZ.t) (psize: R.ref SZ.t)
+  requires
+    pts_to inp 'i ** R.pts_to psize 'ps **
+    pure (SZ.v vpos <= SZ.v inlen /\ SZ.v inlen <= Seq.length 'i /\ SZ.v inlen < pow2 32)
+  returns vnp: SZ.t
+  ensures
+    pts_to inp 'i **
+    (exists* (vsize:SZ.t). R.pts_to psize vsize **
+       pure (SZ.v inlen <= Seq.length 'i /\
+             SZ.v vpos <= SZ.v vnp /\ SZ.v vnp <= SZ.v inlen /\ SZ.v vsize <= SZ.v inlen /\
+             W.all_hex (Seq.slice 'i (SZ.v vpos) (SZ.v vnp)) /\
+             W.dec_hex_var (Seq.slice 'i (SZ.v vpos) (SZ.v vnp)) == SZ.v vsize))
+{
+  let mut np = vpos;
+  let mut size = 0sz;
+  let mut scanning = true;
+  Seq.lemma_eq_intro (Seq.slice 'i (SZ.v vpos) (SZ.v vpos)) (Seq.empty #U8.t);
+  while (!scanning)
+  invariant exists* (vnp vsize:SZ.t) (vsc:bool).
+    R.pts_to np vnp ** R.pts_to size vsize ** R.pts_to scanning vsc ** pts_to inp 'i **
+    pure (SZ.v vpos <= SZ.v vnp /\ SZ.v vnp <= SZ.v inlen /\
+          SZ.v vsize <= SZ.v inlen /\ SZ.v inlen <= Seq.length 'i /\ SZ.v inlen < pow2 32 /\
+          W.all_hex (Seq.slice 'i (SZ.v vpos) (SZ.v vnp)) /\
+          W.dec_hex_var (Seq.slice 'i (SZ.v vpos) (SZ.v vnp)) == SZ.v vsize)
+  {
+    let vnp = !np;
+    if SZ.lt vnp inlen {
+      let c = inp.(vnp);
+      if W.is_hex c {
+        let d = SZ.uint16_to_sizet (CC.unhex_byte c);
+        let s = !size;
+        lemma_size_mul (SZ.v s) (SZ.v inlen);
+        lemma_fits_wide (SZ.v s * 16);
+        let s16 = SZ.mul s 16sz;
+        lemma_fits_wide (SZ.v s16 + SZ.v d);
+        let s' = SZ.add s16 d;
+        if SZ.gt s' inlen {
+          scanning := false;
+        } else {
+          lemma_slice_snoc 'i (SZ.v vpos) (SZ.v vnp);
+          W.lemma_dec_hex_snoc (Seq.slice 'i (SZ.v vpos) (SZ.v vnp)) c;
+          size := s';
+          np := SZ.add vnp 1sz;
+        }
+      } else {
+        scanning := false;
+      }
+    } else {
+      scanning := false;
+    }
+  };
+  psize := !size;
+  !np
+}
+#pop-options
+
+(* Copy `vsize` payload bytes inp[datastart..) -> out[voff..), leaving the
+   out prefix [0..voff) untouched.  Extracted to keep the main decoder VC small. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+fn copy_payload (inp: array U8.t) (out: array U8.t)
+    (datastart voff vsize inlen outcap: SZ.t)
+  requires
+    pts_to inp 'i ** pts_to out 'o **
+    pure (SZ.v datastart + SZ.v vsize <= SZ.v inlen /\ SZ.v inlen <= Seq.length 'i /\
+          SZ.v voff + SZ.v vsize <= SZ.v outcap /\ Seq.length 'o == SZ.v outcap /\
+          SZ.v inlen < pow2 32 /\ SZ.v outcap < pow2 32)
+  ensures
+    pts_to inp 'i **
+    (exists* (ov:Seq.seq U8.t). pts_to out ov **
+       pure (Seq.length ov == SZ.v outcap /\
+             Seq.length 'o == SZ.v outcap /\ SZ.v inlen <= Seq.length 'i /\
+             SZ.v voff + SZ.v vsize <= SZ.v outcap /\
+             SZ.v datastart + SZ.v vsize <= SZ.v inlen /\
+             (forall (j:nat). j < SZ.v voff ==> Seq.index ov j == Seq.index 'o j) /\
+             (forall (j:nat). j < SZ.v vsize ==>
+                Seq.index ov (SZ.v voff + j) == Seq.index 'i (SZ.v datastart + j))))
+{
+  let mut k = 0sz;
+  while (SZ.lt !k vsize)
+  invariant exists* (vk:SZ.t) (ov:Seq.seq U8.t).
+    R.pts_to k vk ** pts_to out ov ** pts_to inp 'i **
+    pure (SZ.v vk <= SZ.v vsize /\ Seq.length ov == SZ.v outcap /\
+          SZ.v voff + SZ.v vsize <= SZ.v outcap /\
+          SZ.v datastart + SZ.v vsize <= SZ.v inlen /\
+          SZ.v inlen <= Seq.length 'i /\
+          (forall (j:nat). j < SZ.v voff ==> Seq.index ov j == Seq.index 'o j) /\
+          (forall (j:nat). j < SZ.v vk ==>
+             Seq.index ov (SZ.v voff + j) == Seq.index 'i (SZ.v datastart + j)))
+  {
+    let vk = !k;
+    lemma_fits_small (SZ.v datastart + SZ.v vk);
+    lemma_fits_small (SZ.v voff + SZ.v vk);
+    let dv = inp.(SZ.add datastart vk);
+    out.(SZ.add voff vk) <- dv;
+    lemma_fits_small (SZ.v vk + 1);
+    k := SZ.add vk 1sz;
+  }
+}
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400 --split_queries always"
 fn http_decode_chunks_var
     (inp: array U8.t) (inlen: SZ.t)
     (out: array U8.t) (outcap: SZ.t)
@@ -357,66 +580,43 @@ fn http_decode_chunks_var
     pts_to inp 'i **
     (exists* (ov:Seq.seq U8.t) (vo:SZ.t).
        pts_to out ov ** R.pts_to poff vo **
-       pure (Seq.length ov == SZ.v outcap /\
-             (ok == true ==> SZ.v vo <= SZ.v outcap)))
+       pure (Seq.length ov == SZ.v outcap /\ SZ.v inlen <= Seq.length 'i /\
+             (ok == true ==>
+                (SZ.v vo <= SZ.v outcap /\
+                 (exists (rest:Seq.seq U8.t).
+                    S.parse_chunks_var (Seq.slice 'i 0 (SZ.v inlen)) ==
+                      Some (Seq.slice ov 0 (SZ.v vo), rest))))))
 {
   let mut pos = 0sz;
   let mut off = 0sz;
   let mut err = false;
   let mut done = false;
+  Seq.lemma_eq_intro (Seq.slice 'o 0 0) (Seq.empty #U8.t);
+  lemma_recon_empty (S.parse_chunks_var (Seq.slice 'i 0 (SZ.v inlen)));
   while (not !done && not !err)
   invariant exists* (vpos voff:SZ.t) (verr vdone:bool) (ov:Seq.seq U8.t).
     R.pts_to pos vpos ** R.pts_to off voff ** R.pts_to err verr ** R.pts_to done vdone **
     pts_to inp 'i ** pts_to out ov **
-    pure (Seq.length ov == SZ.v outcap /\
+    pure (Seq.length ov == SZ.v outcap /\ SZ.v inlen <= Seq.length 'i /\
           SZ.v vpos <= SZ.v inlen /\ SZ.v voff <= SZ.v outcap /\
-          SZ.v inlen < pow2 32 /\ SZ.v outcap < pow2 32)
+          SZ.v inlen < pow2 32 /\ SZ.v outcap < pow2 32 /\
+          (vdone == true ==> verr == false) /\
+          (verr == false ==>
+            ((vdone == false ==>
+                S.parse_chunks_var (Seq.slice 'i 0 (SZ.v inlen)) ==
+                  S.recon (Seq.slice ov 0 (SZ.v voff))
+                          (S.parse_chunks_var (Seq.slice 'i (SZ.v vpos) (SZ.v inlen)))) /\
+             (vdone == true ==>
+                (exists (rest:Seq.seq U8.t).
+                   S.parse_chunks_var (Seq.slice 'i 0 (SZ.v inlen)) ==
+                     Some (Seq.slice ov 0 (SZ.v voff), rest))))))
   {
     let vpos = !pos;
     (* ── parse the variable-width hex size line starting at vpos ─────────── *)
-    let mut np = vpos;
-    let mut size = 0sz;
-    let mut hexcount = 0sz;
-    let mut scanning = true;
-    while (!scanning)
-    invariant exists* (vnp vsize vhc:SZ.t) (vsc:bool).
-      R.pts_to np vnp ** R.pts_to size vsize ** R.pts_to hexcount vhc **
-      R.pts_to scanning vsc ** pts_to inp 'i **
-      pure (SZ.v vnp <= SZ.v inlen /\ SZ.v vsize <= SZ.v inlen /\
-            SZ.v vhc <= SZ.v vnp /\ SZ.v inlen < pow2 32)
-    {
-      let vnp = !np;
-      if SZ.lt vnp inlen {
-        let c = inp.(vnp);
-        if W.is_hex c {
-          let d = SZ.uint16_to_sizet (CC.unhex_byte c);
-          let s = !size;
-          lemma_size_mul (SZ.v s) (SZ.v inlen);
-          lemma_fits_wide (SZ.v s * 16);
-          let s16 = SZ.mul s 16sz;
-          lemma_fits_wide (SZ.v s16 + SZ.v d);
-          let s' = SZ.add s16 d;
-          if SZ.gt s' inlen {
-            (* a chunk larger than the whole input is malformed; stop *)
-            scanning := false;
-          } else {
-            let vhc = !hexcount;
-            lemma_fits_small (SZ.v vhc + 1);
-            size := s';
-            hexcount := SZ.add vhc 1sz;
-            np := SZ.add vnp 1sz;
-          }
-        } else {
-          scanning := false;
-        }
-      } else {
-        scanning := false;
-      }
-    };
+    let mut size_r = 0sz;
+    let vnp = scan_hex_size inp inlen vpos size_r;
     (* ── validate the size line and consume the frame ───────────────────── *)
-    let vnp = !np;
-    let vhc = !hexcount;
-    if SZ.eq vhc 0sz {
+    if SZ.eq vnp vpos {
       err := true;                       (* no hex digits: malformed *)
     } else {
       lemma_fits_small (SZ.v vnp + 1);
@@ -428,14 +628,18 @@ fn http_decode_chunks_var
         if not (U8.eq h0 W.bCR && U8.eq h1 W.bLF) {
           err := true;                   (* size not terminated by CRLF *)
         } else {
-          let vsize = !size;
+          lemma_crlf_at 'i (SZ.v vnp);   (* slice i vnp (vnp+2) == crlf *)
+          let vsize = !size_r;
           let datastart = SZ.add vnp 2sz;
           if SZ.eq vsize 0sz {
-            done := true;                (* last chunk: terminate *)
+            (* last chunk `1*"0" CRLF`: terminate. *)
+            let voff0 = !off;
+            with ov. assert (pts_to out ov);
+            lemma_end_update 'i ov (SZ.v vpos) (SZ.v vnp) (SZ.v voff0) (SZ.v inlen);
+            done := true;
           } else {
             assert_norm (pow2 32 + pow2 32 + 4 < pow2 40);
             lemma_fits_wide (SZ.v datastart + SZ.v vsize + 2);
-            let vposn = !pos;
             let voff = !off;
             if SZ.gt (SZ.add (SZ.add datastart vsize) 2sz) inlen {
               err := true;               (* frame body overruns input *)
@@ -445,24 +649,9 @@ fn http_decode_chunks_var
               if SZ.gt (SZ.add voff vsize) outcap {
                 err := true;             (* reassembly overruns output *)
               } else {
+                with ovold. assert (pts_to out ovold);
                 (* copy vsize payload bytes inp[datastart..) -> out[voff..) *)
-                let mut k = 0sz;
-                while (SZ.lt !k vsize)
-                invariant exists* (vk:SZ.t) (ov:Seq.seq U8.t).
-                  R.pts_to k vk ** pts_to out ov ** pts_to inp 'i **
-                  pure (SZ.v vk <= SZ.v vsize /\ Seq.length ov == SZ.v outcap /\
-                        SZ.v voff + SZ.v vsize <= SZ.v outcap /\
-                        SZ.v datastart + SZ.v vsize + 2 <= SZ.v inlen /\
-                        SZ.v inlen <= Seq.length 'i)
-                {
-                  let vk = !k;
-                  lemma_fits_small (SZ.v datastart + SZ.v vk);
-                  lemma_fits_small (SZ.v voff + SZ.v vk);
-                  let dv = inp.(SZ.add datastart vk);
-                  out.(SZ.add voff vk) <- dv;
-                  lemma_fits_small (SZ.v vk + 1);
-                  k := SZ.add vk 1sz;
-                };
+                copy_payload inp out datastart voff vsize inlen outcap;
                 (* trailing CRLF of the frame body *)
                 let e0 = inp.(SZ.add datastart vsize);
                 lemma_fits_small (SZ.v datastart + SZ.v vsize + 1);
@@ -470,6 +659,15 @@ fn http_decode_chunks_var
                 if not (U8.eq e0 W.bCR && U8.eq e1 W.bLF) {
                   err := true;
                 } else {
+                  with ovnew. assert (pts_to out ovnew);
+                  lemma_crlf_at 'i (SZ.v datastart + SZ.v vsize);   (* trailing crlf slice *)
+                  (* payload copied: slice ovnew off (off+n) == slice i datastart (datastart+n) *)
+                  Seq.lemma_eq_intro
+                    (Seq.slice ovnew (SZ.v voff) (SZ.v voff + SZ.v vsize))
+                    (Seq.slice 'i (SZ.v datastart) (SZ.v datastart + SZ.v vsize));
+                  Seq.lemma_eq_intro (Seq.slice ovnew 0 (SZ.v voff)) (Seq.slice ovold 0 (SZ.v voff));
+                  lemma_step_update 'i ovold ovnew
+                    (SZ.v vpos) (SZ.v vnp) (SZ.v vsize) (SZ.v voff) (SZ.v inlen);
                   pos := SZ.add (SZ.add datastart vsize) 2sz;
                   off := SZ.add voff vsize;
                 }

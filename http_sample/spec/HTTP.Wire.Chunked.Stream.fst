@@ -139,3 +139,55 @@ let lemma_parse_chunks_end (h b suffix:TCP.bytes)
   Seq.lemma_eq_intro (Seq.slice b 0 0) (Seq.empty #U8.t);
   ()
 #pop-options
+
+(* ─── Variable-width (RFC 9112) streaming reassembly ───────────────────────── *)
+(* The variable-width analog of `parse_chunks`: decode a stream of minimal-width
+   chunk frames (see `HTTP.Wire.Chunked.parse_chunk_var`), concatenating the
+   payloads until the first size-0 chunk (`1*"0" CRLF`), returning the reassembled
+   body together with whatever follows the terminator (trailers + final CRLF).
+   Structurally decreasing: a non-empty frame consumes k+2+n+2 >= 5 bytes, so the
+   residual is strictly shorter (the explicit guard makes this manifest). *)
+let rec parse_chunks_var (input:TCP.bytes)
+  : GTot (option (TCP.bytes & TCP.bytes)) (decreases (Seq.length input)) =
+  match parse_chunk_var input with
+  | Some (p, rest) ->
+    if Seq.length p = 0 then Some (Seq.empty #U8.t, rest)
+    else if Seq.length rest < Seq.length input then
+      (match parse_chunks_var rest with
+       | Some (body, rest') -> Some (Seq.append p body, rest')
+       | None -> None)
+    else None
+  | None -> None
+
+(* A non-empty variable-width frame at the head distributes over parse_chunks_var:
+   its payload is prepended to the reassembly of the remaining stream. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+let lemma_parse_chunks_var_step (hs payload suffix:TCP.bytes) (n:nat)
+  : Lemma
+    (requires
+      W.all_hex hs /\ Seq.length hs > 0 /\
+      W.dec_hex_var hs == n /\ 0 < n /\ Seq.length payload == n)
+    (ensures
+      parse_chunks_var
+        (Seq.append hs (Seq.append W.crlf (Seq.append payload (Seq.append W.crlf suffix)))) ==
+        recon payload (parse_chunks_var suffix))
+= let f = Seq.append hs (Seq.append W.crlf (Seq.append payload (Seq.append W.crlf suffix))) in
+  lemma_parse_chunk_var_prefix hs payload suffix n;
+  (* parse_chunk_var f == Some (payload, suffix), payload length n>0, and
+     |suffix| < |f| (the frame consumes hs++CRLF++payload++CRLF >= 4 bytes). *)
+  assert (Seq.length payload == n);
+  assert (Seq.length suffix < Seq.length f);
+  ()
+#pop-options
+
+(* The size-0 last chunk terminates the body: empty reassembly with the whole
+   `suffix` as residual. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+let lemma_parse_chunks_var_end (hs suffix:TCP.bytes)
+  : Lemma
+    (requires W.all_hex hs /\ Seq.length hs > 0 /\ W.dec_hex_var hs == 0)
+    (ensures
+      parse_chunks_var (Seq.append hs (Seq.append W.crlf suffix)) ==
+        Some (Seq.empty #U8.t, suffix))
+= lemma_parse_chunk_var_end hs suffix
+#pop-options

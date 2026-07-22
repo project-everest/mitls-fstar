@@ -154,6 +154,73 @@ let lemma_hex4_roundtrip (n:nat{n < 65536})
   ML.lemma_div_mod n 4096
 #pop-options
 
+(* ─── Variable-width hex (RFC 9112 chunk-size = 1*HEXDIG) ───────────────────── *)
+(* A byte sequence is a hex run iff every byte is a hex digit (length may be 0). *)
+let rec all_hex (h:TCP.bytes) : Tot bool (decreases Seq.length h) =
+  if Seq.length h = 0 then true
+  else is_hex (Seq.index h 0) && all_hex (Seq.slice h 1 (Seq.length h))
+
+(* Big-endian value of a hex run, accumulated most-significant-digit first —
+   matching the impl decoder's `size := size*16 + d` left-to-right scan. *)
+let rec dec_hex_acc (h:TCP.bytes{all_hex h}) (acc:nat) : Tot nat (decreases Seq.length h) =
+  if Seq.length h = 0 then acc
+  else dec_hex_acc (Seq.slice h 1 (Seq.length h)) (acc * 16 + unhex (Seq.index h 0))
+
+let dec_hex_var (h:TCP.bytes{all_hex h}) : nat = dec_hex_acc h 0
+
+(* `all_hex` peels its first byte; the tail of a hex run is a hex run. *)
+let lemma_all_hex_tail (h:TCP.bytes)
+  : Lemma (requires all_hex h /\ Seq.length h > 0)
+          (ensures all_hex (Seq.slice h 1 (Seq.length h)) /\ is_hex (Seq.index h 0)) = ()
+
+(* Length of the maximal hex-digit run at the front of `input` (the size token). *)
+let rec hex_prefix_len (input:TCP.bytes) : Tot nat (decreases Seq.length input) =
+  if Seq.length input = 0 then 0
+  else if is_hex (Seq.index input 0)
+       then 1 + hex_prefix_len (Seq.slice input 1 (Seq.length input))
+       else 0
+
+let rec lemma_hex_prefix_len_bound (input:TCP.bytes)
+  : Lemma (ensures hex_prefix_len input <= Seq.length input) (decreases Seq.length input)
+= if Seq.length input = 0 then ()
+  else if is_hex (Seq.index input 0)
+       then lemma_hex_prefix_len_bound (Seq.slice input 1 (Seq.length input))
+       else ()
+
+(* `dec_hex_acc` distributes over concatenation of hex runs (it folds the
+   accumulator left-to-right, so the value of `xs ++ ys` is the value of `ys`
+   folded onto the value of `xs`). *)
+let rec lemma_dec_hex_acc_app (xs ys:TCP.bytes) (acc:nat)
+  : Lemma
+    (requires all_hex xs /\ all_hex ys)
+    (ensures
+      all_hex (Seq.append xs ys) /\
+      dec_hex_acc (Seq.append xs ys) acc == dec_hex_acc ys (dec_hex_acc xs acc))
+    (decreases Seq.length xs)
+= let f = Seq.append xs ys in
+  if Seq.length xs = 0 then
+    Seq.lemma_eq_intro f ys
+  else begin
+    let xs' = Seq.slice xs 1 (Seq.length xs) in
+    Seq.lemma_index_app1 xs ys 0;                                   (* index f 0 == index xs 0 *)
+    Seq.lemma_eq_intro (Seq.slice f 1 (Seq.length f)) (Seq.append xs' ys);
+    lemma_dec_hex_acc_app xs' ys (acc * 16 + unhex (Seq.index xs 0))
+  end
+
+(* Appending one hex digit multiplies the running value by 16 and adds it — the
+   step law of the impl decoder's `size := size*16 + d` hex scan. *)
+let lemma_dec_hex_snoc (hs:TCP.bytes) (c:U8.t)
+  : Lemma
+    (requires all_hex hs /\ is_hex c)
+    (ensures
+      all_hex (Seq.append hs (Seq.create 1 c)) /\
+      dec_hex_var (Seq.append hs (Seq.create 1 c)) == dec_hex_var hs * 16 + unhex c)
+= let cs = Seq.create 1 c in
+  assert (all_hex cs);
+  lemma_dec_hex_acc_app hs cs 0;
+  (* dec_hex_acc cs a == a*16 + unhex c (single digit) *)
+  Seq.lemma_eq_intro (Seq.slice cs 1 (Seq.length cs)) (Seq.empty #U8.t)
+
 (* ─── Byte-sequence literals and boolean equality ──────────────────────────── *)
 (* Build a concrete byte string from a list (for the fixed HTTP literals). *)
 let lit (l:list U8.t) : TCP.bytes = Seq.seq_of_list l
