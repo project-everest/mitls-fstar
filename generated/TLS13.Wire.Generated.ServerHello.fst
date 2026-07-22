@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 open TLS13.Wire.Generated.ServerHello_body
 
 let synth_serverHello_recip_inverse () : Lemma (LP.synth_inverse synth_serverHello_recip synth_serverHello) = ()
@@ -90,7 +88,7 @@ let read_serverHello : PPB.copyful_parse serverHello_vmatch serverHello_parser s
   assert_norm (serverHello_parser_kind == serverHello'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair protocolVersion_jumper read_protocolVersion () read_serverHello_body) synth_serverHello synth_serverHello_recip
 
-let free_serverHello : PPB.free_t serverHello_vmatch = (PPC.free_pair free_protocolVersion free_serverHello_body)
+let free_serverHello : PPB.free_t serverHello_vmatch = fun x #v -> ((PPC.free_pair free_protocolVersion free_serverHello_body)) x #v
 
 let write_serverHello : PPB.l2r_safe_writer serverHello_vmatch serverHello_serializer serverHello_conv =
   synth_serverHello_injective ();

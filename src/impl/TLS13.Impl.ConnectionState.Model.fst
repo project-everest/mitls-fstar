@@ -8,14 +8,14 @@ open FStar.List.Tot
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module Tr = TLS13.Transcript
@@ -23,6 +23,10 @@ module U16 = FStar.UInt16
 module U64 = FStar.UInt64
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
+module GA = TLS13.Wire.Generated.Alert
+module GAL = TLS13.Wire.Generated.AlertLevel
+module GAD = TLS13.Wire.Generated.AlertDescription
+module LP = LowParse.Spec
 
 // Phase 5: handshake_msg payloads are the QuackyDucky-generated wire records.
 module Sem = TLS13.Wire.Semantics
@@ -326,11 +330,27 @@ let lemma_seal_application_success_next_seq
   | Some _, Some _ -> ()
   | _, _ -> ()
 
+noextract
+let close_notify_alert_fragment () : GTot B.bytes =
+  LP.serialize GA.alert_serializer {
+    GA.level = GAL.Fatal;
+    GA.description = GAD.Close_notify;
+  }
+
+let lemma_close_notify_alert_fragment_generated ()
+  : Lemma (
+      close_notify_alert_fragment () ==
+      LP.serialize GA.alert_serializer {
+        GA.level = GAL.Fatal;
+        GA.description = GAD.Close_notify;
+      })
+  = ()
+
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
   : Lemma
-      (requires CS.connection_state_consistent st)
-      (ensures CS.connection_state_evolves st (local_fail_state st err) /\
-               CS.connection_state_consistent (local_fail_state st err) /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (local_fail_state st err) /\
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent (local_fail_state st err) /\
                CS.legal_connection_delta
                  st
                  {
@@ -346,24 +366,24 @@ let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
     CS.delta_raw_received = B.empty;
   } in
   assert (CS.legal_connection_delta st delta (local_fail_state st err));
-  assert (CS.connection_state_single_step st (local_fail_state st err));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (local_fail_state st err));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (local_fail_state st err);
-  assert (CS.connection_state_evolves st (local_fail_state st err));
-  assert (CS.connection_state_consistent (local_fail_state st err))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (local_fail_state st err));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (local_fail_state st err))
 
 let lemma_started_handshake_state_evolves
   (st:CS.connection_state)
   (start:CS.handshake_start)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_start_handshake st start)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (started_handshake_state st start) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (started_handshake_state st start) /\
                CS.legal_connection_delta
                  st
@@ -387,23 +407,23 @@ let lemma_started_handshake_state_evolves
           Some (started_handshake_state st start).CS.cs_model);
   assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
   assert (CS.legal_connection_delta st delta (started_handshake_state st start));
-  assert (CS.connection_state_single_step st (started_handshake_state st start));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (started_handshake_state st start));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (started_handshake_state st start);
-  assert (CS.connection_state_evolves st (started_handshake_state st start));
-  assert (CS.connection_state_consistent (started_handshake_state st start))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (started_handshake_state st start));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (started_handshake_state st start))
 
 let lemma_started_server_state_evolves
   (st:CS.connection_state)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_start_server st)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (started_server_state st) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (started_server_state st) /\
                CS.legal_connection_delta
                  st
@@ -426,24 +446,24 @@ let lemma_started_server_state_evolves
           Some (started_server_state st).CS.cs_model);
   assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
   assert (CS.legal_connection_delta st delta (started_server_state st));
-  assert (CS.connection_state_single_step st (started_server_state st));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (started_server_state st));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (started_server_state st);
-  assert (CS.connection_state_evolves st (started_server_state st));
-  assert (CS.connection_state_consistent (started_server_state st))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (started_server_state st));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (started_server_state st))
 
 let lemma_selected_server_parameters_state_evolves
   (st:CS.connection_state)
   (selection:CS.server_handshake_selection)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_select_server_parameters st selection)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (selected_server_parameters_state st selection) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (selected_server_parameters_state st selection) /\
                CS.legal_connection_delta
                  st
@@ -470,17 +490,17 @@ let lemma_selected_server_parameters_state_evolves
     st
     delta
     (selected_server_parameters_state st selection));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (selected_server_parameters_state st selection));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (selected_server_parameters_state st selection);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (selected_server_parameters_state st selection));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (selected_server_parameters_state st selection))
 
 let lemma_sent_client_hello_state_evolves
@@ -488,12 +508,12 @@ let lemma_sent_client_hello_state_evolves
   (ch:GCH.clientHello)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_client_hello st ch raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_client_hello_state st ch raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_client_hello_state st ch raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -523,26 +543,26 @@ let lemma_sent_client_hello_state_evolves
           Some (sent_client_hello_state st ch raw_sent).CS.cs_model);
   assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
   assert (CS.legal_connection_delta st delta (sent_client_hello_state st ch raw_sent));
-  assert (CS.connection_state_single_step st (sent_client_hello_state st ch raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (sent_client_hello_state st ch raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_client_hello_state st ch raw_sent);
-  assert (CS.connection_state_evolves st (sent_client_hello_state st ch raw_sent));
-  assert (CS.connection_state_consistent (sent_client_hello_state st ch raw_sent))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (sent_client_hello_state st ch raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (sent_client_hello_state st ch raw_sent))
 
 let lemma_derived_shared_secret_state_evolves
   (st:CS.connection_state)
   (shared:TLS13.Crypto.Spec.x25519_shared_secret)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 CS.legal_event
                   st.CS.cs_model
                   (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared)))
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (derived_shared_secret_state st shared) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (derived_shared_secret_state st shared) /\
                CS.legal_connection_delta
                  st
@@ -565,26 +585,26 @@ let lemma_derived_shared_secret_state_evolves
           Some (derived_shared_secret_state st shared).CS.cs_model);
   assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
   assert (CS.legal_connection_delta st delta (derived_shared_secret_state st shared));
-  assert (CS.connection_state_single_step st (derived_shared_secret_state st shared));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (derived_shared_secret_state st shared));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (derived_shared_secret_state st shared);
-  assert (CS.connection_state_evolves st (derived_shared_secret_state st shared));
-  assert (CS.connection_state_consistent (derived_shared_secret_state st shared))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (derived_shared_secret_state st shared));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (derived_shared_secret_state st shared))
 
 let lemma_installed_traffic_keys_state_evolves
   (st:CS.connection_state)
   (install:CS.traffic_key_install)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 CS.legal_event
                   st.CS.cs_model
                   (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install)))
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (installed_traffic_keys_state st install) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (installed_traffic_keys_state st install) /\
                CS.legal_connection_delta
                  st
@@ -607,27 +627,27 @@ let lemma_installed_traffic_keys_state_evolves
           Some (installed_traffic_keys_state st install).CS.cs_model);
   assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
   assert (CS.legal_connection_delta st delta (installed_traffic_keys_state st install));
-  assert (CS.connection_state_single_step st (installed_traffic_keys_state st install));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (installed_traffic_keys_state st install));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (installed_traffic_keys_state st install);
-  assert (CS.connection_state_evolves st (installed_traffic_keys_state st install));
-  assert (CS.connection_state_consistent (installed_traffic_keys_state st install))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (installed_traffic_keys_state st install));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (installed_traffic_keys_state st install))
 
 let lemma_installed_traffic_keys_for_role_state_evolves
   (st:CS.connection_state)
   (role_install:CS.role_traffic_key_install)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 CS.legal_event
                   st.CS.cs_model
                   (CS.ConnLocalEvent
                     (CS.LocalInstallTrafficKeysForRole role_install)))
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (installed_traffic_keys_for_role_state st role_install) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (installed_traffic_keys_for_role_state st role_install) /\
                CS.legal_connection_delta
                  st
@@ -656,31 +676,31 @@ let lemma_installed_traffic_keys_for_role_state_evolves
     st
     delta
     (installed_traffic_keys_for_role_state st role_install));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (installed_traffic_keys_for_role_state st role_install));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (installed_traffic_keys_for_role_state st role_install);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (installed_traffic_keys_for_role_state st role_install));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (installed_traffic_keys_for_role_state st role_install))
 
 let lemma_validated_certificate_state_evolves
   (st:CS.connection_state)
   (peer:X.peer_identity)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 CS.legal_event
                   st.CS.cs_model
                   (CS.ConnLocalEvent (CS.LocalValidateCertificate peer)))
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (validated_certificate_state st peer) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (validated_certificate_state st peer) /\
                CS.legal_connection_delta
                  st
@@ -703,13 +723,13 @@ let lemma_validated_certificate_state_evolves
           Some (validated_certificate_state st peer).CS.cs_model);
   assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
   assert (CS.legal_connection_delta st delta (validated_certificate_state st peer));
-  assert (CS.connection_state_single_step st (validated_certificate_state st peer));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (validated_certificate_state st peer));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (validated_certificate_state st peer);
-  assert (CS.connection_state_evolves st (validated_certificate_state st peer));
-  assert (CS.connection_state_consistent (validated_certificate_state st peer))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (validated_certificate_state st peer));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (validated_certificate_state st peer))
 
 let lemma_client_handshake_traffic_install_legal
   (model:CS.connection_model)
@@ -919,7 +939,7 @@ let lemma_received_hello_retry_request_rejected_state_evolves
   (st:CS.connection_state)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsClientHelloSent /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
@@ -932,10 +952,10 @@ let lemma_received_hello_retry_request_rejected_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_hello_retry_request_rejected_state st raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_hello_retry_request_rejected_state st raw_received) /\
                CS.legal_connection_delta
                  st
@@ -967,24 +987,24 @@ let lemma_received_hello_retry_request_rejected_state_evolves
     st
     delta
     (received_hello_retry_request_rejected_state st raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_hello_retry_request_rejected_state st raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_hello_retry_request_rejected_state st raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_hello_retry_request_rejected_state st raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_hello_retry_request_rejected_state st raw_received))
 
 let lemma_received_change_cipher_spec_state_evolves
   (st:CS.connection_state)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 (exists stage.
                   st.CS.cs_model.CS.model_control == CS.ControlHandshaking stage) /\
                 CS.event_raw_delta_legal
@@ -995,10 +1015,10 @@ let lemma_received_change_cipher_spec_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_change_cipher_spec_state st raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_change_cipher_spec_state st raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1026,20 +1046,20 @@ let lemma_received_change_cipher_spec_state_evolves
   assert (CS.legal_event st.CS.cs_model ev);
   assert (CS.step_model st.CS.cs_model ev == Some st.CS.cs_model);
   assert (CS.legal_connection_delta st delta (received_change_cipher_spec_state st raw_received));
-  assert (CS.connection_state_single_step st (received_change_cipher_spec_state st raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (received_change_cipher_spec_state st raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_change_cipher_spec_state st raw_received);
-  assert (CS.connection_state_evolves st (received_change_cipher_spec_state st raw_received));
-  assert (CS.connection_state_consistent (received_change_cipher_spec_state st raw_received))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (received_change_cipher_spec_state st raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (received_change_cipher_spec_state st raw_received))
 
 let lemma_received_server_hello_state_evolves
   (st:CS.connection_state)
   (sh:GSH.serverHello)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsClientHelloSent /\
                 CS.legal_event
@@ -1056,10 +1076,10 @@ let lemma_received_server_hello_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_server_hello_state st sh raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_server_hello_state st sh raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1091,17 +1111,17 @@ let lemma_received_server_hello_state_evolves
     st
     delta
     (received_server_hello_state st sh raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_server_hello_state st sh raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_server_hello_state st sh raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_server_hello_state st sh raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_server_hello_state st sh raw_received))
 
 let lemma_sent_server_hello_state_evolves
@@ -1109,12 +1129,12 @@ let lemma_sent_server_hello_state_evolves
   (sh:GSH.serverHello)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_server_hello st sh raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_server_hello_state st sh raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_server_hello_state st sh raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -1147,17 +1167,17 @@ let lemma_sent_server_hello_state_evolves
     st
     delta
     (sent_server_hello_state st sh raw_sent));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_server_hello_state st sh raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_server_hello_state st sh raw_sent);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (sent_server_hello_state st sh raw_sent));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_server_hello_state st sh raw_sent))
 
 let lemma_sent_encrypted_extensions_state_evolves
@@ -1165,12 +1185,12 @@ let lemma_sent_encrypted_extensions_state_evolves
   (ee:GEE.encryptedExtensions)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_encrypted_extensions st ee raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_encrypted_extensions_state st ee raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_encrypted_extensions_state st ee raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -1203,17 +1223,17 @@ let lemma_sent_encrypted_extensions_state_evolves
     st
     delta
     (sent_encrypted_extensions_state st ee raw_sent));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_encrypted_extensions_state st ee raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_encrypted_extensions_state st ee raw_sent);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (sent_encrypted_extensions_state st ee raw_sent));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_encrypted_extensions_state st ee raw_sent))
 
 let lemma_sent_certificate_state_evolves
@@ -1221,12 +1241,12 @@ let lemma_sent_certificate_state_evolves
   (cert:GCert.certificate)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_certificate st cert raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_certificate_state st cert raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_certificate_state st cert raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -1259,29 +1279,29 @@ let lemma_sent_certificate_state_evolves
     st
     delta
     (sent_certificate_state st cert raw_sent));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_certificate_state st cert raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_certificate_state st cert raw_sent);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (sent_certificate_state st cert raw_sent));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_certificate_state st cert raw_sent))
 
 let lemma_signed_certificate_verify_state_evolves
   (st:CS.connection_state)
   (cv:GCV.certificateVerify)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_sign_certificate_verify st cv)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (signed_certificate_verify_state st cv) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (signed_certificate_verify_state st cv) /\
                CS.legal_connection_delta
                  st
@@ -1308,17 +1328,17 @@ let lemma_signed_certificate_verify_state_evolves
     st
     delta
     (signed_certificate_verify_state st cv));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (signed_certificate_verify_state st cv));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (signed_certificate_verify_state st cv);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (signed_certificate_verify_state st cv));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (signed_certificate_verify_state st cv))
 
 let lemma_sent_certificate_verify_state_evolves
@@ -1326,12 +1346,12 @@ let lemma_sent_certificate_verify_state_evolves
   (cv:GCV.certificateVerify)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_certificate_verify st cv raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_certificate_verify_state st cv raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_certificate_verify_state st cv raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -1364,17 +1384,17 @@ let lemma_sent_certificate_verify_state_evolves
     st
     delta
     (sent_certificate_verify_state st cv raw_sent));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_certificate_verify_state st cv raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_certificate_verify_state st cv raw_sent);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (sent_certificate_verify_state st cv raw_sent));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_certificate_verify_state st cv raw_sent))
 
 let lemma_sent_server_finished_state_evolves
@@ -1382,12 +1402,12 @@ let lemma_sent_server_finished_state_evolves
   (fin:GFin.finished)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_server_finished st fin raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_server_finished_state st fin raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_server_finished_state st fin raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -1420,17 +1440,17 @@ let lemma_sent_server_finished_state_evolves
     st
     delta
     (sent_server_finished_state st fin raw_sent));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_server_finished_state st fin raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_server_finished_state st fin raw_sent);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (sent_server_finished_state st fin raw_sent));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_server_finished_state st fin raw_sent))
 
 let lemma_received_client_finished_state_evolves
@@ -1438,12 +1458,12 @@ let lemma_received_client_finished_state_evolves
   (fin:GFin.finished)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_receive_client_finished st fin raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_client_finished_state st fin raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_client_finished_state st fin raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1476,29 +1496,29 @@ let lemma_received_client_finished_state_evolves
     st
     delta
     (received_client_finished_state st fin raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_client_finished_state st fin raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_client_finished_state st fin raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_client_finished_state st fin raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_client_finished_state st fin raw_received))
 
 let lemma_verified_client_finished_state_evolves
   (st:CS.connection_state)
   (fin:GFin.finished)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_verify_client_finished st fin)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (verified_client_finished_state st fin) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (verified_client_finished_state st fin) /\
                CS.legal_connection_delta
                  st
@@ -1525,17 +1545,17 @@ let lemma_verified_client_finished_state_evolves
     st
     delta
     (verified_client_finished_state st fin));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (verified_client_finished_state st fin));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (verified_client_finished_state st fin);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (verified_client_finished_state st fin));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (verified_client_finished_state st fin))
 
 let lemma_received_client_hello_state_evolves
@@ -1543,7 +1563,7 @@ let lemma_received_client_hello_state_evolves
   (ch:GCH.clientHello)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsAwaitingClientHello /\
                 CS.legal_event
@@ -1560,10 +1580,10 @@ let lemma_received_client_hello_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_client_hello_state st ch raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_client_hello_state st ch raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1595,17 +1615,17 @@ let lemma_received_client_hello_state_evolves
     st
     delta
     (received_client_hello_state st ch raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_client_hello_state st ch raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_client_hello_state st ch raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_client_hello_state st ch raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_client_hello_state st ch raw_received))
 
 let lemma_received_encrypted_extensions_state_evolves
@@ -1613,7 +1633,7 @@ let lemma_received_encrypted_extensions_state_evolves
   (ee:GEE.encryptedExtensions)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsServerHelloReceived /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
@@ -1628,10 +1648,10 @@ let lemma_received_encrypted_extensions_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_encrypted_extensions_state st ee raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_encrypted_extensions_state st ee raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1663,17 +1683,17 @@ let lemma_received_encrypted_extensions_state_evolves
     st
     delta
     (received_encrypted_extensions_state st ee raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_encrypted_extensions_state st ee raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_encrypted_extensions_state st ee raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_encrypted_extensions_state st ee raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_encrypted_extensions_state st ee raw_received))
 
 let lemma_received_certificate_state_evolves
@@ -1681,7 +1701,7 @@ let lemma_received_certificate_state_evolves
   (cert:GCert.certificate)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
@@ -1695,10 +1715,10 @@ let lemma_received_certificate_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_certificate_state st cert raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_certificate_state st cert raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1730,17 +1750,17 @@ let lemma_received_certificate_state_evolves
     st
     delta
     (received_certificate_state st cert raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_certificate_state st cert raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_certificate_state st cert raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_certificate_state st cert raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_certificate_state st cert raw_received))
 
 let lemma_received_certificate_verify_state_evolves
@@ -1748,7 +1768,7 @@ let lemma_received_certificate_verify_state_evolves
   (cv:GCV.certificateVerify)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsCertificateValidated /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
@@ -1763,10 +1783,10 @@ let lemma_received_certificate_verify_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_certificate_verify_state st cv raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_certificate_verify_state st cv raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1798,34 +1818,34 @@ let lemma_received_certificate_verify_state_evolves
     st
     delta
     (received_certificate_verify_state st cv raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_certificate_verify_state st cv raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_certificate_verify_state st cv raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_certificate_verify_state st cv raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_certificate_verify_state st cv raw_received))
 
 let lemma_verified_certificate_signature_state_evolves
   (st:CS.connection_state)
   (cv:GCV.certificateVerify)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
                 st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
                 CS.legal_event
                   st.CS.cs_model
                   (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv)))
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (verified_certificate_signature_state st cv) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (verified_certificate_signature_state st cv) /\
                CS.legal_connection_delta
                  st
@@ -1846,20 +1866,20 @@ let lemma_verified_certificate_signature_state_evolves
   assert (CS.step_model st.CS.cs_model ev ==
           Some (verified_certificate_signature_state st cv).CS.cs_model);
   assert (CS.legal_connection_delta st delta (verified_certificate_signature_state st cv));
-  assert (CS.connection_state_single_step st (verified_certificate_signature_state st cv));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (verified_certificate_signature_state st cv));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (verified_certificate_signature_state st cv);
-  assert (CS.connection_state_evolves st (verified_certificate_signature_state st cv));
-  assert (CS.connection_state_consistent (verified_certificate_signature_state st cv))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (verified_certificate_signature_state st cv));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (verified_certificate_signature_state st cv))
 
 let lemma_received_server_finished_state_evolves
   (st:CS.connection_state)
   (fin:GFin.finished)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsCertificateVerifyVerified /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
@@ -1874,10 +1894,10 @@ let lemma_received_server_finished_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_server_finished_state st fin raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_server_finished_state st fin raw_received) /\
                CS.legal_connection_delta
                  st
@@ -1906,29 +1926,29 @@ let lemma_received_server_finished_state_evolves
   assert (CS.step_model st.CS.cs_model ev ==
           Some (received_server_finished_state st fin raw_received).CS.cs_model);
   assert (CS.legal_connection_delta st delta (received_server_finished_state st fin raw_received));
-  assert (CS.connection_state_single_step st (received_server_finished_state st fin raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (received_server_finished_state st fin raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_server_finished_state st fin raw_received);
-  assert (CS.connection_state_evolves st (received_server_finished_state st fin raw_received));
-  assert (CS.connection_state_consistent (received_server_finished_state st fin raw_received))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (received_server_finished_state st fin raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (received_server_finished_state st fin raw_received))
 
 let lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)
   (fin:GFin.finished)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsServerFinishedReceived /\
                 st.CS.cs_model.CS.model_handshake.CS.hs_server_finished == Some fin /\
                 CS.legal_event
                   st.CS.cs_model
                   (CS.ConnLocalEvent (CS.LocalVerifyFinished fin)))
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (verified_server_finished_state st fin) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (verified_server_finished_state st fin) /\
                CS.legal_connection_delta
                  st
@@ -1949,25 +1969,25 @@ let lemma_verified_server_finished_state_evolves
   assert (CS.step_model st.CS.cs_model ev ==
           Some (verified_server_finished_state st fin).CS.cs_model);
   assert (CS.legal_connection_delta st delta (verified_server_finished_state st fin));
-  assert (CS.connection_state_single_step st (verified_server_finished_state st fin));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (verified_server_finished_state st fin));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (verified_server_finished_state st fin);
-  assert (CS.connection_state_evolves st (verified_server_finished_state st fin));
-  assert (CS.connection_state_consistent (verified_server_finished_state st fin))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (verified_server_finished_state st fin));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (verified_server_finished_state st fin))
 
 let lemma_sent_client_finished_state_evolves
   (st:CS.connection_state)
   (fin:GFin.finished)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_client_finished st fin raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_client_finished_state st fin raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_client_finished_state st fin raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -1997,20 +2017,20 @@ let lemma_sent_client_finished_state_evolves
           Some (sent_client_finished_state st fin raw_sent).CS.cs_model);
   assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
   assert (CS.legal_connection_delta st delta (sent_client_finished_state st fin raw_sent));
-  assert (CS.connection_state_single_step st (sent_client_finished_state st fin raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (sent_client_finished_state st fin raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_client_finished_state st fin raw_sent);
-  assert (CS.connection_state_evolves st (sent_client_finished_state st fin raw_sent));
-  assert (CS.connection_state_consistent (sent_client_finished_state st fin raw_sent))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (sent_client_finished_state st fin raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (sent_client_finished_state st fin raw_sent))
 
 let lemma_received_alert_failure_state_evolves
   (st:CS.connection_state)
   (alert:T.alert_description)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 alert <> T.Close_notify /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
@@ -2020,10 +2040,10 @@ let lemma_received_alert_failure_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_alert_failure_state st alert raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_alert_failure_state st alert raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2052,20 +2072,20 @@ let lemma_received_alert_failure_state_evolves
   assert (CS.step_model st.CS.cs_model ev ==
           Some (CS.fail_model st.CS.cs_model (T.AlertError alert)));
   assert (CS.legal_connection_delta st delta (received_alert_failure_state st alert raw_received));
-  assert (CS.connection_state_single_step st (received_alert_failure_state st alert raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (received_alert_failure_state st alert raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_alert_failure_state st alert raw_received);
-  assert (CS.connection_state_evolves st (received_alert_failure_state st alert raw_received));
-  assert (CS.connection_state_consistent (received_alert_failure_state st alert raw_received))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (received_alert_failure_state st alert raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (received_alert_failure_state st alert raw_received))
 
 let lemma_received_close_notify_state_evolves_for_role
   (role:CS.endpoint_role)
   (st:CS.connection_state)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 (st.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
                  st.CS.cs_model.CS.model_control == CS.ControlClosing) /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
@@ -2078,10 +2098,10 @@ let lemma_received_close_notify_state_evolves_for_role
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_close_notify_state st raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_close_notify_state st raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2113,24 +2133,24 @@ let lemma_received_close_notify_state_evolves_for_role
     st
     delta
     (received_close_notify_state st raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_close_notify_state st raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_close_notify_state st raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_close_notify_state st raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_close_notify_state st raw_received))
 
 let lemma_received_close_notify_state_evolves
   (st:CS.connection_state)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 (st.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
                  st.CS.cs_model.CS.model_control == CS.ControlClosing) /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
@@ -2143,10 +2163,10 @@ let lemma_received_close_notify_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_close_notify_state st raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_close_notify_state st raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2170,12 +2190,12 @@ let lemma_sent_close_notify_state_evolves
   (st:CS.connection_state)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_close_notify st raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_close_notify_state st raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_close_notify_state st raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -2208,17 +2228,17 @@ let lemma_sent_close_notify_state_evolves
     st
     delta
     (sent_close_notify_state st raw_sent));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_close_notify_state st raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_close_notify_state st raw_sent);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (sent_close_notify_state st raw_sent));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_close_notify_state st raw_sent))
 
 let lemma_received_application_data_state_evolves_for_role
@@ -2227,7 +2247,7 @@ let lemma_received_application_data_state_evolves_for_role
   (bytes:B.bytes)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
                 st.CS.cs_model.CS.model_config.CS.config_role == role /\
                 CS.application_traffic_available_for_role
@@ -2242,10 +2262,10 @@ let lemma_received_application_data_state_evolves_for_role
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_application_data_state st bytes raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_application_data_state st bytes raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2278,17 +2298,17 @@ let lemma_received_application_data_state_evolves_for_role
     st
     delta
     (received_application_data_state st bytes raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_application_data_state st bytes raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_application_data_state st bytes raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_application_data_state st bytes raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_application_data_state st bytes raw_received))
 
 let lemma_received_application_data_state_evolves
@@ -2296,7 +2316,7 @@ let lemma_received_application_data_state_evolves
   (bytes:B.bytes)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
                   CS.ClientEndpoint /\
@@ -2309,10 +2329,10 @@ let lemma_received_application_data_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_application_data_state st bytes raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_application_data_state st bytes raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2345,7 +2365,7 @@ let lemma_received_ignored_post_handshake_state_evolves
   (body:B.bytes)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
                   CS.ClientEndpoint /\
@@ -2358,10 +2378,10 @@ let lemma_received_ignored_post_handshake_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_ignored_post_handshake_state st body raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_ignored_post_handshake_state st body raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2393,17 +2413,17 @@ let lemma_received_ignored_post_handshake_state_evolves
     st
     delta
     (received_ignored_post_handshake_state st body raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_ignored_post_handshake_state st body raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_ignored_post_handshake_state st body raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_ignored_post_handshake_state st body raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_ignored_post_handshake_state st body raw_received))
 
 let lemma_received_key_update_state_evolves
@@ -2411,7 +2431,7 @@ let lemma_received_key_update_state_evolves
   (req:M.key_update_request)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
                   CS.ClientEndpoint /\
@@ -2424,10 +2444,10 @@ let lemma_received_key_update_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_key_update_state st req raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_key_update_state st req raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2459,24 +2479,24 @@ let lemma_received_key_update_state_evolves
     st
     delta
     (received_key_update_state st req raw_received));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_key_update_state st req raw_received));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (received_key_update_state st req raw_received);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (received_key_update_state st req raw_received));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_key_update_state st req raw_received))
 
 let lemma_received_key_update_not_requested_state_evolves
   (st:CS.connection_state)
   (raw_received:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
                   CS.ClientEndpoint /\
@@ -2489,10 +2509,10 @@ let lemma_received_key_update_not_requested_state_evolves
                   })
                   B.empty
                   raw_received)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (received_key_update_not_requested_state st raw_received) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (received_key_update_not_requested_state st raw_received) /\
                CS.legal_connection_delta
                  st
@@ -2513,12 +2533,12 @@ let lemma_sent_key_update_response_state_evolves
   (st:CS.connection_state)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_key_update st raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_key_update_response_state st raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_key_update_response_state st raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -2551,32 +2571,32 @@ let lemma_sent_key_update_response_state_evolves
     st
     delta
     (sent_key_update_response_state st raw_sent));
-  assert (CS.connection_state_single_step
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_key_update_response_state st raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_key_update_response_state st raw_sent);
-  assert (CS.connection_state_evolves
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
     st
     (sent_key_update_response_state st raw_sent));
-  assert (CS.connection_state_consistent
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_key_update_response_state st raw_sent))
 
 let lemma_delivered_application_data_state_evolves
   (st:CS.connection_state)
   (bytes:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
                 CS.legal_event
                   st.CS.cs_model
                   (CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes)))
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (delivered_application_data_state st bytes) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (delivered_application_data_state st bytes) /\
                CS.legal_connection_delta
                  st
@@ -2599,25 +2619,25 @@ let lemma_delivered_application_data_state_evolves
   assert (CS.step_model st.CS.cs_model ev ==
           Some (delivered_application_data_state st bytes).CS.cs_model);
   assert (CS.legal_connection_delta st delta (delivered_application_data_state st bytes));
-  assert (CS.connection_state_single_step st (delivered_application_data_state st bytes));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (delivered_application_data_state st bytes));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (delivered_application_data_state st bytes);
-  assert (CS.connection_state_evolves st (delivered_application_data_state st bytes));
-  assert (CS.connection_state_consistent (delivered_application_data_state st bytes))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (delivered_application_data_state st bytes));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (delivered_application_data_state st bytes))
 
 let lemma_sent_application_data_state_evolves
   (st:CS.connection_state)
   (bytes:B.bytes)
   (raw_sent:B.bytes)
   : Lemma
-      (requires CS.connection_state_consistent st /\
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
                 can_send_application_data st bytes raw_sent)
-      (ensures CS.connection_state_evolves
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
                  st
                  (sent_application_data_state st bytes raw_sent) /\
-               CS.connection_state_consistent
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
                  (sent_application_data_state st bytes raw_sent) /\
                CS.legal_connection_delta
                  st
@@ -2649,10 +2669,10 @@ let lemma_sent_application_data_state_evolves
   assert (CS.step_model st.CS.cs_model ev ==
           Some (sent_application_data_state st bytes raw_sent).CS.cs_model);
   assert (CS.legal_connection_delta st delta (sent_application_data_state st bytes raw_sent));
-  assert (CS.connection_state_single_step st (sent_application_data_state st bytes raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step st (sent_application_data_state st bytes raw_sent));
   FStar.ReflexiveTransitiveClosure.closure_step
-    CS.connection_state_single_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
     st
     (sent_application_data_state st bytes raw_sent);
-  assert (CS.connection_state_evolves st (sent_application_data_state st bytes raw_sent));
-  assert (CS.connection_state_consistent (sent_application_data_state st bytes raw_sent))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (sent_application_data_state st bytes raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (sent_application_data_state st bytes raw_sent))

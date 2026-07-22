@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CR = TLS13.Impl.ConnectionState.Repr
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CT = TLS13.Impl.Client.Types
@@ -160,17 +160,17 @@ fn new_client_default ()
   ensures CR.connection_exactly c CR.default_initial_state **
           pure (CT.client_state_correct CR.default_initial_state /\
                 CT.client_end_to_end_invariant CR.default_initial_state /\
-                CS.connection_state_raw_to_message_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_raw_to_message_replay_consistent
                   CR.default_initial_state /\
-                CS.connection_state_sent_seal_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent
                   CR.default_initial_state /\
-                CS.connection_state_sent_seal_key_schedule_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_key_schedule_replay_consistent
                   CR.default_initial_state /\
-                CS.connection_state_received_decode_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent
                   CR.default_initial_state /\
-                CS.connection_state_received_decode_key_schedule_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_key_schedule_replay_consistent
                   CR.default_initial_state /\
-                CS.connection_state_protected_raw_segmented_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   CR.default_initial_state)
 
 fn new_client
@@ -204,32 +204,32 @@ fn new_client
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds) /\
-                CS.connection_state_raw_to_message_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_raw_to_message_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds) /\
-                CS.connection_state_sent_seal_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds) /\
-                CS.connection_state_sent_seal_key_schedule_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_key_schedule_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds) /\
-                CS.connection_state_received_decode_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds) /\
-                CS.connection_state_received_decode_key_schedule_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_key_schedule_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds) /\
-                CS.connection_state_protected_raw_segmented_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
@@ -359,12 +359,24 @@ fn process_network_bytes
                   'old_app_out
                   app_out_bytes /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+                 CT.response_stuttered
+                   'st0
+                   st1
+                   buffer_resp.CT.response
+                   'old_network_out
+                   network_out_bytes
+                   'old_app_out
+                   app_out_bytes) /\
+                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
                  buffer_resp.CT.consumed_len == 0sz /\
                  WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
                 (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
                  buffer_resp.CT.consumed_len == 0sz) /\
                 (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
                  buffer_resp.CT.consumed_len == 0sz) /\
+                (SZ.v buffer_resp.CT.response.CT.app_out_len > 0 ==>
+                 buffer_resp.CT.response.CT.status == CT.StepOk /\
+                 buffer_resp.CT.response.CT.network_out_len == 0sz) /\
                 (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False))
 
 fn process_local_event

@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let extensionServerHello_extension_data_key_share'_parser : LP.parser _ extensionServerHello_extension_data_key_share' =
   LP.parse_bounded_vldata_strong 0 65535 keyShareServerHello_serializer
 
@@ -50,12 +48,12 @@ let extensionServerHello_extension_data_key_share_serializer = LP.serialize_synt
 let extensionServerHello_extension_data_key_share_bytesize_eq x = ()
 
 inline_for_extraction let extensionServerHello_extension_data_key_share'_validator : LPS.validator extensionServerHello_extension_data_key_share'_parser =
-  PPVD.validate_bounded_vldata_strong 0 65535 keyShareServerHello_serializer keyShareServerHello_validator (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 0 65535 keyShareServerHello_serializer keyShareServerHello_validator (PPBI.leaf_read_bounded_integer_2 ())
 
 let extensionServerHello_extension_data_key_share_validator = LPC.validate_synth extensionServerHello_extension_data_key_share'_validator synth_extensionServerHello_extension_data_key_share
 
 inline_for_extraction let extensionServerHello_extension_data_key_share'_jumper : LPS.jumper extensionServerHello_extension_data_key_share'_parser =
-  PPVD.jump_bounded_vldata_strong 0 65535 keyShareServerHello_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 0 65535 keyShareServerHello_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let extensionServerHello_extension_data_key_share_jumper = LPC.jump_synth extensionServerHello_extension_data_key_share'_jumper synth_extensionServerHello_extension_data_key_share
 
@@ -63,7 +61,7 @@ let extensionServerHello_extension_data_key_share_accessor =
   PPC.accessor_ext
     (PPC.accessor_compose
       (PPC.accessor_synth synth_extensionServerHello_extension_data_key_share synth_extensionServerHello_extension_data_key_share_recip)
-      (PPVD.accessor_bounded_vldata_strong_payload 0 65535 keyShareServerHello_serializer (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash) ())
+      (PPVD.accessor_bounded_vldata_strong_payload 0 65535 keyShareServerHello_serializer (PPBI.leaf_read_bounded_integer_2 ())) ())
     extensionServerHello_extension_data_key_share_clens ()
 
 
@@ -75,7 +73,7 @@ let read_extensionServerHello_extension_data_key_share : PPB.copyful_parse exten
   extensionServerHello_extension_data_key_share_copyful_synth_injective ();
   extensionServerHello_extension_data_key_share_copyful_synth_inverse ();
   PPC.copyful_parse_synth
-    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 keyShareServerHello_serializer read_keyShareServerHello (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 keyShareServerHello_serializer read_keyShareServerHello (PPBI.leaf_read_bounded_integer_2 ()))
     synth_extensionServerHello_extension_data_key_share synth_extensionServerHello_extension_data_key_share_recip
 
 let free_extensionServerHello_extension_data_key_share : PPB.free_t extensionServerHello_extension_data_key_share_vmatch =
@@ -85,7 +83,7 @@ let write_extensionServerHello_extension_data_key_share : PPB.l2r_safe_writer ex
   extensionServerHello_extension_data_key_share_copyful_synth_injective ();
   extensionServerHello_extension_data_key_share_copyful_synth_inverse ();
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz keyShareServerHello_serializer write_keyShareServerHello fits_u64_squash) <: PPB.l2r_safe_writer _ extensionServerHello_extension_data_key_share'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 0ul 65535 65535ul 2 2sz keyShareServerHello_serializer write_keyShareServerHello) <: PPB.l2r_safe_writer _ extensionServerHello_extension_data_key_share'_serializer _)
     synth_extensionServerHello_extension_data_key_share synth_extensionServerHello_extension_data_key_share_recip
 
 let extensionServerHello_extension_data_key_share_bytesize_eqn x =

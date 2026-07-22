@@ -8,7 +8,8 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CPI = Common.ProtocolImplementation
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
@@ -17,10 +18,12 @@ module CQ = TLS13.Impl.ConnectionState.Queries
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
 module M = TLS13.Messages
+module MR = Pulse.Lib.MonotonicGhostRef
 module R = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
+module SP = TLS13.Impl.Server.CanonicalProtocol
 module SZ = FStar.SizeT
 module ST = TLS13.Impl.Server.Types
 module T = TLS13.Types
@@ -1612,6 +1615,24 @@ fn process_buffered_network_bytes_compact_once
   assert (pure (SZ.v buffer_resp.ST.consumed_len <= B.length raw_prefix));
   assert (pure (SZ.v buffer_resp.ST.consumed_len <= SZ.v current_len));
   assert (pure (SZ.v buffer_resp.ST.consumed_len <= SZ.v buffered_len));
+  assert (pure (CPI.buffers_wf
+    raw_prefix
+    current_len
+    network_out
+    driver_network_out_capacity));
+  SP.lemma_server_network_event_progress
+    (Ghost.reveal d.server_driver_initial)
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    current_len
+    network_out
+    network_out_bytes
+    driver_network_out_capacity
+    app_out_bytes;
+  advance_server_driver_canonical_progress
+    d 'st0 st1;
 
   A.to_mask raw_prefix_array;
   with raw_prefix_mask_after.
@@ -2325,6 +2346,9 @@ fn rec read_process_network_until_ready
            app_out_bytes **
           pure (st1.CS.cs_model.CS.model_config ==
                  'st0.CS.cs_model.CS.model_config /\
+            (result.server_driver_network_loop_exhausted == true ==>
+              st1 == 'st0 /\
+              Seq.equal sent' (Ghost.reveal 'sent)) /\
             (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
               ST.NeedMoreInput /\
@@ -2411,6 +2435,9 @@ fn rec read_process_network_until_ready
           result_app_out **
         pure (st2.CS.cs_model.CS.model_config ==
           st1.CS.cs_model.CS.model_config /\
+        (result.server_driver_network_loop_exhausted == true ==>
+          st2 == st1 /\
+          Seq.equal sent2 sent') /\
         (result.server_driver_network_loop_exhausted == false ==>
           result.server_driver_network_loop_last.ST.response.ST.status <>
             ST.NeedMoreInput /\
@@ -2429,6 +2456,9 @@ fn rec read_process_network_until_ready
                 result_app_out)));
       assert (pure (st2.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config));
+      assert (pure (result.server_driver_network_loop_exhausted == true ==>
+        st2 == 'st0 /\
+        Seq.equal sent2 (Ghost.reveal 'sent)));
       assert (pure (result.server_driver_network_loop_exhausted == false ==>
         server_driver_network_process_correct
             'st0

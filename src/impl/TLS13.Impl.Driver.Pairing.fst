@@ -8,7 +8,7 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module M = TLS13.Messages
@@ -23,6 +23,9 @@ module SeqP = FStar.Seq.Properties
 module ST = TLS13.Impl.Server.Types
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
+module WStep = TLS13.System.WireStep
+
+open TLS13.Spec.Pairing.Transport
 
 let lemma_paired_protocol_received_logs_accounted
   (client:CS.connection_state)
@@ -162,7 +165,7 @@ let lemma_paired_wire_logs_from_exact_prefix_no_read_ahead
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server)
 =
   lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead
     client
@@ -200,7 +203,7 @@ let lemma_client_server_driver_key_material_agrees_from_prefixes
           server_sent)
       (ensures
         paired_protocol_received_logs_exact_prefix client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_paired_protocol_received_logs_exact_prefix
     client
@@ -241,14 +244,14 @@ let lemma_paired_handshake_message_states_paired_cleartext_hello_messages
     Some _, Some _,
     Some _, Some _,
     Some _, Some _ ->
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.ClientHello client_ch)
       (M.ClientHello server_ch));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.ServerHello client_sh)
       (M.ServerHello server_sh));
-    assert (CS.client_hello_corresponds client_ch server_ch);
-    assert (CS.server_hello_corresponds client_sh server_sh)
+    assert (TLS13.Spec.StateMachine.Correspondence.client_hello_corresponds client_ch server_ch);
+    assert (TLS13.Spec.StateMachine.Correspondence.server_hello_corresponds client_sh server_sh)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
 
@@ -292,41 +295,41 @@ let lemma_paired_handshake_event_trace_paired_handshake_message_states
     Some client_cv, Some server_cv,
     Some client_sf, Some server_sf,
     Some client_cf, Some server_cf ->
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.ClientHello client_ch)
       (M.ClientHello server_ch));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.ServerHello client_sh)
       (M.ServerHello server_sh));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.EncryptedExtensions client_ee)
       (M.EncryptedExtensions server_ee));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Certificate client_cert)
       (M.Certificate server_cert));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.CertificateVerify client_cv)
       (M.CertificateVerify server_cv));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Finished client_sf)
       (M.Finished server_sf));
-    assert (CS.handshake_msg_corresponds
+    assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
       (M.Finished client_cf)
       (M.Finished server_cf));
-    assert (CS.client_hello_corresponds client_ch server_ch);
-    assert (CS.server_hello_corresponds client_sh server_sh);
-    assert (CS.encrypted_extensions_corresponds client_ee server_ee);
-    assert (CS.certificate_msg_corresponds client_cert server_cert);
-    assert (CS.certificate_verify_corresponds client_cv server_cv);
+    assert (TLS13.Spec.StateMachine.Correspondence.client_hello_corresponds client_ch server_ch);
+    assert (TLS13.Spec.StateMachine.Correspondence.server_hello_corresponds client_sh server_sh);
+    assert (TLS13.Spec.StateMachine.Correspondence.encrypted_extensions_corresponds client_ee server_ee);
+    assert (TLS13.Spec.StateMachine.Correspondence.certificate_msg_corresponds client_cert server_cert);
+    assert (TLS13.Spec.StateMachine.Correspondence.certificate_verify_corresponds client_cv server_cv);
     assert (client_sf == server_sf);
     assert (client_cf == server_cf);
-    assert (CS.same_transcript_checkpoint CS.TH_CH client server);
-    assert (CS.same_transcript_checkpoint CS.TH_SH client server);
-    assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
-    assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
-    assert (CS.same_transcript_checkpoint CS.TH_SF client server);
-    assert (CS.same_transcript_checkpoint CS.TH_CF client server);
-    assert (CS.paired_handshake_events client server)
+    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CH client server);
+    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SH client server);
+    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_CV client server);
+    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_SF client server);
+    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SF client server);
+    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CF client server);
+    assert (TLS13.Spec.StateMachine.Correspondence.paired_handshake_events client server)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
 
@@ -342,13 +345,13 @@ let lemma_paired_handshake_event_trace_paired_handshake_events
   lemma_paired_handshake_event_trace_paired_handshake_message_states
     client
     server;
-  assert (CS.same_transcript_checkpoint CS.TH_CH client server);
-  assert (CS.same_transcript_checkpoint CS.TH_SH client server);
-  assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
-  assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
-  assert (CS.same_transcript_checkpoint CS.TH_SF client server);
-  assert (CS.same_transcript_checkpoint CS.TH_CF client server);
-  assert (CS.paired_handshake_events client server)
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CH client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SH client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_CV client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_SF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_handshake_events client server)
 
 let lemma_paired_handshake_message_states_application_derivation_projection_inputs
   (client:CS.connection_state)
@@ -388,8 +391,8 @@ let lemma_paired_handshake_message_states_application_derivation_projection_inpu
     lemma_paired_handshake_message_states_paired_handshake_events
       client
       server;
-    assert (CS.same_transcript_checkpoint CS.TH_SF client server);
-    assert (CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server)
+    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SF client server);
+    assert (TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server)
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
 
@@ -403,9 +406,9 @@ let lemma_paired_handshake_events_application_derivation_projection_inputs
           client
           server)
 =
-  assert (CS.paired_handshake_events client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_handshake_events client server);
   CSL.lemma_paired_handshake_events_same_key_derivation_checkpoint
-    CS.DeriveApplicationTraffic
+    TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic
     client
     server
 
@@ -415,14 +418,14 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
   : Lemma
       (requires
         client_server_driver_x25519_projection_inputs client server)
-      (ensures CS.paired_x25519_key_shares client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_x25519_key_shares client server)
 =
   CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
   CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
-  assert (CS.stable_client_x25519_key_share_projection client);
-  assert (CS.client_x25519_key_share_projection client);
-  assert (CS.stable_server_x25519_key_share_projection server);
-  assert (CS.server_x25519_key_share_projection server);
+  assert (TLS13.Spec.StateMachine.Correspondence.stable_client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.stable_server_x25519_key_share_projection server);
+  assert (TLS13.Spec.StateMachine.Correspondence.server_x25519_key_share_projection server);
   let client_hs = client.CS.cs_model.CS.model_handshake in
   let server_hs = server.CS.cs_model.CS.model_handshake in
   match
@@ -442,9 +445,9 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
       selection.CS.server_key_share_private
      with
      | Some client_sk, Some server_sk ->
-       assert (CS.handshake_msg_corresponds
+       assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
          (M.ClientHello client_ch) (M.ClientHello server_ch));
-       assert (CS.handshake_msg_corresponds
+       assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
          (M.ServerHello client_sh) (M.ServerHello server_sh));
        assert (CS.client_hello_key_share client_ch ==
          CS.client_hello_key_share server_ch);
@@ -475,14 +478,14 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
   : Lemma
      (requires
        client_server_driver_x25519_key_share_projection_inputs client server)
-     (ensures CS.paired_x25519_key_shares client server)
+     (ensures TLS13.Spec.StateMachine.Correspondence.paired_x25519_key_shares client server)
 =
   CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
   CSL.lemma_server_application_ready_stable_x25519_key_share_projection server;
-  assert (CS.stable_client_x25519_key_share_projection client);
-  assert (CS.client_x25519_key_share_projection client);
-  assert (CS.stable_server_x25519_key_share_projection server);
-  assert (CS.server_x25519_key_share_projection server);
+  assert (TLS13.Spec.StateMachine.Correspondence.stable_client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.stable_server_x25519_key_share_projection server);
+  assert (TLS13.Spec.StateMachine.Correspondence.server_x25519_key_share_projection server);
   let client_hs = client.CS.cs_model.CS.model_handshake in
   let server_hs = server.CS.cs_model.CS.model_handshake in
   match
@@ -535,10 +538,10 @@ let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection
         client_server_driver_supported_profile_derived_projection_inputs
           client
           server)
-      (ensures CS.paired_key_derivation_checkpoints client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_key_derivation_checkpoints client server)
 =
-  assert (CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server);
-  assert (CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server)
+  assert (TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server)
 #pop-options
 
 let lemma_client_server_driver_paired_key_derivation_checkpoints_from_key_share_projection_inputs
@@ -549,10 +552,10 @@ let lemma_client_server_driver_paired_key_derivation_checkpoints_from_key_share_
         client_server_driver_supported_profile_derived_key_share_projection_inputs
           client
           server)
-      (ensures CS.paired_key_derivation_checkpoints client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_key_derivation_checkpoints client server)
 =
-  assert (CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server);
-  assert (CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server)
+  assert (TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server)
 
 let lemma_client_server_driver_supported_profile_derived_state_inputs_from_projection_inputs
   (client:CS.connection_state)
@@ -603,26 +606,26 @@ let lemma_client_server_driver_supported_profile_derived_key_material_agrees
         SD.server_driver_application_ready server /\
         client_server_driver_supported_profile_derived_state_inputs client server)
       (ensures
-        CS.connection_supported_profile_key_schedule_lineage client /\
-        CS.connection_supported_profile_key_schedule_lineage server /\
-        CS.supported_profile_all_derived_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.connection_supported_profile_key_schedule_lineage client /\
+        TLS13.Spec.StateMachine.Correspondence.connection_supported_profile_key_schedule_lineage server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server)
 =
-  assert (CS.connection_state_consistent client);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent client);
   assert (CS.application_record_keys_installed_for_role
     CS.ClientEndpoint
     client.CS.cs_model);
   CSL.lemma_connection_application_keys_supported_profile_key_schedule_lineage
     CS.ClientEndpoint
     client;
-  assert (CS.connection_state_consistent server);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent server);
   assert (CS.application_record_keys_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
   CSL.lemma_connection_application_keys_supported_profile_key_schedule_lineage
     CS.ServerEndpoint
     server;
-  assert (CS.connection_supported_profile_key_schedule_lineage client);
-  assert (CS.connection_supported_profile_key_schedule_lineage server);
+  assert (TLS13.Spec.StateMachine.Correspondence.connection_supported_profile_key_schedule_lineage client);
+  assert (TLS13.Spec.StateMachine.Correspondence.connection_supported_profile_key_schedule_lineage server);
   CSL.lemma_paired_supported_profile_all_derived_key_material_agrees
     client
     server
@@ -635,14 +638,14 @@ let lemma_client_server_driver_application_record_epochs_installed
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server)
       (ensures
-        CS.application_record_epochs_installed_for_role
+        TLS13.Spec.StateMachine.KeyMaterial.application_record_epochs_installed_for_role
           CS.ClientEndpoint
           client.CS.cs_model /\
-        CS.application_record_epochs_installed_for_role
+        TLS13.Spec.StateMachine.KeyMaterial.application_record_epochs_installed_for_role
           CS.ServerEndpoint
           server.CS.cs_model)
 =
-  assert (CS.connection_state_consistent client);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent client);
   assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
   assert (client.CS.cs_model.CS.model_control == CS.ControlApplicationData);
   assert (CS.application_record_keys_installed_for_role
@@ -651,7 +654,7 @@ let lemma_client_server_driver_application_record_epochs_installed
   CSL.lemma_connection_application_ready_record_epochs_installed
     CS.ClientEndpoint
     client;
-  assert (CS.connection_state_consistent server);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent server);
   assert (server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
   assert (server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
   assert (CS.application_record_keys_installed_for_role
@@ -681,10 +684,10 @@ let lemma_client_server_driver_supported_profile_application_record_state_inputs
   assert (CS.application_record_keys_installed_for_role
     CS.ClientEndpoint
     client.CS.cs_model);
-  assert (CS.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
   CSL.lemma_connection_state_no_key_update_trace_first_epoch_application_traffic_material_slots_match_expected
     client;
-  assert (CS.first_epoch_application_traffic_material_no_key_update_invariant
+  assert (TLS13.Spec.StateMachine.KeyMaterial.first_epoch_application_traffic_material_no_key_update_invariant
     client);
   CSL.lemma_no_key_update_application_traffic_material_matches_expected
     CS.ClientEndpoint
@@ -694,10 +697,10 @@ let lemma_client_server_driver_supported_profile_application_record_state_inputs
   assert (CS.application_record_keys_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   CSL.lemma_connection_state_no_key_update_trace_first_epoch_application_traffic_material_slots_match_expected
     server;
-  assert (CS.first_epoch_application_traffic_material_no_key_update_invariant
+  assert (TLS13.Spec.StateMachine.KeyMaterial.first_epoch_application_traffic_material_no_key_update_invariant
     server);
   CSL.lemma_no_key_update_application_traffic_material_matches_expected
     CS.ServerEndpoint
@@ -711,7 +714,7 @@ let lemma_client_server_driver_remaining_semantic_projection_inputs_from_clearte
         CD.client_driver_application_ready client /\
         SD.server_driver_application_ready server /\
         paired_cleartext_hello_messages client server /\
-        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
+        TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
         client_server_driver_application_derivation_projection_inputs
           client
           server /\
@@ -744,7 +747,7 @@ let lemma_client_server_driver_remaining_semantic_projection_inputs_from_clearte
   lemma_paired_handshake_events_application_derivation_projection_inputs
     client
     server;
-  assert (CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server);
   lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_application_checkpoint
     client
     server
@@ -797,16 +800,16 @@ let lemma_client_server_driver_supported_profile_key_material_inputs_agree
         SD.server_driver_application_ready server /\
         client_server_driver_supported_profile_state_inputs client server)
       (ensures
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server)
 =
   lemma_client_server_driver_supported_profile_derived_key_material_agrees
     client
     server;
-  assert (CS.connection_supported_profile_key_schedule_lineage client);
-  assert (CS.connection_supported_profile_key_schedule_lineage server);
-  assert (CS.supported_profile_all_derived_key_material_agrees client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.connection_supported_profile_key_schedule_lineage client);
+  assert (TLS13.Spec.StateMachine.Correspondence.connection_supported_profile_key_schedule_lineage server);
+  assert (TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server);
   assert (CS.application_record_keys_installed_for_role
     CS.ClientEndpoint
     client.CS.cs_model);
@@ -816,19 +819,19 @@ let lemma_client_server_driver_supported_profile_key_material_inputs_agree
   lemma_client_server_driver_application_record_epochs_installed
     client
     server;
-  assert (CS.application_record_epochs_installed_for_role
+  assert (TLS13.Spec.StateMachine.KeyMaterial.application_record_epochs_installed_for_role
     CS.ClientEndpoint
     client.CS.cs_model);
-  assert (CS.application_record_epochs_installed_for_role
+  assert (TLS13.Spec.StateMachine.KeyMaterial.application_record_epochs_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
   CSL.lemma_supported_profile_application_record_material_inputs_agree_from_expected
     client
     server;
-  assert (CS.supported_profile_application_record_material_inputs_agree
+  assert (TLS13.Spec.StateMachine.KeyMaterial.supported_profile_application_record_material_inputs_agree
     client
     server);
-  assert (CS.supported_profile_client_server_key_material_inputs_agree
+  assert (TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
     client
     server)
 
@@ -856,8 +859,8 @@ let lemma_client_server_driver_key_material_agrees_from_no_read_ahead
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_paired_wire_logs_from_exact_prefix_no_read_ahead
     client
@@ -885,7 +888,7 @@ let lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components
           server_received
           server_sent)
       (ensures
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -895,8 +898,8 @@ let lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_client_server_driver_supported_profile_key_material_inputs_agree
     client
@@ -926,8 +929,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_component
           server_received
           server_sent)
       (ensures
-        CS.supported_profile_all_derived_key_material_agrees client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -937,8 +940,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_component
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_client_server_driver_supported_profile_derived_key_material_agrees
     client
@@ -971,8 +974,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_projectio
         client_server_driver_supported_profile_derived_state_inputs
           client
           server /\
-        CS.supported_profile_all_derived_key_material_agrees client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -982,8 +985,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_projectio
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_client_server_driver_supported_profile_state_inputs_from_projection_inputs
     client
@@ -1024,8 +1027,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_transport
         client_server_driver_supported_profile_derived_state_inputs
           client
           server /\
-        CS.supported_profile_all_derived_key_material_agrees client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -1035,8 +1038,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_transport
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   assert (client_server_driver_key_material_no_read_ahead_projection_inputs
     client
@@ -1074,8 +1077,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_minimal_p
         client_server_driver_supported_profile_derived_state_inputs
           client
           server /\
-        CS.supported_profile_all_derived_key_material_agrees client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -1085,8 +1088,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_minimal_p
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_application_checkpoint
     client
@@ -1127,8 +1130,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_cleartext
         client_server_driver_supported_profile_derived_state_inputs
           client
           server /\
-        CS.supported_profile_all_derived_key_material_agrees client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -1138,8 +1141,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_cleartext
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_client_server_driver_remaining_semantic_projection_inputs_from_cleartext_and_handshake_events
     client
@@ -1187,8 +1190,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_paired_ha
         client_server_driver_supported_profile_derived_state_inputs
           client
           server /\
-        CS.supported_profile_all_derived_key_material_agrees client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -1198,8 +1201,8 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_paired_ha
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_client_server_driver_remaining_semantic_projection_inputs_from_paired_handshake_message_states
     client
@@ -1228,7 +1231,7 @@ let lemma_paired_wire_logs_from_exact_transport
           client_sent
           server_received
           server_sent)
-      (ensures CS.paired_wire_logs client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server)
 =
   Seq.lemma_eq_elim client_sent client.CS.cs_wire_log.CL.raw_sent;
   Seq.lemma_eq_elim server_received server.CS.cs_wire_log.CL.raw_received;
@@ -1252,8 +1255,8 @@ let lemma_client_server_driver_key_material_agrees
           server_received
           server_sent)
       (ensures
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_paired_wire_logs_from_exact_transport
     client
@@ -1269,16 +1272,16 @@ let lemma_client_server_application_record_material_client_to_server_agrees
   (server:CS.connection_state)
   : Lemma
       (requires
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
       (ensures
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server)
 =
-  assert (CS.supported_profile_application_record_material_agrees client server);
-  assert (CS.peer_record_material_agrees
-    (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+  assert (TLS13.Spec.StateMachine.KeyMaterial.supported_profile_application_record_material_agrees client server);
+  assert (TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+    (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
     client
     server)
 
@@ -1287,16 +1290,16 @@ let lemma_client_server_application_record_material_server_to_client_agrees
   (server:CS.connection_state)
   : Lemma
       (requires
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
       (ensures
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
-  assert (CS.supported_profile_application_record_material_agrees client server);
-  assert (CS.peer_record_material_agrees
-    (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+  assert (TLS13.Spec.StateMachine.KeyMaterial.supported_profile_application_record_material_agrees client server);
+  assert (TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+    (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
     client
     server)
 
@@ -1308,29 +1311,29 @@ let lemma_client_to_server_protected_message_decode_from_peer_record_material
   (raw:B.bytes)
   : Lemma
       (requires
-        CS.peer_record_material_agrees
-          (CS.traffic_id epoch CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id epoch CS.ClientTraffic)
           client
           server /\
         client.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
           server.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
-        CS.sent_single_protected_message_seal client.CS.cs_model msg raw /\
+        TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal client.CS.cs_model msg raw /\
         (let (content_type, fragment) = W.serialize_tls_message msg in
          W.parse_tls_message content_type fragment == Some msg))
       (ensures
-        CS.received_single_protected_message_decode
+        TLS13.Spec.StateMachine.Canonical.received_single_protected_message_decode
           server.CS.cs_model
           msg
           raw)
 =
   assert (match
-    CS.record_direction_material
+    TLS13.Spec.StateMachine.KeyMaterial.record_direction_material
       client.CS.cs_model.CS.model_record.CS.record_write,
-    CS.record_direction_material
+    TLS13.Spec.StateMachine.KeyMaterial.record_direction_material
       server.CS.cs_model.CS.model_record.CS.record_read
   with
   | Some sender_write, Some receiver_read ->
-    CS.record_key_iv_material_agrees sender_write receiver_read
+    TLS13.Spec.StateMachine.KeyMaterial.record_key_iv_material_agrees sender_write receiver_read
   | _, _ ->
     False);
   CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
@@ -1347,29 +1350,29 @@ let lemma_server_to_client_protected_message_decode_from_peer_record_material
   (raw:B.bytes)
   : Lemma
       (requires
-        CS.peer_record_material_agrees
-          (CS.traffic_id epoch CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id epoch CS.ServerTraffic)
           client
           server /\
         server.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
           client.CS.cs_model.CS.model_record.CS.record_read.R.seq /\
-        CS.sent_single_protected_message_seal server.CS.cs_model msg raw /\
+        TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal server.CS.cs_model msg raw /\
         (let (content_type, fragment) = W.serialize_tls_message msg in
          W.parse_tls_message content_type fragment == Some msg))
       (ensures
-        CS.received_single_protected_message_decode
+        TLS13.Spec.StateMachine.Canonical.received_single_protected_message_decode
           client.CS.cs_model
           msg
           raw)
 =
   assert (match
-    CS.record_direction_material
+    TLS13.Spec.StateMachine.KeyMaterial.record_direction_material
       server.CS.cs_model.CS.model_record.CS.record_write,
-    CS.record_direction_material
+    TLS13.Spec.StateMachine.KeyMaterial.record_direction_material
       client.CS.cs_model.CS.model_record.CS.record_read
   with
   | Some sender_write, Some receiver_read ->
-    CS.record_key_iv_material_agrees sender_write receiver_read
+    TLS13.Spec.StateMachine.KeyMaterial.record_key_iv_material_agrees sender_write receiver_read
   | _, _ ->
     False);
   CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
@@ -1393,16 +1396,16 @@ let lemma_client_server_application_record_material_agrees_from_paired_handshake
       (ensures
         client_server_driver_remaining_semantic_projection_inputs client server /\
         client_server_driver_supported_profile_state_inputs client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -1443,16 +1446,16 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_and_ha
       (ensures
         client_server_driver_remaining_semantic_projection_inputs client server /\
         client_server_driver_supported_profile_state_inputs client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -1519,7 +1522,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
       (ensures
         WFL.paired_cleartext_hello_wire_equivalent client server /\
         WFL.paired_cleartext_hello_key_shares client server /\
-        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
+        TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
         client_server_driver_supported_profile_derived_key_share_projection_inputs
           client
           server /\
@@ -1527,19 +1530,21 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client
           server /\
         client_server_driver_supported_profile_state_inputs client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
     client
     server
@@ -1630,7 +1635,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
       (ensures
         WFL.paired_cleartext_hello_wire_equivalent client server /\
         WFL.paired_cleartext_hello_key_shares client server /\
-        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
+        TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
         client_server_driver_supported_profile_derived_key_share_projection_inputs
           client
           server /\
@@ -1638,19 +1643,21 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
           client
           server /\
         client_server_driver_supported_profile_state_inputs client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
     client
     server
@@ -1745,8 +1752,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         WFL.paired_cleartext_hello_key_shares client server /\
         WFL.paired_protected_handshake_wire_equivalent client server /\
         paired_handshake_events client server /\
-        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
-        CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server /\
+        TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
+        TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
         client_server_driver_supported_profile_derived_key_share_projection_inputs
           client
           server /\
@@ -1754,19 +1761,21 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client
           server /\
         client_server_driver_supported_profile_state_inputs client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   PWP.lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
     client
     server
@@ -1843,8 +1852,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
         WFL.paired_cleartext_hello_key_shares client server /\
         WFL.paired_protected_handshake_wire_equivalent client server /\
         paired_handshake_events client server /\
-        CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
-        CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server /\
+        TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
+        TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
         client_server_driver_supported_profile_derived_key_share_projection_inputs
           client
           server /\
@@ -1852,19 +1861,21 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
           client
           server /\
         client_server_driver_supported_profile_state_inputs client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   eliminate exists
     (server_ee:PWL.protected_message_replay)
     (server_cert:PWL.protected_message_replay)
@@ -1884,8 +1895,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
     WFL.paired_cleartext_hello_key_shares client server /\
     WFL.paired_protected_handshake_wire_equivalent client server /\
     paired_handshake_events client server /\
-    CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
-    CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server /\
+    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
+    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
     client_server_driver_supported_profile_derived_key_share_projection_inputs
       client
       server /\
@@ -1893,16 +1904,16 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
       client
       server /\
     client_server_driver_supported_profile_state_inputs client server /\
-    CS.supported_profile_client_server_key_material_inputs_agree
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
       client
       server /\
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.
@@ -1969,8 +1980,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
        WFL.paired_cleartext_hello_key_shares client server /\
        WFL.paired_protected_handshake_wire_equivalent client server /\
        paired_handshake_events client server /\
-       CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
-       CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server /\
+       TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
+       TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
        client_server_driver_supported_profile_derived_key_share_projection_inputs
          client
          server /\
@@ -1978,19 +1989,21 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
          client
          server /\
        client_server_driver_supported_profile_state_inputs client server /\
-       CS.supported_profile_client_server_key_material_inputs_agree
+       TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
          client
          server /\
-       CS.supported_profile_client_server_key_material_agrees client server /\
-       CS.peer_record_material_agrees
-         (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+       TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+       TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+         (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
          client
          server /\
-       CS.peer_record_material_agrees
-         (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+       TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+         (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
          client
          server)
 =
+  WStep.lemma_consistent_server_hello_wire_bound server;
+  assert (B.length (W.serialize_handshake (M.ServerHello server_sh)) <= 16640);
   eliminate exists
     (server_ee:PWL.protected_message_replay)
     (server_cert:PWL.protected_message_replay)
@@ -2010,8 +2023,8 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
     WFL.paired_cleartext_hello_key_shares client server /\
     WFL.paired_protected_handshake_wire_equivalent client server /\
     paired_handshake_events client server /\
-    CS.same_key_derivation_checkpoint CS.DeriveHandshakeTraffic client server /\
-    CS.same_key_derivation_checkpoint CS.DeriveApplicationTraffic client server /\
+    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
+    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
     client_server_driver_supported_profile_derived_key_share_projection_inputs
       client
       server /\
@@ -2019,16 +2032,16 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
       client
       server /\
     client_server_driver_supported_profile_state_inputs client server /\
-    CS.supported_profile_client_server_key_material_inputs_agree
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
       client
       server /\
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.
@@ -2081,16 +2094,16 @@ let lemma_client_server_application_record_material_agrees_from_paired_handshake
         paired_handshake_events client server /\
         client_server_driver_remaining_semantic_projection_inputs client server /\
         client_server_driver_supported_profile_state_inputs client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -2121,8 +2134,8 @@ let lemma_client_server_driver_end_to_end_key_material_agrees
         client_server_driver_supported_profile_derived_state_inputs
           client
           server /\
-        CS.supported_profile_all_derived_key_material_agrees client server /\
-        CS.supported_profile_client_server_key_material_inputs_agree
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_all_derived_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
           client
           server /\
         paired_driver_transport_logs_exact
@@ -2132,8 +2145,8 @@ let lemma_client_server_driver_end_to_end_key_material_agrees
           client_sent
           server_received
           server_sent /\
-        CS.paired_wire_logs client server /\
-        CS.supported_profile_client_server_key_material_agrees client server)
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server)
 =
   lemma_client_server_driver_key_material_agrees_from_public_success_components
     client

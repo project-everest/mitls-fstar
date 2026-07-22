@@ -96,4 +96,7 @@ fn dispatch_network_event
                     resp
                     network_out_bytes
                     app_out_bytes) /\
+                (SZ.v resp.CT.app_out_len > 0 ==>
+                  resp.CT.status == CT.StepOk /\
+                  resp.CT.network_out_len == 0sz) /\
                 (resp.CT.status == CT.OutputBufferTooSmall ==> False))

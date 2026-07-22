@@ -8,7 +8,9 @@ module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module ClientCP = TLS13.Impl.Client.CanonicalProtocol
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -32,13 +34,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_repla
         WFL.paired_cleartext_hello_key_shares client server /\
         WFL.paired_protected_handshake_wire_equivalent client server /\
         Pairing.paired_handshake_events client server /\
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -87,13 +89,13 @@ let lemma_client_server_application_record_material_agrees_from_normalized_repla
     WFL.paired_cleartext_hello_key_shares client server /\
     WFL.paired_protected_handshake_wire_equivalent client server /\
     Pairing.paired_handshake_events client server /\
-    CS.supported_profile_client_server_key_material_agrees client server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
       client
       server /\
-    CS.peer_record_material_agrees
-      (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
       client
       server
   with _.
@@ -110,8 +112,8 @@ let lemma_client_server_application_record_material_agrees_from_normalized_repla
       server_sh_raw )
 
 let lemma_client_server_application_record_material_agrees_from_no_tail_valid_byte_traces_with_normalized_replay_shape
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -130,13 +132,13 @@ let lemma_client_server_application_record_material_agrees_from_no_tail_valid_by
           server_received
           server_sent)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =

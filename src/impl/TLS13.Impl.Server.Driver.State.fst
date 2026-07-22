@@ -8,7 +8,9 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module CTypes = TLS13.Impl.CanonicalTypes
+module ES = TLS13.Spec.Endpoint.Server
 module IO = Common.TCP
 module IM = TLS13.Impl.Messages
 module ID = FStar.IndefiniteDescription
@@ -35,6 +37,30 @@ let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
 let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
 
 let no_channel : option IO.channel = None
+
+ghost fn advance_server_driver_canonical_progress
+  (d:server_driver)
+  (st0:Ghost.erased CS.connection_state)
+  (st1:Ghost.erased CS.connection_state)
+  requires
+    server_driver_canonical_progress d (Ghost.reveal st0) **
+    pure (
+      ES.server_progress_preorder
+        #CTypes.server_local_event
+        (Ghost.reveal st0)
+        (Ghost.reveal st1) /\
+      (Ghost.reveal st1).CS.cs_model.CS.model_config ==
+        (Ghost.reveal st0).CS.cs_model.CS.model_config)
+  ensures
+    server_driver_canonical_progress d (Ghost.reveal st1)
+{
+  unfold (server_driver_canonical_progress d (Ghost.reveal st0));
+  assert (pure (
+    (Ghost.reveal st1).CS.cs_model.CS.model_config ==
+      (Ghost.reveal d.server_driver_initial).CS.cs_model.CS.model_config));
+  MR.update d.server_driver_progress (Ghost.reveal st1);
+  fold (server_driver_canonical_progress d (Ghost.reveal st1))
+}
 
 noextract
 let server_driver_endpoint_config

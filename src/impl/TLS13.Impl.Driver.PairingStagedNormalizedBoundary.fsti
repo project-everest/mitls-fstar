@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -246,7 +246,7 @@ let paired_supported_normalized_staged_replay_boundary_inputs
   w.PCB.hcb_client_after3.CS.model_record.CS.record_read ==
     TLS13.Record.Spec.next_seq
       w.PCB.hcb_client_after_verify_skip.CS.model_record.CS.record_read /\
-  CS.conn_events_sent_seal_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
     w.PCB.hcb_server_model5
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeysForRole {
@@ -273,7 +273,7 @@ let paired_supported_normalized_staged_replay_boundary_inputs
     s.snb_server_raw_sent
     s.snb_server_raw_received
     s.snb_server_final /\
-  CS.conn_events_received_decode_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
     w.PCB.hcb_client_model4
     (CS.ConnLocalEvent
       (CS.LocalInstallTrafficKeys {
@@ -298,9 +298,9 @@ let paired_supported_normalized_staged_replay_boundary_inputs
     s.snb_client_raw_sent
     s.snb_client_raw_received
     s.snb_client_final /\
-  CS.record_key_iv_material_agrees
-    (CS.record_material_of_traffic_material s.snb_client_finished_client_write_material)
-    (CS.record_material_of_traffic_material s.snb_client_finished_server_read_material) /\
+  TLS13.Spec.StateMachine.KeyMaterial.record_key_iv_material_agrees
+    (TLS13.Spec.StateMachine.KeyMaterial.record_material_of_traffic_material s.snb_client_finished_client_write_material)
+    (TLS13.Spec.StateMachine.KeyMaterial.record_material_of_traffic_material s.snb_client_finished_server_read_material) /\
   CS.step_model
     s.snb_client_finished_write_install_source
     (CS.ConnLocalEvent
@@ -366,7 +366,7 @@ let paired_supported_normalized_staged_replay_boundary_inputs
       CL.message_direction = CL.Received;
       CL.message_value = M.TlsHandshake w.PCB.hcb_received_msg4;
     }) == Some w.PCB.hcb_cf_server_after_finished /\
-  CS.conn_events_sent_seal_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
     s.snb_client_finished_sender
     (CS.ConnLocalEvent (CS.LocalVerifyFinished w.PCB.hcb_verified_server_finished) ::
      CS.ConnLocalEvent
@@ -388,7 +388,7 @@ let paired_supported_normalized_staged_replay_boundary_inputs
     s.snb_client_finished_raw_sent
     s.snb_client_finished_raw_received
     s.snb_client_finished_final /\
-  CS.conn_events_received_decode_replay
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
     s.snb_client_finished_receiver
     (CS.ConnLocalEvent
        (CS.LocalInstallTrafficKeysForRole {
@@ -518,13 +518,13 @@ val lemma_client_server_application_record_material_agrees_from_normalized_proje
   : Lemma
      (requires paired_supported_normalized_projection_boundary_core client server)
      (ensures
-       CS.supported_profile_client_server_key_material_agrees client server /\
-       CS.peer_record_material_agrees
-         (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+       TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+       TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+         (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
          client
          server /\
-       CS.peer_record_material_agrees
-         (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+       TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+         (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
          client
          server)
 
@@ -585,13 +585,13 @@ val lemma_client_server_application_record_material_agrees_from_normalized_proje
   : Lemma
       (requires paired_supported_normalized_projection_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
@@ -601,12 +601,12 @@ val lemma_client_server_application_record_material_agrees_from_normalized_stage
   : Lemma
       (requires paired_supported_normalized_staged_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)

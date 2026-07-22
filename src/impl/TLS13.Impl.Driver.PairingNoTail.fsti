@@ -6,13 +6,14 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
-module ClientCP = TLS13.Impl.Client.CanonicalProtocol
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module CTypes = TLS13.Impl.CanonicalTypes
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module Pairing = TLS13.Impl.Driver.Pairing
 module PTS = TLS13.Impl.Driver.PairingTraceShape
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
-module ServerCP = TLS13.Impl.Server.CanonicalProtocol
 module SM = Common.StateMachine
 module TCP = Common.TCP
 module WFSM = Common.WireFormatStateMachine
@@ -48,78 +49,78 @@ val lemma_valid_byte_trace_inverts_to_state_trace
             st1)
 
 val lemma_client_valid_byte_trace_preserves_connection_state_consistent
-  (client_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
   (client:CS.connection_state)
   (client_received:B.bytes)
   (client_sent:B.bytes)
   (residual_input:TCP.bytes)
   : Lemma
       (requires
-        CS.connection_state_consistent client_initial /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent client_initial /\
         WFSM.valid_byte_trace
-          (ClientCP.client_system client_initial)
+          (EC.client_system #CTypes.client_local_event client_initial)
           client_received
           client
           client_sent
           residual_input)
-      (ensures CS.connection_state_consistent client)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_consistent client)
 
 val lemma_server_valid_byte_trace_preserves_connection_state_consistent
-  (server_initial:CS.connection_state)
+  (server_initial:ES.server_initial_state)
   (server:CS.connection_state)
   (server_received:B.bytes)
   (server_sent:B.bytes)
   (residual_input:TCP.bytes)
   : Lemma
       (requires
-        CS.connection_state_consistent server_initial /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent server_initial /\
         WFSM.valid_byte_trace
-          (ServerCP.server_system server_initial)
+          (ES.server_system #CTypes.server_local_event server_initial)
           server_received
           server
           server_sent
           residual_input)
-      (ensures CS.connection_state_consistent server)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_consistent server)
 
 val lemma_client_valid_byte_trace_preserves_connection_state_replay_consistent
-  (client_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
   (client:CS.connection_state)
   (client_received:B.bytes)
   (client_sent:B.bytes)
   (residual_input:TCP.bytes)
   : Lemma
       (requires
-        CS.connection_state_sent_seal_replay_consistent client_initial /\
-        CS.connection_state_received_decode_replay_consistent client_initial /\
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client_initial /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client_initial /\
         WFSM.valid_byte_trace
-          (ClientCP.client_system client_initial)
+          (EC.client_system #CTypes.client_local_event client_initial)
           client_received
           client
           client_sent
           residual_input)
       (ensures
-        CS.connection_state_sent_seal_replay_consistent client /\
-        CS.connection_state_received_decode_replay_consistent client)
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client)
 
 val lemma_server_valid_byte_trace_preserves_connection_state_replay_consistent
-  (server_initial:CS.connection_state)
+  (server_initial:ES.server_initial_state)
   (server:CS.connection_state)
   (server_received:B.bytes)
   (server_sent:B.bytes)
   (residual_input:TCP.bytes)
   : Lemma
       (requires
-        CS.connection_state_sent_seal_replay_consistent server_initial /\
-        CS.connection_state_received_decode_replay_consistent server_initial /\
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server_initial /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server_initial /\
         WFSM.valid_byte_trace
-          (ServerCP.server_system server_initial)
+          (ES.server_system #CTypes.server_local_event server_initial)
           server_received
           server
           server_sent
           residual_input)
       (ensures
-        CS.connection_state_sent_seal_replay_consistent server /\
-        CS.connection_state_received_decode_replay_consistent server)
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server)
 
 noextract
 let client_no_tail_application_ready_boundary
@@ -174,8 +175,8 @@ val lemma_paired_successful_handshake_complete_event_log_shape_no_tail
       (ensures
         FStar.List.Tot.length client.CS.cs_event_log == 16 /\
         FStar.List.Tot.length server.CS.cs_event_log == 15 /\
-        CS.connection_state_no_key_update_trace client /\
-        CS.connection_state_no_key_update_trace server)
+        TLS13.Spec.StateMachine.Correspondence.connection_state_no_key_update_trace client /\
+        TLS13.Spec.StateMachine.Correspondence.connection_state_no_key_update_trace server)
 
 val lemma_paired_successful_handshake_complete_state_trace_no_tail
   (client:CS.connection_state)
@@ -185,8 +186,8 @@ val lemma_paired_successful_handshake_complete_state_trace_no_tail
         PTS.paired_successful_handshake_complete_state_trace client server)
       (ensures
         paired_no_tail_application_ready_boundary client server /\
-        CS.connection_state_no_key_update_trace client /\
-        CS.connection_state_no_key_update_trace server)
+        TLS13.Spec.StateMachine.Correspondence.connection_state_no_key_update_trace client /\
+        TLS13.Spec.StateMachine.Correspondence.connection_state_no_key_update_trace server)
 
 noextract
 let paired_no_tail_state_trace_with_paired_handshake_event_trace
@@ -208,20 +209,20 @@ val lemma_client_server_application_record_material_agrees_from_no_tail_state_tr
           client
           server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
 noextract
 let paired_valid_byte_traces_at_no_tail_boundary_with_paired_handshake_event_trace
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -230,13 +231,13 @@ let paired_valid_byte_traces_at_no_tail_boundary_with_paired_handshake_event_tra
   (server_sent:B.bytes)
   : prop =
   WFSM.valid_byte_trace
-    (ClientCP.client_system client_initial)
+    (EC.client_system #CTypes.client_local_event client_initial)
     client_received
     client
     client_sent
     Seq.empty /\
   WFSM.valid_byte_trace
-    (ServerCP.server_system server_initial)
+    (ES.server_system #CTypes.server_local_event server_initial)
     server_received
     server
     server_sent
@@ -248,8 +249,8 @@ let paired_valid_byte_traces_at_no_tail_boundary_with_paired_handshake_event_tra
     server
 
 val lemma_client_server_application_record_material_agrees_from_valid_byte_traces_at_no_tail_boundary_with_paired_handshake_event_trace
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -268,13 +269,13 @@ val lemma_client_server_application_record_material_agrees_from_valid_byte_trace
           server_received
           server_sent)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
@@ -284,7 +285,7 @@ val lemma_successful_handshake_complete_state_trace_from_no_tail_event_log_shape
   : Lemma
       (requires
         paired_no_tail_application_ready_boundary client server /\
-        CS.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
         Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
           client
           server /\
@@ -294,8 +295,8 @@ val lemma_successful_handshake_complete_state_trace_from_no_tail_event_log_shape
 
 noextract
 let paired_valid_byte_traces_at_no_tail_boundary_with_successful_event_log_shape
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -304,13 +305,13 @@ let paired_valid_byte_traces_at_no_tail_boundary_with_successful_event_log_shape
   (server_sent:B.bytes)
   : prop =
   WFSM.valid_byte_trace
-    (ClientCP.client_system client_initial)
+    (EC.client_system #CTypes.client_local_event client_initial)
     client_received
     client
     client_sent
     Seq.empty /\
   WFSM.valid_byte_trace
-    (ServerCP.server_system server_initial)
+    (ES.server_system #CTypes.server_local_event server_initial)
     server_received
     server
     server_sent
@@ -318,15 +319,15 @@ let paired_valid_byte_traces_at_no_tail_boundary_with_successful_event_log_shape
   Seq.equal client_sent server_received /\
   Seq.equal server_sent client_received /\
   paired_no_tail_application_ready_boundary client server /\
-  CS.paired_wire_logs client server /\
+  TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
   PTS.paired_successful_handshake_complete_event_log_shape client server
 
 val lemma_client_server_application_record_material_agrees_from_valid_byte_traces_at_no_tail_boundary_with_successful_event_log_shape
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -345,13 +346,13 @@ val lemma_client_server_application_record_material_agrees_from_valid_byte_trace
           server_received
           server_sent)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 
@@ -392,7 +393,7 @@ val lemma_client_server_application_record_material_agrees_from_valid_byte_trace
 
   Put differently: this predicate is defined directly from
   [WFSM.valid_byte_trace] on both endpoints, the paired transport bytes,
-  [paired_no_tail_application_ready_boundary], [CS.paired_wire_logs],
+  [paired_no_tail_application_ready_boundary], [TLS13.Spec.StateMachine.Correspondence.paired_wire_logs],
   [Pairing.client_server_driver_first_epoch_no_key_update_state_inputs], and
   the trace-shape boundary
   [PTS.paired_successful_handshake_complete_event_log_shape] -- so it has no
@@ -414,12 +415,12 @@ val lemma_client_server_application_record_material_agrees_from_valid_byte_trace
   before receiving the protected ClientFinished.
 
   The genuinely desired role-local no-tail inversion theorem -- deriving
-  [CS.supported_profile_client_server_key_material_agrees] and the paired
-  [CS.peer_record_material_agrees] facts from nothing more than
+  [TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees] and the paired
+  [TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees] facts from nothing more than
   [WFSM.valid_byte_trace] on each endpoint, the paired transport bytes,
   [paired_no_tail_application_ready_boundary], and
   [Pairing.client_server_driver_first_epoch_no_key_update_state_inputs] (with
-  [CS.paired_wire_logs] derived rather than assumed) -- is NOT implemented by
+  [TLS13.Spec.StateMachine.Correspondence.paired_wire_logs] derived rather than assumed) -- is NOT implemented by
   this module.  Reaching it would require, at minimum: (1) a role-local
   inversion lemma per endpoint showing that an application-ready state with an
   event log of the fixed no-tail length (16 for the client, and now also 16 for
@@ -436,8 +437,8 @@ val lemma_client_server_application_record_material_agrees_from_valid_byte_trace
 **)
 noextract
 let paired_supported_no_tail_valid_byte_traces
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -446,13 +447,13 @@ let paired_supported_no_tail_valid_byte_traces
   (server_sent:B.bytes)
   : prop =
   WFSM.valid_byte_trace
-    (ClientCP.client_system client_initial)
+    (EC.client_system #CTypes.client_local_event client_initial)
     client_received
     client
     client_sent
     Seq.empty /\
   WFSM.valid_byte_trace
-    (ServerCP.server_system server_initial)
+    (ES.server_system #CTypes.server_local_event server_initial)
     server_received
     server
     server_sent
@@ -460,7 +461,7 @@ let paired_supported_no_tail_valid_byte_traces
   Seq.equal client_sent server_received /\
   Seq.equal server_sent client_received /\
   paired_no_tail_application_ready_boundary client server /\
-  CS.paired_wire_logs client server /\
+  TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
   Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
     client
     server /\
@@ -476,7 +477,8 @@ let paired_supported_no_tail_valid_byte_traces
   alone."
 **)
 val lemma_client_server_application_record_material_agrees_from_no_tail_valid_byte_traces
-  (client_initial server_initial: CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client server: CS.connection_state)
   (client_received client_sent server_received server_sent: B.bytes)
   : Lemma
@@ -490,6 +492,6 @@ val lemma_client_server_application_record_material_agrees_from_no_tail_valid_by
           client_sent
           server_received
           server_sent)
-      (ensures CS.supported_profile_client_server_key_material_agrees client server /\
-               CS.peer_record_material_agrees (CS.traffic_id CS.TrafficApplication CS.ClientTraffic) client server /\
-               CS.peer_record_material_agrees (CS.traffic_id CS.TrafficApplication CS.ServerTraffic) client server)
+      (ensures TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+               TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic) client server /\
+               TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic) client server)

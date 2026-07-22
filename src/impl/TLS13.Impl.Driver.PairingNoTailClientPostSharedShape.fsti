@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module CL = TLS13.ConnectionLog
 module B = TLS13.Bytes
 module CD = TLS13.Impl.Client.Driver
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 

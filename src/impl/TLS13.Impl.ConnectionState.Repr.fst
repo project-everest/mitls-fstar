@@ -9,7 +9,7 @@ open FStar.List.Tot
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -1175,7 +1175,7 @@ fn alloc_application_empty ()
     (sized_bytes_exactly app.pending_received_raw max_pending_raw_len CS.empty_application_state.CS.app_pending_received_raw);
   rewrite (Box.pts_to key_update_response_pending false) as
     (Box.pts_to app.key_update_response_pending false);
-  assert (pure (CS.pending_application_consistent CS.empty_application_state));
+  assert (pure (TLS13.Spec.StateMachine.Correspondence.pending_application_consistent CS.empty_application_state));
   fold (application_exactly app CS.empty_application_state);
   app
 }

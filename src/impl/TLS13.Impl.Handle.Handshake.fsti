@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CR = TLS13.Impl.ConnectionState.Repr
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages

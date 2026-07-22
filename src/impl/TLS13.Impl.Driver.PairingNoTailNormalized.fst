@@ -6,9 +6,11 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
-module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module CTypes = TLS13.Impl.CanonicalTypes
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module CSL = TLS13.ConnectionState.Lemmas
 module CVE = TLS13.ConnectionState.ClientCertificateVerifyEvent
 module PBridge = TLS13.Impl.Driver.PairingNormalizedBridge
@@ -42,15 +44,14 @@ module PSNB = TLS13.Impl.Driver.PairingStagedNormalizedBoundary
 module Seq = FStar.Seq
 module SCVE = TLS13.ConnectionState.ServerCertificateVerifyEvent
 module SM = Common.StateMachine
-module ServerCP = TLS13.Impl.Server.CanonicalProtocol
 module T = TLS13.Types
 module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
 module WFL = TLS13.Spec.WireFormatLemmas
 
 let lemma_clean_no_tail_valid_byte_traces_preserve_connection_state_consistent
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -69,11 +70,11 @@ let lemma_clean_no_tail_valid_byte_traces_preserve_connection_state_consistent
           server_received
           server_sent)
       (ensures
-        CS.connection_state_consistent client /\
-        CS.connection_state_consistent server)
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent client /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent server)
 =
-  assert (CS.connection_state_consistent client_initial);
-  assert (CS.connection_state_consistent server_initial);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent client_initial);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent server_initial);
   PNT.lemma_client_valid_byte_trace_preserves_connection_state_consistent
     client_initial
     client
@@ -88,8 +89,8 @@ let lemma_clean_no_tail_valid_byte_traces_preserve_connection_state_consistent
     Seq.empty
 
 let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -108,11 +109,11 @@ let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
           server_received
           server_sent)
       (ensures
-        CS.connection_state_consistent client /\
-        CS.connection_state_consistent server)
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent client /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent server)
 =
-  assert (CS.connection_state_consistent client_initial);
-  assert (CS.connection_state_consistent server_initial);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent client_initial);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent server_initial);
   PNT.lemma_client_valid_byte_trace_preserves_connection_state_consistent
     client_initial
     client
@@ -127,8 +128,8 @@ let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_consistent
     Seq.empty
 
 let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_replay_consistent
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -147,23 +148,23 @@ let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_replay_con
           server_received
           server_sent)
       (ensures
-        CS.connection_state_sent_seal_replay_consistent client /\
-        CS.connection_state_received_decode_replay_consistent client /\
-        CS.connection_state_sent_seal_replay_consistent server /\
-        CS.connection_state_received_decode_replay_consistent server)
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server)
 =
   CSL.lemma_initial_sent_seal_replay_consistent
     client_initial.CS.cs_model.CS.model_config;
   CSL.lemma_initial_received_decode_replay_consistent
     client_initial.CS.cs_model.CS.model_config;
-  assert (CS.connection_state_sent_seal_replay_consistent client_initial);
-  assert (CS.connection_state_received_decode_replay_consistent client_initial);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client_initial);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client_initial);
   CSL.lemma_initial_sent_seal_replay_consistent
     server_initial.CS.cs_model.CS.model_config;
   CSL.lemma_initial_received_decode_replay_consistent
     server_initial.CS.cs_model.CS.model_config;
-  assert (CS.connection_state_sent_seal_replay_consistent server_initial);
-  assert (CS.connection_state_received_decode_replay_consistent server_initial);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server_initial);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server_initial);
   PNT.lemma_client_valid_byte_trace_preserves_connection_state_replay_consistent
     client_initial
     client
@@ -178,8 +179,8 @@ let lemma_clean16_no_tail_valid_byte_traces_preserve_connection_state_replay_con
     Seq.empty
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -203,8 +204,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_start_spine16
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_start_and_final_witnesses16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -229,8 +230,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_start_and_final_witnesses
   PNTSS.lemma_server_no_tail_final_model_witnesses16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -258,8 +259,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_inst
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_cover_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -287,8 +288,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_receive_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -315,8 +316,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_first_protected_re
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_receive_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -343,8 +344,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_second_protected_r
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_validated_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -371,8 +372,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_valida
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_verify_received_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -399,8 +400,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_verify
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_signature_verified_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -427,8 +428,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_certificate_signat
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_received_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -455,8 +456,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_re
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_verified_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -483,8 +484,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_server_finished_ve
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_application_installs_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -511,8 +512,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_application_instal
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_server_start_spine16
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -539,8 +540,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_finished_sent_serv
   PNTSS.lemma_server_no_tail_start_spine16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_client_sent_cleartext_and_finished_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -578,12 +579,12 @@ let lemma_clean16_no_tail_valid_byte_traces_client_sent_cleartext_and_finished_r
     client_sent
     server_received
     server_sent;
-  assert (CS.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
   PNTCSR.lemma_client_no_tail_finished_sent_raw_slices client
 
 let lemma_clean16_no_tail_valid_byte_traces_client_received_cleartext_and_server_flight_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -622,12 +623,12 @@ let lemma_clean16_no_tail_valid_byte_traces_client_received_cleartext_and_server
     client_sent
     server_received
     server_sent;
-  assert (CS.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
   PNTCRR.lemma_client_no_tail_server_flight_received_raw_slices client
 
 let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_flight_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -676,7 +677,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
     client_sent
     server_received
     server_sent;
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   eliminate exists
     (sh:GSH.serverHello)
     (ee:GEE.encryptedExtensions)
@@ -741,8 +742,8 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client_finished_raw_slices
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -811,8 +812,8 @@ let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -835,8 +836,8 @@ let lemma_clean16_no_tail_valid_byte_traces_client_certificate_verify_witness
   PNTCS.lemma_client_no_tail_certificate_verify_witness client
 
 let lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -865,14 +866,14 @@ let lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_e
     client_sent
     server_received
     server_sent;
-  assert (CS.connection_state_consistent client);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent client);
   assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
   assert (client.CS.cs_model.CS.model_control == CS.ControlApplicationData);
   CVE.lemma_client_application_ready_received_certificate_verify_event client
 
 let lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_event_split
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -904,8 +905,8 @@ let lemma_clean16_no_tail_valid_byte_traces_client_received_certificate_verify_e
   CVE.lemma_contains_received_certificate_verify_split client.CS.cs_event_log
 
 let lemma_clean16_no_tail_valid_byte_traces_server_sent_certificate_verify_event
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -941,8 +942,8 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_certificate_verify_event
   SCVE.lemma_server_application_ready_sent_certificate_verify_event server
 
 let lemma_clean16_no_tail_valid_byte_traces_server_sent_certificate_verify_event_split
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -974,8 +975,8 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_certificate_verify_event
   SCVE.lemma_contains_sent_certificate_verify_split server.CS.cs_event_log
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_start_spine16_and_client_certificate_verify_witness
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1010,8 +1011,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_inst
   PNTCS.lemma_client_no_tail_certificate_verify_witness client
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_start_and_final_witnesses
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1036,8 +1037,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_start_and_final_witnesses
   PNTSS.lemma_server_no_tail_start_spine_and_final_model_witnesses server
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_cleartext_prefixes
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1062,8 +1063,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_cleartext_prefixes
   PNTSS.lemma_server_no_tail_second_event_client_hello_clean server
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1088,8 +1089,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_prefix
   PNTSS.lemma_server_no_tail_second_event_client_hello_clean server
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_selection_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1114,8 +1115,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_select
   PNTSS.lemma_server_no_tail_third_event_select_parameters_clean server
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1140,8 +1141,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_client_shared_server_shared
   PNTSS.lemma_server_no_tail_fourth_event_derive_shared_secret_clean server
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_server_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1168,8 +1169,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_se
   PNTSS.lemma_server_no_tail_fourth_event_derive_shared_secret_clean server
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1196,8 +1197,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_client_handshake_install_se
   PNTSS.lemma_server_no_tail_fifth_event_server_hello_clean server
 
 let lemma_clean_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1225,8 +1226,8 @@ let lemma_clean_no_tail_valid_byte_traces_role_local_client_two_handshake_instal
   PNTSS.lemma_server_no_tail_fifth_event_server_hello_clean server
 
 let lemma_clean_no_tail_valid_byte_traces_client_supported_hello_profile
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1255,15 +1256,15 @@ let lemma_clean_no_tail_valid_byte_traces_client_supported_hello_profile
     client_sent
     server_received
     server_sent;
-  assert (CS.connection_state_consistent client);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent client);
   assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
   CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
-  assert (CS.client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.client_x25519_key_share_projection client);
   WFL.lemma_state_supported_client_hello_wire_profile_from_config client
 
 let lemma_clean16_no_tail_valid_byte_traces_client_supported_hello_profile
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1292,15 +1293,15 @@ let lemma_clean16_no_tail_valid_byte_traces_client_supported_hello_profile
     client_sent
     server_received
     server_sent;
-  assert (CS.connection_state_consistent client);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent client);
   assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
   CSL.lemma_client_application_ready_stable_x25519_key_share_projection client;
-  assert (CS.client_x25519_key_share_projection client);
+  assert (TLS13.Spec.StateMachine.Correspondence.client_x25519_key_share_projection client);
   WFL.lemma_state_supported_client_hello_wire_profile_from_config client
 
 let lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1310,13 +1311,13 @@ let lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
   : Lemma
       (requires
         WFSM.valid_byte_trace
-          (ClientCP.client_system client_initial)
+          (EC.client_system #CTypes.client_local_event client_initial)
           client_received
           client
           client_sent
           Seq.empty /\
         WFSM.valid_byte_trace
-          (ServerCP.server_system server_initial)
+          (ES.server_system #CTypes.server_local_event server_initial)
           server_received
           server
           server_sent
@@ -1326,28 +1327,28 @@ let lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
       (ensures
         exists client_trace server_trace.
           SM.trace_reaches
-            (ClientCP.client_state_machine client_initial)
+            (EC.client_state_machine #CTypes.client_local_event client_initial)
             client_initial
             client_trace
             client /\
           SM.trace_reaches
-            (ServerCP.server_state_machine server_initial)
+            (ES.server_state_machine #CTypes.server_local_event server_initial)
             server_initial
             server_trace
             server /\
           Seq.equal
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (SM.trace_wire_outputs client_trace))
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (WFSM.trace_input_messages server_trace)) /\
           Seq.equal
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (SM.trace_wire_outputs server_trace))
             (WF.serialize_all
-              TLS13.Impl.CanonicalWire.tls_record_wire_format
+              TLS13.Spec.Endpoint.Wire.tls_record_wire_format
               (WFSM.trace_input_messages client_trace)))
 =
   PNTWL.lemma_client_valid_byte_trace_inverts_to_serialized_trace
@@ -1362,189 +1363,189 @@ let lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
     server_sent;
   assert (exists client_trace.
     SM.trace_reaches
-      (ClientCP.client_state_machine client_initial)
+      (EC.client_state_machine #CTypes.client_local_event client_initial)
       client_initial
       client_trace
       client /\
     Seq.equal
       client_received
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (WFSM.trace_input_messages client_trace)) /\
     Seq.equal
       client_sent
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (SM.trace_wire_outputs client_trace)));
   assert (exists server_trace.
     SM.trace_reaches
-      (ServerCP.server_state_machine server_initial)
+      (ES.server_state_machine #CTypes.server_local_event server_initial)
       server_initial
       server_trace
       server /\
     Seq.equal
       server_received
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (WFSM.trace_input_messages server_trace)) /\
     Seq.equal
       server_sent
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (SM.trace_wire_outputs server_trace)));
   eliminate exists client_trace.
     SM.trace_reaches
-      (ClientCP.client_state_machine client_initial)
+      (EC.client_state_machine #CTypes.client_local_event client_initial)
       client_initial
       client_trace
       client /\
     Seq.equal
       client_received
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (WFSM.trace_input_messages client_trace)) /\
     Seq.equal
       client_sent
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (SM.trace_wire_outputs client_trace))
   returns
     exists client_trace server_trace.
       SM.trace_reaches
-        (ClientCP.client_state_machine client_initial)
+        (EC.client_state_machine #CTypes.client_local_event client_initial)
         client_initial
         client_trace
         client /\
       SM.trace_reaches
-        (ServerCP.server_state_machine server_initial)
+        (ES.server_state_machine #CTypes.server_local_event server_initial)
         server_initial
         server_trace
         server /\
       Seq.equal
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs client_trace))
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (WFSM.trace_input_messages server_trace)) /\
       Seq.equal
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs server_trace))
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (WFSM.trace_input_messages client_trace))
   with _.
   (
     eliminate exists server_trace.
       SM.trace_reaches
-        (ServerCP.server_state_machine server_initial)
+        (ES.server_state_machine #CTypes.server_local_event server_initial)
         server_initial
         server_trace
         server /\
       Seq.equal
         server_received
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (WFSM.trace_input_messages server_trace)) /\
       Seq.equal
         server_sent
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs server_trace))
     returns
       exists client_trace' server_trace'.
         SM.trace_reaches
-          (ClientCP.client_state_machine client_initial)
+          (EC.client_state_machine #CTypes.client_local_event client_initial)
           client_initial
           client_trace'
           client /\
         SM.trace_reaches
-          (ServerCP.server_state_machine server_initial)
+          (ES.server_state_machine #CTypes.server_local_event server_initial)
           server_initial
           server_trace'
           server /\
         Seq.equal
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (SM.trace_wire_outputs client_trace'))
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (WFSM.trace_input_messages server_trace')) /\
         Seq.equal
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (SM.trace_wire_outputs server_trace'))
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (WFSM.trace_input_messages client_trace'))
     with _.
     (
       Seq.lemma_eq_elim
         client_sent
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs client_trace));
       Seq.lemma_eq_elim
         server_received
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (WFSM.trace_input_messages server_trace));
       Seq.lemma_eq_elim
         server_sent
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs server_trace));
       Seq.lemma_eq_elim
         client_received
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (WFSM.trace_input_messages client_trace));
       assert (Seq.equal
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs client_trace))
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (WFSM.trace_input_messages server_trace)));
       assert (Seq.equal
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs server_trace))
         (WF.serialize_all
-          TLS13.Impl.CanonicalWire.tls_record_wire_format
+          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (WFSM.trace_input_messages client_trace)));
       assert (exists client_trace' server_trace'.
         SM.trace_reaches
-          (ClientCP.client_state_machine client_initial)
+          (EC.client_state_machine #CTypes.client_local_event client_initial)
           client_initial
           client_trace'
           client /\
         SM.trace_reaches
-          (ServerCP.server_state_machine server_initial)
+          (ES.server_state_machine #CTypes.server_local_event server_initial)
           server_initial
           server_trace'
           server /\
         Seq.equal
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (SM.trace_wire_outputs client_trace'))
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (WFSM.trace_input_messages server_trace')) /\
         Seq.equal
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (SM.trace_wire_outputs server_trace'))
           (WF.serialize_all
-            TLS13.Impl.CanonicalWire.tls_record_wire_format
+            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
             (WFSM.trace_input_messages client_trace')))
     )
   )
 
 let lemma_clean_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1565,28 +1566,28 @@ let lemma_clean_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
       (ensures
         exists client_trace server_trace.
             SM.trace_reaches
-              (ClientCP.client_state_machine client_initial)
+              (EC.client_state_machine #CTypes.client_local_event client_initial)
               client_initial
               client_trace
               client /\
             SM.trace_reaches
-              (ServerCP.server_state_machine server_initial)
+              (ES.server_state_machine #CTypes.server_local_event server_initial)
               server_initial
               server_trace
               server /\
             Seq.equal
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (SM.trace_wire_outputs client_trace))
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (WFSM.trace_input_messages server_trace)) /\
             Seq.equal
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (SM.trace_wire_outputs server_trace))
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (WFSM.trace_input_messages client_trace)))
 =
   lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
@@ -1600,8 +1601,8 @@ let lemma_clean_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
     server_sent
 
 let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1622,28 +1623,28 @@ let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
       (ensures
         exists client_trace server_trace.
             SM.trace_reaches
-              (ClientCP.client_state_machine client_initial)
+              (EC.client_state_machine #CTypes.client_local_event client_initial)
               client_initial
               client_trace
               client /\
             SM.trace_reaches
-              (ServerCP.server_state_machine server_initial)
+              (ES.server_state_machine #CTypes.server_local_event server_initial)
               server_initial
               server_trace
               server /\
             Seq.equal
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (SM.trace_wire_outputs client_trace))
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (WFSM.trace_input_messages server_trace)) /\
             Seq.equal
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (SM.trace_wire_outputs server_trace))
               (WF.serialize_all
-                TLS13.Impl.CanonicalWire.tls_record_wire_format
+                TLS13.Spec.Endpoint.Wire.tls_record_wire_format
                 (WFSM.trace_input_messages client_trace)))
 =
   lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
@@ -1657,8 +1658,8 @@ let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_serialized_traces
     server_sent
 
 let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1679,12 +1680,12 @@ let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
       (ensures
         exists client_trace server_trace.
           SM.trace_reaches
-            (ClientCP.client_state_machine client_initial)
+            (EC.client_state_machine #CTypes.client_local_event client_initial)
             client_initial
             client_trace
             client /\
           SM.trace_reaches
-            (ServerCP.server_state_machine server_initial)
+            (ES.server_state_machine #CTypes.server_local_event server_initial)
             server_initial
             server_trace
             server /\
@@ -1704,38 +1705,38 @@ let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
     server_sent;
   eliminate exists client_trace server_trace.
     SM.trace_reaches
-      (ClientCP.client_state_machine client_initial)
+      (EC.client_state_machine #CTypes.client_local_event client_initial)
       client_initial
       client_trace
       client /\
     SM.trace_reaches
-      (ServerCP.server_state_machine server_initial)
+      (ES.server_state_machine #CTypes.server_local_event server_initial)
       server_initial
       server_trace
       server /\
     Seq.equal
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (SM.trace_wire_outputs client_trace))
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (WFSM.trace_input_messages server_trace)) /\
     Seq.equal
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (SM.trace_wire_outputs server_trace))
       (WF.serialize_all
-        TLS13.Impl.CanonicalWire.tls_record_wire_format
+        TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (WFSM.trace_input_messages client_trace))
   returns
     exists client_trace' server_trace'.
       SM.trace_reaches
-        (ClientCP.client_state_machine client_initial)
+        (EC.client_state_machine #CTypes.client_local_event client_initial)
         client_initial
         client_trace'
         client /\
       SM.trace_reaches
-        (ServerCP.server_state_machine server_initial)
+        (ES.server_state_machine #CTypes.server_local_event server_initial)
         server_initial
         server_trace'
         server /\
@@ -1753,12 +1754,12 @@ let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
       (WFSM.trace_input_messages client_trace);
     assert (exists client_trace' server_trace'.
       SM.trace_reaches
-        (ClientCP.client_state_machine client_initial)
+        (EC.client_state_machine #CTypes.client_local_event client_initial)
         client_initial
         client_trace'
         client /\
       SM.trace_reaches
-        (ServerCP.server_state_machine server_initial)
+        (ES.server_state_machine #CTypes.server_local_event server_initial)
         server_initial
         server_trace'
         server /\
@@ -1769,8 +1770,8 @@ let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
   )
 
 let lemma_clean_no_tail_valid_byte_traces_paired_wire_logs
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1788,7 +1789,7 @@ let lemma_clean_no_tail_valid_byte_traces_paired_wire_logs
           client_sent
           server_received
           server_sent)
-      (ensures CS.paired_wire_logs client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server)
 =
   PNTWL.lemma_client_valid_byte_trace_wire_logs_exact
     client_initial
@@ -1812,8 +1813,8 @@ let lemma_clean_no_tail_valid_byte_traces_paired_wire_logs
     client.CS.cs_wire_log.CL.raw_received)
 
 let lemma_clean16_no_tail_valid_byte_traces_paired_wire_logs
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -1831,7 +1832,7 @@ let lemma_clean16_no_tail_valid_byte_traces_paired_wire_logs
           client_sent
           server_received
           server_sent)
-      (ensures CS.paired_wire_logs client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server)
 =
   PNTWL.lemma_client_valid_byte_trace_wire_logs_exact
     client_initial
@@ -1867,9 +1868,9 @@ let lemma_paired_client_sent_client_hello_not_server_received_ccs
       (requires
         WFL.supported_client_config_wire_profile
           client.CS.cs_model.CS.model_config /\
-        CS.paired_wire_logs client server /\
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
         client.CS.cs_event_log ==
           CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
           CS.ConnNetworkEvent ({
@@ -1895,13 +1896,13 @@ let lemma_paired_client_sent_client_hello_not_server_received_ccs
     CS.initial_model client.CS.cs_model.CS.model_config in
   let server_model0 =
     CS.initial_model server.CS.cs_model.CS.model_config in
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     client.CS.cs_event_log
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
      CS.ConnNetworkEvent ({
@@ -1954,13 +1955,13 @@ let lemma_paired_client_sent_client_hello_not_server_received_ccs
   returns False
   with _.
   (
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       server.CS.cs_event_log
       server.CS.cs_wire_log.CL.raw_sent
       server.CS.cs_wire_log.CL.raw_received
       server.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -2010,9 +2011,11 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
-        CS.paired_wire_logs client server /\
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
+        WFL.supported_client_config_wire_profile
+          client.CS.cs_model.CS.model_config /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
         client.CS.cs_event_log ==
           CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
           CS.ConnNetworkEvent ({
@@ -2038,13 +2041,13 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
     CS.initial_model client.CS.cs_model.CS.model_config in
   let server_model0 =
     CS.initial_model server.CS.cs_model.CS.model_config in
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     client.CS.cs_event_log
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
      CS.ConnNetworkEvent ({
@@ -2060,6 +2063,16 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
+  PNTRB.lemma_client_prefix_received_server_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
   PNTRB.lemma_client_prefix_raw_slices
     client_model0
     client_start
@@ -2086,13 +2099,13 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
   returns False
   with _.
   (
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       server.CS.cs_event_log
       server.CS.cs_wire_log.CL.raw_sent
       server.CS.cs_wire_log.CL.raw_received
       server.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -2132,8 +2145,8 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2164,12 +2177,12 @@ let lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_ciphe
     server_sent;
   PNTCS.lemma_client_no_tail_fourth_event_derive_shared_secret_clean client;
   PNTSS.lemma_server_no_tail_start_spine16 server;
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   assert (PNT.paired_no_tail_application_ready_boundary16 client server);
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   eliminate exists client_start client_ch client_sh client_shared client_rest.
     client.CS.cs_event_log ==
       CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
@@ -2251,9 +2264,9 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
       (requires
         WFL.supported_client_config_wire_profile
           client.CS.cs_model.CS.model_config /\
-        CS.paired_wire_logs client server /\
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
         client.CS.cs_event_log ==
           CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
           CS.ConnNetworkEvent ({
@@ -2312,7 +2325,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
     CS.initial_model client.CS.cs_model.CS.model_config in
   let server_model0 =
     CS.initial_model server.CS.cs_model.CS.model_config in
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     client.CS.cs_event_log
     client.CS.cs_wire_log.CL.raw_sent
@@ -2352,7 +2365,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
       CL.message_value = M.TlsHandshake (M.Finished cf);
     }) ::
     [] in
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     (CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
      CS.ConnNetworkEvent ({
@@ -2428,13 +2441,13 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
   returns False
   with _.
   (
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       server.CS.cs_event_log
       server.CS.cs_wire_log.CL.raw_sent
       server.CS.cs_wire_log.CL.raw_received
       server.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -2495,9 +2508,11 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
-        CS.paired_wire_logs client server /\
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
+        WFL.supported_client_config_wire_profile
+          client.CS.cs_model.CS.model_config /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
         client.CS.cs_event_log ==
           CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
           CS.ConnNetworkEvent ({
@@ -2527,13 +2542,13 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     CS.initial_model client.CS.cs_model.CS.model_config in
   let server_model0 =
     CS.initial_model server.CS.cs_model.CS.model_config in
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     client.CS.cs_event_log
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
      CS.ConnNetworkEvent ({
@@ -2549,6 +2564,16 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
+  PNTRB.lemma_client_prefix_received_server_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
   PNTRB.lemma_client_prefix_raw_slices
     client_model0
     client_start
@@ -2575,13 +2600,13 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   returns False
   with _.
   (
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       server.CS.cs_event_log
       server.CS.cs_wire_log.CL.raw_sent
       server.CS.cs_wire_log.CL.raw_received
       server.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -2647,9 +2672,9 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello_sele
       (requires
         WFL.supported_client_config_wire_profile
           client.CS.cs_model.CS.model_config /\
-        CS.paired_wire_logs client server /\
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
         client.CS.cs_event_log ==
           CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
           CS.ConnNetworkEvent ({
@@ -2709,7 +2734,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello_sele
     CS.initial_model client.CS.cs_model.CS.model_config in
   let server_model0 =
     CS.initial_model server.CS.cs_model.CS.model_config in
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     client.CS.cs_event_log
     client.CS.cs_wire_log.CL.raw_sent
@@ -2780,13 +2805,13 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello_sele
   returns False
   with _.
   (
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       server.CS.cs_event_log
       server.CS.cs_wire_log.CL.raw_sent
       server.CS.cs_wire_log.CL.raw_received
       server.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -2850,9 +2875,11 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   (server_rest:list CS.conn_event)
   : Lemma
       (requires
-        CS.paired_wire_logs client server /\
-        CS.connection_state_raw_event_replay_consistent client /\
-        CS.connection_state_raw_event_replay_consistent server /\
+        WFL.supported_client_config_wire_profile
+          client.CS.cs_model.CS.model_config /\
+        TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client /\
+        TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server /\
         client.CS.cs_event_log ==
           CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
           CS.ConnNetworkEvent ({
@@ -2883,13 +2910,13 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     CS.initial_model client.CS.cs_model.CS.model_config in
   let server_model0 =
     CS.initial_model server.CS.cs_model.CS.model_config in
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     client.CS.cs_event_log
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
-  assert (CS.conn_events_raw_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
     client_model0
     (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
      CS.ConnNetworkEvent ({
@@ -2905,6 +2932,16 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     client.CS.cs_wire_log.CL.raw_sent
     client.CS.cs_wire_log.CL.raw_received
     client.CS.cs_model);
+  PNTRB.lemma_client_prefix_received_server_hello_supported
+    client_model0
+    client_start
+    client_ch
+    client_sh
+    client_shared
+    client_rest
+    client.CS.cs_wire_log.CL.raw_sent
+    client.CS.cs_wire_log.CL.raw_received
+    client.CS.cs_model;
   PNTRB.lemma_client_prefix_raw_slices
     client_model0
     client_start
@@ -2931,13 +2968,13 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   returns False
   with _.
   (
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       server.CS.cs_event_log
       server.CS.cs_wire_log.CL.raw_sent
       server.CS.cs_wire_log.CL.raw_received
       server.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -2984,8 +3021,8 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -3033,11 +3070,11 @@ let lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher
     server_received
     server_sent;
   PNTSS.lemma_server_no_tail_second_event_client_hello_if_not_ccs16 server;
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   eliminate exists start client_ch client_sh client_shared e4 e5 ee cert peer cv sf e13 e14 cf.
     client.CS.cs_event_log ==
       CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
@@ -3172,8 +3209,8 @@ let lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_server_fourth_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -3232,11 +3269,11 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fourth_event_not_change_ciphe
     server_received
     server_sent;
   PNTSC.lemma_server_no_tail_third_event_select_parameters_if_not_ccs16 server;
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   eliminate exists start client_ch client_sh client_shared e4 e5 ee cert peer cv sf e13 e14 cf.
     client.CS.cs_event_log ==
       CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
@@ -3374,8 +3411,8 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fourth_event_not_change_ciphe
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher_spec
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -3444,11 +3481,11 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
     server_received
     server_sent;
   PNTSC.lemma_server_no_tail_fourth_event_derive_shared_secret_if_not_ccs16 server;
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   eliminate exists start client_ch client_sh client_shared e4 e5 ee cert peer cv sf e13 e14 cf.
     client.CS.cs_event_log ==
       CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
@@ -3551,7 +3588,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                 CS.initial_model client.CS.cs_model.CS.model_config in
               let server_model0 =
                 CS.initial_model server.CS.cs_model.CS.model_config in
-              assert (CS.conn_events_raw_replay
+              assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 client_model0
                 client.CS.cs_event_log
                 client.CS.cs_wire_log.CL.raw_sent
@@ -3595,13 +3632,13 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
               returns False
               with _.
               (
-                assert (CS.conn_events_raw_replay
+                assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   server_model0
                   server.CS.cs_event_log
                   server.CS.cs_wire_log.CL.raw_sent
                   server.CS.cs_wire_log.CL.raw_received
                   server.CS.cs_model);
-                assert (CS.conn_events_raw_replay
+                assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   server_model0
                   (CS.ConnLocalEvent CS.LocalStartServer ::
                    CS.ConnNetworkEvent ({
@@ -3687,13 +3724,13 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                 CS.initial_model client.CS.cs_model.CS.model_config in
               let server_model0 =
                 CS.initial_model server.CS.cs_model.CS.model_config in
-              assert (CS.conn_events_raw_replay
+              assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 client_model0
                 client.CS.cs_event_log
                 client.CS.cs_wire_log.CL.raw_sent
                 client.CS.cs_wire_log.CL.raw_received
                 client.CS.cs_model);
-              assert (CS.conn_events_raw_replay
+              assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                 client_model0
                 (CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
                  CS.ConnNetworkEvent ({
@@ -3709,6 +3746,16 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                 client.CS.cs_wire_log.CL.raw_sent
                 client.CS.cs_wire_log.CL.raw_received
                 client.CS.cs_model);
+              PNTRB.lemma_client_prefix_received_server_hello_supported
+                client_model0
+                start
+                client_ch
+                client_sh
+                client_shared
+                client_tail
+                client.CS.cs_wire_log.CL.raw_sent
+                client.CS.cs_wire_log.CL.raw_received
+                client.CS.cs_model;
               PNTRB.lemma_client_prefix_raw_slices
                 client_model0
                 start
@@ -3735,13 +3782,13 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
               returns False
               with _.
               (
-                assert (CS.conn_events_raw_replay
+                assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   server_model0
                   server.CS.cs_event_log
                   server.CS.cs_wire_log.CL.raw_sent
                   server.CS.cs_wire_log.CL.raw_received
                   server.CS.cs_model);
-                assert (CS.conn_events_raw_replay
+                assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   server_model0
                   (CS.ConnLocalEvent CS.LocalStartServer ::
                    CS.ConnNetworkEvent ({
@@ -3799,8 +3846,8 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -3833,8 +3880,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_prefix
   PNTSS.lemma_server_no_tail_second_event_client_hello_if_not_ccs16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_selection_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -3875,8 +3922,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_sele
   PNTSC.lemma_server_no_tail_third_event_select_parameters_if_not_ccs16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_shared_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -3917,8 +3964,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_shared_server_shar
   PNTSC.lemma_server_no_tail_fourth_event_derive_shared_secret_if_not_ccs16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -3963,8 +4010,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_handshake_install_
   PNTSC.lemma_server_no_tail_fifth_event_server_hello_if_not_ccs16 server
 
 let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_installs_server_hello_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -4010,8 +4057,8 @@ let lemma_clean16_no_tail_valid_byte_traces_role_local_client_two_handshake_inst
   PNTSC.lemma_server_no_tail_fifth_event_server_hello_if_not_ccs16 server
 
 let lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -4069,14 +4116,14 @@ let lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_f
     client_sent
     server_received
     server_sent;
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   assert (PNT.paired_no_tail_application_ready_boundary client server);
   assert (TLS13.Impl.Client.Driver.client_driver_application_ready client);
   assert (TLS13.Impl.Server.Driver.server_driver_application_ready server);
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   PNTRB.lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
     client
     server
@@ -4092,8 +4139,8 @@ let lemma_clean_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_f
     server_rest
 
 let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge_from_role_local_prefix
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -4151,14 +4198,14 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
     client_sent
     server_received
     server_sent;
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   assert (PNT.paired_no_tail_application_ready_boundary16 client server);
   assert (TLS13.Impl.Client.Driver.client_driver_application_ready client);
   assert (TLS13.Impl.Server.Driver.server_driver_application_ready server);
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
   PNTRB.lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
     client
     server
@@ -4174,8 +4221,8 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
     server_rest
 
 let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -4208,7 +4255,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
     server_received
     server_sent;
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
-  assert (CS.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
   eliminate exists client_start client_ch client_sh client_shared e4 e5 client_tail.
     client.CS.cs_event_log ==
       CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
@@ -4249,13 +4296,13 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
       let client_rest = e4 :: e5 :: client_tail in
       let client_model0 =
         CS.initial_model client.CS.cs_model.CS.model_config in
-      assert (CS.conn_events_raw_replay
+      assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         client_model0
         client.CS.cs_event_log
         client.CS.cs_wire_log.CL.raw_sent
         client.CS.cs_wire_log.CL.raw_received
         client.CS.cs_model);
-      assert (CS.conn_events_raw_replay
+      assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         client_model0
         (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
          CS.ConnNetworkEvent ({
@@ -4353,8 +4400,8 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -4406,13 +4453,13 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
     server_sent;
   assert (TLS13.Impl.Client.Types.client_end_to_end_invariant client);
   assert (TLS13.Impl.Server.Types.server_end_to_end_invariant server);
-  assert (CS.connection_state_raw_event_replay_consistent client);
-  assert (CS.connection_state_raw_event_replay_consistent server);
-  assert (CS.connection_state_sent_seal_replay_consistent client);
-  assert (CS.connection_state_received_decode_replay_consistent client);
-  assert (CS.connection_state_sent_seal_replay_consistent server);
-  assert (CS.connection_state_received_decode_replay_consistent server);
-  assert (CS.paired_wire_logs client server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server);
+  assert (TLS13.Spec.StateMachine.Correspondence.paired_wire_logs client server);
   eliminate exists
     client_start
     client_ch
@@ -4546,7 +4593,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
         client_shared);
     assert (Seq.equal server_full_sent client_full_received);
     assert (Seq.equal client_full_sent server_full_received);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       client_model0
       (CS.ConnLocalEvent (CS.LocalStartHandshake client_start) ::
        CS.ConnNetworkEvent ({
@@ -4562,7 +4609,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
       client_full_sent
       client_full_received
       client.CS.cs_model);
-    assert (CS.conn_events_raw_replay
+    assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
       (CS.ConnLocalEvent CS.LocalStartServer ::
        CS.ConnNetworkEvent ({
@@ -4613,7 +4660,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
         })) == Some sm5 /\
-      CS.conn_events_raw_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         sm5
         server_rest
         ts
@@ -4650,7 +4697,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
         })) == Some server_model5 /\
-      CS.conn_events_raw_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
         server_model5
         server_rest
         server_tail_sent
@@ -4696,7 +4743,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
           client_model3
           (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared)) ==
           Some client_model4 /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           client_model4
           client_rest
           client_tail_sent
@@ -4829,25 +4876,25 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
             client_full_received
             server.CS.cs_model
             client.CS.cs_model);
-          assert (CS.conn_events_sent_seal_replay
+          assert (TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
             server_model0
             (FStar.List.Tot.append server_prefix server_rest)
             server_full_sent
             server_full_received
             server.CS.cs_model);
-          assert (CS.conn_events_received_decode_replay
+          assert (TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
             server_model0
             (FStar.List.Tot.append server_prefix server_rest)
             server_full_sent
             server_full_received
             server.CS.cs_model);
-          assert (CS.conn_events_sent_seal_replay
+          assert (TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
             client_model0
             (FStar.List.Tot.append client_prefix client_rest)
             client_full_sent
             client_full_received
             client.CS.cs_model);
-          assert (CS.conn_events_received_decode_replay
+          assert (TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
             client_model0
             (FStar.List.Tot.append client_prefix client_rest)
             client_full_sent
@@ -4885,25 +4932,25 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
             Seq.equal
               server_full_received
               (B.append server_prefix_received server_suffix_received) /\
-            CS.conn_events_sent_seal_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
               server_model0
               server_prefix
               server_prefix_sent
               server_prefix_received
               server_mid /\
-            CS.conn_events_sent_seal_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
               server_mid
               server_rest
               server_suffix_sent
               server_suffix_received
               server.CS.cs_model /\
-            CS.conn_events_received_decode_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
               server_model0
               server_prefix
               server_prefix_sent
               server_prefix_received
               server_mid /\
-            CS.conn_events_received_decode_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
               server_mid
               server_rest
               server_suffix_sent
@@ -4959,25 +5006,25 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
               Seq.equal
                 client_full_received
                 (B.append client_prefix_received client_suffix_received) /\
-              CS.conn_events_sent_seal_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
                 client_model0
                 client_prefix
                 client_prefix_sent
                 client_prefix_received
                 client_mid /\
-              CS.conn_events_sent_seal_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
                 client_mid
                 client_rest
                 client_suffix_sent
                 client_suffix_received
                 client.CS.cs_model /\
-              CS.conn_events_received_decode_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
                 client_model0
                 client_prefix
                 client_prefix_sent
                 client_prefix_received
                 client_mid /\
-              CS.conn_events_received_decode_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
                 client_mid
                 client_rest
                 client_suffix_sent
@@ -5101,25 +5148,25 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
                   client_rest' == client.CS.cs_event_log /\
                 Seq.equal server_suffix_sent' client_suffix_received' /\
                 Seq.equal client_suffix_sent' server_suffix_received' /\
-                CS.conn_events_sent_seal_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
                   server_model5'
                   server_rest'
                   server_suffix_sent'
                   server_suffix_received'
                   server.CS.cs_model /\
-                CS.conn_events_received_decode_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
                   server_model5'
                   server_rest'
                   server_suffix_sent'
                   server_suffix_received'
                   server.CS.cs_model /\
-                CS.conn_events_sent_seal_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
                   client_model4'
                   client_rest'
                   client_suffix_sent'
                   client_suffix_received'
                   client.CS.cs_model /\
-                CS.conn_events_received_decode_replay
+                TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
                   client_model4'
                   client_rest'
                   client_suffix_sent'
@@ -5158,8 +5205,8 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
   )
 
 let lemma_paired_successful_handshake_normalized_replay_shape_from_clean_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -5188,8 +5235,8 @@ let lemma_paired_successful_handshake_normalized_replay_shape_from_clean_no_tail
     server
 
 let lemma_paired_successful_handshake_normalized_replay_shape_from_clean16_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -5218,8 +5265,8 @@ let lemma_paired_successful_handshake_normalized_replay_shape_from_clean16_no_ta
     server
 
 let lemma_client_server_application_record_material_agrees_from_clean_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -5239,13 +5286,13 @@ let lemma_client_server_application_record_material_agrees_from_clean_no_tail_va
           server_sent /\
         PNB.paired_supported_normalized_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -5263,8 +5310,8 @@ let lemma_client_server_application_record_material_agrees_from_clean_no_tail_va
     server
 
 let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -5284,13 +5331,13 @@ let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_sent /\
         PNB.paired_supported_normalized_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =
@@ -5308,8 +5355,8 @@ let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
     server
 
 let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_valid_byte_traces_and_normalized_staged_replay_boundary
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -5329,13 +5376,13 @@ let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
           server_sent /\
         PSNB.paired_supported_normalized_staged_replay_boundary client server)
       (ensures
-        CS.supported_profile_client_server_key_material_agrees client server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ClientTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
           client
           server /\
-        CS.peer_record_material_agrees
-          (CS.traffic_id CS.TrafficApplication CS.ServerTraffic)
+        TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
+          (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
           client
           server)
 =

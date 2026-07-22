@@ -189,7 +189,7 @@ Start with these files:
 - `common/Common.ProtocolImplementation.fst`, `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, and `common/Common.TCP.fsti`: shared protocol refinement, endpoint scheduling, generic fuel-bounded driver, and TCP-history interface.
 - `src/impl/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*`: typed OpenSSL auth TCB used by the verified workflow.
 - `c_stubs/common_tcp_karamel.*`, `c_stubs/common_tcp_stubs.*`, and the OpenSSL interop tests in `test/unit/`: C ABI bridge and smoke tests for the endpoint-driven runtime path.
-- `src/spec/TLS13.Spec.ConnectionState.fst`: audit-facing core connection-state model, legal deltas, cumulative replay predicates, and the accepted-versus-rejected raw-byte distinction. Proof-only preservation/projection lemmas are isolated in `src/spec/TLS13.ConnectionState.Lemmas.fst`; `src/spec/TLS13.StateMachine.fst` is the small client-only trace automaton used by log/projection proofs.
+- `src/spec/core/TLS13.Spec.StateMachine.fst`: audit-facing core connection-state model and legal deltas. Client/server endpoint machines and exact wire semantics are in `src/spec/core/TLS13.Spec.Endpoint.*` and `TLS13.Spec.StateMachine.Canonical`; replay and preservation properties are isolated under `src/spec/properties`.
 - `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*`: verified parser/serializer facades and their `TLS13.Wire.Spec` postconditions.
 - `TLS_DESIGN_AND_IMPL.md`: high-level description of the current proof architecture and remaining gaps.
 - `AUDIT.md`: audit-oriented summary of the theorem guarantees, supported profile, verified/C split, and TCB surface.

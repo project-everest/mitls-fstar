@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let changeCipherSpec_parser = LPI.parse_u8
 
 noextract let changeCipherSpec_serializer = LPI.serialize_u8
 
 let changeCipherSpec_bytesize_eq x = ()
 
-let changeCipherSpec_reader = (PPB.leaf_reader_of_serialized (LPPI.read_u8' ()))
+let changeCipherSpec_reader = fun input #pm #v -> ((PPB.leaf_reader_of_serialized (LPPI.read_u8' ()))) input #pm #v
 
-let changeCipherSpec_writer = (LPPI.l2r_leaf_write_u8 ())
+let changeCipherSpec_writer = fun x out offset #v -> ((LPPI.l2r_leaf_write_u8 ())) x out offset #v
 
-let changeCipherSpec_leaf_size = (LPS.leaf_size_constant_size LPI.serialize_u8 1sz (_ by (FStar.Tactics.norm [delta; iota; zeta; primops]; FStar.Tactics.smt ())))
+let changeCipherSpec_leaf_size = fun x -> ((LPS.leaf_size_constant_size LPI.serialize_u8 1sz (_ by (FStar.Tactics.norm [delta; iota; zeta; primops]; FStar.Tactics.smt ())))) x
 
-let read_changeCipherSpec : PPB.copyful_parse changeCipherSpec_vmatch changeCipherSpec_parser changeCipherSpec_conv = (PPB.copyful_parse_leaf (PPB.leaf_reader_of_serialized (LPPI.read_u8' ())))
+let read_changeCipherSpec : PPB.copyful_parse changeCipherSpec_vmatch changeCipherSpec_parser changeCipherSpec_conv = fun input #pm #v -> ((PPB.copyful_parse_leaf (PPB.leaf_reader_of_serialized (LPPI.read_u8' ())))) input #pm #v
 
-let free_changeCipherSpec : PPB.free_t changeCipherSpec_vmatch = (PPB.free_leaf #U8.t)
+let free_changeCipherSpec : PPB.free_t changeCipherSpec_vmatch = fun x #v -> ((PPB.free_leaf #U8.t)) x #v
 
-let write_changeCipherSpec : PPB.l2r_safe_writer changeCipherSpec_vmatch changeCipherSpec_serializer changeCipherSpec_conv = (PPB.l2r_safe_writer_leaf LPI.serialize_u8 1sz (LPPI.l2r_leaf_write_u8 ()))
+let write_changeCipherSpec : PPB.l2r_safe_writer changeCipherSpec_vmatch changeCipherSpec_serializer changeCipherSpec_conv = fun x #y out #v perr -> ((PPB.l2r_safe_writer_leaf LPI.serialize_u8 1sz (LPPI.l2r_leaf_write_u8 ()))) x #y out #v perr
 
 let changeCipherSpec_bytesize_eqn x = (assert (FStar.Seq.length (LP.serialize LP.serialize_u8 (x)) == 1))
 

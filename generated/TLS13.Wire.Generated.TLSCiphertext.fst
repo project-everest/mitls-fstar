@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field encrypted_record*)
 open TLS13.Wire.Generated.TLSCiphertext_encrypted_record
 
@@ -91,7 +89,7 @@ let read_tLSCiphertext : PPB.copyful_parse tLSCiphertext_vmatch tLSCiphertext_pa
   assert_norm (tLSCiphertext_parser_kind == tLSCiphertext'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair (LPC.jump_nondep_then contentType_jumper protocolVersion_jumper) (PPC.copyful_parse_pair contentType_jumper read_contentType () read_protocolVersion) () read_tLSCiphertext_encrypted_record) synth_tLSCiphertext synth_tLSCiphertext_recip
 
-let free_tLSCiphertext : PPB.free_t tLSCiphertext_vmatch = (PPC.free_pair (PPC.free_pair free_contentType free_protocolVersion) free_tLSCiphertext_encrypted_record)
+let free_tLSCiphertext : PPB.free_t tLSCiphertext_vmatch = fun x #v -> ((PPC.free_pair (PPC.free_pair free_contentType free_protocolVersion) free_tLSCiphertext_encrypted_record)) x #v
 
 let write_tLSCiphertext : PPB.l2r_safe_writer tLSCiphertext_vmatch tLSCiphertext_serializer tLSCiphertext_conv =
   synth_tLSCiphertext_injective ();
@@ -100,7 +98,7 @@ let write_tLSCiphertext : PPB.l2r_safe_writer tLSCiphertext_vmatch tLSCiphertext
 
 let size_tLSCiphertext : PPB.l2r_safe_size tLSCiphertext_vmatch tLSCiphertext_serializer tLSCiphertext_conv =
   synth_tLSCiphertext_injective ();
-  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair fits_u64_squash (PPC.l2r_safe_size_pair fits_u64_squash size_contentType () size_protocolVersion) () size_tLSCiphertext_encrypted_record) synth_tLSCiphertext synth_tLSCiphertext_recip
+  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair (PPC.l2r_safe_size_pair size_contentType () size_protocolVersion) () size_tLSCiphertext_encrypted_record) synth_tLSCiphertext synth_tLSCiphertext_recip
 
 let tLSCiphertext_bytesize_eqn x =
   [@inline_let] let _ = synth_tLSCiphertext_injective () in

@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 private let pre : squash (LP.vldata_vlarray_precond 2 65535 namedGroup_parser 1 32767 == true) = _ by (FStar.Tactics.trefl ())
 
 let namedGroupList_parser =
@@ -48,10 +46,10 @@ let namedGroupList_serializer =
 let namedGroupList_bytesize_eq x = ()
 
 let namedGroupList_validator =
- PPAR.validate_vlarray 2 65535 namedGroup_serializer namedGroup_validator 1 32767 () (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+ PPAR.validate_vlarray 2 65535 namedGroup_serializer namedGroup_validator 1 32767 () (PPBI.leaf_read_bounded_integer_2 ()) ()
 
 let namedGroupList_jumper =
- PPAR.jump_vlarray 2 65535 namedGroup_serializer 1 32767 () (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+ PPAR.jump_vlarray 2 65535 namedGroup_serializer 1 32767 () (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ())) ()
 
 let namedGroupList_bytesize_eqn x = LP.length_serialize_vlarray 2 65535 namedGroup_serializer 1 32767 () x
 
@@ -63,7 +61,7 @@ let read_namedGroupList : PPB.copyful_parse namedGroupList_vmatch namedGroupList
   PPC.copyful_parse_synth
     (PPVD.copyful_parse_bounded_vldata_strong_payload 2 65535 (LP.serialize_list _ namedGroup_serializer)
        (PPLS.copyful_parse_list read_namedGroup namedGroup_jumper ())
-       (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+       (PPBI.leaf_read_bounded_integer_2 ()))
     (LP.vldata_to_vlarray 2 65535 namedGroup_serializer 1 32767 ())
     (LP.vlarray_to_vldata 2 65535 namedGroup_serializer 1 32767 ())
 
@@ -76,8 +74,8 @@ let write_namedGroupList : PPB.l2r_safe_writer namedGroupList_vmatch namedGroupL
   assert_norm ((LP.get_parser_kind namedGroup_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
   assert_norm ((LP.get_parser_kind namedGroup_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 (LSeqB.mk_seq_sizet 2 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ namedGroup_serializer)
-       (PPLS.l2r_safe_writer_list namedGroup_serializer write_namedGroup ()) fits_u64_squash) <: PPB.l2r_safe_writer _ (LP.serialize_bounded_vldata_strong 2 65535 (LP.serialize_list _ namedGroup_serializer)) _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 2ul 65535 65535ul 2 2sz (LP.serialize_list _ namedGroup_serializer)
+       (PPLS.l2r_safe_writer_list namedGroup_serializer write_namedGroup ())) <: PPB.l2r_safe_writer _ (LP.serialize_bounded_vldata_strong 2 65535 (LP.serialize_list _ namedGroup_serializer)) _)
     (LP.vldata_to_vlarray 2 65535 namedGroup_serializer 1 32767 ())
     (LP.vlarray_to_vldata 2 65535 namedGroup_serializer 1 32767 ())
 

@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let signatureScheme_repr_parser = LPI.parse_u16
 
 noextract let signatureScheme_repr_serializer = LPI.serialize_u16
@@ -49,7 +47,7 @@ inline_for_extraction noextract let signatureScheme_repr_reader = (PPB.leaf_read
 
 inline_for_extraction noextract let signatureScheme_repr_writer = (LPPI.l2r_leaf_write_u16 ())
 
-inline_for_extraction let synth_signatureScheme (x:LP.maybe_enum_key signatureScheme_enum) : signatureScheme = 
+inline_for_extraction noextract let synth_signatureScheme (x:LP.maybe_enum_key signatureScheme_enum) : signatureScheme = 
   match x with
   | LP.Known k -> k
   | LP.Unknown y ->
@@ -57,7 +55,7 @@ inline_for_extraction let synth_signatureScheme (x:LP.maybe_enum_key signatureSc
     [@inline_let] let _ = assert_norm (LP.list_mem v (LP.list_map snd signatureScheme_enum) == known_signatureScheme_repr v) in
     Unknown_signatureScheme v
 
-inline_for_extraction let synth_signatureScheme_inv (x:signatureScheme) : LP.maybe_enum_key signatureScheme_enum = 
+inline_for_extraction noextract let synth_signatureScheme_inv (x:signatureScheme) : LP.maybe_enum_key signatureScheme_enum = 
   match x with
   | Unknown_signatureScheme y ->
     [@inline_let] let v : U16.t = y in

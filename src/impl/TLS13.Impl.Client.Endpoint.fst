@@ -12,9 +12,11 @@ module CQ = TLS13.Impl.ConnectionStateQuery
 module CPI = Common.ProtocolImplementation
 module CQueries = TLS13.Impl.Client.CanonicalQueries
 module CR = TLS13.Impl.ConnectionState.Repr
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
+module EC = TLS13.Spec.Endpoint.Client
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module O = TLS13.OpenSSL
@@ -923,7 +925,7 @@ fn client_finish_network_action
   (st1:Ghost.erased CS.connection_state)
   (consumed:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   client_endpoint_network_continuation cc cfg frame (Ghost.reveal st0) network_frame **
   CP.client_network_bridge_frame_post
@@ -974,7 +976,7 @@ fn client_finish_network_io
   (out_contents:Ghost.erased B.bytes)
   (consumed:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   client_network_io_continuation cc ch frame (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0) nio **
   pts_to (client_network_input nio) (Ghost.reveal (client_network_input_contents nio)) **
@@ -1323,7 +1325,7 @@ fn client_finish_local_action
   (st0:Ghost.erased CS.connection_state)
   (st1:Ghost.erased CS.connection_state)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   client_endpoint_local_continuation cc cfg frame (Ghost.reveal st0) ev local_frame **
   CP.client_local_frame_post
@@ -1416,7 +1418,7 @@ fn client_finish_local_io
   (st1:Ghost.erased CS.connection_state)
   (out_contents:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   client_local_io_continuation cc ch frame (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0) ev lio **
   pts_to (client_local_output lio) (Ghost.reveal out_contents) **
@@ -1858,7 +1860,7 @@ ensures
           (old_out:Ghost.erased B.bytes)
           (out_contents:Ghost.erased B.bytes)
           (wire_outputs:Ghost.erased (list CW.wire_message))
-          (local_outputs:Ghost.erased (list CTypes.local_output)).
+          (local_outputs:Ghost.erased (list EAPI.local_output)).
     CP.client_invariant
       cc
       (Ghost.reveal received1)
@@ -1883,7 +1885,7 @@ ensures
       (Ghost.reveal local_outputs) **
     pure (
       CPI.local_process_correct
-        (CP.client_system (Ghost.reveal cc.CP.canonical_client_initial))
+        (EC.client_system #CTypes.client_local_event (Ghost.reveal cc.CP.canonical_client_initial))
         ev
         (Ghost.reveal old_out)
         (Ghost.reveal out_contents)
@@ -1989,7 +1991,7 @@ ensures
       (Ghost.reveal local_outputse));
   assert (pure (
     CPI.local_process_correct
-      (CP.client_system (Ghost.reveal cc.CP.canonical_client_initial))
+      (EC.client_system #CTypes.client_local_event (Ghost.reveal cc.CP.canonical_client_initial))
       ev
       (Ghost.reveal (client_local_old_output lio))
       (Ghost.reveal out_contentse)
@@ -3099,7 +3101,7 @@ let client_protocol_endpoint
       CS.connection_state
       CW.wire_message
       CTypes.client_local_event
-      CTypes.local_output
+      EAPI.local_output
       CP.client_protocol_implementation
   =
   {

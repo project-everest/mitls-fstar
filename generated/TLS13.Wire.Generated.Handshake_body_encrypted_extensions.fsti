@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.EncryptedExtensions
 
-type handshake_body_encrypted_extensions = encryptedExtensions
+noextract type handshake_body_encrypted_extensions = encryptedExtensions
 
 inline_for_extraction noextract let handshake_body_encrypted_extensions_parser_kind = LP.strong_parser_kind 5 65540 None
 

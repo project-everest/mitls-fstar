@@ -9,7 +9,7 @@ open FStar.List.Tot
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -46,7 +46,7 @@ open TLS13.Impl.ConnectionState.Model
 
 
 let connection_state_preorder : FStar.Preorder.preorder CS.connection_state =
-  CS.connection_state_evolves
+  TLS13.Spec.StateMachine.Reachability.connection_state_evolves
 
 let state_ref : Type0 = MR.mref connection_state_preorder
 
@@ -1177,7 +1177,7 @@ let application_exactly
     Box.pts_to app.key_update_response_pending key_update_response_pending **
     pure (SZ.v source_offset == spec.CS.app_pending_source_offset /\
           key_update_response_pending == spec.CS.app_key_update_response_pending /\
-          CS.pending_application_consistent spec)
+          TLS13.Spec.StateMachine.Correspondence.pending_application_consistent spec)
 
 let connection_model_exactly
   ([@@@mkey] c:connection_state)
@@ -1197,7 +1197,7 @@ let connection_exactly
   : slprop =
   MR.pts_to c.ghost_state #1.0R st **
   connection_model_exactly c st.CS.cs_model **
-  pure (CS.connection_state_consistent st)
+  pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent st)
 
 let is_connection_state (c:connection_state) : slprop =
   exists* st. connection_exactly c st
@@ -1280,7 +1280,7 @@ let server_initial_state
   CS.initial (server_connection_config certificate_chain credential_identity)
 
 let lemma_default_initial_consistent ()
-  : Lemma (CS.connection_state_consistent default_initial_state)
+  : Lemma (TLS13.Spec.StateMachine.Reachability.connection_state_consistent default_initial_state)
 =
   ()
 
@@ -1289,7 +1289,7 @@ let lemma_configured_initial_consistent
   (trust_anchors:B.bytes)
   (validation_time_seconds:SZ.t)
   : Lemma
-      (CS.connection_state_consistent
+      (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
         (configured_initial_state server_name trust_anchors validation_time_seconds))
 =
   ()
@@ -1298,7 +1298,7 @@ let lemma_server_initial_consistent
   (certificate_chain:B.bytes)
   (credential_identity:B.bytes)
   : Lemma
-      (CS.connection_state_consistent
+      (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
         (server_initial_state certificate_chain credential_identity))
 =
   ()

@@ -11,7 +11,7 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CLH = TLS13.Impl.ConnectionState.LocalHandshake
@@ -719,7 +719,7 @@ let lemma_server_handshake_write_seal_some
         aad
         {
           R.content_type = T.Application_data;
-          R.fragment = CS.sent_tls_inner_plaintext_fragment msg;
+          R.fragment = TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment msg;
         }))
 =
   assert_norm (ST.server_end_to_end_invariant st ==
@@ -728,8 +728,8 @@ let lemma_server_handshake_write_seal_some
   assert (ST.server_state_correct st);
   assert_norm (ST.server_state_correct st ==
     (ST.server_state_core_correct st /\
-     CS.connection_state_sent_seal_replay_consistent st /\
-     CS.connection_state_received_decode_replay_consistent st));
+     TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st /\
+     TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st));
   assert (ST.server_state_core_correct st);
   assert_norm (ST.server_state_core_correct st ==
     (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -739,15 +739,15 @@ let lemma_server_handshake_write_seal_some
         B.length cfg.CS.server_certificate_chain <=
           Bounds.max_server_certificate_chain_len
       | None -> False) /\
-     CS.connection_state_consistent st /\
-     CS.connection_state_full_log_consistent_for_role CS.ServerEndpoint st));
-  assert (CS.connection_state_consistent st);
+     TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+     TLS13.Spec.StateMachine.Replay.connection_state_full_log_consistent_for_role CS.ServerEndpoint st));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent st);
   CSL.lemma_server_handshake_write_record_has_keys st;
-  assert (CS.connection_state_full_log_consistent_for_role CS.ServerEndpoint st);
-  assert (CS.connection_state_layered_log_consistent_for_role CS.ServerEndpoint st);
-  assert (CS.connection_state_record_keys_consistent_for_role CS.ServerEndpoint st);
-  assert (CS.model_record_keys_consistent_for_role CS.ServerEndpoint st.CS.cs_model);
-  assert (CS.record_write_key_schedule_projection_for_role
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_full_log_consistent_for_role CS.ServerEndpoint st);
+  assert (TLS13.Spec.StateMachine.Log.connection_state_layered_log_consistent_for_role CS.ServerEndpoint st);
+  assert (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role CS.ServerEndpoint st);
+  assert (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role CS.ServerEndpoint st.CS.cs_model);
+  assert (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
     CS.ServerEndpoint
     st.CS.cs_model);
   assert (
@@ -760,7 +760,7 @@ let lemma_server_handshake_write_seal_some
     aad
     {
       R.content_type = T.Application_data;
-      R.fragment = CS.sent_tls_inner_plaintext_fragment msg;
+      R.fragment = TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment msg;
     }
 
 fn process_send_server_hello
@@ -927,11 +927,11 @@ fn process_send_server_hello
     B.empty
     'old_network_out
     'old_app_out));
-  assert (pure (CS.event_protected_raw_segmented_success
+  assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
     (Ghost.reveal ev)
     (Ghost.reveal 'raw_bytes)
     B.empty));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (Ghost.reveal ev)
     (Ghost.reveal 'raw_bytes)));
@@ -1157,11 +1157,11 @@ fn process_send_server_hello_serialized
     B.empty
     network_out_bytes
     'old_app_out));
-  assert (pure (CS.event_protected_raw_segmented_success
+  assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
     (Ghost.reveal ev)
     network_out_bytes
     B.empty));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (Ghost.reveal ev)
     network_out_bytes));
@@ -1478,7 +1478,7 @@ fn process_send_encrypted_extensions_serialized
     (W.serialize_handshake (M.EncryptedExtensions (Ghost.reveal ee)))));
   lemma_server_handshake_write_seal_some
     'st0
-    (CS.application_data_record_header (SZ.v written_fragment + 17))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v written_fragment + 17))
     (M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee)));
 
   unfold (connection_exactly s 'st0);
@@ -1513,11 +1513,11 @@ fn process_send_encrypted_extensions_serialized
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.sent_single_protected_message_seal
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal
     'st0.CS.cs_model
     (M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee)))
     network_out_bytes));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
@@ -1532,20 +1532,20 @@ fn process_send_encrypted_extensions_serialized
     })
     network_out_bytes
     B.empty;
-  assert (pure (CS.event_protected_raw_segmented_success
+  assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee));
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.connection_state_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0));
-  assert (pure (CS.model_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
-  assert (pure (CS.record_write_key_schedule_projection_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
   assert (pure (CM.can_send_encrypted_extensions
@@ -1894,7 +1894,7 @@ fn process_send_certificate_serialized
     SZ.v fragment_len));
   lemma_server_handshake_write_seal_some
     'st0
-    (CS.application_data_record_header (SZ.v written_fragment + 17))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v written_fragment + 17))
     (M.TlsHandshake (M.Certificate (Ghost.reveal cert)));
 
   unfold (connection_exactly s 'st0);
@@ -1929,11 +1929,11 @@ fn process_send_certificate_serialized
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.sent_single_protected_message_seal
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal
     'st0.CS.cs_model
     (M.TlsHandshake (M.Certificate (Ghost.reveal cert)))
     network_out_bytes));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
@@ -1948,20 +1948,20 @@ fn process_send_certificate_serialized
     })
     network_out_bytes
     B.empty;
-  assert (pure (CS.event_protected_raw_segmented_success
+  assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.Certificate (Ghost.reveal cert));
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.connection_state_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0));
-  assert (pure (CS.model_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
-  assert (pure (CS.record_write_key_schedule_projection_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
   assert (pure (CM.can_send_certificate
@@ -2315,7 +2315,7 @@ fn process_send_certificate_verify_serialized
     SZ.v fragment_len));
   lemma_server_handshake_write_seal_some
     'st0
-    (CS.application_data_record_header (SZ.v written_fragment + 17))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v written_fragment + 17))
     (M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv)));
   IM.free_certificate_verify lcv;
 
@@ -2351,11 +2351,11 @@ fn process_send_certificate_verify_serialized
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.sent_single_protected_message_seal
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal
     'st0.CS.cs_model
     (M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv)))
     network_out_bytes));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
@@ -2370,20 +2370,20 @@ fn process_send_certificate_verify_serialized
     })
     network_out_bytes
     B.empty;
-  assert (pure (CS.event_protected_raw_segmented_success
+  assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.connection_state_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0));
-  assert (pure (CS.model_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
-  assert (pure (CS.record_write_key_schedule_projection_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
   assert (pure (CM.can_send_certificate_verify
@@ -2597,7 +2597,7 @@ fn process_send_stored_certificate_verify_serialized
     SZ.v fragment_len));
   lemma_server_handshake_write_seal_some
     'st0
-    (CS.application_data_record_header (SZ.v written_fragment + 17))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v written_fragment + 17))
     (M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv)));
 
   unfold (connection_exactly s 'st0);
@@ -2632,11 +2632,11 @@ fn process_send_stored_certificate_verify_serialized
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.sent_single_protected_message_seal
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal
     'st0.CS.cs_model
     (M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv)))
     network_out_bytes));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
@@ -2651,20 +2651,20 @@ fn process_send_stored_certificate_verify_serialized
     })
     network_out_bytes
     B.empty;
-  assert (pure (CS.event_protected_raw_segmented_success
+  assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.connection_state_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0));
-  assert (pure (CS.model_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
-  assert (pure (CS.record_write_key_schedule_projection_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
   assert (pure (CM.can_send_certificate_verify
@@ -2954,7 +2954,7 @@ fn process_send_server_finished_serialized
     (W.serialize_handshake (M.Finished (Ghost.reveal fin)))));
   lemma_server_handshake_write_seal_some
     'st0
-    (CS.application_data_record_header (SZ.v written_fragment + 17))
+    (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v written_fragment + 17))
     (M.TlsHandshake (M.Finished (Ghost.reveal fin)));
 
   unfold (connection_exactly s 'st0);
@@ -2989,11 +2989,11 @@ fn process_send_server_finished_serialized
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.sent_single_protected_message_seal
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal
     'st0.CS.cs_model
     (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
     network_out_bytes));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
@@ -3008,20 +3008,20 @@ fn process_send_server_finished_serialized
     })
     network_out_bytes
     B.empty;
-  assert (pure (CS.event_protected_raw_segmented_success
+  assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
     })
     network_out_bytes
     B.empty));
-  assert (pure (CS.connection_state_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0));
-  assert (pure (CS.model_record_keys_consistent_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
-  assert (pure (CS.record_write_key_schedule_projection_for_role
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
     CS.ServerEndpoint
     'st0.CS.cs_model));
   assert (pure (H.verify_finished
@@ -3159,7 +3159,7 @@ fn process_send_server_finished_serialized
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
     })));
-  assert (pure (CS.sent_event_seal_projection
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;

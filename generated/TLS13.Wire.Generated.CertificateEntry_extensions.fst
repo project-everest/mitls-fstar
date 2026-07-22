@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let certificateEntry_extensions_list_bytesize_nil = LP.serialize_list_nil extensionCertificate_parser extensionCertificate_serializer
 
 let certificateEntry_extensions_list_bytesize_cons x y = LP.serialize_list_cons extensionCertificate_parser extensionCertificate_serializer x y; (extensionCertificate_bytesize_eq (x))
@@ -54,12 +52,12 @@ let certificateEntry_extensions_serializer = LP.serialize_synth _ synth_certific
 let certificateEntry_extensions_bytesize_eq x = ()
 
 inline_for_extraction let certificateEntry_extensions'_validator : LPS.validator certificateEntry_extensions'_parser =
-  PPVD.validate_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionCertificate_serializer) (PPLS.validate_list extensionCertificate_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionCertificate_serializer) (PPLS.validate_list extensionCertificate_validator ()) (PPBI.leaf_read_bounded_integer_2 ())
 
 let certificateEntry_extensions_validator = LPC.validate_synth certificateEntry_extensions'_validator synth_certificateEntry_extensions
 
 inline_for_extraction let certificateEntry_extensions'_jumper : LPS.jumper certificateEntry_extensions'_parser =
-  PPVD.jump_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionCertificate_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionCertificate_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let certificateEntry_extensions_jumper = LPC.jump_synth certificateEntry_extensions'_jumper synth_certificateEntry_extensions
 
@@ -76,7 +74,7 @@ let read_certificateEntry_extensions : PPB.copyful_parse certificateEntry_extens
   PPC.copyful_parse_synth
     (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 (LP.serialize_list _ extensionCertificate_serializer)
        (PPLS.copyful_parse_list read_extensionCertificate extensionCertificate_jumper ())
-       (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+       (PPBI.leaf_read_bounded_integer_2 ()))
     synth_certificateEntry_extensions synth_certificateEntry_extensions_recip
 
 let free_certificateEntry_extensions : PPB.free_t certificateEntry_extensions_vmatch =
@@ -88,7 +86,7 @@ let write_certificateEntry_extensions : PPB.l2r_safe_writer certificateEntry_ext
   assert_norm ((LP.get_parser_kind extensionCertificate_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
   assert_norm ((LP.get_parser_kind extensionCertificate_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ extensionCertificate_serializer)
-       (PPLS.l2r_safe_writer_list extensionCertificate_serializer write_extensionCertificate ()) fits_u64_squash) <: PPB.l2r_safe_writer _ certificateEntry_extensions'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 0ul 65535 65535ul 2 2sz (LP.serialize_list _ extensionCertificate_serializer)
+       (PPLS.l2r_safe_writer_list extensionCertificate_serializer write_extensionCertificate ())) <: PPB.l2r_safe_writer _ certificateEntry_extensions'_serializer _)
     synth_certificateEntry_extensions synth_certificateEntry_extensions_recip
 

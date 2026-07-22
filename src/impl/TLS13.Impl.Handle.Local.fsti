@@ -7,7 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CR = TLS13.Impl.ConnectionState.Repr
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8

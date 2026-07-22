@@ -7,7 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CF = TLS13.Impl.ConnectionState.Fail
@@ -171,17 +171,17 @@ fn process_send_application_data_local_event
       (Ghost.reveal ev)
       raw_sent
       B.empty;
-    assert (pure (CS.event_protected_raw_segmented_success
+    assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
       (Ghost.reveal ev)
       raw_sent
       B.empty));
-    assert (pure (CS.connection_state_record_keys_consistent_for_role
+    assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
       CS.ServerEndpoint
       'st0));
-    assert (pure (CS.model_record_keys_consistent_for_role
+    assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
       CS.ServerEndpoint
       'st0.CS.cs_model));
-    assert (pure (CS.record_write_key_schedule_projection_for_role
+    assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
       CS.ServerEndpoint
       'st0.CS.cs_model));
 
@@ -454,17 +454,17 @@ fn process_send_close_notify_local_event
       (Ghost.reveal ev)
       raw_sent
       B.empty;
-    assert (pure (CS.event_protected_raw_segmented_success
+    assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
       (Ghost.reveal ev)
       raw_sent
       B.empty));
-    assert (pure (CS.connection_state_record_keys_consistent_for_role
+    assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
       CS.ServerEndpoint
       'st0));
-    assert (pure (CS.model_record_keys_consistent_for_role
+    assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
       CS.ServerEndpoint
       'st0.CS.cs_model));
-    assert (pure (CS.record_write_key_schedule_projection_for_role
+    assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
       CS.ServerEndpoint
       'st0.CS.cs_model));
 

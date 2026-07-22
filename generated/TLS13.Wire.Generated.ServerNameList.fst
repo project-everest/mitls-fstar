@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let serverNameList_list_bytesize_nil = LP.serialize_list_nil serverName_parser serverName_serializer
 
 let serverNameList_list_bytesize_cons x y = LP.serialize_list_cons serverName_parser serverName_serializer x y; (serverName_bytesize_eq (x))
@@ -54,12 +52,12 @@ let serverNameList_serializer = LP.serialize_synth _ synth_serverNameList server
 let serverNameList_bytesize_eq x = ()
 
 inline_for_extraction let serverNameList'_validator : LPS.validator serverNameList'_parser =
-  PPVD.validate_bounded_vldata_strong 1 65535 (LP.serialize_list _ serverName_serializer) (PPLS.validate_list serverName_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 1 65535 (LP.serialize_list _ serverName_serializer) (PPLS.validate_list serverName_validator ()) (PPBI.leaf_read_bounded_integer_2 ())
 
 let serverNameList_validator = LPC.validate_synth serverNameList'_validator synth_serverNameList
 
 inline_for_extraction let serverNameList'_jumper : LPS.jumper serverNameList'_parser =
-  PPVD.jump_bounded_vldata_strong 1 65535 (LP.serialize_list _ serverName_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 1 65535 (LP.serialize_list _ serverName_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let serverNameList_jumper = LPC.jump_synth serverNameList'_jumper synth_serverNameList
 
@@ -76,7 +74,7 @@ let read_serverNameList : PPB.copyful_parse serverNameList_vmatch serverNameList
   PPC.copyful_parse_synth
     (PPVD.copyful_parse_bounded_vldata_strong_payload 1 65535 (LP.serialize_list _ serverName_serializer)
        (PPLS.copyful_parse_list read_serverName serverName_jumper ())
-       (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+       (PPBI.leaf_read_bounded_integer_2 ()))
     synth_serverNameList synth_serverNameList_recip
 
 let free_serverNameList : PPB.free_t serverNameList_vmatch =
@@ -88,7 +86,7 @@ let write_serverNameList : PPB.l2r_safe_writer serverNameList_vmatch serverNameL
   assert_norm ((LP.get_parser_kind serverName_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
   assert_norm ((LP.get_parser_kind serverName_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 1 (LSeqB.mk_seq_sizet 1 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ serverName_serializer)
-       (PPLS.l2r_safe_writer_list serverName_serializer write_serverName ()) fits_u64_squash) <: PPB.l2r_safe_writer _ serverNameList'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 1 1ul 65535 65535ul 2 2sz (LP.serialize_list _ serverName_serializer)
+       (PPLS.l2r_safe_writer_list serverName_serializer write_serverName ())) <: PPB.l2r_safe_writer _ serverNameList'_serializer _)
     synth_serverNameList synth_serverNameList_recip
 

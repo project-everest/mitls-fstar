@@ -13,7 +13,7 @@
 EVERPARSE_HOME ?= $(CURDIR)/tools/everparse
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE  ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME  ?= $(FSTAR_HOME)/karamel
+KRML_HOME  ?= $(EVERPARSE_HOME)/opt/karamel
 # Use the installed KaRaMeL binary (opt/FStar/karamel/out/bin/krml): unlike the
 # in-tree `krml` symlink to _build/default/src/Karamel.exe, it self-locates its
 # krmllib/share, so no extra symlinks are needed.
@@ -46,11 +46,14 @@ EXTRACT_DIR = _extract
 HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
 HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
+SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(GENERATED_DIR) \
+  $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include common \
-  --include src/spec \
+  $(addprefix --include ,$(SPEC_DIRS)) \
   --include src/impl \
   --include $(GENERATED_DIR) \
   --include $(LOWPARSE_HOME) \
@@ -95,9 +98,13 @@ FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
-SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
+SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
+ROOT_FILES = \
+  src/impl/TLS13.System.Temporal.fst \
+  src/impl/TLS13.Impl.Client.Driver.fst \
+  src/impl/TLS13.Impl.Server.Driver.fst
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
@@ -181,13 +188,59 @@ parsers:
 	$(MAKE) regen-generated
 	$(MAKE) extract-generated
 
+# ── Portable generated-verification cache (for CI) ─────────────────
+# The generated TLS13.Wire.Generated.* .checked files are a pure function of two
+# inputs: the QuackyDucky-generated sources (themselves derived from $(QD_RFC))
+# and the F*/LowParse/QuackyDucky toolchain (pinned by scripts/build-everparse.sh).
+# So a CI cache keyed on the hash of just those two files can carry the whole
+# generated-module verification result across runs.  These targets export/import
+# that result as a single relocatable tarball — exactly the artifacts the
+# $(GENERATED_STAMP) recipe produces (the sub-make cache/, the .checked copies the
+# main build consumes as already-cached, the harness .depend, and the stamp).
+GENERATED_CACHE_TARBALL ?= generated-checked.tar.gz
+
+# Bundle the verification artifacts into $(GENERATED_CACHE_TARBALL).  Only files
+# that exist are added, so a partial tree never aborts the tar.
+.PHONY: save-generated-cache
+save-generated-cache:
+	@test -f $(GENERATED_STAMP) || { \
+	  echo "No verified generated modules to save; run 'make generated-checked' first." >&2; \
+	  exit 1; }
+	@files='$(GENERATED_STAMP)'; \
+	 for f in $(GENERATED_DIR)/.depend $(GENERATED_DIR)/cache \
+	          $(GENERATED_DIR)/TLS13.Wire.Generated.*.checked; do \
+	   [ -e "$$f" ] && files="$$files $$f"; \
+	 done; \
+	 tar czf $(GENERATED_CACHE_TARBALL) $$files; \
+	 echo "Saved generated verification cache -> $(GENERATED_CACHE_TARBALL)"
+
+# Unpack a previously saved tarball, then mark the restored .checked files and
+# stamp newer than the (freshly checked-out) generated sources so Make treats
+# $(GENERATED_STAMP) as up-to-date and skips re-running the verification.  A
+# missing tarball is not an error — the build simply verifies from scratch.  F*
+# still validates every .checked against its source hash when the main build
+# consumes it, so a stale cache is safely re-verified rather than trusted.
+.PHONY: restore-generated-cache
+restore-generated-cache:
+	@if [ ! -f $(GENERATED_CACHE_TARBALL) ]; then \
+	  echo "No cache tarball at $(GENERATED_CACHE_TARBALL); nothing to restore (will verify from scratch)."; \
+	  exit 0; \
+	fi; \
+	if tar xzf $(GENERATED_CACHE_TARBALL); then \
+	  find $(GENERATED_DIR) \( -name '*.checked' -o -name '.checked.stamp' \) -exec touch {} + ; \
+	  echo "Restored generated verification cache from $(GENERATED_CACHE_TARBALL) (stamp marked fresh)."; \
+	else \
+	  echo "WARNING: could not extract $(GENERATED_CACHE_TARBALL); verifying from scratch." >&2; \
+	  rm -f $(GENERATED_STAMP); \
+	fi
+
 # ── Dependency Analysis ────────────────────────────────────────────
 # The generated .checked files must exist before `.depend` is computed, because
 # the dependency scan runs F* with --already_cached +TLS13.Wire.Generated.  The
 # order-only $(GENERATED_STAMP) prerequisite produces them first (without forcing
 # a needless `.depend` rebuild once present).
 .depend: $(ALL_FILES) Makefile | check-toolchain $(GENERATED_STAMP)
-	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ALL_FILES) --output_deps_to $@
+	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ROOT_FILES) --output_deps_to $@
 
 # Do NOT pull in .depend (and, through it, the order-only $(GENERATED_STAMP)
 # prerequisite) for the generated-pipeline phony goals or clean.  `parsers` runs
@@ -198,7 +251,8 @@ parsers:
 # sub-make — racing under -jN.  These goals manage the generated .checked files
 # explicitly via the stamp and never need the spec/impl dependency graph.
 DEPEND_EXCLUDED_GOALS := clean regen-generated verify-generated extract-generated \
-  parsers generated-checked $(GENERATED_STAMP)
+  parsers generated-checked save-generated-cache restore-generated-cache \
+  $(GENERATED_STAMP)
 ifeq (,$(filter $(DEPEND_EXCLUDED_GOALS),$(MAKECMDGOALS)))
 include .depend
 endif
@@ -211,7 +265,7 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated
+.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated save-generated-cache restore-generated-cache
 
 all: verify
 
@@ -248,13 +302,12 @@ check-admits:
 # ── Extraction Bundles ─────────────────────────────────────────────
 # List of modules to extract (dotted names)
 EXTRACT_MODULES = \
-  $(BUNDLE_IMPL_MODULES) \
-  TLS13.Extract.Smoke
+  $(BUNDLE_IMPL_MODULES)
 
 # Convert module names to .krml filenames
 KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(EXTRACT_MODULES)))
 
-.PHONY: extract-krml extract-connection extract-smoke \
+.PHONY: extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle
 
 extract-krml: $(KRML_FILES)
@@ -277,7 +330,6 @@ SERIALIZER_MODULES = \
   TLS13.Impl.Serializer.Handshake \
   TLS13.Impl.Serializer.Finished \
   TLS13.Impl.Serializer.EncryptedExtensions \
-  TLS13.Impl.Serializer.CertificateVerify \
   TLS13.Impl.Serializer.ServerHello \
   TLS13.Impl.Serializer.Certificate \
   TLS13.Impl.Serializer.ProtectedRecord \
@@ -287,7 +339,7 @@ SERIALIZER_INTERNAL_MODULES = \
   TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Handshake,\
   TLS13.Impl.Serializer.Finished,\
   TLS13.Impl.Serializer.EncryptedExtensions,\
-  TLS13.Impl.Serializer.CertificateVerify,TLS13.Impl.Serializer.ServerHello,\
+  TLS13.Impl.Serializer.ServerHello,\
   TLS13.Impl.Serializer.Certificate,TLS13.Impl.Serializer.ProtectedRecord,\
   TLS13.Impl.Serializer
 
@@ -354,7 +406,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.KeySchedule,TLS13.Record
 
 # Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, Common.TCP
+# TLS13.Crypto, TLS13.OpenSSL, Common.TCP
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 
@@ -371,30 +423,7 @@ TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
-COMMON_ENDPOINT_MODULES = \
-  Common.StateMachine \
-  Common.WireFormat \
-  Common.WireFormatStateMachine \
-  Common.ProtocolImplementation \
-  Common.ProtocolEndpoint \
-  Common.ProtocolDriver
-TLS13_SHARED_ENDPOINT_MODULES = \
-  TLS13.Impl.ConnectionStateQuery \
-  TLS13.Impl.CanonicalTypes \
-  TLS13.Impl.CanonicalWire
-TLS13_CLIENT_ENDPOINT_MODULES = \
-  $(TLS13_SHARED_ENDPOINT_MODULES) \
-  TLS13.Impl.Client.CanonicalProtocol \
-  TLS13.Impl.Client.CanonicalQueries \
-  TLS13.Impl.Client.Endpoint
-TLS13_SERVER_ENDPOINT_MODULES = \
-  $(TLS13_SHARED_ENDPOINT_MODULES) \
-  TLS13.Impl.Server.CanonicalProtocol \
-  TLS13.Impl.Server.CanonicalQueries \
-  TLS13.Impl.Server.Endpoint
 CLIENT_DRIVER_IMPL_MODULES = \
-  $(COMMON_ENDPOINT_MODULES) \
-  $(TLS13_CLIENT_ENDPOINT_MODULES) \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -418,7 +447,15 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Messages \
   TLS13.KeySchedule \
   TLS13.Record \
-  TLS13.Impl.Client
+  TLS13.Impl.Client \
+  TLS13.Impl.Client.Driver.State \
+  TLS13.Impl.Client.Driver.New \
+  TLS13.Impl.Client.Driver.Core \
+  TLS13.Impl.Client.Driver.Cleanup \
+  TLS13.Impl.Client.Driver.Connect \
+  TLS13.Impl.Client.Driver.Send \
+  TLS13.Impl.Client.Driver.Receive \
+  TLS13.Impl.Client.Driver.Close
 CLIENT_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES))) \
@@ -428,19 +465,25 @@ CLIENT_DRIVER_KRML_FILES = \
 DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
+  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
+  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
+  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Client.CanonicalProtocol,\
+  -TLS13.Impl.Client.CanonicalQueries,-TLS13.Impl.Client.Endpoint,\
   -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*,\
-  -TLS13.X509,-TLS13.MachineTypes
+  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 SERVER_DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
+  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
+  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
+  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Server.CanonicalProtocol,\
+  -TLS13.Impl.Server.CanonicalQueries,-TLS13.Impl.Server.Endpoint,\
   -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*,\
-  -TLS13.X509,-TLS13.MachineTypes
+  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
 SERVER_DRIVER_MODULES = \
-  $(COMMON_ENDPOINT_MODULES) \
-  $(TLS13_SERVER_ENDPOINT_MODULES) \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.ConnectionState.Bounds \
   TLS13.Impl.ConnectionState.Model \
@@ -480,9 +523,11 @@ SERVER_DRIVER_KRML_FILES = \
   $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
+GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 TLS13_BUNDLE_KRML_FILES = \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
 # Extract FStar.Pervasives.Native for tuple support
@@ -550,7 +595,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@target_base=$$(basename "$@" .krml); \
 	module=; src=; \
 	for ext in fst fsti; do \
-	  for dir in common src/spec src/impl $(GENERATED_DIR) $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse \
+	  for dir in $(SOURCE_DIRS) \
 	      $(FSTAR_ULIB) $(FSTAR_PULSE_COMMON) $(FSTAR_PULSE_LIB); do \
 	    test -d "$$dir" || continue; \
 	    for candidate in "$$dir"/*.$$ext; do \
@@ -581,7 +626,7 @@ extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
 extract-tls13-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
 
-$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | $(OUTPUT_DIR)
+$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify $(OUTPUT_DIR)
 	$(MAKE) $(TLS13_BUNDLE_KRML_FILES)
 	@touch $@
 
@@ -610,10 +655,10 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library TLS13.X509 -library Common.TCP \
+	  -library TLS13.Crypto -library Common.TCP \
 	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
-	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
+	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
@@ -624,22 +669,6 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  "$@" "$$status" "$$((end-start))" "$$(date -Is)"; \
 	exit $$status
 	@touch $@
-
-# ── Smoke Test Extraction ───────────────────────────────────────────────
-
-SMOKE_DIR = $(EXTRACT_DIR)/smoke
-SMOKE_KRML = $(OUTPUT_DIR)/TLS13_Extract_Smoke.krml
-SMOKE_C = $(SMOKE_DIR)/TLS13_Extract_Smoke.c
-SMOKE_H = $(SMOKE_DIR)/TLS13_Extract_Smoke.h
-
-$(SMOKE_DIR):
-	mkdir -p $@
-
-$(SMOKE_C) $(SMOKE_H): $(SMOKE_KRML) | $(SMOKE_DIR)
-	$(KRML_EXE) -skip-compilation -skip-makefiles \
-	  -tmpdir $(SMOKE_DIR) $(SMOKE_KRML)
-
-extract-smoke: $(SMOKE_C) $(SMOKE_H)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # C Stubs and Dependencies
@@ -714,9 +743,14 @@ check-c-stubs: | check-deps
 	  $(ECHO_STUB_SOURCES)
 
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
-test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: \
-  scripts/generate-test-certs.sh
+TEST_CERT_STAMP = test/certs/.generated
+
+$(TEST_CERT_STAMP): scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
+	touch $@
+
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: $(TEST_CERT_STAMP)
+	@test -f $@
 
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
@@ -809,10 +843,6 @@ check-deps:
 	@scripts/check-openssl.sh >/dev/null
 	@test -d third_party/hacl-star/dist/gcc-compatible || \
 	  { echo "Missing HACL* C snapshot; run scripts/fetch-hacl-star.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8446.txt || \
-	  { echo "Missing RFC 8446 cache; run scripts/fetch-rfcs.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8448.txt || \
-	  { echo "Missing RFC 8448 cache; run scripts/fetch-rfcs.sh"; exit 1; }
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
@@ -820,10 +850,11 @@ clean:
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
 	  test/openssl_echo_server.port \
-	  test/openssl_echo_server.log
+	  test/openssl_echo_server.log \
+	  $(TEST_CERT_STAMP)
 	find src test -name '*.checked' -delete
 
-.PHONY: all verify test extract-krml extract-connection extract-smoke \
+.PHONY: all verify test extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-openssl-sclient \

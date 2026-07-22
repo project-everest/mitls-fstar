@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let certificate_certificate_request_context_parser = LP.parse_bounded_seq_vlbytes 0 255
 
 noextract let certificate_certificate_request_context_serializer = LP.serialize_bounded_seq_vlbytes 0 255
 
 let certificate_certificate_request_context_bytesize_eq x = ()
 
-let certificate_certificate_request_context_validator = LSeqB.validate_bounded_seq_vlbytes 0 255 (PPBI.leaf_read_bounded_integer_1 fits_u64_squash) fits_u64_squash
+let certificate_certificate_request_context_validator = LSeqB.validate_bounded_seq_vlbytes 0 255 (PPBI.leaf_read_bounded_integer_1 ())
 
-let certificate_certificate_request_context_jumper = LSeqB.jump_bounded_seq_vlbytes 0 255 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 255)) (PPBI.leaf_read_bounded_integer_1 fits_u64_squash)) fits_u64_squash
+let certificate_certificate_request_context_jumper = LSeqB.jump_bounded_seq_vlbytes 0 255 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 255)) (PPBI.leaf_read_bounded_integer_1 ()))
 
-let read_certificate_certificate_request_context = LSeqB.copyful_parse_bounded_seq_vlbytes 0 255 (PPBI.leaf_read_bounded_integer_1 fits_u64_squash) fits_u64_squash
+let read_certificate_certificate_request_context = LSeqB.copyful_parse_bounded_seq_vlbytes 0 255 (PPBI.leaf_read_bounded_integer_1 ())
 
 let free_certificate_certificate_request_context : PPB.free_t certificate_certificate_request_context_vmatch = fun x #v -> LSeqB.free_copy_seqbytes x #(Ghost.hide (Ghost.reveal v <: Seq.seq FStar.UInt8.t))
 
-let write_certificate_certificate_request_context = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 255 (LSeqB.mk_seq_sizet 255 fits_u64_squash) 1sz fits_u64_squash
+let write_certificate_certificate_request_context = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 0 0ul 255 255ul 1sz
 
-let size_certificate_certificate_request_context = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 255 (LSeqB.mk_seq_sizet 255 fits_u64_squash) 1sz fits_u64_squash
+let size_certificate_certificate_request_context = LSeqB.l2r_safe_size_bounded_seq_vlbytes 0 0ul 255 255ul 1sz
 
 let certificate_certificate_request_context_bytesize_eqn x = LP.length_serialize_bounded_seq_vlbytes 0 255 x
 

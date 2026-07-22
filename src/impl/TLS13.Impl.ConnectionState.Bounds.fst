@@ -1,5 +1,9 @@
 module TLS13.Impl.ConnectionState.Bounds
 
+module SZ = FStar.SizeT
+
+let max_server_certificate_chain_len_sz : SZ.t = 16610sz
+
 let lemma_option_is_some_some #a (x:option a)
   : Lemma
       (requires option_is_some x)

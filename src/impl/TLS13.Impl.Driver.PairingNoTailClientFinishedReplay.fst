@@ -7,7 +7,9 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
 module M = TLS13.Messages
 module GCH   = TLS13.Wire.Generated.ClientHello
 module GSH   = TLS13.Wire.Generated.ServerHello
@@ -712,7 +714,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
   : Lemma
       (requires
         PNTCAS.client_no_tail_application_install_cover e13 e14 /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model12
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
            e13 ::
@@ -739,7 +741,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
           (after_app_read:CS.connection_model)
           (client_app_write_material:CS.traffic_key_material)
           (client_app_read_material:CS.traffic_key_material).
-          CS.conn_events_sent_seal_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
             model12
             (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
              CS.ConnLocalEvent
@@ -810,7 +812,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
       (after_app_read':CS.connection_model)
       (client_app_write_material':CS.traffic_key_material)
       (client_app_read_material':CS.traffic_key_material).
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         model12
         (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
          CS.ConnLocalEvent
@@ -866,10 +868,10 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
       CS.legal_event model12 verify_ev /\
       CS.step_model model12 verify_ev == Some model1 /\
       CS.event_raw_delta_legal model12 verify_ev delta0_sent delta0_received /\
-      CS.sent_event_nonempty_seal_projection model12 verify_ev delta0_sent /\
+      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model12 verify_ev delta0_sent /\
       Seq.equal suffix_sent (B.append delta0_sent tail0_sent) /\
       Seq.equal suffix_received (B.append delta0_received tail0_received) /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         model1
         (e13 :: e14 :: sent_ev :: [])
         tail0_sent
@@ -882,7 +884,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
         (after_app_read':CS.connection_model)
         (client_app_write_material':CS.traffic_key_material)
         (client_app_read_material':CS.traffic_key_material).
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model12
           (verify_ev ::
            CS.ConnLocalEvent
@@ -939,10 +941,10 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
         CS.legal_event model1 e13 /\
         CS.step_model model1 e13 == Some model2 /\
         CS.event_raw_delta_legal model1 e13 delta1_sent delta1_received /\
-        CS.sent_event_nonempty_seal_projection model1 e13 delta1_sent /\
+        TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model1 e13 delta1_sent /\
         Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
         Seq.equal tail0_received (B.append delta1_received tail1_received) /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model2
           (e14 :: sent_ev :: [])
           tail1_sent
@@ -955,7 +957,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
           (after_app_read':CS.connection_model)
           (client_app_write_material':CS.traffic_key_material)
           (client_app_read_material':CS.traffic_key_material).
-          CS.conn_events_sent_seal_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
             model12
             (verify_ev ::
              CS.ConnLocalEvent
@@ -1012,10 +1014,10 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
           CS.legal_event model2 e14 /\
           CS.step_model model2 e14 == Some model3 /\
           CS.event_raw_delta_legal model2 e14 delta2_sent delta2_received /\
-          CS.sent_event_nonempty_seal_projection model2 e14 delta2_sent /\
+          TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model2 e14 delta2_sent /\
           Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
           Seq.equal tail1_received (B.append delta2_received tail2_received) /\
-          CS.conn_events_sent_seal_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
             model3
             (sent_ev :: [])
             tail2_sent
@@ -1028,7 +1030,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
             (after_app_read':CS.connection_model)
             (client_app_write_material':CS.traffic_key_material)
             (client_app_read_material':CS.traffic_key_material).
-            CS.conn_events_sent_seal_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
               model12
               (verify_ev ::
                CS.ConnLocalEvent
@@ -1133,7 +1135,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
               (after_app_read':CS.connection_model)
               (client_app_write_material':CS.traffic_key_material)
               (client_app_read_material':CS.traffic_key_material).
-              CS.conn_events_sent_seal_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
                 model12
                 (verify_ev ::
                  CS.ConnLocalEvent
@@ -1189,10 +1191,10 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
                 }) in
             assert_norm (CS.event_raw_delta_legal model1 write_ev delta1_sent delta1_received);
             assert_norm (CS.event_raw_delta_legal after_write read_ev delta2_sent delta2_received);
-            assert_norm (CS.sent_event_nonempty_seal_projection model1 write_ev delta1_sent);
-            assert_norm (CS.sent_event_nonempty_seal_projection after_write read_ev delta2_sent);
+            assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model1 write_ev delta1_sent);
+            assert_norm (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection after_write read_ev delta2_sent);
             assert (CS.step_model model3 sent_ev == Some final_model);
-            assert (CS.conn_events_sent_seal_replay
+            assert (TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
               model3
               (sent_ev :: [])
               tail2_sent
@@ -1205,7 +1207,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
               read_ev
               delta2_sent
               delta2_received);
-            assert (CS.sent_event_nonempty_seal_projection
+            assert (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection
               after_write
               read_ev
               delta2_sent);
@@ -1231,7 +1233,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
               write_ev
               delta1_sent
               delta1_received);
-            assert (CS.sent_event_nonempty_seal_projection
+            assert (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection
               model1
               write_ev
               delta1_sent);
@@ -1268,7 +1270,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
               (after_app_read':CS.connection_model)
               (client_app_write_material':CS.traffic_key_material)
               (client_app_read_material':CS.traffic_key_material).
-              CS.conn_events_sent_seal_replay
+              TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
                 model12
                 (verify_ev ::
                  CS.ConnLocalEvent
@@ -1323,7 +1325,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
   : Lemma
       (requires
         PNTCAS.client_no_tail_application_install_cover e13 e14 /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
            e13 ::
@@ -1360,10 +1362,10 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
     CS.legal_event model verify_ev /\
     CS.step_model model verify_ev == Some model1 /\
     CS.event_raw_delta_legal model verify_ev delta0_sent delta0_received /\
-    CS.sent_event_nonempty_seal_projection model verify_ev delta0_sent /\
+    TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model verify_ev delta0_sent /\
     Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal raw_received (B.append delta0_received tail0_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model1
       (e13 :: e14 :: sent_ev :: [])
       tail0_sent
@@ -1388,10 +1390,10 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
       CS.legal_event model1 e13 /\
       CS.step_model model1 e13 == Some model2 /\
       CS.event_raw_delta_legal model1 e13 delta1_sent delta1_received /\
-      CS.sent_event_nonempty_seal_projection model1 e13 delta1_sent /\
+      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model1 e13 delta1_sent /\
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         model2
         (e14 :: sent_ev :: [])
         tail1_sent
@@ -1416,10 +1418,10 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
         CS.legal_event model2 e14 /\
         CS.step_model model2 e14 == Some model3 /\
         CS.event_raw_delta_legal model2 e14 delta2_sent delta2_received /\
-        CS.sent_event_nonempty_seal_projection model2 e14 delta2_sent /\
+        TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model2 e14 delta2_sent /\
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model3
           (sent_ev :: [])
           tail2_sent
@@ -1444,10 +1446,10 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           CS.legal_event model3 sent_ev /\
           CS.step_model model3 sent_ev == Some model4 /\
           CS.event_raw_delta_legal model3 sent_ev delta3_sent delta3_received /\
-          CS.sent_event_nonempty_seal_projection model3 sent_ev delta3_sent /\
+          TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model3 sent_ev delta3_sent /\
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
-          CS.conn_events_sent_seal_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
             model4
             []
             tail3_sent
@@ -1511,7 +1513,7 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
   : Lemma
       (requires
         PNTCFS.paired_no_tail_client_finished_staged_milestone client server /\
-        CS.connection_state_sent_seal_replay_consistent client)
+        TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client)
       (ensures
         client_finished_exact_suffix_sent_seal_replay_slice client)
 =
@@ -1725,7 +1727,7 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
       client.CS.cs_event_log ==
         FStar.List.Tot.append prefix suffix);
     assert (
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         (CS.initial_model client.CS.cs_model.CS.model_config)
         (FStar.List.Tot.append prefix suffix)
         client.CS.cs_wire_log.CL.raw_sent
@@ -1750,13 +1752,13 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
       Seq.equal
         client.CS.cs_wire_log.CL.raw_received
         (B.append prefix_received suffix_received) /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         (CS.initial_model client.CS.cs_model.CS.model_config)
         prefix
         prefix_sent
         prefix_received
         mid /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         mid
         suffix
         suffix_sent
@@ -1835,7 +1837,7 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
         Seq.equal
           client.CS.cs_wire_log.CL.raw_received
           (B.append prefix_received' suffix_received') /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           (CS.initial_model client.CS.cs_model.CS.model_config)
           (CS.ConnLocalEvent (CS.LocalStartHandshake start') ::
            CS.ConnNetworkEvent ({
@@ -1871,7 +1873,7 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
           prefix_sent'
           prefix_received'
           model12' /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model12'
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf') ::
            e13' ::
@@ -1983,7 +1985,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
     Seq.equal
       client.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       (CS.initial_model client.CS.cs_model.CS.model_config)
       (CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
        CS.ConnNetworkEvent ({
@@ -2019,7 +2021,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
       prefix_sent
       prefix_received
       model12 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -2114,7 +2116,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
       Seq.equal
         client.CS.cs_wire_log.CL.raw_received
         (B.append prefix_received suffix_received) /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         (CS.initial_model client.CS.cs_model.CS.model_config)
         (CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
          CS.ConnNetworkEvent ({
@@ -2150,7 +2152,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
         prefix_sent
         prefix_received
         model12 /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         model12
         (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
          e13 ::
@@ -2197,7 +2199,7 @@ let lemma_client_finished_sent_seal_suffix_head_steps
   (final_model:CS.connection_model)
   : Lemma
       (requires
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model12
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
            e13 ::
@@ -2225,7 +2227,7 @@ let lemma_client_finished_sent_seal_suffix_head_steps
       CL.message_direction = CL.Sent;
       CL.message_value = M.TlsHandshake (M.Finished cf);
     }) in
-  assert (CS.conn_events_sent_seal_replay
+  assert (TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
     model12
     (verify_ev :: e13 :: e14 :: sent_ev :: [])
     suffix_sent
@@ -2247,10 +2249,10 @@ let lemma_client_finished_sent_seal_suffix_head_steps
     CS.legal_event model12 verify_ev /\
     CS.step_model model12 verify_ev == Some after_verify /\
     CS.event_raw_delta_legal model12 verify_ev delta0_sent delta0_received /\
-    CS.sent_event_nonempty_seal_projection model12 verify_ev delta0_sent /\
+    TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection model12 verify_ev delta0_sent /\
     Seq.equal suffix_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal suffix_received (B.append delta0_received tail0_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       after_verify
       (e13 :: e14 :: sent_ev :: [])
       tail0_sent
@@ -2275,10 +2277,10 @@ let lemma_client_finished_sent_seal_suffix_head_steps
       CS.legal_event after_verify e13 /\
       CS.step_model after_verify e13 == Some after_e13 /\
       CS.event_raw_delta_legal after_verify e13 delta1_sent delta1_received /\
-      CS.sent_event_nonempty_seal_projection after_verify e13 delta1_sent /\
+      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection after_verify e13 delta1_sent /\
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         after_e13
         (e14 :: sent_ev :: [])
         tail1_sent
@@ -2303,10 +2305,10 @@ let lemma_client_finished_sent_seal_suffix_head_steps
         CS.legal_event after_e13 e14 /\
         CS.step_model after_e13 e14 == Some after_e14 /\
         CS.event_raw_delta_legal after_e13 e14 delta2_sent delta2_received /\
-        CS.sent_event_nonempty_seal_projection after_e13 e14 delta2_sent /\
+        TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection after_e13 e14 delta2_sent /\
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           after_e14
           (sent_ev :: [])
           tail2_sent
@@ -2331,10 +2333,10 @@ let lemma_client_finished_sent_seal_suffix_head_steps
           CS.legal_event after_e14 sent_ev /\
           CS.step_model after_e14 sent_ev == Some after_finished /\
           CS.event_raw_delta_legal after_e14 sent_ev delta3_sent delta3_received /\
-          CS.sent_event_nonempty_seal_projection after_e14 sent_ev delta3_sent /\
+          TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection after_e14 sent_ev delta3_sent /\
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
-          CS.conn_events_sent_seal_replay
+          TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
             after_finished
             []
             tail3_sent
@@ -2344,7 +2346,7 @@ let lemma_client_finished_sent_seal_suffix_head_steps
         with _.
         (
           assert_norm (
-            CS.conn_events_sent_seal_replay
+            TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
               after_finished
               []
               tail3_sent
@@ -2451,7 +2453,7 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
     Seq.equal
       client.CS.cs_wire_log.CL.raw_received
       (B.append prefix_received suffix_received) /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       (CS.initial_model client.CS.cs_model.CS.model_config)
       (CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
        CS.ConnNetworkEvent ({
@@ -2487,7 +2489,7 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
       prefix_sent
       prefix_received
       model12 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -2531,7 +2533,7 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
       (suffix_sent':B.bytes)
       (suffix_received':B.bytes).
       PNTCAS.client_no_tail_application_install_cover e13' e14' /\
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         model12'
         (CS.ConnLocalEvent (CS.LocalVerifyFinished sf') ::
          e13' ::
@@ -2556,8 +2558,8 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_seal_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2601,8 +2603,8 @@ let lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_se
     server
 
 let lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_seal_raw_record_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2635,8 +2637,8 @@ let lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_se
   lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_slice client
 
 let lemma_clean16_no_tail_valid_byte_traces_client_finished_exact_suffix_sent_seal_head_step_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2683,7 +2685,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
     suffix_sent
     suffix_received.
     PNTCAS.client_no_tail_application_install_cover e13 e14 /\
-    CS.conn_events_sent_seal_replay
+    TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
       model12
       (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
        e13 ::
@@ -2722,7 +2724,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
       (after_app_read:CS.connection_model)
       (client_app_write_material:CS.traffic_key_material)
       (client_app_read_material:CS.traffic_key_material).
-      CS.conn_events_sent_seal_replay
+      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
         model12
         (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
          CS.ConnLocalEvent
@@ -2785,7 +2787,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
         (client_app_read_material':CS.traffic_key_material)
         (suffix_sent':B.bytes)
         (suffix_received':B.bytes).
-        CS.conn_events_sent_seal_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
           model12'
           (CS.ConnLocalEvent (CS.LocalVerifyFinished sf') ::
            CS.ConnLocalEvent
@@ -2850,8 +2852,8 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
   )
 
 let lemma_clean16_no_tail_valid_byte_traces_client_finished_canonical_sent_seal_replay_slice
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)
@@ -2958,8 +2960,8 @@ let lemma_clean16_client_finished_staged_replay_fragment_from_completion
     client_finished_staged_replay_fragment client server w r)
 
 let lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_replay_fragment_from_completion
-  (client_initial:CS.connection_state)
-  (server_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
+  (server_initial:ES.server_initial_state)
   (client:CS.connection_state)
   (server:CS.connection_state)
   (client_received:B.bytes)

@@ -3,20 +3,11 @@
 
 /*
  * TLS13.Bytes.empty is proof/spec-level in F*, but KaRaMeL can still emit
- * references to it from proof-erased local-event records. Provide a per-C-file
- * immutable nil node once the generated Prims_list__uint8_t type is available.
+ * references to it from proof-erased local-event records. Delay construction
+ * until each use site, after KaRaMeL has declared Prims_list__uint8_t.
  */
 
-#if defined(__GNUC__) || defined(__clang__)
-#define TLS13_BYTES_KARAMEL_UNUSED __attribute__((unused))
-#else
-#define TLS13_BYTES_KARAMEL_UNUSED
-#endif
+#define TLS13_Bytes_empty \
+  (&(Prims_list__uint8_t){ .tag = Prims_Nil })
 
 #endif /* TLS13_BYTES_KARAMEL_H */
-
-#if defined(Prims_Nil) && !defined(TLS13_BYTES_KARAMEL_EMPTY_DEFINED)
-#define TLS13_BYTES_KARAMEL_EMPTY_DEFINED
-static TLS13_BYTES_KARAMEL_UNUSED Prims_list__uint8_t tls13_bytes_karamel_empty = { .tag = Prims_Nil };
-#define TLS13_Bytes_empty (&tls13_bytes_karamel_empty)
-#endif

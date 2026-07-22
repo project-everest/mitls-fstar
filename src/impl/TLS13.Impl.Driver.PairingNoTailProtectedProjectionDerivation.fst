@@ -5,7 +5,7 @@ module TLS13.Impl.Driver.PairingNoTailProtectedProjectionDerivation
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module Pairing = TLS13.Impl.Driver.Pairing
 module PWS = TLS13.ConnectionState.ProtectedWireStaged
 module Tac = FStar.Tactics

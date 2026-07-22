@@ -4,7 +4,7 @@ module TLS13.Impl.Driver.PairingNormalizedBridge
 
 open Pulse.Lib.Pervasives
 
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module PCB = TLS13.Impl.Driver.PairingCleanBoundary
 module PNB = TLS13.Impl.Driver.PairingNormalizedBoundary
 module PNS = TLS13.Impl.Driver.PairingNormalizedShape

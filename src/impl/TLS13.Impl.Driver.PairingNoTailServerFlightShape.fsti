@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module GEE   = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
@@ -98,7 +98,7 @@ val lemma_server_post_two_handshake_installs_tail_order_from_replay
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
         FStar.List.Tot.length rest == 9 /\
-        CS.conn_events_raw_replay
+        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
           model
           rest
           raw_sent

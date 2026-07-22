@@ -9,7 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CryptoSpec = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -18,7 +18,7 @@ module K = TLS13.Keys
 module M = TLS13.Messages
 module O = TLS13.OpenSSL
 module R = TLS13.Record.Spec
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module ST = TLS13.Impl.Server.Types
 module Tr = TLS13.Transcript
 module Seq = FStar.Seq
@@ -88,15 +88,15 @@ fn new_server
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)) /\
-                CS.connection_state_sent_seal_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)) /\
-                CS.connection_state_received_decode_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)) /\
-                CS.connection_state_protected_raw_segmented_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)))
@@ -128,15 +128,15 @@ fn new_server_erased_credential_identity
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)) /\
-                CS.connection_state_sent_seal_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)) /\
-                CS.connection_state_received_decode_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)) /\
-                CS.connection_state_protected_raw_segmented_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)))
@@ -2030,7 +2030,7 @@ fn process_client_finished
                    'st0
                    (Ghost.reveal fin)
                    (Ghost.reveal 'raw_bytes) /\
-                 CS.received_event_nonempty_decode_projection
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
                      (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
