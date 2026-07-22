@@ -750,6 +750,7 @@ ensures exists* (d1:Seq.seq U8.t).
           SZ.v off + 128 <= Seq.length contents /\
           SZ.fits (SZ.v off + 128) /\
           (forall (k:nat). k < SZ.v vj ==> Seq.index d k == Seq.index (Ghost.reveal contents) (SZ.v off + k)))
+  decreases (128 - SZ.v (!j))
   {
     let vj = !j;
     FStar.SizeT.fits_lte (SZ.v off + SZ.v vj) (SZ.v off + 128);

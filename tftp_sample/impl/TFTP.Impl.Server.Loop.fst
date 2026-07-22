@@ -194,6 +194,7 @@ ensures exists* (st1:TP.tftp_server_state) (nsent:TCP.bytes) (oc':Seq.seq U8.t).
     pts_to data dc **
     pts_to out od **
     pure (SZ.v vj <= SZ.v data_len /\ SZ.v data_len <= 512 /\ Seq.length od == 516)
+  decreases (SZ.v data_len - SZ.v (!j))
   {
     let vj = !j;
     let dv = data.(vj);
@@ -369,6 +370,7 @@ ensures exists* (d1:Seq.seq U8.t).
           SZ.fits (SZ.v off + SZ.v len) /\
           (forall (k:nat). k < SZ.v vj ==>
              Seq.index d k == Seq.index (Ghost.reveal contents) (SZ.v off + k)))
+  decreases (SZ.v len - SZ.v (!j))
   {
     let vj = !j;
     FStar.SizeT.fits_lte (SZ.v off + SZ.v vj) (SZ.v off + SZ.v len);
@@ -459,6 +461,7 @@ ensures exists* (chr chs pr ps:TCP.bytes) (st1:TP.tftp_server_state)
             (rv == true ==>
               loop_coupling (Ghost.reveal contents) (Ghost.reveal nblocks)
                 (Ghost.reveal filename) st cv))
+  decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
   {
     with st cv. _;
     assert (pure (loop_coupling (Ghost.reveal contents) (Ghost.reveal nblocks)
