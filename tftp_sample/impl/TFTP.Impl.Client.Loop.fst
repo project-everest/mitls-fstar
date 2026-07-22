@@ -302,12 +302,14 @@ fn read_status_update
 requires
   CC.tftp_client_inv i received sent st **
   R.pts_to running rn0 **
-  R.pts_to remaining f0
+  R.pts_to remaining f0 **
+  pure (not (Ghost.reveal f0 = 0sz))
 returns _:unit
 ensures exists* (rn1:bool) (f1:SZ.t).
   CC.tftp_client_inv i received sent st **
   R.pts_to running rn1 **
-  R.pts_to remaining f1
+  R.pts_to remaining f1 **
+  pure (rn1 == false \/ (rn1 == Ghost.reveal rn0 /\ SZ.v f1 < SZ.v (Ghost.reveal f0)))
 {
   unfold (CC.tftp_client_inv i received sent st);
   with svs. _;
@@ -376,6 +378,7 @@ ensures exists* (chr chs pr ps:TCP.bytes) (st1:TP.tftp_client_state)
       R.pts_to cursor cv **
       pure (Seq.length ib == 516 /\ Seq.length sc == 512 /\ Seq.length ac == 4 /\
             Seq.length ob == SZ.v outcap /\ SZ.v cv <= SZ.v outcap)
+  decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
   {
     (* read one whole datagram (n = its length, n <= 516) *)
     let n = TCP.read ch inbuf 516sz;
