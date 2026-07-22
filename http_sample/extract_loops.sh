@@ -10,6 +10,7 @@ EP=${EVERPARSE_HOME:-/workspaces/agentic-tls/tools/everparse}
 FS=$EP/opt/FStar/bin/fstar.exe
 LP=$EP/src/lowparse
 KRML=$EP/opt/FStar/karamel/out/bin/krml
+[ -x "$KRML" ] || KRML=$EP/opt/karamel/out/bin/krml
 export PATH=$EP/opt/z3:$PATH
 cd "$(dirname "$0")"
 F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include $LP/pulse --include spec --include impl"

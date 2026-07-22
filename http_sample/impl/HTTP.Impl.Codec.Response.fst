@@ -113,25 +113,30 @@ fn match_ci_at
   returns b: bool
   ensures pts_to inp 'i ** pure (SZ.v n <= Seq.length 'i)
 {
+  (* Keep this fn a single straight-line `stt` block: an `if/else` whose `then`
+     branch is a pure value (`false`, effect `stt`) and whose `else` branch holds
+     a `while` (effect `stt_div`) cannot be joined under Pulse's divergent-block
+     rule (Error 228: stt_div vs stt).  Instead we fold the length check into the
+     `ok` accumulator and run the `while` unconditionally — the guard `!ok`
+     immediately exits when the buffer is too short. *)
+  let mut k = 0sz;
+  let mut ok = true;
   if SZ.lt (SZ.sub n pos) len {
-    false
-  } else {
-    let mut k = 0sz;
-    let mut ok = true;
-    while (SZ.lt !k len && !ok)
-    invariant exists* (vk:SZ.t) (vok:bool).
-      R.pts_to k vk ** R.pts_to ok vok ** pts_to inp 'i **
-      pure (SZ.v vk <= SZ.v len /\ SZ.v n <= Seq.length 'i /\
-            SZ.v pos + SZ.v len <= SZ.v n)
-    {
-      let vk = !k;
-      let c = inp.(SZ.add pos vk);
-      let e = name_byte vk;
-      ok := U8.eq (to_lower c) e;
-      k := SZ.add vk 1sz;
-    };
-    !ok
-  }
+    ok := false;
+  };
+  while (SZ.lt !k len && !ok)
+  invariant exists* (vk:SZ.t) (vok:bool).
+    R.pts_to k vk ** R.pts_to ok vok ** pts_to inp 'i **
+    pure (SZ.v vk <= SZ.v len /\ SZ.v n <= Seq.length 'i /\
+          (vok ==> SZ.v pos + SZ.v len <= SZ.v n))
+  {
+    let vk = !k;
+    let c = inp.(SZ.add pos vk);
+    let e = name_byte vk;
+    ok := U8.eq (to_lower c) e;
+    k := SZ.add vk 1sz;
+  };
+  !ok
 }
 
 module CW = HTTP.Wire.Common
