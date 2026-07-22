@@ -32,9 +32,12 @@ still missing to interoperate with arbitrary real-world HTTP/1.1 peers.
 - **Headers are opaque:** skipped/whitelisted rather than parsed into a general
   `(name, value)` list. No header map, case-insensitive lookup, or arbitrary
   header emit.
-- **Fixed-width `Content-Length` only** (`00000025`). A real server sends
-  `Content-Length: 25`; our client parser would reject it. (Chunk sizes are
-  variable-width; `Content-Length` is not — yet.)
+- **`Content-Length` width.** The client already *parses* variable-width
+  `Content-Length` (`Content-Length: 25`) — the `parse_dec_at` scanner is now
+  proved to compute the clamped `W.dec_dec_var` of the maximal decimal run
+  (functional spec, not just memory-safe). The *server* still emits fixed-width
+  (`00000025`), which real peers accept; a canonical variable-width emitter and
+  threading the parsed-value spec up to `http_get` remain follow-ups.
 - **No response routing / status selection:** the server always emits a fixed
   `200`. No method/target dispatch, no `Date`/`Server` headers.
 - **Narrow body delimitation:** relies on `Connection: close` / exact framing.
@@ -74,7 +77,11 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
 
 ## Status
 
-- [ ] 2. Variable-width `Content-Length` parse + emit — **in progress**
+- [~] 2. Variable-width `Content-Length` — **in progress**: verified spec codec
+      (`W.dec_dec_var` / `ser_response_var` round-trip) DONE; client `parse_dec_at`
+      now has a functional spec tying the parsed value to `W.dec_dec_var` DONE;
+      canonical variable-width *emit* + threading the value spec to `http_get`
+      remain.
 - [ ] 1. General header parser/emitter
 - [ ] 3. `POST` + request bodies
 - [ ] 4. Smuggling / limit defenses + error responses
