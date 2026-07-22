@@ -1,8 +1,8 @@
-#include "tls13_lib_memmove.h"
+#include "common_memmove.h"
 
 #include <string.h>
 
-void TLS13_Lib_Memmove_memmove(
+void Common_Memmove_memmove(
     uint8_t *buffer,
     size_t dst_offset,
     size_t src_offset,

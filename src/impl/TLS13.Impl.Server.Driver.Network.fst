@@ -15,7 +15,7 @@ module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
-module Memmove = TLS13.Lib.Memmove
+module Memmove = Common.Memmove
 module CQ = TLS13.Impl.ConnectionState.Queries
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
@@ -2726,7 +2726,7 @@ fn rec read_until_client_hello_received
     }
   } else {
     assert (pure (0 < SZ.v fuel));
-    let step = read_and_process_network_once d;
+    let step = process_buffered_or_read_network_once d;
     with st1 received' sent' step_app_out.
       assert (server_driver_connected_with_app_out
         d
