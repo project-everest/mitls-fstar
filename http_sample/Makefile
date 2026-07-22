@@ -28,7 +28,11 @@
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME ?= $(FSTAR_HOME)/karamel
+# KaRaMeL lives at opt/karamel in the EverParse toolchain built by
+# scripts/build-everparse.sh (the CI layout, shared with the other samples);
+# older local devcontainers vendor it under opt/FStar/karamel.  Prefer whichever
+# exists so the same Makefile works in CI and in a local checkout.
+KRML_HOME ?= $(firstword $(wildcard $(EVERPARSE_HOME)/opt/karamel $(FSTAR_HOME)/karamel) $(EVERPARSE_HOME)/opt/karamel)
 KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/src/lowparse

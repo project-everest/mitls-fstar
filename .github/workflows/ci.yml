@@ -112,6 +112,8 @@ jobs:
             cmd: make -j"$(nproc)" -C ymodem_sample vloop-test && make -j"$(nproc)" -C ymodem_sample/interop
           - name: tftp (vloop-test + interop)
             cmd: make -j"$(nproc)" -C tftp_sample vloop-test && make -j"$(nproc)" -C tftp_sample/interop
+          - name: http (vloop-tests)
+            cmd: make -j"$(nproc)" -C http_sample vloop-tests
     steps:
       - uses: actions/checkout@v4
         with:
