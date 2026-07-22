@@ -1922,6 +1922,7 @@ fn process_buffered_network_bytes_compact_once
 
 #pop-options
 
+inline_for_extraction
 fn read_and_process_network_once
   (d:server_driver)
   (authorization:Ghost.erased ST.server_buffer_response)

@@ -458,8 +458,10 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Client.Driver.Close
 CLIENT_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES))) \
+  $(filter-out $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml, \
+    $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES)))) \
   $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml \
+  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 DRIVER_EXTRACT_SELECTOR = \
@@ -528,6 +530,7 @@ TLS13_BUNDLE_KRML_FILES = \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
+  $(OUTPUT_DIR)/Common_BufferedTCP.krml \
   $(OUTPUT_DIR)/Common_Memmove.krml \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
