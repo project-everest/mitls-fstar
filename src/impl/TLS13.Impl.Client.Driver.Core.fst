@@ -1162,9 +1162,8 @@ fn driver_process_buffered_network_bytes_compact_once
   }
 }
 
-fn driver_read_buffered_network_bytes_compact_once
+private fn driver_read_buffered_network_bytes_compact_once
   (d:driver)
-  (authorization:Ghost.erased CT.client_buffer_response)
   (raw:array U8.t)
   (raw_capacity:SZ.t)
   (buffered_len:SZ.t)
@@ -1180,8 +1179,6 @@ fn driver_read_buffered_network_bytes_compact_once
                  SZ.v buffered_len < SZ.v raw_capacity /\
                  Seq.equal 'buffered
                    (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
-                 client_buffer_read_decision (Ghost.reveal authorization) ==
-                   BS.NeedMore /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
@@ -1243,22 +1240,8 @@ fn driver_read_buffered_network_bytes_compact_once
     sent
     (Ghost.reveal 'buffered)
     buffered_len;
-  let permit_buffer =
-    Ghost.hide
-      (BT.mk_phys_buffer (Ghost.reveal 'old_raw) (SZ.v buffered_len));
-  assert (pure (BT.buffer_wf (Ghost.reveal permit_buffer)));
-  assert (pure (BT.can_read (Ghost.reveal permit_buffer)));
-  let permit =
-    BS.issue_read_permit
-      (Ghost.hide (client_buffer_read_decision (Ghost.reveal authorization)))
-      permit_buffer;
-  unfold (BS.read_permit permit (Ghost.reveal permit_buffer));
-  rewrite (BT.read_permit permit (Ghost.reveal permit_buffer)) as
-    (BT.read_permit permit
-      (BT.mk_phys_buffer (Ghost.reveal 'old_raw) (SZ.v buffered_len)));
   let read_result =
     BT.read_append
-      permit
       d.driver_channel
       raw
       raw_capacity
@@ -2064,11 +2047,12 @@ fn driver_progress_buffered_network_step
         result
       } else {
       assert (pure (
+        buffer_full == false));
+      assert (pure (
         SZ.v processed.buffered_network_new_len < SZ.v raw_capacity));
       let read_result =
         driver_read_buffered_network_bytes_compact_once
         d
-        (Ghost.hide processed.buffered_network_read.network_read_buffer_resp)
         raw
         raw_capacity
         processed.buffered_network_new_len

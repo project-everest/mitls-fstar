@@ -1923,19 +1923,15 @@ fn process_buffered_network_bytes_compact_once
 #pop-options
 
 inline_for_extraction
-fn read_and_process_network_once
+private fn read_and_process_network_once
   (d:server_driver)
-  (authorization:Ghost.erased ST.server_buffer_response)
   requires server_driver_connected
             d
             'st0
             'certificate_chain
             'credential_identity
             'received
-            'sent **
-           pure (
-            server_buffer_read_decision (Ghost.reveal authorization) ==
-              BS.NeedMore)
+            'sent
   returns resp:ST.server_buffer_response
   ensures exists* st1 received' sent' app_out_bytes.
           server_driver_connected_with_app_out
@@ -2029,20 +2025,8 @@ fn read_and_process_network_once
   assert (pure (Some concrete_ch == Some ch));
   rewrite (IO.is_channel ch 'received 'sent) as
     (IO.is_channel concrete_ch 'received 'sent);
-  let permit_buffer =
-    Ghost.hide (BT.mk_phys_buffer raw (SZ.v current_len));
-  assert (pure (BT.buffer_wf (Ghost.reveal permit_buffer)));
-  assert (pure (BT.can_read (Ghost.reveal permit_buffer)));
-  let permit =
-    BS.issue_read_permit
-      (Ghost.hide (server_buffer_read_decision (Ghost.reveal authorization)))
-      permit_buffer;
-  unfold (BS.read_permit permit (Ghost.reveal permit_buffer));
-  rewrite (BT.read_permit permit (Ghost.reveal permit_buffer)) as
-    (BT.read_permit permit (BT.mk_phys_buffer raw (SZ.v current_len)));
   let read_result =
     BT.read_append
-      permit
       concrete_ch
       (V.vec_to_array d.server_driver_raw)
       driver_rx_capacity
@@ -2262,7 +2246,7 @@ fn process_buffered_or_read_network_once
     } else {
       forget_server_driver_connected_app_out d;
       let read_step =
-        read_and_process_network_once d (Ghost.hide buffered_step);
+        read_and_process_network_once d;
       read_step
     }
   } else {
