@@ -221,6 +221,139 @@ let lemma_dec_hex_snoc (hs:TCP.bytes) (c:U8.t)
   (* dec_hex_acc cs a == a*16 + unhex c (single digit) *)
   Seq.lemma_eq_intro (Seq.slice cs 1 (Seq.length cs)) (Seq.empty #U8.t)
 
+(* ─── Variable-width decimal (RFC 9112 Content-Length = 1*DIGIT) ────────────── *)
+(* The decimal twin of the variable-width hex machinery above: a real
+   `Content-Length` field is a minimal-width decimal run (`25`, not `00000025`)
+   whose value may exceed the fixed 8-digit `max_len8` cap.  Same shape as the
+   hex helpers so the round-trip proofs line up.                                *)
+
+(* A byte sequence is a decimal run iff every byte is a decimal digit. *)
+let rec all_dec (h:TCP.bytes) : Tot bool (decreases Seq.length h) =
+  if Seq.length h = 0 then true
+  else is_dec (Seq.index h 0) && all_dec (Seq.slice h 1 (Seq.length h))
+
+(* Big-endian value of a decimal run, MSD-first — matching the impl decoder's
+   `acc := acc*10 + d` left-to-right scan. *)
+let rec dec_dec_acc (h:TCP.bytes{all_dec h}) (acc:nat) : Tot nat (decreases Seq.length h) =
+  if Seq.length h = 0 then acc
+  else dec_dec_acc (Seq.slice h 1 (Seq.length h)) (acc * 10 + undig (Seq.index h 0))
+
+let dec_dec_var (h:TCP.bytes{all_dec h}) : nat = dec_dec_acc h 0
+
+(* `all_dec` peels its first byte; the tail of a decimal run is a decimal run. *)
+let lemma_all_dec_tail (h:TCP.bytes)
+  : Lemma (requires all_dec h /\ Seq.length h > 0)
+          (ensures all_dec (Seq.slice h 1 (Seq.length h)) /\ is_dec (Seq.index h 0)) = ()
+
+(* Length of the maximal decimal-digit run at the front of `input` (the bound is
+   intrinsic so slices `input[0..dec_prefix_len input]` are well-typed). *)
+let rec dec_prefix_len (input:TCP.bytes) : Tot (k:nat{k <= Seq.length input}) (decreases Seq.length input) =
+  if Seq.length input = 0 then 0
+  else if is_dec (Seq.index input 0)
+       then 1 + dec_prefix_len (Seq.slice input 1 (Seq.length input))
+       else 0
+
+let lemma_dec_prefix_len_bound (input:TCP.bytes)
+  : Lemma (ensures dec_prefix_len input <= Seq.length input) = ()
+
+(* The maximal decimal prefix is itself a decimal run. *)
+let rec lemma_dec_prefix_all_dec (input:TCP.bytes)
+  : Lemma (ensures all_dec (Seq.slice input 0 (dec_prefix_len input)))
+          (decreases Seq.length input)
+= if Seq.length input = 0 then
+    Seq.lemma_eq_intro (Seq.slice input 0 (dec_prefix_len input)) (Seq.empty #U8.t)
+  else if is_dec (Seq.index input 0) then begin
+    let tl = Seq.slice input 1 (Seq.length input) in
+    lemma_dec_prefix_all_dec tl;
+    let p = dec_prefix_len input in                (* = 1 + dec_prefix_len tl *)
+    let ptl = dec_prefix_len tl in
+    (* slice input 0 p == cons (index input 0) (slice tl 0 ptl) *)
+    Seq.lemma_eq_intro (Seq.slice input 1 p) (Seq.slice tl 0 ptl);
+    Seq.lemma_eq_intro (Seq.slice (Seq.slice input 0 p) 1 p) (Seq.slice tl 0 ptl)
+  end
+  else Seq.lemma_eq_intro (Seq.slice input 0 (dec_prefix_len input)) (Seq.empty #U8.t)
+
+(* `dec_dec_acc` distributes over concatenation of decimal runs (left fold). *)
+let rec lemma_dec_dec_acc_app (xs ys:TCP.bytes) (acc:nat)
+  : Lemma
+    (requires all_dec xs /\ all_dec ys)
+    (ensures
+      all_dec (Seq.append xs ys) /\
+      dec_dec_acc (Seq.append xs ys) acc == dec_dec_acc ys (dec_dec_acc xs acc))
+    (decreases Seq.length xs)
+= let f = Seq.append xs ys in
+  if Seq.length xs = 0 then
+    Seq.lemma_eq_intro f ys
+  else begin
+    let xs' = Seq.slice xs 1 (Seq.length xs) in
+    Seq.lemma_index_app1 xs ys 0;
+    Seq.lemma_eq_intro (Seq.slice f 1 (Seq.length f)) (Seq.append xs' ys);
+    lemma_dec_dec_acc_app xs' ys (acc * 10 + undig (Seq.index xs 0))
+  end
+
+(* Appending one decimal digit multiplies the running value by 10 and adds it. *)
+let lemma_dec_dec_snoc (hs:TCP.bytes) (c:U8.t)
+  : Lemma
+    (requires all_dec hs /\ is_dec c)
+    (ensures
+      all_dec (Seq.append hs (Seq.create 1 c)) /\
+      dec_dec_var (Seq.append hs (Seq.create 1 c)) == dec_dec_var hs * 10 + undig c)
+= let cs = Seq.create 1 c in
+  assert (all_dec cs);
+  lemma_dec_dec_acc_app hs cs 0;
+  Seq.lemma_eq_intro (Seq.slice cs 1 (Seq.length cs)) (Seq.empty #U8.t)
+
+(* Splitting a decimal run followed by a non-digit (or end of input) at its
+   maximal prefix recovers exactly the run and the trailing bytes — the receive
+   companion of the `acc*10+d` scan (the CRLF after Content-Length is 0x0D). *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
+let rec lemma_dec_prefix_len_run (d rest:TCP.bytes)
+  : Lemma
+    (requires all_dec d /\ (Seq.length rest = 0 \/ not (is_dec (Seq.index rest 0))))
+    (ensures
+      dec_prefix_len (Seq.append d rest) == Seq.length d /\
+      Seq.slice (Seq.append d rest) 0 (Seq.length d) == d /\
+      Seq.slice (Seq.append d rest) (Seq.length d) (Seq.length (Seq.append d rest)) == rest)
+    (decreases Seq.length d)
+= let f = Seq.append d rest in
+  SP.append_slices d rest;                          (* slice f 0 |d| == d; slice f |d| .. == rest *)
+  if Seq.length d = 0 then begin
+    Seq.lemma_eq_intro f rest;
+    assert (dec_prefix_len f == 0)
+  end
+  else begin
+    lemma_all_dec_tail d;                             (* is_dec (index d 0), all_dec d' *)
+    let d' = Seq.slice d 1 (Seq.length d) in
+    Seq.lemma_index_app1 d rest 0;                    (* index f 0 == index d 0 *)
+    Seq.lemma_eq_intro (Seq.slice f 1 (Seq.length f)) (Seq.append d' rest);
+    lemma_dec_prefix_len_run d' rest;                 (* dec_prefix_len (d'++rest) == length d' *)
+    assert (dec_prefix_len f == 1 + dec_prefix_len (Seq.append d' rest))
+  end
+#pop-options
+
+(* ── Canonical variable-width decimal encoder (minimal digits, "0" for zero) ── *)
+let rec enc_dec_var (n:nat) : Tot (b:TCP.bytes{Seq.length b > 0}) (decreases n) =
+  if n < 10 then Seq.create 1 (dig n)
+  else Seq.append (enc_dec_var (n / 10)) (Seq.create 1 (dig (n % 10)))
+
+(* The encoder is a canonical section of `dec_dec_var`: it produces a decimal
+   run that decodes back to `n`. *)
+let rec lemma_enc_dec_var_roundtrip (n:nat)
+  : Lemma (ensures all_dec (enc_dec_var n) /\ dec_dec_var (enc_dec_var n) == n)
+          (decreases n)
+= if n < 10 then
+    Seq.lemma_eq_intro (Seq.slice (enc_dec_var n) 1 (Seq.length (enc_dec_var n)))
+                       (Seq.empty #U8.t)
+  else begin
+    lemma_enc_dec_var_roundtrip (n / 10);
+    lemma_dec_dec_snoc (enc_dec_var (n / 10)) (dig (n % 10))
+  end
+
+(* The encoder never starts with a byte that a status-line/head parser would
+   confuse — trivially, its bytes are all digits. *)
+let lemma_enc_dec_var_all_dec (n:nat)
+  : Lemma (ensures all_dec (enc_dec_var n)) = lemma_enc_dec_var_roundtrip n
+
 (* ─── Byte-sequence literals and boolean equality ──────────────────────────── *)
 (* Build a concrete byte string from a list (for the fixed HTTP literals). *)
 let lit (l:list U8.t) : TCP.bytes = Seq.seq_of_list l

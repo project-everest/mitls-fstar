@@ -237,6 +237,70 @@ let lemma_parse_body_exact (p:TCP.bytes)
      lemma_bseq_neq_first (Seq.slice p 0 9) resp_prefix)
 #pop-options
 
+(* ─── Variable-width Content-Length response head (RFC 9112 §6.2) ───────────────
+   The fixed `ser_response`/`parse_response` above pad Content-Length to 8 digits
+   ("00000025") and cap it at 10^8.  A real origin server emits the minimal-width
+   canonical decimal ("Content-Length: 25") and bodies may exceed 10^8.  These
+   companions mirror the fixed pair but use the variable-width decimal codec
+   (`W.enc_dec_var` / `W.dec_dec_var`), lifting the cap to an arbitrary `nat`
+   while preserving an EXACT round-trip.  The trailing CRLFCRLF's first byte
+   (0x0D) is not a digit, so the maximal decimal run cuts exactly at the length. *)
+let ser_response_var (code:status_code) (len:nat) : TCP.bytes =
+  Seq.append resp_prefix
+    (Seq.append (W.enc_dec3 (U16.v code))
+      (Seq.append cl_tail_pre
+        (Seq.append (W.enc_dec_var len) cl_tail_post)))
+
+let parse_response_var (input:TCP.bytes) : GTot (option (status_code & nat)) =
+  if Seq.length input < 9 then None else
+  if not (W.bseq_eq (Seq.slice input 0 9) resp_prefix) then None else
+  let rest0 = Seq.slice input 9 (Seq.length input) in
+  if Seq.length rest0 < 3 then None else
+  let codeb = Seq.slice rest0 0 3 in
+  if not (W.dec3_ok codeb) then None else
+  let code = W.dec_dec3 codeb in
+  let rest1 = Seq.slice rest0 3 (Seq.length rest0) in
+  if Seq.length rest1 < 19 then None else
+  if not (W.bseq_eq (Seq.slice rest1 0 19) cl_tail_pre) then None else
+  let rest2 = Seq.slice rest1 19 (Seq.length rest1) in
+  let dl = W.dec_prefix_len rest2 in
+  if dl = 0 then None else                          (* 1*DIGIT: at least one digit *)
+  let lenb = Seq.slice rest2 0 dl in
+  let tl = Seq.slice rest2 dl (Seq.length rest2) in
+  W.lemma_dec_prefix_all_dec rest2;                 (* all_dec lenb (= slice rest2 0 dl) *)
+  let len = W.dec_dec_var lenb in
+  if 100 <= code && code < 1000 && W.bseq_eq tl cl_tail_post
+  then Some (U16.uint_to_t code, len)
+  else None
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
+let lemma_parse_ser_response_var (code:status_code) (len:nat)
+  : Lemma (ensures parse_response_var (ser_response_var code len) == Some (code, len))
+= let input = ser_response_var code len in
+  let x0 = Seq.append (W.enc_dec3 (U16.v code))
+             (Seq.append cl_tail_pre (Seq.append (W.enc_dec_var len) cl_tail_post)) in
+  let x1 = Seq.append cl_tail_pre (Seq.append (W.enc_dec_var len) cl_tail_post) in
+  let x2 = Seq.append (W.enc_dec_var len) cl_tail_post in
+  SP.append_slices resp_prefix x0;
+  W.lemma_bseq_eq_refl resp_prefix;
+  let rest0 = Seq.slice input 9 (Seq.length input) in
+  assert (rest0 == x0);
+  SP.append_slices (W.enc_dec3 (U16.v code)) x1;
+  W.lemma_dec3_roundtrip (U16.v code);
+  let rest1 = Seq.slice rest0 3 (Seq.length rest0) in
+  assert (rest1 == x1);
+  SP.append_slices cl_tail_pre x2;
+  W.lemma_bseq_eq_refl cl_tail_pre;
+  assert_norm (Seq.length cl_tail_pre == 19);
+  let rest2 = Seq.slice rest1 19 (Seq.length rest1) in
+  assert (rest2 == x2);
+  W.lemma_enc_dec_var_roundtrip len;                (* all_dec (enc_dec_var len); decodes to len *)
+  assert_norm (Seq.length cl_tail_post > 0 /\ not (W.is_dec (Seq.index cl_tail_post 0)));
+  W.lemma_dec_prefix_len_run (W.enc_dec_var len) cl_tail_post;
+  W.lemma_bseq_eq_refl cl_tail_post;
+  assert (parse_response_var input == Some (code, len))
+#pop-options
+
 (* ─── The wire_format instance ─────────────────────────────────────────────── *)
 noextract
 let http_wire_format : WF.wire_format http_message =
