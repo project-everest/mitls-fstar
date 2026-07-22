@@ -15,6 +15,8 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module DL = TLS13.Impl.Server.Driver.Local
 module DN = TLS13.Impl.Server.Driver.Network
 module DState = TLS13.Impl.Server.Driver.State
+module IO = Common.TCP
+module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module SM = TLS13.Spec.StateMachine.ClientTrace
@@ -28,6 +30,8 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
 type server_driver = DState.server_driver
+type server_credentials = O.server_credentials
+type server_listener = IO.listener
 
 noextract
 val server_driver_canonical
@@ -70,6 +74,12 @@ val server_driver_closed
   (st:CS.connection_state)
   (certificate_chain:B.bytes)
   (credential_identity:CS.server_credential_identity)
+  : slprop
+
+noextract
+val server_driver_released
+  (d:server_driver)
+  (st:CS.connection_state)
   : slprop
 
 type server_workflow_status =
@@ -233,7 +243,8 @@ let server_driver_receive_correct
   (out_bytes:B.bytes)
   : prop =
   server_driver_receive_status_correct result loop st1 app_out out_bytes /\
-  B.length app_out == SZ.v DState.driver_app_out_capacity /\
+  B.length app_out >= SZ.v DState.driver_app_out_capacity /\
+  B.length app_out <= B.length out_bytes /\
   SZ.v result.server_receive_len <= B.length out_bytes /\
   (loop.DN.server_driver_network_loop_exhausted == true ==>
     st1 == st0 /\
@@ -438,6 +449,106 @@ let server_driver_close_fuel_correct
   (wait_for_peer == true /\ SZ.v network_fuel == 0) ==>
     status == ServerWorkflowExhausted
 
+fn new_server_listener
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  requires pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len)
+  returns result: option server_listener
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match result with
+           | Some listener -> IO.is_listener listener 'bind_host_bytes port
+           | None -> emp)
+
+fn free_server_listener (listener:server_listener)
+  requires IO.is_listener listener 'bind_host_bytes 'port
+  ensures emp
+
+fn new_server_credentials
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (private_key:array U8.t)
+  (private_key_len:SZ.t)
+  requires pts_to certificate_chain 'certificate_chain_bytes **
+           pts_to private_key 'private_key_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'private_key_bytes == SZ.v private_key_len)
+  returns result: option server_credentials
+  ensures exists* credential_identity.
+          pts_to certificate_chain 'certificate_chain_bytes **
+          pts_to private_key 'private_key_bytes **
+          (match result with
+           | Some credentials ->
+             O.is_server_credentials
+               credentials
+               (Ghost.reveal 'certificate_chain_bytes)
+               credential_identity
+           | None -> emp)
+
+fn free_server_credentials (credentials:server_credentials)
+  requires O.is_server_credentials
+    credentials
+    'certificate_chain
+    'credential_identity
+  ensures emp
+
+fn new_server_with_credentials
+  (credentials:server_credentials)
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (private_key:array U8.t)
+  (private_key_len:SZ.t)
+  (#supported_profile_provider: erased SP.server_supported_profile_provider)
+  requires (exists* credential_identity.
+              O.is_server_credentials
+                credentials
+                (Ghost.reveal 'certificate_chain_bytes)
+                credential_identity) **
+           pts_to certificate_chain 'certificate_chain_bytes **
+           pts_to private_key 'private_key_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'private_key_bytes == SZ.v private_key_len /\
+                 B.length 'certificate_chain_bytes <=
+                   Bounds.max_server_certificate_chain_len)
+  returns result: option server_driver
+  ensures pts_to certificate_chain 'certificate_chain_bytes **
+          pts_to private_key 'private_key_bytes **
+          (exists* credential_identity.
+            O.is_server_credentials
+              credentials
+              (Ghost.reveal 'certificate_chain_bytes)
+              credential_identity **
+            (match result with
+             | Some d ->
+               server_driver_live
+                 d
+                 (CR.server_initial_state
+                   (Ghost.reveal 'certificate_chain_bytes)
+                   credential_identity)
+                 (Ghost.reveal 'certificate_chain_bytes)
+                 credential_identity **
+               pure (ST.server_state_correct
+                       (CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity) /\
+                     CM.can_start_server
+                       (CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity) /\
+                     ST.server_end_to_end_invariant
+                       (CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity) /\
+                     B.length 'certificate_chain_bytes <=
+                       Bounds.max_server_certificate_chain_len /\
+                     Ghost.reveal
+                       (server_driver_canonical d).SP.canonical_server_initial ==
+                       CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity)
+             | None -> emp))
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -532,6 +643,55 @@ fn accept
                  'credential_identity
                  received
                  sent)
+
+fn accept_with_listener
+  (d:server_driver)
+  (listener:server_listener)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires IO.is_listener listener 'bind_host_bytes port **
+           server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                  CM.can_start_server 'st0 /\
+                  Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                  (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                   | Some cfg ->
+                     CS.cipher_suite_offered
+                       cfg.CS.server_supported_cipher_suites
+                       T.TLS_CHACHA20_POLY1305_SHA256 /\
+                     CS.named_group_offered
+                       cfg.CS.server_supported_groups
+                       T.X25519 /\
+                     CS.signature_scheme_offered
+                       cfg.CS.server_allowed_signature_schemes
+                       T.Rsa_pss_rsae_sha256 /\
+                     cfg.CS.server_sni_policy == None
+                   | None -> False))
+  returns status:server_workflow_status
+  ensures IO.is_listener listener 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerWorkflowOk ->
+            exists* wire_received wire_sent pending app_log.
+               DState.server_channel_inv
+                 d wire_received wire_sent pending app_log
+           | ServerWorkflowClosed ->
+             exists* st1.
+               server_driver_closed
+                  d st1 'certificate_chain 'credential_identity
+           | _ ->
+             exists* st1 received sent.
+               server_driver_connected
+                  d
+                  st1
+                  'certificate_chain
+                  'credential_identity
+                  received
+                  sent)
 
 fn send
   (d:server_driver)
@@ -695,6 +855,11 @@ fn abort_connected
              'received
              'sent
   ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
+
+fn free
+  (d:server_driver)
+  requires server_driver_closed d 'st 'certificate_chain 'credential_identity
+  ensures server_driver_released d 'st
 
 noextract
 val server_channel_implementation

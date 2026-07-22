@@ -105,6 +105,7 @@ ensures
             Vec.is_full_vec srv.stack /\
             Vec.is_full_vec srv.size /\
             SZ.v (R.read remaining) <= SZ.v fuel)
+      decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
       {
         with rem_live keep_live received_loop sent_loop log_loop req_bytes_loop resp_bytes_loop.
           assert (

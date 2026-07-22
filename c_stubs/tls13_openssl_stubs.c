@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 struct tls13_peer_identity_s {
   EVP_PKEY *leaf_public_key;
@@ -20,6 +21,10 @@ struct tls13_server_credentials_s {
   uint8_t *certificate_chain;
   size_t certificate_chain_len;
   EVP_PKEY *private_key;
+};
+
+struct tls13_trust_store_s {
+  X509_STORE *raw;
 };
 
 static X509 *read_single_cert_pem(const uint8_t *pem, size_t pem_len) {
@@ -72,33 +77,26 @@ static EVP_PKEY *read_private_key_pem_or_der(const uint8_t *bytes, size_t len) {
 
 static bool validate_leaf_cert(
     const char *hostname,
-    const uint8_t *trust_anchor_pem,
-    size_t trust_anchor_pem_len,
+    const tls13_trust_store *trust_store,
+    size_t validation_time_seconds,
     X509 *leaf,
     tls13_peer_identity **out_peer) {
-  if (hostname == NULL || trust_anchor_pem == NULL || leaf == NULL || out_peer == NULL ||
-      trust_anchor_pem_len > INT_MAX) {
+  if (hostname == NULL || trust_store == NULL || trust_store->raw == NULL ||
+      leaf == NULL || out_peer == NULL) {
     return false;
   }
 
   *out_peer = NULL;
   bool ok = false;
-  X509 *trust_anchor = NULL;
-  X509_STORE *store = NULL;
   X509_STORE_CTX *ctx = NULL;
   tls13_peer_identity *peer = NULL;
 
-  trust_anchor = read_single_cert_pem(trust_anchor_pem, trust_anchor_pem_len);
-  store = X509_STORE_new();
   ctx = X509_STORE_CTX_new();
   peer = calloc(1, sizeof *peer);
-  if (trust_anchor == NULL || store == NULL || ctx == NULL || peer == NULL) {
+  if (ctx == NULL || peer == NULL) {
     goto done;
   }
-  if (X509_STORE_add_cert(store, trust_anchor) != 1) {
-    goto done;
-  }
-  if (X509_STORE_CTX_init(ctx, store, leaf, NULL) != 1) {
+  if (X509_STORE_CTX_init(ctx, trust_store->raw, leaf, NULL) != 1) {
     goto done;
   }
   X509_VERIFY_PARAM *param = X509_STORE_CTX_get0_param(ctx);
@@ -106,6 +104,14 @@ static bool validate_leaf_cert(
       (X509_VERIFY_PARAM_set1_ip_asc(param, hostname) != 1 &&
        X509_VERIFY_PARAM_set1_host(param, hostname, 0) != 1)) {
     goto done;
+  }
+  if (validation_time_seconds != 0u) {
+    time_t validation_time = (time_t)validation_time_seconds;
+    if (validation_time < (time_t)0 ||
+        (size_t)validation_time != validation_time_seconds) {
+      goto done;
+    }
+    X509_VERIFY_PARAM_set_time(param, validation_time);
   }
   if (X509_verify_cert(ctx) != 1) {
     goto done;
@@ -121,8 +127,54 @@ static bool validate_leaf_cert(
 done:
   tls13_openssl_peer_identity_free(peer);
   X509_STORE_CTX_free(ctx);
-  X509_STORE_free(store);
+  return ok;
+}
+
+tls13_trust_store *tls13_openssl_trust_store_new(
+    const uint8_t *trust_anchor_pem,
+    size_t trust_anchor_pem_len) {
+  if (trust_anchor_pem == NULL || trust_anchor_pem_len == 0u ||
+      trust_anchor_pem_len > INT_MAX) {
+    return NULL;
+  }
+
+  X509 *trust_anchor =
+      read_single_cert_pem(trust_anchor_pem, trust_anchor_pem_len);
+  X509_STORE *raw = X509_STORE_new();
+  tls13_trust_store *trust_store = calloc(1u, sizeof *trust_store);
+  if (trust_anchor == NULL || raw == NULL || trust_store == NULL ||
+      X509_STORE_add_cert(raw, trust_anchor) != 1) {
+    X509_free(trust_anchor);
+    X509_STORE_free(raw);
+    free(trust_store);
+    return NULL;
+  }
+
   X509_free(trust_anchor);
+  trust_store->raw = raw;
+  return trust_store;
+}
+
+bool tls13_openssl_validate_leaf_der_with_store(
+    const char *hostname,
+    const tls13_trust_store *trust_store,
+    size_t validation_time_seconds,
+    const uint8_t *leaf_der,
+    size_t leaf_der_len,
+    tls13_peer_identity **out_peer) {
+  if (hostname == NULL || trust_store == NULL || leaf_der == NULL ||
+      out_peer == NULL || leaf_der_len > LONG_MAX) {
+    return false;
+  }
+
+  X509 *leaf = read_single_cert_der(leaf_der, leaf_der_len);
+  bool ok = validate_leaf_cert(
+      hostname,
+      trust_store,
+      validation_time_seconds,
+      leaf,
+      out_peer);
+  X509_free(leaf);
   return ok;
 }
 
@@ -138,9 +190,11 @@ bool tls13_openssl_validate_leaf_der(
     return false;
   }
 
-  X509 *leaf = read_single_cert_der(leaf_der, leaf_der_len);
-  bool ok = validate_leaf_cert(hostname, trust_anchor_pem, trust_anchor_pem_len, leaf, out_peer);
-  X509_free(leaf);
+  tls13_trust_store *trust_store =
+      tls13_openssl_trust_store_new(trust_anchor_pem, trust_anchor_pem_len);
+  bool ok = tls13_openssl_validate_leaf_der_with_store(
+      hostname, trust_store, 0u, leaf_der, leaf_der_len, out_peer);
+  tls13_openssl_trust_store_free(trust_store);
   return ok;
 }
 
@@ -280,6 +334,14 @@ void tls13_openssl_peer_identity_free(tls13_peer_identity *peer) {
   }
   EVP_PKEY_free(peer->leaf_public_key);
   free(peer);
+}
+
+void tls13_openssl_trust_store_free(tls13_trust_store *trust_store) {
+  if (trust_store == NULL) {
+    return;
+  }
+  X509_STORE_free(trust_store->raw);
+  free(trust_store);
 }
 
 void tls13_openssl_server_credentials_free(tls13_server_credentials *creds) {

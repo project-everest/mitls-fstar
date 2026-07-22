@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module R = TLS13.Record.Spec
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -247,6 +248,56 @@ fn peek_open_application
                          out_bytes == fst opened)) /\
                 (not ok ==> out_bytes == 'old /\
                            R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
+
+fn peek_open_application_suffix
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (raw: array U8.t)
+  (raw_len: SZ.t)
+  (cipher_offset: SZ.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to raw 'raw_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'raw_bytes == SZ.v raw_len /\
+                 SZ.fits (SZ.v raw_len) /\
+                 SZ.v cipher_offset <= SZ.v raw_len /\
+                 SZ.v cipher_offset + SZ.v cipher_len == SZ.v raw_len /\
+                 B.length 'old + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_record_state st 's **
+          pts_to aad 'aad_bytes **
+          pts_to raw 'raw_bytes **
+          pts_to out out_bytes **
+          pure (B.length 'raw_bytes == SZ.v raw_len /\
+                SZ.fits (SZ.v raw_len) /\
+                SZ.v cipher_offset <= SZ.v raw_len /\
+                B.length out_bytes == B.length 'old /\
+                (ok ==> Some? (R.open_record 's
+                                 (Ghost.reveal 'aad_bytes)
+                                 (Seq.slice
+                                   (Ghost.reveal 'raw_bytes)
+                                   (SZ.v cipher_offset)
+                                   (SZ.v raw_len))) /\
+                         (let opened = Some?.v (R.open_record 's
+                                               (Ghost.reveal 'aad_bytes)
+                                               (Seq.slice
+                                                 (Ghost.reveal 'raw_bytes)
+                                                 (SZ.v cipher_offset)
+                                                 (SZ.v raw_len))) in
+                          out_bytes == fst opened)) /\
+                (not ok ==> out_bytes == 'old /\
+                           R.open_record 's
+                             (Ghost.reveal 'aad_bytes)
+                             (Seq.slice
+                               (Ghost.reveal 'raw_bytes)
+                               (SZ.v cipher_offset)
+                               (SZ.v raw_len)) == None))
 
 fn open_application_runtime
   (st: record_state)

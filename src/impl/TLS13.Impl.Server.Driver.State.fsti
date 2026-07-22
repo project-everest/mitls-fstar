@@ -519,6 +519,51 @@ let server_driver_buffers_with_app_out
       V.is_full_vec d.server_driver_local_app_out)
 
 noextract
+let server_driver_buffers_with_output
+  (d:server_driver)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  (output:array U8.t)
+  (output_len:SZ.t)
+  (output_bytes:B.bytes)
+  : slprop
+=
+  Box.pts_to d.server_driver_buffered_len buffered_len **
+  exists* empty_payload raw network_out material cv_input signature local_app_out.
+    V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+    V.pts_to d.server_driver_raw #1.0R raw **
+    V.pts_to d.server_driver_network_out #1.0R network_out **
+    V.pts_to d.server_driver_material_payload #1.0R material **
+    V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+    V.pts_to d.server_driver_signature #1.0R signature **
+    V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
+    pts_to output output_bytes **
+    pure (
+      B.length empty_payload == 0 /\
+      B.length raw == SZ.v driver_rx_capacity /\
+      B.length buffered == SZ.v buffered_len /\
+      SZ.v buffered_len <= SZ.v driver_rx_capacity /\
+      Seq.equal buffered (Seq.slice raw 0 (SZ.v buffered_len)) /\
+      B.length network_out == SZ.v driver_network_out_capacity /\
+      B.length material == SZ.v driver_material_capacity /\
+      B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
+      B.length signature == SZ.v driver_signature_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
+      B.length output_bytes == SZ.v output_len /\
+      IM.max_record_fragment_len <= SZ.v output_len /\
+      Bounds.max_certificate_verify_input_len <=
+        SZ.v driver_certificate_verify_input_capacity /\
+      IM.max_signature_len <= SZ.v driver_signature_capacity /\
+      V.is_full_vec d.server_driver_empty_payload /\
+      V.is_full_vec d.server_driver_raw /\
+      V.is_full_vec d.server_driver_network_out /\
+      V.is_full_vec d.server_driver_material_payload /\
+      V.is_full_vec d.server_driver_certificate_verify_input /\
+      V.is_full_vec d.server_driver_signature /\
+      V.is_full_vec d.server_driver_app_out /\
+      V.is_full_vec d.server_driver_local_app_out)
+
+noextract
 let server_driver_live
   (d:server_driver)
   (st:CS.connection_state)
@@ -752,7 +797,138 @@ let server_driver_connected_with_app_out
           server_driver_wire_logs_match st received sent buffered buffered_len /\
           B.length app_out == SZ.v driver_app_out_capacity)
 
-fn forget_server_driver_connected_app_out
+noextract
+let server_driver_connected_with_output
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (output:array U8.t)
+  (output_len:SZ.t)
+  (output_bytes:B.bytes)
+  : slprop
+=
+  S.connection_exactly d.server_driver_server st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  server_driver_canonical_progress d st **
+  exists* ch buffered buffered_len.
+    Box.pts_to d.server_driver_channel (Some ch) **
+    IO.is_channel ch received sent **
+    server_driver_io_history d received sent **
+    server_driver_buffers_with_output
+      d buffered buffered_len output output_len output_bytes **
+    pure (ST.server_end_to_end_invariant st /\
+          server_driver_config_matches_credentials
+           st
+           certificate_chain
+           credential_identity /\
+          server_driver_supported_profile_selection st credential_identity /\
+          server_driver_wire_logs_match st received sent buffered buffered_len /\
+          B.length output_bytes == SZ.v output_len /\
+          IM.max_record_fragment_len <= SZ.v output_len)
+
+ghost fn expose_server_driver_connected_output
+  (d:server_driver)
+  requires server_driver_connected
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+  ensures exists* app_out.
+          server_driver_connected_with_output
+            d
+            'st
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+            (V.vec_to_array d.server_driver_app_out)
+            driver_app_out_capacity
+            app_out
+
+ghost fn restore_server_driver_connected_output
+  (d:server_driver)
+  requires server_driver_connected_with_output
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+           (V.vec_to_array d.server_driver_app_out)
+           driver_app_out_capacity
+           'app_out
+  ensures server_driver_connected_with_app_out
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+           'app_out
+
+ghost fn redirect_server_driver_connected_output
+  (d:server_driver)
+  (output:array U8.t)
+  (output_len:SZ.t)
+  requires server_driver_connected
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent **
+           pts_to output 'output_bytes **
+           pure (
+             B.length 'output_bytes == SZ.v output_len /\
+             IM.max_record_fragment_len <= SZ.v output_len)
+  ensures exists* internal_app_out.
+          server_driver_connected_with_output
+            d
+            'st
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+            output
+            output_len
+            'output_bytes **
+          V.pts_to d.server_driver_app_out internal_app_out **
+          pure (B.length internal_app_out == SZ.v driver_app_out_capacity)
+
+ghost fn release_server_driver_connected_output
+  (d:server_driver)
+  (output:array U8.t)
+  (output_len:SZ.t)
+  requires server_driver_connected_with_output
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+           output
+           output_len
+           'output_bytes **
+           V.pts_to d.server_driver_app_out 'internal_app_out **
+           pure (B.length 'internal_app_out == SZ.v driver_app_out_capacity)
+  ensures server_driver_connected
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent **
+          pts_to output 'output_bytes
+
+ghost fn forget_server_driver_connected_app_out
   (d:server_driver)
   requires server_driver_connected_with_app_out
            d
@@ -770,7 +946,7 @@ fn forget_server_driver_connected_app_out
            'received
            'sent
 
-fn expose_server_driver_connected_app_out
+ghost fn expose_server_driver_connected_app_out
   (d:server_driver)
   requires server_driver_connected
            d

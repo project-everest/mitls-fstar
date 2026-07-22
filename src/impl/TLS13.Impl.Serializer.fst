@@ -1013,6 +1013,7 @@ fn build_server_certificate_verify_input
               cv_context_index k) /\
             (forall (k:nat). SZ.v (Ref.read i) <= k /\ k < 34 ==>
               Seq.index context_loop k == 0uy))
+    decreases (34 - SZ.v (Ref.read i))
   {
     let vi = Ref.read i;
     assert (pure (SZ.v vi < 34));

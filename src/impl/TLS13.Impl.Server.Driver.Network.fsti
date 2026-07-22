@@ -170,6 +170,55 @@ fn server_driver_control_snapshot
            'sent **
           pure (CR.control_snapshot_matches snapshot 'st0)
 
+fn read_process_network_until_ready_into
+  (d:DS.server_driver)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (fuel:SZ.t)
+  requires DS.server_driver_connected_with_output
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+             app_out
+             app_out_len
+             'old_app_out
+  returns result:server_driver_network_loop_result
+  ensures exists* st1 received' sent' app_out_bytes.
+          DS.server_driver_connected_with_output
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent'
+           app_out
+           app_out_len
+           app_out_bytes **
+          pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config /\
+            (result.server_driver_network_loop_exhausted == true ==>
+              st1 == 'st0 /\
+              Seq.equal sent' (Ghost.reveal 'sent)) /\
+            (result.server_driver_network_loop_exhausted == false ==>
+            result.server_driver_network_loop_last.ST.response.ST.status <>
+              ST.NeedMoreInput /\
+            server_driver_network_process_correct
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent' /\
+            server_driver_network_process_correct_for_app_out
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent'
+              app_out_bytes))
+
 fn read_process_network_until_ready
   (d:DS.server_driver)
   (fuel:SZ.t)

@@ -1284,24 +1284,31 @@ let lemma_server_network_logged_received_exact_when_nonfailed
 
 #push-options "--split_queries always --using_facts_from '* -TLS13.Impl.Server.Driver.NetworkOrdered'"
 
-fn process_buffered_network_bytes_compact_once
+fn process_buffered_network_bytes_compact_once_into
   (d:server_driver)
-  requires server_driver_connected
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires server_driver_connected_with_output
              d
              'st0
              'certificate_chain
              'credential_identity
              'received
              'sent
+             app_out
+             app_out_len
+             'old_app_out
   returns resp:ST.server_buffer_response
   ensures exists* st1 sent' app_out_bytes.
-          server_driver_connected_with_app_out
+          server_driver_connected_with_output
             d
             st1
             'certificate_chain
             'credential_identity
             'received
             sent'
+            app_out
+            app_out_len
             app_out_bytes **
           pure (server_driver_network_process_correct
             'st0
@@ -1317,17 +1324,21 @@ fn process_buffered_network_bytes_compact_once
              sent'
              app_out_bytes)
 {
-  unfold (server_driver_connected
+  unfold (server_driver_connected_with_output
     d
     'st0
     'certificate_chain
     'credential_identity
     'received
-    'sent);
+    'sent
+    app_out
+    app_out_len
+    'old_app_out);
   with ch buffered buffered_len.
     assert (Box.pts_to d.server_driver_channel (Some ch) **
             IO.is_channel ch 'received 'sent **
-            server_driver_buffers d buffered buffered_len);
+            server_driver_buffers_with_output
+              d buffered buffered_len app_out app_out_len 'old_app_out);
   assert (pure (ST.server_end_to_end_invariant 'st0));
   assert (pure (server_driver_wire_logs_match
     'st0
@@ -1335,8 +1346,9 @@ fn process_buffered_network_bytes_compact_once
     'sent
     buffered
     buffered_len));
-  unfold (server_driver_buffers d buffered buffered_len);
-  with empty_payload raw network_out material cv_input signature app_out.
+  unfold (server_driver_buffers_with_output
+    d buffered buffered_len app_out app_out_len 'old_app_out);
+  with empty_payload raw network_out material cv_input signature local_app_out.
     assert (
       Box.pts_to d.server_driver_buffered_len buffered_len **
       V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -1345,13 +1357,13 @@ fn process_buffered_network_bytes_compact_once
       V.pts_to d.server_driver_material_payload #1.0R material **
       V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
       V.pts_to d.server_driver_signature #1.0R signature **
-      V.pts_to d.server_driver_app_out #1.0R app_out);
+      V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
+      pts_to app_out 'old_app_out);
   let current_len = Box.(!d.server_driver_buffered_len);
   assert (pure (current_len == buffered_len));
 
   V.to_array_pts_to d.server_driver_raw;
   V.to_array_pts_to d.server_driver_network_out;
-  V.to_array_pts_to d.server_driver_app_out;
   A.pts_to_len (V.vec_to_array d.server_driver_raw);
   assert (pure (A.length (V.vec_to_array d.server_driver_raw) ==
     SZ.v driver_rx_capacity));
@@ -1412,15 +1424,15 @@ fn process_buffered_network_bytes_compact_once
       current_len
       (V.vec_to_array d.server_driver_network_out)
       driver_network_out_capacity
-      (V.vec_to_array d.server_driver_app_out)
-      driver_app_out_capacity;
+      app_out
+      app_out_len;
   with st1 network_out_bytes app_out_bytes.
     assert (S.connection_exactly d.server_driver_server st1 **
             pts_to raw_prefix_array raw_prefix **
             pts_to (V.vec_to_array d.server_driver_network_out) network_out_bytes **
-            pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
+            pts_to app_out app_out_bytes);
   assert (pure (B.length network_out_bytes == SZ.v driver_network_out_capacity));
-  assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
+  assert (pure (B.length app_out_bytes == SZ.v app_out_len));
   assert (pure (ST.server_network_bytes_end_to_end_correct
     'st0
     st1
@@ -1696,11 +1708,12 @@ fn process_buffered_network_bytes_compact_once
   Box.(d.server_driver_buffered_len := compact_len);
   V.to_vec_pts_to d.server_driver_raw;
   V.to_vec_pts_to d.server_driver_network_out;
-  V.to_vec_pts_to d.server_driver_app_out;
-  fold (server_driver_buffers_with_app_out
+  fold (server_driver_buffers_with_output
     d
     (Ghost.reveal new_buffered)
     compact_len
+    app_out
+    app_out_len
     app_out_bytes);
   assert (pure (logged_received_bytes_accounted
     st1.CS.cs_wire_log.CL.raw_received
@@ -1843,7 +1856,7 @@ fn process_buffered_network_bytes_compact_once
       (if SZ.v written <= B.length network_out_bytes
        then Seq.slice network_out_bytes 0 (SZ.v written)
        else B.empty));
-  fold (server_driver_connected_with_app_out
+  fold (server_driver_connected_with_output
     d
     st1
     'certificate_chain
@@ -1854,6 +1867,8 @@ fn process_buffered_network_bytes_compact_once
       (if SZ.v written <= B.length network_out_bytes
        then Seq.slice network_out_bytes 0 (SZ.v written)
        else B.empty))
+    app_out
+    app_out_len
     app_out_bytes);
   lemma_server_driver_network_process_correct_intro
     'st0
@@ -1923,24 +1938,31 @@ fn process_buffered_network_bytes_compact_once
 #pop-options
 
 inline_for_extraction
-private fn read_and_process_network_once
+private fn read_and_process_network_once_into
   (d:server_driver)
-  requires server_driver_connected
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires server_driver_connected_with_output
             d
             'st0
             'certificate_chain
             'credential_identity
             'received
             'sent
+            app_out
+            app_out_len
+            'old_app_out
   returns resp:ST.server_buffer_response
   ensures exists* st1 received' sent' app_out_bytes.
-          server_driver_connected_with_app_out
+          server_driver_connected_with_output
            d
            st1
            'certificate_chain
            'credential_identity
            received'
            sent'
+           app_out
+           app_out_len
            app_out_bytes **
           pure (server_driver_network_process_correct
            'st0
@@ -1956,17 +1978,21 @@ private fn read_and_process_network_once
             sent'
             app_out_bytes)
 {
-  unfold (server_driver_connected
+  unfold (server_driver_connected_with_output
     d
     'st0
     'certificate_chain
     'credential_identity
     'received
-    'sent);
+    'sent
+    app_out
+    app_out_len
+    'old_app_out);
   with ch buffered buffered_len.
     assert (Box.pts_to d.server_driver_channel (Some ch) **
             IO.is_channel ch 'received 'sent **
-            server_driver_buffers d buffered buffered_len);
+            server_driver_buffers_with_output
+              d buffered buffered_len app_out app_out_len 'old_app_out);
   assert (pure (ST.server_end_to_end_invariant 'st0));
   assert (pure (server_driver_wire_logs_match
     'st0
@@ -1974,8 +2000,9 @@ private fn read_and_process_network_once
     'sent
     buffered
     buffered_len));
-  unfold (server_driver_buffers d buffered buffered_len);
-  with empty_payload raw network_out material cv_input signature app_out.
+  unfold (server_driver_buffers_with_output
+    d buffered buffered_len app_out app_out_len 'old_app_out);
+  with empty_payload raw network_out material cv_input signature local_app_out.
     assert (
       Box.pts_to d.server_driver_buffered_len buffered_len **
       V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -1984,21 +2011,26 @@ private fn read_and_process_network_once
       V.pts_to d.server_driver_material_payload #1.0R material **
       V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
       V.pts_to d.server_driver_signature #1.0R signature **
-      V.pts_to d.server_driver_app_out #1.0R app_out);
+      V.pts_to d.server_driver_local_app_out #1.0R local_app_out **
+      pts_to app_out 'old_app_out);
   let current_len = Box.(!d.server_driver_buffered_len);
   assert (pure (current_len == buffered_len));
   assert (pure (SZ.v current_len <= SZ.v driver_rx_capacity));
 
   if (current_len = driver_rx_capacity) {
-    fold (server_driver_buffers d buffered buffered_len);
-    fold (server_driver_connected
+    fold (server_driver_buffers_with_output
+      d buffered buffered_len app_out app_out_len 'old_app_out);
+    fold (server_driver_connected_with_output
       d
       'st0
       'certificate_chain
       'credential_identity
       'received
-      'sent);
-    process_buffered_network_bytes_compact_once d
+      'sent
+      app_out
+      app_out_len
+      'old_app_out);
+    process_buffered_network_bytes_compact_once_into d app_out app_out_len
   } else {
   assert (pure (SZ.v current_len < SZ.v driver_rx_capacity));
   let old_consumed =
@@ -2096,7 +2128,6 @@ private fn read_and_process_network_once
 
   Box.(d.server_driver_buffered_len := total_len);
   V.to_vec_pts_to d.server_driver_raw;
-  fold (server_driver_buffers d (Ghost.reveal new_buffered) total_len);
   CPI.lemma_bytes_extends_append (Ghost.reveal 'received) read_chunk;
   CPI.lemma_bytes_extends_refl (Ghost.reveal 'sent);
   advance_server_driver_io_history
@@ -2105,36 +2136,54 @@ private fn read_and_process_network_once
     'sent
     (B.append (Ghost.reveal 'received) read_chunk)
     'sent;
-  fold (server_driver_connected
+  fold (server_driver_buffers_with_output
+    d
+    (Ghost.reveal new_buffered)
+    total_len
+    app_out
+    app_out_len
+    'old_app_out);
+  fold (server_driver_connected_with_output
     d
     'st0
     'certificate_chain
     'credential_identity
     (B.append (Ghost.reveal 'received) read_chunk)
-    'sent);
-  let resp = process_buffered_network_bytes_compact_once d;
+    'sent
+    app_out
+    app_out_len
+    'old_app_out);
+  let resp =
+    process_buffered_network_bytes_compact_once_into d app_out app_out_len;
   resp
   }
 }
 
-fn process_buffered_or_read_network_once
+fn process_buffered_or_read_network_once_into
   (d:server_driver)
-  requires server_driver_connected
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires server_driver_connected_with_output
             d
             'st0
             'certificate_chain
             'credential_identity
             'received
             'sent
+            app_out
+            app_out_len
+            'old_app_out
   returns resp:ST.server_buffer_response
   ensures exists* st1 received' sent' app_out_bytes.
-          server_driver_connected_with_app_out
+          server_driver_connected_with_output
            d
            st1
            'certificate_chain
            'credential_identity
            received'
            sent'
+           app_out
+           app_out_len
            app_out_bytes **
           pure (server_driver_network_process_correct
            'st0
@@ -2150,15 +2199,18 @@ fn process_buffered_or_read_network_once
             sent'
             app_out_bytes)
 {
-  let buffered_step = process_buffered_network_bytes_compact_once d;
+  let buffered_step =
+    process_buffered_network_bytes_compact_once_into d app_out app_out_len;
   with st1 sent' buffered_app_out.
-    assert (server_driver_connected_with_app_out
+    assert (server_driver_connected_with_output
       d
       st1
       'certificate_chain
       'credential_identity
       'received
       sent'
+      app_out
+      app_out_len
       buffered_app_out **
     pure (server_driver_network_process_correct
       'st0
@@ -2185,70 +2237,8 @@ fn process_buffered_or_read_network_once
     assert (pure (st1 == 'st0));
     assert (pure (Seq.equal sent' (Ghost.reveal 'sent)));
     Seq.lemma_eq_elim sent' (Ghost.reveal 'sent);
-    rewrite (server_driver_connected_with_app_out
-      d
-      st1
-      'certificate_chain
-      'credential_identity
-      'received
-      sent'
-      buffered_app_out) as
-      (server_driver_connected_with_app_out
-        d
-        st1
-        'certificate_chain
-        'credential_identity
-        'received
-        (Ghost.reveal 'sent)
-        buffered_app_out);
-    assert (pure (
-      server_buffer_read_decision buffered_step == BS.NeedMore));
-    unfold (server_driver_connected_with_app_out
-      d
-      st1
-      'certificate_chain
-      'credential_identity
-      'received
-      (Ghost.reveal 'sent)
-      buffered_app_out);
-    with ch buffered buffered_len.
-      assert (
-        Box.pts_to d.server_driver_channel (Some ch) **
-        IO.is_channel ch 'received 'sent **
-        server_driver_buffers_with_app_out
-          d buffered buffered_len buffered_app_out);
-    unfold (server_driver_buffers_with_app_out
-      d buffered buffered_len buffered_app_out);
-    with empty_payload raw network_out material cv_input signature local_app_out.
-      assert (
-        Box.pts_to d.server_driver_buffered_len buffered_len **
-        V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
-        V.pts_to d.server_driver_raw #1.0R raw **
-        V.pts_to d.server_driver_network_out #1.0R network_out **
-        V.pts_to d.server_driver_material_payload #1.0R material **
-        V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
-        V.pts_to d.server_driver_signature #1.0R signature **
-        V.pts_to d.server_driver_app_out #1.0R buffered_app_out **
-        V.pts_to d.server_driver_local_app_out #1.0R local_app_out);
-    let current_len = Box.(!d.server_driver_buffered_len);
-    fold (server_driver_buffers_with_app_out
-      d buffered buffered_len buffered_app_out);
-    fold (server_driver_connected_with_app_out
-      d
-      st1
-      'certificate_chain
-      'credential_identity
-      'received
-      (Ghost.reveal 'sent)
-      buffered_app_out);
-    if (current_len = driver_rx_capacity) {
-      buffered_step
-    } else {
-      forget_server_driver_connected_app_out d;
-      let read_step =
-        read_and_process_network_once d;
-      read_step
-    }
+    let read_step = read_and_process_network_once_into d app_out app_out_len;
+    read_step
   } else {
     buffered_step
   }
@@ -2299,25 +2289,32 @@ fn server_driver_control_snapshot
   snapshot
 }
 
-fn rec read_process_network_until_ready
+fn rec read_process_network_until_ready_into
   (d:server_driver)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
   (fuel:SZ.t)
-  requires server_driver_connected
+  requires server_driver_connected_with_output
             d
             'st0
             'certificate_chain
             'credential_identity
             'received
             'sent
+            app_out
+            app_out_len
+            'old_app_out
   returns result:server_driver_network_loop_result
   ensures exists* st1 received' sent' app_out_bytes.
-          server_driver_connected_with_app_out
+          server_driver_connected_with_output
            d
            st1
            'certificate_chain
            'credential_identity
            received'
            sent'
+           app_out
+           app_out_len
            app_out_bytes **
           pure (st1.CS.cs_model.CS.model_config ==
                  'st0.CS.cs_model.CS.model_config /\
@@ -2352,7 +2349,6 @@ fn rec read_process_network_until_ready
     ST.consumed_len = 0sz;
   };
   if (fuel = 0sz) {
-    expose_server_driver_connected_app_out d;
     assert (pure ('st0.CS.cs_model.CS.model_config ==
       'st0.CS.cs_model.CS.model_config));
     {
@@ -2361,15 +2357,18 @@ fn rec read_process_network_until_ready
     }
   } else {
     assert (pure (0 < SZ.v fuel));
-    let step = process_buffered_or_read_network_once d;
+    let step =
+      process_buffered_or_read_network_once_into d app_out app_out_len;
     with st1 received' sent' step_app_out.
-      assert (server_driver_connected_with_app_out
+      assert (server_driver_connected_with_output
         d
         st1
         'certificate_chain
         'credential_identity
         received'
         sent'
+        app_out
+        app_out_len
         step_app_out **
       pure (server_driver_network_process_correct
         'st0
@@ -2397,16 +2396,19 @@ fn rec read_process_network_until_ready
       Seq.lemma_eq_elim sent' (Ghost.reveal 'sent);
       let next_fuel = SZ.sub fuel 1sz;
       assert (pure (SZ.v next_fuel < SZ.v fuel));
-      forget_server_driver_connected_app_out d;
-      let result = read_process_network_until_ready d next_fuel;
+      let result =
+        read_process_network_until_ready_into
+          d app_out app_out_len next_fuel;
       with st2 received2 sent2 result_app_out.
-        assert (server_driver_connected_with_app_out
+        assert (server_driver_connected_with_output
           d
           st2
           'certificate_chain
           'credential_identity
           received2
           sent2
+          app_out
+          app_out_len
           result_app_out **
         pure (st2.CS.cs_model.CS.model_config ==
           st1.CS.cs_model.CS.model_config /\
@@ -2479,6 +2481,188 @@ fn rec read_process_network_until_ready
     }
 
   }
+}
+
+fn process_buffered_network_bytes_compact_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 sent' app_out_bytes.
+          server_driver_connected_with_app_out
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+            app_out_bytes **
+          pure (server_driver_network_process_correct
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'sent)
+            sent' /\
+            server_driver_network_process_correct_for_app_out
+             'st0
+             st1
+             resp
+             (Ghost.reveal 'sent)
+             sent'
+             app_out_bytes)
+{
+  expose_server_driver_connected_output d;
+  let resp =
+    process_buffered_network_bytes_compact_once_into
+      d
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity;
+  restore_server_driver_connected_output d;
+  resp
+}
+
+fn read_and_process_network_once
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 received' sent' app_out_bytes.
+          server_driver_connected_with_app_out
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent'
+           app_out_bytes **
+          pure (server_driver_network_process_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'sent)
+           sent' /\
+           server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'sent)
+            sent'
+            app_out_bytes)
+{
+  expose_server_driver_connected_output d;
+  let resp =
+    read_and_process_network_once_into
+      d
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity;
+  restore_server_driver_connected_output d;
+  resp
+}
+
+fn process_buffered_or_read_network_once
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 received' sent' app_out_bytes.
+          server_driver_connected_with_app_out
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent'
+           app_out_bytes **
+          pure (server_driver_network_process_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'sent)
+           sent' /\
+           server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'sent)
+            sent'
+            app_out_bytes)
+{
+  expose_server_driver_connected_output d;
+  let resp =
+    process_buffered_or_read_network_once_into
+      d
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity;
+  restore_server_driver_connected_output d;
+  resp
+}
+
+fn read_process_network_until_ready
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns result:server_driver_network_loop_result
+  ensures exists* st1 received' sent' app_out_bytes.
+          server_driver_connected_with_app_out
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent'
+           app_out_bytes **
+          pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config /\
+            (result.server_driver_network_loop_exhausted == true ==>
+              st1 == 'st0 /\
+              Seq.equal sent' (Ghost.reveal 'sent)) /\
+            (result.server_driver_network_loop_exhausted == false ==>
+            result.server_driver_network_loop_last.ST.response.ST.status <>
+              ST.NeedMoreInput /\
+            server_driver_network_process_correct
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent' /\
+            server_driver_network_process_correct_for_app_out
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent'
+              app_out_bytes))
+{
+  expose_server_driver_connected_output d;
+  let result =
+    read_process_network_until_ready_into
+      d
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity
+      fuel;
+  restore_server_driver_connected_output d;
+  result
 }
 
 fn rec read_until_client_hello_received

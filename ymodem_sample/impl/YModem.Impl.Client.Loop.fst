@@ -262,12 +262,14 @@ fn read_status_update
 requires
   CC.ymodem_client_inv i received sent st **
   R.pts_to running rn0 **
-  R.pts_to remaining f0
+  R.pts_to remaining f0 **
+  pure (not (Ghost.reveal f0 = 0sz))
 returns _:unit
 ensures exists* (rn1:bool) (f1:SZ.t).
   CC.ymodem_client_inv i received sent st **
   R.pts_to running rn1 **
-  R.pts_to remaining f1
+  R.pts_to remaining f1 **
+  pure (rn1 == false \/ (rn1 == Ghost.reveal rn0 /\ SZ.v f1 < SZ.v (Ghost.reveal f0)))
 {
   unfold (CC.ymodem_client_inv i received sent st);
   with svs. _;
@@ -345,6 +347,7 @@ ensures exists* (chr chs pr ps:TCP.bytes) (st1:YP.ymodem_client_state)
       pure (Seq.length c == 1 /\ Seq.length so == 133 /\ Seq.length t == 132 /\
             Seq.length a == 1 /\ Seq.length y == 128 /\ Seq.length o == SZ.v outcap /\
             SZ.v cv <= SZ.v outcap)
+  decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
   {
     let nlead = TCP.read_full ch ctrl 1sz;
     let lead = ctrl.(0sz);

@@ -1,5 +1,6 @@
 #include "tls13_server_driver.h"
 
+#include "TLS13_Impl_ConnectionState_Bounds.h"
 #include "TLS13_Impl_Server_Driver.h"
 
 #include <stdio.h>
@@ -18,6 +19,18 @@ struct tls13_server_driver_s {
   TLS13_Impl_Server_Driver_server_driver verified_driver;
   enum tls13_server_driver_state state;
   char last_error[256];
+};
+
+struct tls13_server_config_s {
+  TLS13_Impl_Server_Driver_server_credentials verified_credentials;
+  TLS13_Impl_Server_Driver_server_listener verified_listener;
+  uint8_t *bind_host;
+  size_t bind_host_len;
+  uint16_t port;
+  uint8_t *certificate_chain;
+  size_t certificate_chain_len;
+  uint8_t *private_key_pem;
+  size_t private_key_pem_len;
 };
 
 static int driver_fail(tls13_server_driver *driver, const char *message) {
@@ -86,8 +99,8 @@ static void abort_terminal_driver(tls13_server_driver *driver) {
   driver->state = TLS13_SERVER_DRIVER_CLOSED;
 }
 
-int tls13_server_driver_accept(
-    tls13_server_driver **out,
+int tls13_server_config_new(
+    tls13_server_config **out,
     const char *bind_host,
     uint16_t port,
     const uint8_t *certificate_chain,
@@ -100,7 +113,92 @@ int tls13_server_driver_accept(
   *out = NULL;
   if (bind_host == NULL || bind_host[0] == '\0' ||
       (certificate_chain == NULL && certificate_chain_len != 0u) ||
-      private_key_pem == NULL || private_key_pem_len == 0u) {
+      private_key_pem == NULL || private_key_pem_len == 0u ||
+      certificate_chain_len >
+          TLS13_Impl_ConnectionState_Bounds_max_server_certificate_chain_len_sz) {
+    return 1;
+  }
+
+  size_t bind_host_len = strlen(bind_host);
+  tls13_server_config *config = calloc(1u, sizeof *config);
+  uint8_t *bind_host_copy = malloc(bind_host_len);
+  uint8_t *certificate_copy =
+      malloc(certificate_chain_len == 0u ? 1u : certificate_chain_len);
+  uint8_t *private_key_copy = malloc(private_key_pem_len);
+  if (config == NULL || bind_host_copy == NULL || certificate_copy == NULL ||
+      private_key_copy == NULL) {
+    free(private_key_copy);
+    free(certificate_copy);
+    free(bind_host_copy);
+    free(config);
+    return 1;
+  }
+  memcpy(bind_host_copy, bind_host, bind_host_len);
+  if (certificate_chain_len != 0u) {
+    memcpy(certificate_copy, certificate_chain, certificate_chain_len);
+  }
+  memcpy(private_key_copy, private_key_pem, private_key_pem_len);
+
+  FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials credentials =
+      TLS13_Impl_Server_Driver_new_server_credentials(
+          certificate_copy,
+          certificate_chain_len,
+          private_key_copy,
+          private_key_pem_len);
+  if (credentials.tag != FStar_Pervasives_Native_Some) {
+    free(private_key_copy);
+    free(certificate_copy);
+    free(bind_host_copy);
+    free(config);
+    return 1;
+  }
+
+  FStar_Pervasives_Native_option__Common_TCP_listener listener =
+      TLS13_Impl_Server_Driver_new_server_listener(
+          bind_host_copy, bind_host_len, port);
+  if (listener.tag != FStar_Pervasives_Native_Some) {
+    TLS13_Impl_Server_Driver_free_server_credentials(credentials.v);
+    free(private_key_copy);
+    free(certificate_copy);
+    free(bind_host_copy);
+    free(config);
+    return 1;
+  }
+
+  config->verified_credentials = credentials.v;
+  config->verified_listener = listener.v;
+  config->bind_host = bind_host_copy;
+  config->bind_host_len = bind_host_len;
+  config->port = port;
+  config->certificate_chain = certificate_copy;
+  config->certificate_chain_len = certificate_chain_len;
+  config->private_key_pem = private_key_copy;
+  config->private_key_pem_len = private_key_pem_len;
+  *out = config;
+  return 0;
+}
+
+void tls13_server_config_free(tls13_server_config *config) {
+  if (config == NULL) {
+    return;
+  }
+  TLS13_Impl_Server_Driver_free_server_listener(config->verified_listener);
+  TLS13_Impl_Server_Driver_free_server_credentials(
+      config->verified_credentials);
+  free(config->private_key_pem);
+  free(config->certificate_chain);
+  free(config->bind_host);
+  free(config);
+}
+
+int tls13_server_driver_accept_with_config(
+    tls13_server_driver **out,
+    const tls13_server_config *config) {
+  if (out == NULL) {
+    return 1;
+  }
+  *out = NULL;
+  if (config == NULL) {
     return 1;
   }
 
@@ -109,17 +207,13 @@ int tls13_server_driver_accept(
     return 1;
   }
 
-  uint8_t empty_certificate = 0u;
-  uint8_t *certificate_input =
-      certificate_chain_len == 0u
-          ? &empty_certificate
-          : (uint8_t *)(void *)certificate_chain;
   FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_server_driver created =
-      TLS13_Impl_Server_Driver_new_server(
-          certificate_input,
-          certificate_chain_len,
-          (uint8_t *)(void *)private_key_pem,
-          private_key_pem_len);
+      TLS13_Impl_Server_Driver_new_server_with_credentials(
+          config->verified_credentials,
+          config->certificate_chain,
+          config->certificate_chain_len,
+          config->private_key_pem,
+          config->private_key_pem_len);
   if (created.tag != FStar_Pervasives_Native_Some) {
     (void)driver_fail(driver, "verified server driver allocation failed");
     free(driver);
@@ -128,11 +222,12 @@ int tls13_server_driver_accept(
 
   driver->verified_driver = created.v;
   TLS13_Impl_Server_Driver_server_workflow_status status =
-      TLS13_Impl_Server_Driver_accept(
+      TLS13_Impl_Server_Driver_accept_with_listener(
           driver->verified_driver,
-          (uint8_t *)(void *)bind_host,
-          strlen(bind_host),
-          port,
+          config->verified_listener,
+          config->bind_host,
+          config->bind_host_len,
+          config->port,
           TLS13_SERVER_DRIVER_LOCAL_FUEL,
           TLS13_SERVER_DRIVER_NETWORK_FUEL);
   if (status != TLS13_Impl_Server_Driver_ServerWorkflowOk) {
@@ -142,6 +237,7 @@ int tls13_server_driver_accept(
     } else {
       driver->state = TLS13_SERVER_DRIVER_CLOSED;
     }
+    TLS13_Impl_Server_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
   }
@@ -149,6 +245,33 @@ int tls13_server_driver_accept(
   driver->state = TLS13_SERVER_DRIVER_READY;
   *out = driver;
   return 0;
+}
+
+int tls13_server_driver_accept(
+    tls13_server_driver **out,
+    const char *bind_host,
+    uint16_t port,
+    const uint8_t *certificate_chain,
+    size_t certificate_chain_len,
+    const uint8_t *private_key_pem,
+    size_t private_key_pem_len) {
+  tls13_server_config *config = NULL;
+  if (tls13_server_config_new(
+          &config,
+          bind_host,
+          port,
+          certificate_chain,
+          certificate_chain_len,
+          private_key_pem,
+          private_key_pem_len) != 0) {
+    if (out != NULL) {
+      *out = NULL;
+    }
+    return 1;
+  }
+  int result = tls13_server_driver_accept_with_config(out, config);
+  tls13_server_config_free(config);
+  return result;
 }
 
 int tls13_server_driver_send_application_data(
@@ -266,5 +389,6 @@ void tls13_server_driver_free(tls13_server_driver *driver) {
   if (driver->state == TLS13_SERVER_DRIVER_READY) {
     (void)tls13_server_driver_close(driver, false);
   }
+  TLS13_Impl_Server_Driver_free(driver->verified_driver);
   free(driver);
 }

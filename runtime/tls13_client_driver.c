@@ -18,6 +18,15 @@ struct tls13_client_driver_s {
   char last_error[256];
 };
 
+struct tls13_client_config_s {
+  TLS13_Impl_Client_Driver_client_auth_config verified_config;
+  uint8_t *server_name;
+  size_t server_name_len;
+  uint8_t *trust_anchor_pem;
+  size_t trust_anchor_pem_len;
+  size_t validation_time_seconds;
+};
+
 static int driver_fail(tls13_client_driver *driver, const char *message) {
   if (driver != NULL && message != NULL) {
     (void)snprintf(driver->last_error, sizeof driver->last_error, "%s", message);
@@ -89,10 +98,8 @@ static void abort_terminal_driver(tls13_client_driver *driver) {
   }
 }
 
-int tls13_client_driver_connect(
-    tls13_client_driver **out,
-    const char *connect_host,
-    uint16_t port,
+int tls13_client_config_new(
+    tls13_client_config **out,
     const char *server_name,
     const uint8_t *trust_anchor_pem,
     size_t trust_anchor_pem_len,
@@ -101,16 +108,74 @@ int tls13_client_driver_connect(
     return 1;
   }
   *out = NULL;
-  if (connect_host == NULL || server_name == NULL ||
+  if (server_name == NULL ||
       (trust_anchor_pem == NULL && trust_anchor_pem_len != 0u)) {
     return 1;
   }
 
-  size_t connect_host_len = strlen(connect_host);
   size_t server_name_len = strlen(server_name);
-  if (connect_host_len == 0u || server_name_len == 0u ||
+  if (server_name_len == 0u ||
       server_name_len > TLS13_CLIENT_MAX_SERVER_NAME_LEN ||
       trust_anchor_pem_len > TLS13_CLIENT_MAX_TRUST_ANCHORS_LEN) {
+    return 1;
+  }
+
+  tls13_client_config *config = calloc(1u, sizeof *config);
+  uint8_t *server_name_copy = malloc(server_name_len);
+  uint8_t *trust_anchor_copy =
+      malloc(trust_anchor_pem_len == 0u ? 1u : trust_anchor_pem_len);
+  if (config == NULL || server_name_copy == NULL ||
+      trust_anchor_copy == NULL) {
+    free(trust_anchor_copy);
+    free(server_name_copy);
+    free(config);
+    return 1;
+  }
+  memcpy(server_name_copy, server_name, server_name_len);
+  if (trust_anchor_pem_len != 0u) {
+    memcpy(trust_anchor_copy, trust_anchor_pem, trust_anchor_pem_len);
+  }
+
+  config->verified_config = TLS13_Impl_Client_Driver_new_auth_config(
+      server_name_copy,
+      server_name_len,
+      trust_anchor_copy,
+      trust_anchor_pem_len,
+      validation_time_seconds);
+  config->server_name = server_name_copy;
+  config->server_name_len = server_name_len;
+  config->trust_anchor_pem = trust_anchor_copy;
+  config->trust_anchor_pem_len = trust_anchor_pem_len;
+  config->validation_time_seconds = validation_time_seconds;
+  *out = config;
+  return 0;
+}
+
+void tls13_client_config_free(tls13_client_config *config) {
+  if (config == NULL) {
+    return;
+  }
+  TLS13_Impl_Client_Driver_free_auth_config(config->verified_config);
+  free(config->trust_anchor_pem);
+  free(config->server_name);
+  free(config);
+}
+
+int tls13_client_driver_connect_with_config(
+    tls13_client_driver **out,
+    const char *connect_host,
+    uint16_t port,
+    const tls13_client_config *config) {
+  if (out == NULL) {
+    return 1;
+  }
+  *out = NULL;
+  if (connect_host == NULL || config == NULL) {
+    return 1;
+  }
+
+  size_t connect_host_len = strlen(connect_host);
+  if (connect_host_len == 0u) {
     return 1;
   }
 
@@ -119,17 +184,14 @@ int tls13_client_driver_connect(
     return 1;
   }
 
-  uint8_t empty_trust_anchor = 0u;
-  uint8_t *trust_anchor_input =
-      trust_anchor_pem_len == 0u
-          ? &empty_trust_anchor
-          : (uint8_t *)(void *)trust_anchor_pem;
-  driver->verified_driver = TLS13_Impl_Client_Driver_new_client(
-      (uint8_t *)(void *)server_name,
-      server_name_len,
-      trust_anchor_input,
-      trust_anchor_pem_len,
-      validation_time_seconds);
+  driver->verified_driver =
+      TLS13_Impl_Client_Driver_new_client_with_auth_config(
+          config->verified_config,
+          config->server_name,
+          config->server_name_len,
+          config->trust_anchor_pem,
+          config->trust_anchor_pem_len,
+          config->validation_time_seconds);
 
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_connect(
@@ -141,6 +203,7 @@ int tls13_client_driver_connect(
           TLS13_DRIVER_WORKFLOW_FUEL);
   if (status != TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
     (void)driver_fail_status(driver, "connect", status);
+    TLS13_Impl_Client_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
   }
@@ -148,6 +211,32 @@ int tls13_client_driver_connect(
   driver->connected = true;
   *out = driver;
   return 0;
+}
+
+int tls13_client_driver_connect(
+    tls13_client_driver **out,
+    const char *connect_host,
+    uint16_t port,
+    const char *server_name,
+    const uint8_t *trust_anchor_pem,
+    size_t trust_anchor_pem_len,
+    size_t validation_time_seconds) {
+  tls13_client_config *config = NULL;
+  if (tls13_client_config_new(
+          &config,
+          server_name,
+          trust_anchor_pem,
+          trust_anchor_pem_len,
+          validation_time_seconds) != 0) {
+    if (out != NULL) {
+      *out = NULL;
+    }
+    return 1;
+  }
+  int result =
+      tls13_client_driver_connect_with_config(out, connect_host, port, config);
+  tls13_client_config_free(config);
+  return result;
 }
 
 int tls13_client_driver_send_application_data(
@@ -293,5 +382,6 @@ void tls13_client_driver_free(tls13_client_driver *driver) {
   if (driver->connected) {
     abort_connected_driver(driver);
   }
+  TLS13_Impl_Client_Driver_free(driver->verified_driver);
   free(driver);
 }

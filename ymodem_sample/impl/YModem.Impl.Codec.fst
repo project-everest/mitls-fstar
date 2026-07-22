@@ -300,6 +300,7 @@ fn ymodem_emit_data_block
     R.pts_to c cv **
     pts_to data 'd **
     pure (SZ.v cv <= 128 /\ Seq.length 'd == 128)
+  decreases (Prims.op_Subtraction 128 (SZ.v (!c)))
   {
     let cv = !c;
     let b = data.(cv);
@@ -330,6 +331,7 @@ fn ymodem_emit_data_block
       Seq.index sv 1 == blk /\
       Seq.index sv 2 == bc /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (3 + j) == Seq.index 'd j))
+  decreases (Prims.op_Subtraction 128 (SZ.v (!i)))
   {
     let vi = !i;
     let dv = data.(vi);
@@ -375,6 +377,7 @@ fn ymodem_recv_data_block
       Seq.length 'i == 133 /\
       Seq.length ov == 128 /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'i (3 + j)))
+  decreases (Prims.op_Subtraction 128 (SZ.v (!i)))
   {
     let vi = !i;
     let dv = inp.(3sz + vi);

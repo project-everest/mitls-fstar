@@ -26,3 +26,6 @@ test/openssl_echo_server.log
 test/openssl_echo_server.port
 test/openssl-echo.*
 test/certs/
+test/perf/tls13_bench
+test/perf/tls13_bench-gprof
+benchmark-results/

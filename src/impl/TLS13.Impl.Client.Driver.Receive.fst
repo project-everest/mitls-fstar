@@ -951,7 +951,6 @@ fn run
       V.to_array_pts_to d.client_driver_auth_payload;
       V.to_array_pts_to d.client_driver_auth_cv_input;
       V.to_array_pts_to d.client_driver_auth_signature;
-      V.to_array_pts_to d.client_driver_app_out;
       let core = {
         driver_client = d.client_driver_client;
         driver_channel = concrete_ch;
@@ -1008,8 +1007,8 @@ fn run
           driver_signature_capacity
           driver_public_key_payload_capacity
           driver_server_finished_payload_len
-          (V.vec_to_array d.client_driver_app_out)
-          driver_app_out_capacity
+          out
+          out_len
           local_fuel
           fuel;
       with st1 workflow_buffered raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
@@ -1021,44 +1020,24 @@ fn run
                 pts_to (V.vec_to_array d.client_driver_auth_payload) auth_payload_bytes **
                 pts_to (V.vec_to_array d.client_driver_auth_cv_input) auth_cv_input_bytes **
                 pts_to (V.vec_to_array d.client_driver_auth_signature) auth_signature_bytes **
-                pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+                pts_to out app_out_bytes);
       assert (pure (st1.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config));
       let response =
         workflow.driver_workflow_network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response;
       let copy_len = response.CT.app_out_len;
       let app_fits = SZ.lte copy_len out_len;
-      let app_src_fits = SZ.lte copy_len driver_app_out_capacity;
       let workflow_ok = workflow.driver_workflow_status = DriverWorkflowOk;
       CChannel.lemma_receive_observation_app_out_length
         'st0
         st1
         (client_driver_workflow_observation workflow)
         app_out_bytes;
-      assert (pure (workflow_ok ==>
-        B.length (CT.response_app_out response app_out_bytes) ==
-          SZ.v copy_len));
-      lemma_response_app_out_length_fits_if
-        workflow_ok
-        response
-        app_out_bytes;
-      assert (pure (workflow_ok ==>
-        SZ.v copy_len <= B.length app_out_bytes));
-      if (workflow_ok && app_fits && app_src_fits) {
-        A.pts_to_len (V.vec_to_array d.client_driver_app_out);
-        A.pts_to_len out;
+      if (workflow_ok && app_fits) {
         assert (pure (SZ.v copy_len <= SZ.v out_len));
         assert (pure (workflow_ok ==>
           SZ.v copy_len <= B.length app_out_bytes));
-        assert (pure (A.length (V.vec_to_array d.client_driver_app_out) == B.length app_out_bytes));
-        assert (pure (A.length out == SZ.v out_len));
-        assert (pure (SZ.v copy_len <= A.length (V.vec_to_array d.client_driver_app_out)));
-        assert (pure (SZ.v copy_len <= A.length out));
-        let _ = A.memcpy_l copy_len (V.vec_to_array d.client_driver_app_out) out;
-        with out_bytes.
-          assert (pts_to out out_bytes);
-        A.pts_to_len out;
-        assert (pure (B.length out_bytes == SZ.v out_len));
+        assert (pure (B.length app_out_bytes == SZ.v out_len));
         assert (pure (workflow_ok ==>
           SZ.v copy_len <= B.length app_out_bytes));
         lemma_memcpy_prefix
@@ -1068,10 +1047,9 @@ fn run
         assert (pure (Seq.equal
           (CT.response_app_out response app_out_bytes)
           (Seq.slice app_out_bytes 0 (SZ.v copy_len))));
-        Seq.lemma_len_slice out_bytes 0 (SZ.v copy_len);
         Seq.lemma_len_slice app_out_bytes 0 (SZ.v copy_len);
         assert (pure (Seq.equal
-          (Seq.slice out_bytes 0 (SZ.v copy_len))
+          (Seq.slice app_out_bytes 0 (SZ.v copy_len))
           (Seq.slice app_out_bytes 0 (SZ.v copy_len))));
         let receive_result = {
           client_receive_status = DriverWorkflowOk;
@@ -1083,25 +1061,25 @@ fn run
           receive_result
           response
           app_out_bytes
-          out_bytes));
+          app_out_bytes));
         assert (pure (client_driver_receive_status_correct
           receive_result
           (client_driver_workflow_observation workflow)
           app_out_bytes
-          out_bytes));
+          app_out_bytes));
         assert (pure (client_driver_receive_correct
           'st0
           st1
           receive_result
           (client_driver_workflow_observation workflow)
           app_out_bytes
-          out_bytes));
+          app_out_bytes));
         assert (pure (client_receive_workflow_application_log
           'st0 st1 workflow app_out_bytes));
         assert (pure (TChannel.application_log st1 ==
           CI.append_received
            (TChannel.application_log 'st0)
-           (Seq.slice out_bytes 0 (SZ.v receive_result.client_receive_len))));
+           (Seq.slice app_out_bytes 0 (SZ.v receive_result.client_receive_len))));
         assert (pure (exists obs app_out.
           client_driver_receive_correct
             'st0
@@ -1109,7 +1087,7 @@ fn run
             receive_result
             obs
             app_out
-            out_bytes));
+            app_out_bytes));
         unfold (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len);
         rewrite (driver_exactly td.top_driver_core st1 workflow_buffered workflow.driver_workflow_rx_len) as
           (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
@@ -1131,7 +1109,6 @@ fn run
         V.to_vec_pts_to d.client_driver_auth_payload;
         V.to_vec_pts_to d.client_driver_auth_cv_input;
         V.to_vec_pts_to d.client_driver_auth_signature;
-        V.to_vec_pts_to d.client_driver_app_out;
         Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
         assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
         rewrite (C.connection_exactly core.driver_client st1) as
@@ -1156,9 +1133,7 @@ fn run
         fold (client_driver_connected d st1 received1 sent1);
         receive_result
       } else {
-        with out_bytes.
-          assert (pts_to out out_bytes);
-        assert (pure (B.length out_bytes == SZ.v out_len));
+        assert (pure (B.length app_out_bytes == SZ.v out_len));
         let receive_result = {
           client_receive_status =
             if workflow_ok then DriverWorkflowStepFailed else workflow.driver_workflow_status;
@@ -1167,12 +1142,11 @@ fn run
         assert (pure (workflow_ok ==>
           SZ.v copy_len <= B.length app_out_bytes));
         assert (pure (
-          B.length app_out_bytes == SZ.v driver_app_out_capacity));
+          B.length app_out_bytes == SZ.v out_len));
         assert (pure (
-          SZ.v driver_app_out_capacity == L.max_record_fragment_len));
+          L.max_record_fragment_len <= SZ.v out_len));
         assert (pure (workflow_ok ==> SZ.v copy_len <= SZ.v out_len));
         assert (pure (workflow_ok ==> app_fits == true));
-        assert (pure (workflow_ok ==> app_src_fits == true));
         assert (pure (workflow_ok == false));
         assert (pure (receive_result.client_receive_status ==
           workflow.driver_workflow_status));
@@ -1188,14 +1162,14 @@ fn run
           receive_result
           (client_driver_workflow_observation workflow)
           app_out_bytes
-          out_bytes));
+          app_out_bytes));
         assert (pure (client_driver_receive_correct
           'st0
           st1
           receive_result
           (client_driver_workflow_observation workflow)
           app_out_bytes
-          out_bytes));
+          app_out_bytes));
         assert (pure (exists obs app_out.
           client_driver_receive_correct
             'st0
@@ -1203,7 +1177,7 @@ fn run
             receive_result
             obs
             app_out
-            out_bytes));
+            app_out_bytes));
         unfold (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len);
         rewrite (driver_exactly td.top_driver_core st1 workflow_buffered workflow.driver_workflow_rx_len) as
           (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
@@ -1225,7 +1199,6 @@ fn run
         V.to_vec_pts_to d.client_driver_auth_payload;
         V.to_vec_pts_to d.client_driver_auth_cv_input;
         V.to_vec_pts_to d.client_driver_auth_signature;
-        V.to_vec_pts_to d.client_driver_app_out;
         Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
         assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
         rewrite (C.connection_exactly core.driver_client st1) as

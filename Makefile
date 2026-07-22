@@ -46,8 +46,9 @@ EXTRACT_DIR = _extract
 HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
 HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
-SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(GENERATED_DIR) \
+SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
   $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse
 
 # ── F* Flags ───────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ INCLUDES = \
   --include common \
   $(addprefix --include ,$(SPEC_DIRS)) \
   --include src/impl \
+  --include $(EXTERN_DIR) \
   --include $(GENERATED_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse
@@ -100,7 +102,8 @@ FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
 SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
+EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
+ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 ROOT_FILES = \
   src/impl/TLS13.System.Temporal.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
@@ -265,7 +268,7 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated save-generated-cache restore-generated-cache
+.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated save-generated-cache restore-generated-cache benchmark benchmark-build benchmark-profile-build profile
 
 all: verify
 
@@ -363,6 +366,7 @@ PULSE_RUNTIME_MODULES = \
 # Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -391,7 +395,7 @@ BUNDLE_IMPL_MODULES = \
 
 # Non-API modules (everything except TLS13.Impl.Client)
 BUNDLE_INTERNAL_MODULES = \
-  TLS13.Impl.Endpoint.Types,TLS13.Impl.Client.Types,\
+  TLS13.Impl.ArrayCopy,TLS13.Impl.Endpoint.Types,TLS13.Impl.Client.Types,\
   TLS13.Impl.ConnectionState.Bounds,\
   TLS13.Impl.ConnectionState.Model,TLS13.Impl.ConnectionState.Tags,\
   TLS13.Impl.ConnectionState.Repr,TLS13.Impl.ConnectionState.Queries,\
@@ -405,8 +409,8 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Messages,\
   TLS13.KeySchedule,TLS13.Record
 
-# Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, Common.Memmove, TLS13.OpenSSL, Common.TCP
+# Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
+# models remain under src/spec/assumptions.
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 
@@ -424,6 +428,7 @@ TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
 CLIENT_DRIVER_IMPL_MODULES = \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -486,6 +491,7 @@ SERVER_DRIVER_EXTRACT_SELECTOR = \
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
 SERVER_DRIVER_MODULES = \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.ConnectionState.Bounds \
   TLS13.Impl.ConnectionState.Model \
@@ -683,12 +689,85 @@ HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
   $(HACL_DIR)/Hacl_Hash_SHA2.c \
   $(HACL_DIR)/Hacl_HMAC.c \
-  $(HACL_DIR)/Hacl_HKDF.c \
   $(HACL_DIR)/Hacl_Curve25519_51.c \
   $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305.c \
   $(HACL_DIR)/Hacl_Chacha20.c \
   $(HACL_DIR)/Hacl_MAC_Poly1305.c \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
+
+HACL_SIMD256 ?= $(shell \
+  printf '%s\n' '#include <immintrin.h>' \
+    'int main(void) { __m256i x = _mm256_setzero_si256(); return __builtin_cpu_supports("avx2") ? _mm256_extract_epi32(x, 0) : 0; }' | \
+  $(CC) -mavx2 -x c -c -o /dev/null - >/dev/null 2>&1 && echo 1 || echo 0)
+HACL_SIMD256_CFLAGS = -mavx2 -DHACL_CAN_COMPILE_VEC256=1
+HACL_SIMD256_SOURCES = \
+  $(HACL_DIR)/Hacl_Chacha20_Vec256.c \
+  $(HACL_DIR)/Hacl_MAC_Poly1305_Simd256.c \
+  $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305_Simd256.c
+HACL_SIMD256_MODULES = \
+  Hacl_Chacha20_Vec256 \
+  Hacl_MAC_Poly1305_Simd256 \
+  Hacl_AEAD_Chacha20Poly1305_Simd256
+HACL_SIMD256_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_obj
+HACL_SIMD256_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_benchmark_obj
+HACL_SIMD256_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_profile_obj
+
+ifeq ($(HACL_SIMD256),1)
+HACL_SIMD256_TEST_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_TEST_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+HACL_SIMD256_BENCHMARK_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_BENCHMARK_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+HACL_SIMD256_PROFILE_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_PROFILE_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+else
+HACL_SIMD256_TEST_OBJECTS =
+HACL_SIMD256_BENCHMARK_OBJECTS =
+HACL_SIMD256_PROFILE_OBJECTS =
+endif
+
+HACL_ACCEL ?= $(shell \
+  printf '%s\n' \
+    '#if !defined(__linux__) || !defined(__x86_64__)' \
+    '#error unsupported HACL acceleration target' \
+    '#endif' \
+    'int main(void) { return 0; }' | \
+  $(CC) -x c -c -o /dev/null - >/dev/null 2>&1 && echo 1 || echo 0)
+HACL_ACCEL_CONFIG_DIR = $(EXTRACT_DIR)/hacl_accel_config
+HACL_ACCEL_CONFIG = $(HACL_ACCEL_CONFIG_DIR)/config.h
+HACL_ACCEL_CFLAGS = -I $(HACL_ACCEL_CONFIG_DIR)
+HACL_ACCEL_C_MODULES = \
+  EverCrypt_AutoConfig2 \
+  EverCrypt_Hash \
+  EverCrypt_HMAC \
+  Hacl_Curve25519_64
+HACL_ACCEL_ASM_MODULES = \
+  cpuid-x86_64-linux \
+  sha256-x86_64-linux \
+  curve25519-x86_64-linux
+HACL_ACCEL_MODULES = $(HACL_ACCEL_C_MODULES) $(HACL_ACCEL_ASM_MODULES)
+HACL_ACCEL_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_obj
+HACL_ACCEL_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_benchmark_obj
+HACL_ACCEL_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_profile_obj
+
+ifeq ($(HACL_ACCEL),1)
+HACL_ACCEL_CONFIG_DEP = $(HACL_ACCEL_CONFIG)
+HACL_ACCEL_TEST_OBJECTS = \
+  $(addprefix $(HACL_ACCEL_TEST_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
+HACL_ACCEL_BENCHMARK_OBJECTS = \
+  $(addprefix $(HACL_ACCEL_BENCHMARK_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
+HACL_ACCEL_PROFILE_OBJECTS = \
+  $(addprefix $(HACL_ACCEL_PROFILE_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
+else
+HACL_ACCEL_CONFIG_DEP =
+HACL_ACCEL_TEST_OBJECTS =
+HACL_ACCEL_BENCHMARK_OBJECTS =
+HACL_ACCEL_PROFILE_OBJECTS =
+endif
+
+HACL_TEST_OBJECTS = $(HACL_SIMD256_TEST_OBJECTS) $(HACL_ACCEL_TEST_OBJECTS)
+HACL_BENCHMARK_OBJECTS = \
+  $(HACL_SIMD256_BENCHMARK_OBJECTS) $(HACL_ACCEL_BENCHMARK_OBJECTS)
+HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJECTS)
 
 ECHO_STUB_SOURCES = \
   runtime/common_memmove.c \
@@ -712,8 +791,11 @@ ECHO_STUB_HEADERS = \
 # Common C flags for all test builds
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -ffunction-sections -fdata-sections \
+  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
+  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
   -I c_stubs \
   -I runtime \
+  -I $(HACL_ACCEL_CONFIG_DIR) \
   -I $(KRML_HOME)/include \
   -I $(KRML_HOME)/krmllib/dist/minimal \
   -I $(HACL_DIR) \
@@ -722,6 +804,129 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -I $(HACL_KL)
 
 LDFLAGS_COMMON = -Wl,--gc-sections
+
+$(HACL_SIMD256_TEST_OBJ_DIR) \
+$(HACL_SIMD256_BENCHMARK_OBJ_DIR) \
+$(HACL_SIMD256_PROFILE_OBJ_DIR) \
+$(HACL_ACCEL_CONFIG_DIR) \
+$(HACL_ACCEL_TEST_OBJ_DIR) \
+$(HACL_ACCEL_BENCHMARK_OBJ_DIR) \
+$(HACL_ACCEL_PROFILE_OBJ_DIR):
+	mkdir -p $@
+
+$(HACL_ACCEL_CONFIG): Makefile | $(HACL_ACCEL_CONFIG_DIR)
+	printf '%s\n' \
+	  '#define TARGET_ARCHITECTURE 2' \
+	  '#define HACL_CAN_COMPILE_VALE 1' \
+	  '#define HACL_CAN_COMPILE_INLINE_ASM 0' \
+	  '#define HACL_CAN_COMPILE_VEC128 0' \
+	  '#define HACL_CAN_COMPILE_VEC256 0' > $@
+
+$(HACL_SIMD256_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_TEST_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_SIMD256_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_BENCHMARK_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_SIMD256_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_PROFILE_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_TEST_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_TEST_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_BENCHMARK_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_BENCHMARK_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_PROFILE_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_PROFILE_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+# Benchmark builds keep symbols and frame pointers for profiling while using
+# production optimization. Override these variables to compare compiler flags.
+BENCHMARK_CFLAGS ?= -O3 -DNDEBUG -g -fno-omit-frame-pointer
+BENCHMARK_PROFILE_CFLAGS ?= -O2 -DNDEBUG -g -pg -fno-omit-frame-pointer
+BENCHMARK_OBJ_DIR = $(TLS13_BUNDLE_DIR)/benchmark_obj
+BENCHMARK_PROFILE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/benchmark_profile_obj
+BENCHMARK_BUILD_ID := $(shell printf '%s' '$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(TLS13_BUNDLE_INCLUDES) $(LDFLAGS_COMMON)' | cksum | cut -d' ' -f1)
+BENCHMARK_PROFILE_BUILD_ID := $(shell printf '%s' '$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(TLS13_BUNDLE_INCLUDES) $(LDFLAGS_COMMON)' | cksum | cut -d' ' -f1)
+BENCHMARK_OBJ_STAMP = $(BENCHMARK_OBJ_DIR)/.built-$(BENCHMARK_BUILD_ID)
+BENCHMARK_PROFILE_OBJ_STAMP = $(BENCHMARK_PROFILE_OBJ_DIR)/.built-$(BENCHMARK_PROFILE_BUILD_ID)
+BENCHMARK_BINARY = test/perf/tls13_bench
+BENCHMARK_PROFILE_BINARY = test/perf/tls13_bench-gprof
+
+$(BENCHMARK_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+	@rm -rf $(BENCHMARK_OBJ_DIR)
+	@mkdir -p $(BENCHMARK_OBJ_DIR)
+	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	  obj="$(BENCHMARK_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+$(BENCHMARK_PROFILE_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+	@rm -rf $(BENCHMARK_PROFILE_OBJ_DIR)
+	@mkdir -p $(BENCHMARK_PROFILE_OBJ_DIR)
+	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	  obj="$(BENCHMARK_PROFILE_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+define link_benchmark
+	$(CC) $(CFLAGS_COMMON) $(1) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(2)/*.o \
+	  $(4) \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_client_driver.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/perf/tls13_bench.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) $(1) -lssl -lcrypto -o $(3)
+endef
+
+$(BENCHMARK_BINARY): test/perf/tls13_bench.c $(BENCHMARK_OBJ_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_BENCHMARK_OBJECTS) | check-deps
+	$(call link_benchmark,$(BENCHMARK_CFLAGS),$(BENCHMARK_OBJ_DIR),$@,$(HACL_BENCHMARK_OBJECTS))
+
+$(BENCHMARK_PROFILE_BINARY): test/perf/tls13_bench.c \
+  $(BENCHMARK_PROFILE_OBJ_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_PROFILE_OBJECTS) | check-deps
+	$(call link_benchmark,$(BENCHMARK_PROFILE_CFLAGS),$(BENCHMARK_PROFILE_OBJ_DIR),$@,$(HACL_PROFILE_OBJECTS))
+
+benchmark-build: $(BENCHMARK_BINARY) test/certs/ca.pem test/certs/chain.pem \
+  test/certs/leaf.der test/certs/leaf.key
+
+benchmark-profile-build: $(BENCHMARK_PROFILE_BINARY) test/certs/ca.pem \
+  test/certs/chain.pem test/certs/leaf.der test/certs/leaf.key
+
+benchmark: benchmark-build
+	scripts/benchmark-tls13.sh
+
+profile: benchmark-profile-build
+	scripts/profile-tls13.sh
 
 $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile | check-deps
 	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
@@ -737,17 +942,33 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
-  test-openssl-sclient check-c-stubs
+  test-openssl-sclient test-hacl-stubs check-c-stubs
 
-test: verify check-c-stubs test-openssl-echo test-openssl-sclient
+test: verify check-c-stubs test-hacl-stubs test-openssl-echo test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
-check-c-stubs: | check-deps
+check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
-	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal \
+	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
+	  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
+	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
+	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \
 	  -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
 	  $(ECHO_STUB_SOURCES)
+
+# ── HACL* Wrapper Tests ─────────────────────────────────────────────
+test/test_hacl_stubs: test/unit/test_hacl_stubs.c \
+  c_stubs/tls13_hacl_stubs.c c_stubs/tls13_hacl_stubs.h \
+  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(HACL_TEST_OBJECTS) \
+	  test/unit/test_hacl_stubs.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -o $@
+
+test-hacl-stubs: test/test_hacl_stubs
+	./test/test_hacl_stubs
 
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
 TEST_CERT_STAMP = test/certs/.generated
@@ -762,10 +983,12 @@ test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: 
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
@@ -812,10 +1035,12 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 test/test_extracted_server_openssl_client: \
   test/unit/test_extracted_server_openssl_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \
@@ -858,6 +1083,7 @@ clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
+	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
 	  test/openssl_echo_server.log \
 	  $(TEST_CERT_STAMP)
@@ -867,4 +1093,5 @@ clean:
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-openssl-sclient \
-  check-c-stubs check-toolchain check-deps clean
+  check-c-stubs check-toolchain check-deps benchmark benchmark-build \
+  benchmark-profile-build profile clean
