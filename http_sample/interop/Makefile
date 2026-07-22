@@ -63,21 +63,25 @@ test: build-progs
 	@printf 'verified-http-body payload %s\n' "$$(date +%s)" > $(RUN_DIR)/body.txt
 	@echo "  serving body.txt ($$(wc -c < $(RUN_DIR)/body.txt) bytes) with our verified-response server; fetching with curl ..."
 	@cd $(RUN_DIR) && \
+	  HTTP_PARSE_STATUS_FILE=parse.status \
 	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
 	    $(SRV_OUR) $(PORT) body.txt & srv=$$!; sleep 0.5; \
 	    code=$$(curl -s -o recv.txt -w "%{http_code}" --max-time 5 http://127.0.0.1:$(PORT)/); rc=$$?; \
 	    echo "curl exit=$$rc http_code=$$code" > curl.log; \
+	    for i in $$(seq 1 40); do [ -s parse.status ] && break; sleep 0.05; done; \
 	    exit $$rc' \
 	    > run.log 2>&1; \
 	  st=$$?; \
 	  code=$$(sed -n "s/.*http_code=//p" curl.log 2>/dev/null); \
 	  if cmp -s recv.txt body.txt; then content=match; else content=differ; fi; \
-	  if [ $$st -eq 0 ] && [ "$$code" = 200 ] && [ "$$content" = match ]; then \
-	    echo "  RESULT: PASS - curl got HTTP $$code and a byte-identical body from the verified server (request PARSED in-model)"; \
+	  status=$$(cat parse.status 2>/dev/null); \
+	  if [ "$$status" = "ok 1" ]; then parsed=ok; else parsed=no; fi; \
+	  if [ $$st -eq 0 ] && [ "$$code" = 200 ] && [ "$$content" = match ] && [ "$$parsed" = ok ]; then \
+	    echo "  RESULT: PASS - curl got HTTP $$code + byte-identical body, and the VERIFIED parser accepted curl's real request head (parse.status='$$status', target '/' = 1 byte)"; \
 	    rm -rf $(RUN_DIR_ABS); \
 	  else \
-	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/curl did not terminate: killed after $(TIMEOUT)s (code=$$code content=$$content)"; \
-	    else echo "  RESULT: FAIL - exit=$$st http_code=$$code content=$$content"; fi; \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/curl did not terminate: killed after $(TIMEOUT)s (code=$$code content=$$content parsed=$$parsed status='$$status')"; \
+	    else echo "  RESULT: FAIL - exit=$$st http_code=$$code content=$$content parsed=$$parsed status='$$status'"; fi; \
 	    echo "  --- curl.log ---"; cat curl.log 2>/dev/null; \
 	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
 	    echo "  (run dir kept at $(RUN_DIR_ABS) for inspection)"; \

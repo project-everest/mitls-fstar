@@ -99,6 +99,12 @@ int main(int argc, char **argv) {
 
   uint16_t port = (uint16_t)atoi(argv[1]);
 
+  /* Optional status file (env HTTP_PARSE_STATUS_FILE): after each request we
+     write "ok <target_len>" or "unrecognized" so a test harness can DETERMINISTIC-
+     ally assert that the VERIFIED parser accepted the client's request head
+     (persisting past the server being killed, unlike a racy stderr log). */
+  const char *status_path = getenv("HTTP_PARSE_STATUS_FILE");
+
   /* Resolve the response body: an optional file, else the built-in string. */
   uint8_t *body = NULL;
   size_t   body_len = 0;
@@ -167,6 +173,16 @@ int main(int argc, char **argv) {
     else
       fprintf(stderr, "http_server: request head not recognized (served 200 anyway, %zu-byte body)\n",
               body_len);
+
+    /* Deterministic status marker for the test harness. */
+    if (status_path) {
+      FILE *sf = fopen(status_path, "w");
+      if (sf) {
+        if (okr) fprintf(sf, "ok %zu\n", ptlen);
+        else     fprintf(sf, "unrecognized\n");
+        fclose(sf);
+      }
+    }
   }
 
   free(reqbuf); free(headbuf); free(scratch); free(body);
