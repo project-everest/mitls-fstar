@@ -263,22 +263,94 @@ let server_driver_network_reaches
   : prop =
   exists (path:list CS.connection_state). is_network_path st0 st1 path
 
-fn new_server
+fn new_server_listener
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  requires pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len)
+  returns result: option server_listener
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match result with
+           | Some listener -> IO.is_listener listener 'bind_host_bytes port
+           | None -> emp)
+{
+  IO.listen_tcp bind_host bind_host_len port
+}
+
+fn free_server_listener (listener:server_listener)
+  requires IO.is_listener listener 'bind_host_bytes 'port
+  ensures emp
+{
+  IO.close_listener listener
+}
+
+fn new_server_credentials
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (private_key:array U8.t)
+  (private_key_len:SZ.t)
+  requires pts_to certificate_chain 'certificate_chain_bytes **
+           pts_to private_key 'private_key_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'private_key_bytes == SZ.v private_key_len)
+  returns result: option server_credentials
+  ensures exists* credential_identity.
+          pts_to certificate_chain 'certificate_chain_bytes **
+          pts_to private_key 'private_key_bytes **
+          (match result with
+           | Some credentials ->
+             O.is_server_credentials
+               credentials
+               (Ghost.reveal 'certificate_chain_bytes)
+               credential_identity
+           | None -> emp)
+{
+  O.server_credentials_new
+    certificate_chain
+    certificate_chain_len
+    private_key
+    private_key_len
+}
+
+fn free_server_credentials (credentials:server_credentials)
+  requires O.is_server_credentials
+    credentials
+    'certificate_chain
+    'credential_identity
+  ensures emp
+{
+  O.server_credentials_free credentials
+}
+
+fn new_server_with_credentials
+  (credentials:server_credentials)
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
   (private_key:array U8.t)
   (private_key_len:SZ.t)
   (#supported_profile_provider: erased SP.server_supported_profile_provider)
-  requires pts_to certificate_chain 'certificate_chain_bytes **
-           pts_to private_key 'private_key_bytes **
-           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
-                 B.length 'private_key_bytes == SZ.v private_key_len)
+  requires (exists* credential_identity.
+             O.is_server_credentials
+               credentials
+               (Ghost.reveal 'certificate_chain_bytes)
+               credential_identity) **
+          pts_to certificate_chain 'certificate_chain_bytes **
+          pts_to private_key 'private_key_bytes **
+          pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                B.length 'private_key_bytes == SZ.v private_key_len /\
+                B.length 'certificate_chain_bytes <=
+                  Bounds.max_server_certificate_chain_len)
   returns result: option server_driver
   ensures pts_to certificate_chain 'certificate_chain_bytes **
           pts_to private_key 'private_key_bytes **
-          (match result with
-           | Some d ->
-             exists* credential_identity.
+          (exists* credential_identity.
+            O.is_server_credentials
+              credentials
+              (Ghost.reveal 'certificate_chain_bytes)
+              credential_identity **
+            (match result with
+             | Some d ->
                server_driver_live
                  d
                  (CR.server_initial_state
@@ -305,30 +377,13 @@ fn new_server
                        CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
                          credential_identity)
-           | None ->
-             emp) **
-          pure
-           (not (B.length 'certificate_chain_bytes <=
-                   Bounds.max_server_certificate_chain_len) ==>
-            result == None)
+             | None -> emp))
 {
-  (* Totalization: accept an arbitrary-length certificate chain at the API
-     boundary and reject (as [None], with all input resources preserved) any
-     chain that exceeds the authoritative [max_server_certificate_chain_len]
-     bound.  The check runs BEFORE any allocation or credential construction, so
-     the oversized path frees nothing and simply returns the untouched inputs.
-     On the in-bound path [within_bound == true] gives
-     [SZ.v certificate_chain_len <= SZ.v max_server_certificate_chain_len_sz],
-     and the [max_server_certificate_chain_len_sz] refinement rewrites the RHS to
-     [max_server_certificate_chain_len]; together with the [requires] equation
-     [B.length 'certificate_chain_bytes == SZ.v certificate_chain_len] this
-     re-establishes the bound that the credential/state constructors and the
-     strengthened [Some] postcondition rely on. *)
-  let within_bound =
-    SZ.lte certificate_chain_len Bounds.max_server_certificate_chain_len_sz;
-  if within_bound {
-  assert (pure (B.length 'certificate_chain_bytes <=
-                Bounds.max_server_certificate_chain_len));
+  with credential_identity.
+    assert (O.is_server_credentials
+      credentials
+      (Ghost.reveal 'certificate_chain_bytes)
+      credential_identity);
   let material_payload = V.alloc 0uy DS.driver_material_capacity;
   V.to_array_pts_to material_payload;
   let material_ok =
@@ -342,23 +397,7 @@ fn new_server
     V.free material_payload;
     None
   } else {
-  let creds_opt =
-    O.server_credentials_new
-      certificate_chain
-      certificate_chain_len
-      private_key
-      private_key_len;
-  match creds_opt {
-    None -> {
-      V.free material_payload;
-      None
-    }
-    Some creds -> {
-      with credential_identity. assert (
-        O.is_server_credentials
-          creds
-          (Ghost.reveal 'certificate_chain_bytes)
-          credential_identity);
+      let creds = O.server_credentials_clone credentials;
       let erased_identity : erased CS.server_credential_identity =
         Ghost.hide credential_identity;
       let s =
@@ -532,24 +571,111 @@ fn new_server
         (Ghost.reveal 'certificate_chain_bytes)
         credential_identity);
       Some d
+  }
+}
+
+fn new_server
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (private_key:array U8.t)
+  (private_key_len:SZ.t)
+  (#supported_profile_provider: erased SP.server_supported_profile_provider)
+  requires pts_to certificate_chain 'certificate_chain_bytes **
+           pts_to private_key 'private_key_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'private_key_bytes == SZ.v private_key_len)
+  returns result: option server_driver
+  ensures pts_to certificate_chain 'certificate_chain_bytes **
+          pts_to private_key 'private_key_bytes **
+          (match result with
+           | Some d ->
+             exists* credential_identity.
+               server_driver_live
+                 d
+                 (CR.server_initial_state
+                   (Ghost.reveal 'certificate_chain_bytes)
+                   credential_identity)
+                 (Ghost.reveal 'certificate_chain_bytes)
+                 credential_identity **
+               pure (ST.server_state_correct
+                       (CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity) /\
+                     CM.can_start_server
+                       (CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity) /\
+                     ST.server_end_to_end_invariant
+                       (CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity) /\
+                     B.length 'certificate_chain_bytes <=
+                       Bounds.max_server_certificate_chain_len /\
+                     Ghost.reveal
+                       (server_driver_canonical d).SP.canonical_server_initial ==
+                       CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity)
+           | None -> emp) **
+          pure
+           (not (B.length 'certificate_chain_bytes <=
+                   Bounds.max_server_certificate_chain_len) ==>
+            result == None)
+{
+  let within_bound =
+    SZ.lte certificate_chain_len Bounds.max_server_certificate_chain_len_sz;
+  if within_bound {
+    assert (pure (B.length 'certificate_chain_bytes <=
+                  Bounds.max_server_certificate_chain_len));
+    let credentials_opt =
+      new_server_credentials
+        certificate_chain
+        certificate_chain_len
+        private_key
+        private_key_len;
+    match credentials_opt {
+      None -> { None }
+      Some credentials -> {
+        with credential_identity.
+          assert (O.is_server_credentials
+            credentials
+            (Ghost.reveal 'certificate_chain_bytes)
+            credential_identity);
+        let result =
+          new_server_with_credentials
+            credentials
+            certificate_chain
+            certificate_chain_len
+            private_key
+            private_key_len
+            #supported_profile_provider;
+        match result {
+          None -> {
+            free_server_credentials credentials;
+            None
+          }
+          Some d -> {
+            free_server_credentials credentials;
+            Some d
+          }
+        }
+      }
     }
-  }
-  }
   } else {
-    (* Oversized certificate chain: nothing has been allocated yet, so return
-       [None] with the (untouched) input resources preserved. *)
     None
   }
 }
 
 fn accept_connected
   (d:server_driver)
+  (source:DT.server_transport_source)
   (bind_host:array U8.t)
   (bind_host_len:SZ.t)
   (port:U16.t)
   (local_fuel:SZ.t)
   (network_fuel:SZ.t)
-  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+  requires DT.owns_server_transport_source source 'bind_host_bytes port **
+           server_driver_live d 'st0 'certificate_chain 'credential_identity **
            pts_to bind_host 'bind_host_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
                  CM.can_start_server 'st0 /\
@@ -568,7 +694,8 @@ fn accept_connected
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns status:server_workflow_status
-  ensures pts_to bind_host 'bind_host_bytes **
+  ensures DT.owns_server_transport_source source 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
           (match status with
            | ServerWorkflowClosed ->
              exists* st1.
@@ -606,6 +733,7 @@ fn accept_connected
   let result =
     accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
       d
+      source
       bind_host
       bind_host_len
       port
@@ -898,6 +1026,82 @@ fn accept_connected
   }
 }
 
+fn accept_from_source
+  (d:server_driver)
+  (source:DT.server_transport_source)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires DT.owns_server_transport_source source 'bind_host_bytes port **
+           server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                 CM.can_start_server 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.Rsa_pss_rsae_sha256 /\
+                    cfg.CS.server_sni_policy == None
+                  | None -> False))
+  returns status:server_workflow_status
+  ensures DT.owns_server_transport_source source 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerWorkflowOk ->
+             exists* raw_received raw_sent app_log.
+               DS.server_channel_inv d raw_received raw_sent app_log
+           | ServerWorkflowClosed ->
+             exists* st1.
+               server_driver_closed
+                 d st1 'certificate_chain 'credential_identity
+           | _ ->
+             exists* st1 received sent.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent)
+{
+  let status =
+    accept_connected
+      d source bind_host bind_host_len port local_fuel network_fuel;
+  match status {
+    ServerWorkflowOk -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d st1 'certificate_chain 'credential_identity received sent);
+      SChannel.pack_connected_channel
+        d
+        (Ghost.hide st1)
+        (Ghost.hide (Ghost.reveal 'certificate_chain))
+        (Ghost.hide (Ghost.reveal 'credential_identity))
+        (Ghost.hide received)
+        (Ghost.hide sent);
+      ServerWorkflowOk
+    }
+    ServerWorkflowNeedMoreInput -> { ServerWorkflowNeedMoreInput }
+    ServerWorkflowStepFailed -> { ServerWorkflowStepFailed }
+    ServerWorkflowExhausted -> { ServerWorkflowExhausted }
+    ServerWorkflowClosed -> { ServerWorkflowClosed }
+    ServerWorkflowPayloadTooLarge -> { ServerWorkflowPayloadTooLarge }
+    ServerWorkflowOutputBufferTooSmall -> {
+      ServerWorkflowOutputBufferTooSmall
+    }
+  }
+}
+
 fn accept
   (d:server_driver)
   (bind_host:array U8.t)
@@ -943,32 +1147,73 @@ fn accept
                  received
                  sent)
 {
+  fold (DT.owns_server_transport_source None 'bind_host_bytes port);
   let status =
-    accept_connected
-      d bind_host bind_host_len port local_fuel network_fuel;
-  match status {
-    ServerWorkflowOk -> {
-      with st1 received sent.
-        assert (server_driver_connected
-          d st1 'certificate_chain 'credential_identity received sent);
-      SChannel.pack_connected_channel
-        d
-        (Ghost.hide st1)
-        (Ghost.hide (Ghost.reveal 'certificate_chain))
-        (Ghost.hide (Ghost.reveal 'credential_identity))
-        (Ghost.hide received)
-        (Ghost.hide sent);
-      ServerWorkflowOk
-    }
-    ServerWorkflowNeedMoreInput -> { ServerWorkflowNeedMoreInput }
-    ServerWorkflowStepFailed -> { ServerWorkflowStepFailed }
-    ServerWorkflowExhausted -> { ServerWorkflowExhausted }
-    ServerWorkflowClosed -> { ServerWorkflowClosed }
-    ServerWorkflowPayloadTooLarge -> { ServerWorkflowPayloadTooLarge }
-    ServerWorkflowOutputBufferTooSmall -> {
-      ServerWorkflowOutputBufferTooSmall
-    }
-  }
+    accept_from_source
+      d None bind_host bind_host_len port local_fuel network_fuel;
+  unfold (DT.owns_server_transport_source None 'bind_host_bytes port);
+  status
+}
+
+fn accept_with_listener
+  (d:server_driver)
+  (listener:server_listener)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires IO.is_listener listener 'bind_host_bytes port **
+           server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                 CM.can_start_server 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.Rsa_pss_rsae_sha256 /\
+                    cfg.CS.server_sni_policy == None
+                  | None -> False))
+  returns status:server_workflow_status
+  ensures IO.is_listener listener 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerWorkflowOk ->
+             exists* raw_received raw_sent app_log.
+               DS.server_channel_inv d raw_received raw_sent app_log
+           | ServerWorkflowClosed ->
+             exists* st1.
+               server_driver_closed
+                 d st1 'certificate_chain 'credential_identity
+           | _ ->
+             exists* st1 received sent.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent)
+{
+  rewrite (IO.is_listener listener 'bind_host_bytes port) as
+    (DT.owns_server_transport_source
+      (Some listener) 'bind_host_bytes port);
+  let status =
+    accept_from_source
+      d (Some listener) bind_host bind_host_len port local_fuel network_fuel;
+  rewrite
+    (DT.owns_server_transport_source
+      (Some listener) 'bind_host_bytes port) as
+    (IO.is_listener listener 'bind_host_bytes port);
+  status
 }
 
 let lemma_local_send_application_log

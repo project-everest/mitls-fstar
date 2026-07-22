@@ -830,20 +830,11 @@ static int run_client_handshakes(
 }
 
 static int verified_server_once(
-    uint16_t port,
-    const struct buffer *certificate,
-    const struct buffer *key,
+    const tls13_server_config *config,
     uint64_t *latency_ns) {
   tls13_server_driver *driver = NULL;
   uint64_t start = clock_ns(CLOCK_MONOTONIC_RAW);
-  int result = tls13_server_driver_accept(
-      &driver,
-      "127.0.0.1",
-      port,
-      certificate->data,
-      certificate->len,
-      key->data,
-      key->len);
+  int result = tls13_server_driver_accept_with_config(&driver, config);
   *latency_ns = clock_ns(CLOCK_MONOTONIC_RAW) - start;
   if (result != 0) {
     fprintf(
@@ -881,6 +872,7 @@ static int run_server_handshakes(
     uint64_t *latencies) {
   struct buffer certificate = {0};
   struct buffer key = {0};
+  tls13_server_config *verified_config = NULL;
   SSL_CTX *server_context = NULL;
   int listener = -1;
   int sync_pair[2] = {-1, -1};
@@ -893,7 +885,16 @@ static int run_server_handshakes(
   }
   if (options->benchmark->implementation == IMPL_VERIFIED) {
     if (read_file(files->leaf_der, &certificate) != 0 ||
-        read_file(files->leaf_key, &key) != 0) {
+        read_file(files->leaf_key, &key) != 0 ||
+        tls13_server_config_new(
+            &verified_config,
+            "127.0.0.1",
+            port,
+            certificate.data,
+            certificate.len,
+            key.data,
+            key.len) != 0) {
+      tls13_server_config_free(verified_config);
       free(certificate.data);
       free(key.data);
       close(sync_pair[0]);
@@ -922,6 +923,7 @@ static int run_server_handshakes(
     if (listener >= 0) {
       close(listener);
     }
+    tls13_server_config_free(verified_config);
     free(certificate.data);
     free(key.data);
     close(sync_pair[0]);
@@ -933,6 +935,7 @@ static int run_server_handshakes(
     if (listener >= 0) {
       close(listener);
     }
+    tls13_server_config_free(verified_config);
     int result = openssl_client_handshake_peer(
         port,
         options->warmup + options->iterations,
@@ -947,7 +950,7 @@ static int run_server_handshakes(
     uint64_t ignored = 0u;
     if (signal_ready(sync_pair[0]) != 0 ||
         (options->benchmark->implementation == IMPL_VERIFIED
-             ? verified_server_once(port, &certificate, &key, &ignored)
+             ? verified_server_once(verified_config, &ignored)
              : openssl_server_once(server_context, listener, &ignored)) != 0) {
       result = -1;
       break;
@@ -960,8 +963,7 @@ static int run_server_handshakes(
   for (size_t i = 0u; result == 0 && i < options->iterations; ++i) {
     if (signal_ready(sync_pair[0]) != 0 ||
         (options->benchmark->implementation == IMPL_VERIFIED
-             ? verified_server_once(
-                   port, &certificate, &key, &latencies[i])
+             ? verified_server_once(verified_config, &latencies[i])
              : openssl_server_once(
                    server_context, listener, &latencies[i])) != 0) {
       result = -1;
@@ -980,6 +982,7 @@ static int run_server_handshakes(
     close(listener);
   }
   SSL_CTX_free(server_context);
+  tls13_server_config_free(verified_config);
   free(certificate.data);
   free(key.data);
   return result;

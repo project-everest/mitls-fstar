@@ -42,6 +42,7 @@ struct TLS13_OpenSSL_auth_context_s {
 };
 
 struct TLS13_OpenSSL_server_credentials_s {
+  atomic_size_t references;
   tls13_server_credentials *raw;
 };
 
@@ -186,10 +187,22 @@ TLS13_OpenSSL_server_credentials_new(
     tls13_openssl_server_credentials_free(raw);
     return result;
   }
+  atomic_init(&creds->references, (size_t)1u);
   creds->raw = raw;
   result.tag = FStar_Pervasives_Native_Some;
   result.v = creds;
   return result;
+}
+
+TLS13_OpenSSL_server_credentials
+TLS13_OpenSSL_server_credentials_clone(
+    TLS13_OpenSSL_server_credentials creds) {
+  if (creds == NULL) {
+    abort();
+  }
+  (void)atomic_fetch_add_explicit(
+      &creds->references, (size_t)1u, memory_order_relaxed);
+  return creds;
 }
 
 FStar_Pervasives_Native_option__size_t
@@ -265,6 +278,11 @@ void TLS13_OpenSSL_auth_context_free(TLS13_OpenSSL_auth_context ctx) {
 
 void TLS13_OpenSSL_server_credentials_free(TLS13_OpenSSL_server_credentials creds) {
   if (creds == NULL) {
+    return;
+  }
+  if (atomic_fetch_sub_explicit(
+          &creds->references, (size_t)1u, memory_order_acq_rel) !=
+      (size_t)1u) {
     return;
   }
   tls13_openssl_server_credentials_free(creds->raw);

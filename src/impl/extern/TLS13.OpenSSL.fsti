@@ -95,6 +95,12 @@ fn server_credentials_new
                credential_identity
            | None -> emp)
 
+fn server_credentials_clone (creds:server_credentials)
+  requires is_server_credentials creds 'certificate_chain 'credential_identity
+  returns clone: server_credentials
+  ensures is_server_credentials creds 'certificate_chain 'credential_identity **
+          is_server_credentials clone 'certificate_chain 'credential_identity
+
 fn sign_certificate_verify
   (creds:server_credentials)
   (input:array U8.t)
