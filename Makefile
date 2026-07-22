@@ -530,6 +530,7 @@ TLS13_BUNDLE_KRML_FILES = \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
+  $(OUTPUT_DIR)/Common_BufferedTCP_Internal.krml \
   $(OUTPUT_DIR)/Common_BufferedTCP.krml \
   $(OUTPUT_DIR)/Common_Memmove.krml \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml

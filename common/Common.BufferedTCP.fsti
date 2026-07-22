@@ -3,12 +3,16 @@ module Common.BufferedTCP
 #lang-pulse
 
 (**
-  Public contract for protocol-independent buffered TCP input.
+  Abstract ownership interface for a buffered TCP channel.
 
-  The pure model records a fixed-capacity backing sequence and the number of
-  pending bytes densely stored at its front.  The imperative operations expose
-  only verified in-place compaction and append-read; their masked-array proofs
-  and sequence-manipulation helpers remain private to the implementation.
+  A [t] exclusively owns a TCP channel, its fixed-capacity receive storage, and
+  its current pending length.  Clients reason only about [phys_buffer], the
+  logical model of that storage.  The concrete channel, array, length cell, and
+  compaction machinery are hidden by [is_buffered].
+
+  The scheduling layer in [Common.BufferedStream] is responsible for deciding
+  when [read_more] may be called.  In particular, applications should receive a
+  buffered-stream abstraction rather than the underlying [t].
 **)
 
 open Pulse.Lib.Pervasives
@@ -19,219 +23,114 @@ module SZ  = FStar.SizeT
 module U8  = FStar.UInt8
 module TCP = Common.TCP
 
-let take (s:TCP.bytes) (n:nat) : TCP.bytes =
-  Seq.slice s 0 (if n <= Seq.length s then n else Seq.length s)
+type bytes = TCP.bytes
 
-let drop (s:TCP.bytes) (n:nat) : TCP.bytes =
-  Seq.slice s (if n <= Seq.length s then n else Seq.length s) (Seq.length s)
+(* -------------------------------------------------------------------------- *)
+(* Logical buffer model                                                       *)
+(* -------------------------------------------------------------------------- *)
 
-noeq
-type phys_buffer = {
-  pb_data   : TCP.bytes;
-  pb_filled : nat;
-}
+val phys_buffer : Type0
 
-let buffer_data (b:phys_buffer) : TCP.bytes =
-  b.pb_data
+val pending : phys_buffer -> bytes
+val capacity : phys_buffer -> nat
 
-let filled_count (b:phys_buffer) : nat =
-  b.pb_filled
-
-let buffer_wf (b:phys_buffer) : prop =
-  filled_count b <= Seq.length (buffer_data b)
-
-let capacity (b:phys_buffer) : nat =
-  Seq.length (buffer_data b)
-
-let live_count (b:phys_buffer) : nat =
-  if filled_count b <= Seq.length (buffer_data b)
-  then filled_count b
-  else Seq.length (buffer_data b)
-
-let pending (b:phys_buffer) : TCP.bytes =
-  Seq.slice (buffer_data b) 0 (live_count b)
+val buffer_wf : phys_buffer -> prop
 
 let free_space (b:phys_buffer) : nat =
-  Seq.length (buffer_data b) - live_count b
+  if Seq.length (pending b) <= capacity b
+  then capacity b - Seq.length (pending b)
+  else 0
 
-val lemma_live_wf
+let can_read (b:phys_buffer) : prop =
+  0 < free_space b
+
+let chunk_fits (b:phys_buffer) (chunk:bytes) : prop =
+  Seq.length chunk <= free_space b
+
+let take (s:bytes) (n:nat) : bytes =
+  Seq.slice s 0 (if n <= Seq.length s then n else Seq.length s)
+
+let drop (s:bytes) (n:nat) : bytes =
+  Seq.slice s (if n <= Seq.length s then n else Seq.length s) (Seq.length s)
+
+let received_split
+  (received delivered:bytes)
   (b:phys_buffer)
-  : Lemma
-      (requires buffer_wf b)
-      (ensures live_count b == filled_count b)
+  : prop =
+  Seq.equal received (Seq.append delivered (pending b))
+
+let committed_after
+  (delivered:bytes)
+  (b:phys_buffer)
+  (consumed:nat)
+  : bytes =
+  Seq.append delivered (take (pending b) consumed)
+
+val compact : phys_buffer -> consumed:nat -> phys_buffer
+val append_read : phys_buffer -> chunk:bytes -> phys_buffer
 
 val lemma_pending_length
   (b:phys_buffer)
   : Lemma
       (requires buffer_wf b)
-      (ensures Seq.length (pending b) == filled_count b)
-
-val lemma_pending_dense_prefix
-  (b:phys_buffer)
-  : Lemma
-      (requires buffer_wf b)
-      (ensures TCP.bytes_exact_prefix (pending b) (buffer_data b))
-
-val lemma_free_space_wf
-  (b:phys_buffer)
-  : Lemma
-      (requires buffer_wf b)
-      (ensures
-        free_space b == capacity b - filled_count b /\
-        filled_count b + free_space b == capacity b)
-
-let received_split
-  (received committed:TCP.bytes)
-  (b:phys_buffer)
-  : prop =
-  Seq.equal received (Seq.append committed (pending b))
-
-let history_received_split
-  (h:TCP.history)
-  (committed:TCP.bytes)
-  (b:phys_buffer)
-  : prop =
-  received_split h.TCP.tcp_received committed b
-
-val lemma_committed_prefix
-  (received committed:TCP.bytes)
-  (b:phys_buffer)
-  : Lemma
-      (requires received_split received committed b)
-      (ensures TCP.bytes_extends committed received)
-
-val lemma_pending_is_tail
-  (received committed:TCP.bytes)
-  (b:phys_buffer)
-  : Lemma
-      (requires received_split received committed b)
-      (ensures
-        Seq.length committed <= Seq.length received /\
-        Seq.equal
-          (pending b)
-          (Seq.slice received (Seq.length committed) (Seq.length received)))
-
-let committed_after
-  (committed:TCP.bytes)
-  (b:phys_buffer)
-  (n:nat)
-  : TCP.bytes =
-  Seq.append committed (take (pending b) n)
-
-let compact (b:phys_buffer) (n:nat) : phys_buffer =
-  let f = live_count b in
-  let k = if n <= f then n else f in
-  {
-    pb_data =
-      Seq.append
-        (Seq.slice (buffer_data b) k f)
-        (Seq.slice
-          (buffer_data b)
-          (f - k)
-          (Seq.length (buffer_data b)));
-    pb_filled = f - k;
-  }
-
-val lemma_compact_capacity
-  (b:phys_buffer)
-  (n:nat)
-  : Lemma
-      (ensures capacity (compact b n) == capacity b)
+      (ensures Seq.length (pending b) <= capacity b)
 
 val lemma_compact_wf
   (b:phys_buffer)
-  (n:nat)
+  (consumed:nat)
   : Lemma
-      (ensures buffer_wf (compact b n))
-
-val lemma_compact_filled
-  (b:phys_buffer)
-  (n:nat)
-  : Lemma
-      (requires buffer_wf b /\ n <= filled_count b)
-      (ensures filled_count (compact b n) == filled_count b - n)
+      (requires buffer_wf b /\ consumed <= Seq.length (pending b))
+      (ensures buffer_wf (compact b consumed))
 
 val lemma_compact_pending
   (b:phys_buffer)
-  (n:nat)
+  (consumed:nat)
   : Lemma
-      (requires buffer_wf b /\ n <= filled_count b)
-      (ensures Seq.equal (pending (compact b n)) (drop (pending b) n))
+      (requires buffer_wf b /\ consumed <= Seq.length (pending b))
+      (ensures
+        Seq.equal
+          (pending (compact b consumed))
+          (drop (pending b) consumed))
 
 val lemma_committed_after_extends
-  (committed:TCP.bytes)
+  (delivered:bytes)
   (b:phys_buffer)
-  (n:nat)
+  (consumed:nat)
   : Lemma
-      (ensures TCP.bytes_extends committed (committed_after committed b n))
+      (ensures TCP.bytes_extends delivered (committed_after delivered b consumed))
 
 val lemma_commit_preserves_full
-  (received committed:TCP.bytes)
+  (received delivered:bytes)
   (b:phys_buffer)
-  (n:nat)
+  (consumed:nat)
   : Lemma
       (requires
-        received_split received committed b /\
+        received_split received delivered b /\
         buffer_wf b /\
-        n <= filled_count b)
+        consumed <= Seq.length (pending b))
       (ensures
         received_split
           received
-          (committed_after committed b n)
-          (compact b n))
-
-let chunk_fits (b:phys_buffer) (chunk:TCP.bytes) : prop =
-  Seq.length chunk <= free_space b
-
-let read_request_ok (b:phys_buffer) (max_len:nat) : prop =
-  0 < max_len /\ max_len <= free_space b
-
-let can_read (b:phys_buffer) : prop =
-  free_space b > 0
-
-let append_read (b:phys_buffer) (chunk:TCP.bytes) : phys_buffer =
-  let f = live_count b in
-  if f + Seq.length chunk <= Seq.length (buffer_data b)
-  then
-    {
-      pb_data =
-        Seq.append
-          (Seq.slice (buffer_data b) 0 f)
-          (Seq.append
-            chunk
-            (Seq.slice
-              (buffer_data b)
-              (f + Seq.length chunk)
-              (Seq.length (buffer_data b))));
-      pb_filled = f + Seq.length chunk;
-    }
-  else b
-
-val lemma_append_read_capacity
-  (b:phys_buffer)
-  (chunk:TCP.bytes)
-  : Lemma
-      (ensures capacity (append_read b chunk) == capacity b)
+          (committed_after delivered b consumed)
+          (compact b consumed))
 
 val lemma_append_read_wf
   (b:phys_buffer)
-  (chunk:TCP.bytes)
-  : Lemma
-      (requires buffer_wf b)
-      (ensures buffer_wf (append_read b chunk))
-
-val lemma_append_read_filled
-  (b:phys_buffer)
-  (chunk:TCP.bytes)
+  (chunk:bytes)
   : Lemma
       (requires buffer_wf b /\ chunk_fits b chunk)
-      (ensures
-        filled_count (append_read b chunk) ==
-          filled_count b + Seq.length chunk)
+      (ensures buffer_wf (append_read b chunk))
+
+val lemma_append_read_capacity
+  (b:phys_buffer)
+  (chunk:bytes)
+  : Lemma
+      (requires buffer_wf b /\ chunk_fits b chunk)
+      (ensures capacity (append_read b chunk) == capacity b)
 
 val lemma_append_read_pending
   (b:phys_buffer)
-  (chunk:TCP.bytes)
+  (chunk:bytes)
   : Lemma
       (requires buffer_wf b /\ chunk_fits b chunk)
       (ensures
@@ -239,222 +138,245 @@ val lemma_append_read_pending
           (pending (append_read b chunk))
           (Seq.append (pending b) chunk))
 
-val lemma_append_read_pending_extends
-  (b:phys_buffer)
-  (chunk:TCP.bytes)
-  : Lemma
-      (requires buffer_wf b /\ chunk_fits b chunk)
-      (ensures
-        TCP.bytes_extends
-          (pending b)
-          (pending (append_read b chunk)))
-
 val lemma_append_read_extends_received
-  (received committed:TCP.bytes)
+  (received delivered:bytes)
   (b:phys_buffer)
-  (chunk:TCP.bytes)
+  (chunk:bytes)
   : Lemma
       (requires
-        received_split received committed b /\
+        received_split received delivered b /\
         buffer_wf b /\
         chunk_fits b chunk)
       (ensures
         received_split
           (Seq.append received chunk)
-          committed
+          delivered
           (append_read b chunk))
 
-val lemma_append_read_history
-  (h:TCP.history)
-  (committed:TCP.bytes)
-  (b:phys_buffer)
-  (chunk:TCP.bytes)
-  : Lemma
-      (requires
-        history_received_split h committed b /\
-        buffer_wf b /\
-        chunk_fits b chunk)
-      (ensures
-        history_received_split
-          (TCP.append_received h chunk)
-          committed
-          (append_read b chunk))
+(* -------------------------------------------------------------------------- *)
+(* Abstract buffered channel ownership                                        *)
+(* -------------------------------------------------------------------------- *)
 
-val lemma_can_read_iff
-  (b:phys_buffer)
-  : Lemma
-      (requires buffer_wf b)
-      (ensures (can_read b <==> filled_count b < capacity b))
+val t : Type0
 
-val lemma_read_request_available
-  (b:phys_buffer)
-  : Lemma
-      (requires buffer_wf b /\ can_read b)
-      (ensures read_request_ok b (free_space b))
+val is_buffered :
+  b:t ->
+  model:phys_buffer ->
+  received:bytes ->
+  delivered:bytes ->
+  sent:bytes ->
+  slprop
 
-val lemma_full_no_read
-  (b:phys_buffer)
-  (max_len:nat)
-  : Lemma
-      (requires buffer_wf b /\ ~(can_read b))
-      (ensures ~(read_request_ok b max_len))
-
-val lemma_read_chunk_fits
-  (b:phys_buffer)
-  (max_len:nat)
-  (chunk:TCP.bytes)
-  : Lemma
-      (requires
-        read_request_ok b max_len /\
-        Seq.length chunk <= max_len)
-      (ensures chunk_fits b chunk)
-
-let empty_buffer (cap:nat) : phys_buffer =
-  { pb_data = Seq.create cap 0uy; pb_filled = 0 }
-
-val lemma_empty_buffer_wf
-  (cap:nat)
-  : Lemma
-      (ensures
-        buffer_wf (empty_buffer cap) /\
-        capacity (empty_buffer cap) == cap)
-
-val lemma_empty_buffer_pending
-  (cap:nat)
-  : Lemma
-      (ensures Seq.equal (pending (empty_buffer cap)) Seq.empty)
-
-val lemma_empty_buffer_received
-  (cap:nat)
-  : Lemma
-      (ensures received_split Seq.empty Seq.empty (empty_buffer cap))
-
-let mk_phys_buffer (data:TCP.bytes) (filled:nat) : phys_buffer =
-  { pb_data = data; pb_filled = filled }
-
-let pending_after_consumed
-  (buffered_len consumed_len:SZ.t)
-  : SZ.t =
-  if SZ.lte consumed_len buffered_len
-  then SZ.sub buffered_len consumed_len
-  else 0sz
-
-fn compact_buffer_suffix
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (buffered_len:SZ.t)
-  (consumed_len:SZ.t)
+ghost fn recall_model
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
   requires
-    pts_to raw 'raw_bytes **
-    pure (
-      Seq.length (Ghost.reveal 'raw_bytes) == SZ.v raw_capacity /\
-      SZ.v consumed_len <= SZ.v buffered_len /\
-      SZ.v buffered_len <= SZ.v raw_capacity)
-  returns new_len:SZ.t
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
   ensures
-    exists* raw_after.
-      pts_to raw raw_after **
-      pure (
-        Seq.length raw_after == SZ.v raw_capacity /\
-        Seq.length (Ghost.reveal 'raw_bytes) == SZ.v raw_capacity /\
-        SZ.v consumed_len <= SZ.v buffered_len /\
-        SZ.v buffered_len <= SZ.v raw_capacity /\
-        new_len == pending_after_consumed buffered_len consumed_len /\
-        SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
-        SZ.v new_len <= SZ.v buffered_len /\
-        Seq.equal
-          (Seq.slice raw_after 0 (SZ.v new_len))
-          (Seq.slice
-            (Ghost.reveal 'raw_bytes)
-            (SZ.v consumed_len)
-            (SZ.v buffered_len)) /\
-        buffer_wf
-          (mk_phys_buffer
-            (Ghost.reveal 'raw_bytes)
-            (SZ.v buffered_len)) /\
-        SZ.v new_len ==
-          filled_count
-            (compact
-              (mk_phys_buffer
-                (Ghost.reveal 'raw_bytes)
-                (SZ.v buffered_len))
-              (SZ.v consumed_len)) /\
-        Seq.equal
-          (Seq.slice raw_after 0 (SZ.v new_len))
-          (pending
-            (compact
-              (mk_phys_buffer
-                (Ghost.reveal 'raw_bytes)
-                (SZ.v buffered_len))
-              (SZ.v consumed_len))))
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent) **
+    pure (
+      buffer_wf (Ghost.reveal model) /\
+      received_split
+        (Ghost.reveal received)
+        (Ghost.reveal delivered)
+        (Ghost.reveal model))
 
-noeq
-type read_append_result = {
-  ra_read  : SZ.t;
-  ra_total : SZ.t;
-}
-
-let read_count (res:read_append_result) : SZ.t =
-  res.ra_read
-
-let total_count (res:read_append_result) : SZ.t =
-  res.ra_total
-
-fn read_append
+fn wrap_empty
   (ch:TCP.channel)
-  (raw:array U8.t)
-  (capacity:SZ.t)
-  (filled:SZ.t)
-  (#received #sent:Ghost.erased TCP.bytes)
-  requires
-    TCP.is_channel ch received sent **
-    pts_to raw 'raw_before **
-    pure (
-      Seq.length (Ghost.reveal 'raw_before) == SZ.v capacity /\
-      SZ.v filled < SZ.v capacity)
-  returns res:read_append_result
+  (buffer_capacity:SZ.t)
+  requires TCP.is_channel ch 'received 'sent
+  returns b:t
   ensures
-    exists* raw_after chunk.
-      TCP.is_channel
-        ch
-        (Seq.append (Ghost.reveal received) chunk)
-        (Ghost.reveal sent) **
-      pts_to raw raw_after **
+    exists* model.
+      is_buffered
+        b
+        model
+        (Ghost.reveal 'received)
+        (Ghost.reveal 'received)
+        (Ghost.reveal 'sent) **
       pure (
-        Seq.length raw_after == SZ.v capacity /\
-        Seq.length (Ghost.reveal 'raw_before) == SZ.v capacity /\
-        SZ.v filled <= SZ.v capacity /\
-        SZ.v (read_count res) <= SZ.v capacity - SZ.v filled /\
-        SZ.v (total_count res) == SZ.v filled + SZ.v (read_count res) /\
-        SZ.v (total_count res) <= SZ.v capacity /\
-        Seq.length chunk == SZ.v (read_count res) /\
+        buffer_wf model /\
+        capacity model == SZ.v buffer_capacity /\
+        Seq.equal (pending model) Seq.empty)
+
+(* -------------------------------------------------------------------------- *)
+(* Read-only pending view                                                     *)
+(* -------------------------------------------------------------------------- *)
+
+val pending_view : Type0
+val view_data : pending_view -> array U8.t
+val view_length : pending_view -> SZ.t
+
+val buffered_frame :
+  b:t ->
+  view:pending_view ->
+  model:phys_buffer ->
+  received:bytes ->
+  delivered:bytes ->
+  sent:bytes ->
+  slprop
+
+fn borrow_pending
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  returns view:pending_view
+  ensures
+    pts_to (view_data view) (pending (Ghost.reveal model)) **
+    buffered_frame
+      b
+      view
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent) **
+    pure (SZ.v (view_length view) == Seq.length (pending (Ghost.reveal model)))
+
+fn release_pending
+  (b:t)
+  (view:pending_view)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    pts_to (view_data view) (pending (Ghost.reveal model)) **
+    buffered_frame
+      b
+      view
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+
+(* -------------------------------------------------------------------------- *)
+(* State transitions                                                          *)
+(* -------------------------------------------------------------------------- *)
+
+fn commit_prefix
+  (b:t)
+  (consumed:SZ.t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent) **
+    pure (SZ.v consumed <= Seq.length (pending (Ghost.reveal model)))
+  returns remaining:SZ.t
+  ensures
+    exists* model'.
+      is_buffered
+        b
+        model'
+        (Ghost.reveal received)
+        (committed_after
+          (Ghost.reveal delivered)
+          (Ghost.reveal model)
+          (SZ.v consumed))
+        (Ghost.reveal sent) **
+      pure (
+        buffer_wf model' /\
+        capacity model' == capacity (Ghost.reveal model) /\
         Seq.equal
-          (Seq.slice raw_after 0 (SZ.v filled))
-          (Seq.slice
-            (Ghost.reveal 'raw_before)
-            0
-            (SZ.v filled)) /\
+          (pending model')
+          (drop (pending (Ghost.reveal model)) (SZ.v consumed)) /\
+        SZ.v remaining == Seq.length (pending model'))
+
+fn read_more
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent) **
+    pure (buffer_wf (Ghost.reveal model) /\ can_read (Ghost.reveal model))
+  returns read_len:SZ.t
+  ensures
+    exists* chunk model'.
+      is_buffered
+        b
+        model'
+        (Seq.append (Ghost.reveal received) chunk)
+        (Ghost.reveal delivered)
+        (Ghost.reveal sent) **
+      pure (
+        Seq.length chunk == SZ.v read_len /\
+        buffer_wf model' /\
+        capacity model' == capacity (Ghost.reveal model) /\
         Seq.equal
-          (Seq.slice raw_after 0 (SZ.v (total_count res)))
-          (Seq.append
-            (Seq.slice
-              (Ghost.reveal 'raw_before)
-              0
-              (SZ.v filled))
-            chunk) /\
-        buffer_wf
-          (mk_phys_buffer raw_after (SZ.v (total_count res))) /\
-        chunk_fits
-          (mk_phys_buffer
-            (Ghost.reveal 'raw_before)
-            (SZ.v filled))
-          chunk /\
-        Seq.equal
-          (pending
-            (mk_phys_buffer raw_after (SZ.v (total_count res))))
-          (Seq.append
-            (pending
-              (mk_phys_buffer
-                (Ghost.reveal 'raw_before)
-                (SZ.v filled)))
-            chunk))
+          (pending model')
+          (Seq.append (pending (Ghost.reveal model)) chunk))
+
+fn write
+  (b:t)
+  (data:array U8.t)
+  (len:SZ.t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent) **
+    pts_to data 'bytes **
+    pure (SZ.v len <= Seq.length (Ghost.reveal 'bytes))
+  returns written:SZ.t
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Seq.append
+        (Ghost.reveal sent)
+        (if SZ.v written <= Seq.length (Ghost.reveal 'bytes)
+         then Seq.slice (Ghost.reveal 'bytes) 0 (SZ.v written)
+         else Seq.create 0 0uy)) **
+    pts_to data 'bytes **
+    pure (written == len)
+
+fn close
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  ensures emp

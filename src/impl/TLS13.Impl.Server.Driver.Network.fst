@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Common.BufferedTCP.Internal
 module BS = Common.BufferedStream
 module CI = Common.ChannelImplementation
 module A = Pulse.Lib.Array

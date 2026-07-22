@@ -443,7 +443,7 @@ let lemma_commit_count_ok
       (requires BT.buffer_wf b)
       (ensures
         consumed_of (sp.sp_classify st (BT.pending b)) <=
-          BT.filled_count b)
+          Seq.length (BT.pending b))
 = sp.sp_consumption st (BT.pending b);
   BT.lemma_pending_length b
 
@@ -659,11 +659,11 @@ let process_transition
     // class, NOT by this live transition — so its case here is irrelevant.
     True
   | Progress k ->
-    0 < k /\ k <= BT.filled_count b /\
+    0 < k /\ k <= Seq.length (BT.pending b) /\
     Seq.equal committed' (BT.committed_after committed b k) /\
     b' == BT.compact b k
   | Yield k _ ->
-    0 < k /\ k <= BT.filled_count b /\
+    0 < k /\ k <= Seq.length (BT.pending b) /\
     Seq.equal committed' (BT.committed_after committed b k) /\
     b' == BT.compact b k
 
@@ -764,36 +764,6 @@ let lemma_read_delivers_intro
   introduce exists (c:TCP.bytes).
       BT.chunk_fits b c /\
       Seq.equal (BT.pending (BT.append_read b chunk)) (Seq.append (BT.pending b) c) /\
-      Seq.equal (Seq.append received chunk) (Seq.append received c)
-  with chunk and ()
-
-(**
-  The real [Common.BufferedTCP.read_append] primitive establishes [read_delivers]:
-  from its transport postcondition (buffer well-formed, capacity preserved, dense
-  prefix == old pending ++ chunk, history advanced by chunk) the process-gated
-  [bse_read] caller derives the class contract for the append-read buffer.
-**)
-let lemma_read_append_read_delivers
-  (received raw_before raw_after:TCP.bytes)
-  (capacity filled new_filled:nat)
-  (chunk:TCP.bytes)
-  : Lemma
-      (requires
-        Seq.length raw_before == capacity /\
-        Seq.length raw_after == capacity /\
-        filled <= capacity /\
-        new_filled <= capacity /\
-        BT.buffer_wf (BT.mk_phys_buffer raw_after new_filled) /\
-        BT.chunk_fits (BT.mk_phys_buffer raw_before filled) chunk /\
-        Seq.equal (BT.pending (BT.mk_phys_buffer raw_after new_filled))
-                  (Seq.append (BT.pending (BT.mk_phys_buffer raw_before filled)) chunk))
-      (ensures
-        read_delivers received (Seq.append received chunk)
-          (BT.mk_phys_buffer raw_before filled) (BT.mk_phys_buffer raw_after new_filled))
-= introduce exists (c:TCP.bytes).
-      BT.chunk_fits (BT.mk_phys_buffer raw_before filled) c /\
-      Seq.equal (BT.pending (BT.mk_phys_buffer raw_after new_filled))
-                (Seq.append (BT.pending (BT.mk_phys_buffer raw_before filled)) c) /\
       Seq.equal (Seq.append received chunk) (Seq.append received c)
   with chunk and ()
 
