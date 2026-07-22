@@ -441,7 +441,9 @@ let lemma_commit_count_ok
   (b:BT.phys_buffer)
   : Lemma
       (requires BT.buffer_wf b)
-      (ensures consumed_of (sp.sp_classify st (BT.pending b)) <= b.BT.pb_filled)
+      (ensures
+        consumed_of (sp.sp_classify st (BT.pending b)) <=
+          BT.filled_count b)
 = sp.sp_consumption st (BT.pending b);
   BT.lemma_pending_length b
 
@@ -657,11 +659,11 @@ let process_transition
     // class, NOT by this live transition — so its case here is irrelevant.
     True
   | Progress k ->
-    0 < k /\ k <= b.BT.pb_filled /\
+    0 < k /\ k <= BT.filled_count b /\
     Seq.equal committed' (BT.committed_after committed b k) /\
     b' == BT.compact b k
   | Yield k _ ->
-    0 < k /\ k <= b.BT.pb_filled /\
+    0 < k /\ k <= BT.filled_count b /\
     Seq.equal committed' (BT.committed_after committed b k) /\
     b' == BT.compact b k
 

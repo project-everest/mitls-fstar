@@ -102,13 +102,6 @@ let lemma_recombine (#t:Type) (s:Seq.seq t) (n m:nat)
     (Seq.append (Seq.slice s 0 n) (Seq.slice s n m))
     (Seq.slice s 0 m)
 
-(** Bounded prefix [take] and suffix [drop] of a byte sequence (total). *)
-let take (s:TCP.bytes) (n:nat) : TCP.bytes =
-  Seq.slice s 0 (if n <= Seq.length s then n else Seq.length s)
-
-let drop (s:TCP.bytes) (n:nat) : TCP.bytes =
-  Seq.slice s (if n <= Seq.length s then n else Seq.length s) (Seq.length s)
-
 let lemma_take_drop (s:TCP.bytes) (n:nat)
   : Lemma
       (requires n <= Seq.length s)
@@ -120,74 +113,30 @@ let lemma_take_drop (s:TCP.bytes) (n:nat)
 (*  The physical fixed-capacity buffer                                *)
 (* ------------------------------------------------------------------ *)
 
-(**
-  A fixed-capacity physical receive buffer.  [pb_data] is the backing array's
-  contents — its length is the (constant) capacity — and [pb_filled] is the
-  number of live bytes, densely packed at the front.
-**)
-noeq
-type phys_buffer = {
-  pb_data   : TCP.bytes;
-  pb_filled : nat;
-}
-
-(** Well-formedness: the live count never exceeds the physical capacity. *)
-let buffer_wf (b:phys_buffer) : prop =
-  b.pb_filled <= Seq.length b.pb_data
-
-(** The fixed physical capacity (length of the backing array). *)
-let capacity (b:phys_buffer) : nat = Seq.length b.pb_data
-
-(** The clamped live count (equals [pb_filled] whenever [buffer_wf]). *)
-let live (b:phys_buffer) : nat =
-  if b.pb_filled <= Seq.length b.pb_data then b.pb_filled else Seq.length b.pb_data
-
-(**
-  The pending region: the dense prefix of the physical array.  This is the
-  transport bytes received but not yet consumed by the protocol.
-**)
-let pending (b:phys_buffer) : TCP.bytes =
-  Seq.slice b.pb_data 0 (live b)
-
-(** Free space available for the next read. *)
-let free_space (b:phys_buffer) : nat =
-  Seq.length b.pb_data - live b
-
 let lemma_live_wf (b:phys_buffer)
-  : Lemma (requires buffer_wf b) (ensures live b == b.pb_filled)
+  : Lemma (requires buffer_wf b) (ensures live_count b == filled_count b)
 = ()
 
 (** Item (2): [pending] has length [pb_filled] and is a prefix of the array. *)
 let lemma_pending_length (b:phys_buffer)
   : Lemma (requires buffer_wf b)
-          (ensures Seq.length (pending b) == b.pb_filled)
+          (ensures Seq.length (pending b) == filled_count b)
 = ()
 
 let lemma_pending_dense_prefix (b:phys_buffer)
   : Lemma (requires buffer_wf b)
-          (ensures TCP.bytes_exact_prefix (pending b) b.pb_data)
+          (ensures TCP.bytes_exact_prefix (pending b) (buffer_data b))
 = lemma_pending_length b
 
 let lemma_free_space_wf (b:phys_buffer)
   : Lemma (requires buffer_wf b)
-          (ensures free_space b == capacity b - b.pb_filled /\
-                   b.pb_filled + free_space b == capacity b)
+          (ensures free_space b == capacity b - filled_count b /\
+                   filled_count b + free_space b == capacity b)
 = ()
 
 (* ------------------------------------------------------------------ *)
 (*  Item (1): full received = committed prefix ++ pending             *)
 (* ------------------------------------------------------------------ *)
-
-(**
-  The transport invariant: the raw received byte stream is the committed
-  (delivered) prefix followed by the pending region held in [b].
-**)
-let received_split (received committed:TCP.bytes) (b:phys_buffer) : prop =
-  Seq.equal received (Seq.append committed (pending b))
-
-(** History-flavoured restatement, using [Common.TCP.history]. *)
-let history_received_split (h:TCP.history) (committed:TCP.bytes) (b:phys_buffer) : prop =
-  received_split h.TCP.tcp_received committed b
 
 (** The committed bytes are an exact byte-prefix of the received stream. *)
 let lemma_committed_prefix (received committed:TCP.bytes) (b:phys_buffer)
@@ -209,29 +158,6 @@ let lemma_pending_is_tail (received committed:TCP.bytes) (b:phys_buffer)
 (*  Item (3): prefix commit + physical compaction                     *)
 (* ------------------------------------------------------------------ *)
 
-(**
-  Commit a prefix of [n] pending bytes: the committed stream grows by the first
-  [n] pending bytes.
-**)
-let committed_after (committed:TCP.bytes) (b:phys_buffer) (n:nat) : TCP.bytes =
-  Seq.append committed (take (pending b) n)
-
-(**
-  Physically compact the buffer after consuming [n] front bytes: slide the
-  remaining live tail down to the front, preserving the fixed capacity.  Bytes
-  past the new live region are don't-care (here: carried from the old tail).
-**)
-let compact (b:phys_buffer) (n:nat) : phys_buffer =
-  let f = live b in
-  let k = if n <= f then n else f in
-  {
-    pb_data =
-      Seq.append
-        (Seq.slice b.pb_data k f)
-        (Seq.slice b.pb_data (f - k) (Seq.length b.pb_data));
-    pb_filled = f - k;
-  }
-
 (** Compaction preserves the fixed capacity and keeps the buffer well-formed. *)
 let lemma_compact_capacity (b:phys_buffer) (n:nat)
   : Lemma (ensures capacity (compact b n) == capacity b)
@@ -242,18 +168,21 @@ let lemma_compact_wf (b:phys_buffer) (n:nat)
 = ()
 
 let lemma_compact_filled (b:phys_buffer) (n:nat)
-  : Lemma (requires buffer_wf b /\ n <= b.pb_filled)
-          (ensures (compact b n).pb_filled == b.pb_filled - n)
+  : Lemma (requires buffer_wf b /\ n <= filled_count b)
+          (ensures filled_count (compact b n) == filled_count b - n)
 = ()
 
 (** The pending region after compaction is the old pending with [n] bytes dropped. *)
 let lemma_compact_pending (b:phys_buffer) (n:nat)
-  : Lemma (requires buffer_wf b /\ n <= b.pb_filled)
+  : Lemma (requires buffer_wf b /\ n <= filled_count b)
           (ensures Seq.equal (pending (compact b n)) (drop (pending b) n))
-= let f = b.pb_filled in
+= let f = filled_count b in
   lemma_slice_append_l
-    (Seq.slice b.pb_data n f)
-    (Seq.slice b.pb_data (f - n) (Seq.length b.pb_data));
+    (Seq.slice (buffer_data b) n f)
+    (Seq.slice
+      (buffer_data b)
+      (f - n)
+      (Seq.length (buffer_data b)));
   Seq.lemma_eq_intro (pending (compact b n)) (drop (pending b) n)
 
 (** Committing extends the committed byte stream (reuses the CPI prefix lemma). *)
@@ -268,7 +197,10 @@ let lemma_committed_after_extends (committed:TCP.bytes) (b:phys_buffer) (n:nat)
 let lemma_commit_preserves_full
   (received committed:TCP.bytes) (b:phys_buffer) (n:nat)
   : Lemma
-      (requires received_split received committed b /\ buffer_wf b /\ n <= b.pb_filled)
+      (requires
+        received_split received committed b /\
+        buffer_wf b /\
+        n <= filled_count b)
       (ensures received_split received (committed_after committed b n) (compact b n))
 = lemma_pending_length b;
   lemma_compact_pending b n;
@@ -285,41 +217,6 @@ let lemma_commit_preserves_full
 (*  Item (4): append-read, with capacity and no-zero-read conditions  *)
 (* ------------------------------------------------------------------ *)
 
-(** A delivered chunk fits the free capacity of the buffer. *)
-let chunk_fits (b:phys_buffer) (chunk:TCP.bytes) : prop =
-  Seq.length chunk <= free_space b
-
-(**
-  A read *request* of [max_len] bytes is admissible: it is non-zero (no
-  zero-length read is ever issued) and fits the free capacity.
-**)
-let read_request_ok (b:phys_buffer) (max_len:nat) : prop =
-  0 < max_len /\ max_len <= free_space b
-
-(** There is room to issue a non-empty read. *)
-let can_read (b:phys_buffer) : prop =
-  free_space b > 0
-
-(**
-  Deliver a freshly-read [chunk] into the buffer, at the end of the live region.
-  When the chunk fits (the capacity side condition) this preserves the fixed
-  capacity and appends [chunk] to the pending region.
-**)
-let append_read (b:phys_buffer) (chunk:TCP.bytes) : phys_buffer =
-  let f = live b in
-  if f + Seq.length chunk <= Seq.length b.pb_data
-  then
-    {
-      pb_data =
-        Seq.append
-          (Seq.slice b.pb_data 0 f)
-          (Seq.append
-            chunk
-            (Seq.slice b.pb_data (f + Seq.length chunk) (Seq.length b.pb_data)));
-      pb_filled = f + Seq.length chunk;
-    }
-  else b
-
 let lemma_append_read_capacity (b:phys_buffer) (chunk:TCP.bytes)
   : Lemma (ensures capacity (append_read b chunk) == capacity b)
 = ()
@@ -331,20 +228,30 @@ let lemma_append_read_wf (b:phys_buffer) (chunk:TCP.bytes)
 
 let lemma_append_read_filled (b:phys_buffer) (chunk:TCP.bytes)
   : Lemma (requires buffer_wf b /\ chunk_fits b chunk)
-          (ensures (append_read b chunk).pb_filled == b.pb_filled + Seq.length chunk)
+          (ensures
+            filled_count (append_read b chunk) ==
+              filled_count b + Seq.length chunk)
 = ()
 
 (** The pending region grows by exactly the delivered chunk. *)
 let lemma_append_read_pending (b:phys_buffer) (chunk:TCP.bytes)
   : Lemma (requires buffer_wf b /\ chunk_fits b chunk)
           (ensures Seq.equal (pending (append_read b chunk)) (Seq.append (pending b) chunk))
-= let f = b.pb_filled in
+= let f = filled_count b in
   lemma_slice_append_l
-    (Seq.slice b.pb_data 0 f)
-    (Seq.append chunk (Seq.slice b.pb_data (f + Seq.length chunk) (Seq.length b.pb_data)));
+    (Seq.slice (buffer_data b) 0 f)
+    (Seq.append
+      chunk
+      (Seq.slice
+        (buffer_data b)
+        (f + Seq.length chunk)
+        (Seq.length (buffer_data b))));
   lemma_slice_append_l
     chunk
-    (Seq.slice b.pb_data (f + Seq.length chunk) (Seq.length b.pb_data));
+    (Seq.slice
+      (buffer_data b)
+      (f + Seq.length chunk)
+      (Seq.length (buffer_data b)));
   Seq.lemma_eq_intro (pending (append_read b chunk)) (Seq.append (pending b) chunk)
 
 (** An append-read extends the pending region as a byte-prefix (old pending kept). *)
@@ -384,7 +291,7 @@ let lemma_append_read_history
 (** A read is possible exactly when the buffer is not full. *)
 let lemma_can_read_iff (b:phys_buffer)
   : Lemma (requires buffer_wf b)
-          (ensures (can_read b <==> b.pb_filled < capacity b))
+          (ensures (can_read b <==> filled_count b < capacity b))
 = ()
 
 (**
@@ -415,10 +322,6 @@ let lemma_read_chunk_fits (b:phys_buffer) (max_len:nat) (chunk:TCP.bytes)
 (*  Initialisation                                                    *)
 (* ------------------------------------------------------------------ *)
 
-(** A fresh, empty buffer of a fixed capacity. *)
-let empty_buffer (cap:nat) : phys_buffer =
-  { pb_data = Seq.create cap 0uy; pb_filled = 0 }
-
 let lemma_empty_buffer_wf (cap:nat)
   : Lemma (ensures buffer_wf (empty_buffer cap) /\ capacity (empty_buffer cap) == cap)
 = ()
@@ -440,10 +343,6 @@ let lemma_empty_buffer_received (cap:nat)
 (*  Imperative realisation: in-place compaction over a physical array *)
 (* ------------------------------------------------------------------ *)
 
-(** Build the modelled buffer for a physical array [data] with [filled] live bytes. *)
-let mk_phys_buffer (data:TCP.bytes) (filled:nat) : phys_buffer =
-  { pb_data = data; pb_filled = filled }
-
 (**
   The pure-model facts realised by an in-place front compaction of [consumed]
   bytes: the compacted buffer is well-formed, its live count is [buffered_len -
@@ -455,19 +354,13 @@ let lemma_compact_suffix_model (data:TCP.bytes) (buffered_len consumed:nat)
       (ensures (
         let b = mk_phys_buffer data buffered_len in
         buffer_wf b /\
-        (compact b consumed).pb_filled == buffered_len - consumed /\
+        filled_count (compact b consumed) == buffered_len - consumed /\
         Seq.equal (pending (compact b consumed)) (Seq.slice data consumed buffered_len)))
 = let b = mk_phys_buffer data buffered_len in
   lemma_pending_length b;
   lemma_compact_filled b consumed;
   lemma_compact_pending b consumed;
   Seq.lemma_eq_intro (pending (compact b consumed)) (Seq.slice data consumed buffered_len)
-
-(** The pending length remaining after committing [consumed_len] of [buffered_len]. *)
-let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
-  if SZ.lte consumed_len buffered_len
-  then SZ.sub buffered_len consumed_len
-  else 0sz
 
 (**
   In-place compaction of the physical receive array: slide the still-pending
@@ -479,7 +372,7 @@ let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
   [compact_buffer_suffix] can be deleted and this called instead), and (b) the
   connection to the pure [compact] model — [Seq.slice raw_after 0 new_len] is
   exactly [pending (compact b consumed)] for the modelled buffer [b], and
-  [new_len] is [(compact b consumed).pb_filled] — so callers may reason with the
+  [new_len] is [filled_count (compact b consumed)] — so callers may reason with the
   pure model and [received_split] after calling it.
 **)
 fn compact_buffer_suffix
@@ -511,8 +404,10 @@ fn compact_buffer_suffix
              // (b) pure-model connection to [compact] / [pending]
              buffer_wf (mk_phys_buffer (Ghost.reveal 'raw_bytes) (SZ.v buffered_len)) /\
              SZ.v new_len ==
-               (compact (mk_phys_buffer (Ghost.reveal 'raw_bytes) (SZ.v buffered_len))
-                        (SZ.v consumed_len)).pb_filled /\
+               filled_count
+                 (compact
+                   (mk_phys_buffer (Ghost.reveal 'raw_bytes) (SZ.v buffered_len))
+                   (SZ.v consumed_len)) /\
              Seq.equal
                (Seq.slice raw_after 0 (SZ.v new_len))
                (pending (compact (mk_phys_buffer (Ghost.reveal 'raw_bytes) (SZ.v buffered_len))
@@ -527,13 +422,6 @@ fn compact_buffer_suffix
 (* ------------------------------------------------------------------ *)
 (*  Imperative realisation: read into the free tail of the array      *)
 (* ------------------------------------------------------------------ *)
-
-(** Result of [read_append]: the bytes read this call and the new filled length. *)
-noeq
-type read_append_result = {
-  ra_read  : SZ.t;   // number of bytes delivered by [Common.TCP.read] this call
-  ra_total : SZ.t;   // new filled length == old [filled] + [ra_read]
-}
 
 (**
   The reusable transport read primitive.  Given the channel [ch], its backing
@@ -572,20 +460,20 @@ fn read_append
              Seq.length raw_after == SZ.v capacity /\
              Seq.length (Ghost.reveal 'raw_before) == SZ.v capacity /\
              SZ.v filled <= SZ.v capacity /\
-             SZ.v res.ra_read <= SZ.v capacity - SZ.v filled /\
-             SZ.v res.ra_total == SZ.v filled + SZ.v res.ra_read /\
-             SZ.v res.ra_total <= SZ.v capacity /\
-             Seq.length chunk == SZ.v res.ra_read /\
+             SZ.v (read_count res) <= SZ.v capacity - SZ.v filled /\
+             SZ.v (total_count res) == SZ.v filled + SZ.v (read_count res) /\
+             SZ.v (total_count res) <= SZ.v capacity /\
+             Seq.length chunk == SZ.v (read_count res) /\
              // old pending prefix preserved
              Seq.equal (Seq.slice raw_after 0 (SZ.v filled))
                        (Seq.slice (Ghost.reveal 'raw_before) 0 (SZ.v filled)) /\
              // new dense prefix == old_pending ++ chunk
-             Seq.equal (Seq.slice raw_after 0 (SZ.v res.ra_total))
+             Seq.equal (Seq.slice raw_after 0 (SZ.v (total_count res)))
                        (Seq.append (Seq.slice (Ghost.reveal 'raw_before) 0 (SZ.v filled)) chunk) /\
              // pure-model connection
-             buffer_wf (mk_phys_buffer raw_after (SZ.v res.ra_total)) /\
+             buffer_wf (mk_phys_buffer raw_after (SZ.v (total_count res))) /\
              chunk_fits (mk_phys_buffer (Ghost.reveal 'raw_before) (SZ.v filled)) chunk /\
-             Seq.equal (pending (mk_phys_buffer raw_after (SZ.v res.ra_total)))
+             Seq.equal (pending (mk_phys_buffer raw_after (SZ.v (total_count res))))
                        (Seq.append (pending (mk_phys_buffer (Ghost.reveal 'raw_before) (SZ.v filled))) chunk))
 {
   A.to_mask raw;
