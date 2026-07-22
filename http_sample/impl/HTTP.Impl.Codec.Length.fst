@@ -113,6 +113,34 @@ let lemma_req_tail_byte (k:SZ.t{SZ.v k < 13})
   assert_norm (Seq.index (Seq.cons W.bSP req_tail) 11 == 0x0Duy);
   assert_norm (Seq.index (Seq.cons W.bSP req_tail) 12 == 0x0Auy)
 
+(* Runtime k-th byte of the request-line version token "HTTP/1.1\r\n" (req_ver),
+   used by the headers-tolerant request-head parser. *)
+inline_for_extraction
+let req_ver_byte (k:SZ.t{SZ.v k < 10}) : U8.t =
+  if      SZ.eq k 0sz then 0x48uy
+  else if SZ.eq k 1sz then 0x54uy
+  else if SZ.eq k 2sz then 0x54uy
+  else if SZ.eq k 3sz then 0x50uy
+  else if SZ.eq k 4sz then 0x2Fuy
+  else if SZ.eq k 5sz then 0x31uy
+  else if SZ.eq k 6sz then 0x2Euy
+  else if SZ.eq k 7sz then 0x31uy
+  else if SZ.eq k 8sz then 0x0Duy
+  else                     0x0Auy
+
+let lemma_req_ver_byte (k:SZ.t{SZ.v k < 10})
+  : Lemma (req_ver_byte k == Seq.index req_ver (SZ.v k))
+= assert_norm (Seq.index req_ver 0 == 0x48uy);
+  assert_norm (Seq.index req_ver 1 == 0x54uy);
+  assert_norm (Seq.index req_ver 2 == 0x54uy);
+  assert_norm (Seq.index req_ver 3 == 0x50uy);
+  assert_norm (Seq.index req_ver 4 == 0x2Fuy);
+  assert_norm (Seq.index req_ver 5 == 0x31uy);
+  assert_norm (Seq.index req_ver 6 == 0x2Euy);
+  assert_norm (Seq.index req_ver 7 == 0x31uy);
+  assert_norm (Seq.index req_ver 8 == 0x0Duy);
+  assert_norm (Seq.index req_ver 9 == 0x0Auy)
+
 let lemma_lit_get_byte (k:SZ.t{SZ.v k < 4})
   : Lemma ((if SZ.eq k 0sz then 0x47uy else if SZ.eq k 1sz then 0x45uy
             else if SZ.eq k 2sz then 0x54uy else 0x20uy)
@@ -382,9 +410,63 @@ let lemma_recv_request_ok (inp:Seq.seq U8.t) (sp:nat)
   with (target <: W.token) and ()
 #pop-options
 
-(* ------------------------------------------------------------------------ *)
-(* Recv: parse the 43-byte response head back into (code, len).             *)
-(* ------------------------------------------------------------------------ *)
+(* Headers-tolerant parse-inversion for a REAL client's request head.  Given a
+   buffer `inp` whose first bytes are "GET ", whose FIRST space (at position `sp`)
+   bounds a space-free target = inp[4..sp], and whose 10 bytes after that space
+   are the version token req_ver = "HTTP/1.1\r\n", `parse_request_line inp` returns
+   exactly that target -- IGNORING every byte after req_ver (all header lines and
+   the terminating CRLFCRLF).  Unlike `lemma_recv_request_ok`, `inp` is NOT fully
+   reconstructed: only its request-line prefix is constrained, so curl's headers
+   are accepted.  Proof: rebuild inp[4..] as  target ++ (SP :: inp[sp+1..])  so
+   `split_sp` cuts at the first space, then match the "GET " prefix and req_ver. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
+let lemma_parse_request_line_ok (inp:Seq.seq U8.t) (sp:nat)
+  : Lemma
+    (requires
+       4 <= sp /\ sp + 11 <= Seq.length inp /\
+       (forall (k:nat). k < 4 ==> Seq.index inp k == Seq.index lit_get k) /\
+       (forall (j:nat). 4 <= j /\ j < sp ==> Seq.index inp j =!= W.bSP) /\
+       Seq.index inp sp == W.bSP /\
+       (forall (k:nat). k < 10 ==>
+          Seq.index inp (sp + 1 + k) == Seq.index req_ver k))
+    (ensures (exists (tk:W.token).
+       (tk <: Seq.seq U8.t) == Seq.slice inp 4 sp /\
+       parse_request_line inp == Some tk))
+= let n = Seq.length inp in
+  (* "GET " prefix matches *)
+  Seq.lemma_eq_intro (Seq.slice inp 0 4) lit_get;
+  W.lemma_bseq_eq (Seq.slice inp 0 4) lit_get;
+  let rest0 = Seq.slice inp 4 n in
+  let target = Seq.slice inp 4 sp in
+  lemma_space_free_no_space target;
+  let tlrest = Seq.slice inp (sp + 1) n in
+  let mid = Seq.cons W.bSP tlrest in
+  let apnd = Seq.append target mid in
+  assert (Seq.length mid == n - sp);
+  assert (Seq.length apnd == n - 4);
+  (* rest0 == target ++ (SP :: inp[sp+1..]) *)
+  introduce forall (j:nat{j < Seq.length rest0}).
+      Seq.index rest0 j == Seq.index apnd j
+  with (
+    let tlen = sp - 4 in
+    if j < tlen then Seq.lemma_index_app1 target mid j
+    else begin
+      Seq.lemma_index_app2 target mid j;
+      (if j > tlen then () else ())   (* j == tlen: mid.[0] == bSP == inp.[sp] *)
+    end
+  );
+  Seq.lemma_eq_intro rest0 apnd;
+  (* split_sp cuts at the first space, recovering (target, tlrest) *)
+  W.split_sp_append (target <: W.token) tlrest;
+  assert (W.split_sp rest0 == Some (target, tlrest));
+  (* the 10 bytes after the space are the version token "HTTP/1.1\r\n" *)
+  Seq.lemma_eq_intro (Seq.slice tlrest 0 10) req_ver;
+  W.lemma_bseq_eq (Seq.slice tlrest 0 10) req_ver;
+  introduce exists (tk:W.token).
+      (tk <: Seq.seq U8.t) == Seq.slice inp 4 sp /\
+      parse_request_line inp == Some tk
+  with (target <: W.token) and ()
+#pop-options
 
 open Pulse.Lib.BoundedIntegers
 
@@ -885,6 +967,97 @@ fn http_recv_request (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
       let vtok = !tok;
       if vtok {
         lemma_recv_request_ok ('i <: Seq.seq U8.t) (SZ.v sp);
+        ptlen := SZ.sub sp 4sz;
+        true
+      } else {
+        ptlen := 0sz;
+        false
+      }
+    } else {
+      ptlen := 0sz;
+      false
+    }
+  }
+}
+#pop-options
+
+(* Parse a REAL client's request head  "GET " target " HTTP/1.1\r\n" headers* "\r\n"
+   in `inp` (logical length `n`), tolerating arbitrary header lines.  Returns
+   `ok`; when `ok`, `ptlen` holds the target length `tl`, the recovered space-free
+   target is `Seq.slice inp 4 (4 + tl)`, and `parse_request_line inp == Some tk`.
+   Unlike `http_recv_request` it does NOT require an exact known length or a
+   header-less request: it locates the FIRST space (bounding the space-free
+   target), verifies the "GET " prefix and the 10-byte version token
+   "HTTP/1.1\r\n" right after it, and ignores every following byte (the headers).
+   `lemma_parse_request_line_ok` certifies the recovered target. *)
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 2"
+fn http_recv_request_head (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
+  requires
+    pts_to inp 'i ** R.pts_to ptlen 't0 **
+    pure (Seq.length 'i == SZ.v n)
+  returns ok: bool
+  ensures
+    pts_to inp 'i **
+    (exists* (tl:SZ.t).
+       R.pts_to ptlen tl **
+       pure (ok == true ==>
+         (exists (tk:W.token).
+            Seq.length 'i == SZ.v n /\
+            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v n) /\
+            (tk <: Seq.seq U8.t) == Seq.slice 'i 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            parse_request_line 'i == Some tk)))
+{
+  if SZ.lt n 15sz {
+    false
+  } else {
+    (* literal prefix "GET " *)
+    let p0 = inp.(0sz); let p1 = inp.(1sz); let p2 = inp.(2sz); let p3 = inp.(3sz);
+    let lit_ok = U8.eq p0 0x47uy && U8.eq p1 0x45uy && U8.eq p2 0x54uy && U8.eq p3 0x20uy;
+    (* scan for the first space at or after index 4 *)
+    let mut i = 4sz;
+    let mut fnd = false;
+    while (SZ.lt !i n && not !fnd)
+    invariant exists* (vi:SZ.t) (vf:bool).
+      R.pts_to i vi ** R.pts_to fnd vf ** pts_to inp 'i **
+      pure (4 <= SZ.v vi /\ SZ.v vi <= SZ.v n /\ Seq.length 'i == SZ.v n /\
+        (forall (j:nat). 4 <= j /\ j < SZ.v vi ==> Seq.index 'i j =!= W.bSP) /\
+        (vf == true ==> (SZ.v vi < SZ.v n /\ Seq.index 'i (SZ.v vi) == W.bSP)))
+    {
+      let vi = !i;
+      let c = inp.(vi);
+      if U8.eq c 0x20uy {
+        fnd := true;
+      } else {
+        i := SZ.add vi 1sz;
+      }
+    };
+    let sp = !i;
+    let vfnd = !fnd;
+    (* require the 10-byte version token to fit after the space (sp + 11 <= n) *)
+    if (vfnd && lit_ok && SZ.lte 11sz (SZ.sub n sp)) {
+      (* verify the 10-byte version token  "HTTP/1.1\r\n"  right after the space *)
+      let mut k = 0sz;
+      let mut tok = true;
+      while (SZ.lt !k 10sz)
+      invariant exists* (vk:SZ.t) (vt:bool).
+        R.pts_to k vk ** R.pts_to tok vt ** pts_to inp 'i **
+        pure (SZ.v vk <= 10 /\ Seq.length 'i == SZ.v n /\
+          4 <= SZ.v sp /\ Prims.op_Addition (SZ.v sp) 11 <= SZ.v n /\
+          (vt == true ==> (forall (kk:nat). kk < SZ.v vk ==>
+             Seq.index 'i (Prims.op_Addition (Prims.op_Addition (SZ.v sp) 1) kk)
+               == Seq.index req_ver kk)))
+      {
+        let vk = !k;
+        let bv = inp.(SZ.add (SZ.add sp 1sz) vk);
+        lemma_req_ver_byte vk;
+        let ev = req_ver_byte vk;
+        let eq = U8.eq bv ev;
+        tok := (!tok) && eq;
+        k := SZ.add vk 1sz;
+      };
+      let vtok = !tok;
+      if vtok {
+        lemma_parse_request_line_ok ('i <: Seq.seq U8.t) (SZ.v sp);
         ptlen := SZ.sub sp 4sz;
         true
       } else {

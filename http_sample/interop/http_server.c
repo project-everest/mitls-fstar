@@ -1,25 +1,28 @@
 /*
- * http_server.c -- an HTTP/1.1 origin SERVER whose response is produced by the
- * VERIFIED, extracted Pulse driver `http_server_run_length_full`.
+ * http_server.c -- an HTTP/1.1 origin SERVER whose request PARSE and response
+ * are BOTH produced by VERIFIED, extracted Pulse code.
  *
- * The response head + body -- "HTTP/1.1 200 \r\nContent-Length: <8-digit>\r\n\r\n"
- * followed by the body bytes -- is framed and written by the verified FStar/Pulse
- * code extracted to C in HTTP_Verified.c (http_server_run_length_full, which
- * reuses the verified head emitter http_emit_response and body copy
- * http_emit_body, over the verified Common.TCP channel).  This program is the
- * thin, UNVERIFIED glue around it:
+ * Each exchange runs through the verified driver `http_server_exchange_length_head`
+ * (in HTTP_Verified.c), which:
+ *   - parses the client's request head with the verified headers-tolerant codec
+ *     leaf `http_recv_request_head` -- it locates the space-free request target
+ *     between "GET " and the " HTTP/1.1\r\n" version token and IGNORES all header
+ *     lines, so a REAL client (curl, browsers, sending Host/User-Agent/Accept and
+ *     a request of a-priori-unknown length) is parsed.  On success the recovered
+ *     target provably matches `parse_request_line` of the received bytes;
+ *   - then writes the response head + body -- "HTTP/1.1 200 \r\nContent-Length:
+ *     <8-digit>\r\n\r\n" followed by the body bytes -- via the verified head
+ *     emitter http_emit_response and body copy http_emit_body, over the verified
+ *     Common.TCP channel, and closes it.
  *
+ * This program is the thin, UNVERIFIED glue around that driver:
  *   1. bind a TCP socket to loopback:<port> and listen;
- *   2. for each accepted connection, DRAIN the client's request head (up to the
- *      CRLF-CRLF terminator).  A real client (curl) always sends a Host header
- *      and others, and its request length is not known ahead of time, so the
- *      verified fixed-format request parser (http_recv_request, which accepts
- *      only a header-less "GET <target> HTTP/1.1\r\n\r\n" of known length) can't
- *      parse it -- the request read is therefore out-of-model glue.  The bytes
- *      are drained (not interpreted) so the connection closes cleanly;
- *   3. wrap the connected fd into a Common_TCP_channel and hand it to the
- *      VERIFIED http_server_run_length_full, which writes the 200 response head
- *      + body and closes the channel.
+ *   2. for each accepted connection, READ the client's request head into a buffer
+ *      up to the CRLF-CRLF terminator (the socket read is glue -- the request
+ *      length is not known ahead of time -- but the buffered bytes are then
+ *      parsed by the VERIFIED leaf, so the parse itself is in-model);
+ *   3. wrap the connected fd into a Common_TCP_channel and hand it, with the
+ *      request buffer, to the VERIFIED http_server_exchange_length_head.
  *
  * The server serves the SAME fixed body to every request (a built-in string, or
  * the contents of an optional file argument).  It loops, serving connections
@@ -44,10 +47,10 @@
 #include <unistd.h>
 
 #define RESP_HEAD_LEN 43       /* fixed size of the verified response head */
-#define REQ_CAP       65536    /* max request-head bytes we will drain */
+#define REQ_CAP       65536    /* max request-head bytes we will buffer */
 
 static const char DEFAULT_BODY[] =
-  "Hello from the verified FStar/Pulse HTTP/1.1 server!\n";
+  "Served by the verified FStar/Pulse HTTP/1.1 server!\n";
 
 /* Read a whole file into a freshly malloc'd buffer; sets *out_len. */
 static uint8_t *read_file(const char *path, size_t *out_len) {
@@ -65,24 +68,24 @@ static uint8_t *read_file(const char *path, size_t *out_len) {
   return buf;
 }
 
-/* Drain the request head from `fd` up to and including the CRLF-CRLF that ends
-   it (or until EOF / cap / error).  The bytes are discarded -- see the file
-   header for why the request is out-of-model glue.  Returns the number of bytes
-   read, or -1 on a hard error. */
-static ssize_t drain_request_head(int fd) {
-  uint8_t buf[4096];
+/* Read the request head from `fd` into `out` (capacity `cap`), up to and
+   including the CRLF-CRLF that ends it (or until EOF / cap / error).  Unlike a
+   plain drain, the bytes are KEPT so the verified parser can inspect them.
+   Returns the number of bytes stored, or -1 on a hard error. */
+static ssize_t read_request_head(int fd, uint8_t *out, size_t cap) {
   size_t total = 0;
   int match = 0;                       /* how much of "\r\n\r\n" matched so far */
   static const uint8_t term[4] = { '\r', '\n', '\r', '\n' };
-  while (total < REQ_CAP) {
-    ssize_t r = recv(fd, buf, sizeof buf, 0);
+  while (total < cap) {
+    ssize_t r = recv(fd, out + total, cap - total, 0);
     if (r < 0) { if (errno == EINTR) continue; return -1; }
     if (r == 0) break;                 /* client closed without a full head */
-    total += (size_t)r;
     for (ssize_t i = 0; i < r; i++) {
-      match = (buf[i] == term[match]) ? match + 1 : (buf[i] == term[0] ? 1 : 0);
-      if (match == 4) return (ssize_t)total;   /* end of request head */
+      uint8_t b = out[total + (size_t)i];
+      match = (b == term[match]) ? match + 1 : (b == term[0] ? 1 : 0);
+      if (match == 4) return (ssize_t)(total + (size_t)i + 1);   /* end of head */
     }
+    total += (size_t)r;
   }
   return (ssize_t)total;
 }
@@ -130,28 +133,43 @@ int main(int argc, char **argv) {
   fprintf(stderr, "http_server: listening on 127.0.0.1:%u, serving %zu-byte body (verified response)\n",
           port, body_len);
 
-  /* Staging buffers for the verified emitter: 43-byte head + body_len body. */
+  /* Staging buffers for the verified exchange: the request head buffer, the
+     recovered target-length out-param, the 43-byte response head, and the body
+     scratch. */
+  uint8_t *reqbuf  = malloc(REQ_CAP);
   uint8_t *headbuf = malloc(RESP_HEAD_LEN);
   uint8_t *scratch = malloc(body_len ? body_len : 1);
-  if (!headbuf || !scratch) { free(headbuf); free(scratch); free(body); close(lfd); return 1; }
+  if (!reqbuf || !headbuf || !scratch) { free(reqbuf); free(headbuf); free(scratch); free(body); close(lfd); return 1; }
 
   /* 2. Accept loop. */
   for (;;) {
     int fd = accept(lfd, NULL, NULL);
     if (fd < 0) { if (errno == EINTR) continue; perror("accept"); break; }
 
-    /* Drain the client's request head (out-of-model glue). */
-    (void)drain_request_head(fd);
+    /* Read the client's request head into reqbuf (socket read is glue). */
+    ssize_t rl = read_request_head(fd, reqbuf, REQ_CAP);
+    if (rl < 0) { close(fd); continue; }
+    size_t reqlen = (size_t)rl;
 
-    /* 3. Hand the connected fd to the VERIFIED response driver, which writes the
-       200 head + body and closes the channel (and thus the fd). */
+    /* 3. Hand the connected fd + request buffer to the VERIFIED exchange driver:
+       it PARSES the request head with http_recv_request_head (recovering the
+       target length into ptlen) and writes the 200 head + body, closing the
+       channel (and thus the fd). */
+    size_t ptlen = 0;
     Common_TCP_channel ch = Common_TCP_channel_of_fd(fd);
-    http_server_run_length_full(ch, (uint16_t)200, body, body_len, headbuf, scratch);
+    bool okr = http_server_exchange_length_head(ch, reqbuf, reqlen, &ptlen,
+                                                (uint16_t)200, body, body_len,
+                                                headbuf, scratch);
 
-    fprintf(stderr, "http_server: served one request (200, %zu-byte body)\n", body_len);
+    if (okr)
+      fprintf(stderr, "http_server: parsed request (target %zu bytes), served 200 (%zu-byte body)\n",
+              ptlen, body_len);
+    else
+      fprintf(stderr, "http_server: request head not recognized (served 200 anyway, %zu-byte body)\n",
+              body_len);
   }
 
-  free(headbuf); free(scratch); free(body);
+  free(reqbuf); free(headbuf); free(scratch); free(body);
   close(lfd);
   return 0;
 }

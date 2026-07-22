@@ -103,6 +103,33 @@ let parse_request (input:TCP.bytes) : GTot (WF.parse_result http_message) =
     then Some (Msg_request target, Seq.empty)
     else None
 
+(* ─── Headers-tolerant request-line parse (receive side) ───────────────────── *)
+(* "HTTP/1.1\r\n" — the request-line version token immediately following the
+   target's trailing space.  A REAL client (curl, browsers) sends the mandatory
+   request line then one-or-more header lines and a terminating CRLFCRLF:
+       "GET " target " HTTP/1.1\r\n"  header-lines*  "\r\n"
+   `parse_request` (above) accepts ONLY the header-less internal form; this
+   `parse_request_line` is the tolerant companion used on a server to parse a
+   real client's request head.  It recovers the space-free `target` between the
+   "GET " prefix and the " HTTP/1.1\r\n" version token and deliberately IGNORES
+   every byte after that token (all headers), returning just the target.  *)
+let req_ver : TCP.bytes =
+  W.lit [0x48uy;0x54uy;0x54uy;0x50uy;0x2Fuy;0x31uy;0x2Euy;0x31uy;0x0Duy;0x0Auy]  (* "HTTP/1.1\r\n" *)
+
+let parse_request_line (input:TCP.bytes) : GTot (option W.token) =
+  if Seq.length input < 4 then None
+  else if not (W.bseq_eq (Seq.slice input 0 4) lit_get) then None
+  else
+    let rest0 = Seq.slice input 4 (Seq.length input) in
+    match W.split_sp rest0 with
+    | None -> None
+    | Some (target, tl) ->
+      if W.space_free target
+         && Seq.length tl >= 10
+         && W.bseq_eq (Seq.slice tl 0 10) req_ver
+      then Some target
+      else None
+
 let parse_response (input:TCP.bytes) : GTot (WF.parse_result http_message) =
   if Seq.length input < 9 then None else
   let rest0 = Seq.slice input 9 (Seq.length input) in

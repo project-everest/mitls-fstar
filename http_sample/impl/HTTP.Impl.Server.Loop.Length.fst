@@ -142,3 +142,53 @@ fn http_server_exchange_length
   okr
 }
 #pop-options
+
+(* Full Content-Length request/response *round trip* accepting a REAL client's
+   request head (curl, browsers): the caller has already drained `reqlen` request
+   bytes into `reqbuf` (a header-bearing request line of a-priori-unknown length,
+   so it is NOT read here via `read_full`), which the verified headers-tolerant
+   codec leaf `http_recv_request_head` parses to recover the request target
+   (length in `ptlen`); then the response head+body are sent exactly as
+   `http_server_run_length_full` does, closing the channel.  On `okr` the received
+   bytes match `parse_request_line` with `tk` the recovered target slice. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_server_exchange_length_head
+  (ch: TCP.channel)
+  (reqbuf: array U8.t)
+  (reqlen: SZ.t)
+  (ptlen: R.ref SZ.t)
+  (code: U16.t)
+  (file: array U8.t)
+  (file_len: SZ.t)
+  (headbuf: array U8.t)
+  (scratch: array U8.t)
+  requires
+    TCP.is_channel ch 'received 'sent **
+    pts_to reqbuf 'rq ** R.pts_to ptlen 't0 **
+    pts_to file 'f ** pts_to headbuf 'hb ** pts_to scratch 's **
+    pure (Seq.length 'rq == SZ.v reqlen /\
+          Seq.length 'f == SZ.v file_len /\
+          Seq.length 'hb == 43 /\
+          Seq.length 's == SZ.v file_len /\
+          body_ok 'f /\
+          Prims.op_LessThanOrEqual 100 (U16.v code) /\
+          Prims.op_LessThan (U16.v code) 1000 /\
+          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+  returns okr: bool
+  ensures
+    pts_to file 'f **
+    (exists* (rq' hb' s':Seq.seq U8.t) (tl:SZ.t).
+       pts_to reqbuf rq' ** R.pts_to ptlen tl **
+       pts_to headbuf hb' ** pts_to scratch s' **
+       pure (okr == true ==>
+         (exists (tk:W.token).
+            Seq.length rq' == SZ.v reqlen /\
+            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v reqlen) /\
+            (tk <: Seq.seq U8.t) == Seq.slice rq' 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            parse_request_line rq' == Some tk)))
+{
+  let okr = Codec.http_recv_request_head reqbuf reqlen ptlen;
+  http_server_run_length_full ch code file file_len headbuf scratch;
+  okr
+}
+#pop-options

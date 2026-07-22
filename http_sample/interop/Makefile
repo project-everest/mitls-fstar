@@ -1,13 +1,16 @@
 # ═══════════════════════════════════════════════════════════════════
-# HTTP/1.1 interop test: a real `curl` client against our verified-response server
+# HTTP/1.1 interop test: a real `curl` client against our verified server
 # ═══════════════════════════════════════════════════════════════════
-# `http_server` is an origin server whose RESPONSE (status head + Content-Length
-# body) is produced by the VERIFIED, extracted Pulse driver
-# `http_server_run_length_full` in ../_extract/HTTP_Verified.c.  The bind/accept
-# loop and the draining of the client's request head are thin UNVERIFIED glue
-# (http_server.c) — a real client (curl) sends headers and a request of unknown
-# length that the fixed-format verified request parser cannot accept, so the
-# request read is out of model; the RESPONSE is verified byte-exact.
+# `http_server` is an origin server whose request PARSE and RESPONSE are BOTH
+# produced by VERIFIED, extracted Pulse code: each exchange runs through
+# `http_server_exchange_length_head` in ../_extract/HTTP_Verified.c, which parses
+# the client's request head with the verified headers-tolerant leaf
+# `http_recv_request_head` (recovering the request target, ignoring headers) and
+# then writes the Content-Length response head + body.  The bind/accept loop and
+# the socket read of the request head are thin UNVERIFIED glue (http_server.c) —
+# a real client (curl) sends headers and a request of unknown length, so reading
+# it off the socket is glue, but the buffered bytes are then parsed IN-MODEL by
+# the verified leaf, and the response is verified byte-exact.
 #
 # `make test` starts http_server on a loopback port, issues a real `curl`
 # request, and PASSES only if curl reports HTTP 200 AND the body it received is
@@ -53,7 +56,7 @@ build-progs:
 # ── curl <-> our verified-response server ─────────────────────────────────────
 test: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
-	@echo " HTTP interop test:  curl (client)  ->  http_server (verified response)"
+	@echo " HTTP interop test:  curl (client)  ->  http_server (verified parse + response)"
 	@echo "═══════════════════════════════════════════════════════════════════"
 	@command -v curl >/dev/null 2>&1 || { echo "  SKIP: 'curl' not found on PATH"; exit 3; }
 	@rm -rf $(RUN_DIR); mkdir -p $(RUN_DIR)
@@ -70,7 +73,7 @@ test: build-progs
 	  code=$$(sed -n "s/.*http_code=//p" curl.log 2>/dev/null); \
 	  if cmp -s recv.txt body.txt; then content=match; else content=differ; fi; \
 	  if [ $$st -eq 0 ] && [ "$$code" = 200 ] && [ "$$content" = match ]; then \
-	    echo "  RESULT: PASS - curl got HTTP $$code and a byte-identical body from the verified server"; \
+	    echo "  RESULT: PASS - curl got HTTP $$code and a byte-identical body from the verified server (request PARSED in-model)"; \
 	    rm -rf $(RUN_DIR_ABS); \
 	  else \
 	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/curl did not terminate: killed after $(TIMEOUT)s (code=$$code content=$$content)"; \
