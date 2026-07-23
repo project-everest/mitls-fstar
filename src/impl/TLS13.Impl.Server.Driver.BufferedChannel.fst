@@ -16,6 +16,248 @@ module Seq = FStar.Seq
 module ST = TLS13.Impl.Server.Types
 module TChannel = TLS13.Impl.Channel
 
+ghost fn open_terminal_indexed
+  (d:DS.top_server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  (st:Ghost.erased CS.connection_state)
+  (certificate_chain:Ghost.erased B.bytes)
+  (credential_identity:Ghost.erased CS.server_credential_identity)
+  (channel:Ghost.erased BT.t)
+  (model:Ghost.erased BT.phys_buffer)
+  (committed:Ghost.erased B.bytes)
+  (buffered_len:Ghost.erased FStar.SizeT.t)
+  requires
+    DS.top_server_channel_terminal_indexed
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal app_log)
+      (Ghost.reveal st)
+      (Ghost.reveal certificate_chain)
+      (Ghost.reveal credential_identity)
+      (Ghost.reveal channel)
+      (Ghost.reveal model)
+      (Ghost.reveal committed)
+      (Ghost.reveal buffered_len)
+  ensures
+    exists* actual_certificate_chain actual_credential_identity.
+      DS.top_server_driver_connected_indexed
+        d
+        (Ghost.reveal st)
+        actual_certificate_chain
+        actual_credential_identity
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent)
+        (Ghost.reveal channel)
+        (Ghost.reveal model)
+        (Ghost.reveal committed)
+        (Ghost.reveal buffered_len) **
+      pure (
+        (Ghost.reveal app_log) ==
+          TChannel.application_log (Ghost.reveal st))
+{
+  unfold (DS.top_server_channel_terminal_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal app_log)
+    (Ghost.reveal st)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)
+    (Ghost.reveal channel)
+    (Ghost.reveal model)
+    (Ghost.reveal committed)
+    (Ghost.reveal buffered_len));
+  unfold (CP.server_invariant
+    (DS.top_server_driver_canonical d)
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
+    (Ghost.reveal st));
+  with actual_certificate_chain actual_credential_identity. _;
+  (Ghost.reveal
+    (DS.top_server_driver_canonical d)
+      .CP.canonical_server_supported_profile)
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
+    (Ghost.reveal st)
+    actual_certificate_chain
+    actual_credential_identity;
+  DS.lemma_supported_profile_selection_driver
+    (Ghost.reveal st)
+    actual_credential_identity;
+  fold (DS.buffered_driver_canonical_progress
+    (DS.top_server_as_buffered d (Ghost.reveal channel))
+    (Ghost.reveal st));
+  fold (DS.buffered_driver_indexed
+    (DS.top_server_as_buffered d (Ghost.reveal channel))
+    (Ghost.reveal st)
+    actual_certificate_chain
+    actual_credential_identity
+    (BT.pending (Ghost.reveal model))
+    (Ghost.reveal buffered_len)
+    (Ghost.reveal model)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal committed)
+    (Ghost.reveal wire_sent));
+  fold (DS.top_server_driver_connected_indexed
+    d
+    (Ghost.reveal st)
+    actual_certificate_chain
+    actual_credential_identity
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal channel)
+    (Ghost.reveal model)
+    (Ghost.reveal committed)
+    (Ghost.reveal buffered_len))
+}
+
+ghost fn open_channel_invariant
+  (d:DS.top_server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  ensures
+    exists* st certificate_chain credential_identity.
+      DS.top_server_driver_connected
+        d
+        st
+        certificate_chain
+        credential_identity
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent) **
+      pure (
+        ST.server_connection_control_not_failed st /\
+        (Ghost.reveal app_log) == TChannel.application_log st)
+{
+  unfold (DS.top_server_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log));
+  with st certificate_chain credential_identity channel model committed buffered_len.
+    assert (DS.top_server_channel_terminal_indexed
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal app_log)
+      st
+      certificate_chain
+      credential_identity
+      channel
+      model
+      committed
+      buffered_len);
+  open_terminal_indexed
+    d wire_received wire_sent app_log
+    (Ghost.hide st)
+    (Ghost.hide certificate_chain)
+    (Ghost.hide credential_identity)
+    (Ghost.hide channel)
+    (Ghost.hide model)
+    (Ghost.hide committed)
+    (Ghost.hide buffered_len);
+  with actual_certificate_chain actual_credential_identity.
+    assert (DS.top_server_driver_connected_indexed
+      d
+      st
+      actual_certificate_chain
+      actual_credential_identity
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      channel
+      model
+      committed
+      buffered_len);
+  fold (DS.top_server_driver_connected
+    d
+    st
+    actual_certificate_chain
+    actual_credential_identity
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent))
+}
+
+ghost fn open_terminal_invariant
+  (d:DS.top_server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.top_server_channel_terminal
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal app_log)
+  ensures
+    exists* st certificate_chain credential_identity.
+      DS.top_server_driver_connected
+        d
+        st
+        certificate_chain
+        credential_identity
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent)
+{
+  unfold (DS.top_server_channel_terminal
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal app_log));
+  with st certificate_chain credential_identity channel model committed buffered_len.
+    assert (DS.top_server_channel_terminal_indexed
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal app_log)
+      st
+      certificate_chain
+      credential_identity
+      channel
+      model
+      committed
+      buffered_len);
+  open_terminal_indexed
+    d wire_received wire_sent app_log
+    (Ghost.hide st)
+    (Ghost.hide certificate_chain)
+    (Ghost.hide credential_identity)
+    (Ghost.hide channel)
+    (Ghost.hide model)
+    (Ghost.hide committed)
+    (Ghost.hide buffered_len);
+  with actual_certificate_chain actual_credential_identity.
+    assert (DS.top_server_driver_connected_indexed
+      d
+      st
+      actual_certificate_chain
+      actual_credential_identity
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      channel
+      model
+      committed
+      buffered_len);
+  fold (DS.top_server_driver_connected
+    d
+    st
+    actual_certificate_chain
+    actual_credential_identity
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent))
+}
+
 let lemma_channel_received_buffered_decomp
   (st:CS.connection_state)
   (received:B.bytes)

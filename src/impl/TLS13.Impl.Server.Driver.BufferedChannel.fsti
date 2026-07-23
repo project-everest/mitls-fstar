@@ -9,6 +9,54 @@ module CS = TLS13.Spec.StateMachine
 module DS = TLS13.Impl.Server.Driver.State
 module ST = TLS13.Impl.Server.Types
 module TChannel = TLS13.Impl.Channel
+module CI = Common.ChannelImplementation
+
+ghost fn open_channel_invariant
+  (d:DS.top_server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  ensures
+    exists* st certificate_chain credential_identity.
+      DS.top_server_driver_connected
+        d
+        st
+        certificate_chain
+        credential_identity
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent) **
+      pure (
+        ST.server_connection_control_not_failed st /\
+        (Ghost.reveal app_log) == TChannel.application_log st)
+
+ghost fn open_terminal_invariant
+  (d:DS.top_server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.top_server_channel_terminal
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal app_log)
+  ensures
+    exists* st certificate_chain credential_identity.
+      DS.top_server_driver_connected
+        d
+        st
+        certificate_chain
+        credential_identity
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent)
 
 ghost fn pack_connected_channel_invariant
   (d:DS.top_server_driver)
