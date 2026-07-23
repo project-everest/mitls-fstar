@@ -7,6 +7,8 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module BL = TLS13.Impl.Server.Driver.BufferedLifecycle
+module BH = TLS13.Impl.Server.Driver.BufferedHandshake
+module BN = TLS13.Impl.Server.Driver.BufferedNetwork
 module CI = Common.ChannelImplementation
 module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes

@@ -1,0 +1,226 @@
+module TLS13.Impl.Server.Driver.BufferedHandshake
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
+
+module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
+module CM = TLS13.Impl.ConnectionState.Model
+module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
+module DS = TLS13.Impl.Server.Driver.State
+module M = TLS13.Messages
+module Seq = FStar.Seq
+module SS = TLS13.Impl.Server.Send
+module ST = TLS13.Impl.Server.Types
+module SZ = FStar.SizeT
+module T = TLS13.Types
+module U8 = FStar.UInt8
+module GSHbody = TLS13.Wire.Generated.ServerHello_body
+
+noextract
+let selection_from_payload_correct
+  (st0 st1:CS.connection_state)
+  (payload:B.bytes)
+  : prop =
+  B.length payload == 64 /\
+  (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+         st0.CS.cs_model.CS.model_config.CS.config_server with
+   | Some ch, Some cfg ->
+     let selection = {
+       CS.server_selected_client_hello = ch;
+       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+       CS.server_selected_group = T.X25519;
+       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+       CS.server_random = CL.raw_slice payload 0 32;
+       CS.server_key_share_private = Some (CL.raw_slice payload 32 64);
+       CS.server_key_share_public =
+         CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
+       CS.server_selected_credential = cfg.CS.server_credential_identity;
+     } in
+     st1 == CM.selected_server_parameters_state st0 selection
+   | _ -> False)
+
+noextract
+let server_hello_from_payload_correct
+  (st0 st1:CS.connection_state)
+  (payload:B.bytes)
+  : prop =
+  B.length payload == 64 /\
+  (let sh =
+     SS.mk_server_hello_witness
+       (CL.raw_slice payload 0 32)
+       (CryptoSpec.x25519_public_from_private
+         (CL.raw_slice payload 32 64))
+       T.TLS_CHACHA20_POLY1305_SHA256 in
+   st1 ==
+     CM.sent_server_hello_state
+       st0
+       sh
+       (CS.serialized_cleartext_tls_message
+         (M.TlsHandshake (M.ServerHello sh))))
+
+fn start_server_once
+  (d:DS.buffered_driver)
+  (empty_payload:array U8.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires
+    DS.buffered_driver_exactly
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'buffered
+      'buffered_len **
+    pts_to empty_payload 'empty_payload_bytes **
+    pts_to network_out 'old_network_out **
+    pts_to app_out 'old_app_out **
+    pure (
+      B.length 'empty_payload_bytes == 0 /\
+      B.length 'old_network_out == SZ.v network_out_len /\
+      B.length 'old_app_out == SZ.v app_out_len /\
+      CM.can_start_server 'st0)
+  returns resp:ST.server_response
+  ensures
+    exists* network_out_bytes app_out_bytes.
+      DS.buffered_driver_exactly
+        d
+        (CM.started_server_state 'st0)
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len **
+      pts_to empty_payload 'empty_payload_bytes **
+      pts_to network_out network_out_bytes **
+      pts_to app_out app_out_bytes **
+      pure (
+        B.length network_out_bytes == SZ.v network_out_len /\
+        B.length app_out_bytes == SZ.v app_out_len)
+
+fn select_default_server_parameters_from_payload_once
+  (d:DS.buffered_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires
+    DS.buffered_driver_exactly
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'buffered
+      'buffered_len **
+    pts_to payload 'payload_bytes **
+    pts_to network_out 'old_network_out **
+    pts_to app_out 'old_app_out **
+    pure (
+      B.length 'payload_bytes == SZ.v payload_len /\
+      SZ.v payload_len == 64 /\
+      B.length 'old_network_out == SZ.v network_out_len /\
+      B.length 'old_app_out == SZ.v app_out_len /\
+      network_out_len == DS.driver_network_out_capacity /\
+      app_out_len == DS.driver_app_out_capacity /\
+      ST.server_local_event_input_ready
+        'st0
+        ST.LocalSelectServerParameters
+        (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures
+    exists* st1 network_out_bytes app_out_bytes.
+      DS.buffered_driver_exactly
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len **
+      pts_to payload 'payload_bytes **
+      pts_to network_out network_out_bytes **
+      pts_to app_out app_out_bytes **
+      pure (
+        B.length network_out_bytes == SZ.v network_out_len /\
+        B.length app_out_bytes == SZ.v app_out_len /\
+        selection_from_payload_correct
+          'st0
+          st1
+          (Ghost.reveal 'payload_bytes))
+
+fn send_server_hello_from_payload_once
+  (d:DS.buffered_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires
+    DS.buffered_driver_exactly
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'buffered
+      'buffered_len **
+    pts_to payload 'payload_bytes **
+    pts_to app_out 'old_app_out **
+    pure (
+      B.length 'payload_bytes == SZ.v payload_len /\
+      SZ.v payload_len == 64 /\
+      B.length 'old_app_out == SZ.v app_out_len /\
+      ST.server_local_event_input_ready
+        'st0
+        ST.LocalSendServerHello
+        (Ghost.reveal 'payload_bytes) /\
+      (Seq.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 ==>
+       (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32) <>
+         GSHbody.serverHello_body_cst) /\
+      (let sh =
+         SS.mk_server_hello_witness
+           (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+           (CryptoSpec.x25519_public_from_private
+             (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+           T.TLS_CHACHA20_POLY1305_SHA256 in
+       CM.can_send_server_hello
+         'st0
+         sh
+         (CS.serialized_cleartext_tls_message
+           (M.TlsHandshake (M.ServerHello sh)))))
+  returns resp:ST.server_response
+  ensures
+    exists* st1 app_out_bytes.
+      DS.buffered_driver_exactly
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len **
+      pts_to payload 'payload_bytes **
+      pts_to app_out app_out_bytes **
+      pure (
+        B.length app_out_bytes == SZ.v app_out_len /\
+        server_hello_from_payload_correct
+          'st0
+          st1
+          (Ghost.reveal 'payload_bytes) /\
+        ST.server_local_event_end_to_end_correct
+          'st0
+          st1
+          resp
+          ST.LocalSendServerHello
+          (Ghost.reveal 'payload_bytes)
+          (CS.serialized_cleartext_tls_message
+            (M.TlsHandshake
+              (M.ServerHello
+                (SS.mk_server_hello_witness
+                  (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+                  (CryptoSpec.x25519_public_from_private
+                    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                  T.TLS_CHACHA20_POLY1305_SHA256))))
+          app_out_bytes)
