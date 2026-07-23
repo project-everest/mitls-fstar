@@ -1,3 +1,6 @@
 [submodule "third_party/hacl-star"]
 	path = third_party/hacl-star
 	url = https://github.com/hacl-star/hacl-star.git
+[submodule "third_party/dolev-yao-star-extrinsic"]
+	path = third_party/dolev-yao-star-extrinsic
+	url = https://github.com/nikswamy/dolev-yao-star-extrinsic.git

@@ -30,6 +30,8 @@ LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
 # relying on the caller having sourced tools/everparse/env.sh.
 Z3_DIR         ?= $(EVERPARSE_HOME)/opt/z3
 export PATH := $(Z3_DIR):$(PATH)
+TLS_Z3_VERSION := 4.13.3
+DY_Z3_VERSION  := 4.15.3
 
 GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
@@ -46,6 +48,9 @@ EXTRACT_DIR = _extract
 HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
 HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+DY_HOME     = third_party/dolev-yao-star-extrinsic
+DY_CORE_DIR = $(DY_HOME)/src/core
+DY_CACHE_DIR = $(DY_HOME)/cache
 EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
 SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
@@ -85,6 +90,23 @@ FSTAR_FLAGS = \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
+
+FSTAR_SYMBOLIC_FLAGS = \
+  $(OTHERFLAGS) \
+  --cache_checked_modules \
+  --cache_dir $(CACHE_DIR) \
+  --odir $(OUTPUT_DIR) \
+  --warn_error -321 \
+  --report_assumes warn \
+  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse,DY -TLS13 +TLS13.Wire.Generated' \
+  --ext optimize_let_vc \
+  --ext fly_deps \
+  --z3version $(TLS_Z3_VERSION) \
+  --include $(DY_CACHE_DIR) \
+  --include $(DY_CORE_DIR) \
+  $(INCLUDES)
+
+FSTAR_SYMBOLIC = $(FSTAR_EXE) $(FSTAR_SYMBOLIC_FLAGS)
 
 FSTAR_EXTRACT_FLAGS = \
   $(OTHERFLAGS) \
@@ -255,6 +277,7 @@ restore-generated-cache:
 # explicitly via the stamp and never need the spec/impl dependency graph.
 DEPEND_EXCLUDED_GOALS := clean regen-generated verify-generated extract-generated \
   parsers generated-checked save-generated-cache restore-generated-cache \
+  verify-dy-core \
   $(GENERATED_STAMP)
 ifeq (,$(filter $(DEPEND_EXCLUDED_GOALS),$(MAKECMDGOALS)))
 include .depend
@@ -268,7 +291,11 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated save-generated-cache restore-generated-cache benchmark benchmark-build benchmark-profile-build profile
+.PHONY: all verify verify-tls verify-dy-core verify-symbolic test clean \
+  check-toolchain check-z3 check-deps admit-count check-admits \
+  generated-checked parsers extract-generated save-generated-cache \
+  restore-generated-cache benchmark benchmark-build benchmark-profile-build \
+  profile
 
 all: verify
 
@@ -278,8 +305,59 @@ all: verify
 # via $(GENERATED_STAMP).
 generated-checked: $(GENERATED_STAMP)
 
-verify: generated-checked $(ALL_CHECKED_FILES)
+verify-dy-core: check-toolchain check-z3
+	+$(MAKE) -C $(DY_HOME) core \
+	  FSTAR_EXE='$(abspath $(FSTAR_EXE))' \
+	  DY_HOME='$(abspath $(DY_HOME))'
+	@echo "DY* core verified with Z3 $(DY_Z3_VERSION)"
+
+SYMBOLIC_IMPORT_FILE = src/spec/symbolic/TLS13.Symbolic.Import.fst
+SYMBOLIC_PROFILE_FILE = src/spec/symbolic/TLS13.Symbolic.Profile.fst
+SYMBOLIC_TERMS_FILE = src/spec/symbolic/TLS13.Symbolic.Terms.fst
+SYMBOLIC_USAGES_FILE = src/spec/symbolic/TLS13.Symbolic.Usages.fst
+SYMBOLIC_LABELS_FILE = src/spec/symbolic/TLS13.Symbolic.Labels.fst
+SYMBOLIC_EVENTS_FILE = src/spec/symbolic/TLS13.Symbolic.Events.fst
+SYMBOLIC_LEMMAS_FILE = src/spec/symbolic/TLS13.Symbolic.Lemmas.fst
+SYMBOLIC_IMPORT_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Import.fst.checked
+SYMBOLIC_PROFILE_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Profile.fst.checked
+SYMBOLIC_TERMS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Terms.fst.checked
+SYMBOLIC_USAGES_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Usages.fst.checked
+SYMBOLIC_LABELS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Labels.fst.checked
+SYMBOLIC_EVENTS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Events.fst.checked
+SYMBOLIC_LEMMAS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Lemmas.fst.checked
+
+$(SYMBOLIC_PROFILE_CHECKED): $(SYMBOLIC_PROFILE_FILE) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
+
+$(SYMBOLIC_TERMS_CHECKED): $(SYMBOLIC_TERMS_FILE) $(SYMBOLIC_PROFILE_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
+
+$(SYMBOLIC_USAGES_CHECKED): $(SYMBOLIC_USAGES_FILE) $(SYMBOLIC_TERMS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
+
+$(SYMBOLIC_LABELS_CHECKED): $(SYMBOLIC_LABELS_FILE) $(SYMBOLIC_TERMS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
+
+$(SYMBOLIC_EVENTS_CHECKED): $(SYMBOLIC_EVENTS_FILE) $(SYMBOLIC_TERMS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
+
+$(SYMBOLIC_LEMMAS_CHECKED): $(SYMBOLIC_LEMMAS_FILE) $(SYMBOLIC_TERMS_CHECKED) $(SYMBOLIC_USAGES_CHECKED) $(SYMBOLIC_LABELS_CHECKED) $(SYMBOLIC_EVENTS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
+
+$(SYMBOLIC_IMPORT_CHECKED): $(SYMBOLIC_IMPORT_FILE) $(SYMBOLIC_PROFILE_CHECKED) $(SYMBOLIC_TERMS_CHECKED) $(SYMBOLIC_USAGES_CHECKED) $(SYMBOLIC_LABELS_CHECKED) $(SYMBOLIC_EVENTS_CHECKED) $(SYMBOLIC_LEMMAS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
+
+verify-symbolic: verify-tls verify-dy-core \
+  $(SYMBOLIC_PROFILE_CHECKED) $(SYMBOLIC_TERMS_CHECKED) \
+  $(SYMBOLIC_USAGES_CHECKED) $(SYMBOLIC_LABELS_CHECKED) \
+  $(SYMBOLIC_EVENTS_CHECKED) $(SYMBOLIC_LEMMAS_CHECKED) \
+  $(SYMBOLIC_IMPORT_CHECKED)
+	@echo "TLS symbolic modules verified with Z3 $(TLS_Z3_VERSION)"
+
+verify-tls: generated-checked $(ALL_CHECKED_FILES)
 	@echo "All F* modules verified"
+
+verify: verify-tls verify-symbolic
 
 admit-count:
 	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src calc_sample/spec calc_sample/impl || true); \
@@ -1069,6 +1147,15 @@ check-toolchain:
 	  exit 1; \
 	fi
 
+check-z3:
+	@for version in "$(TLS_Z3_VERSION)" "$(DY_Z3_VERSION)"; do \
+	  solver="$(Z3_DIR)/z3-$$version"; \
+	  if [ ! -x "$$solver" ]; then \
+	    echo "Z3 $$version not found at $$solver.  Run ./setup.sh."; \
+	    exit 1; \
+	  fi; \
+	done
+
 check-deps:
 	@scripts/check-openssl.sh >/dev/null
 	@test -d third_party/hacl-star/dist/gcc-compatible || \
@@ -1077,6 +1164,8 @@ check-deps:
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
+	  $(DY_HOME)/hints $(DY_HOME)/obj $(DY_HOME)/cache \
+	  $(DY_HOME)/ml/lib/src \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
 	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \

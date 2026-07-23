@@ -42,20 +42,23 @@ the whole pipeline (QuackyDucky generation → F* verification → KaRaMeL extra
 
 `./setup.sh` builds the EverParse toolchain (QuackyDucky + LowParse + the
 F*/KaRaMeL binaries it vendors) from the pinned fork/commit into
-`tools/everparse` (gitignored), then initializes the HACL* submodule and fetches
-the RFC and OpenSSL dependencies. No separate F* installation is required; the
-`make` toolchain is derived from `EVERPARSE_HOME` (default `tools/everparse`).
+`tools/everparse` (gitignored), installs Z3 4.13.3 and 4.15.3, then initializes
+the DY* and HACL* submodules and fetches the RFC and OpenSSL dependencies. No
+separate F* installation is required; the `make` toolchain is derived from
+`EVERPARSE_HOME` (default `tools/everparse`).
 
 Environment overrides: `EVERPARSE_HOME`, `EVERPARSE_REPO`, `EVERPARSE_BRANCH`,
-`EVERPARSE_COMMIT`, `JOBS`, or point `FSTAR_EXE`/`KRML_EXE`/`QD_EXE` at a
-different toolchain when invoking `make`.
+`EVERPARSE_COMMIT`, `Z3_DIR`, `JOBS`, or point
+`FSTAR_EXE`/`KRML_EXE`/`QD_EXE` at a different toolchain when invoking `make`.
 
 ## Validation
 
 ```sh
 make parsers         # QuackyDucky: regenerate, verify, and extract the TLS wire
                      #   parsers/serializers from tls.qd.rfc (generated/)
-make verify          # verify all F*/Pulse modules
+make verify-dy-core  # verify the pinned DY* core with Z3 4.15.3
+make verify-symbolic # verify TLS symbolic modules with Z3 4.13.3
+make verify          # verify all F*/Pulse and symbolic modules
 make extract-tls13-bundle  # extract the unified client/server driver bundle
 make test            # verify, check echo stubs, and run OpenSSL echo interop
 ```

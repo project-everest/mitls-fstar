@@ -104,6 +104,8 @@ jobs:
           - name: tls-root (make test)
             cmd: make -j"$(nproc)" _cache/TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.fst.checked && make -j"$(nproc)" test
             cache_generated: true
+          - name: symbolic (verify)
+            cmd: make -j"$(nproc)" verify-symbolic
           - name: calc (test-c)
             cmd: make -j"$(nproc)" -C calc_sample test-c
           - name: ftp (verify)
