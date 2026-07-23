@@ -423,3 +423,111 @@ ghost fn pack_connected_channel
   pack_connected_channel_invariant
     d st certificate_chain credential_identity received sent
 }
+
+ghost fn pack_connected_channel_terminal
+  (d:DS.top_server_driver)
+  (st:Ghost.erased CS.connection_state)
+  (certificate_chain:Ghost.erased B.bytes)
+  (credential_identity:Ghost.erased CS.server_credential_identity)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  requires
+    DS.top_server_driver_connected
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal certificate_chain)
+      (Ghost.reveal credential_identity)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+  ensures
+    DS.top_server_channel_terminal
+      d
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (TChannel.application_log (Ghost.reveal st))
+{
+  unfold (DS.top_server_driver_connected
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)
+    (Ghost.reveal received)
+    (Ghost.reveal sent));
+  with channel model committed buffered_len.
+    assert (DS.top_server_driver_connected_indexed
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal certificate_chain)
+      (Ghost.reveal credential_identity)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      channel
+      model
+      committed
+      buffered_len);
+  unfold (DS.top_server_driver_connected_indexed
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    channel
+    model
+    committed
+    buffered_len);
+  unfold (DS.buffered_driver_indexed
+    (DS.top_server_as_buffered d channel)
+    (Ghost.reveal st)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)
+    (BT.pending model)
+    buffered_len
+    model
+    (Ghost.reveal received)
+    committed
+    (Ghost.reveal sent));
+  unfold (DS.buffered_driver_canonical_progress
+    (DS.top_server_as_buffered d channel)
+    (Ghost.reveal st));
+  MR.recall_snapshot
+    d.DS.top_server_driver_progress
+    #1.0R
+    #(Ghost.reveal st)
+    #(Ghost.reveal d.DS.top_server_driver_initial);
+  CP.lemma_server_progress_state_ahead
+    (Ghost.reveal d.DS.top_server_driver_initial)
+    (Ghost.reveal d.DS.top_server_driver_initial)
+    (Ghost.reveal st);
+  assert (pure (CP.server_invariant_pure
+    (Ghost.reveal d.DS.top_server_driver_initial)
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
+    (Ghost.reveal st)));
+  assert (pure (CP.server_config_matches_credentials
+    (Ghost.reveal d.DS.top_server_driver_initial)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)));
+  fold (CP.server_invariant
+    (DS.top_server_driver_canonical d)
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
+    (Ghost.reveal st));
+  fold (DS.top_server_channel_terminal_indexed
+    d
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (TChannel.application_log (Ghost.reveal st))
+    (Ghost.reveal st)
+    (Ghost.reveal certificate_chain)
+    (Ghost.reveal credential_identity)
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.top_server_channel_terminal
+    d
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (TChannel.application_log (Ghost.reveal st)))
+}
