@@ -15,7 +15,7 @@ export PATH=$EP/opt/z3:$PATH
 cd "$(dirname "$0")"
 F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include $LP/pulse --include spec --include impl"
 
-MODS="HTTP.Impl.Codec.Chunked HTTP.Impl.Codec.Chunked.Stream HTTP.Impl.Loop.Chunked.Stream HTTP.Impl.Server.Loop HTTP.Impl.Client.Loop HTTP.Impl.Codec.Length HTTP.Impl.Server.Loop.Length HTTP.Impl.Client.Loop.Length HTTP.Impl.Codec.Request HTTP.Impl.Codec.Response HTTP.Impl.Client.Loop.Get"
+MODS="HTTP.Impl.Codec.Chunked HTTP.Impl.Codec.Chunked.Stream HTTP.Impl.Loop.Chunked.Stream HTTP.Impl.Server.Loop HTTP.Impl.Client.Loop HTTP.Impl.Codec.Length HTTP.Impl.Server.Loop.Length HTTP.Impl.Client.Loop.Length HTTP.Impl.Codec.Request HTTP.Impl.Codec.Response HTTP.Impl.Client.Loop.Get HTTP.Impl.Codec.Header HTTP.Impl.Loop.Header"
 
 for M in $MODS; do
   KM=_output/$(echo "$M" | tr . _).krml
@@ -32,7 +32,7 @@ for M in $MODS; do KRMLS="$KRMLS _output/$(echo "$M" | tr . _).krml"; done
 rm -rf _extract
 mkdir -p _extract
 $KRML -tmpdir _extract -skip-compilation -warn-error -2-9-17 \
-  -bundle 'HTTP.Impl.Server.Loop+HTTP.Impl.Client.Loop+HTTP.Impl.Codec.Chunked+HTTP.Impl.Codec.Chunked.Stream+HTTP.Impl.Loop.Chunked.Stream+HTTP.Impl.Server.Loop.Length+HTTP.Impl.Client.Loop.Length+HTTP.Impl.Codec.Length+HTTP.Impl.Codec.Request+HTTP.Impl.Codec.Response+HTTP.Impl.Client.Loop.Get=[rename=HTTP_Verified]' \
+  -bundle 'HTTP.Impl.Server.Loop+HTTP.Impl.Client.Loop+HTTP.Impl.Codec.Chunked+HTTP.Impl.Codec.Chunked.Stream+HTTP.Impl.Loop.Chunked.Stream+HTTP.Impl.Server.Loop.Length+HTTP.Impl.Client.Loop.Length+HTTP.Impl.Codec.Length+HTTP.Impl.Codec.Request+HTTP.Impl.Codec.Response+HTTP.Impl.Client.Loop.Get+HTTP.Impl.Codec.Header+HTTP.Impl.Loop.Header=[rename=HTTP_Verified]' \
   -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims,LowParse.*,HTTP.Wire.Common,HTTP.Wire.Chunked,HTTP.Wire.Chunked.Stream,HTTP.Wire.Length,Common.StateMachine,Common.WireFormat,Common.WireFormatStateMachine,Common.FileTransfer,Common.TCP.History,Common.ProtocolEndpoint,Common.ProtocolDriver' \
   -no-prefix HTTP.Impl.Server.Loop \
   -no-prefix HTTP.Impl.Client.Loop \
@@ -45,6 +45,8 @@ $KRML -tmpdir _extract -skip-compilation -warn-error -2-9-17 \
   -no-prefix HTTP.Impl.Codec.Request \
   -no-prefix HTTP.Impl.Codec.Response \
   -no-prefix HTTP.Impl.Client.Loop.Get \
+  -no-prefix HTTP.Impl.Codec.Header \
+  -no-prefix HTTP.Impl.Loop.Header \
   $KRMLS
 echo "=== generated ==="
 ls -1 _extract/*.c _extract/*.h 2>/dev/null

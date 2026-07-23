@@ -85,7 +85,15 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       now has a functional spec tying the parsed value to `W.dec_dec_var` DONE;
       canonical variable-width *emit* + threading the value spec to `http_get`
       remain.
-- [ ] 1. General header parser/emitter
+- [~] 1. General header parser/emitter — **first slice DONE**: verified
+      single field-line model (`HTTP.Wire.Header`: `parse_field` / `ser_field`
+      round-trip) + extractable parser leaf `http_parse_header_field`
+      (`HTTP.Impl.Codec.Header`, functional tie to `parse_field`) + iterator
+      driver `http_count_headers` (`HTTP.Impl.Loop.Header`), exercised
+      field-by-field by `verified/header_parse_test.c`. Remaining: an
+      output `(name, value)` **list** model and re-expressing the existing
+      whitelist scanner (Content-Length / Transfer-Encoding / Host) on top of
+      the general field iterator.
 - [ ] 3. `POST` + request bodies
 - [ ] 4. Smuggling / limit defenses + error responses
 - [ ] 5. Keep-alive / persistent connections; TLS
