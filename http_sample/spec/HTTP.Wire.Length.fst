@@ -78,6 +78,23 @@ let ser_request_host (target host:W.token) : TCP.bytes =
       (Seq.append req_host_mid
         (Seq.append host req_host_tail)))
 
+(* Client POST request HEAD carrying a variable-width Content-Length.  Layout:
+       "POST " target " HTTP/1.1\r\nContent-Length: " <digits(len)> "\r\n\r\n"
+   The request body (len bytes) is sent immediately after this head.  Mirrors
+   `ser_response`'s variable-width digit run (`W.enc_dec_var`) but on the request
+   side; the closing `cl_tail_post` ("\r\n\r\n") is shared with the response. *)
+let lit_post : TCP.bytes = W.lit [0x50uy;0x4Fuy;0x53uy;0x54uy;0x20uy]  (* "POST " *)
+let req_post_mid : TCP.bytes =
+  W.lit [0x20uy;0x48uy;0x54uy;0x54uy;0x50uy;0x2Fuy;0x31uy;0x2Euy;0x31uy;0x0Duy;0x0Auy;
+         0x43uy;0x6Fuy;0x6Euy;0x74uy;0x65uy;0x6Euy;0x74uy;0x2Duy;0x4Cuy;0x65uy;0x6Euy;
+         0x67uy;0x74uy;0x68uy;0x3Auy;0x20uy]   (* " HTTP/1.1\r\nContent-Length: " *)
+
+let ser_request_post (target:W.token) (len:content_len) : TCP.bytes =
+  Seq.append lit_post
+    (Seq.append target
+      (Seq.append req_post_mid
+        (Seq.append (W.enc_dec_var len) cl_tail_post)))
+
 let ser_response (code:status_code) (len:content_len) : TCP.bytes =
   Seq.append resp_prefix
     (Seq.append (W.enc_dec3 (U16.v code))
