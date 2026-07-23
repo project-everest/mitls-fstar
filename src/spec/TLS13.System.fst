@@ -397,8 +397,7 @@ let protected_channel_ready (s:tls_system_state) : prop =
     let recip = recipient_state s recipient in
     let synth_sender : CS.connection_state =
       { recip with CS.cs_model = snapshot } in
-    ( M.TlsHandshake? sent /\
-      PC.pre_appdata_control snapshot.CS.model_control /\
+    ( PC.pre_appdata_control snapshot.CS.model_control /\
       PC.pre_appdata_control recip.CS.cs_model.CS.model_control /\
       snapshot.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
       recip.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake )
@@ -4166,6 +4165,79 @@ let lemma_cert_wire_parse_roundtrip (cert:GCert.certificate)
       (GHS.Body_certificate (cert <: GHS.handshake_body_certificate)) (M.Certificate cert)
 #pop-options
 
+(** Kind-characterization helpers for the two protected-channel-ready
+    establishment lemmas.  With the `M.TlsHandshake? sent` gate dropped from
+    `protected_channel_ready`'s guard, the establishment must handle EVERY `sent`
+    that the driver can put on the wire.  These helpers invert the driver's
+    `local_event_kind_matches` (explicit constructor match in a minimal context so
+    Z3 reliably inverts the kind enum) to record that a driver `Sent` network
+    event is NEVER a `ChangeCipherSpec` and NEVER a `IgnoredPostHandshake`, and
+    that any alert it emits is exactly `Close_notify`.  Together with the guard's
+    `pre_appdata` conjunct (which excludes the `ControlApplicationData`-only
+    ApplicationData / KeyUpdate sends) this pins `sent` to a protected handshake
+    message or `Close_notify` at every establishment. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_send_kind_char
+  (k:ST.local_event_kind) (payload:B.bytes) (sent:M.tls_message)
+  : Lemma
+      (requires
+        ST.local_event_kind_matches k payload
+          (CS.ConnNetworkEvent ({ CL.message_direction = CL.Sent; CL.message_value = sent })))
+      (ensures
+        (M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify) /\
+        ~(M.TlsChangeCipherSpec? sent) /\
+        ~(M.TlsIgnoredPostHandshake? sent))
+  = match k with
+    | ST.LocalStartServer -> ()
+    | ST.LocalSelectServerParameters -> ()
+    | ST.LocalDeriveSharedSecret -> ()
+    | ST.LocalInstallClientHandshakeTrafficKeys -> ()
+    | ST.LocalInstallServerHandshakeTrafficKeys -> ()
+    | ST.LocalInstallClientApplicationTrafficKeys -> ()
+    | ST.LocalInstallServerApplicationTrafficKeys -> ()
+    | ST.LocalSignCertificateVerify -> ()
+    | ST.LocalVerifyClientFinished -> ()
+    | ST.LocalDeliverApplicationData -> ()
+    | ST.LocalSendServerHello -> ()
+    | ST.LocalSendEncryptedExtensions -> ()
+    | ST.LocalSendCertificate -> ()
+    | ST.LocalSendCertificateVerify -> ()
+    | ST.LocalSendServerFinished -> ()
+    | ST.LocalSendApplicationData -> ()
+    | ST.LocalSendCloseNotify -> ()
+    | ST.LocalFail -> ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_client_send_kind_char
+  (st:CS.connection_state) (k:CTy2.local_event_kind) (payload:B.bytes) (sent:M.tls_message)
+  : Lemma
+      (requires
+        CTy2.local_event_kind_matches st k payload
+          (CS.ConnNetworkEvent ({ CL.message_direction = CL.Sent; CL.message_value = sent })))
+      (ensures
+        (M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify) /\
+        ~(M.TlsChangeCipherSpec? sent) /\
+        ~(M.TlsIgnoredPostHandshake? sent))
+  = match k with
+    | CTy2.LocalStartHandshake -> ()
+    | CTy2.LocalDeriveSharedSecret -> ()
+    | CTy2.LocalInstallClientHandshakeTrafficKeys -> ()
+    | CTy2.LocalInstallServerHandshakeTrafficKeys -> ()
+    | CTy2.LocalInstallClientApplicationTrafficKeys -> ()
+    | CTy2.LocalInstallServerApplicationTrafficKeys -> ()
+    | CTy2.LocalValidateCertificate -> ()
+    | CTy2.LocalVerifyCertificateSignature -> ()
+    | CTy2.LocalVerifyFinished -> ()
+    | CTy2.LocalDeliverApplicationData -> ()
+    | CTy2.LocalSendClientHello -> ()
+    | CTy2.LocalSendClientFinished -> ()
+    | CTy2.LocalSendApplicationData -> ()
+    | CTy2.LocalSendKeyUpdate -> ()
+    | CTy2.LocalSendCloseNotify -> ()
+    | CTy2.LocalFail -> ()
+#pop-options
+
 #push-options "--fuel 2 --ifuel 8 --z3rlimit 100 --split_queries always"
 let lemma_pcr_establish_server_send
   (a b:tls_system_state)
@@ -4214,8 +4286,7 @@ let lemma_pcr_establish_server_send
       assert (a.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
       assert (write_hs_stage_shape a.server.CS.cs_model);
       introduce
-        ( M.TlsHandshake? sent /\
-          PC.pre_appdata_control a.server.CS.cs_model.CS.model_control /\
+        ( PC.pre_appdata_control a.server.CS.cs_model.CS.model_control /\
           PC.pre_appdata_control a.client.CS.cs_model.CS.model_control /\
           a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
           a.client.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake )
@@ -4251,28 +4322,42 @@ let lemma_pcr_establish_server_send
         assert (CS.peer_record_material_agrees
                   (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic)
                   a.client ({ a.client with CS.cs_model = a.server.CS.cs_model }));
-        // H_rt : per-message wire round-trip.  The server's four protected
-        // handshake messages, each representable at the legal send.
-        let hs = M.TlsHandshake?._0 sent in
-        assert (sent == M.TlsHandshake hs);
-        assert (CS.legal_handshake_message a.server.CS.cs_model CL.Sent hs);
-        W.lemma_serialize_tls_message_handshake hs;
-        match hs with
-        | M.Finished fin ->
-          RVDF.lemma_parse_finished_handshake fin
-        | M.EncryptedExtensions ee ->
-          // legal Sent-EE forces alpn == None ==> representable.
-          W.lemma_encryptedExtensions_representable ee;
-          lemma_ee_wire_parse_roundtrip ee
-        | M.Certificate cert ->
-          // legal Sent-Certificate forces certificate_representable /\ bytesize bound.
-          lemma_cert_wire_parse_roundtrip cert
-        | M.CertificateVerify cv ->
-          // legal Sent-CV forces certificateVerify_representable.
-          lemma_cv_wire_parse_roundtrip cv
-        | M.ClientHello _ -> assert False
-        | M.ServerHello _ -> assert False
-        | M.HelloRetryRequest -> assert False
+        // H_rt : per-message wire round-trip.  With the handshake gate dropped
+        // from the guard, `sent` is any protected send the server driver emits:
+        // a handshake message (four representable protected messages) or a
+        // Close_notify alert.  ApplicationData / KeyUpdate / IgnoredPostHandshake
+        // are excluded by `pre_appdata` (they are legal only at
+        // ControlApplicationData); ChangeCipherSpec by the kind-char helper.
+        assert (SCP.server_api_event_matches api (CS.sent_tls_event sent));
+        lemma_server_send_kind_char api.CTy.server_local_kind api.CTy.server_local_payload sent;
+        (match sent with
+         | M.TlsHandshake hs ->
+           assert (CS.legal_handshake_message a.server.CS.cs_model CL.Sent hs);
+           W.lemma_serialize_tls_message_handshake hs;
+           (match hs with
+            | M.Finished fin ->
+              RVDF.lemma_parse_finished_handshake fin
+            | M.EncryptedExtensions ee ->
+              // legal Sent-EE forces alpn == None ==> representable.
+              W.lemma_encryptedExtensions_representable ee;
+              lemma_ee_wire_parse_roundtrip ee
+            | M.Certificate cert ->
+              // legal Sent-Certificate forces certificate_representable /\ bytesize bound.
+              lemma_cert_wire_parse_roundtrip cert
+            | M.CertificateVerify cv ->
+              // legal Sent-CV forces certificateVerify_representable.
+              lemma_cv_wire_parse_roundtrip cv
+            | M.ClientHello _ -> assert False
+            | M.ServerHello _ -> assert False
+            | M.HelloRetryRequest -> assert False)
+         | M.TlsAlert al ->
+           // kind-char: any alert the server driver sends is Close_notify.
+           assert (al == T.Close_notify);
+           W.lemma_parse_serialize_tls_message_close_notify ()
+         | M.TlsApplicationData _ -> assert False
+         | M.TlsKeyUpdate _ -> assert False
+         | M.TlsIgnoredPostHandshake _ -> assert False
+         | M.TlsChangeCipherSpec -> assert False)
       )
     )
 #pop-options
@@ -4325,8 +4410,7 @@ let lemma_pcr_establish_client_send
       assert (a.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
       assert (write_hs_stage_shape a.client.CS.cs_model);
       introduce
-        ( M.TlsHandshake? sent /\
-          PC.pre_appdata_control a.client.CS.cs_model.CS.model_control /\
+        ( PC.pre_appdata_control a.client.CS.cs_model.CS.model_control /\
           PC.pre_appdata_control a.server.CS.cs_model.CS.model_control /\
           a.client.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
           a.server.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake )
@@ -4341,40 +4425,72 @@ let lemma_pcr_establish_client_send
            W.parse_tls_message ct frag == Some sent) )
       with _g.
       (
-        let hs = M.TlsHandshake?._0 sent in
-        assert (sent == M.TlsHandshake hs);
-        match hs with
-        | M.Finished fin ->
-          // H_rt : Finished round-trips unconditionally.
-          W.lemma_serialize_tls_message_handshake hs;
-          RVDF.lemma_parse_finished_handshake fin;
-          // H_seal : Finished is not a cleartext message, single protected record.
-          assert (CS.network_message_is_cleartext CL.Sent sent == false);
-          assert (CS.sent_single_protected_message_seal a.client.CS.cs_model sent raw);
-          // H_seq
-          SCB.lemma_hseq_from_counts a.client a.server;
-          // H_mat : client (sender) -> server (recipient), ClientTraffic direction.
-          assert (Some? (hsf a.client).CS.hs_client_hello);
-          assert (Some? (hsf a.client).CS.hs_server_hello);
-          assert (Some? (hsf a.server).CS.hs_client_hello);
-          assert (Some? (hsf a.server).CS.hs_server_hello);
-          assert (ch_wire_equiv a);
-          assert (sh_wire_equiv a);
-          assert (hello_key_shares_ok a);
-          let client_ch = Some?.v (hsf a.client).CS.hs_client_hello in
-          let server_ch = Some?.v (hsf a.server).CS.hs_client_hello in
-          let client_sh = Some?.v (hsf a.client).CS.hs_server_hello in
-          let server_sh = Some?.v (hsf a.server).CS.hs_server_hello in
-          lemma_pcr_hmat_client_send a.client a.server client_ch server_ch client_sh server_sh;
-          assert (CS.peer_record_material_agrees
-                    (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic)
-                    ({ a.server with CS.cs_model = a.client.CS.cs_model }) a.server)
-        | M.ClientHello _ -> assert False
-        | M.ServerHello _ -> assert False
-        | M.EncryptedExtensions _ -> assert False
-        | M.Certificate _ -> assert False
-        | M.CertificateVerify _ -> assert False
-        | M.HelloRetryRequest -> assert False
+        assert (CCP.client_api_event_matches a.client api (CS.sent_tls_event sent));
+        lemma_client_send_kind_char a.client api.CTy.client_local_kind api.CTy.client_local_payload sent;
+        (match sent with
+         | M.TlsHandshake hs ->
+           (match hs with
+            | M.Finished fin ->
+              // H_rt : Finished round-trips unconditionally.
+              W.lemma_serialize_tls_message_handshake hs;
+              RVDF.lemma_parse_finished_handshake fin;
+              // H_seal : Finished is not a cleartext message, single protected record.
+              assert (CS.network_message_is_cleartext CL.Sent sent == false);
+              assert (CS.sent_single_protected_message_seal a.client.CS.cs_model sent raw);
+              // H_seq
+              SCB.lemma_hseq_from_counts a.client a.server;
+              // H_mat : client (sender) -> server (recipient), ClientTraffic direction.
+              assert (Some? (hsf a.client).CS.hs_client_hello);
+              assert (Some? (hsf a.client).CS.hs_server_hello);
+              assert (Some? (hsf a.server).CS.hs_client_hello);
+              assert (Some? (hsf a.server).CS.hs_server_hello);
+              assert (ch_wire_equiv a);
+              assert (sh_wire_equiv a);
+              assert (hello_key_shares_ok a);
+              let client_ch = Some?.v (hsf a.client).CS.hs_client_hello in
+              let server_ch = Some?.v (hsf a.server).CS.hs_client_hello in
+              let client_sh = Some?.v (hsf a.client).CS.hs_server_hello in
+              let server_sh = Some?.v (hsf a.server).CS.hs_server_hello in
+              lemma_pcr_hmat_client_send a.client a.server client_ch server_ch client_sh server_sh;
+              assert (CS.peer_record_material_agrees
+                        (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic)
+                        ({ a.server with CS.cs_model = a.client.CS.cs_model }) a.server)
+            | M.ClientHello _ -> assert False
+            | M.ServerHello _ -> assert False
+            | M.EncryptedExtensions _ -> assert False
+            | M.Certificate _ -> assert False
+            | M.CertificateVerify _ -> assert False
+            | M.HelloRetryRequest -> assert False)
+         | M.TlsAlert al ->
+           // kind-char: any alert the client driver sends is Close_notify.
+           assert (al == T.Close_notify);
+           // H_rt : Close_notify round-trips.
+           W.lemma_parse_serialize_tls_message_close_notify ();
+           // H_seal : Close_notify is protected, single record.
+           assert (CS.network_message_is_cleartext CL.Sent sent == false);
+           assert (CS.sent_single_protected_message_seal a.client.CS.cs_model sent raw);
+           // H_seq
+           SCB.lemma_hseq_from_counts a.client a.server;
+           // H_mat : client (sender) -> server (recipient), ClientTraffic direction.
+           assert (Some? (hsf a.client).CS.hs_client_hello);
+           assert (Some? (hsf a.client).CS.hs_server_hello);
+           assert (Some? (hsf a.server).CS.hs_client_hello);
+           assert (Some? (hsf a.server).CS.hs_server_hello);
+           assert (ch_wire_equiv a);
+           assert (sh_wire_equiv a);
+           assert (hello_key_shares_ok a);
+           let client_ch = Some?.v (hsf a.client).CS.hs_client_hello in
+           let server_ch = Some?.v (hsf a.server).CS.hs_client_hello in
+           let client_sh = Some?.v (hsf a.client).CS.hs_server_hello in
+           let server_sh = Some?.v (hsf a.server).CS.hs_server_hello in
+           lemma_pcr_hmat_client_send a.client a.server client_ch server_ch client_sh server_sh;
+           assert (CS.peer_record_material_agrees
+                     (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic)
+                     ({ a.server with CS.cs_model = a.client.CS.cs_model }) a.server)
+         | M.TlsApplicationData _ -> assert False
+         | M.TlsKeyUpdate _ -> assert False
+         | M.TlsIgnoredPostHandshake _ -> assert False
+         | M.TlsChangeCipherSpec -> assert False)
       )
     )
 #pop-options

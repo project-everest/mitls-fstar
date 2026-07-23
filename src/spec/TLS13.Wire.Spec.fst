@@ -959,6 +959,17 @@ let lemma_serialize_tls_message_close_notify ()
 =
   ()
 
+let lemma_parse_serialize_tls_message_close_notify ()
+  : Lemma
+      (let (ct, frag) = serialize_tls_message (M.TlsAlert T.Close_notify) in
+       parse_tls_message ct frag == Some (M.TlsAlert T.Close_notify))
+=
+  lemma_serialize_tls_message_close_notify ();
+  let frag = B.of_list [2uy; 0uy] in
+  assert_norm (B.length frag == 2);
+  assert_norm (Seq.index frag 1 == 0uy);
+  assert_norm (alert_description_of_byte 0uy == Some T.Close_notify)
+
 let lemma_serialize_tls_message_change_cipher_spec ()
   : Lemma (serialize_tls_message M.TlsChangeCipherSpec ==
     (T.Change_cipher_spec, B.singleton 1uy))
