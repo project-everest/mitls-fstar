@@ -632,6 +632,29 @@ let inflight_sender_coupling (s:tls_system_state) : prop =
     CS.step_model snapshot (CS.sent_tls_event sent)
       == Some (ipso_sender_endpoint s recipient).CS.cs_model
 
+(** STAGE 3a-bis (sender liveness / no-fatal-alert-in-flight) — the in-flight
+    ghost label `sent` is NEVER a bare FATAL alert.  Both canonical drivers'
+    `local_event_kind_matches` (Impl.{Client,Server}.Types) map every
+    nonempty-wire send to `sent ∈ {handshake, TlsApplicationData, TlsKeyUpdate,
+    Close_notify}`; NEITHER driver has a fatal-alert send kind (the only alert
+    kind is `LocalSendCloseNotify -> Close_notify`).  So a bare fatal
+    `M.TlsAlert` is never put in flight.  This faithfulness-only fact lets a
+    delivery EXCLUDE the fatal-alert sub-case: for a fatal alert the sender's
+    `step_model` would be `fail_model` (ConnectionState.fst:2100-2101), whose
+    landing collapses the write-seq alignment; combined with
+    `inflight_sender_coupling` this excludes that ghost label.  NOTE: we do NOT
+    claim the sender's control is non-`ControlFailed` — that is genuinely FALSE
+    (a legal `Close_notify` send from a handshake control lands the sender at
+    `ControlFailed` via step_tls_message:2100), so the fact is carried on the
+    MESSAGE, not the control.  Established at each SEND by the driver's
+    `local_event_kind_matches` case analysis, frozen while in-flight, vacuous at
+    deliveries/locals (post channel TlsQuiet) and initial. **)
+let inflight_sender_live (s:tls_system_state) : prop =
+  match s.channel with
+  | TlsQuiet -> True
+  | TlsInFlight _recipient _raw _snapshot sent ->
+    M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify
+
 (** The inductive structural invariant. **)
 let tls_system_inv (s:tls_system_state) : prop =
   client_stage_ok s.client /\
@@ -673,6 +696,7 @@ let tls_system_inv (s:tls_system_state) : prop =
   inflight_wire_faithful s /\
   inflight_sender_coupling s /\
   inflight_protected_sender_ok s /\
+  inflight_sender_live s /\
   incremental_protected_witnesses s
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -1203,7 +1227,7 @@ let lemma_initial_inv (cfg_c cfg_s:CS.connection_config)
     ApplicationData record, whose `parse_record_wire` is ApplicationData-typed, so
     the "received cleartext ClientHello" antecedent (which forces a Handshake
     record) is FALSE and the clause is vacuous. **)
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --z3smtopt '(set-option :smt.arith.solver 2)'"
 let lemma_cc_client_send
   (a:tls_system_state)
   (local:CTy.client_local_event) (c':CS.connection_state)
@@ -4574,6 +4598,7 @@ let lemma_ipw_pres_client_send
         inflight_wire_faithful b /\
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
+        inflight_sender_live b /\
         incremental_protected_witnesses b)
   = let raw = emitted_raw out in
     WStep.lemma_serialize_all_single_wire w;
@@ -4593,6 +4618,7 @@ let lemma_ipw_pres_client_send
       (inflight_wire_faithful b /\
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
+       inflight_sender_live b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -4648,11 +4674,52 @@ let lemma_ipw_pres_client_send
          | M.TlsHandshake (M.CertificateVerify _) ->
            assert False
          | _ -> ()) in
+      // inflight_sender_live b: sent is never a bare FATAL alert.  conn_ev ==
+      // ConnNetworkEvent {Sent; sent} and client_api_event_matches (in scope)
+      // unfolds to local_event_kind_matches, whose ConnNetworkEvent arms force
+      // sent in {ClientHello, Finished, TlsApplicationData, KeyUpdate,
+      // Close_notify}; no client local kind emits a fatal alert.
+      assert (M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify);
       ()
     )
 #pop-options
 
 (** (2) server SEND. **)
+
+(** Focused kind-inversion helper: the server driver's `local_event_kind_matches`
+    for a `Sent` network event never produces a bare FATAL alert (the only alert
+    send kind is `LocalSendCloseNotify -> Close_notify`).  Proven in a minimal
+    context (explicit enum match) so Z3 reliably inverts the 18-constructor kind,
+    unlike the huge server-send VC where the split starves. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_send_kind_not_fatal_alert
+  (k:ST.local_event_kind) (payload:B.bytes) (sent:M.tls_message)
+  : Lemma
+      (requires
+        ST.local_event_kind_matches k payload
+          (CS.ConnNetworkEvent ({ CL.message_direction = CL.Sent; CL.message_value = sent })))
+      (ensures M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify)
+  = match k with
+    | ST.LocalStartServer -> ()
+    | ST.LocalSelectServerParameters -> ()
+    | ST.LocalDeriveSharedSecret -> ()
+    | ST.LocalInstallClientHandshakeTrafficKeys -> ()
+    | ST.LocalInstallServerHandshakeTrafficKeys -> ()
+    | ST.LocalInstallClientApplicationTrafficKeys -> ()
+    | ST.LocalInstallServerApplicationTrafficKeys -> ()
+    | ST.LocalSignCertificateVerify -> ()
+    | ST.LocalVerifyClientFinished -> ()
+    | ST.LocalDeliverApplicationData -> ()
+    | ST.LocalSendServerHello -> ()
+    | ST.LocalSendEncryptedExtensions -> ()
+    | ST.LocalSendCertificate -> ()
+    | ST.LocalSendCertificateVerify -> ()
+    | ST.LocalSendServerFinished -> ()
+    | ST.LocalSendApplicationData -> ()
+    | ST.LocalSendCloseNotify -> ()
+    | ST.LocalFail -> ()
+#pop-options
+
 #push-options "--fuel 2 --ifuel 8 --z3rlimit 80 --split_queries always"
 let lemma_ipw_pres_server_send
   (a b:tls_system_state)
@@ -4672,6 +4739,7 @@ let lemma_ipw_pres_server_send
         inflight_wire_faithful b /\
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
+        inflight_sender_live b /\
         incremental_protected_witnesses b)
   = let raw = emitted_raw out in
     WStep.lemma_serialize_all_single_wire w;
@@ -4691,6 +4759,7 @@ let lemma_ipw_pres_server_send
       (inflight_wire_faithful b /\
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
+       inflight_sender_live b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -4762,6 +4831,14 @@ let lemma_ipw_pres_server_send
            assert (a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake);
            assert ((hsf s').CS.hs_server_finished == Some fin)
          | _ -> ()) in
+      // inflight_sender_live b: sent is never a bare FATAL alert.  conn_ev ==
+      // ConnNetworkEvent {Sent; sent}; server_api_event_matches (in scope)
+      // unfolds to local_event_kind_matches; the focused kind-inversion helper
+      // discharges M.TlsAlert? sent ==> sent == Close_notify.
+      lemma_server_send_kind_not_fatal_alert
+        (CTy.server_local_event_api local).CTy.server_local_kind
+        (CTy.server_local_event_api local).CTy.server_local_payload sent;
+      assert (M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify);
       ()
     )
 #pop-options
@@ -4784,6 +4861,7 @@ let lemma_ipw_pres_client_local
         inflight_wire_faithful b /\
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
+        inflight_sender_live b /\
         incremental_protected_witnesses b)
   = lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
     let api = CTy.client_local_event_api local in
@@ -4800,6 +4878,7 @@ let lemma_ipw_pres_client_local
       (inflight_wire_faithful b /\
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
+       inflight_sender_live b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -4852,6 +4931,7 @@ let lemma_ipw_pres_server_local
         inflight_wire_faithful b /\
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
+        inflight_sender_live b /\
         incremental_protected_witnesses b)
   = lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
     let api = CTy.server_local_event_api local in
@@ -4868,6 +4948,7 @@ let lemma_ipw_pres_server_local
       (inflight_wire_faithful b /\
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
+       inflight_sender_live b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -5289,6 +5370,7 @@ let lemma_ipw_pres_deliver_to_client
         inflight_wire_faithful b /\
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
+        inflight_sender_live b /\
         incremental_protected_witnesses b)
   = // STOP-AND-REPORT (blocked obligation, per task HARD CONSTRAINTS 1 & 2).
     //
@@ -5367,6 +5449,7 @@ let lemma_ipw_pres_deliver_to_server
         inflight_wire_faithful b /\
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
+        inflight_sender_live b /\
         incremental_protected_witnesses b)
   = // STOP-AND-REPORT (blocked obligation, symmetric to lemma_ipw_pres_deliver_to_client).
     //
