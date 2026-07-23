@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module BL = TLS13.Impl.Server.Driver.BufferedLifecycle
 module CI = Common.ChannelImplementation
 module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes

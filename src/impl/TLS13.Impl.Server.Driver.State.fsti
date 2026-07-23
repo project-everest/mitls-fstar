@@ -9,6 +9,7 @@ module BT = Common.BufferedTCP
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CI = Common.ChannelImplementation
+module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CTypes = TLS13.Impl.CanonicalTypes
 module ES = TLS13.Spec.Endpoint.Server
@@ -792,6 +793,15 @@ let top_server_driver_closed
   (exists* h. MR.pts_to d.top_server_driver_tcp_history #1.0R h) **
   top_server_driver_buffers d **
   (exists* model. BT.is_storage d.top_server_driver_storage model)
+
+noextract
+let top_server_driver_released
+  (d:top_server_driver)
+  (st:CS.connection_state)
+  : slprop =
+  CR.connection_released d.top_server_driver_server st **
+  top_server_driver_canonical_progress d st **
+  (exists* h. MR.pts_to d.top_server_driver_tcp_history #1.0R h)
 
 noextract
 let server_driver_buffers
