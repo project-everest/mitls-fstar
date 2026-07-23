@@ -476,7 +476,7 @@ DRIVER_EXTRACT_SELECTOR = \
   -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
   -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
   -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Client.CanonicalProtocol,\
-  -TLS13.Impl.Client.CanonicalQueries,-TLS13.Impl.Client.Endpoint,\
+  -TLS13.Impl.Client.CanonicalQueries,\
   -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 SERVER_DRIVER_EXTRACT_SELECTOR = \
@@ -486,7 +486,7 @@ SERVER_DRIVER_EXTRACT_SELECTOR = \
   -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
   -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
   -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Server.CanonicalProtocol,\
-  -TLS13.Impl.Server.CanonicalQueries,-TLS13.Impl.Server.Endpoint,\
+  -TLS13.Impl.Server.CanonicalQueries,\
   -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 

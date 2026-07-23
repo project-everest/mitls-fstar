@@ -17,8 +17,6 @@ module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
-module SQueries = TLS13.Impl.Server.CanonicalQueries
-module EP = TLS13.Impl.Server.Endpoint
 module ST = TLS13.Impl.Server.Types
 module TChannel = TLS13.Impl.Channel
 module Box = Pulse.Lib.Box
@@ -162,57 +160,6 @@ ghost fn advance_server_driver_canonical_progress
         (Ghost.reveal st0).CS.cs_model.CS.model_config)
   ensures
     server_driver_canonical_progress d (Ghost.reveal st1)
-
-noextract
-val server_driver_endpoint_config
-  (d: server_driver)
-  : SQueries.server_next_local_action_config
-
-noextract
-val server_driver_endpoint_frame
-  (d: server_driver)
-  (network_app_out: array U8.t)
-  (network_app_out_len: SZ.t)
-  (local_payload: array U8.t)
-  (local_payload_len: SZ.t)
-  (local_app_out: array U8.t)
-  (local_app_out_len: SZ.t)
-  (certificate_chain_len: SZ.t)
-  (certificate_chain_len_proof:
-    (certificate_chain:Ghost.erased B.bytes ->
-      Ghost.erased
-        (SZ.v certificate_chain_len == B.length (Ghost.reveal certificate_chain))))
-  (certificate_chain_len_bound:
-    Ghost.erased
-      (SZ.v certificate_chain_len <= Bounds.max_server_certificate_chain_len))
-  (material_spec: Ghost.erased EP.server_endpoint_material_spec)
-  (private_key: V.vec U8.t)
-  (material_deferred_ready:
-    (st:Ghost.erased CS.connection_state ->
-    action:SQueries.server_deferred_action ->
-      Ghost.erased
-        (SQueries.server_deferred_action_ready (Ghost.reveal st) action ==>
-         EP.server_endpoint_material_bytes_match_state
-           (Ghost.reveal material_spec)
-           (Ghost.reveal st))))
-  : f:EP.server_endpoint_frame{
-      f.EP.server_ep_query.SQueries.server_query_network_app_out == network_app_out /\
-      SZ.v f.EP.server_ep_query.SQueries.server_query_network_app_out_len ==
-        SZ.v network_app_out_len /\
-      f.EP.server_ep_query.SQueries.server_query_local_payload == local_payload /\
-      SZ.v f.EP.server_ep_query.SQueries.server_query_local_payload_len ==
-        SZ.v local_payload_len /\
-      f.EP.server_ep_query.SQueries.server_query_local_app_out == local_app_out /\
-      SZ.v f.EP.server_ep_query.SQueries.server_query_local_app_out_len ==
-        SZ.v local_app_out_len /\
-      f.EP.server_ep_raw == d.server_driver_raw /\
-      SZ.v f.EP.server_ep_raw_len == SZ.v driver_rx_capacity /\
-      f.EP.server_ep_network_out == d.server_driver_network_out /\
-      SZ.v f.EP.server_ep_network_out_len == SZ.v driver_network_out_capacity /\
-      f.EP.server_ep_material == d.server_driver_material_payload /\
-      SZ.v f.EP.server_ep_material_len == SZ.v driver_material_capacity /\
-      f.EP.server_ep_material_spec == material_spec /\
-      f.EP.server_ep_private == private_key}
 
 type server_driver_transport_status =
   | ServerDriverTransportOk
@@ -682,60 +629,6 @@ let server_channel_snapshot
       st **
     server_driver_io_history_snapshot d wire_received wire_sent **
     pure (app_log == TChannel.application_log st)
-
-noextract
-(**
-  Endpoint-owned connected server state. The server endpoint requires a distinct
-  private-key vec, so callers provide that through [frame] instead of treating
-  the 64-byte material vec as a splittable subview.
-**)
-let server_driver_endpoint_connected
-  (d:server_driver)
-  (cfg:SQueries.server_next_local_action_config)
-  (frame:EP.server_endpoint_frame)
-  (st:CS.connection_state)
-  (certificate_chain:B.bytes)
-  (credential_identity:CS.server_credential_identity)
-  (canonical_received:B.bytes)
-  (canonical_sent:B.bytes)
-  : slprop
-  =
-  SP.server_invariant
-    (server_driver_canonical d)
-    canonical_received
-    canonical_sent
-    st **
-  exists* ch buffered_len cv_input signature.
-    Box.pts_to d.server_driver_channel (Some ch) **
-    Box.pts_to d.server_driver_buffered_len buffered_len **
-    V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
-    V.pts_to d.server_driver_signature #1.0R signature **
-    EP.server_endpoint_frame_ready
-      (server_driver_canonical d)
-      cfg
-      frame
-      st **
-    EP.server_endpoint_io_ready
-      (server_driver_canonical d)
-      ch
-      frame
-      canonical_received
-      canonical_sent
-      st **
-    pure (ST.server_end_to_end_invariant st /\
-          server_driver_config_matches_credentials
-            st
-            certificate_chain
-            credential_identity /\
-          server_driver_supported_profile_selection st credential_identity /\
-          SZ.v buffered_len <= SZ.v frame.EP.server_ep_raw_len /\
-          B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
-          B.length signature == SZ.v driver_signature_capacity /\
-          Bounds.max_certificate_verify_input_len <=
-            SZ.v driver_certificate_verify_input_capacity /\
-          IM.max_signature_len <= SZ.v driver_signature_capacity /\
-          V.is_full_vec d.server_driver_certificate_verify_input /\
-          V.is_full_vec d.server_driver_signature)
 
 noextract
 let server_driver_connected_with_app_out
