@@ -249,7 +249,8 @@ fn alloc_storage
     bs_filled = filled;
     bs_capacity = buffer_capacity;
   };
-  let model = I.empty_buffer (SZ.v buffer_capacity);
+  let model : erased phys_buffer =
+    Ghost.hide (I.empty_buffer (SZ.v buffer_capacity));
   I.lemma_empty_buffer_wf (SZ.v buffer_capacity);
   I.lemma_empty_buffer_pending (SZ.v buffer_capacity);
   rewrite
@@ -263,7 +264,7 @@ fn alloc_storage
     (Box.pts_to filled 0sz)
     as
     (Box.pts_to storage.bs_filled 0sz);
-  fold (is_storage storage model);
+  fold (is_storage storage (Ghost.reveal model));
   storage
 }
 

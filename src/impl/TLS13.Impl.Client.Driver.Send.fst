@@ -93,6 +93,7 @@ let lemma_send_application_data_local_input_wf
 =
   ()
 
+inline_for_extraction
 fn top_driver_send_application_data
   (d:top_driver)
   (payload:array U8.t)

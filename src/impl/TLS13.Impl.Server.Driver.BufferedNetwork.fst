@@ -51,7 +51,7 @@ let decide
   | ST.NeedMoreInput ->
     BS.NeedMore
   | ST.StepOk ->
-    BS.Yield (SZ.v buffer_resp.ST.consumed_len) ()
+    BS.Yield buffer_resp.ST.consumed_len ()
   | status ->
     BS.Reject status
 
@@ -331,16 +331,16 @@ fn owns_wf
 }
 
 let lemma_yield_transition
-  (k:nat)
+  (k:SZ.t)
   (committed committed':B.bytes)
   (model model':BT.phys_buffer)
   : Lemma
       (requires
-        0 < k /\
-        k <= Seq.length (BT.pending model) /\
+        0 < SZ.v k /\
+        SZ.v k <= Seq.length (BT.pending model) /\
         Seq.equal committed'
-          (BT.committed_after committed model k) /\
-        model' == BT.compact model k)
+          (BT.committed_after committed model (SZ.v k)) /\
+        model' == BT.compact model (SZ.v k))
       (ensures
         BS.process_transition
           (BS.Yield k () <: BS.classification unit ST.server_status)
@@ -814,7 +814,7 @@ fn process
       buffer_resp.ST.response.ST.status = ST.StepOk;
     if step_ok {
       let decision : BS.classification unit ST.server_status =
-        BS.Yield (SZ.v buffer_resp.ST.consumed_len) ();
+        BS.Yield buffer_resp.ST.consumed_len ();
       assert (pure (0 < SZ.v buffer_resp.ST.consumed_len));
       assert (pure (decide result == decision));
       assert (pure (
@@ -825,7 +825,7 @@ fn process
             (Ghost.reveal model)
             (SZ.v buffer_resp.ST.consumed_len)));
       lemma_yield_transition
-        (SZ.v buffer_resp.ST.consumed_len)
+        buffer_resp.ST.consumed_len
         (Ghost.reveal committed)
         (Ghost.reveal new_committed)
         (Ghost.reveal model)
@@ -872,10 +872,10 @@ fn process
           (Ghost.reveal model)
           (BS.Processed
             result
-            (BS.Yield (SZ.v buffer_resp.ST.consumed_len) ())));
+            (BS.Yield buffer_resp.ST.consumed_len ())));
       BS.Processed
         result
-        (BS.Yield (SZ.v buffer_resp.ST.consumed_len) ())
+        (BS.Yield buffer_resp.ST.consumed_len ())
     } else {
       fold (owns
         e

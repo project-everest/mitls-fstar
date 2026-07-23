@@ -652,10 +652,11 @@ fn rec receive_application_data
           network_out_network
           (Ghost.reveal 'old_app_out)
           app_out_network));
-        let proof_observation = {
-          client_receive_observed_status = DriverWorkflowOk;
-          client_receive_observed_response = buffer_resp;
-        };
+        let proof_observation : erased client_receive_observation =
+          Ghost.hide {
+            client_receive_observed_status = DriverWorkflowOk;
+            client_receive_observed_response = buffer_resp;
+          };
         lemma_receive_observation_network_ok
           'st0
           st_network
@@ -667,9 +668,15 @@ fn rec receive_application_data
           (Ghost.reveal 'old_app_out)
           app_out_network;
         assert (pure (client_receive_observation_network_correct
-          'st0 st_network proof_observation app_out_network));
+          'st0
+          st_network
+          (Ghost.reveal proof_observation)
+          app_out_network));
         CChannel.lemma_receive_observation_app_out_length
-          'st0 st_network proof_observation app_out_network;
+          'st0
+          st_network
+          (Ghost.reveal proof_observation)
+          app_out_network;
         CChannel.lemma_network_bytes_application_log
           'st0
           st_network
@@ -754,7 +761,7 @@ fn rec receive_application_data
               'st0
               st_network
               app_out_network
-              proof_observation
+              (Ghost.reveal proof_observation)
               (receive_workflow_observation result);
             assert (pure (client_receive_observation_network_correct
               'st0
@@ -852,7 +859,7 @@ fn rec receive_application_data
                 st_local
                 app_out_network
                 app_out_local
-                proof_observation
+                (Ghost.reveal proof_observation)
                 (receive_workflow_observation result);
               assert (pure (client_receive_observation_network_correct
                 'st0
@@ -1159,9 +1166,10 @@ fn run
   V.to_vec_pts_to d.client_driver_auth_payload;
   V.to_vec_pts_to d.client_driver_auth_cv_input;
   V.to_vec_pts_to d.client_driver_auth_signature;
-  let observation = receive_workflow_observation workflow;
+  let observation : erased client_receive_observation =
+    Ghost.hide (receive_workflow_observation workflow);
   CChannel.lemma_receive_observation_app_out_length
-    'st0 st1 observation out_bytes;
+    'st0 st1 (Ghost.reveal observation) out_bytes;
   let workflow_ok =
     workflow.receive_workflow_status = DriverWorkflowOk;
   let response = workflow.receive_workflow_response.CT.response;
@@ -1176,9 +1184,9 @@ fn run
       if workflow_ok then response.CT.app_out_len else 0sz;
   };
   assert (pure (client_driver_receive_status_correct
-    result observation out_bytes out_bytes));
+    result (Ghost.reveal observation) out_bytes out_bytes));
   assert (pure (client_driver_receive_correct
-    'st0 st1 result observation out_bytes out_bytes));
+    'st0 st1 result (Ghost.reveal observation) out_bytes out_bytes));
   if workflow_ok {
     assert (pure (
       result.client_receive_status == DriverWorkflowOk));

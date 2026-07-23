@@ -132,7 +132,7 @@ let completed_drive_correct
       old_app_out
       app_out /\
     buffer_resp.CT.response.CT.status == CT.StepOk /\
-    consumed == SZ.v buffer_resp.CT.consumed_len
+    consumed == buffer_resp.CT.consumed_len
   | BS.DriveReject network error _ ->
     let buffer_resp =
       network.DS.buffered_network_read.DS.network_read_buffer_resp in

@@ -77,28 +77,6 @@ static int driver_fail_status(
   return 1;
 }
 
-/* A non-Ok / non-Closed accept outcome leaves the verified driver in the
-   lower-level *connected* predicate (handshake incomplete), not in a channel
-   invariant, so it must be disposed through abort_connected, whose F*
-   precondition is exactly server_driver_connected.  (The ordinary abort
-   consumes the live channel invariant and does not match this state.) */
-static void abort_connected_driver(tls13_server_driver *driver) {
-  TLS13_Impl_Server_Driver_abort_connected(driver->verified_driver);
-  driver->state = TLS13_SERVER_DRIVER_CLOSED;
-}
-
-/* A non-usable send/receive outcome leaves the verified channel in the
-   *terminal* invariant rather than the live channel invariant, so it must be
-   disposed through the dedicated terminal cleanup entry point.  For receive
-   this covers both a peer close (ServerWorkflowClosed) and a hard failure
-   (ServerWorkflowStepFailed); for send it covers ServerWorkflowStepFailed.
-   Calling the ordinary abort (which consumes the live invariant) would leave
-   terminal ownership unconsumable. */
-static void abort_terminal_driver(tls13_server_driver *driver) {
-  TLS13_Impl_Server_Driver_abort_terminal(driver->verified_driver);
-  driver->state = TLS13_SERVER_DRIVER_CLOSED;
-}
-
 int tls13_server_config_new(
     tls13_server_config **out,
     const char *bind_host,
@@ -232,11 +210,7 @@ int tls13_server_driver_accept_with_config(
           TLS13_SERVER_DRIVER_NETWORK_FUEL);
   if (status != TLS13_Impl_Server_Driver_ServerWorkflowOk) {
     (void)driver_fail_status(driver, "accept", status);
-    if (status != TLS13_Impl_Server_Driver_ServerWorkflowClosed) {
-      abort_connected_driver(driver);
-    } else {
-      driver->state = TLS13_SERVER_DRIVER_CLOSED;
-    }
+    driver->state = TLS13_SERVER_DRIVER_CLOSED;
     TLS13_Impl_Server_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
@@ -302,9 +276,7 @@ int tls13_server_driver_send_application_data(
       TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge) {
     return 1;
   }
-  /* Only ServerWorkflowStepFailed reaches here (send returns Ok /
-     PayloadTooLarge / StepFailed); it leaves the terminal invariant. */
-  abort_terminal_driver(driver);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
   return 1;
 }
 
@@ -347,11 +319,7 @@ int tls13_server_driver_receive_application_data(
        so the connection remains usable for retry. */
     return 1;
   }
-  /* Both a peer close (ServerWorkflowClosed) and a hard failure
-     (ServerWorkflowStepFailed) leave the verified channel in the *terminal*
-     invariant, so both must be disposed through the terminal cleanup entry
-     point rather than the live-invariant abort. */
-  abort_terminal_driver(driver);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
   return 1;
 }
 

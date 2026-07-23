@@ -5,13 +5,14 @@ module Common.BufferedStream
 open Pulse.Lib.Pervasives
 
 module Seq = FStar.Seq
+module SZ  = FStar.SizeT
 module TCP = Common.TCP
 module BT  = Common.BufferedTCP
 
 type classification (output:Type0) (error:Type0) =
   | NeedMore : classification output error
-  | Progress : consumed:nat -> classification output error
-  | Yield    : consumed:nat -> out:output -> classification output error
+  | Progress : consumed:SZ.t -> classification output error
+  | Yield    : consumed:SZ.t -> out:output -> classification output error
   | Reject   : err:error -> classification output error
 
 type process_outcome (output error result:Type0) =
@@ -26,14 +27,14 @@ type process_outcome (output error result:Type0) =
 type drive_outcome (output error result:Type0) =
   | DriveProgress :
       result ->
-      nat ->
-      FStar.SizeT.t ->
+      SZ.t ->
+      SZ.t ->
       drive_outcome output error result
   | DriveYield :
       result ->
-      nat ->
+      SZ.t ->
       output ->
-      FStar.SizeT.t ->
+      SZ.t ->
       drive_outcome output error result
   | DriveReject :
       result ->
@@ -47,12 +48,12 @@ type drive_outcome (output error result:Type0) =
   | DriveExhausted :
       drive_outcome output error result
 
-let consumed_of (#output #error:Type0) (d:classification output error) : nat =
+let consumed_of (#output #error:Type0) (d:classification output error) : SZ.t =
   match d with
-  | NeedMore -> 0
+  | NeedMore -> 0sz
   | Progress k -> k
   | Yield k _ -> k
-  | Reject _ -> 0
+  | Reject _ -> 0sz
 
 let drive_fuel_left
   (#output #error #result:Type0)
@@ -79,13 +80,13 @@ let process_transition
   | Reject _ ->
     True
   | Progress k ->
-    0 < k /\ k <= Seq.length (BT.pending b) /\
-    Seq.equal committed' (BT.committed_after committed b k) /\
-    b' == BT.compact b k
+    0 < SZ.v k /\ SZ.v k <= Seq.length (BT.pending b) /\
+    Seq.equal committed' (BT.committed_after committed b (SZ.v k)) /\
+    b' == BT.compact b (SZ.v k)
   | Yield k _ ->
-    0 < k /\ k <= Seq.length (BT.pending b) /\
-    Seq.equal committed' (BT.committed_after committed b k) /\
-    b' == BT.compact b k
+    0 < SZ.v k /\ SZ.v k <= Seq.length (BT.pending b) /\
+    Seq.equal committed' (BT.committed_after committed b (SZ.v k)) /\
+    b' == BT.compact b (SZ.v k)
 
 let read_delivers
   (received received':TCP.bytes)

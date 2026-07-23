@@ -454,6 +454,7 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Record \
   TLS13.Impl.Client \
   TLS13.Impl.Client.Driver.State \
+  TLS13.Impl.Client.Driver.BufferedNetwork \
   TLS13.Impl.Client.Driver.New \
   TLS13.Impl.Client.Driver.Core \
   TLS13.Impl.Client.Driver.Cleanup \
@@ -520,7 +521,6 @@ SERVER_DRIVER_MODULES = \
   Common.TCP \
   TLS13.OpenSSL \
   TLS13.Impl.Server.Driver.State \
-  TLS13.Impl.Server.Driver.Transport \
   TLS13.Impl.Server.Driver.Network \
   TLS13.Impl.Server.Driver.BufferedNetwork \
   TLS13.Impl.Server.Driver.BufferedTransport \
@@ -535,7 +535,6 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Driver.BufferedReceive \
   TLS13.Impl.Server.Driver.BufferedClose \
   TLS13.Impl.Server.Driver.Local \
-  TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver
 SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
@@ -545,13 +544,14 @@ SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 TLS13_BUNDLE_KRML_FILES = \
-  $(CLIENT_DRIVER_KRML_FILES) \
-  $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
   $(OUTPUT_DIR)/Common_BufferedTCP_Internal.krml \
   $(OUTPUT_DIR)/Common_BufferedTCP.krml \
+  $(OUTPUT_DIR)/Common_BufferedStream.krml \
   $(OUTPUT_DIR)/Common_Memmove.krml \
-  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml \
+  $(CLIENT_DRIVER_KRML_FILES) \
+  $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES)))
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)

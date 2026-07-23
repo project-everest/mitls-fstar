@@ -90,6 +90,7 @@ module Common.BufferedStream
 open Pulse.Lib.Pervasives
 
 module Seq = FStar.Seq
+module SZ  = FStar.SizeT
 module TCP = Common.TCP
 module BT  = Common.BufferedTCP
 
@@ -135,8 +136,9 @@ let consumption_law
   (st:state)
   (pending:TCP.bytes)
   : prop =
-  consumed_of (classify st pending) <= Seq.length pending /\
-  (makes_progress (classify st pending) ==> consumed_of (classify st pending) > 0)
+  SZ.v (consumed_of (classify st pending)) <= Seq.length pending /\
+  (makes_progress (classify st pending) ==>
+    SZ.v (consumed_of (classify st pending)) > 0)
 
 (**
   Conclusive decisions are prefix-stable: reading ahead (appending [extra]
@@ -207,7 +209,8 @@ let lemma_consumption_bounded
   (st:state)
   (pending:TCP.bytes)
   : Lemma
-      (ensures consumed_of (sp.sp_classify st pending) <= Seq.length pending)
+      (ensures
+        SZ.v (consumed_of (sp.sp_classify st pending)) <= Seq.length pending)
 = sp.sp_consumption st pending
 
 let lemma_progress_positive
@@ -218,8 +221,8 @@ let lemma_progress_positive
   : Lemma
       (requires makes_progress (sp.sp_classify st pending))
       (ensures
-        0 < consumed_of (sp.sp_classify st pending) /\
-        consumed_of (sp.sp_classify st pending) <= Seq.length pending)
+        0 < SZ.v (consumed_of (sp.sp_classify st pending)) /\
+        SZ.v (consumed_of (sp.sp_classify st pending)) <= Seq.length pending)
 = sp.sp_consumption st pending
 
 (* ------------------------------------------------------------------ *)
@@ -313,7 +316,7 @@ let lemma_needmore_stutter
   : Lemma
       (requires needs_more sp st pending)
       (ensures
-        consumed_of (sp.sp_classify st pending) == 0 /\
+        consumed_of (sp.sp_classify st pending) == 0sz /\
         ~(makes_progress (sp.sp_classify st pending)) /\
         ~(produces_output (sp.sp_classify st pending)))
 = ()
@@ -432,7 +435,7 @@ let lemma_commit_count_ok
   : Lemma
       (requires BT.buffer_wf b)
       (ensures
-        consumed_of (sp.sp_classify st (BT.pending b)) <=
+        SZ.v (consumed_of (sp.sp_classify st (BT.pending b))) <=
           Seq.length (BT.pending b))
 = sp.sp_consumption st (BT.pending b);
   BT.lemma_pending_length b
@@ -449,7 +452,7 @@ let step_commit
   (b:BT.phys_buffer)
   : (TCP.bytes & BT.phys_buffer) =
   let k = consumed_of (sp.sp_classify st (BT.pending b)) in
-  (BT.committed_after committed b k, BT.compact b k)
+  (BT.committed_after committed b (SZ.v k), BT.compact b (SZ.v k))
 
 (**
   Core scheduler theorem: committing *any* classifier decision preserves the
@@ -469,8 +472,8 @@ let lemma_step_commit_preserves
          stream_invariant received committed' b'))
 = lemma_commit_count_ok sp st b;
   let k = consumed_of (sp.sp_classify st (BT.pending b)) in
-  BT.lemma_commit_preserves_full received committed b k;
-  BT.lemma_compact_wf b k
+  BT.lemma_commit_preserves_full received committed b (SZ.v k);
+  BT.lemma_compact_wf b (SZ.v k)
 
 (** The committed stream only ever grows when a decision is committed. *)
 let lemma_step_commit_extends
@@ -484,7 +487,7 @@ let lemma_step_commit_extends
         (let (committed', _) = step_commit sp st committed b in
          TCP.bytes_extends committed committed'))
 = let k = consumed_of (sp.sp_classify st (BT.pending b)) in
-  BT.lemma_committed_after_extends committed b k
+  BT.lemma_committed_after_extends committed b (SZ.v k)
 
 (**
   Committing a [NeedMore] decision is a buffer no-op: the committed prefix and
@@ -643,7 +646,8 @@ let lemma_process_transition_needmore_stutter
   (b b':BT.phys_buffer)
   : Lemma
       (requires process_transition d committed committed' b b' /\ d == NeedMore)
-      (ensures Seq.equal committed' committed /\ b' == b /\ consumed_of d == 0)
+      (ensures
+        Seq.equal committed' committed /\ b' == b /\ consumed_of d == 0sz)
 = ()
 
 (**
@@ -670,11 +674,11 @@ let lemma_process_transition_preserves
   | NeedMore -> ()
   | Reject _ -> ()
   | Progress k ->
-    BT.lemma_commit_preserves_full received committed b k;
-    BT.lemma_compact_wf b k
+    BT.lemma_commit_preserves_full received committed b (SZ.v k);
+    BT.lemma_compact_wf b (SZ.v k)
   | Yield k _ ->
-    BT.lemma_commit_preserves_full received committed b k;
-    BT.lemma_compact_wf b k
+    BT.lemma_commit_preserves_full received committed b (SZ.v k);
+    BT.lemma_compact_wf b (SZ.v k)
 
 (**
   A read step extends the received stream by exactly the delivered chunk, keeping
