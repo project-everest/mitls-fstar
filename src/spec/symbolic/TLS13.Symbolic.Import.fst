@@ -9,6 +9,7 @@ module Labels = TLS13.Symbolic.Labels
 module Lemmas = TLS13.Symbolic.Lemmas
 module Profile = TLS13.Symbolic.Profile
 module Product = TLS13.Symbolic.Product
+module Secrecy = TLS13.Symbolic.Secrecy
 module Terms = TLS13.Symbolic.Terms
 module Usages = TLS13.Symbolic.Usages
 

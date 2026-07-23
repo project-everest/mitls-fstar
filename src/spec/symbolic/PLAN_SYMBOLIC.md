@@ -1,6 +1,6 @@
 # Symbolic Security Proof Plan for the TLS 1.3 1-RTT Profile
 
-Status: **approved; Phase 6 complete; Phase 7 in progress**
+Status: **approved; Phase 7 complete; Phase 8 in progress**
 
 This document is the review gate for the symbolic-security work. Until this
 plan is approved, the only repository change in this workstream should be this
@@ -639,6 +639,34 @@ label for Finished. `DY.is_corrupt trace label` means that this labeled value
 was exposed in the modeled trace. It does not imply compromise of unrelated
 ephemeral, traffic, or peer state.
 
+### 10.8 Key-schedule lineage and secrecy consumers
+
+Phase 7 uses `complete_key_schedule_lineage` to bind an endpoint's represented
+key-schedule fields to the exact TLS symbolic constructors at two historical
+transcript checkpoints: the ServerHello transcript for handshake traffic
+secrets and the server-Finished transcript for generation-zero application
+traffic secrets. `schedule_target_matches` then identifies the particular
+installed or derived secret named by a theorem. Both predicates are
+load-bearing in `established_schedule_secret_secrecy`.
+
+The caller must establish that the two ephemeral terms are the actual client
+and server ephemeral secrets for the sessions, carry their role/session-specific
+DH usages, and have the stated corruption labels. This is the execution-local
+freshness and X25519 realization boundary; arbitrary representation bindings
+alone do not establish it.
+
+For a matching honest pair, attacker knowledge of any covered schedule secret
+implies corruption of the client or server ephemeral label. The client-side
+specialization permits server-credential compromise as the alternative to an
+honest matching server. The server-side specialization explicitly requires the
+honest-peer evidence; no secrecy is claimed for an attacker-chosen peer DH
+share.
+
+HKDF-derived terms inherit the symbolic label of their input secret under the
+configured DY* KDF usage. Key separation is only constructor and exact-label
+separation in the symbolic model. It is not a claim that concrete HKDF outputs
+cannot collide.
+
 ## 11. Proposed module hierarchy
 
 All new TLS proof modules live under `src/spec/symbolic`.
@@ -951,24 +979,24 @@ Commit boundary:
 Purpose: show that established secrets are not DY-derivable without the stated
 compromise.
 
-- [ ] Prove DH shared-secret label/origin lemmas.
-- [ ] Prove handshake-secret secrecy.
-- [ ] Prove both handshake traffic-secret secrecy results.
-- [ ] Prove Finished-key secrecy.
-- [ ] Prove master-secret secrecy.
-- [ ] Prove both generation-zero application traffic-secret secrecy results.
-- [ ] Prove record-key secrecy.
-- [ ] State the server-side honest-peer precondition explicitly.
-- [ ] Specialize general public-label results to corruption disjunctions for
+- [x] Prove DH shared-secret label/origin lemmas.
+- [x] Prove handshake-secret secrecy.
+- [x] Prove both handshake traffic-secret secrecy results.
+- [x] Prove Finished-key secrecy.
+- [x] Prove master-secret secrecy.
+- [x] Prove both generation-zero application traffic-secret secrecy results.
+- [x] Prove record-key secrecy.
+- [x] State the server-side honest-peer precondition explicitly.
+- [x] Specialize general public-label results to corruption disjunctions for
       honest peers.
-- [ ] Prove symbolic key separation for all listed purposes/directions.
-- [ ] Document that symbolic separation is not concrete collision-freedom.
+- [x] Prove symbolic key separation for all listed purposes/directions.
+- [x] Document that symbolic separation is not concrete collision-freedom.
 
 Exit gate:
 
-- [ ] Every target secret has a theorem with explicit, minimal compromise
+- [x] Every target secret has a theorem with explicit, minimal compromise
       exceptions.
-- [ ] No theorem accidentally authenticates an unnamed client.
+- [x] No theorem accidentally authenticates an unnamed client.
 
 Commit boundary:
 
