@@ -369,6 +369,7 @@ fn process_network_bytes
                    app_out_bytes) /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
                  buffer_resp.CT.consumed_len == 0sz /\
+                 WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                  WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
                 (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
                  buffer_resp.CT.consumed_len == 0sz) /\

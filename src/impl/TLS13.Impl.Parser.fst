@@ -6296,7 +6296,9 @@ fn build_decoded_record_ok
   ensures
     (match r with
      | L.NetworkRecordNeedMoreInput ->
-       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
+       pure (
+         WS.record_prefix_incomplete (Ghost.reveal raw_bytes) /\
+         WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkRecordDecodeError -> emp
      | L.NetworkRecordOk decoded ->
       exists* fragment_bytes2.
@@ -6360,7 +6362,9 @@ fn decode_network_record
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkRecordNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkRecordDecodeError -> emp
            | L.NetworkRecordOk decoded ->
             exists* fragment_bytes.
@@ -6596,7 +6600,9 @@ fn build_decoded_buffer_ok
   ensures
     (match r with
      | L.NetworkBufferNeedMoreInput ->
-       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
+       pure (
+         WS.record_prefix_incomplete (Ghost.reveal raw_bytes) /\
+         WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkBufferDecodeError -> emp
      | L.NetworkBufferOk decoded ->
       exists* raw_record_bytes2 fragment_bytes2.
@@ -6679,7 +6685,9 @@ fn decode_network_buffer
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkBufferNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkBufferDecodeError -> emp
            | L.NetworkBufferOk decoded ->
             exists* raw_record_bytes fragment_bytes.
@@ -6881,6 +6889,11 @@ fn decode_network_buffer
         }
       } else {
         (* header parsed but the full fragment has not arrived yet *)
+        WS.lemma_read_u16_definition (Ghost.reveal 'raw_bytes) 3;
+        assert (pure (
+          WS.read_u16 (Ghost.reveal 'raw_bytes) 3 == SZ.v flen));
+        assert (pure (
+          WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes)));
         RVD.lemma_parse_record_wire_none_incomplete 'raw_bytes;
         L.NetworkBufferNeedMoreInput
       }

@@ -633,20 +633,6 @@ let parse_record_wire (input:B.bytes) : GTot (option (T.content_type & M.sealed_
         if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then None
         else Some (T.Handshake, Seq.slice input 5 (5 + fragment_len), 5 + fragment_len)
 
-let record_prefix_incomplete (input:B.bytes) : GTot prop =
-  if B.length input < 5 then
-    True
-  else
-    let b0 = Seq.index input 0 in
-    let b1 = Seq.index input 1 in
-    let b2 = Seq.index input 2 in
-    let fragment_len = read_u16 input 3 in
-    b1 == 0x03uy /\
-    (b2 == 0x03uy \/ (b0 == 0x16uy /\ b2 == 0x01uy)) /\
-    fragment_len <= 16640 /\
-    (b0 == 0x14uy \/ b0 == 0x15uy \/ b0 == 0x16uy \/ b0 == 0x17uy) /\
-    B.length input < 5 + fragment_len
-
 let lemma_record_prefix_incomplete_bound
   (input:B.bytes)
   : Lemma

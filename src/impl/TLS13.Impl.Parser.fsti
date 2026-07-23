@@ -76,7 +76,9 @@ fn decode_network_record
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkRecordNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkRecordDecodeError -> emp
            | L.NetworkRecordOk decoded ->
             exists* fragment_bytes.
@@ -144,7 +146,9 @@ fn decode_network_buffer
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkBufferNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkBufferDecodeError -> emp
            | L.NetworkBufferOk decoded ->
             exists* raw_record_bytes fragment_bytes.

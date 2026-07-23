@@ -2096,5 +2096,6 @@ fn process_network_bytes
                    network_out_bytes
                    app_out_bytes /\
                 (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                   W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
                   Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)))
