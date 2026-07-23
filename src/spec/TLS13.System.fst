@@ -72,6 +72,7 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module PWH = TLS13.ConnectionState.ProtectedWireHead
 
 open FStar.List.Tot
 
@@ -555,7 +556,81 @@ let incremental_protected_witnesses (s:tls_system_state) : prop =
           PWB.protected_handshake_event_projection_pair r
             (M.EncryptedExtensions server_ee) (M.EncryptedExtensions client_ee))
    | Some _, None -> False
+   | None, _ -> True) /\
+  (* server Certificate : sender = server, receiver = client *)
+  (match (hsf s.client).CS.hs_certificate,
+         (hsf s.server).CS.hs_certificate with
+   | Some client_cert, Some server_cert ->
+       (exists (r:PWB.protected_message_replay).
+          PWB.protected_handshake_event_projection_pair r
+            (M.Certificate server_cert) (M.Certificate client_cert))
+   | Some _, None -> False
+   | None, _ -> True) /\
+  (* server CertificateVerify : sender = server, receiver = client *)
+  (match (hsf s.client).CS.hs_certificate_verify,
+         (hsf s.server).CS.hs_certificate_verify with
+   | Some client_cv, Some server_cv ->
+       (exists (r:PWB.protected_message_replay).
+          PWB.protected_handshake_event_projection_pair r
+            (M.CertificateVerify server_cv) (M.CertificateVerify client_cv))
+   | Some _, None -> False
+   | None, _ -> True) /\
+  (* server Finished : sender = server, receiver = client *)
+  (match (hsf s.client).CS.hs_server_finished,
+         (hsf s.server).CS.hs_server_finished with
+   | Some client_sf, Some server_sf ->
+       (exists (r:PWB.protected_message_replay).
+          PWB.protected_handshake_event_projection_pair r
+            (M.Finished server_sf) (M.Finished client_sf))
+   | Some _, None -> False
+   | None, _ -> True) /\
+  (* client Finished : sender = CLIENT, receiver = SERVER (polarity mirrored) *)
+  (match (hsf s.server).CS.hs_client_finished,
+         (hsf s.client).CS.hs_client_finished with
+   | Some server_cf, Some client_cf ->
+       (exists (r:PWB.protected_message_replay).
+          PWB.protected_handshake_event_projection_pair r
+            (M.Finished client_cf) (M.Finished server_cf))
+   | Some _, None -> False
    | None, _ -> True)
+
+(** STAGE 3a (wire faithfulness) — the SINGLE in-flight record's raw is the SEAL
+    of the channel-label message `sent` under the SENDER's frozen snapshot write
+    keys.  UNGUARDED (needed to break the guard-circularity in
+    protected_channel_ready at a delivery).  Carries FAITHFULNESS ONLY, NOT
+    material agreement (that stays guarded in protected_channel_ready).  For a
+    cleartext hello `sent` the seal projection is True (network_message_is_cleartext),
+    so this conjunct is a no-op there.  Frozen while in-flight => inductive:
+    established at each SEND from the transition's seal projection, vacuous at
+    deliveries (post channel TlsQuiet) and locals (channel frozen). **)
+let inflight_wire_faithful (s:tls_system_state) : prop =
+  match s.channel with
+  | TlsQuiet -> True
+  | TlsInFlight recipient raw snapshot sent ->
+    CS.sent_event_nonempty_seal_projection snapshot (CS.sent_tls_event sent) raw /\
+    (CS.network_message_is_cleartext CL.Sent sent ==>
+       CS.cleartext_tls_message_raw sent raw)
+
+(** STAGE 3a (sender coupling) — the ghost in-flight `(snapshot, sent)` is COUPLED
+    to the real sender: stepping the sender's frozen snapshot by the send event of
+    `sent` reproduces the SENDER endpoint's post-send model.  The sender is the
+    endpoint OPPOSITE the recipient.  This is the structural fact that lets a
+    delivery derive `M.TlsHandshake? sent` (the guard of protected_channel_ready)
+    from the real sender's stored handshake state.  Established at each SEND from
+    the transition's `legal_connection_delta` (its `step_model` conjunct), vacuous
+    at deliveries (post channel TlsQuiet) and locals (channel frozen while quiet).
+
+    Marked `opaque_to_smt` so that unfolding `tls_system_inv` in unrelated lemmas
+    does NOT drag the recursive `CS.step_model` term into every VC that merely
+    carries the invariant as a hypothesis; the few lemmas that reason about it
+    `reveal_opaque` it explicitly. **)
+[@@ "opaque_to_smt"]
+let inflight_sender_coupling (s:tls_system_state) : prop =
+  match s.channel with
+  | TlsQuiet -> True
+  | TlsInFlight recipient raw snapshot sent ->
+    CS.step_model snapshot (CS.sent_tls_event sent)
+      == Some (ipso_sender_endpoint s recipient).CS.cs_model
 
 (** The inductive structural invariant. **)
 let tls_system_inv (s:tls_system_state) : prop =
@@ -594,8 +669,11 @@ let tls_system_inv (s:tls_system_state) : prop =
   PC.client_micro_shape s.client.CS.cs_model /\
   PC.server_micro_shape s.server.CS.cs_model /\
   SCB.seq_count_ok_pair s.client s.server /\
-  protected_channel_ready s
-  // TEMP-NEUTRALIZED for probing: /\ inflight_protected_sender_ok s /\ incremental_protected_witnesses s
+  protected_channel_ready s /\
+  inflight_wire_faithful s /\
+  inflight_sender_coupling s /\
+  inflight_protected_sender_ok s /\
+  incremental_protected_witnesses s
 
 (** ─────────────────────────────────────────────────────────────────────────
     The six transition shapes.  Each advances exactly one endpoint by exactly one
@@ -1093,6 +1171,8 @@ let lemma_initial_inv (cfg_c cfg_s:CS.connection_config)
     assert (TlsQuiet? (initial_tls_system cfg_c cfg_s).channel);
     // Stage 3a: bridge is vacuous (quiet channel); witnesses are vacuous (all
     // handshake fields None at the initial state).
+    reveal_opaque (`%inflight_sender_coupling)
+      (inflight_sender_coupling (initial_tls_system cfg_c cfg_s));
     reveal_opaque (`%incremental_protected_witnesses)
       (incremental_protected_witnesses (initial_tls_system cfg_c cfg_s))
 
@@ -4275,6 +4355,552 @@ let lemma_pcr_establish_client_send
     )
 #pop-options
 
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE 3a preservation helpers for the two SENDER-side bridges
+    (`inflight_wire_faithful`, `inflight_protected_sender_ok`) and the incremental
+    per-message replay witnesses (`incremental_protected_witnesses`) at the four
+    NON-DELIVERY transitions (client/server send and local).
+
+    First, two supporting pure lemmas.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(* SERVER write-epoch shape: a server at any pre-server-Finished-sent control
+   (New / AwaitingCH / CHReceived / SHSent / ServerEncryptedFlightSent) has a
+   write epoch that is not Application.  The server installs its application WRITE
+   record keys via `LocalInstallTrafficKeysForRole`, legal ONLY at
+   `HsServerFinishedSent`; every earlier control keeps the write epoch below
+   Application.  Mirrors `client_write_hs_epoch_shape`. *)
+let server_write_pre_finished_epoch (m:CS.connection_model) : prop =
+  (m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+   (m.CS.model_control == CS.ControlNew \/
+    m.CS.model_control == CS.ControlHandshaking CS.HsAwaitingClientHello \/
+    m.CS.model_control == CS.ControlHandshaking CS.HsClientHelloReceived \/
+    m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent \/
+    m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent)) ==>
+    m.CS.model_record.CS.record_write.R.epoch =!= R.Application
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_step_server_write_pre_finished_epoch
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+      (requires server_write_pre_finished_epoch m /\ CS.legal_event m ev /\ CS.step_model m ev == Some m')
+      (ensures server_write_pre_finished_epoch m')
+  = ()
+#pop-options
+
+let lemma_delta_server_write_pre_finished_epoch (st0 st1:CS.connection_state)
+  : Lemma
+      (requires server_write_pre_finished_epoch st0.CS.cs_model /\ CS.connection_state_single_step st0 st1)
+      (ensures server_write_pre_finished_epoch st1.CS.cs_model)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_server_write_pre_finished_epoch st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+
+let lemma_consistent_server_write_pre_finished_epoch (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st)
+      (ensures server_write_pre_finished_epoch st.CS.cs_model)
+  = let p (st:CS.connection_state) = server_write_pre_finished_epoch st.CS.cs_model in
+    let stable :
+      squash (
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) =
+      introduce forall (x:CS.connection_state) (y:CS.connection_state).
+        p x /\ CS.connection_state_single_step x y ==> p y
+      with introduce _ ==> _ with _. lemma_delta_server_write_pre_finished_epoch x y in
+    RTC.stable_on_closure CS.connection_state_single_step p stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+
+(* A NON-received event (a SEND or a LOCAL) does not create a handshake message
+   field `None -> Some` except at the single control where the endpoint STORES
+   that message.  The value-preserving locals (`LocalVerify*`) require the field
+   already `Some` by their legality, so they never turn a `None` into `Some`. *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_nonrecv_field_none_stable
+  (m m':CS.connection_model) (ev:CS.conn_event)
+  : Lemma
+      (requires
+        CS.legal_event m ev /\
+        CS.step_model m ev == Some m' /\
+        (CS.ConnLocalEvent? ev \/
+         (CS.ConnNetworkEvent? ev /\
+          (CS.ConnNetworkEvent?._0 ev).CL.message_direction == CL.Sent)))
+      (ensures
+        (let h  = m.CS.model_handshake in
+         let h' = m'.CS.model_handshake in
+         let c  = m.CS.model_control in
+         (~(c == CS.ControlHandshaking CS.HsServerHelloSent) ==>
+            (None? h.CS.hs_encrypted_extensions ==> None? h'.CS.hs_encrypted_extensions)) /\
+         (~(c == CS.ControlHandshaking CS.HsServerEncryptedFlightSent) ==>
+            (None? h.CS.hs_certificate ==> None? h'.CS.hs_certificate)) /\
+         (~(c == CS.ControlHandshaking CS.HsServerEncryptedFlightSent) ==>
+            (None? h.CS.hs_certificate_verify ==> None? h'.CS.hs_certificate_verify)) /\
+         (~(c == CS.ControlHandshaking CS.HsServerEncryptedFlightSent) ==>
+            (None? h.CS.hs_server_finished ==> None? h'.CS.hs_server_finished)) /\
+         (~(c == CS.ControlHandshaking CS.HsServerFinishedVerified) ==>
+            (None? h.CS.hs_client_finished ==> None? h'.CS.hs_client_finished))))
+  = ()
+#pop-options
+
+(* A client / server LOCAL api-event matches only a `ConnLocalEvent` or a
+   `Sent` network event (never a `Received` one): every non-`False` arm of
+   `local_event_kind_matches` produces one of those two shapes.  Isolated so the
+   ~16-arm case split runs in a small context. *)
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 40"
+let lemma_client_matches_local_or_sent
+  (st0:CS.connection_state) (api:CTy.client_api_event) (conn_ev:CS.conn_event)
+  : Lemma
+      (requires CCP.client_api_event_matches st0 api conn_ev)
+      (ensures
+        CS.ConnLocalEvent? conn_ev \/
+        (CS.ConnNetworkEvent? conn_ev /\
+         (CS.ConnNetworkEvent?._0 conn_ev).CL.message_direction == CL.Sent))
+  = ()
+
+let lemma_server_matches_local_or_sent
+  (api:CTy.server_api_event) (conn_ev:CS.conn_event)
+  : Lemma
+      (requires SCP.server_api_event_matches api conn_ev)
+      (ensures
+        CS.ConnLocalEvent? conn_ev \/
+        (CS.ConnNetworkEvent? conn_ev /\
+         (CS.ConnNetworkEvent?._0 conn_ev).CL.message_direction == CL.Sent))
+  = ()
+#pop-options
+
+(* A sent Finished at a control other than HsServerEncryptedFlightSent is the
+   client's Finished send at HsServerFinishedVerified: the step stores it in
+   `hs_client_finished` (via the field-preserving `append_handshake_to_transcript`).
+   Isolated so the step inversion runs in a small context. *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 100 --split_queries always"
+let lemma_step_sent_finished_stores_client
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? sent /\ M.Finished? (M.TlsHandshake?._0 sent) /\
+        m.CS.model_control =!= CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+        CS.step_model m (CS.sent_tls_event sent) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified /\
+        m'.CS.model_handshake.CS.hs_client_finished
+          == Some (M.Finished?._0 (M.TlsHandshake?._0 sent)))
+  = ()
+#pop-options
+
+(* Server sent-flight stores (isolated step inversions).  Each Sent handshake
+   message has a unique originating control, so both the control and the stored
+   field are recovered from the successful step. *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 100 --split_queries always"
+let lemma_step_sent_ee_stores_server
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? sent /\ M.EncryptedExtensions? (M.TlsHandshake?._0 sent) /\
+        CS.step_model m (CS.sent_tls_event sent) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
+        m'.CS.model_handshake.CS.hs_encrypted_extensions
+          == Some (M.EncryptedExtensions?._0 (M.TlsHandshake?._0 sent)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 100 --split_queries always"
+let lemma_step_sent_cert_stores_server
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? sent /\ M.Certificate? (M.TlsHandshake?._0 sent) /\
+        CS.step_model m (CS.sent_tls_event sent) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+        m'.CS.model_handshake.CS.hs_certificate
+          == Some (M.Certificate?._0 (M.TlsHandshake?._0 sent)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 100 --split_queries always"
+let lemma_step_sent_cv_stores_server
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? sent /\ M.CertificateVerify? (M.TlsHandshake?._0 sent) /\
+        CS.step_model m (CS.sent_tls_event sent) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+        m'.CS.model_handshake.CS.hs_certificate_verify
+          == Some (M.CertificateVerify?._0 (M.TlsHandshake?._0 sent)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 100 --split_queries always"
+let lemma_step_sent_finished_stores_server
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? sent /\ M.Finished? (M.TlsHandshake?._0 sent) /\
+        m.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedVerified /\
+        CS.step_model m (CS.sent_tls_event sent) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+        m'.CS.model_handshake.CS.hs_server_finished
+          == Some (M.Finished?._0 (M.TlsHandshake?._0 sent)))
+  = ()
+#pop-options
+
+(** (1) client SEND. **)
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_ipw_pres_client_send
+  (a b:tls_system_state)
+  (local:CTy.client_local_event) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        TlsQuiet? a.channel /\
+        CCP.client_step a.client (SM.LocalEvent local) c' out /\
+        out.SM.so_wire_outputs == [w] /\
+        client_advances a.client c' /\
+        c'.CS.cs_event_log == a.client.CS.cs_event_log @ [CS.sent_tls_event sent] /\
+        b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent })
+      (ensures
+        inflight_wire_faithful b /\
+        inflight_sender_coupling b /\
+        inflight_protected_sender_ok b /\
+        incremental_protected_witnesses b)
+  = let raw = emitted_raw out in
+    WStep.lemma_serialize_all_single_wire w;
+    SCB.lemma_wire_serialize_nonempty w;
+    lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
+    let api = CTy.client_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (CCP.client_api_event_matches a.client api conn_ev /\
+       CCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       CCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta a.client
+         ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty }) c' /\
+       CS.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev raw_sent /\
+       CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev B.empty)
+    returns
+      (inflight_wire_faithful b /\
+       inflight_sender_coupling b /\
+       inflight_protected_sender_ok b /\
+       incremental_protected_witnesses b)
+    with _pf2.
+    (
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
+      assert (Seq.equal raw_sent raw);
+      Seq.lemma_eq_elim raw_sent raw;
+      assert (B.length raw_sent > 0);
+      FStar.List.Tot.Properties.lemma_append_last a.client.CS.cs_event_log [conn_ev];
+      FStar.List.Tot.Properties.lemma_append_last a.client.CS.cs_event_log [CS.sent_tls_event sent];
+      assert (conn_ev == CS.sent_tls_event sent);
+      let d : CS.connection_delta =
+        { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty } in
+      assert (CS.legal_connection_delta a.client d c');
+      introduce exists (delta:CS.connection_delta). CS.legal_connection_delta a.client delta c'
+      with d and ();
+      assert (CS.connection_state_single_step a.client c');
+      lemma_consistent_step_vstable a.client c';
+      lemma_consistent_mono_shape a.client;
+      lemma_consistent_client_write_hs_epoch_shape a.client;
+      SCB.lemma_consistent_record_key_epoch_coupling a.client;
+      lemma_nonrecv_field_none_stable a.client.CS.cs_model c'.CS.cs_model conn_ev;
+      assert (client_stage_ok a.client);
+      assert (~(a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent));
+      assert (~(a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+      // inflight_wire_faithful b
+      assert (CS.sent_event_nonempty_seal_projection a.client.CS.cs_model (CS.sent_tls_event sent) raw);
+      assert (CS.event_raw_delta_legal a.client.CS.cs_model conn_ev raw_sent B.empty);
+      assert (CS.network_message_raw_delta_legal a.client.CS.cs_model
+                ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw_sent);
+      assert (inflight_wire_faithful b);
+      // inflight_sender_coupling b: from legal_connection_delta a.client d c'
+      // (step_model a.client.cs_model conn_ev == Some c'.cs_model, conn_ev == sent_tls_event sent;
+      //  ipso_sender_endpoint b ServerEndpoint == b.client == c').
+      reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling b);
+      assert (inflight_sender_coupling b);
+      // incremental_protected_witnesses b
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+      assert (incremental_protected_witnesses b);
+      // inflight_protected_sender_ok b (case-split on sent)
+      let _ : squash (inflight_protected_sender_ok b) =
+        (match sent with
+         | M.TlsHandshake (M.Finished fin) ->
+           lemma_step_sent_finished_stores_client a.client.CS.cs_model c'.CS.cs_model sent;
+           assert (a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified);
+           assert (CS.sent_single_protected_message_seal a.client.CS.cs_model sent raw);
+           assert (Some? a.client.CS.cs_model.CS.model_record.CS.record_write.R.key);
+           assert (a.client.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+           assert ((hsf c').CS.hs_client_finished == Some fin)
+         | M.TlsHandshake (M.EncryptedExtensions _)
+         | M.TlsHandshake (M.Certificate _)
+         | M.TlsHandshake (M.CertificateVerify _) ->
+           assert False
+         | _ -> ()) in
+      ()
+    )
+#pop-options
+
+(** (2) server SEND. **)
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_ipw_pres_server_send
+  (a b:tls_system_state)
+  (local:CTy.server_local_event) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        TlsQuiet? a.channel /\
+        SCP.server_step a.server (SM.LocalEvent local) s' out /\
+        out.SM.so_wire_outputs == [w] /\
+        server_advances a.server s' /\
+        s'.CS.cs_event_log == a.server.CS.cs_event_log @ [CS.sent_tls_event sent] /\
+        b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent })
+      (ensures
+        inflight_wire_faithful b /\
+        inflight_sender_coupling b /\
+        inflight_protected_sender_ok b /\
+        incremental_protected_witnesses b)
+  = let raw = emitted_raw out in
+    WStep.lemma_serialize_all_single_wire w;
+    SCB.lemma_wire_serialize_nonempty w;
+    lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
+    let api = CTy.server_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (SCP.server_api_event_matches api conn_ev /\
+       SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       SCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta a.server
+         ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty }) s' /\
+       CS.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev raw_sent /\
+       CS.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev B.empty)
+    returns
+      (inflight_wire_faithful b /\
+       inflight_sender_coupling b /\
+       inflight_protected_sender_ok b /\
+       incremental_protected_witnesses b)
+    with _pf2.
+    (
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
+      assert (Seq.equal raw_sent raw);
+      Seq.lemma_eq_elim raw_sent raw;
+      assert (B.length raw_sent > 0);
+      FStar.List.Tot.Properties.lemma_append_last a.server.CS.cs_event_log [conn_ev];
+      FStar.List.Tot.Properties.lemma_append_last a.server.CS.cs_event_log [CS.sent_tls_event sent];
+      assert (conn_ev == CS.sent_tls_event sent);
+      let d : CS.connection_delta =
+        { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty } in
+      assert (CS.legal_connection_delta a.server d s');
+      introduce exists (delta:CS.connection_delta). CS.legal_connection_delta a.server delta s'
+      with d and ();
+      assert (CS.connection_state_single_step a.server s');
+      lemma_consistent_step_vstable a.server s';
+      lemma_consistent_mono_shape a.server;
+      lemma_consistent_server_write_pre_finished_epoch a.server;
+      SCB.lemma_consistent_record_key_epoch_coupling a.server;
+      lemma_nonrecv_field_none_stable a.server.CS.cs_model s'.CS.cs_model conn_ev;
+      assert (server_stage_ok a.server);
+      assert (~(a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified));
+      // inflight_wire_faithful b
+      assert (CS.sent_event_nonempty_seal_projection a.server.CS.cs_model (CS.sent_tls_event sent) raw);
+      assert (CS.event_raw_delta_legal a.server.CS.cs_model conn_ev raw_sent B.empty);
+      assert (CS.network_message_raw_delta_legal a.server.CS.cs_model
+                ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw_sent);
+      assert (inflight_wire_faithful b);
+      // inflight_sender_coupling b: from legal_connection_delta a.server d s'
+      // (step_model a.server.cs_model conn_ev == Some s'.cs_model, conn_ev == sent_tls_event sent;
+      //  ipso_sender_endpoint b ClientEndpoint == b.server == s').
+      reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling b);
+      assert (inflight_sender_coupling b);
+      // incremental_protected_witnesses b
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+      assert (incremental_protected_witnesses b);
+      // inflight_protected_sender_ok b (case-split on sent)
+      let _ : squash (inflight_protected_sender_ok b) =
+        (match sent with
+         | M.TlsHandshake (M.EncryptedExtensions ee) ->
+           lemma_step_sent_ee_stores_server a.server.CS.cs_model s'.CS.cs_model sent;
+           assert (a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
+           assert (CS.sent_single_protected_message_seal a.server.CS.cs_model sent raw);
+           assert (Some? a.server.CS.cs_model.CS.model_record.CS.record_write.R.key);
+           assert (a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+           assert ((hsf s').CS.hs_encrypted_extensions == Some ee)
+         | M.TlsHandshake (M.Certificate cert) ->
+           lemma_step_sent_cert_stores_server a.server.CS.cs_model s'.CS.cs_model sent;
+           assert (a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+           assert (CS.sent_single_protected_message_seal a.server.CS.cs_model sent raw);
+           assert (Some? a.server.CS.cs_model.CS.model_record.CS.record_write.R.key);
+           assert (a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+           assert ((hsf s').CS.hs_certificate == Some cert)
+         | M.TlsHandshake (M.CertificateVerify cv) ->
+           lemma_step_sent_cv_stores_server a.server.CS.cs_model s'.CS.cs_model sent;
+           assert (a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+           assert (CS.sent_single_protected_message_seal a.server.CS.cs_model sent raw);
+           assert (Some? a.server.CS.cs_model.CS.model_record.CS.record_write.R.key);
+           assert (a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+           assert ((hsf s').CS.hs_certificate_verify == Some cv)
+         | M.TlsHandshake (M.Finished fin) ->
+           lemma_step_sent_finished_stores_server a.server.CS.cs_model s'.CS.cs_model sent;
+           assert (a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+           assert (CS.sent_single_protected_message_seal a.server.CS.cs_model sent raw);
+           assert (Some? a.server.CS.cs_model.CS.model_record.CS.record_write.R.key);
+           assert (a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+           assert ((hsf s').CS.hs_server_finished == Some fin)
+         | _ -> ()) in
+      ()
+    )
+#pop-options
+
+(** (3) client LOCAL. **)
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_ipw_pres_client_local
+  (a b:tls_system_state)
+  (local:CTy.client_local_event) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        TlsQuiet? a.channel /\
+        CCP.client_step a.client (SM.LocalEvent local) c' out /\
+        out.SM.so_wire_outputs == [] /\
+        client_local_advances a.client c' /\
+        b == { a with client = c' })
+      (ensures
+        inflight_wire_faithful b /\
+        inflight_sender_coupling b /\
+        inflight_protected_sender_ok b /\
+        incremental_protected_witnesses b)
+  = lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
+    let api = CTy.client_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (CCP.client_api_event_matches a.client api conn_ev /\
+       CCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       CCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta a.client
+         ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty }) c' /\
+       CS.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev raw_sent /\
+       CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev B.empty)
+    returns
+      (inflight_wire_faithful b /\
+       inflight_sender_coupling b /\
+       inflight_protected_sender_ok b /\
+       incremental_protected_witnesses b)
+    with _pf2.
+    (
+      WStep.lemma_serialize_all_nil_wire ();
+      Seq.lemma_eq_elim raw_sent B.empty;
+      let d : CS.connection_delta =
+        { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty } in
+      assert (CS.legal_connection_delta a.client d c');
+      assert (CS.event_raw_delta_legal a.client.CS.cs_model conn_ev raw_sent B.empty);
+      lemma_client_matches_local_or_sent a.client api conn_ev;
+      introduce exists (delta:CS.connection_delta). CS.legal_connection_delta a.client delta c'
+      with d and ();
+      assert (CS.connection_state_single_step a.client c');
+      lemma_consistent_step_vstable a.client c';
+      lemma_consistent_mono_shape a.client;
+      lemma_nonrecv_field_none_stable a.client.CS.cs_model c'.CS.cs_model conn_ev;
+      assert (client_stage_ok a.client);
+      assert (~(a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent));
+      assert (~(a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+      // channel frozen: b.channel == a.channel == TlsQuiet
+      assert (inflight_wire_faithful a);
+      assert (inflight_wire_faithful b);
+      assert (TlsQuiet? b.channel);
+      reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling b);
+      assert (inflight_sender_coupling b);
+      assert (inflight_protected_sender_ok a);
+      assert (inflight_protected_sender_ok b);
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+      assert (incremental_protected_witnesses b)
+    )
+#pop-options
+
+(** (4) server LOCAL. **)
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_ipw_pres_server_local
+  (a b:tls_system_state)
+  (local:CTy.server_local_event) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        TlsQuiet? a.channel /\
+        SCP.server_step a.server (SM.LocalEvent local) s' out /\
+        out.SM.so_wire_outputs == [] /\
+        server_local_advances a.server s' /\
+        b == { a with server = s' })
+      (ensures
+        inflight_wire_faithful b /\
+        inflight_sender_coupling b /\
+        inflight_protected_sender_ok b /\
+        incremental_protected_witnesses b)
+  = lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
+    let api = CTy.server_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (SCP.server_api_event_matches api conn_ev /\
+       SCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       SCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta a.server
+         ({ CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+            CS.delta_raw_received = B.empty }) s' /\
+       CS.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev raw_sent /\
+       CS.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev B.empty)
+    returns
+      (inflight_wire_faithful b /\
+       inflight_sender_coupling b /\
+       inflight_protected_sender_ok b /\
+       incremental_protected_witnesses b)
+    with _pf2.
+    (
+      WStep.lemma_serialize_all_nil_wire ();
+      Seq.lemma_eq_elim raw_sent B.empty;
+      let d : CS.connection_delta =
+        { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = B.empty } in
+      assert (CS.legal_connection_delta a.server d s');
+      assert (CS.event_raw_delta_legal a.server.CS.cs_model conn_ev raw_sent B.empty);
+      lemma_server_matches_local_or_sent api conn_ev;
+      introduce exists (delta:CS.connection_delta). CS.legal_connection_delta a.server delta s'
+      with d and ();
+      assert (CS.connection_state_single_step a.server s');
+      lemma_consistent_step_vstable a.server s';
+      lemma_consistent_mono_shape a.server;
+      lemma_nonrecv_field_none_stable a.server.CS.cs_model s'.CS.cs_model conn_ev;
+      assert (server_stage_ok a.server);
+      assert (~(a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified));
+      // channel frozen: b.channel == a.channel == TlsQuiet
+      assert (inflight_wire_faithful a);
+      assert (inflight_wire_faithful b);
+      assert (TlsQuiet? b.channel);
+      reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling b);
+      assert (inflight_sender_coupling b);
+      assert (inflight_protected_sender_ok a);
+      assert (inflight_protected_sender_ok b);
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+      reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+      assert (incremental_protected_witnesses b)
+    )
+#pop-options
+
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_client_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_client_send a b /\ tls_no_rekeying b)
@@ -4301,7 +4927,8 @@ let lemma_pres_client_send (a b:tls_system_state)
        lemma_wire_facts_client_send a b;
        lemma_pw_pres_client_send a b local c' out w sent;
        lemma_scop_client_send a b;
-       lemma_pcr_establish_client_send a b local c' out w sent)
+       lemma_pcr_establish_client_send a b local c' out w sent;
+       lemma_ipw_pres_client_send a b local c' out w sent)
 #pop-options
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
@@ -4330,7 +4957,8 @@ let lemma_pres_server_send (a b:tls_system_state)
        lemma_wire_facts_server_send a b;
        lemma_pw_pres_server_send a b local s' out w sent;
        lemma_scop_server_send a b;
-       lemma_pcr_establish_server_send a b local s' out w sent)
+       lemma_pcr_establish_server_send a b local s' out w sent;
+       lemma_ipw_pres_server_send a b local s' out w sent)
 #pop-options
 
 (** Ready-couple discharge — the single-endpoint reachability-inversion chain.
@@ -4360,6 +4988,427 @@ let lemma_ready_couple_post_cf (s:tls_system_state)
       s.server.CS.cs_model.CS.model_config s.server
 #pop-options
 
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE 3a — the two protected DELIVERY helpers.  Post-state channel is quiet,
+    so `inflight_wire_faithful`, `inflight_sender_coupling`, and
+    `inflight_protected_sender_ok` are vacuous; the real work is the fresh
+    per-message replay witness in `incremental_protected_witnesses`.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** ══════════ PORTED PURE HELPERS (verified in /tmp/scratch) ══════════ **)
+
+(* Two decodes of the same raw record under the same model yield the same message. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+let lemma_received_single_protected_message_decode_unique
+  (model:CS.connection_model) (m1 m2:M.tls_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.received_single_protected_message_decode model m1 raw /\
+        CS.received_single_protected_message_decode model m2 raw)
+      (ensures m1 == m2)
+  = ()
+#pop-options
+
+(* Receive-step inversions (client side). *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
+let lemma_step_recv_ee_stores_client
+  (m m':CS.connection_model) (received:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? received /\ M.EncryptedExtensions? (M.TlsHandshake?._0 received) /\
+        CS.step_model m (CS.received_tls_event received) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        m'.CS.model_handshake.CS.hs_encrypted_extensions
+          == Some (M.EncryptedExtensions?._0 (M.TlsHandshake?._0 received)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
+let lemma_step_recv_cert_stores_client
+  (m m':CS.connection_model) (received:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? received /\ M.Certificate? (M.TlsHandshake?._0 received) /\
+        CS.step_model m (CS.received_tls_event received) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
+        m'.CS.model_handshake.CS.hs_certificate
+          == Some (M.Certificate?._0 (M.TlsHandshake?._0 received)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
+let lemma_step_recv_cv_stores_client
+  (m m':CS.connection_model) (received:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? received /\ M.CertificateVerify? (M.TlsHandshake?._0 received) /\
+        CS.step_model m (CS.received_tls_event received) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsCertificateValidated /\
+        m'.CS.model_handshake.CS.hs_certificate_verify
+          == Some (M.CertificateVerify?._0 (M.TlsHandshake?._0 received)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
+let lemma_step_recv_finished_stores_server_finished
+  (m m':CS.connection_model) (received:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? received /\ M.Finished? (M.TlsHandshake?._0 received) /\
+        m.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedSent /\
+        CS.step_model m (CS.received_tls_event received) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyVerified /\
+        m'.CS.model_handshake.CS.hs_server_finished
+          == Some (M.Finished?._0 (M.TlsHandshake?._0 received)))
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
+let lemma_step_recv_finished_stores_client_finished
+  (m m':CS.connection_model) (received:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? received /\ M.Finished? (M.TlsHandshake?._0 received) /\
+        m.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateVerifyVerified /\
+        CS.step_model m (CS.received_tls_event received) == Some m')
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
+        m'.CS.model_handshake.CS.hs_client_finished
+          == Some (M.Finished?._0 (M.TlsHandshake?._0 received)))
+  = ()
+#pop-options
+
+(* Field-map contrapositive lemmas. *)
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 200 --split_queries always"
+let fm_client (m m':CS.connection_model) (received:M.tls_message)
+  : Lemma (requires m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+                    m.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedSent /\
+                    CS.step_model m (CS.received_tls_event received) == Some m')
+          (ensures (
+        let h  = m.CS.model_handshake in
+        let h' = m'.CS.model_handshake in
+        (~(M.TlsHandshake? received /\ M.EncryptedExtensions? (M.TlsHandshake?._0 received)) ==>
+           h'.CS.hs_encrypted_extensions == h.CS.hs_encrypted_extensions) /\
+        (~(M.TlsHandshake? received /\ M.Certificate? (M.TlsHandshake?._0 received)) ==>
+           h'.CS.hs_certificate == h.CS.hs_certificate) /\
+        (~(M.TlsHandshake? received /\ M.CertificateVerify? (M.TlsHandshake?._0 received)) ==>
+           h'.CS.hs_certificate_verify == h.CS.hs_certificate_verify) /\
+        (~(M.TlsHandshake? received /\ M.Finished? (M.TlsHandshake?._0 received)) ==>
+           h'.CS.hs_server_finished == h.CS.hs_server_finished) /\
+        h'.CS.hs_client_finished == h.CS.hs_client_finished))
+  = ()
+#pop-options
+
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 200 --split_queries always"
+let fm_server (m m':CS.connection_model) (received:M.tls_message)
+  : Lemma (requires m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+                    m.CS.model_control =!= CS.ControlHandshaking CS.HsServerHelloReceived /\
+                    m.CS.model_control =!= CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
+                    m.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateReceived /\
+                    m.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateValidated /\
+                    m.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
+                    m.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateVerifyVerified /\
+                    CS.step_model m (CS.received_tls_event received) == Some m')
+          (ensures (
+        let h  = m.CS.model_handshake in
+        let h' = m'.CS.model_handshake in
+        h'.CS.hs_encrypted_extensions == h.CS.hs_encrypted_extensions /\
+        h'.CS.hs_certificate == h.CS.hs_certificate /\
+        h'.CS.hs_certificate_verify == h.CS.hs_certificate_verify /\
+        h'.CS.hs_server_finished == h.CS.hs_server_finished /\
+        (~(M.TlsHandshake? received /\ M.Finished? (M.TlsHandshake?._0 received)) ==>
+           h'.CS.hs_client_finished == h.CS.hs_client_finished)))
+  = ()
+#pop-options
+
+(* Client read-epoch shape + RTC lift. *)
+let client_read_pre_appdata_epoch_shape (m:CS.connection_model) : prop =
+  m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+  (m.CS.model_control == CS.ControlNew \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsStarted \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsClientHelloSent \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsEncryptedExtensionsReceived \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsCertificateReceived \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsCertificateValidated \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyReceived \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyVerified)
+  ==> m.CS.model_record.CS.record_read.R.epoch =!= R.Application
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200 --split_queries always"
+let lemma_step_client_read_shape
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma (requires client_read_pre_appdata_epoch_shape m /\ CS.legal_event m ev /\ CS.step_model m ev == Some m')
+          (ensures client_read_pre_appdata_epoch_shape m')
+  = ()
+#pop-options
+
+let lemma_delta_client_read_shape (st0 st1:CS.connection_state)
+  : Lemma (requires client_read_pre_appdata_epoch_shape st0.CS.cs_model /\ CS.connection_state_single_step st0 st1)
+          (ensures client_read_pre_appdata_epoch_shape st1.CS.cs_model)
+  = let delta_w = ID.indefinite_description_ghost CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_client_read_shape st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+
+let lemma_consistent_client_read_shape (st:CS.connection_state)
+  : Lemma (requires CS.connection_state_consistent st)
+          (ensures client_read_pre_appdata_epoch_shape st.CS.cs_model)
+  = let p (st:CS.connection_state) = client_read_pre_appdata_epoch_shape st.CS.cs_model in
+    let stable : squash (forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) =
+      introduce forall (x:CS.connection_state) (y:CS.connection_state).
+        p x /\ CS.connection_state_single_step x y ==> p y
+      with introduce _ ==> _ with _. lemma_delta_client_read_shape x y in
+    RTC.stable_on_closure CS.connection_state_single_step p stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st)
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_client_read_epoch_handshake
+  (st:CS.connection_state) (msg:M.tls_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.connection_state_consistent st /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        (st.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived \/
+         st.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsEncryptedExtensionsReceived \/
+         st.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsCertificateValidated \/
+         st.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyVerified) /\
+        CS.received_single_protected_message_decode st.CS.cs_model msg raw)
+      (ensures st.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake)
+  = lemma_consistent_client_read_shape st;
+    SCB.lemma_consistent_record_key_epoch_coupling st;
+    let rr = st.CS.cs_model.CS.model_record.CS.record_read in
+    eliminate exists outer opened plaintext.
+        W.parse_record_wire raw == Some (T.Application_data, outer, B.length raw) /\
+        CS.received_record_opened st.CS.cs_model raw outer opened /\
+        W.parse_plaintext opened == Some plaintext /\
+        W.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
+    returns rr.R.epoch == R.Handshake
+    with _pf.
+    ( eliminate exists read_state'.
+        R.open_record rr (CS.record_header_aad raw) outer == Some (opened, read_state')
+      returns rr.R.epoch == R.Handshake
+      with _pf2.
+      ( assert (Some? rr.R.key) ) )
+#pop-options
+
+(* Server read-epoch shape + RTC lift. *)
+let server_read_pre_appdata_epoch_shape (m:CS.connection_model) : prop =
+  m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  (m.CS.model_control == CS.ControlNew \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsAwaitingClientHello \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsClientHelloReceived \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent \/
+   m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent)
+  ==> m.CS.model_record.CS.record_read.R.epoch =!= R.Application
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200 --split_queries always"
+let lemma_step_server_read_shape
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma (requires server_read_pre_appdata_epoch_shape m /\ CS.legal_event m ev /\ CS.step_model m ev == Some m')
+          (ensures server_read_pre_appdata_epoch_shape m')
+  = ()
+#pop-options
+
+let lemma_delta_server_read_shape (st0 st1:CS.connection_state)
+  : Lemma (requires server_read_pre_appdata_epoch_shape st0.CS.cs_model /\ CS.connection_state_single_step st0 st1)
+          (ensures server_read_pre_appdata_epoch_shape st1.CS.cs_model)
+  = let delta_w = ID.indefinite_description_ghost CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_server_read_shape st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+
+let lemma_consistent_server_read_shape (st:CS.connection_state)
+  : Lemma (requires CS.connection_state_consistent st)
+          (ensures server_read_pre_appdata_epoch_shape st.CS.cs_model)
+  = let p (st:CS.connection_state) = server_read_pre_appdata_epoch_shape st.CS.cs_model in
+    let stable : squash (forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (p y); (CS.connection_state_single_step x y)}
+          p x /\ CS.connection_state_single_step x y ==> p y) =
+      introduce forall (x:CS.connection_state) (y:CS.connection_state).
+        p x /\ CS.connection_state_single_step x y ==> p y
+      with introduce _ ==> _ with _. lemma_delta_server_read_shape x y in
+    RTC.stable_on_closure CS.connection_state_single_step p stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (CS.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st)
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_server_read_epoch_handshake
+  (st:CS.connection_state) (msg:M.tls_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.connection_state_consistent st /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        st.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
+        CS.received_single_protected_message_decode st.CS.cs_model msg raw)
+      (ensures st.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake)
+  = lemma_consistent_server_read_shape st;
+    SCB.lemma_consistent_record_key_epoch_coupling st;
+    let rr = st.CS.cs_model.CS.model_record.CS.record_read in
+    eliminate exists outer opened plaintext.
+        W.parse_record_wire raw == Some (T.Application_data, outer, B.length raw) /\
+        CS.received_record_opened st.CS.cs_model raw outer opened /\
+        W.parse_plaintext opened == Some plaintext /\
+        W.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
+    returns rr.R.epoch == R.Handshake
+    with _pf.
+    ( eliminate exists read_state'.
+        R.open_record rr (CS.record_header_aad raw) outer == Some (opened, read_state')
+      returns rr.R.epoch == R.Handshake
+      with _pf2.
+      ( assert (Some? rr.R.key) ) )
+#pop-options
+
+(** ══════════ END PORTED PURE HELPERS ══════════ **)
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
+let lemma_ipw_pres_deliver_to_client
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        CCP.client_step a.client (SM.WireEvent wire) c' out /\
+        client_advances a.client c' /\
+        b == { a with client = c'; channel = TlsQuiet })
+      (ensures
+        inflight_wire_faithful b /\
+        inflight_sender_coupling b /\
+        inflight_protected_sender_ok b /\
+        incremental_protected_witnesses b)
+  = // STOP-AND-REPORT (blocked obligation, per task HARD CONSTRAINTS 1 & 2).
+    //
+    // Post channel is TlsQuiet, so inflight_wire_faithful/inflight_sender_coupling/
+    // inflight_protected_sender_ok(b) are vacuously True (dispatch as in the local
+    // templates). The residual is `incremental_protected_witnesses b` in the BUILD
+    // branch (the client freshly stores a protected handshake field F=Some v from
+    // decoding the in-flight record `raw`). That clause is keyed (client F, server F);
+    // to discharge it one must EXCLUDE the case where the ghost in-flight label
+    // `sent` is a FATAL alert, i.e. prove the gateway `M.TlsHandshake? sent`.
+    //
+    // TRACTABLE sub-cases of the gateway (all closable from retained conjuncts):
+    //   * sent a HANDSHAKE: a.server sits at a pre_appdata handshaking control, so
+    //     protected_channel_ready's guard {TlsHandshake? sent; pre_appdata snap;
+    //     pre_appdata client; snap.write.epoch=Handshake; client.read.epoch=Handshake}
+    //     holds and yields snap.write.seq == a.client.read.seq + material + roundtrip;
+    //     seal->decode + decode-uniqueness pin sent==msg and build the projection_pair.
+    //   * sent CLEARTEXT (ClientHello/ServerHello/HRR/CCS): inflight_wire_faithful's
+    //     cleartext clause forces `raw` to a Handshake/CCS content record, contradicting
+    //     `raw` being an Application_data record (from the client's protected decode).
+    //   * sent = AppData / KeyUpdate / IgnoredPostHandshake / Close_notify: legal (via
+    //     step_model, from inflight_sender_coupling) only at ControlApplicationData, ruled
+    //     out by byte_pairing counting (client at a build control sent 0 appdata => server
+    //     received 0 => server not at ControlApplicationData); the Requested/Ignored sub
+    //     cases give step_model == None, contradicting the coupling's == Some.
+    //
+    // BLOCKED sub-case: sent = FATAL alert (M.TlsAlert, not Close_notify). step_model snap
+    // (Sent alert) == fail_model snap (ConnectionState.fst:1116/2100), preserving the record,
+    // so a.server.write == snap.write and a.server is at ControlFailed. In the BUILD branch
+    // the client decoded `raw` to a HANDSHAKE; the ONLY way to contradict that (for an alert
+    // label) is the crypto identity open(seal)=pt (Record.Spec lemma_open_record_after_seal_
+    // peer), which REQUIRES the seq alignment
+    //     snap.write.seq == a.client.read.seq                                    (*)
+    // Indeed if (*) held, crypto correctness would force the client's open to yield the ALERT
+    // plaintext (content_type Alert), contradicting the BUILD premise (decode == handshake);
+    // so the BUILD branch forces MISalignment. Retained conjuncts cannot resolve this:
+    //   - protected_channel_ready carries snap.write.seq == recip.read.seq but GUARDED by
+    //     `M.TlsHandshake? sent`, false for an alert (circular with the goal).
+    //   - SCB.seq_count_ok_pair's pwrite_ok is GATED on pre_appdata_control; a.server at
+    //     ControlFailed => vacuous, no write-seq/appdata-count relation for a.server.
+    //   - inflight_protected_sender_ok's alert arm is `_ -> True`; inflight_wire_faithful pins
+    //     raw as a seal at snap.write.seq but with no numeric value.
+    //   - server_byte_reachable (RTC of the RAW legal_connection_delta, which DOES admit a
+    //     wire-appending Sent(alert) as an Application_data record, ConnectionState.fst:3770)
+    //     yields only the forward-inductive DISJUNCTION, at ControlFailed/handshake write
+    //     epoch, write.seq == raw_appdata_count(raw_sent)  \/  == raw_appdata_count(raw_sent)-1
+    //     (the `-1` = failed via a wire-appending protected Sent(alert); the plain `=` = failed
+    //     via an empty-wire LocalFail or a receive). The fatal-alert FAIL-MODE is erased by
+    //     fail_model (it drops the pre-fail control) and is NOT a function of the reachable
+    //     STATE, so the disjunction is unresolvable; with byte_pairing (ss == cr ++ raw) the
+    //     two branches give snap.write.seq == a.client.read.seq (aligned) resp. +1 (misaligned).
+    // Under the forced-MISaligned BUILD branch, `raw` would have to be simultaneously the
+    // client-decoded handshake record AND seal(snap.write, alert): refuting that needs a
+    // seal/open injectivity-in-nonce axiom (a FORBIDDEN crypto strengthening; Crypto.Spec.fsti
+    // exposes correctness ONLY, no authenticity/injectivity). Pinning (*) instead needs a
+    // receiver-facing coupling conjunct in tls_system_inv (a FORBIDDEN 5th conjunct). No
+    // forbidden-device-free discharge exists. Left admitted; reported to the project lead.
+    admit ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
+let lemma_ipw_pres_deliver_to_server
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        SCP.server_step a.server (SM.WireEvent wire) s' out /\
+        server_advances a.server s' /\
+        b == { a with server = s'; channel = TlsQuiet })
+      (ensures
+        inflight_wire_faithful b /\
+        inflight_sender_coupling b /\
+        inflight_protected_sender_ok b /\
+        incremental_protected_witnesses b)
+  = // STOP-AND-REPORT (blocked obligation, symmetric to lemma_ipw_pres_deliver_to_client).
+    //
+    // Post channel is TlsQuiet, so the three inflight_* conjuncts of b are vacuous.
+    // Residual: `incremental_protected_witnesses b`, BUILD branch = the client-Finished
+    // clause (#5); the server freshly stores hs_client_finished from decoding `raw`. The
+    // 4 server clauses transport. As on the client side, discharging the client-Finished
+    // clause requires the gateway `M.TlsHandshake? sent` for the ghost in-flight label.
+    //
+    // Roles swapped: sender = client, receiver = server; a.channel == TlsInFlight
+    // ServerEndpoint raw snap sent; protected_channel_ready's ServerEndpoint branch uses
+    // ClientTraffic material; byte_pairing's ServerEndpoint branch is `cs == sr ++ raw`.
+    // Tractable gateway sub-cases (handshake / cleartext / appdata-keyupdate-close) close
+    // exactly as on the client side.
+    //
+    // BLOCKED sub-case identical in shape: sent = FATAL alert (M.TlsAlert, not Close_notify).
+    // step_model snap (Sent alert) == fail_model snap, so a.client.write == snap.write and
+    // a.client is at ControlFailed. In the BUILD branch the server decoded `raw` to a
+    // HANDSHAKE (the client Finished); contradicting that for an alert label needs the crypto
+    // identity open(seal)=pt (Record.Spec lemma_open_record_after_seal_peer), which REQUIRES
+    //     snap.write.seq == a.server.read.seq                                    (*)
+    // If (*) held, crypto correctness would force the server's open to yield the ALERT
+    // plaintext, contradicting the BUILD premise (decode == handshake); so the BUILD branch
+    // forces MISalignment. Retained conjuncts cannot resolve this:
+    //   - protected_channel_ready's alignment is guarded by `M.TlsHandshake? sent` (circular);
+    //   - SCB.seq_count_ok_pair's pwrite_ok is gated off at the sender's ControlFailed;
+    //   - server_byte_reachable (RTC of the RAW legal_connection_delta, which DOES admit a
+    //     wire-appending Sent(alert) as an Application_data record) yields only the forward-
+    //     inductive DISJUNCTION, at ControlFailed/handshake write epoch, write.seq ==
+    //     raw_appdata_count(raw_sent)  \/  == raw_appdata_count(raw_sent)-1 (the `-1` = failed
+    //     via a wire-appending protected Sent(alert); the plain `=` = failed via empty-wire
+    //     LocalFail or a receive). The fail-mode is erased by fail_model and is not a function
+    //     of the reachable STATE, so the disjunction is unresolvable; with byte_pairing
+    //     (cs == sr ++ raw) the branches give snap.write.seq == a.server.read.seq resp. +1.
+    // Under the forced-MISaligned BUILD branch, `raw` would have to be simultaneously the
+    // server-decoded handshake record AND seal(snap.write, alert): refuting that needs a
+    // seal/open injectivity-in-nonce axiom (FORBIDDEN crypto strengthening); pinning (*) needs
+    // a receiver-facing 5th conjunct in tls_system_inv (FORBIDDEN). No forbidden-device-free
+    // discharge exists. Left admitted; reported to the project lead.
+    admit ()
+#pop-options
+
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
 let lemma_pres_deliver_to_server (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_server a b /\ tls_no_rekeying b)
@@ -4386,6 +5435,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        lemma_wire_facts_deliver_to_server a b;
        lemma_pw_pres_deliver_to_server a b wire s' out;
        lemma_scop_deliver_to_server a b;
+       lemma_ipw_pres_deliver_to_server a b wire s' out raw snap sent;
        assert (TlsQuiet? b.channel);
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -4419,6 +5469,7 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        lemma_wire_facts_deliver_to_client a b;
        lemma_pw_pres_deliver_to_client a b wire c' out;
        lemma_scop_deliver_to_client a b;
+       lemma_ipw_pres_deliver_to_client a b wire c' out raw snap sent;
        assert (TlsQuiet? b.channel);
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -4451,6 +5502,7 @@ let lemma_pres_client_local (a b:tls_system_state)
        lemma_wire_facts_client_local a b;
        lemma_pw_pres_client_local a b local c' out;
        lemma_scop_client_local a b;
+       lemma_ipw_pres_client_local a b local c' out;
        assert (TlsQuiet? b.channel);
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -4483,6 +5535,7 @@ let lemma_pres_server_local (a b:tls_system_state)
        lemma_wire_facts_server_local a b;
        lemma_pw_pres_server_local a b local s' out;
        lemma_scop_server_local a b;
+       lemma_ipw_pres_server_local a b local s' out;
        assert (TlsQuiet? b.channel);
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
