@@ -372,6 +372,92 @@ fn rec receive_loop
 }
 #pop-options
 
+#push-options "--z3refresh --z3rlimit 20 --split_queries always --z3seed 17"
+fn rec await_peer_close_with_buffer
+  (d:DS.top_server_driver)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (fuel:SZ.t)
+  requires
+    DS.top_server_driver_connected
+      d 'st0 'certificate_chain 'credential_identity 'received0 'sent0 **
+    pts_to out 'old_output **
+    pure (
+      B.length 'old_output == SZ.v out_len /\
+      IM.max_record_fragment_len <= SZ.v out_len /\
+      ST.server_connection_control_not_failed 'st0)
+  returns status:receive_status
+  ensures
+    exists* st1 received1 sent1 output.
+      DS.top_server_driver_connected
+        d st1 'certificate_chain 'credential_identity received1 sent1 **
+      pts_to out output **
+      pure (
+        B.length output == SZ.v out_len /\
+        status <> BufferedReceiveOk /\
+        status <> BufferedReceiveOutputBufferTooSmall /\
+        (status == BufferedReceiveExhausted ==>
+          ST.server_connection_control_not_failed st1))
+  decreases (SZ.v fuel)
+{
+  if (fuel = 0sz) {
+    BufferedReceiveExhausted
+  } else {
+    let result = receive_loop d out out_len fuel;
+    with st1 received1 sent1 output.
+      assert (
+        DS.top_server_driver_connected
+          d st1 'certificate_chain 'credential_identity received1 sent1 **
+        pts_to out output);
+    match result.loop_status {
+      BufferedReceiveOk -> {
+        let next_fuel = SZ.sub fuel 1sz;
+        assert (pure (SZ.v next_fuel < SZ.v fuel));
+        await_peer_close_with_buffer d out out_len next_fuel
+      }
+      BufferedReceiveExhausted -> { BufferedReceiveExhausted }
+      BufferedReceiveClosed -> { BufferedReceiveClosed }
+      BufferedReceiveFailed -> { BufferedReceiveFailed }
+      BufferedReceiveOutputBufferTooSmall -> {
+        assert (pure (ST.server_connection_control_not_failed st1));
+        BufferedReceiveExhausted
+      }
+    }
+  }
+}
+#pop-options
+
+fn await_peer_close
+  (d:DS.top_server_driver)
+  (network_fuel:SZ.t)
+  requires
+    DS.top_server_driver_connected
+      d 'st0 'certificate_chain 'credential_identity 'received0 'sent0 **
+    pure (ST.server_connection_control_not_failed 'st0)
+  returns status:receive_status
+  ensures
+    exists* st1 received1 sent1.
+      DS.top_server_driver_connected
+        d st1 'certificate_chain 'credential_identity received1 sent1 **
+      pure (
+        status <> BufferedReceiveOk /\
+        status <> BufferedReceiveOutputBufferTooSmall /\
+        (status == BufferedReceiveExhausted ==>
+          ST.server_connection_control_not_failed st1))
+{
+  let scratch = V.alloc 0uy DS.driver_app_out_capacity;
+  V.to_array_pts_to scratch;
+  let status =
+    await_peer_close_with_buffer
+      d
+      (V.vec_to_array scratch)
+      DS.driver_app_out_capacity
+      network_fuel;
+  V.to_vec_pts_to scratch;
+  V.free scratch;
+  status
+}
+
 fn run
   (d:DS.top_server_driver)
   (wire_received0:Ghost.erased B.bytes)
