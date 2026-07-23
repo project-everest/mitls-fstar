@@ -533,6 +533,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Driver.BufferedAccept \
   TLS13.Impl.Server.Driver.BufferedSend \
   TLS13.Impl.Server.Driver.BufferedReceive \
+  TLS13.Impl.Server.Driver.BufferedClose \
   TLS13.Impl.Server.Driver.Local \
   TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver

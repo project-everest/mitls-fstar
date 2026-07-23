@@ -16,6 +16,35 @@ type send_status =
   | BufferedSendPayloadTooLarge
   | BufferedSendFailed
 
+fn query_application_ready
+  (d:DS.top_server_driver)
+  requires
+    DS.top_server_driver_connected
+      d
+      'st
+      'certificate_chain
+      'credential_identity
+      'received
+      'sent
+  returns ready:bool
+  ensures
+    DS.top_server_driver_connected
+      d
+      'st
+      'certificate_chain
+      'credential_identity
+      'received
+      'sent **
+    pure (
+      TLS13.Impl.Server.Types.server_end_to_end_invariant 'st /\
+      (ready ==>
+        'st.TLS13.Spec.StateMachine.cs_model
+          .TLS13.Spec.StateMachine.model_control ==
+            TLS13.Spec.StateMachine.ControlApplicationData /\
+        TLS13.Spec.StateMachine.application_record_keys_installed_for_role
+          TLS13.Spec.StateMachine.ServerEndpoint
+          'st.TLS13.Spec.StateMachine.cs_model))
+
 fn run
   (d:DS.top_server_driver)
   (wire_received0:Ghost.erased B.bytes)
