@@ -1,0 +1,16 @@
+{
+  "fstar_exe": "../tools/everparse/opt/FStar/out/bin/fstar.exe",
+  "options": [
+    "--cache_checked_modules",
+    "--cache_dir", "_cache",
+    "--already_cached", "Prims,FStar,Pulse,PulseCore",
+    "--warn_error", "-321-241-272-288",
+    "--ext", "optimize_let_vc",
+    "--include", "../common",
+    "--include", "spec"
+  ],
+  "include_dirs": [
+    "../common",
+    "spec"
+  ]
+}
