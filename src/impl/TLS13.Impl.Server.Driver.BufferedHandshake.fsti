@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
+module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CryptoSpec = TLS13.Crypto.Spec
 module BN = TLS13.Impl.Server.Driver.BufferedNetwork
@@ -26,6 +27,46 @@ type server_flight_result =
   | ServerFlightOk
   | ServerFlightDeriveFailed
   | ServerFlightSendNotReady
+
+val lemma_select_server_parameters_input_ready_intro
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  (server_random server_private_key:B.bytes_of_len 32)
+  : Lemma
+      (requires
+        B.length payload == 64 /\
+        st.CS.cs_model.CS.model_config.CS.config_role ==
+          CS.ServerEndpoint /\
+        st.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsClientHelloReceived /\
+        CR.server_selection_absent st.CS.cs_model.CS.model_handshake /\
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+        Some? st.CS.cs_model.CS.model_config.CS.config_server /\
+        server_random == CL.raw_slice payload 0 32 /\
+        server_private_key == CL.raw_slice payload 32 64 /\
+        (match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+               st.CS.cs_model.CS.model_config.CS.config_server with
+         | Some ch, Some cfg ->
+           CM.can_select_server_parameters st {
+             CS.server_selected_client_hello = ch;
+             CS.server_selected_cipher_suite =
+               T.TLS_CHACHA20_POLY1305_SHA256;
+             CS.server_selected_group = T.X25519;
+             CS.server_selected_signature_scheme =
+               T.Rsa_pss_rsae_sha256;
+             CS.server_random = server_random;
+             CS.server_key_share_private = Some server_private_key;
+             CS.server_key_share_public =
+               CryptoSpec.x25519_public_from_private server_private_key;
+             CS.server_selected_credential =
+               cfg.CS.server_credential_identity;
+           }
+         | _ -> False))
+      (ensures
+        ST.server_local_event_input_ready
+          st
+          ST.LocalSelectServerParameters
+          payload)
 
 noextract
 let selection_from_payload_correct
