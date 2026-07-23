@@ -291,7 +291,10 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify verify-tls verify-dy-core verify-symbolic test clean \
+.PHONY: all verify verify-tls verify-dy-core verify-symbolic \
+  verify-symbolic-model verify-symbolic-invariant \
+  verify-symbolic-authentication verify-symbolic-secrecy \
+  verify-symbolic-records test clean \
   check-toolchain check-z3 check-deps admit-count check-admits \
   generated-checked parsers extract-generated save-generated-cache \
   restore-generated-cache benchmark benchmark-build benchmark-profile-build \
@@ -376,6 +379,21 @@ $(SYMBOLIC_RECORD_SECURITY_CHECKED): $(SYMBOLIC_RECORD_SECURITY_FILE) $(SYMBOLIC
 
 $(SYMBOLIC_IMPORT_CHECKED): $(SYMBOLIC_IMPORT_FILE) $(SYMBOLIC_PROFILE_CHECKED) $(SYMBOLIC_TERMS_CHECKED) $(SYMBOLIC_USAGES_CHECKED) $(SYMBOLIC_LABELS_CHECKED) $(SYMBOLIC_EVENTS_CHECKED) $(SYMBOLIC_LEMMAS_CHECKED) $(SYMBOLIC_BRIDGE_CHECKED) $(SYMBOLIC_PRODUCT_CHECKED) $(SYMBOLIC_INVARIANT_CHECKED) $(SYMBOLIC_AUTHENTICATION_CHECKED) $(SYMBOLIC_SECRECY_CHECKED) $(SYMBOLIC_RECORD_SECURITY_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
 	$(FSTAR_SYMBOLIC) $<
+
+verify-symbolic-model: verify-tls verify-dy-core $(SYMBOLIC_PRODUCT_CHECKED)
+	@echo "TLS symbolic product model verified with Z3 $(TLS_Z3_VERSION)"
+
+verify-symbolic-invariant: verify-tls verify-dy-core $(SYMBOLIC_INVARIANT_CHECKED)
+	@echo "TLS symbolic trace invariant verified with Z3 $(TLS_Z3_VERSION)"
+
+verify-symbolic-authentication: verify-tls verify-dy-core $(SYMBOLIC_AUTHENTICATION_CHECKED)
+	@echo "TLS symbolic authentication verified with Z3 $(TLS_Z3_VERSION)"
+
+verify-symbolic-secrecy: verify-tls verify-dy-core $(SYMBOLIC_SECRECY_CHECKED)
+	@echo "TLS symbolic secrecy verified with Z3 $(TLS_Z3_VERSION)"
+
+verify-symbolic-records: verify-tls verify-dy-core $(SYMBOLIC_RECORD_SECURITY_CHECKED)
+	@echo "TLS symbolic record security verified with Z3 $(TLS_Z3_VERSION)"
 
 verify-symbolic: verify-tls verify-dy-core \
   $(SYMBOLIC_PROFILE_CHECKED) $(SYMBOLIC_TERMS_CHECKED) \

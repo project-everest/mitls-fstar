@@ -1,6 +1,6 @@
 # Symbolic Security Proof Plan for the TLS 1.3 1-RTT Profile
 
-Status: **approved; Phase 8 complete; Phase 9 in progress**
+Status: **complete through Phase 9**
 
 This document is the review gate for the symbolic-security work. Until this
 plan is approved, the only repository change in this workstream should be this
@@ -1057,23 +1057,24 @@ Commit boundary:
 
 Purpose: make the proof maintainable and its claims auditable.
 
-- [ ] Add a short security-model document linked from the repository README.
-- [ ] Publish the final assumption ledger.
-- [ ] Map each headline claim to its F* theorem name.
-- [ ] Document excluded TLS features.
-- [ ] Document the symbolic-versus-computational distinction.
-- [ ] Add targeted verification targets per proof layer.
-- [ ] Bound and document exceptional SMT resource settings.
-- [ ] Run proof-stability repetitions from clean caches.
-- [ ] Run the full repository verification and test targets.
-- [ ] Confirm recursive-submodule CI from a clean checkout.
-- [ ] Confirm no untracked local DY* clone is required.
+- [x] Add a short security-model document linked from the repository README.
+- [x] Publish the final assumption ledger.
+- [x] Map each headline claim to its F* theorem name.
+- [x] Document excluded TLS features.
+- [x] Document the symbolic-versus-computational distinction.
+- [x] Add targeted verification targets per proof layer.
+- [x] Confirm that the symbolic files use no exceptional local SMT resource
+      settings.
+- [x] Run proof-stability repetitions from clean caches.
+- [x] Run the full repository verification and test targets.
+- [x] Confirm recursive-submodule CI from a clean checkout.
+- [x] Confirm no untracked local DY* clone is required.
 
 Exit gate:
 
-- [ ] All symbolic modules verify from a clean checkout.
-- [ ] Full repository verification and tests pass.
-- [ ] No admitted theorem, hidden assumption, or unreviewed dependency revision
+- [x] All symbolic modules verify from a clean checkout.
+- [x] Full repository verification and tests pass.
+- [x] No admitted theorem, hidden assumption, or unreviewed dependency revision
       remains.
 
 Commit boundary:
