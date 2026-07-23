@@ -14,6 +14,7 @@ module CPI = Common.ProtocolImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CryptoSpec = TLS13.Crypto.Spec
+module BN = TLS13.Impl.Server.Driver.BufferedNetwork
 module DS = TLS13.Impl.Server.Driver.State
 module Mat = TLS13.Impl.Server.Material
 module M = TLS13.Messages
@@ -850,4 +851,146 @@ fn send_server_hello_from_payload_once
     (Ghost.reveal 'buffered)
     'buffered_len);
   resp
+}
+
+let lemma_derive_shared_secret_ready_with_credentials
+  (st:CS.connection_state)
+  (payload certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        ST.server_local_event_input_ready
+          st
+          ST.LocalDeriveSharedSecret
+          payload)
+      (ensures
+        ST.server_local_event_input_ready_with_credentials
+          st
+          ST.LocalDeriveSharedSecret
+          payload
+          certificate_chain
+          credential_identity)
+=
+  ()
+
+fn derive_shared_secret_from_payload_once
+  (d:DS.buffered_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires
+    DS.buffered_driver_exactly
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'buffered
+      'buffered_len **
+    pts_to payload 'payload_bytes **
+    pts_to network_out 'old_network_out **
+    pts_to app_out 'old_app_out **
+    pure (
+      B.length 'payload_bytes == SZ.v payload_len /\
+      SZ.v payload_len == 64 /\
+      B.length 'old_network_out == SZ.v network_out_len /\
+      B.length 'old_app_out == SZ.v app_out_len /\
+      ST.server_local_event_input_ready
+        'st0
+        ST.LocalDeriveSharedSecret
+        (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+  returns resp:ST.server_response
+  ensures
+    exists* st1 network_out_bytes app_out_bytes.
+      DS.buffered_driver_exactly
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len **
+      pts_to payload 'payload_bytes **
+      pts_to network_out network_out_bytes **
+      pts_to app_out app_out_bytes **
+      pure (
+        B.length network_out_bytes == SZ.v network_out_len /\
+        B.length app_out_bytes == SZ.v app_out_len /\
+        ST.server_local_event_end_to_end_correct
+          'st0
+          st1
+          resp
+          ST.LocalDeriveSharedSecret
+          (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)
+          network_out_bytes
+          app_out_bytes /\
+        derive_shared_secret_from_payload_correct
+          'st0
+          st1
+          resp
+          (Ghost.reveal 'payload_bytes))
+{
+  let mut server_random = [| 0uy; 32sz |];
+  let mut server_private_key = [| 0uy; 32sz |];
+  Mat.copy_server_random_and_private_from_payload
+    payload
+    server_random
+    server_private_key;
+  with server_private_key_bytes.
+    assert (pts_to server_private_key server_private_key_bytes);
+  assert (pure (Seq.equal
+    server_private_key_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)));
+  Seq.lemma_eq_elim
+    server_private_key_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64);
+  lemma_derive_shared_secret_ready_with_credentials
+    'st0
+    server_private_key_bytes
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity);
+  assert (pure (BN.local_event_ready
+    'st0
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  let result =
+    BN.process_local_event
+      d
+      ST.LocalDeriveSharedSecret
+      server_private_key
+      32sz
+      network_out
+      network_out_len
+      app_out
+      app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (
+      DS.buffered_driver_exactly
+        d st1 'certificate_chain 'credential_identity 'buffered 'buffered_len **
+      pts_to server_private_key server_private_key_bytes **
+      pts_to network_out network_out_bytes **
+      pts_to app_out app_out_bytes);
+  assert (pure (ST.server_local_event_end_to_end_correct
+    'st0
+    st1
+    result.BN.local_write_resp
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes
+    network_out_bytes
+    app_out_bytes));
+  assert (pure (BN.local_event_success_correct
+    'st0
+    st1
+    result.BN.local_write_resp
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes));
+  assert (pure (derive_shared_secret_from_payload_correct
+    'st0
+    st1
+    result.BN.local_write_resp
+    (Ghost.reveal 'payload_bytes)));
+  result.BN.local_write_resp
 }

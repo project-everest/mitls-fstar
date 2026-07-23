@@ -11,7 +11,9 @@ module BT = Common.BufferedTCP
 module CI = Common.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CPI = Common.ProtocolImplementation
+module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module DN = TLS13.Impl.Server.Driver.Network
 module DL = TLS13.Impl.Server.Driver.Local
 module DS = TLS13.Impl.Server.Driver.State
@@ -1035,6 +1037,136 @@ fn read
           model'))
     }
 
+    fn process_local_event_preserving_success
+      (s:S.server)
+      (creds:O.server_credentials)
+      (kind:ST.local_event_kind)
+      (payload:array U8.t)
+      (payload_len:SZ.t)
+      (network_out:array U8.t)
+      (network_out_len:SZ.t)
+      (app_out:array U8.t)
+      (app_out_len:SZ.t)
+      requires
+        S.connection_exactly s 'st0 **
+        O.is_server_credentials
+          creds
+          'certificate_chain
+          'credential_identity **
+        pts_to payload 'payload_bytes **
+        pts_to network_out 'old_network_out **
+        pts_to app_out 'old_app_out **
+        pure (
+          B.length 'payload_bytes == SZ.v payload_len /\
+          B.length 'old_network_out == SZ.v network_out_len /\
+          B.length 'old_app_out == SZ.v app_out_len /\
+          ST.server_end_to_end_invariant 'st0 /\
+          local_event_ready
+            'st0
+            kind
+            (Ghost.reveal 'payload_bytes)
+            (Ghost.reveal 'certificate_chain)
+            (Ghost.reveal 'credential_identity))
+      returns resp:ST.server_response
+      ensures
+        exists* st1 network_out_bytes app_out_bytes.
+          S.connection_exactly s st1 **
+          O.is_server_credentials
+            creds
+            'certificate_chain
+            'credential_identity **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (
+            B.length network_out_bytes == SZ.v network_out_len /\
+            B.length app_out_bytes == SZ.v app_out_len /\
+            ST.server_local_event_end_to_end_correct
+              'st0
+              st1
+              resp
+              kind
+              (Ghost.reveal 'payload_bytes)
+              network_out_bytes
+              app_out_bytes /\
+            local_event_success_correct
+              'st0
+              st1
+              resp
+              kind
+              (Ghost.reveal 'payload_bytes))
+    {
+      match kind {
+        ST.LocalDeriveSharedSecret -> {
+          assert (pure (ST.server_local_event_input_ready_with_credentials
+            'st0
+            kind
+            (Ghost.reveal 'payload_bytes)
+            (Ghost.reveal 'certificate_chain)
+            (Ghost.reveal 'credential_identity)));
+          assert (pure (ST.server_local_event_input_ready
+            'st0
+            kind
+            (Ghost.reveal 'payload_bytes)));
+          let resp =
+            S.process_derive_shared_secret_from_private_array
+              s
+              payload
+              network_out
+              network_out_len
+              app_out
+              app_out_len;
+          with st1 network_out_bytes app_out_bytes.
+            assert (
+              S.connection_exactly s st1 **
+              O.is_server_credentials
+                creds
+                'certificate_chain
+                'credential_identity **
+              pts_to payload 'payload_bytes **
+              pts_to network_out network_out_bytes **
+              pts_to app_out app_out_bytes);
+          assert (pure (local_event_success_correct
+            'st0
+            st1
+            resp
+            kind
+            (Ghost.reveal 'payload_bytes)));
+          resp
+        }
+        _ -> {
+          let resp =
+            S.process_local_event_with_credentials
+              s
+              creds
+              kind
+              payload
+              payload_len
+              network_out
+              network_out_len
+              app_out
+              app_out_len;
+          with st1 network_out_bytes app_out_bytes.
+            assert (
+              S.connection_exactly s st1 **
+              O.is_server_credentials
+                creds
+                'certificate_chain
+                'credential_identity **
+              pts_to payload 'payload_bytes **
+              pts_to network_out network_out_bytes **
+              pts_to app_out app_out_bytes);
+          assert (pure (local_event_success_correct
+            'st0
+            st1
+            resp
+            kind
+            (Ghost.reveal 'payload_bytes)));
+          resp
+        }
+      }
+    }
+
     fn process_local_event
       (d:DS.buffered_driver)
       (kind:ST.local_event_kind)
@@ -1089,6 +1221,12 @@ fn read
               (Ghost.reveal 'payload_bytes)
               network_out_bytes
               app_out_bytes /\
+            local_event_success_correct
+              'st0
+              st1
+              result.local_write_resp
+              kind
+              (Ghost.reveal 'payload_bytes) /\
             result.local_write_written ==
               result.local_write_resp.ST.network_out_len)
     {
@@ -1123,7 +1261,7 @@ fn read
         committed
         sent);
       let resp =
-        S.process_local_event_with_credentials
+        process_local_event_preserving_success
           d.buffered_driver_server
           d.buffered_driver_credentials
           kind
@@ -1151,6 +1289,12 @@ fn read
         (Ghost.reveal 'payload_bytes)
         network_out_bytes
         app_out_bytes));
+      assert (pure (local_event_success_correct
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)));
       DS.lemma_local_event_wire_lengths
         'st0
         st1

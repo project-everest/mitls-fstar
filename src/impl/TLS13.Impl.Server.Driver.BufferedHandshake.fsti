@@ -10,6 +10,7 @@ module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine
 module CryptoSpec = TLS13.Crypto.Spec
+module BN = TLS13.Impl.Server.Driver.BufferedNetwork
 module DS = TLS13.Impl.Server.Driver.State
 module M = TLS13.Messages
 module Seq = FStar.Seq
@@ -61,6 +62,26 @@ let server_hello_from_payload_correct
        sh
        (CS.serialized_cleartext_tls_message
          (M.TlsHandshake (M.ServerHello sh))))
+
+noextract
+let derive_shared_secret_from_payload_correct
+  (st0 st1:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : prop =
+  B.length payload == 64 /\
+  (resp.ST.status == ST.StepOk ==>
+   exists shared.
+     st1 == CM.derived_shared_secret_state st0 shared /\
+     (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+      | Some ch ->
+       (match CS.client_hello_key_share ch with
+        | Some client_public ->
+          CryptoSpec.x25519_shared
+            (CL.raw_slice payload 32 64)
+            client_public == Some shared
+        | None -> False)
+      | None -> False))
 
 fn start_server_once
   (d:DS.buffered_driver)
@@ -224,3 +245,61 @@ fn send_server_hello_from_payload_once
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
                   T.TLS_CHACHA20_POLY1305_SHA256))))
           app_out_bytes)
+
+fn derive_shared_secret_from_payload_once
+  (d:DS.buffered_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires
+    DS.buffered_driver_exactly
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'buffered
+      'buffered_len **
+    pts_to payload 'payload_bytes **
+    pts_to network_out 'old_network_out **
+    pts_to app_out 'old_app_out **
+    pure (
+      B.length 'payload_bytes == SZ.v payload_len /\
+      SZ.v payload_len == 64 /\
+      B.length 'old_network_out == SZ.v network_out_len /\
+      B.length 'old_app_out == SZ.v app_out_len /\
+      ST.server_local_event_input_ready
+        'st0
+        ST.LocalDeriveSharedSecret
+        (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+  returns resp:ST.server_response
+  ensures
+    exists* st1 network_out_bytes app_out_bytes.
+      DS.buffered_driver_exactly
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len **
+      pts_to payload 'payload_bytes **
+      pts_to network_out network_out_bytes **
+      pts_to app_out app_out_bytes **
+      pure (
+        B.length network_out_bytes == SZ.v network_out_len /\
+        B.length app_out_bytes == SZ.v app_out_len /\
+        ST.server_local_event_end_to_end_correct
+          'st0
+          st1
+          resp
+          ST.LocalDeriveSharedSecret
+          (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)
+          network_out_bytes
+          app_out_bytes /\
+        derive_shared_secret_from_payload_correct
+          'st0
+          st1
+          resp
+          (Ghost.reveal 'payload_bytes))

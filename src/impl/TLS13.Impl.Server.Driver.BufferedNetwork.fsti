@@ -10,6 +10,7 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module BS = Common.BufferedStream
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module DS = TLS13.Impl.Server.Driver.State
 module M = TLS13.Messages
 module Seq = FStar.Seq
@@ -77,6 +78,25 @@ let local_event_ready
      (M.Certificate (SS.mk_cert_witness certificate_chain))) ==
        13 + B.length certificate_chain)
 
+noextract
+let local_event_success_correct
+  (st0 st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  : prop =
+  kind == ST.LocalDeriveSharedSecret /\
+  resp.ST.status == ST.StepOk ==>
+  exists shared.
+   st1 == CM.derived_shared_secret_state st0 shared /\
+   (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch ->
+      (match CS.client_hello_key_share ch with
+       | Some client_public ->
+         CryptoSpec.x25519_shared payload client_public == Some shared
+       | None -> False)
+    | None -> False)
+
 fn process_local_event
   (d:DS.buffered_driver)
   (kind:ST.local_event_kind)
@@ -131,6 +151,12 @@ fn process_local_event
           (Ghost.reveal 'payload_bytes)
           network_out_bytes
           app_out_bytes /\
+        local_event_success_correct
+          'st0
+          st1
+          result.local_write_resp
+          kind
+          (Ghost.reveal 'payload_bytes) /\
         result.local_write_written ==
           result.local_write_resp.ST.network_out_len)
 
