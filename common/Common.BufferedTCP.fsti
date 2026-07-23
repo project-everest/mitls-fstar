@@ -192,6 +192,80 @@ ghost fn recall_model
         (Ghost.reveal delivered)
         (Ghost.reveal model))
 
+(* Reusable fixed-capacity storage while it is detached from a channel. *)
+val storage : Type0
+
+val is_storage :
+  storage ->
+  model:phys_buffer ->
+  slprop
+
+ghost fn recall_storage
+  (storage:storage)
+  (#model:erased phys_buffer)
+  requires is_storage storage (Ghost.reveal model)
+  ensures
+    is_storage storage (Ghost.reveal model) **
+    pure (
+      buffer_wf (Ghost.reveal model) /\
+      Seq.equal (pending (Ghost.reveal model)) Seq.empty)
+
+fn alloc_storage
+  (buffer_capacity:SZ.t)
+  returns storage:storage
+  ensures
+    exists* model.
+      is_storage storage model **
+      pure (
+       buffer_wf model /\
+       capacity model == SZ.v buffer_capacity /\
+       Seq.equal (pending model) Seq.empty)
+
+fn attach
+  (storage:storage)
+  (ch:TCP.channel)
+  (#model:erased phys_buffer)
+  requires
+    is_storage storage (Ghost.reveal model) **
+    TCP.is_channel ch 'received 'sent **
+    pure (
+      buffer_wf (Ghost.reveal model) /\
+      Seq.equal (pending (Ghost.reveal model)) Seq.empty)
+  returns b:t
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal 'received)
+      (Ghost.reveal 'received)
+      (Ghost.reveal 'sent)
+
+fn close_detach
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  returns storage:storage
+  ensures
+    exists* model'.
+      is_storage storage model' **
+      pure (
+       buffer_wf model' /\
+       capacity model' == capacity (Ghost.reveal model) /\
+       Seq.equal (pending model') Seq.empty)
+
+fn free_storage
+  (storage:storage)
+  (#model:erased phys_buffer)
+  requires is_storage storage (Ghost.reveal model)
+  ensures emp
+
 fn wrap_empty
   (ch:TCP.channel)
   (buffer_capacity:SZ.t)

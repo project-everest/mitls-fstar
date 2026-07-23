@@ -177,6 +177,203 @@ ghost fn recall_model
     (Ghost.reveal sent))
 }
 
+noeq
+type storage = {
+  bs_storage: V.vec U8.t;
+  bs_filled: Box.box SZ.t;
+  bs_capacity: SZ.t;
+}
+
+let is_storage
+  (storage:storage)
+  (model:phys_buffer)
+  : slprop =
+  exists* raw.
+    V.pts_to storage.bs_storage #1.0R raw **
+    Box.pts_to storage.bs_filled 0sz **
+    pure (
+      V.is_full_vec storage.bs_storage /\
+      Seq.length raw == SZ.v storage.bs_capacity /\
+      buffer_wf model /\
+      capacity model == SZ.v storage.bs_capacity /\
+      Seq.equal (pending model) Seq.empty)
+
+ghost fn recall_storage
+  (storage:storage)
+  (#model:erased phys_buffer)
+  requires is_storage storage (Ghost.reveal model)
+  ensures
+    is_storage storage (Ghost.reveal model) **
+    pure (
+      buffer_wf (Ghost.reveal model) /\
+      Seq.equal (pending (Ghost.reveal model)) Seq.empty)
+{
+  unfold (is_storage storage (Ghost.reveal model));
+  fold (is_storage storage (Ghost.reveal model))
+}
+
+fn alloc_storage
+  (buffer_capacity:SZ.t)
+  returns storage:storage
+  ensures
+    exists* model.
+      is_storage storage model **
+      pure (
+        buffer_wf model /\
+        capacity model == SZ.v buffer_capacity /\
+        Seq.equal (pending model) Seq.empty)
+{
+  let raw = V.alloc 0uy buffer_capacity;
+  let filled = Box.alloc 0sz;
+  let storage = {
+    bs_storage = raw;
+    bs_filled = filled;
+    bs_capacity = buffer_capacity;
+  };
+  let model = I.empty_buffer (SZ.v buffer_capacity);
+  I.lemma_empty_buffer_wf (SZ.v buffer_capacity);
+  I.lemma_empty_buffer_pending (SZ.v buffer_capacity);
+  rewrite
+    (V.pts_to raw #1.0R (Seq.create (SZ.v buffer_capacity) 0uy))
+    as
+    (V.pts_to
+      storage.bs_storage
+      #1.0R
+      (Seq.create (SZ.v storage.bs_capacity) 0uy));
+  rewrite
+    (Box.pts_to filled 0sz)
+    as
+    (Box.pts_to storage.bs_filled 0sz);
+  fold (is_storage storage model);
+  storage
+}
+
+fn attach
+  (storage:storage)
+  (ch:TCP.channel)
+  (#model:erased phys_buffer)
+  requires
+    is_storage storage (Ghost.reveal model) **
+    TCP.is_channel ch 'received 'sent **
+    pure (
+      buffer_wf (Ghost.reveal model) /\
+      Seq.equal (pending (Ghost.reveal model)) Seq.empty)
+  returns b:t
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal 'received)
+      (Ghost.reveal 'received)
+      (Ghost.reveal 'sent)
+{
+  unfold (is_storage storage (Ghost.reveal model));
+  with raw.
+    assert (
+      V.pts_to storage.bs_storage #1.0R raw **
+      Box.pts_to storage.bs_filled 0sz);
+  let b = {
+    bt_channel = ch;
+    bt_storage = storage.bs_storage;
+    bt_filled = storage.bs_filled;
+    bt_capacity = storage.bs_capacity;
+  };
+  Seq.append_empty_r (Ghost.reveal 'received);
+  assert (pure (received_split
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'received)
+    (Ghost.reveal model)));
+  rewrite
+    (TCP.is_channel ch 'received 'sent)
+    as
+    (TCP.is_channel b.bt_channel 'received 'sent);
+  rewrite
+    (V.pts_to storage.bs_storage #1.0R raw)
+    as
+    (V.pts_to b.bt_storage #1.0R raw);
+  rewrite
+    (Box.pts_to storage.bs_filled 0sz)
+    as
+    (Box.pts_to b.bt_filled 0sz);
+  fold (is_buffered
+    b
+    (Ghost.reveal model)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent));
+  b
+}
+
+fn close_detach
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  returns storage:storage
+  ensures
+    exists* model'.
+      is_storage storage model' **
+      pure (
+        buffer_wf model' /\
+        capacity model' == capacity (Ghost.reveal model) /\
+        Seq.equal (pending model') Seq.empty)
+{
+  unfold (is_buffered
+    b
+    (Ghost.reveal model)
+    (Ghost.reveal received)
+    (Ghost.reveal delivered)
+    (Ghost.reveal sent));
+  with raw filled.
+    assert (
+      TCP.is_channel
+        b.bt_channel
+        (Ghost.reveal received)
+        (Ghost.reveal sent) **
+      V.pts_to b.bt_storage #1.0R raw **
+      Box.pts_to b.bt_filled filled);
+  TCP.close b.bt_channel;
+  Box.(b.bt_filled := 0sz);
+  let storage = {
+    bs_storage = b.bt_storage;
+    bs_filled = b.bt_filled;
+    bs_capacity = b.bt_capacity;
+  };
+  let model' : erased phys_buffer =
+    Ghost.hide (I.mk_phys_buffer raw 0);
+  assert (pure (buffer_wf (Ghost.reveal model')));
+  assert (pure (
+    capacity (Ghost.reveal model') == capacity (Ghost.reveal model)));
+  Seq.lemma_eq_intro (pending (Ghost.reveal model')) Seq.empty;
+  rewrite
+    (V.pts_to b.bt_storage #1.0R raw)
+    as
+    (V.pts_to storage.bs_storage #1.0R raw);
+  rewrite
+    (Box.pts_to b.bt_filled 0sz)
+    as
+    (Box.pts_to storage.bs_filled 0sz);
+  fold (is_storage storage (Ghost.reveal model'));
+  storage
+}
+
+fn free_storage
+  (storage:storage)
+  (#model:erased phys_buffer)
+  requires is_storage storage (Ghost.reveal model)
+  ensures emp
+{
+  unfold (is_storage storage (Ghost.reveal model));
+  V.free storage.bs_storage;
+  Box.free storage.bs_filled
+}
+
 fn wrap_empty
   (ch:TCP.channel)
   (buffer_capacity:SZ.t)
@@ -195,41 +392,15 @@ fn wrap_empty
         capacity model == SZ.v buffer_capacity /\
         Seq.equal (pending model) Seq.empty)
 {
-  let storage = V.alloc 0uy buffer_capacity;
-  let filled = Box.alloc 0sz;
-  let b = {
-    bt_channel = ch;
-    bt_storage = storage;
-    bt_filled = filled;
-    bt_capacity = buffer_capacity;
-  };
-  let model = I.empty_buffer (SZ.v buffer_capacity);
-  I.lemma_empty_buffer_wf (SZ.v buffer_capacity);
-  I.lemma_empty_buffer_pending (SZ.v buffer_capacity);
-  Seq.append_empty_r (Ghost.reveal 'received);
-  assert (pure (received_split
-    (Ghost.reveal 'received)
-    (Ghost.reveal 'received)
-    model));
-  rewrite
-    (TCP.is_channel ch 'received 'sent)
-    as
-    (TCP.is_channel b.bt_channel 'received 'sent);
-  rewrite
-    (V.pts_to storage #1.0R (Seq.create (SZ.v buffer_capacity) 0uy))
-    as
-    (V.pts_to b.bt_storage #1.0R (Seq.create (SZ.v b.bt_capacity) 0uy));
-  rewrite
-    (Box.pts_to filled 0sz)
-    as
-    (Box.pts_to b.bt_filled 0sz);
-  fold (is_buffered
-    b
-    model
-    (Ghost.reveal 'received)
-    (Ghost.reveal 'received)
-    (Ghost.reveal 'sent));
-  b
+  let storage = alloc_storage buffer_capacity;
+  with model.
+    assert (
+      is_storage storage model **
+      pure (
+        buffer_wf model /\
+        capacity model == SZ.v buffer_capacity /\
+        Seq.equal (pending model) Seq.empty));
+  attach storage ch
 }
 
 noeq
@@ -812,13 +983,8 @@ fn close
       (Ghost.reveal sent)
   ensures emp
 {
-  unfold (is_buffered
-    b
-    (Ghost.reveal model)
-    (Ghost.reveal received)
-    (Ghost.reveal delivered)
-    (Ghost.reveal sent));
-  TCP.close b.bt_channel;
-  V.free b.bt_storage;
-  Box.free b.bt_filled
+  let storage = close_detach b;
+  with model'.
+    assert (is_storage storage model');
+  free_storage storage
 }
