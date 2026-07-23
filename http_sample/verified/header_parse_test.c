@@ -145,6 +145,24 @@ static void expect_dec(const uint8_t *buf, size_t n,
   }
 }
 
+/* Assert record k of an enumerated header list has the given name/value. */
+static void check_rec(const uint8_t *buf, size_t k,
+                      const size_t *noff, const size_t *nlen,
+                      const size_t *voff, const size_t *vlen,
+                      const char *name, const char *val) {
+  size_t enl = strlen(name), evl = strlen(val);
+  if (nlen[k] != enl || memcmp(buf + noff[k], name, enl) != 0) {
+    printf("FAIL: record %zu name mismatch (got nlen=%zu, want '%s')\n",
+           k, nlen[k], name);
+    fails++;
+  }
+  if (vlen[k] != evl || memcmp(buf + voff[k], val, evl) != 0) {
+    printf("FAIL: record %zu value mismatch (got vlen=%zu '%.*s', want '%s')\n",
+           k, vlen[k], (int)vlen[k], buf + voff[k], val);
+    fails++;
+  }
+}
+
 int main(void) {
   /* ---- 1. A normal header block, iterated field-by-field ---------------- */
   {
@@ -180,6 +198,29 @@ int main(void) {
 
     /* http_header_dec: locate a header and parse its value as a decimal */
     expect_dec(buf, n, "content-length", 42);              /* CL via header model */
+
+    /* http_parse_headers: enumerate the whole block into record arrays */
+    {
+      size_t no[8], nl[8], vo[8], vl[8], count = 999;
+      http_parse_headers((uint8_t *)buf, n, 8, no, nl, vo, vl, &count);
+      if (count != 5) {
+        printf("FAIL: parse_headers count got %zu, want 5\n", count);
+        fails++;
+      } else {
+        check_rec(buf, 0, no, nl, vo, vl, "Host", "example.com");
+        check_rec(buf, 1, no, nl, vo, vl, "Content-Length", "42");
+        check_rec(buf, 2, no, nl, vo, vl, "X-Trailing", "value  ");
+        check_rec(buf, 3, no, nl, vo, vl, "A", "B");
+        check_rec(buf, 4, no, nl, vo, vl, "X-Empty", "");
+      }
+      /* capacity clamp: cap=2 yields exactly 2 records */
+      size_t count2 = 999;
+      http_parse_headers((uint8_t *)buf, n, 2, no, nl, vo, vl, &count2);
+      if (count2 != 2) {
+        printf("FAIL: parse_headers cap=2 count got %zu, want 2\n", count2);
+        fails++;
+      }
+    }
   }
 
   /* ---- 2. Empty block: first line is the terminator --------------------- */

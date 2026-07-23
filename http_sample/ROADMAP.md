@@ -85,16 +85,17 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       now has a functional spec tying the parsed value to `W.dec_dec_var` DONE;
       canonical variable-width *emit* + threading the value spec to `http_get`
       remain.
-- [~] 1. General header parser/emitter — **first slice + lookup DONE**: verified
+- [x] 1. General header parser/emitter (**parse side complete**): verified
       single field-line model (`HTTP.Wire.Header`: `parse_field` / `ser_field`
       round-trip) + extractable parser leaf `http_parse_header_field`
-      (`HTTP.Impl.Codec.Header`, functional tie to `parse_field`); iterator +
-      lookup drivers in `HTTP.Impl.Loop.Header` (`http_count_headers`,
-      `http_find_header` name→value slice, `http_header_dec` = find + verified
-      `parse_dec_at`, re-expressing Content-Length lookup on the general header
-      model). Exercised by `verified/header_parse_test.c`. Remaining: an output
-      `(name, value)` **list** model and porting the existing whitelist scanner
-      (Transfer-Encoding / Host) onto the field iterator.
+      (`HTTP.Impl.Codec.Header`, functional tie to `parse_field`); driver layer
+      in `HTTP.Impl.Loop.Header` — `http_count_headers`, `http_find_header`
+      (name→value slice), `http_header_dec` (find + verified `parse_dec_at`,
+      Content-Length via the header model), and `http_parse_headers` (enumerate
+      the whole block into `(name_off,name_len,val_off,val_len)` record arrays).
+      Exercised by `verified/header_parse_test.c`. *Emit side* (building header
+      blocks from records) and porting the Transfer-Encoding/Host receive scan
+      onto the iterator remain as follow-ups.
 - [ ] 3. `POST` + request bodies
 - [ ] 4. Smuggling / limit defenses + error responses
 - [ ] 5. Keep-alive / persistent connections; TLS

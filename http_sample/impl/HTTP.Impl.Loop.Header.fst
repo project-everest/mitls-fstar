@@ -213,3 +213,82 @@ fn http_header_dec
     ()
   }
 }
+
+(* Enumerate every header field-line in `inp[0..n)` into four caller-provided,
+   parallel output arrays of capacity `cap`: record `k` is
+     name  = inp[noff[k] .. noff[k]+nlen[k]),
+     value = inp[voff[k] .. voff[k]+vlen[k]).
+   `pcount` receives the number of records written (<= cap).  Enumeration stops
+   at the terminating empty CRLF, the first malformed line, when the output is
+   full, or if a line fails to advance the cursor.  Memory-safe; each recorded
+   field is proved correct per-line by the leaf `http_parse_header_field`. *)
+fn http_parse_headers
+  (inp: array U8.t) (n: SZ.t) (cap: SZ.t)
+  (noff: array SZ.t) (nlen: array SZ.t) (voff: array SZ.t) (vlen: array SZ.t)
+  (pcount: R.ref SZ.t)
+  requires
+    pts_to inp 'i ** pts_to noff 'no ** pts_to nlen 'nl **
+    pts_to voff 'vo ** pts_to vlen 'vl ** R.pts_to pcount 'c0 **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\ SZ.v cap < pow2 32 /\
+          Seq.length 'no == SZ.v cap /\ Seq.length 'nl == SZ.v cap /\
+          Seq.length 'vo == SZ.v cap /\ Seq.length 'vl == SZ.v cap)
+  ensures
+    pts_to inp 'i **
+    (exists* (no nl vo vl:Seq.seq SZ.t) (count:SZ.t).
+       pts_to noff no ** pts_to nlen nl ** pts_to voff vo ** pts_to vlen vl **
+       R.pts_to pcount count **
+       pure (SZ.v count <= SZ.v cap))
+{
+  let mut pos     = 0sz;
+  let mut cnt     = 0sz;
+  let mut go      = true;
+  let mut pis_end = false;
+  let mut pok     = false;
+  let mut pnl     = 0sz;
+  let mut voffr   = 0sz;
+  let mut vlenr   = 0sz;
+  let mut pnext   = 0sz;
+  while (!go)
+  invariant exists* (vpos vcnt:SZ.t) (vgo ve vok:bool) (a e1 e2 d:SZ.t)
+                    (no nl vo vl:Seq.seq SZ.t).
+    R.pts_to pos vpos ** R.pts_to cnt vcnt ** R.pts_to go vgo **
+    R.pts_to pis_end ve ** R.pts_to pok vok **
+    R.pts_to pnl a ** R.pts_to voffr e1 ** R.pts_to vlenr e2 ** R.pts_to pnext d **
+    pts_to inp 'i ** pts_to noff no ** pts_to nlen nl **
+    pts_to voff vo ** pts_to vlen vl **
+    pure (SZ.v vpos <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\
+          SZ.v vcnt <= SZ.v cap /\ SZ.v cap < pow2 32 /\
+          Seq.length no == SZ.v cap /\ Seq.length nl == SZ.v cap /\
+          Seq.length vo == SZ.v cap /\ Seq.length vl == SZ.v cap)
+  {
+    let vpos = !pos;
+    let vcnt = !cnt;
+    if (SZ.gte vcnt cap) {
+      go := false;
+    } else {
+      Hdr.http_parse_header_field inp n vpos pis_end pok pnl voffr vlenr pnext;
+      let isend = !pis_end;
+      let ok = !pok;
+      if (isend || not ok) {
+        go := false;
+      } else {
+        let nl_ = !pnl;
+        let vo_ = !voffr;
+        let vl_ = !vlenr;
+        let nx  = !pnext;
+        noff.(vcnt) <- vpos;
+        nlen.(vcnt) <- nl_;
+        voff.(vcnt) <- vo_;
+        vlen.(vcnt) <- vl_;
+        Hdr.lemma_fits32 (SZ.v vcnt + 1);
+        cnt := SZ.add vcnt 1sz;
+        if SZ.gt nx vpos {
+          pos := nx;
+        } else {
+          go := false;
+        }
+      }
+    }
+  };
+  pcount := !cnt;
+}
