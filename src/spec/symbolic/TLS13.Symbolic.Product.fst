@@ -1,5 +1,17 @@
 module TLS13.Symbolic.Product
 
+(*
+ * Product semantics coupling concrete TLS execution to a symbolic DY trace.
+ *
+ * A product state contains concrete endpoint states, symbolic endpoint shadows,
+ * an execution-indexed representation, a symbolic network, and a trusted-server
+ * registry.  Honest steps follow the existing concrete local/canonical
+ * semantics and supply symbolic realization evidence; attacker steps inject,
+ * route, drop, replay, or corrupt according to DY knowledge.  Projection is
+ * unconditional for product executions, while lifting is conditional on
+ * symbolically_realizable_execution.  See SYMBOLIC_AUDIT.md Section 8.
+ *)
+
 module B = TLS13.Bytes
 module Bridge = TLS13.Symbolic.Bridge
 module Canonical = TLS13.Spec.StateMachine.Canonical
@@ -23,6 +35,7 @@ module Usages = TLS13.Symbolic.Usages
 module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
 
+(* Relate optional concrete bytes to an optional represented symbolic term. *)
 let option_represents
   (representation:Bridge.representation)
   (concrete:option B.bytes)
@@ -34,6 +47,7 @@ let option_represents
     Bridge.represents representation concrete_value symbolic_value
   | _, _ -> False
 
+(* Relate an optional concrete secret to an optional symbolic representation. *)
 let secret_option_represents
   (representation:Bridge.representation)
   (concrete:option C.secret)
@@ -45,6 +59,9 @@ let secret_option_represents
     Bridge.represents representation concrete_value symbolic_value
   | _, _ -> False
 
+(*
+ * One concrete state-machine transition together with its observable wire I/O.
+ *)
 noeq
 type concrete_transition = {
   concrete_before: SM.connection_state;
@@ -54,6 +71,7 @@ type concrete_transition = {
   concrete_raw_received: B.bytes;
 }
 
+(* Check the transition against the ordinary legal_connection_delta relation. *)
 let concrete_transition_is_legal
   (transition:concrete_transition)
   : prop =
@@ -66,6 +84,7 @@ let concrete_transition_is_legal
     }
     transition.concrete_after
 
+(* Check the transition against exact canonical wire semantics. *)
 let concrete_transition_is_canonical
   (transition:concrete_transition)
   : prop =
@@ -76,6 +95,7 @@ let concrete_transition_is_canonical
     transition.concrete_raw_sent
     transition.concrete_raw_received
 
+(* Forward concrete execution over a list of contiguous legal transitions. *)
 let rec concrete_execution
   (initial:SM.connection_state)
   (transitions:list concrete_transition)
@@ -88,6 +108,7 @@ let rec concrete_execution
     concrete_transition_is_legal transition /\
     concrete_execution transition.concrete_after rest final
 
+(* Reverse-history concrete execution, used by endpoint shadow refinement. *)
 let rec reverse_concrete_execution
   (final:SM.connection_state)
   (reverse_transitions:list concrete_transition)
@@ -101,6 +122,9 @@ let rec reverse_concrete_execution
     reverse_concrete_execution
       transition.concrete_before rest initial
 
+(*
+ * Symbolic traffic secret, record key, and static IV for one direction/epoch.
+ *)
 noeq
 type symbolic_traffic_material = {
   symbolic_traffic_secret: DY.bytes;
@@ -108,6 +132,7 @@ type symbolic_traffic_material = {
   symbolic_traffic_iv: DY.bytes;
 }
 
+(* Symbolic image of the concrete TLS key-schedule fields used by the profile. *)
 noeq
 type symbolic_key_schedule = {
   symbolic_early_secret: option DY.bytes;
@@ -120,6 +145,7 @@ type symbolic_key_schedule = {
   symbolic_server_application_traffic: option symbolic_traffic_material;
 }
 
+(* Symbolic record state for one read or write direction. *)
 noeq
 type symbolic_direction_state = {
   symbolic_epoch: R.epoch;
@@ -128,6 +154,13 @@ type symbolic_direction_state = {
   symbolic_sequence_number: nat;
 }
 
+(*
+ * Symbolic companion to one concrete endpoint state.
+ *
+ * It records stable session identity, symbolic transcript/context, key
+ * schedule, read/write states, peer leaf key, reverse concrete history, and
+ * authentication milestones.
+ *)
 noeq
 type endpoint_shadow = {
   shadow_session: Terms.endpoint_session;
@@ -145,6 +178,12 @@ type endpoint_shadow = {
   shadow_client_finished_accepted: bool;
 }
 
+(*
+ * Relate concrete traffic material to symbolic secret/key/IV terms.
+ *
+ * Optional presence must agree, and present symbolic keys and IVs must be the
+ * expected constructors over their represented traffic secret.
+ *)
 let traffic_material_represents
   (representation:Bridge.representation)
   (concrete:option SM.traffic_key_material)
@@ -171,6 +210,12 @@ let traffic_material_represents
       symbolic_material.symbolic_traffic_iv
   | _, _ -> False
 
+(*
+ * Refine the concrete key schedule by all modeled symbolic schedule fields.
+ *
+ * This is representation-level correspondence; exact symbolic derivation
+ * lineage is an additional Secrecy premise.
+ *)
 let key_schedule_refines
   (representation:Bridge.representation)
   (concrete:SM.key_schedule_state)
@@ -209,6 +254,10 @@ let key_schedule_refines
     concrete.SM.ks_server_application_traffic
     symbolic.symbolic_server_application_traffic
 
+(*
+ * Refine a concrete record-direction state by symbolic epoch, sequence, key,
+ * and static IV.
+ *)
 let direction_state_refines
   (representation:Bridge.representation)
   (concrete:R.direction_state)
@@ -220,6 +269,7 @@ let direction_state_refines
     representation concrete.R.static_iv symbolic.symbolic_static_iv /\
   symbolic.symbolic_sequence_number == concrete.R.seq
 
+(* Check that one direction state refers to a selected traffic-material record. *)
 let direction_matches_material
   (direction:symbolic_direction_state)
   (material:option symbolic_traffic_material)
@@ -231,6 +281,9 @@ let direction_matches_material
     iv == traffic.symbolic_traffic_iv
   | _, _, _ -> False
 
+(*
+ * Select expected traffic material from role, read/write side, and epoch.
+ *)
 let expected_direction_material
   (role:Terms.symbolic_role)
   (direction:R.epoch)
@@ -260,6 +313,7 @@ let expected_direction_material
      | Terms.SymbolicServer, false ->
        schedule.symbolic_server_application_traffic)
 
+(* Exclude KeyUpdate-related events from the fixed generation-zero profile. *)
 let event_excludes_key_update (event:SM.conn_event) : prop =
   match event with
   | SM.ConnNetworkEvent directed ->
@@ -268,11 +322,13 @@ let event_excludes_key_update (event:SM.conn_event) : prop =
      | _ -> True)
   | SM.ConnLocalEvent _ -> True
 
+(* Classify concrete events that do not carry network bytes. *)
 let is_local_event (event:SM.conn_event) : prop =
   match event with
   | SM.ConnLocalEvent _ -> True
   | SM.ConnNetworkEvent _ -> False
 
+(* Recursively require every event in a concrete history to exclude KeyUpdate. *)
 let rec events_exclude_key_update
   (events:list SM.conn_event)
   : Tot prop (decreases events) =
@@ -282,6 +338,7 @@ let rec events_exclude_key_update
     event_excludes_key_update event /\
     events_exclude_key_update rest
 
+(* Require the concrete configuration to match the shadow's symbolic role. *)
 let config_matches_role (shadow:endpoint_shadow) : prop =
   match shadow.shadow_session.Terms.session_role with
   | Terms.SymbolicClient ->
@@ -291,6 +348,11 @@ let config_matches_role (shadow:endpoint_shadow) : prop =
     Profile.server_config_in_profile
       shadow.shadow_concrete.SM.cs_model.SM.model_config
 
+(*
+ * Tie an optional context to the endpoint session and symbolic transcript.
+ *
+ * This does not derive the context's other symbolic fields from concrete state.
+ *)
 let context_matches_endpoint (shadow:endpoint_shadow) : prop =
   match shadow.shadow_context with
   | None -> True
@@ -302,6 +364,7 @@ let context_matches_endpoint (shadow:endpoint_shadow) : prop =
      | Terms.SymbolicServer ->
        context.Terms.context_server == shadow.shadow_session)
 
+(* Project the concrete leaf public key from an optional validated peer identity. *)
 let validated_leaf_key
   (peer:option X.peer_identity)
   : option B.bytes =
@@ -309,6 +372,15 @@ let validated_leaf_key
   | None -> None
   | Some identity -> Some identity.X.leaf_public_key
 
+(*
+ * Main endpoint refinement predicate.
+ *
+ * It requires concrete reachability from the saved origin, role/profile
+ * agreement, transcript and key-state representation, direction consistency,
+ * leaf-key representation, milestone agreement, and a KeyUpdate-free history.
+ * It does not establish cryptographic lineage or full concrete correspondence
+ * for every field of a symbolic session context.
+ *)
 let endpoint_refines
   (representation:Bridge.representation)
   (shadow:endpoint_shadow)
@@ -369,12 +441,14 @@ let endpoint_refines
   shadow.shadow_concrete.SM.cs_model.SM.model_application.SM.app_key_update_response_pending ==
     false
 
+(* Encode optional symbolic bytes with a public presence discriminator. *)
 let encode_optional_symbolic (value:option DY.bytes) : DY.bytes =
   match value with
   | None -> Terms.public_bytes (B.singleton 0uy)
   | Some symbolic ->
     DY.Concat (Terms.public_bytes (B.singleton 1uy)) symbolic
 
+(* Encode optional traffic material as secret/key/IV structure. *)
 let encode_optional_traffic
   (value:option symbolic_traffic_material)
   : DY.bytes =
@@ -389,6 +463,7 @@ let encode_optional_traffic
           material.symbolic_traffic_key
           material.symbolic_traffic_iv))
 
+(* Encode all modeled key-schedule fields into one state-content term. *)
 let encode_key_schedule (schedule:symbolic_key_schedule) : DY.bytes =
   DY.Concat
     (encode_optional_symbolic schedule.symbolic_early_secret)
@@ -410,6 +485,7 @@ let encode_key_schedule (schedule:symbolic_key_schedule) : DY.bytes =
                 (encode_optional_traffic
                   schedule.symbolic_server_application_traffic)))))))
 
+(* Encode a record-direction state's optional key and static IV. *)
 let encode_direction_state
   (direction:symbolic_direction_state)
   : DY.bytes =
@@ -417,6 +493,7 @@ let encode_direction_state
     (encode_optional_symbolic direction.symbolic_key)
     (encode_optional_symbolic direction.symbolic_static_iv)
 
+(* Encode the symbolic endpoint shadow stored in a DY State trace entry. *)
 let endpoint_state_content (shadow:endpoint_shadow) : DY.bytes =
   DY.Concat
     (Terms.encode_endpoint_session shadow.shadow_session)
@@ -431,18 +508,24 @@ let endpoint_state_content (shadow:endpoint_shadow) : DY.bytes =
             (encode_optional_symbolic
               shadow.shadow_authenticated_server_key)))))
 
+(* Construct the DY State entry representing an endpoint's current shadow. *)
 let endpoint_state_entry (shadow:endpoint_shadow) : DY.trace_entry =
   DY.SetState
     shadow.shadow_session.Terms.session_principal
     shadow.shadow_session.Terms.session_state_id
     (endpoint_state_content shadow)
 
+(* One queued concrete wire fragment paired with its symbolic message term. *)
 noeq
 type network_packet = {
   packet_raw: B.bytes;
   packet_symbolic: DY.bytes;
 }
 
+(*
+ * Complete product state: symbolic trace and representation, endpoint shadows,
+ * in-flight network packets, and the trusted-server registry.
+ *)
 noeq
 type product_state = {
   product_trace: DY.trace;
@@ -452,6 +535,7 @@ type product_state = {
   product_registry: list Bridge.trusted_server;
 }
 
+(* Propositional membership of an endpoint shadow in a product endpoint list. *)
 let rec endpoint_member
   (shadow:endpoint_shadow)
   (endpoints:list endpoint_shadow)
@@ -460,6 +544,7 @@ let rec endpoint_member
   | [] -> False
   | head :: tail -> head == shadow \/ endpoint_member shadow tail
 
+(* Lift endpoint_refines pointwise over an endpoint list. *)
 let rec endpoints_refine
   (representation:Bridge.representation)
   (endpoints:list endpoint_shadow)
@@ -470,12 +555,14 @@ let rec endpoints_refine
     endpoint_refines representation head /\
     endpoints_refine representation tail
 
+(* Compare endpoint identities by principal and mutable-state identifier. *)
 let same_session
   (left right:Terms.endpoint_session)
   : prop =
   left.Terms.session_principal == right.Terms.session_principal /\
   left.Terms.session_state_id == right.Terms.session_state_id
 
+(* State that no endpoint in a list uses the selected session identity. *)
 let rec session_absent
   (session:Terms.endpoint_session)
   (endpoints:list endpoint_shadow)
@@ -486,6 +573,7 @@ let rec session_absent
     ~(same_session session head.shadow_session) /\
     session_absent session tail
 
+(* Require pairwise-unique endpoint identities throughout a list. *)
 let rec sessions_unique
   (endpoints:list endpoint_shadow)
   : Tot prop (decreases endpoints) =
@@ -495,6 +583,7 @@ let rec sessions_unique
     session_absent head.shadow_session tail /\
     sessions_unique tail
 
+(* State that every occurrence of a selected trace entry has one timestamp. *)
 let trace_entry_unique
   (tr:DY.trace)
   (entry:DY.trace_entry)
@@ -504,6 +593,9 @@ let trace_entry_unique
     DY.entry_at tr right entry
     ==> left == right
 
+(*
+ * Require unique occurrence times for all three injective-authentication events.
+ *)
 let security_events_unique (tr:DY.trace) : prop =
   forall principal content.
     trace_entry_unique
@@ -522,6 +614,12 @@ let security_events_unique (tr:DY.trace) : prop =
         (Events.event_tag Events.ClientFinishedSent)
         content)
 
+(*
+ * Split occurrence in a snoc trace into the new final entry or the old prefix.
+ *
+ * Requirement: entry occurs at time in Snoc tr last.
+ * Guarantee: it is last at trace_length tr, or an earlier occurrence in tr.
+ *)
 val entry_at_snoc_cases:
   tr:DY.trace ->
   last:DY.trace_entry ->
@@ -532,6 +630,7 @@ val entry_at_snoc_cases:
     (ensures
       (time == DY.trace_length tr /\ entry == last) \/
       (time < DY.trace_length tr /\ DY.entry_at tr time entry))
+(* Normalize DY trace lookup definitions to expose the two snoc cases. *)
 let entry_at_snoc_cases tr last time entry =
   norm_spec
     [delta_only
@@ -545,6 +644,13 @@ let entry_at_snoc_cases tr last time entry =
      iota]
     (DY.entry_at (DY.Snoc tr last) time entry)
 
+(*
+ * Preserve uniqueness of a selected entry when appending one trace entry.
+ *
+ * Requirement: entry was unique in tr; if last equals entry, entry did not
+ * already occur in tr.
+ * Guarantee: entry is unique in Snoc tr last.
+ *)
 val trace_entry_unique_snoc:
   tr:DY.trace ->
   last:DY.trace_entry ->
@@ -555,6 +661,12 @@ val trace_entry_unique_snoc:
       (~(last == entry) \/ ~(DY.entry_exists tr entry)))
     (ensures trace_entry_unique (DY.Snoc tr last) entry)
 
+(*
+ * Convert a witnessed timestamp occurrence to existential trace membership.
+ *
+ * Requirement: entry occurs at time in tr.
+ * Guarantee: entry_exists tr entry.
+ *)
 val entry_at_implies_exists:
   tr:DY.trace ->
   time:DY.timestamp ->
@@ -562,10 +674,17 @@ val entry_at_implies_exists:
   Lemma
     (requires DY.entry_at tr time entry)
     (ensures DY.entry_exists tr entry)
+(* Introduce the supplied timestamp as the existential witness. *)
 let entry_at_implies_exists tr time entry =
   introduce exists witness. DY.entry_at tr witness entry
   with time and ()
 
+(*
+ * Eliminate two occurrence timestamps using trace-entry uniqueness.
+ *
+ * Requirement: entry is unique in tr and occurs at left and right.
+ * Guarantee: left equals right.
+ *)
 val trace_entry_unique_at:
   tr:DY.trace ->
   entry:DY.trace_entry ->
@@ -577,9 +696,16 @@ val trace_entry_unique_at:
       DY.entry_at tr left entry /\
       DY.entry_at tr right entry)
     (ensures left == right)
+(* Unfold trace_entry_unique and instantiate its universal implication. *)
 let trace_entry_unique_at tr entry left right =
   normalize_term_spec trace_entry_unique
 
+(*
+ * Derive contradiction from occurrence of an entry assumed absent.
+ *
+ * Requirement: entry does not exist in tr but occurs at time.
+ * Guarantee: False.
+ *)
 val fresh_entry_not_old:
   tr:DY.trace ->
   entry:DY.trace_entry ->
@@ -589,9 +715,11 @@ val fresh_entry_not_old:
       ~(DY.entry_exists tr entry) /\
       DY.entry_at tr time entry)
     (ensures False)
+(* Derive entry_exists using the occurrence, contradicting the requirement. *)
 let fresh_entry_not_old tr entry time =
   entry_at_implies_exists tr time entry
 
+(* Analyze both timestamps with entry_at_snoc_cases and use old uniqueness. *)
 let trace_entry_unique_snoc tr last entry =
   introduce forall left right.
     DY.entry_at (DY.Snoc tr last) left entry /\
@@ -626,6 +754,7 @@ let trace_entry_unique_snoc tr last entry =
         trace_entry_unique_at tr entry left right
       end))
 
+(* Recognize the three event tags used for injective authentication. *)
 let is_security_event_entry (entry:DY.trace_entry) : prop =
   match entry with
   | DY.Event _ tag _ ->
@@ -634,6 +763,12 @@ let is_security_event_entry (entry:DY.trace_entry) : prop =
     tag == Events.event_tag Events.ClientFinishedSent
   | _ -> False
 
+(*
+ * Preserve uniqueness for one security-event target across trace extension.
+ *
+ * Requirement: target is unique in tr and any appended security event is fresh.
+ * Guarantee: target is unique in Snoc tr last.
+ *)
 val security_target_unique_snoc:
   tr:DY.trace ->
   last:DY.trace_entry ->
@@ -643,10 +778,18 @@ val security_target_unique_snoc:
       trace_entry_unique tr target /\
       (is_security_event_entry last ==> ~(DY.entry_exists tr last)))
     (ensures trace_entry_unique (DY.Snoc tr last) target)
+(* Show the generic snoc side condition from tag classification, then reuse it. *)
 let security_target_unique_snoc tr last target =
   assert (~(last == target) \/ ~(DY.entry_exists tr target));
   trace_entry_unique_snoc tr last target
 
+(*
+ * Preserve uniqueness of every modeled security event across one append.
+ *
+ * Requirement: all security events are unique in tr, and an appended security
+ * event has not appeared before.
+ * Guarantee: all security events are unique in Snoc tr last.
+ *)
 val security_events_unique_snoc:
   tr:DY.trace ->
   last:DY.trace_entry ->
@@ -655,6 +798,7 @@ val security_events_unique_snoc:
       security_events_unique tr /\
       (is_security_event_entry last ==> ~(DY.entry_exists tr last)))
     (ensures security_events_unique (DY.Snoc tr last))
+(* Instantiate security_target_unique_snoc for each of the three event tags. *)
 let security_events_unique_snoc tr last =
   introduce forall principal content.
     trace_entry_unique
@@ -689,6 +833,10 @@ let security_events_unique_snoc tr last =
         (Events.event_tag Events.ClientFinishedSent)
         content))
 
+(*
+ * Core product-state consistency: trace synchronization, endpoint refinement,
+ * and unique endpoint session identities.
+ *)
 let product_well_formed (state:product_state) : prop =
   state.product_representation.Bridge.representation_trace ==
     state.product_trace /\
@@ -697,6 +845,7 @@ let product_well_formed (state:product_state) : prop =
     state.product_endpoints /\
   sessions_unique state.product_endpoints
 
+(* Exclude all modeled security-origin events from an initial trace. *)
 let security_origin_free (tr:DY.trace) : prop =
   forall principal content.
     ~(DY.event_triggered
@@ -716,10 +865,12 @@ let security_origin_free (tr:DY.trace) : prop =
         (Events.event_tag Events.ProtectedRecordSent)
         content)
 
+(* Require a well-formed product state with no pre-existing security origins. *)
 let initial_product_state (state:product_state) : prop =
   product_well_formed state /\
   security_origin_free state.product_trace
 
+(* Relate endpoint lists differing by exactly one selected replacement. *)
 let rec replace_endpoint
   (before_shadow after_shadow:endpoint_shadow)
   (before_endpoints after_endpoints:list endpoint_shadow)
@@ -734,6 +885,7 @@ let rec replace_endpoint
       replace_endpoint
         before_shadow after_shadow tail after_tail)
 
+(* Propositional membership of a concrete/symbolic packet in the network list. *)
 let rec packet_member
   (packet:network_packet)
   (packets:list network_packet)
@@ -742,6 +894,7 @@ let rec packet_member
   | [] -> False
   | head :: tail -> head == packet \/ packet_member packet tail
 
+(* Relate packet lists after removing exactly one selected packet occurrence. *)
 let rec remove_packet
   (packet:network_packet)
   (before after:list network_packet)
@@ -754,6 +907,10 @@ let rec remove_packet
       after == head :: after_tail /\
       remove_packet packet tail after_tail)
 
+(*
+ * Witness connecting an emitted concrete protected record to symbolic context,
+ * direction, epoch, sequence, key/IV, plaintext, and AEAD term.
+ *)
 noeq
 type sent_record_realization = {
   sent_record_context: Terms.session_context;
@@ -769,6 +926,10 @@ type sent_record_realization = {
   sent_record_symbolic_plaintext: DY.bytes;
 }
 
+(*
+ * Witness connecting an accepted concrete protected record to its exact
+ * symbolic context, direction, epoch, sequence, key/IV, plaintext, and term.
+ *)
 noeq
 type accepted_record_realization = {
   accepted_record_context: Terms.session_context;
@@ -789,6 +950,9 @@ type accepted_record_realization = {
   accepted_record_symbolic_plaintext: DY.bytes;
 }
 
+(*
+ * Construct the symbolic nonce for a sent record from its IV and sequence token.
+ *)
 let sent_record_symbolic_nonce
   (record:sent_record_realization)
   : DY.bytes =
@@ -796,6 +960,7 @@ let sent_record_symbolic_nonce
     record.sent_record_symbolic_static_iv
     record.sent_record_sequence_number
 
+(* Construct the symbolic AEAD term for a sent protected record. *)
 let sent_record_protected_term
   (record:sent_record_realization)
   : DY.bytes =
@@ -806,6 +971,7 @@ let sent_record_protected_term
     (Terms.protected_record_additional_data
       record.sent_record_concrete_aad)
 
+(* Construct symbolic wire bytes as public AAD concatenated with the AEAD term. *)
 let sent_record_wire_term
   (record:sent_record_realization)
   : DY.bytes =
@@ -814,6 +980,7 @@ let sent_record_wire_term
       record.sent_record_concrete_aad)
     (sent_record_protected_term record)
 
+(* Construct the symbolic nonce for an accepted record. *)
 let accepted_record_symbolic_nonce
   (record:accepted_record_realization)
   : DY.bytes =
@@ -821,6 +988,13 @@ let accepted_record_symbolic_nonce
     record.accepted_record_symbolic_static_iv
     record.accepted_record_sequence_number
 
+(*
+ * Expose the accepted nonce's sequence-token identity.
+ *
+ * Requirement: none.
+ * Guarantee: the nonce equals record_nonce_from_sequence_token applied to the
+ * accepted record's encoded sequence number.
+ *)
 val accepted_record_symbolic_nonce_definition:
   record:accepted_record_realization ->
   Lemma
@@ -829,8 +1003,10 @@ val accepted_record_symbolic_nonce_definition:
       Terms.record_nonce_from_sequence_token
         (Terms.encode_record_sequence_number
           record.accepted_record_sequence_number))
+(* The result follows by reduction of accepted_record_symbolic_nonce. *)
 let accepted_record_symbolic_nonce_definition record = ()
 
+(* Construct the symbolic AEAD term for an accepted protected record. *)
 let accepted_record_protected_term
   (record:accepted_record_realization)
   : DY.bytes =
@@ -841,6 +1017,12 @@ let accepted_record_protected_term
     (Terms.protected_record_additional_data
       record.accepted_record_concrete_aad)
 
+(*
+ * Expose every constructor argument of an accepted protected-record term.
+ *
+ * Requirement: none.
+ * Guarantee: the term has the stated key, nonce, plaintext, and AAD.
+ *)
 val accepted_record_protected_term_definition:
   record:accepted_record_realization ->
   Lemma
@@ -852,8 +1034,10 @@ val accepted_record_protected_term_definition:
         record.accepted_record_symbolic_plaintext
         (Terms.protected_record_additional_data
           record.accepted_record_concrete_aad))
+(* The equality follows by reduction of accepted_record_protected_term. *)
 let accepted_record_protected_term_definition record = ()
 
+(* Construct accepted symbolic wire bytes from public AAD and the AEAD term. *)
 let accepted_record_wire_term
   (record:accepted_record_realization)
   : DY.bytes =
@@ -862,6 +1046,7 @@ let accepted_record_wire_term
       record.accepted_record_concrete_aad)
     (accepted_record_protected_term record)
 
+(* Concatenate symbolic wire terms for a nonempty or fragmented record batch. *)
 let rec sent_record_batch_wire_term
   (records:list sent_record_realization)
   : Tot DY.bytes (decreases records) =
@@ -873,6 +1058,7 @@ let rec sent_record_batch_wire_term
       (sent_record_wire_term record)
       (sent_record_batch_wire_term rest)
 
+(* Map endpoint role to the direction of records it sends. *)
 let record_direction_for_sender
   (role:Terms.symbolic_role)
   : Events.record_direction =
@@ -880,6 +1066,7 @@ let record_direction_for_sender
   | Terms.SymbolicClient -> Events.ClientToServer
   | Terms.SymbolicServer -> Events.ServerToClient
 
+(* Map endpoint role to the direction of records it receives. *)
 let record_direction_for_receiver
   (role:Terms.symbolic_role)
   : Events.record_direction =
@@ -887,6 +1074,7 @@ let record_direction_for_receiver
   | Terms.SymbolicClient -> Events.ServerToClient
   | Terms.SymbolicServer -> Events.ClientToServer
 
+(* Relate modeled handshake/application epochs to concrete record epochs. *)
 let record_epoch_matches
   (symbolic:Events.record_epoch)
   (concrete:R.epoch)
@@ -896,6 +1084,10 @@ let record_epoch_matches
   | Events.ApplicationEpoch, R.Application -> True
   | _, _ -> False
 
+(*
+ * For sent application data, tie concrete content to a labeled symbolic term.
+ * Other protected message kinds impose no extra plaintext constraint here.
+ *)
 let sent_symbolic_plaintext_realizes_message
   (representation:Bridge.representation)
   (shadow:endpoint_shadow)
@@ -917,6 +1109,9 @@ let sent_symbolic_plaintext_realizes_message
           shadow.shadow_session.Terms.session_state_id
   | _ -> True
 
+(*
+ * For accepted application data, tie concrete content to symbolic plaintext.
+ *)
 let accepted_symbolic_plaintext_realizes_message
   (representation:Bridge.representation)
   (message:M.tls_message)
@@ -930,6 +1125,12 @@ let accepted_symbolic_plaintext_realizes_message
         Terms.application_plaintext symbolic_content (B.singleton 23uy)
   | _ -> True
 
+(*
+ * Connect one concrete protected send to its exact symbolic record.
+ *
+ * This fixes context, direction, epoch, sequence, plaintext, AAD, concrete and
+ * symbolic key/IV, parsed ciphertext, AEAD seal bridge, and symbolic wire term.
+ *)
 let sent_record_realizes
   (representation:Bridge.representation)
   (shadow:endpoint_shadow)
@@ -994,6 +1195,9 @@ let sent_record_realizes
       record.sent_record_concrete_aad)
     record.sent_record_symbolic_plaintext
 
+(*
+ * Realize application data fragmented according to the canonical record limit.
+ *)
 let rec sent_application_record_contents_realize
   (representation:Bridge.representation)
   (shadow:endpoint_shadow)
@@ -1030,6 +1234,9 @@ let rec sent_application_record_contents_realize
           tail raw_tail rest
     | [] -> False
 
+(*
+ * Realize all protected records emitted by one concrete network event.
+ *)
 let sent_record_batch_realizes
   (representation:Bridge.representation)
   (shadow:endpoint_shadow)
@@ -1060,6 +1267,12 @@ let sent_record_batch_realizes
       representation raw (sent_record_batch_wire_term records)
   | _ -> False
 
+(*
+ * Connect one concrete protected receive to its exact symbolic record.
+ *
+ * This fixes context, direction, epoch, sequence, AAD, key/IV, ciphertext,
+ * parsed plaintext, AEAD-open bridge, and symbolic wire representation.
+ *)
 let accepted_record_realizes
   (representation:Bridge.representation)
   (shadow:endpoint_shadow)
@@ -1130,6 +1343,10 @@ let accepted_record_realizes
   Bridge.represents
     representation raw (accepted_record_wire_term record)
 
+(*
+ * Symbolic security event, record-send batch, record acceptance, or no event
+ * associated with one concrete step.
+ *)
 noeq
 type protocol_event_realization =
   | NoProtocolEvent
@@ -1156,6 +1373,7 @@ type protocol_event_realization =
       record:accepted_record_realization ->
       protocol_event_realization
 
+(* Classify concrete steps that must produce a protocol-origin realization. *)
 let protocol_origin_event (event:SM.conn_event) : bool =
   match event with
   | SM.ConnLocalEvent (SM.LocalSignCertificateVerify _) -> true
@@ -1167,6 +1385,7 @@ let protocol_origin_event (event:SM.conn_event) : bool =
          directed.CL.message_direction message))
   | _ -> false
 
+(* Classify protected sends other than Finished-origin events. *)
 let record_only_origin_event (event:SM.conn_event) : bool =
   match event with
   | SM.ConnNetworkEvent directed ->
@@ -1177,6 +1396,7 @@ let record_only_origin_event (event:SM.conn_event) : bool =
      | _, _ -> false)
   | _ -> false
 
+(* Build the optional handshake security-event entry for a realization. *)
 let protocol_event_entry
   (shadow:endpoint_shadow)
   (realization:protocol_event_realization)
@@ -1215,6 +1435,7 @@ let protocol_event_entry
   | ProtectedRecordAccepted _ ->
     None
 
+(* Build the ProtectedRecordSent trace entry with all origin-binding fields. *)
 let sent_record_event_entry
   (record:sent_record_realization)
   : DY.trace_entry =
@@ -1233,6 +1454,7 @@ let sent_record_event_entry
     record.sent_record_symbolic_plaintext
     (sent_record_protected_term record)
 
+(* Build the ProtectedRecordAccepted entry for an endpoint and accepted record. *)
 let accepted_record_event_entry
   (shadow:endpoint_shadow)
   (record:accepted_record_realization)
@@ -1248,6 +1470,7 @@ let accepted_record_event_entry
     record.accepted_record_symbolic_plaintext
     (accepted_record_protected_term record)
 
+(* Append ProtectedRecordSent entries for every record in a batch. *)
 let rec sent_record_event_trace
   (before:DY.trace)
   (records:list sent_record_realization)
@@ -1259,6 +1482,9 @@ let rec sent_record_event_trace
       (DY.Snoc before (sent_record_event_entry record))
       rest
 
+(*
+ * State that a key/nonce pair already appears in a ProtectedRecordSent event.
+ *)
 let record_nonce_used
   (trace:DY.trace)
   (key nonce:DY.bytes)
@@ -1271,6 +1497,9 @@ let record_nonce_used
         context direction epoch sequence_number plaintext
         (Terms.protected_record key nonce plaintext additional_data))
 
+(*
+ * Require each sent record key/nonce pair to be unused in the growing trace.
+ *)
 let rec sent_record_batch_fresh
   (before:DY.trace)
   (records:list sent_record_realization)
@@ -1286,6 +1515,13 @@ let rec sent_record_batch_fresh
       (DY.Snoc before (sent_record_event_entry record))
       rest
 
+(*
+ * Relate one concrete event to its symbolic handshake/record realization.
+ *
+ * Signature and Finished cases connect trusted keys and authenticators;
+ * protected-record cases connect exact send/open realization; NoProtocolEvent
+ * is allowed only when the concrete event is not a classified origin.
+ *)
 let protocol_event_realizes
   (representation:Bridge.representation)
   (registry:list Bridge.trusted_server)
@@ -1383,6 +1619,7 @@ let protocol_event_realizes
   | _, NoProtocolEvent -> protocol_origin_event event == false
   | _, _ -> False
 
+(* Fix the queued symbolic network message for record-producing realizations. *)
 let protocol_event_symbolic_message
   (realization:protocol_event_realization)
   (symbolic:DY.bytes)
@@ -1394,6 +1631,7 @@ let protocol_event_symbolic_message
     symbolic == sent_record_batch_wire_term records
   | _ -> True
 
+(* Append all security-origin or record-acceptance entries for a realization. *)
 let protocol_event_trace
   (before:DY.trace)
   (shadow:endpoint_shadow)
@@ -1415,6 +1653,10 @@ let protocol_event_trace
      | None -> before
      | Some entry -> DY.Snoc before entry)
 
+(*
+ * Require injective authentication events and sent key/nonce pairs to be fresh.
+ * Accepted-record events need not be unique.
+ *)
 let protocol_event_fresh
   (before:DY.trace)
   (shadow:endpoint_shadow)
@@ -1437,6 +1679,13 @@ let protocol_event_fresh
      | None -> True
      | Some entry -> ~(DY.entry_exists before entry))
 
+(*
+ * Couple one honest concrete event to network and trace effects.
+ *
+ * Local, send, and receive cases respectively preserve the network, enqueue a
+ * represented packet and MsgSent, or consume a represented packet.  Each case
+ * records protocol events first and appends the endpoint's new State entry.
+ *)
 let honest_network_trace_delta
   (representation:Bridge.representation)
   (registry:list Bridge.trusted_server)
@@ -1482,6 +1731,9 @@ let honest_network_trace_delta
         remove_packet packet before_network after_network /\
         after_trace == DY.Snoc event_trace (endpoint_state_entry after_shadow)))
 
+(*
+ * Require monotonic trace growth and preservation of all explicit bindings.
+ *)
 let representation_extends
   (before after:Bridge.representation)
   : prop =
@@ -1494,6 +1746,10 @@ let representation_extends
     Bridge.explicitly_bound
       after.Bridge.representation_bindings concrete symbolic
 
+(*
+ * Actions of the coupled semantics: endpoint creation, honest randomness and
+ * state-machine steps, DY network control, and explicit state corruption.
+ *)
 noeq
 type product_action =
   | CreateEndpoint: endpoint_shadow -> product_action
@@ -1527,6 +1783,13 @@ type product_action =
       state_timestamp:DY.timestamp ->
       product_action
 
+(*
+ * Realize one honest endpoint update across the complete product state.
+ *
+ * The endpoint identity and origin are stable; concrete history grows by the
+ * exact transition; representation, endpoint list, network, trace, registry,
+ * and new endpoint refinement evolve consistently.
+ *)
 let symbolic_update_realizes
   (before after:product_state)
   (before_shadow after_shadow:endpoint_shadow)
@@ -1564,6 +1827,7 @@ let symbolic_update_realizes
   after.product_registry == before.product_registry /\
   endpoint_refines after.product_representation after_shadow
 
+(* Public alias for the complete symbolic-update realization predicate. *)
 let honest_state_update
   (before after:product_state)
   (before_shadow after_shadow:endpoint_shadow)
@@ -1573,6 +1837,7 @@ let honest_state_update
   symbolic_update_realizes
     before after before_shadow after_shadow event raw_sent raw_received
 
+(* Select the session-started event tag from an endpoint role. *)
 let session_started_kind
   (role:Terms.symbolic_role)
   : Events.event_kind =
@@ -1580,12 +1845,14 @@ let session_started_kind
   | Terms.SymbolicClient -> Events.ClientSessionStarted
   | Terms.SymbolicServer -> Events.ServerSessionStarted
 
+(* Construct the session-started event for a newly created endpoint. *)
 let session_started_entry (shadow:endpoint_shadow) : DY.trace_entry =
   Events.event_entry
     shadow.shadow_session.Terms.session_principal
     (session_started_kind shadow.shadow_session.Terms.session_role)
     (Terms.encode_endpoint_session shadow.shadow_session)
 
+(* Append session-start and initial endpoint-state entries on endpoint creation. *)
 let created_endpoint_trace
   (before:DY.trace)
   (shadow:endpoint_shadow)
@@ -1594,6 +1861,15 @@ let created_endpoint_trace
     (DY.Snoc before (session_started_entry shadow))
     (endpoint_state_entry shadow)
 
+(*
+ * One legal transition of the concrete/symbolic product semantics.
+ *
+ * Both states must be well formed.  Honest local/canonical actions consume the
+ * corresponding concrete semantics and realization.  Attacker actions are
+ * limited by DY knowledge and the network list.  Corruption targets an existing
+ * State entry and appends a Corrupt entry.  This is the central audited step
+ * relation connecting concrete executions to symbolic traces.
+ *)
 let product_step
   (before:product_state)
   (action:product_action)
@@ -1703,6 +1979,7 @@ let product_step
     after.product_network == before.product_network /\
     after.product_registry == before.product_registry)
 
+(* One product action packaged with its before and after states. *)
 noeq
 type product_transition = {
   transition_before: product_state;
@@ -1710,6 +1987,7 @@ type product_transition = {
   transition_after: product_state;
 }
 
+(* Reflexive-transitive execution of a contiguous list of legal product steps. *)
 let rec product_execution
   (initial:product_state)
   (transitions:list product_transition)
@@ -1725,11 +2003,18 @@ let rec product_execution
       transition.transition_after /\
     product_execution transition.transition_after rest final
 
+(*
+ * Establish injective-event uniqueness at the product origin.
+ *
+ * Requirement: state is initial and therefore security_origin_free.
+ * Guarantee: every modeled authentication event is unique in its trace.
+ *)
 val initial_product_state_has_unique_security_events:
   state:product_state ->
   Lemma
     (requires initial_product_state state)
     (ensures security_events_unique state.product_trace)
+(* Normalize origin-freedom and event occurrence to discharge uniqueness. *)
 let initial_product_state_has_unique_security_events state =
   norm_spec
     [delta_only
@@ -1742,6 +2027,12 @@ let initial_product_state_has_unique_security_events state =
        `%DY.entry_exists]]
     (initial_product_state state)
 
+(*
+ * Classify any emitted protocol-event entry as an authentication event.
+ *
+ * Requirement: protocol_event_entry returns Some entry.
+ * Guarantee: entry satisfies is_security_event_entry.
+ *)
 val protocol_event_entry_is_security:
   shadow:endpoint_shadow ->
   realization:protocol_event_realization ->
@@ -1749,6 +2040,7 @@ val protocol_event_entry_is_security:
   Lemma
     (requires protocol_event_entry shadow realization == Some entry)
     (ensures is_security_event_entry entry)
+(* Case-analyze the realization; only the three authentication cases return Some. *)
 let protocol_event_entry_is_security shadow realization entry =
   match realization with
   | NoProtocolEvent -> ()
@@ -1758,6 +2050,12 @@ let protocol_event_entry_is_security shadow realization entry =
   | ProtectedRecordsGenerated _ -> ()
   | ProtectedRecordAccepted _ -> ()
 
+(*
+ * Show that appending record-send entries preserves authentication uniqueness.
+ *
+ * Requirement: security events are unique in before.
+ * Guarantee: they remain unique after sent_record_event_trace.
+ *)
 val sent_record_event_trace_preserves_unique_security_events:
   before:DY.trace ->
   records:list sent_record_realization ->
@@ -1766,6 +2064,7 @@ val sent_record_event_trace_preserves_unique_security_events:
     (ensures
       security_events_unique (sent_record_event_trace before records))
     (decreases (List.Tot.length records))
+(* Induct over records; each appended record event has a non-security tag. *)
 let rec sent_record_event_trace_preserves_unique_security_events
   before records =
   match records with
@@ -1777,6 +2076,12 @@ let rec sent_record_event_trace_preserves_unique_security_events
       (DY.Snoc before (sent_record_event_entry record))
       rest
 
+(*
+ * Preserve authentication-event uniqueness through a protocol realization.
+ *
+ * Requirement: uniqueness holds before and protocol_event_fresh holds.
+ * Guarantee: uniqueness holds in the complete protocol_event_trace.
+ *)
 val protocol_event_trace_preserves_unique_security_events:
   before:DY.trace ->
   shadow:endpoint_shadow ->
@@ -1788,6 +2093,7 @@ val protocol_event_trace_preserves_unique_security_events:
     (ensures
       security_events_unique
         (protocol_event_trace before shadow realization))
+(* Analyze each realization and apply snoc preservation to its emitted entries. *)
 let protocol_event_trace_preserves_unique_security_events
   before shadow realization =
   match realization with
@@ -1814,6 +2120,13 @@ let protocol_event_trace_preserves_unique_security_events
        protocol_event_entry_is_security shadow realization entry;
        security_events_unique_snoc before entry)
 
+(*
+ * Preserve authentication uniqueness through an honest trace/network delta.
+ *
+ * Requirement: before_trace has unique security events and the stated honest
+ * delta relates all network, endpoint, and trace arguments.
+ * Guarantee: after_trace has unique security events.
+ *)
 val honest_network_trace_delta_preserves_unique_security_events:
   representation:Bridge.representation ->
   registry:list Bridge.trusted_server ->
@@ -1834,6 +2147,7 @@ val honest_network_trace_delta_preserves_unique_security_events:
         before_shadow after_shadow event raw_sent raw_received
         after_network after_trace)
     (ensures security_events_unique after_trace)
+(* Extract the realization, preserve its event trace, then append non-security entries. *)
 let honest_network_trace_delta_preserves_unique_security_events
   representation registry before_network before_trace
   before_shadow after_shadow event raw_sent raw_received
@@ -1907,6 +2221,12 @@ let honest_network_trace_delta_preserves_unique_security_events
           (endpoint_state_entry after_shadow))
     end)
 
+(*
+ * Preserve authentication-event uniqueness across any product action.
+ *
+ * Requirement: before has unique security events and product_step holds.
+ * Guarantee: after has unique security events.
+ *)
 val product_step_preserves_unique_security_events:
   before:product_state ->
   action:product_action ->
@@ -1916,6 +2236,7 @@ val product_step_preserves_unique_security_events:
       security_events_unique before.product_trace /\
       product_step before action after)
     (ensures security_events_unique after.product_trace)
+(* Case-analyze actions; honest updates use the delta lemma, others append no target. *)
 let product_step_preserves_unique_security_events before action after =
   match action with
   | CreateEndpoint shadow ->
@@ -1951,6 +2272,12 @@ let product_step_preserves_unique_security_events before action after =
     security_events_unique_snoc
       before.product_trace (DY.Corrupt timestamp)
 
+(*
+ * Preserve authentication-event uniqueness over a complete product execution.
+ *
+ * Requirement: uniqueness at initial and product_execution to final.
+ * Guarantee: uniqueness at final.
+ *)
 val product_execution_preserves_unique_security_events:
   initial:product_state ->
   transitions:list product_transition ->
@@ -1961,6 +2288,7 @@ val product_execution_preserves_unique_security_events:
       product_execution initial transitions final)
     (ensures security_events_unique final.product_trace)
     (decreases (List.Tot.length transitions))
+(* Induct over transitions and compose the one-step preservation lemma. *)
 let rec product_execution_preserves_unique_security_events
   initial transitions final =
   match transitions with
@@ -1973,6 +2301,12 @@ let rec product_execution_preserves_unique_security_events
     product_execution_preserves_unique_security_events
       transition.transition_after rest final
 
+(*
+ * Derive security-event uniqueness for every reachable product state.
+ *
+ * Requirement: an initial product state and an execution to final.
+ * Guarantee: final's trace has unique modeled authentication events.
+ *)
 val reachable_product_state_has_unique_security_events:
   initial:product_state ->
   transitions:list product_transition ->
@@ -1982,12 +2316,17 @@ val reachable_product_state_has_unique_security_events:
       initial_product_state initial /\
       product_execution initial transitions final)
     (ensures security_events_unique final.product_trace)
+(* Establish origin uniqueness, then propagate it through the execution. *)
 let reachable_product_state_has_unique_security_events
   initial transitions final =
   initial_product_state_has_unique_security_events initial;
   product_execution_preserves_unique_security_events
     initial transitions final
 
+(*
+ * Require an honest product transition to expose exactly one concrete
+ * transition's before/after states, event, and wire fragments.
+ *)
 let transition_projects_exactly
  (concrete:concrete_transition)
  (product:product_transition)
@@ -2009,6 +2348,10 @@ let transition_projects_exactly
     raw_received == concrete.concrete_raw_received
   | _ -> False
 
+(*
+ * Restrict liftable concrete transitions to KeyUpdate-free local or canonical
+ * one-way-wire steps in the verified profile.
+ *)
 let concrete_transition_in_profile
   (transition:concrete_transition)
   : prop =
@@ -2023,6 +2366,9 @@ let concrete_transition_in_profile
      B.length transition.concrete_raw_received <> 0)) /\
    concrete_transition_is_canonical transition)
 
+(*
+ * Caller-supplied symbolic witnesses and successor state for one concrete step.
+ *)
 noeq
 type transition_realization = {
   realization_before_shadow: endpoint_shadow;
@@ -2030,6 +2376,12 @@ type transition_realization = {
   realization_after_state: product_state;
 }
 
+(*
+ * Full conditional-lifting premise for one concrete transition.
+ *
+ * It demands profile membership, product well-formedness, endpoint selection,
+ * exact concrete before/after alignment, and symbolic_update_realizes.
+ *)
 let transition_realization_obligations
   (before:product_state)
   (concrete:concrete_transition)
@@ -2050,6 +2402,7 @@ let transition_realization_obligations
     concrete.concrete_raw_sent
     concrete.concrete_raw_received
 
+(* Named alias emphasizing that transition realization is a premise, not derived. *)
 let symbolically_realizable_transition
   (before:product_state)
   (concrete:concrete_transition)
@@ -2057,6 +2410,7 @@ let symbolically_realizable_transition
   : prop =
   transition_realization_obligations before concrete realization
 
+(* Construct the local or canonical product transition selected by wire I/O. *)
 let realized_product_transition
   (before:product_state)
   (concrete:concrete_transition)
@@ -2083,6 +2437,13 @@ let realized_product_transition
     transition_after = realization.realization_after_state;
   }
 
+(*
+ * Unpack the facts contained in one transition-realization obligation.
+ *
+ * Requirement: transition_realization_obligations holds.
+ * Guarantee: well-formedness, endpoint alignment, no-KeyUpdate, symbolic
+ * realization, and the correct local/canonical concrete case are all exposed.
+ *)
 val transition_realization_facts:
   before:product_state ->
   concrete:concrete_transition ->
@@ -2119,6 +2480,7 @@ val transition_realization_facts:
           (B.length concrete.concrete_raw_sent == 0 /\
            B.length concrete.concrete_raw_received <> 0)) /\
          concrete_transition_is_canonical concrete)))
+(* Normalize the two defining predicates and split on empty versus nonempty I/O. *)
 let transition_realization_facts before concrete realization =
   norm_spec
     [zeta; delta_only [`%transition_realization_obligations]]
@@ -2131,6 +2493,13 @@ let transition_realization_facts before concrete realization =
   then ()
   else ()
 
+(*
+ * Lift one conditionally realizable concrete transition to the product.
+ *
+ * Requirement: all transition_realization_obligations are supplied.
+ * Guarantee: realized_product_transition is a legal product_step and projects
+ * exactly to the concrete transition.
+ *)
 val realizable_transition_lifts:
   before:product_state ->
   concrete:concrete_transition ->
@@ -2146,6 +2515,7 @@ val realizable_transition_lifts:
         product.transition_action
         product.transition_after /\
       transition_projects_exactly concrete product))
+(* Expose realization facts, split local/canonical cases, and normalize definitions. *)
 let realizable_transition_lifts before concrete realization =
   transition_realization_facts before concrete realization;
   let product =
@@ -2177,6 +2547,12 @@ let realizable_transition_lifts before concrete realization =
       (transition_projects_exactly concrete product)
   )
 
+(*
+ * Per-step conditional lifting hypothesis for an entire concrete execution.
+ *
+ * This is the load-bearing completeness premise: the theorem does not prove
+ * these realizations exist from concrete_execution alone.
+ *)
 let rec symbolically_realizable_execution
   (product_initial:product_state)
   (concrete_initial:SM.connection_state)
@@ -2204,6 +2580,7 @@ let rec symbolically_realizable_execution
       product_final
   | _, _ -> False
 
+(* Materialize product transitions from concrete steps and supplied realizations. *)
 let rec lifted_product_transitions
   (product_initial:product_state)
   (concrete:list concrete_transition)
@@ -2220,6 +2597,7 @@ let rec lifted_product_transitions
       realization_tail
   | _, _ -> []
 
+(* Lift exact transition projection pointwise over two equal-length executions. *)
 let rec execution_projects_exactly
   (concrete:list concrete_transition)
   (product:list product_transition)
@@ -2231,6 +2609,14 @@ let rec execution_projects_exactly
     execution_projects_exactly concrete_tail product_tail
   | _, _ -> False
 
+(*
+ * Construct and verify the product lift of a realizable concrete execution.
+ *
+ * Requirement: symbolically_realizable_execution supplies one realization per
+ * concrete step and identifies both final states.
+ * Guarantee: the concrete execution is legal, the constructed product execution
+ * is legal, and every product transition projects exactly to its concrete step.
+ *)
 val complete_execution_lifts:
   product_initial:product_state ->
   concrete_initial:SM.connection_state ->
@@ -2251,6 +2637,7 @@ val complete_execution_lifts:
       product_execution product_initial product product_final /\
       execution_projects_exactly concrete product))
     (decreases (List.Tot.length concrete))
+(* Induct over concrete steps, applying realizable_transition_lifts at each head. *)
 let rec complete_execution_lifts
   product_initial concrete_initial concrete concrete_final
   realizations product_final =
@@ -2274,6 +2661,13 @@ let rec complete_execution_lifts
       product_final
   | _, _ -> ()
 
+(*
+ * Package conditional complete lifting as existence of a product execution.
+ *
+ * Requirement: symbolically_realizable_execution.
+ * Guarantee: an explicitly constructed product transition list executes to the
+ * product final state and projects exactly to the concrete list.
+ *)
 val concrete_execution_has_product_lift:
   product_initial:product_state ->
   concrete_initial:SM.connection_state ->
@@ -2293,6 +2687,7 @@ val concrete_execution_has_product_lift:
             product_initial concrete realizations /\
         product_execution product_initial product product_final /\
         execution_projects_exactly concrete product)
+(* Invoke complete_execution_lifts and use lifted_product_transitions as witness. *)
 let concrete_execution_has_product_lift
   product_initial concrete_initial concrete concrete_final
   realizations product_final =
@@ -2300,6 +2695,12 @@ let concrete_execution_has_product_lift
     product_initial concrete_initial concrete concrete_final
     realizations product_final
 
+(*
+ * Expose well-formedness embedded in the product-step relation.
+ *
+ * Requirement: product_step before action after.
+ * Guarantee: both before and after are product_well_formed.
+ *)
 val product_step_preserves_well_formed:
   before:product_state ->
   action:product_action ->
@@ -2309,8 +2710,15 @@ val product_step_preserves_well_formed:
     (ensures
       product_well_formed before /\
       product_well_formed after)
+(* The result is a direct projection from product_step's conjunction. *)
 let product_step_preserves_well_formed before action after = ()
 
+(*
+ * Establish well-formedness of an execution's final product state.
+ *
+ * Requirement: product_execution initial transitions final.
+ * Guarantee: product_well_formed final.
+ *)
 val product_execution_final_well_formed:
   initial:product_state ->
   transitions:list product_transition ->
@@ -2319,6 +2727,7 @@ val product_execution_final_well_formed:
     (requires product_execution initial transitions final)
     (ensures product_well_formed final)
     (decreases (List.Tot.length transitions))
+(* Normalize and recurse along the transition tail to the final state. *)
 let rec product_execution_final_well_formed initial transitions final =
   norm_spec
     [zeta; iota; delta_only [`%product_execution]]
@@ -2329,6 +2738,12 @@ let rec product_execution_final_well_formed initial transitions final =
     product_execution_final_well_formed
       transition.transition_after rest final
 
+(*
+ * Project concrete legality from an honest local product step.
+ *
+ * Requirement: the specified HonestLocal product_step.
+ * Guarantee: its exact concrete delta satisfies legal_connection_delta.
+ *)
 val honest_local_step_is_legal:
   before:product_state ->
   after:product_state ->
@@ -2353,9 +2768,16 @@ val honest_local_step_is_legal:
           SM.delta_raw_received = raw_received;
         }
         after_shadow.shadow_concrete)
+(* The legal delta is a direct conjunct of the HonestLocal product-step case. *)
 let honest_local_step_is_legal
   before after before_shadow after_shadow event raw_sent raw_received = ()
 
+(*
+ * Project concrete and canonical legality from an honest network product step.
+ *
+ * Requirement: the specified HonestCanonical product_step.
+ * Guarantee: the exact delta is legal and satisfies canonical_wire_step.
+ *)
 val honest_canonical_step_is_legal:
   before:product_state ->
   after:product_state ->
@@ -2384,9 +2806,16 @@ val honest_canonical_step_is_legal:
         before_shadow.shadow_concrete
         after_shadow.shadow_concrete
         event raw_sent raw_received)
+(* Both facts are direct conjuncts of the HonestCanonical product-step case. *)
 let honest_canonical_step_is_legal
   before after before_shadow after_shadow event raw_sent raw_received = ()
 
+(*
+ * Select endpoint refinement from pointwise list refinement.
+ *
+ * Requirement: all endpoints refine and shadow is a member.
+ * Guarantee: endpoint_refines representation shadow.
+ *)
 val endpoint_member_refines:
   representation:Bridge.representation ->
   endpoints:list endpoint_shadow ->
@@ -2397,6 +2826,7 @@ val endpoint_member_refines:
       endpoint_member shadow endpoints)
     (ensures endpoint_refines representation shadow)
     (decreases (List.Tot.length endpoints))
+(* Induct over the endpoint list until the membership witness reaches shadow. *)
 let rec endpoint_member_refines representation endpoints shadow =
   match endpoints with
   | [] -> ()
@@ -2404,6 +2834,12 @@ let rec endpoint_member_refines representation endpoints shadow =
     if head == shadow then ()
     else endpoint_member_refines representation tail shadow
 
+(*
+ * Project concrete reachability consistency for a current endpoint.
+ *
+ * Requirement: state is well formed and contains shadow.
+ * Guarantee: shadow's concrete state is connection_state_consistent.
+ *)
 val endpoint_projection_is_reachable:
   state:product_state ->
   shadow:endpoint_shadow ->
@@ -2412,10 +2848,18 @@ val endpoint_projection_is_reachable:
       product_well_formed state /\
       endpoint_member shadow state.product_endpoints)
     (ensures Reach.connection_state_consistent shadow.shadow_concrete)
+(* Obtain endpoint_refines from membership and project its reachability conjunct. *)
 let endpoint_projection_is_reachable state shadow =
   endpoint_member_refines
     state.product_representation state.product_endpoints shadow
 
+(*
+ * Recover an endpoint's exact concrete history and reachability after execution.
+ *
+ * Requirement: a product execution reaches final and final contains shadow.
+ * Guarantee: shadow starts at SM.initial, its reverse history is a legal
+ * concrete execution from that origin, and its current state is consistent.
+ *)
 val reachable_endpoint_projects_exactly:
   initial:product_state ->
   transitions:list product_transition ->
@@ -2433,6 +2877,7 @@ val reachable_endpoint_projects_exactly:
         shadow.shadow_reverse_history
         shadow.shadow_origin /\
       Reach.connection_state_consistent shadow.shadow_concrete)
+(* Derive final well-formedness, then project endpoint refinement and reachability. *)
 let reachable_endpoint_projects_exactly
   initial transitions final shadow =
   product_execution_final_well_formed initial transitions final;

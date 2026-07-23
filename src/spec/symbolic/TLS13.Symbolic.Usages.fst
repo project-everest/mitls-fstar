@@ -1,43 +1,66 @@
 module TLS13.Symbolic.Usages
 
+(*
+ * Protocol-specific DY usages for TLS keys and derived material.
+ *
+ * Usages record cryptographic purpose independently of confidentiality labels.
+ * The KDF classifier below inspects exact symbolic HkdfLabel structure to
+ * distinguish roles, epochs, Finished keys, record keys, and IVs.  These are
+ * symbolic domain-separation facts; concrete key installation is established
+ * separately by Product and Secrecy premises.
+ *)
+
 module B = TLS13.Bytes
 module DY = DY.Core
 module K = TLS13.Keys
 module Seq = FStar.Seq
 module Terms = TLS13.Symbolic.Terms
 
+(* Identify a server signing key by principal and credential term. *)
 let signing_key_usage
   (server:DY.principal)
   (credential:DY.bytes)
   : DY.usage =
   DY.SigKey server credential
 
+(* Usage assigned to honest randomized-signature nonces. *)
 let signing_nonce_usage : DY.usage =
   DY.SigNonce
 
+(* Usage descriptor for the non-PSK early-secret stage in one context. *)
 let early_secret_usage (context:Terms.session_context) : DY.usage =
   DY.KdfExpandKey
     "TLS13.EarlySecret"
     (Terms.encode_session_context context)
 
+(* Usage descriptor for the handshake-secret extract stage. *)
 let handshake_secret_usage (context:Terms.session_context) : DY.usage =
   DY.KdfExpandKey
     "TLS13.HandshakeSecret"
     (Terms.encode_session_context context)
 
+(* Usage descriptor for the master-secret extract stage. *)
 let master_secret_usage (context:Terms.session_context) : DY.usage =
   DY.KdfExpandKey
     "TLS13.MasterSecret"
     (Terms.encode_session_context context)
 
+(* Identify an endpoint's X25519 private value by its encoded session. *)
 let ephemeral_dh_usage (session:Terms.endpoint_session) : DY.usage =
   DY.DhKey "TLS13.X25519Ephemeral" (Terms.encode_endpoint_session session)
 
+(* Common usage of a shared secret produced from a TLS ephemeral DH key. *)
 let shared_dh_usage : DY.usage =
   DY.KdfExpandKey
     "TLS13.X25519SharedSecret"
     (Terms.public_bytes B.empty)
 
+(*
+ * Select the result usage when both DH peer usages are known.
+ *
+ * A TLS ephemeral key on either side yields shared_dh_usage; unrelated DH
+ * usages are rejected with NoUsage.
+ *)
 let known_peer_dh_usage
   (left:DY.usage{DY.DhKey? left})
   (right:DY.usage{DY.DhKey? right})
@@ -47,6 +70,7 @@ let known_peer_dh_usage
   | _, DY.DhKey "TLS13.X25519Ephemeral" _ -> shared_dh_usage
   | _, _ -> DY.NoUsage
 
+(* Select the shared-secret usage when only one TLS private-key usage is known. *)
 let unknown_peer_dh_usage
   (key_usage:DY.usage{DY.DhKey? key_usage})
   : DY.usage =
@@ -54,18 +78,33 @@ let unknown_peer_dh_usage
   | DY.DhKey "TLS13.X25519Ephemeral" _ -> shared_dh_usage
   | _ -> DY.NoUsage
 
+(*
+ * Symmetry of known-peer DH usage selection.
+ *
+ * Requirement: both inputs are well-formed DH-key usages (refinement types).
+ * Guarantee: swapping the two peer usages does not change the result usage.
+ *)
 val known_peer_dh_usage_commutes:
   left:DY.usage{DY.DhKey? left} ->
   right:DY.usage{DY.DhKey? right} ->
   Lemma
     (known_peer_dh_usage left right ==
      known_peer_dh_usage right left)
+(* Proof: exhaustive case analysis on the two DH usage constructors. *)
 let known_peer_dh_usage_commutes left right =
   match left, right with
   | DY.DhKey "TLS13.X25519Ephemeral" _, _ -> ()
   | _, DY.DhKey "TLS13.X25519Ephemeral" _ -> ()
   | _, _ -> ()
 
+(*
+ * Compatibility of unknown- and known-peer usage selection.
+ *
+ * Requirement: the left private-key usage produces a non-NoUsage result when
+ * the peer is unknown.
+ * Guarantee: supplying any well-formed peer usage to known_peer_dh_usage gives
+ * exactly that same result.
+ *)
 val unknown_peer_dh_usage_implies:
   left:DY.usage{DY.DhKey? left} ->
   right:DY.usage{DY.DhKey? right} ->
@@ -74,11 +113,19 @@ val unknown_peer_dh_usage_implies:
     (ensures
       known_peer_dh_usage left right ==
       unknown_peer_dh_usage left)
+(* Proof: the requirement restricts left to the TLS ephemeral usage branch. *)
 let unknown_peer_dh_usage_implies left right =
   match left with
   | DY.DhKey "TLS13.X25519Ephemeral" _ -> ()
   | _ -> ()
 
+(*
+ * Classify a KDF expansion from its exact symbolic HkdfLabel info.
+ *
+ * The output/label/context length bytes distinguish TLS derivations.  Traffic
+ * direction and epoch select unique KdfExpandKey, MacKey, AeadKey, or IV
+ * usages.  Any malformed or unsupported info shape maps to NoUsage.
+ *)
 let kdf_usage_for_info
   (prk_usage:DY.usage{DY.KdfExpandKey? prk_usage})
   (info:DY.bytes)
@@ -166,7 +213,15 @@ let kdf_usage_for_info
     else DY.NoUsage
   | _ -> DY.NoUsage
 
+(*
+ * TLS crypto-usage instance consumed by the DY invariant.
+ *
+ * Guarantee: DH terms use the symmetric TLS selectors above, KDF expansion uses
+ * the exact-label classifier, and every derived term inherits the PRK's
+ * confidentiality label through a reflexive flow proof.
+ *)
 val tls_crypto_usages: DY.crypto_usages
+(* Install the TLS overrides while retaining all unrelated DY default usages. *)
 instance tls_crypto_usages = {
   DY.default_crypto_usages with
   dh_usage = {
