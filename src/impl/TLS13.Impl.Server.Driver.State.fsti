@@ -705,10 +705,6 @@ let top_server_channel_terminal_indexed
     st.CS.cs_wire_log.CL.raw_sent
     st **
   Box.pts_to d.top_server_driver_channel (Some channel) **
-  O.is_server_credentials
-    d.top_server_driver_credentials
-    certificate_chain
-    credential_identity **
   BT.is_buffered
     channel model wire_received committed wire_sent **
   MR.pts_to

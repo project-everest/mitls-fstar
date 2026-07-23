@@ -529,6 +529,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Driver.BufferedLocal \
   TLS13.Impl.Server.Driver.BufferedWorkflow \
   TLS13.Impl.Server.Driver.BufferedTopHandshake \
+  TLS13.Impl.Server.Driver.BufferedChannel \
   TLS13.Impl.Server.Driver.Local \
   TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver

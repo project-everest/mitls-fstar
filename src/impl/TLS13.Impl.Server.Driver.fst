@@ -12,6 +12,7 @@ module BLoc = TLS13.Impl.Server.Driver.BufferedLocal
 module BN = TLS13.Impl.Server.Driver.BufferedNetwork
 module BW = TLS13.Impl.Server.Driver.BufferedWorkflow
 module BTH = TLS13.Impl.Server.Driver.BufferedTopHandshake
+module BC = TLS13.Impl.Server.Driver.BufferedChannel
 module CI = Common.ChannelImplementation
 module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes
