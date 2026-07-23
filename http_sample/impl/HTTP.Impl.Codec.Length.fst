@@ -468,6 +468,163 @@ let lemma_parse_request_line_ok (inp:Seq.seq U8.t) (sp:nat)
   with (target <: W.token) and ()
 #pop-options
 
+(* ======================================================================== *)
+(* Variable-width Content-Length response head  (RFC 9112 §6.2)              *)
+(* "HTTP/1.1 " ddd " \r\nContent-Length: " D..D "\r\n\r\n"  (minimal decimal) *)
+(* ======================================================================== *)
+
+(* Number of decimal digits `enc_dec_var n` emits (minimal width, "0" -> 1). *)
+noextract
+let rec dec_width (n:nat) : Tot (d:pos) (decreases n) =
+  if n < 10 then 1 else 1 + dec_width (n / 10)
+
+(* Loose bound used only to discharge SizeT `fits` for the digit count. *)
+let rec lemma_dec_width_le (n:nat)
+  : Lemma (ensures dec_width n <= n + 1) (decreases n)
+= if n < 10 then () else lemma_dec_width_le (n / 10)
+
+(* `dec_width` is monotone; used to cap a 32-bit length's digit count at 10. *)
+let rec lemma_dec_width_mono (a:nat) (b:nat)
+  : Lemma (requires a <= b) (ensures dec_width a <= dec_width b) (decreases b)
+= if b < 10 then ()
+  else if a < 10 then ()
+  else lemma_dec_width_mono (a / 10) (b / 10)
+
+(* A 32-bit value has at most 10 decimal digits. *)
+let lemma_dec_width_u32_le10 (n:U32.t)
+  : Lemma (dec_width (U32.v n) <= 10)
+= lemma_dec_width_mono (U32.v n) 4294967295;
+  assert_norm (dec_width 4294967295 == 10)
+
+(* `enc_dec_var n` has exactly `dec_width n` bytes. *)
+let rec lemma_enc_dec_var_len (n:nat)
+  : Lemma (ensures Seq.length (W.enc_dec_var n) == dec_width n) (decreases n)
+= if n < 10 then () else lemma_enc_dec_var_len (n / 10)
+
+(* `dig` is a section of `undig` on decimal-digit bytes. *)
+let lemma_dig_undig_inv (b:U8.t)
+  : Lemma (requires W.is_dec b) (ensures W.dig (W.undig b) == b) = ()
+
+(* Every byte of a decimal run is a decimal digit. *)
+let rec lemma_all_dec_index (h:Seq.seq U8.t) (i:nat)
+  : Lemma (requires W.all_dec h /\ i < Seq.length h)
+          (ensures W.is_dec (Seq.index h i)) (decreases i)
+= W.lemma_all_dec_tail h;
+  if i = 0 then ()
+  else lemma_all_dec_index (Seq.slice h 1 (Seq.length h)) (i - 1)
+
+(* A prefix of a decimal run is a decimal run. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let rec lemma_all_dec_prefix (h:Seq.seq U8.t) (m:nat)
+  : Lemma (requires W.all_dec h /\ m <= Seq.length h)
+          (ensures W.all_dec (Seq.slice h 0 m)) (decreases m)
+= if m = 0 then Seq.lemma_eq_intro (Seq.slice h 0 m) (Seq.empty #U8.t)
+  else begin
+    W.lemma_all_dec_tail h;
+    let tl = Seq.slice h 1 (Seq.length h) in
+    lemma_all_dec_prefix tl (m - 1);
+    let p = Seq.slice h 0 m in
+    Seq.lemma_eq_intro (Seq.slice p 1 m) (Seq.slice tl 0 (m - 1))
+  end
+#pop-options
+
+(* Split the (j+1)-prefix of `h` into its j-prefix and the singleton at j. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let lemma_slice_snoc (h:Seq.seq U8.t) (j:nat)
+  : Lemma (requires j + 1 <= Seq.length h)
+          (ensures Seq.slice h 0 (j + 1)
+                   == Seq.append (Seq.slice h 0 j) (Seq.create 1 (Seq.index h j)))
+= Seq.lemma_eq_intro (Seq.slice h 0 (j + 1))
+                     (Seq.append (Seq.slice h 0 j) (Seq.create 1 (Seq.index h j)))
+#pop-options
+
+(* Euclidean split of `p*10 + r` (0 <= r < 10). *)
+let lemma_divmod10 (p:nat) (r:nat{r < 10})
+  : Lemma ((p * 10 + r) % 10 == r /\ (p * 10 + r) / 10 == p)
+= FStar.Math.Lemmas.lemma_mod_plus r p 10;
+  FStar.Math.Lemmas.lemma_div_plus r p 10
+
+(* Opaque view of the whole variable-width response head — the analog of
+   `respbytes` for the fixed head.  Keeps z3 from unfolding ser_response_var
+   (and enc_dec_var's recursion) while `Seq.index (srv_bytes ..) m` rides the
+   copy-loop invariants; all byte facts are exposed once by `lemma_srv_index`. *)
+[@@ "opaque_to_smt"]
+noextract
+let srv_bytes (code:U16.t{100 <= U16.v code /\ U16.v code < 1000}) (len:U32.t)
+  : Seq.seq U8.t
+= ser_response_var (code <: status_code) (U32.v len)
+
+let lemma_srv_reveal (code:U16.t{100 <= U16.v code /\ U16.v code < 1000}) (len:U32.t)
+  : Lemma (srv_bytes code len == ser_response_var (code <: status_code) (U32.v len))
+= reveal_opaque (`%srv_bytes) (srv_bytes code len)
+
+(* Per-position byte inventory of the variable-width head, exposed once.  The
+   five append segments (prefix, 3 status digits, cl-pre, D decimal digits,
+   cl-post) resolve via the SMT-patterned index-append lemmas on the revealed
+   ser_response_var; the digit run stays abstract as `Seq.index ee (m-31)`. *)
+#push-options "--z3rlimit 100 --fuel 4 --ifuel 2 --split_queries always"
+let lemma_srv_index (code:U16.t{100 <= U16.v code /\ U16.v code < 1000}) (len:U32.t)
+  : Lemma
+    (ensures (
+       let s = srv_bytes code len in
+       let ee = W.enc_dec_var (U32.v len) in
+       let d = Seq.length ee in
+       let c = U16.v code in
+       Seq.length resp_prefix == 9 /\
+       Seq.length cl_tail_pre == 19 /\
+       Seq.length cl_tail_post == 4 /\
+       Seq.length s == 35 + d /\
+       (forall (k:nat{k < 9}).  Seq.index s k == Seq.index resp_prefix k) /\
+       Seq.index s 9  == Seq.index (W.enc_dec3 c) 0 /\
+       Seq.index s 10 == Seq.index (W.enc_dec3 c) 1 /\
+       Seq.index s 11 == Seq.index (W.enc_dec3 c) 2 /\
+       (forall (k:nat{k < 19}). Seq.index s (12 + k) == Seq.index cl_tail_pre k) /\
+       (forall (k:nat{k < d}).  Seq.index s (31 + k) == Seq.index ee k) /\
+       (forall (k:nat{k < 4}).  Seq.index s (31 + d + k) == Seq.index cl_tail_post k)))
+= reveal_opaque (`%srv_bytes) (srv_bytes code len);
+  assert_norm (Seq.length resp_prefix == 9);
+  assert_norm (Seq.length cl_tail_pre == 19);
+  assert_norm (Seq.length cl_tail_post == 4)
+#pop-options
+
+(* Merge the three region correspondences (prefix [0,31), digits [31,31+d),
+   tail [31+d,35+d)) into whole-buffer equality — the finalizer for the emit. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+let lemma_combine3 (sf srv:Seq.seq U8.t) (d:nat)
+  : Lemma
+    (requires
+       Seq.length sf == 35 + d /\ Seq.length srv == 35 + d /\
+       (forall (k:nat).  k < 31 ==> Seq.index sf k == Seq.index srv k) /\
+       (forall (jj:nat). jj < d ==> Seq.index sf (31 + jj) == Seq.index srv (31 + jj)) /\
+       (forall (kk:nat). kk < 4 ==> Seq.index sf (31 + d + kk) == Seq.index srv (31 + d + kk)))
+    (ensures sf == srv)
+= introduce forall (i:nat{i < Seq.length sf}). Seq.index sf i == Seq.index srv i
+  with (
+    if i < 31 then ()
+    else if i < 31 + d then
+      assert (Seq.index sf (31 + (i - 31)) == Seq.index srv (31 + (i - 31)))
+    else
+      assert (Seq.index sf (31 + d + (i - 31 - d)) == Seq.index srv (31 + d + (i - 31 - d)))
+  );
+  Seq.lemma_eq_intro sf srv
+#pop-options
+
+(* Finalize: a fully-filled buffer equal to `srv_bytes code len` is
+   `ser_response_var` of the (coerced) code/len, packaged as the guarded
+   existential the variable-width emitter advertises. *)
+let lemma_emit_response_var_final
+      (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+      (len:U32.t)
+      (s:Seq.seq U8.t)
+  : Lemma
+    (requires s == srv_bytes code len)
+    (ensures (exists (co:status_code).
+                U16.v co == U16.v code /\ s == ser_response_var co (U32.v len)))
+= lemma_srv_reveal code len;
+  introduce exists (co:status_code).
+    U16.v co == U16.v code /\ s == ser_response_var co (U32.v len)
+  with (code <: status_code) and ()
+
 open Pulse.Lib.BoundedIntegers
 
 (* size_t is at least 32 bits on every real target; HTTP head buffers can exceed
@@ -477,6 +634,52 @@ let lemma_fits32 (x:nat)
   : Lemma (requires x < pow2 32) (ensures FStar.SizeT.fits x)
   = assume (FStar.SizeT.fits_u32);
     FStar.SizeT.fits_u32_implies_fits x
+
+(* Executable decimal digit count, carrying its spec correspondence in the
+   refined return type (used to size/scan the D-digit region at runtime). *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let rec dec_width_u32 (n:U32.t)
+  : Tot (d:SZ.t{SZ.v d == dec_width (U32.v n)}) (decreases (U32.v n))
+= if U32.lt n 10ul then 1sz
+  else begin
+    let r = dec_width_u32 (U32.div n 10ul) in
+    lemma_dec_width_le (U32.v n / 10);
+    lemma_fits32 (1 + SZ.v r);
+    SZ.add 1sz r
+  end
+#pop-options
+
+(* Executable k-th byte of the head PREFIX region [0,31): the 9-byte literal
+   "HTTP/1.1 ", the 3 status digits, and the 19-byte " \r\nContent-Length: ". *)
+inline_for_extraction
+let head_pre (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+             (k:SZ.t{SZ.v k < 31}) : U8.t =
+  if SZ.lt k 9sz then resp_prefix_byte k
+  else if SZ.lt k 12sz then
+    (if SZ.eq k 9sz then u16_digit (U16.div code 100us)
+     else if SZ.eq k 10sz then u16_digit (U16.rem (U16.div code 10us) 10us)
+     else u16_digit (U16.rem code 10us))
+  else cl_pre_byte (SZ.sub k 12sz)
+
+(* head_pre agrees with `srv_bytes code len` at every prefix position (k<31). *)
+#push-options "--z3rlimit 100 --fuel 4 --ifuel 2 --split_queries always"
+let lemma_head_pre (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
+                   (len:U32.t) (k:SZ.t{SZ.v k < 31})
+  : Lemma (Seq.length (srv_bytes code len) == 35 + Seq.length (W.enc_dec_var (U32.v len)) /\
+           head_pre code k == Seq.index (srv_bytes code len) (SZ.v k))
+= lemma_srv_index code len;
+  assert_norm (Seq.length resp_prefix == 9);
+  assert_norm (Seq.length cl_tail_pre == 19);
+  assert_norm (U16.v 100us == 100);
+  assert_norm (U16.v 10us == 10);
+  if SZ.lt k 9sz then lemma_resp_prefix_byte k
+  else if SZ.lt k 12sz then begin
+    lemma_uint_mod 16 (U16.v (U16.div code 10us)) (U16.v 10us);
+    lemma_uint_mod 16 (U16.v code) (U16.v 10us);
+    lemma_enc_dec3_index (U16.v code)
+  end
+  else lemma_cl_pre_byte (SZ.sub k 12sz)
+#pop-options
 
 
 (* Introduce the body_payload existential witnessing the serialize-correspondence
@@ -799,6 +1002,131 @@ fn http_emit_response
   lemma_respbytes_len code len;
   Seq.lemma_eq_intro sf (respbytes code len);
   lemma_emit_response_final code len sf;
+  ()
+}
+#pop-options
+
+(* Build the variable-width HTTP response head
+   "HTTP/1.1 " ddd " \r\nContent-Length: " D..D "\r\n\r\n"  into `out`
+   (length 35 + dec_width len), proved equal to `ser_response_var code len`.
+   Three phases over one `out == srv_bytes code len` correspondence: the 31-byte
+   prefix (left-to-right copy loop from head_pre), the D decimal digits filled
+   RIGHT-TO-LEFT off `rem := rem/10` (each digit `= enc_dec_var len` at that pos
+   via the dec_dec_var snoc law), then the 4-byte "\r\n\r\n" tail. *)
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 2"
+fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
+  requires
+    pts_to out 'o **
+    pure (Prims.op_LessThanOrEqual 100 (U16.v code) /\
+          Prims.op_LessThan (U16.v code) 1000 /\
+          Seq.length 'o == Prims.op_Addition 35 (dec_width (U32.v len)))
+  ensures
+    (exists* (o':Seq.seq U8.t).
+       pts_to out o' **
+       pure (Seq.length o' == Prims.op_Addition 35 (dec_width (U32.v len)) /\
+             ((Prims.op_LessThanOrEqual 100 (U16.v code) /\
+               Prims.op_LessThan (U16.v code) 1000) ==>
+              (exists (co:status_code).
+                 U16.v co == U16.v code /\
+                 o' == ser_response_var co (U32.v len)))))
+{
+  lemma_enc_dec_var_len (U32.v len);        (* length ee == dec_width len == d *)
+  W.lemma_enc_dec_var_roundtrip (U32.v len); (* all_dec ee /\ dec_dec_var ee == len *)
+  lemma_srv_index code len;                 (* length srv == 35 + d *)
+  let dcount = dec_width_u32 len;           (* SZ.v dcount == d *)
+  lemma_dec_width_u32_le10 len;             (* d <= 10, so 31+d, 35+d fit SizeT *)
+
+  (* Phase 1: prefix [0,31) — left-to-right copy from head_pre. *)
+  let mut a = 0sz;
+  while (SZ.lt !a 31sz)
+  invariant exists* (va:SZ.t) (sv:Seq.seq U8.t).
+    R.pts_to a va ** pts_to out sv **
+    pure (
+      SZ.v va <= 31 /\
+      SZ.v dcount == Seq.length (W.enc_dec_var (U32.v len)) /\
+      Seq.length sv == Prims.op_Addition 35 (SZ.v dcount) /\
+      Seq.length (srv_bytes code len) == Prims.op_Addition 35 (SZ.v dcount) /\
+      (forall (k:nat). k < SZ.v va ==> Seq.index sv k == Seq.index (srv_bytes code len) k))
+  {
+    let va = !a;
+    lemma_head_pre code len va;
+    let bt = head_pre code va;
+    out.(va) <- bt;
+    a := SZ.add va 1sz;
+  };
+
+  (* Phase 2: digits [31, 31+d) — right-to-left, peeling low digits off rem. *)
+  let mut pos = SZ.add 31sz dcount;
+  let mut rem = len;
+  lemma_all_dec_prefix (W.enc_dec_var (U32.v len)) (SZ.v dcount);
+  while (SZ.lt 31sz !pos)
+  invariant exists* (vpos:SZ.t) (vrem:U32.t) (sv:Seq.seq U8.t).
+    R.pts_to pos vpos ** R.pts_to rem vrem ** pts_to out sv **
+    pure (
+      31 <= SZ.v vpos /\ SZ.v vpos <= Prims.op_Addition 31 (SZ.v dcount) /\
+      SZ.v dcount == Seq.length (W.enc_dec_var (U32.v len)) /\
+      Seq.length sv == Prims.op_Addition 35 (SZ.v dcount) /\
+      Seq.length (srv_bytes code len) == Prims.op_Addition 35 (SZ.v dcount) /\
+      (forall (k:nat). k < 31 ==> Seq.index sv k == Seq.index (srv_bytes code len) k) /\
+      (forall (jj:nat).
+         (Prims.op_Subtraction (SZ.v vpos) 31 <= jj /\ jj < SZ.v dcount) ==>
+         Seq.index sv (Prims.op_Addition 31 jj) == Seq.index (srv_bytes code len) (Prims.op_Addition 31 jj)) /\
+      W.all_dec (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Subtraction (SZ.v vpos) 31)) /\
+      Prims.op_Equality #Prims.nat (U32.v vrem)
+        (W.dec_dec_var (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Subtraction (SZ.v vpos) 31))))
+  {
+    let vpos = !pos;
+    let vrem = !rem;
+    let pos' = SZ.sub vpos 1sz;              (* absolute position to write, in [31,31+d) *)
+    let jpos = SZ.sub pos' 31sz;             (* SZ.v jpos == SZ.v pos' - 31 == q-1 *)
+    lemma_srv_index code len;
+    lemma_all_dec_prefix (W.enc_dec_var (U32.v len)) (SZ.v jpos);
+    lemma_all_dec_index (W.enc_dec_var (U32.v len)) (SZ.v jpos);
+    lemma_slice_snoc (W.enc_dec_var (U32.v len)) (SZ.v jpos);
+    W.lemma_dec_dec_snoc (Seq.slice (W.enc_dec_var (U32.v len)) 0 (SZ.v jpos))
+                         (Seq.index (W.enc_dec_var (U32.v len)) (SZ.v jpos));
+    lemma_divmod10 (W.dec_dec_var (Seq.slice (W.enc_dec_var (U32.v len)) 0 (SZ.v jpos)))
+                   (W.undig (Seq.index (W.enc_dec_var (U32.v len)) (SZ.v jpos)));
+    lemma_mod10_32 vrem;
+    let r10 = U32.rem vrem 10ul;
+    let bt = u32_digit r10;
+    lemma_dig_undig_inv (Seq.index (W.enc_dec_var (U32.v len)) (SZ.v jpos));
+    out.(pos') <- bt;
+    rem := U32.div vrem 10ul;
+    pos := pos';
+  };
+
+  (* Phase 3: tail [31+d, 35+d) — left-to-right copy of "\r\n\r\n". *)
+  let base = SZ.add 31sz dcount;
+  let mut b = 0sz;
+  while (SZ.lt !b 4sz)
+  invariant exists* (vb:SZ.t) (sv:Seq.seq U8.t).
+    R.pts_to b vb ** pts_to out sv **
+    pure (
+      SZ.v vb <= 4 /\
+      SZ.v dcount == Seq.length (W.enc_dec_var (U32.v len)) /\
+      Seq.length sv == Prims.op_Addition 35 (SZ.v dcount) /\
+      Seq.length (srv_bytes code len) == Prims.op_Addition 35 (SZ.v dcount) /\
+      (forall (k:nat). k < 31 ==> Seq.index sv k == Seq.index (srv_bytes code len) k) /\
+      (forall (jj:nat). jj < SZ.v dcount ==>
+         Seq.index sv (Prims.op_Addition 31 jj) == Seq.index (srv_bytes code len) (Prims.op_Addition 31 jj)) /\
+      (forall (kk:nat). kk < SZ.v vb ==>
+         Seq.index sv (Prims.op_Addition (Prims.op_Addition 31 (SZ.v dcount)) kk)
+           == Seq.index (srv_bytes code len) (Prims.op_Addition (Prims.op_Addition 31 (SZ.v dcount)) kk)))
+  {
+    let vb = !b;
+    lemma_srv_index code len;
+    lemma_cl_post_byte vb;
+    let bt = cl_post_byte vb;
+    out.(SZ.add base vb) <- bt;
+    b := SZ.add vb 1sz;
+  };
+
+  with sf. assert (pts_to out sf);
+  lemma_srv_index code len;                 (* length srv == 35 + length ee *)
+  lemma_enc_dec_var_len (U32.v len);        (* length ee == dec_width len *)
+  lemma_combine3 sf (srv_bytes code len) (SZ.v dcount);
+  lemma_emit_response_var_final code len sf;
   ()
 }
 #pop-options

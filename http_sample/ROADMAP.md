@@ -33,11 +33,14 @@ still missing to interoperate with arbitrary real-world HTTP/1.1 peers.
   `(name, value)` list. No header map, case-insensitive lookup, or arbitrary
   header emit.
 - **`Content-Length` width.** The client already *parses* variable-width
-  `Content-Length` (`Content-Length: 25`) — the `parse_dec_at` scanner is now
+  `Content-Length` (`Content-Length: 25`) — the `parse_dec_at` scanner is
   proved to compute the clamped `W.dec_dec_var` of the maximal decimal run
-  (functional spec, not just memory-safe). The *server* still emits fixed-width
-  (`00000025`), which real peers accept; a canonical variable-width emitter and
-  threading the parsed-value spec up to `http_get` remain follow-ups.
+  (functional spec, not just memory-safe). The *server* now also *emits* the
+  RFC-canonical variable-width Content-Length via the verified leaf
+  `http_emit_response_var` (proved equal to `ser_response_var`) and driver
+  `http_server_run_length_var`; the fixed-width `00000025` emitter is retained
+  alongside. Threading the parsed-value spec up to `http_get` remains a
+  follow-up.
 - **No response routing / status selection:** the server always emits a fixed
   `200`. No method/target dispatch, no `Date`/`Server` headers.
 - **Narrow body delimitation:** relies on `Connection: close` / exact framing.

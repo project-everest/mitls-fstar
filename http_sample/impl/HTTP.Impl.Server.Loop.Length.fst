@@ -94,6 +94,51 @@ fn http_server_run_length_full
 }
 #pop-options
 
+(* Variable-width Content-Length send driver: identical to
+   `http_server_run_length_full` but emits the RFC-canonical *minimal-width*
+   Content-Length (e.g. "Content-Length: 25" rather than the fixed
+   "Content-Length: 00000025").  The head is `35 + dec_width file_len` bytes,
+   emitted through the verified leaf `Codec.http_emit_response_var` (proved equal
+   to `ser_response_var`), then the body follows verbatim.  This is what a
+   real-world origin server sends and what ordinary clients (curl, browsers)
+   expect on the wire. *)
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
+fn http_server_run_length_var
+  (ch: TCP.channel)
+  (code: U16.t)
+  (file: array U8.t)
+  (file_len: SZ.t)
+  (headbuf: array U8.t)
+  (scratch: array U8.t)
+  requires
+    TCP.is_channel ch 'received 'sent **
+    pts_to file 'f **
+    pts_to headbuf 'hb **
+    pts_to scratch 's **
+    pure (Seq.length 'f == SZ.v file_len /\
+          Seq.length 'hb == Prims.op_Addition 35 (Codec.dec_width (SZ.v file_len)) /\
+          Seq.length 's == SZ.v file_len /\
+          body_ok 'f /\
+          Prims.op_LessThanOrEqual 100 (U16.v code) /\
+          Prims.op_LessThan (U16.v code) 1000 /\
+          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+  ensures
+    pts_to file 'f **
+    (exists* (hb' s':Seq.seq U8.t).
+       pts_to headbuf hb' ** pts_to scratch s')
+{
+  let flen32 = SZ.sizet_to_uint32 file_len;
+  Codec.http_emit_response_var code flen32 headbuf;
+  Codec.lemma_dec_width_u32_le10 flen32;
+  let hlen = SZ.add 35sz (Codec.dec_width_u32 flen32);
+  let nh = TCP.write ch headbuf hlen;
+  Codec.http_emit_body file file_len scratch;
+  let nb = TCP.write ch scratch file_len;
+  TCP.close ch;
+  ()
+}
+#pop-options
+
 (* Full Content-Length request/response *round trip* (server side): read the
    `reqlen`-byte request head, parse it via the verified codec leaf
    `http_recv_request` to recover the request target (its length reported in
