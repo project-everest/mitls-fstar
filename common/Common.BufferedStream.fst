@@ -97,25 +97,11 @@ module BT  = Common.BufferedTCP
 (*  Item (5): generic stream-processor classification                 *)
 (* ------------------------------------------------------------------ *)
 
-type classification (output:Type0) (error:Type0) =
-  | NeedMore : classification output error
-  | Progress : consumed:nat -> classification output error
-  | Yield    : consumed:nat -> out:output -> classification output error
-  | Reject   : err:error -> classification output error
-
 (** A decision is conclusive when it is not [NeedMore]. *)
 let is_conclusive (#output #error:Type0) (d:classification output error) : bool =
   match d with
   | NeedMore -> false
   | _ -> true
-
-(** How many pending bytes a decision consumes. *)
-let consumed_of (#output #error:Type0) (d:classification output error) : nat =
-  match d with
-  | NeedMore -> 0
-  | Progress k -> k
-  | Yield k _ -> k
-  | Reject _ -> 0
 
 (** A decision makes forward progress (consumes and advances). *)
 let makes_progress (#output #error:Type0) (d:classification output error) : bool =
@@ -645,28 +631,6 @@ let lemma_process_before_read_sound
       [Common.BufferedTCP] [committed_after]/[compact] model, with the
       consumption positive and bounded by the live count.
 **)
-let process_transition
-  (#output #error:Type0)
-  (d:classification output error)
-  (committed committed':TCP.bytes)
-  (b b':BT.phys_buffer)
-  : prop =
-  match d with
-  | NeedMore ->
-    Seq.equal committed' committed /\ b' == b
-  | Reject _ ->
-    // Reject is a TERMINAL decision handled by the [bse_terminal] branch of the
-    // class, NOT by this live transition — so its case here is irrelevant.
-    True
-  | Progress k ->
-    0 < k /\ k <= Seq.length (BT.pending b) /\
-    Seq.equal committed' (BT.committed_after committed b k) /\
-    b' == BT.compact b k
-  | Yield k _ ->
-    0 < k /\ k <= Seq.length (BT.pending b) /\
-    Seq.equal committed' (BT.committed_after committed b k) /\
-    b' == BT.compact b k
-
 (** The NeedMore case of a relational process is an exact stutter, consuming 0. *)
 let lemma_process_transition_needmore_stutter
   (#output #error:Type0)
@@ -739,17 +703,6 @@ let lemma_read_extends_received
   physical array, so it is realised by the real [Common.BufferedTCP.read_append]
   primitive, not only the canonical [append_read] model.
 **)
-let read_delivers
-  (received received':TCP.bytes)
-  (b b':BT.phys_buffer)
-  : prop =
-  BT.buffer_wf b' /\
-  BT.capacity b' == BT.capacity b /\
-  (exists (chunk:TCP.bytes).
-     BT.chunk_fits b chunk /\
-     Seq.equal (BT.pending b') (Seq.append (BT.pending b) chunk) /\
-     Seq.equal received' (Seq.append received chunk))
-
 (** [read_delivers] holds after appending any fitting chunk (canonical model). *)
 let lemma_read_delivers_intro
   (received:TCP.bytes)
@@ -792,134 +745,154 @@ let lemma_read_delivers_preserves
   Seq.append_assoc committed (BT.pending b) chunk
 
 (**
-  The relational buffered-stream endpoint contract that a concrete effectful
-  endpoint (e.g. a TLS 1.3 driver) instantiates.  See the module header for the
-  semantics; in particular [bse_read_auth] is an exclusive ownership state that
-  makes process-before-read type-enforced, and there is NO pure pre-classifier.
-
-  Ownership is indexed by the EXACT received transport history, so [bse_owns_wf]
-  proves the real invariant [received_split received committed b] (not a
-  tautology).  The approved scheduling semantics are:
-
-    * NeedMore        => stay LIVE (exact stutter) and yield read authorisation;
-    * Progress/Yield  => stay LIVE, advanced (the scheduler must process again);
-    * Reject          => go TERMINAL ([bse_terminal]); TLS fatal processing may
-                         have consumed input, so no stutter and no live ownership
-                         is required or returned (matches TLS [ConnectionFailed]).
+  Process the exact current pending bytes and perform physical reads only after
+  the processor returns a semantically justified [NeedMore].  Each read returns
+  ordinary live ownership, so the recursive call must process the enlarged
+  pending prefix before another read can occur.
 **)
-noextract
-class buffered_stream_endpoint
-  (endpoint:Type0)
-  (state:Type0)
-  (output:Type0)
-  (error:Type0)
-  (result:Type0)
-  =
+inline_for_extraction
+fn rec drive_until_conclusive
+  (#endpoint #state #output #error #result:Type0)
+  (ep:buffered_stream_endpoint endpoint state output error result)
+  (e:endpoint)
+  (st:Ghost.erased state)
+  (received:Ghost.erased TCP.bytes)
+  (committed:Ghost.erased TCP.bytes)
+  (b:Ghost.erased BT.phys_buffer)
+  (fuel:FStar.SizeT.t)
+  requires
+    ep.bse_owns
+      e
+      (Ghost.reveal st)
+      (Ghost.reveal received)
+      (Ghost.reveal committed)
+      (Ghost.reveal b)
+  returns outcome:drive_outcome output error result
+  ensures
+    drive_post
+      ep
+      e
+      outcome
+  decreases (FStar.SizeT.v fuel)
 {
-  (* Pure projection of a concrete result value to its abstract decision. *)
-  bse_decide:
-    result -> GTot (classification output error);
-
-  (* Live stream ownership indexed by the exact received history, committed
-     prefix and buffer.  [received] is the authoritative full transport history;
-     [received == committed ++ pending b] is the invariant (see [bse_owns_wf]). *)
-  bse_owns:
-    endpoint -> state -> TCP.bytes -> TCP.bytes -> BT.phys_buffer -> slprop;
-
-  (* Terminal ownership after a fatal (Reject) decision: no further processing. *)
-  bse_terminal:
-    endpoint -> state -> TCP.bytes -> slprop;
-
-  (* Terminal SCHEDULER-FAILURE ownership: the classifier said NeedMore but the
-     fixed-capacity buffer is FULL, so no (non-zero) read is possible.  This is a
-     scheduler failure distinct from a protocol [Reject]; read authorisation is
-     REFUSED here (never fabricated at a full buffer). *)
-  bse_buffer_full:
-    endpoint -> state -> TCP.bytes -> slprop;
-
-  (* Exclusive read-ready ownership, produced only by [bse_process].  Concrete
-     endpoints include their actual channel and backing-array ownership here, so
-     equal byte contents from another endpoint cannot satisfy this predicate. *)
-  bse_read_auth:
-    endpoint -> state -> TCP.bytes -> TCP.bytes -> BT.phys_buffer -> slprop;
-
-  (* Live ownership entails the real transport invariant. *)
-  bse_owns_wf:
-    e:endpoint ->
-    st:Ghost.erased state ->
-    received:Ghost.erased TCP.bytes ->
-    committed:Ghost.erased TCP.bytes ->
-    b:Ghost.erased BT.phys_buffer ->
-      stt_ghost unit emp_inames
-        (bse_owns e (Ghost.reveal st) (Ghost.reveal received) (Ghost.reveal committed) (Ghost.reveal b))
-        (fun _ ->
-          bse_owns e (Ghost.reveal st) (Ghost.reveal received) (Ghost.reveal committed) (Ghost.reveal b) **
-          pure (
-            BT.buffer_wf (Ghost.reveal b) /\
-            BT.received_split (Ghost.reveal received) (Ghost.reveal committed) (Ghost.reveal b)));
-
-  (* The effectful, relational process-before-read step.  The received history is
-     threaded UNCHANGED through the live cases (processing does not read the
-     network).
-       NeedMore  => exact stutter; if the buffer still has free space it stays
-                    LIVE and yields read authorisation, but if the buffer is FULL
-                    it goes to [bse_buffer_full] (a scheduler failure) and NEVER
-                    yields read authorisation — no zero-length reads.
-       Progress/Yield => stay LIVE, advance committed/buffer (must process again).
-       Reject    => go terminal ([bse_terminal]). *)
-  bse_process:
-    e:endpoint ->
-    st:Ghost.erased state ->
-    received:Ghost.erased TCP.bytes ->
-    committed:Ghost.erased TCP.bytes ->
-    b:Ghost.erased BT.phys_buffer ->
-      stt result
-        (bse_owns e (Ghost.reveal st) (Ghost.reveal received) (Ghost.reveal committed) (Ghost.reveal b))
-        (fun r ->
-          match bse_decide r with
-          | Reject _ ->
-            (exists* st' received'. bse_terminal e st' received')
-          | NeedMore ->
-            (exists* st' committed' b'.
-              pure (
-                process_transition (bse_decide r) (Ghost.reveal committed) committed' (Ghost.reveal b) b' /\
-                st' == Ghost.reveal st) **
-              // NeedMore stutters (b' == b), so this is exactly [BT.can_read b']:
-              (if BT.free_space (Ghost.reveal b) > 0
-               then
-                 bse_read_auth
-                   e st' (Ghost.reveal received) committed' b'
-               else
-                 bse_buffer_full e st' (Ghost.reveal received)))
-          | Progress _ ->
-            (exists* st' committed' b'.
-              bse_owns e st' (Ghost.reveal received) committed' b' **
-              pure (process_transition (bse_decide r) (Ghost.reveal committed) committed' (Ghost.reveal b) b'))
-          | Yield _ _ ->
-            (exists* st' committed' b'.
-              bse_owns e st' (Ghost.reveal received) committed' b' **
-              pure (process_transition (bse_decide r) (Ghost.reveal committed) committed' (Ghost.reveal b) b')));
-
-  (* The read step: consume the linear read authorisation (only obtainable from a
-     NeedMore process) and the live ownership, read a chunk, and re-establish live
-     ownership at the advanced history [received' = received ++ chunk] and the
-     append-read buffer.  This is what enforces process-before-read. *)
-  bse_read:
-    e:endpoint ->
-    st:Ghost.erased state ->
-    received:Ghost.erased TCP.bytes ->
-    committed:Ghost.erased TCP.bytes ->
-    b:Ghost.erased BT.phys_buffer ->
-      stt unit
-        (bse_read_auth
-           e
-           (Ghost.reveal st)
-           (Ghost.reveal received)
-           (Ghost.reveal committed)
-           (Ghost.reveal b) **
-         pure (BT.buffer_wf (Ghost.reveal b) /\ BT.can_read (Ghost.reveal b)))
-        (fun _ ->
-          exists* received' b'.
-            bse_owns e (Ghost.reveal st) received' (Ghost.reveal committed) b' **
-            pure (read_delivers (Ghost.reveal received) received' (Ghost.reveal b) b'));
+  if (fuel = 0sz) {
+    fold
+      (drive_post
+        ep
+        e
+        DriveExhausted);
+    DriveExhausted
+  } else {
+    let owns_wf = ep.bse_owns_wf;
+    owns_wf e st received committed b;
+    let process = ep.bse_process;
+    let processed =
+      process e st received committed b;
+    match processed {
+      ProcessBufferFull r -> {
+        assert (exists* st'.
+          ep.bse_buffer_full e st' (Ghost.reveal received));
+        fold
+          (drive_post
+            ep
+            e
+            (DriveBufferFull r));
+        DriveBufferFull r
+      }
+      Processed r decision -> {
+        match decision {
+          NeedMore -> {
+            with st' committed' b'.
+             assert (
+               ep.bse_read_auth
+                 e st' (Ghost.reveal received) committed' b' **
+               pure (
+                 ep.bse_needs_more
+                   (Ghost.reveal st)
+                   (BT.pending (Ghost.reveal b)) /\
+                 decision == ep.bse_decide r /\
+                 process_transition
+                   decision
+                   (Ghost.reveal committed)
+                   committed'
+                   (Ghost.reveal b)
+                   b' /\
+                 st' == Ghost.reveal st /\
+                 BT.can_read (Ghost.reveal b)));
+            lemma_process_transition_needmore_stutter
+             decision
+             (Ghost.reveal committed)
+             committed'
+             (Ghost.reveal b)
+             b';
+            rewrite
+             (ep.bse_read_auth
+               e st' (Ghost.reveal received) committed' b')
+             as
+             (ep.bse_read_auth
+               e
+               (Ghost.reveal st)
+               (Ghost.reveal received)
+               (Ghost.reveal committed)
+               (Ghost.reveal b));
+            let read = ep.bse_read;
+            read e st received committed b;
+            with received' b'.
+             assert (
+               ep.bse_owns
+                 e (Ghost.reveal st) received' (Ghost.reveal committed) b' **
+               pure (
+                 read_delivers
+                   (Ghost.reveal received)
+                   received'
+                   (Ghost.reveal b)
+                   b'));
+            let next_fuel = FStar.SizeT.sub fuel 1sz;
+            assert (pure (FStar.SizeT.v next_fuel < FStar.SizeT.v fuel));
+            drive_until_conclusive
+             ep
+             e
+             st
+             (Ghost.hide received')
+             committed
+             (Ghost.hide b')
+             next_fuel
+          }
+          Progress consumed -> {
+            assert (exists* st' committed' b'.
+              ep.bse_owns e st' (Ghost.reveal received) committed' b');
+            assert (pure (ep.bse_decide r == Progress consumed));
+            fold
+              (drive_post
+                ep
+                e
+                (DriveProgress r consumed));
+            DriveProgress r consumed
+          }
+          Yield consumed output -> {
+            assert (exists* st' committed' b'.
+              ep.bse_owns e st' (Ghost.reveal received) committed' b');
+            assert (pure (ep.bse_decide r == Yield consumed output));
+            fold
+              (drive_post
+                ep
+                e
+                (DriveYield r consumed output));
+            DriveYield r consumed output
+          }
+          Reject error -> {
+            assert (exists* st' received'.
+              ep.bse_terminal e st' received');
+            assert (pure (ep.bse_decide r == Reject error));
+            fold
+              (drive_post
+                ep
+                e
+                (DriveReject r error));
+            DriveReject r error
+          }
+        }
+      }
+    }
+  }
 }
