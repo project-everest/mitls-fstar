@@ -803,7 +803,15 @@ fn driver_progress_buffered_network_step
              st1.CS.cs_model.CS.model_config ==
                'st0.CS.cs_model.CS.model_config /\
              (CT.client_end_to_end_invariant 'st0 ==>
-              CT.client_end_to_end_invariant st1))
+              CT.client_end_to_end_invariant st1) /\
+             BN.completed_drive_correct
+               'st0
+               st1
+               'old_network_out
+               network_out_bytes
+               'old_app_out
+               app_out_bytes
+               result)
 {
   rewrite
     (top_driver_exactly d 'st0 'buffered buffered_len)
