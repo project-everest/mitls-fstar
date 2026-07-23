@@ -84,6 +84,48 @@ noeq type buffered_driver = {
         (Ghost.reveal buffered_driver_initial));
 }
 
+noeq type top_server_driver = {
+  top_server_driver_server: S.server;
+  top_server_driver_credentials: O.server_credentials;
+  top_server_driver_channel: Box.box (option BT.t);
+  top_server_driver_storage: BT.storage;
+  top_server_driver_empty_payload: V.vec U8.t;
+  top_server_driver_network_out: V.vec U8.t;
+  top_server_driver_material_payload: V.vec U8.t;
+  top_server_driver_certificate_verify_input: V.vec U8.t;
+  top_server_driver_signature: V.vec U8.t;
+  top_server_driver_app_out: V.vec U8.t;
+  top_server_driver_local_app_out: V.vec U8.t;
+  top_server_driver_progress:
+    MR.mref (ES.server_progress_preorder #CTypes.server_local_event);
+  top_server_driver_tcp_history:
+    MR.mref CI.io_history_preorder;
+  top_server_driver_initial: Ghost.erased ES.server_initial_state;
+  top_server_driver_supported_profile:
+    Ghost.erased
+      (SP.server_supported_profile_proof
+        (Ghost.reveal top_server_driver_initial));
+}
+
+val no_buffered_channel : option BT.t
+
+inline_for_extraction
+let top_server_as_buffered
+  (d:top_server_driver)
+  (channel:BT.t)
+  : buffered_driver =
+  {
+    buffered_driver_server = d.top_server_driver_server;
+    buffered_driver_credentials = d.top_server_driver_credentials;
+    buffered_driver_channel = channel;
+    buffered_driver_storage = d.top_server_driver_storage;
+    buffered_driver_progress = d.top_server_driver_progress;
+    buffered_driver_tcp_history = d.top_server_driver_tcp_history;
+    buffered_driver_initial = d.top_server_driver_initial;
+    buffered_driver_supported_profile =
+      d.top_server_driver_supported_profile;
+  }
+
 noextract
 let server_driver_canonical (d: server_driver) : SP.canonical_server = {
   SP.canonical_server_state = d.server_driver_server;
@@ -102,6 +144,40 @@ let buffered_driver_canonical (d:buffered_driver) : SP.canonical_server = {
   SP.canonical_server_supported_profile =
     d.buffered_driver_supported_profile;
 }
+
+noextract
+let top_server_driver_canonical
+  (d:top_server_driver)
+  : SP.canonical_server =
+  {
+    SP.canonical_server_state = d.top_server_driver_server;
+    SP.canonical_server_credentials = d.top_server_driver_credentials;
+    SP.canonical_server_progress = d.top_server_driver_progress;
+    SP.canonical_server_initial = d.top_server_driver_initial;
+    SP.canonical_server_supported_profile =
+      d.top_server_driver_supported_profile;
+  }
+
+noextract
+let top_server_driver_canonical_progress
+  (d:top_server_driver)
+  (st:CS.connection_state)
+  : slprop =
+  MR.pts_to d.top_server_driver_progress #1.0R st **
+  MR.snapshot
+    d.top_server_driver_progress
+    (Ghost.reveal d.top_server_driver_initial) **
+  pure (
+    Seq.equal
+      (Ghost.reveal d.top_server_driver_initial)
+        .CS.cs_wire_log.CL.raw_received
+      B.empty /\
+    Seq.equal
+      (Ghost.reveal d.top_server_driver_initial)
+        .CS.cs_wire_log.CL.raw_sent
+      B.empty /\
+    st.CS.cs_model.CS.model_config ==
+      (Ghost.reveal d.top_server_driver_initial).CS.cs_model.CS.model_config)
 
 noextract
 let server_driver_history (received sent:B.bytes) : IO.history =
@@ -496,6 +572,226 @@ let buffered_driver_exactly
       received
       committed
       sent
+
+noextract
+let top_server_driver_buffers
+  (d:top_server_driver)
+  : slprop =
+  exists* empty_payload network_out material cv_input signature app_out local_app_out.
+    V.pts_to d.top_server_driver_empty_payload #1.0R empty_payload **
+    V.pts_to d.top_server_driver_network_out #1.0R network_out **
+    V.pts_to d.top_server_driver_material_payload #1.0R material **
+    V.pts_to d.top_server_driver_certificate_verify_input #1.0R cv_input **
+    V.pts_to d.top_server_driver_signature #1.0R signature **
+    V.pts_to d.top_server_driver_app_out #1.0R app_out **
+    V.pts_to d.top_server_driver_local_app_out #1.0R local_app_out **
+    pure (
+      B.length empty_payload == 0 /\
+      B.length network_out == SZ.v driver_network_out_capacity /\
+      B.length material == SZ.v driver_material_capacity /\
+      B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
+      B.length signature == SZ.v driver_signature_capacity /\
+      B.length app_out == SZ.v driver_app_out_capacity /\
+      B.length local_app_out == SZ.v driver_app_out_capacity /\
+      Bounds.max_certificate_verify_input_len <=
+        SZ.v driver_certificate_verify_input_capacity /\
+      IM.max_signature_len <= SZ.v driver_signature_capacity /\
+      IM.max_record_fragment_len <= SZ.v driver_app_out_capacity /\
+      V.is_full_vec d.top_server_driver_empty_payload /\
+      V.is_full_vec d.top_server_driver_network_out /\
+      V.is_full_vec d.top_server_driver_material_payload /\
+      V.is_full_vec d.top_server_driver_certificate_verify_input /\
+      V.is_full_vec d.top_server_driver_signature /\
+      V.is_full_vec d.top_server_driver_app_out /\
+      V.is_full_vec d.top_server_driver_local_app_out)
+
+noextract
+let top_server_driver_live
+  (d:top_server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : slprop =
+  S.connection_exactly d.top_server_driver_server st **
+  O.is_server_credentials
+    d.top_server_driver_credentials
+    certificate_chain
+    credential_identity **
+  top_server_driver_canonical_progress d st **
+  Box.pts_to d.top_server_driver_channel no_buffered_channel **
+  MR.pts_to
+    d.top_server_driver_tcp_history
+    #1.0R
+    (server_driver_history B.empty B.empty) **
+  top_server_driver_buffers d **
+  exists* model.
+    BT.is_storage d.top_server_driver_storage model **
+    pure (
+      BT.buffer_wf model /\
+      BT.capacity model == SZ.v driver_rx_capacity /\
+      Seq.equal (BT.pending model) B.empty /\
+      ST.server_end_to_end_invariant st /\
+      server_driver_config_matches_credentials
+        st certificate_chain credential_identity /\
+      server_driver_supported_profile_selection st credential_identity /\
+      server_driver_wire_logs_match_witness
+        st B.empty B.empty B.empty B.empty 0sz)
+
+noextract
+let top_server_driver_connected_indexed
+  (d:top_server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (received sent:B.bytes)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  Box.pts_to d.top_server_driver_channel (Some channel) **
+  buffered_driver_indexed
+    (top_server_as_buffered d channel)
+    st
+    certificate_chain
+    credential_identity
+    (BT.pending model)
+    buffered_len
+    model
+    received
+    committed
+    sent **
+  top_server_driver_buffers d **
+  pure (SZ.v buffered_len == B.length (BT.pending model))
+
+noextract
+let top_server_driver_connected
+  (d:top_server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (received sent:B.bytes)
+  : slprop =
+  exists* channel model committed buffered_len.
+    top_server_driver_connected_indexed
+      d
+      st
+      certificate_chain
+      credential_identity
+      received
+      sent
+      channel
+      model
+      committed
+      buffered_len
+
+noextract
+let top_server_channel_terminal_indexed
+  (d:top_server_driver)
+  (wire_received wire_sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  SP.server_invariant
+    (top_server_driver_canonical d)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    st **
+  Box.pts_to d.top_server_driver_channel (Some channel) **
+  O.is_server_credentials
+    d.top_server_driver_credentials
+    certificate_chain
+    credential_identity **
+  BT.is_buffered
+    channel model wire_received committed wire_sent **
+  MR.pts_to
+    d.top_server_driver_tcp_history
+    #1.0R
+    (server_driver_history wire_received wire_sent) **
+  top_server_driver_buffers d **
+  pure (
+    BT.same_storage channel d.top_server_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    server_driver_wire_logs_match_witness
+      st
+      wire_received
+      wire_sent
+      committed
+      (BT.pending model)
+      buffered_len /\
+    SZ.v buffered_len == B.length (BT.pending model) /\
+    app_log == TChannel.application_log st)
+
+noextract
+let top_server_channel_terminal
+  (d:top_server_driver)
+  (wire_received wire_sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st certificate_chain credential_identity channel model committed buffered_len.
+    top_server_channel_terminal_indexed
+      d
+      wire_received
+      wire_sent
+      app_log
+      st
+      certificate_chain
+      credential_identity
+      channel
+      model
+      committed
+      buffered_len
+
+noextract
+let top_server_channel_inv
+  (d:top_server_driver)
+  (wire_received wire_sent pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st certificate_chain credential_identity channel model committed buffered_len.
+    top_server_channel_terminal_indexed
+      d
+      wire_received
+      wire_sent
+      app_log
+      st
+      certificate_chain
+      credential_identity
+      channel
+      model
+      committed
+      buffered_len **
+    pure (
+      ST.server_connection_control_not_failed st /\
+      Seq.equal pending (BT.pending model) /\
+      Seq.equal
+        wire_received
+        (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+      Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent)
+
+noextract
+let top_server_driver_closed
+  (d:top_server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : slprop =
+  S.connection_exactly d.top_server_driver_server st **
+  O.is_server_credentials
+    d.top_server_driver_credentials
+    certificate_chain
+    credential_identity **
+  top_server_driver_canonical_progress d st **
+  Box.pts_to d.top_server_driver_channel no_buffered_channel **
+  (exists* h. MR.pts_to d.top_server_driver_tcp_history #1.0R h) **
+  top_server_driver_buffers d **
+  (exists* model. BT.is_storage d.top_server_driver_storage model)
 
 noextract
 let server_driver_buffers

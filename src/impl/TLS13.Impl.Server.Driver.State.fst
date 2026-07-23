@@ -37,6 +37,7 @@ let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
 let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
 
 let no_channel : option IO.channel = None
+let no_buffered_channel : option BT.t = None
 
 ghost fn advance_server_driver_canonical_progress
   (d:server_driver)
