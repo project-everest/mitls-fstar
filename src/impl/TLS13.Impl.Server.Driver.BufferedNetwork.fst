@@ -13,8 +13,10 @@ module CL = TLS13.ConnectionLog
 module CPI = Common.ProtocolImplementation
 module CS = TLS13.Spec.StateMachine
 module DN = TLS13.Impl.Server.Driver.Network
+module DL = TLS13.Impl.Server.Driver.Local
 module DS = TLS13.Impl.Server.Driver.State
 module MR = Pulse.Lib.MonotonicGhostRef
+module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module S = TLS13.Impl.Server
 module SP = TLS13.Impl.Server.CanonicalProtocol
@@ -1031,6 +1033,299 @@ fn read
           (Seq.append (Ghost.reveal received) chunk)
           (Ghost.reveal model)
           model'))
+    }
+
+    fn process_local_event
+      (d:DS.buffered_driver)
+      (kind:ST.local_event_kind)
+      (payload:array U8.t)
+      (payload_len:SZ.t)
+      (network_out:array U8.t)
+      (network_out_len:SZ.t)
+      (app_out:array U8.t)
+      (app_out_len:SZ.t)
+      requires
+        DS.buffered_driver_exactly
+          d
+          'st0
+          'certificate_chain
+          'credential_identity
+          'buffered
+          'buffered_len **
+        pts_to payload 'payload_bytes **
+        pts_to network_out 'old_network_out **
+        pts_to app_out 'old_app_out **
+        pure (
+          B.length 'payload_bytes == SZ.v payload_len /\
+          B.length 'old_network_out == SZ.v network_out_len /\
+          B.length 'old_app_out == SZ.v app_out_len /\
+          local_event_ready
+            'st0
+            kind
+            (Ghost.reveal 'payload_bytes)
+            (Ghost.reveal 'certificate_chain)
+            (Ghost.reveal 'credential_identity))
+      returns result:local_write_result
+      ensures
+        exists* st1 network_out_bytes app_out_bytes.
+          DS.buffered_driver_exactly
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'buffered
+            'buffered_len **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (
+            B.length network_out_bytes == SZ.v network_out_len /\
+            B.length app_out_bytes == SZ.v app_out_len /\
+            ST.server_local_event_end_to_end_correct
+              'st0
+              st1
+              result.local_write_resp
+              kind
+              (Ghost.reveal 'payload_bytes)
+              network_out_bytes
+              app_out_bytes /\
+            result.local_write_written ==
+              result.local_write_resp.ST.network_out_len)
+    {
+      unfold (DS.buffered_driver_exactly
+        d
+        'st0
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len);
+      with model received committed sent.
+        assert (DS.buffered_driver_indexed
+          d
+          'st0
+          'certificate_chain
+          'credential_identity
+          'buffered
+          'buffered_len
+          model
+          received
+          committed
+          sent);
+      unfold (DS.buffered_driver_indexed
+        d
+        'st0
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len
+        model
+        received
+        committed
+        sent);
+      let resp =
+        S.process_local_event_with_credentials
+          d.buffered_driver_server
+          d.buffered_driver_credentials
+          kind
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      with st1 network_out_bytes app_out_bytes.
+        assert (
+          S.connection_exactly d.buffered_driver_server st1 **
+          O.is_server_credentials
+            d.buffered_driver_credentials
+            'certificate_chain
+            'credential_identity **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes);
+      assert (pure (ST.server_local_event_end_to_end_correct
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)
+        network_out_bytes
+        app_out_bytes));
+      DS.lemma_local_event_wire_lengths
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)
+        network_out_bytes
+        app_out_bytes;
+      let written =
+        BT.write
+          d.buffered_driver_channel
+          network_out
+          resp.ST.network_out_len;
+      assert (pure (written == resp.ST.network_out_len));
+      assert (pure (SZ.v written <= B.length network_out_bytes));
+      let sent_delta =
+        Ghost.hide
+          (ST.response_network_out resp network_out_bytes);
+      assert (pure (Seq.equal
+        (if SZ.v written <= B.length network_out_bytes
+         then Seq.slice network_out_bytes 0 (SZ.v written)
+         else B.empty)
+        (Ghost.reveal sent_delta)));
+      Seq.lemma_eq_elim
+        (if SZ.v written <= B.length network_out_bytes
+         then Seq.slice network_out_bytes 0 (SZ.v written)
+         else B.empty)
+        (Ghost.reveal sent_delta);
+      rewrite
+        (BT.is_buffered
+          d.buffered_driver_channel
+          model
+          received
+          committed
+          (B.append sent
+            (if SZ.v written <= B.length network_out_bytes
+             then Seq.slice network_out_bytes 0 (SZ.v written)
+             else B.empty)))
+        as
+        (BT.is_buffered
+          d.buffered_driver_channel
+          model
+          received
+          committed
+          (B.append sent (Ghost.reveal sent_delta)));
+      tcp_history_note_write
+        d.buffered_driver_tcp_history
+        (Ghost.hide received)
+        (Ghost.hide sent)
+        sent_delta;
+      let sent' = Ghost.hide (B.append sent (Ghost.reveal sent_delta));
+      rewrite
+        (BT.is_buffered
+          d.buffered_driver_channel
+          model
+          received
+          committed
+          (B.append sent (Ghost.reveal sent_delta)))
+        as
+        (BT.is_buffered
+          d.buffered_driver_channel
+          model
+          received
+          committed
+          (Ghost.reveal sent'));
+      rewrite
+        (MR.pts_to
+          d.buffered_driver_tcp_history
+          #1.0R
+          (DS.server_driver_history
+            received
+            (B.append sent (Ghost.reveal sent_delta))))
+        as
+        (MR.pts_to
+          d.buffered_driver_tcp_history
+          #1.0R
+          (DS.server_driver_history received (Ghost.reveal sent')));
+      assert (pure (Seq.equal sent 'st0.CS.cs_wire_log.CL.raw_sent));
+      Seq.lemma_eq_elim sent 'st0.CS.cs_wire_log.CL.raw_sent;
+      assert (pure (Seq.equal
+        st1.CS.cs_wire_log.CL.raw_sent
+        (B.append
+          'st0.CS.cs_wire_log.CL.raw_sent
+          (Ghost.reveal sent_delta))));
+      assert (pure (Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        'st0.CS.cs_wire_log.CL.raw_received));
+      Seq.lemma_eq_elim
+        st1.CS.cs_wire_log.CL.raw_received
+        'st0.CS.cs_wire_log.CL.raw_received;
+      DS.lemma_server_local_event_received_exact_when_nonfailed
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)
+        network_out_bytes
+        app_out_bytes
+        received
+        sent
+        committed
+        (BT.pending model)
+        'buffered_len;
+      assert (pure (DS.server_driver_wire_logs_match_witness
+        st1
+        received
+        (Ghost.reveal sent')
+        committed
+        (BT.pending model)
+        'buffered_len));
+      unfold (DS.buffered_driver_canonical_progress d 'st0);
+      SP.lemma_server_local_event_progress
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)
+        network_out_bytes
+        app_out_bytes;
+      MR.update d.buffered_driver_progress st1;
+      fold (DS.buffered_driver_canonical_progress d st1);
+      DL.lemma_server_driver_local_write_correct_intro
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)
+        sent
+        (Ghost.reveal sent')
+        network_out_bytes
+        app_out_bytes;
+      DL.lemma_server_driver_local_write_correct_preserves_supported_profile_selection
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)
+        (Ghost.reveal 'certificate_chain)
+        (Ghost.reveal 'credential_identity)
+        sent
+        (Ghost.reveal sent');
+      ST.lemma_server_local_event_preserves_config
+        'st0
+        st1
+        resp
+        kind
+        (Ghost.reveal 'payload_bytes)
+        network_out_bytes
+        app_out_bytes;
+      assert (pure (DS.server_driver_config_matches_credentials
+        st1
+        (Ghost.reveal 'certificate_chain)
+        (Ghost.reveal 'credential_identity)));
+      fold (DS.buffered_driver_indexed
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len
+        model
+        received
+        committed
+        (Ghost.reveal sent'));
+      fold (DS.buffered_driver_exactly
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len);
+      {
+        local_write_resp = resp;
+        local_write_written = written;
+      }
     }
 
     noextract
