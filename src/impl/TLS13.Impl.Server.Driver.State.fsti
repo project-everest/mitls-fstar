@@ -5,6 +5,7 @@ module TLS13.Impl.Server.Driver.State
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module BT = Common.BufferedTCP
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CI = Common.ChannelImplementation
@@ -67,6 +68,22 @@ noeq type server_driver = {
       (SP.server_supported_profile_proof (Ghost.reveal server_driver_initial));
 }
 
+noeq type buffered_driver = {
+  buffered_driver_server: S.server;
+  buffered_driver_credentials: O.server_credentials;
+  buffered_driver_channel: BT.t;
+  buffered_driver_storage: BT.storage;
+  buffered_driver_progress:
+    MR.mref (ES.server_progress_preorder #CTypes.server_local_event);
+  buffered_driver_tcp_history:
+    MR.mref CI.io_history_preorder;
+  buffered_driver_initial: Ghost.erased ES.server_initial_state;
+  buffered_driver_supported_profile:
+    Ghost.erased
+      (SP.server_supported_profile_proof
+        (Ghost.reveal buffered_driver_initial));
+}
+
 noextract
 let server_driver_canonical (d: server_driver) : SP.canonical_server = {
   SP.canonical_server_state = d.server_driver_server;
@@ -74,6 +91,16 @@ let server_driver_canonical (d: server_driver) : SP.canonical_server = {
   SP.canonical_server_progress = d.server_driver_progress;
   SP.canonical_server_initial = d.server_driver_initial;
   SP.canonical_server_supported_profile = d.server_driver_supported_profile;
+}
+
+noextract
+let buffered_driver_canonical (d:buffered_driver) : SP.canonical_server = {
+  SP.canonical_server_state = d.buffered_driver_server;
+  SP.canonical_server_credentials = d.buffered_driver_credentials;
+  SP.canonical_server_progress = d.buffered_driver_progress;
+  SP.canonical_server_initial = d.buffered_driver_initial;
+  SP.canonical_server_supported_profile =
+    d.buffered_driver_supported_profile;
 }
 
 noextract
@@ -144,6 +171,27 @@ let server_driver_canonical_progress
       B.empty /\
     st.CS.cs_model.CS.model_config ==
       (Ghost.reveal d.server_driver_initial).CS.cs_model.CS.model_config)
+
+noextract
+let buffered_driver_canonical_progress
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  : slprop =
+  MR.pts_to d.buffered_driver_progress #1.0R st **
+  MR.snapshot
+    d.buffered_driver_progress
+    (Ghost.reveal d.buffered_driver_initial) **
+  pure (
+    Seq.equal
+      (Ghost.reveal d.buffered_driver_initial)
+        .CS.cs_wire_log.CL.raw_received
+      B.empty /\
+    Seq.equal
+      (Ghost.reveal d.buffered_driver_initial)
+        .CS.cs_wire_log.CL.raw_sent
+      B.empty /\
+    st.CS.cs_model.CS.model_config ==
+      (Ghost.reveal d.buffered_driver_initial).CS.cs_model.CS.model_config)
 
 ghost fn advance_server_driver_canonical_progress
   (d:server_driver)
@@ -379,6 +427,75 @@ val lemma_supported_profile_selection_driver
       (requires SP.server_supported_profile_selection st credential_identity)
       (ensures
         server_driver_supported_profile_selection st credential_identity)
+
+noextract
+let buffered_driver_indexed
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  (model:BT.phys_buffer)
+  (received committed sent:B.bytes)
+  : slprop =
+  S.connection_exactly d.buffered_driver_server st **
+  O.is_server_credentials
+    d.buffered_driver_credentials
+    certificate_chain
+    credential_identity **
+  buffered_driver_canonical_progress d st **
+  BT.is_buffered
+    d.buffered_driver_channel
+    model
+    received
+    committed
+    sent **
+  MR.pts_to
+    d.buffered_driver_tcp_history
+    #1.0R
+    (server_driver_history received sent) **
+  pure (
+    BT.same_storage
+      d.buffered_driver_channel
+      d.buffered_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    Seq.equal (BT.pending model) buffered /\
+    server_driver_wire_logs_match_witness
+      st
+      received
+      sent
+      committed
+      buffered
+      buffered_len /\
+    ST.server_end_to_end_invariant st /\
+    server_driver_config_matches_credentials
+      st
+      certificate_chain
+      credential_identity /\
+    server_driver_supported_profile_selection st credential_identity)
+
+noextract
+let buffered_driver_exactly
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  exists* model received committed sent.
+    buffered_driver_indexed
+      d
+      st
+      certificate_chain
+      credential_identity
+      buffered
+      buffered_len
+      model
+      received
+      committed
+      sent
 
 noextract
 let server_driver_buffers

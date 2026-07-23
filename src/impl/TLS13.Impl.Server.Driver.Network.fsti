@@ -411,3 +411,35 @@ val lemma_server_network_wire_accounting
           st1.CS.cs_wire_log.CL.raw_received
           (B.append old_consumed
             (ST.server_network_consumed_prefix buffer_resp input)))
+
+val lemma_server_network_logged_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (old_consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        DS.server_driver_wire_logs_match_witness
+          st0
+          received
+          sent
+          old_consumed
+          buffered
+          buffered_len /\
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp input network_out app_out /\
+        ST.server_network_consumed_input_projection
+          st0 st1 buffer_resp input network_out app_out)
+      (ensures
+        ST.server_connection_control_not_failed st1 ==>
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append old_consumed
+              (ST.server_network_consumed_prefix buffer_resp input)))

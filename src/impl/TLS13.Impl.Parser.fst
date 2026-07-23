@@ -6641,6 +6641,7 @@ fn build_decoded_buffer_ok
             SZ.v decoded.L.decoded_buffer_raw_record_len /\
           decoded.L.decoded_buffer_raw_record_len ==
             decoded.L.decoded_buffer_consumed_len /\
+          0 < SZ.v decoded.L.decoded_buffer_consumed_len /\
           SZ.v decoded.L.decoded_buffer_consumed_len <=
             B.length (Ghost.reveal raw_bytes) /\
           Seq.equal
@@ -6663,6 +6664,9 @@ fn build_decoded_buffer_ok
             fragment_bytes2
             raw_record_bytes2))
 {
+  CT.lemma_raw_record_parse_success_nonempty
+    (Ghost.reveal raw_record_bytes);
+  assert (pure (0 < SZ.v consumed_len));
   L.NetworkBufferOk
     { L.decoded_buffer_raw_record = raw_record_vec;
       L.decoded_buffer_raw_record_len = consumed_len;
@@ -6726,6 +6730,7 @@ fn decode_network_buffer
                   SZ.v decoded.L.decoded_buffer_raw_record_len /\
                 decoded.L.decoded_buffer_raw_record_len ==
                   decoded.L.decoded_buffer_consumed_len /\
+                0 < SZ.v decoded.L.decoded_buffer_consumed_len /\
                 SZ.v decoded.L.decoded_buffer_consumed_len <=
                   B.length (Ghost.reveal 'raw_bytes) /\
                 Seq.equal

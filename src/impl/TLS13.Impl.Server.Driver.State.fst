@@ -5,6 +5,7 @@ module TLS13.Impl.Server.Driver.State
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module BT = Common.BufferedTCP
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CI = Common.ChannelImplementation
 module CL = TLS13.ConnectionLog

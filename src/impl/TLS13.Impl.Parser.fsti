@@ -187,6 +187,7 @@ fn decode_network_buffer
                   SZ.v decoded.L.decoded_buffer_raw_record_len /\
                 decoded.L.decoded_buffer_raw_record_len ==
                   decoded.L.decoded_buffer_consumed_len /\
+                0 < SZ.v decoded.L.decoded_buffer_consumed_len /\
                 SZ.v decoded.L.decoded_buffer_consumed_len <=
                   B.length (Ghost.reveal 'raw_bytes) /\
                 Seq.equal

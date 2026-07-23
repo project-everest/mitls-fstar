@@ -522,6 +522,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Driver.State \
   TLS13.Impl.Server.Driver.Transport \
   TLS13.Impl.Server.Driver.Network \
+  TLS13.Impl.Server.Driver.BufferedNetwork \
   TLS13.Impl.Server.Driver.Local \
   TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver
