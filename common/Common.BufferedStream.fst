@@ -67,8 +67,9 @@ module Common.BufferedStream
 
     * [bse_process] classifies the current pending RELATIONALLY, threading the
       received history UNCHANGED through the live cases (processing does not read
-      the             network): NeedMore is an *exact stutter* — it transitions exclusive live
-      ownership to [bse_read_auth]
+      the network). [bse_result_valid] retains the endpoint-specific correctness
+      theorem for the returned result across the generic loop. NeedMore is an
+      *exact stutter* — it transitions exclusive live ownership to [bse_read_auth]
       only when the buffer still has free space ([BT.free_space b' > 0]); if the
       buffer is FULL it instead goes to [bse_buffer_full] (a scheduler failure)
       and NEVER yields read authorisation (no zero-length reads).  Progress/Yield
@@ -78,6 +79,9 @@ module Common.BufferedStream
     * [bse_read] consumes the authorisation and the live ownership, reads a chunk,
       and re-establishes live ownership at the advanced history
       [received' = received ++ chunk] and the append-read buffer.
+
+   [drive_until_conclusive] also returns the unused read fuel, so callers can
+   thread one explicit workflow budget through buffering and protocol progress.
 
   The module depends on [Common.BufferedTCP] and never the reverse.
 
@@ -744,13 +748,50 @@ let lemma_read_delivers_preserves
   Seq.lemma_eq_elim received' (Seq.append received chunk);
   Seq.append_assoc committed (BT.pending b) chunk
 
+private
+fn endpoint_process
+  (#endpoint #state #output #error #result:Type0)
+  (ep:buffered_stream_endpoint endpoint state output error result)
+  (e:endpoint)
+  (st:Ghost.erased state)
+  (received:Ghost.erased TCP.bytes)
+  (committed:Ghost.erased TCP.bytes)
+  (b:Ghost.erased BT.phys_buffer)
+  requires
+    ep.bse_owns
+      e
+      (Ghost.reveal st)
+      (Ghost.reveal received)
+      (Ghost.reveal committed)
+      (Ghost.reveal b)
+  returns outcome:process_outcome output error result
+  ensures
+    process_post
+      ep.bse_decide
+      ep.bse_needs_more
+      ep.bse_result_valid
+      ep.bse_owns
+      ep.bse_terminal
+      ep.bse_buffer_full
+      ep.bse_read_auth
+      e
+      (Ghost.reveal st)
+      (Ghost.reveal received)
+      (Ghost.reveal committed)
+      (Ghost.reveal b)
+      outcome
+{
+  let process = ep.bse_process;
+  process e st received committed b
+}
+
 (**
   Process the exact current pending bytes and perform physical reads only after
   the processor returns a semantically justified [NeedMore].  Each read returns
   ordinary live ownership, so the recursive call must process the enlarged
   pending prefix before another read can occur.
 **)
-inline_for_extraction
+noextract
 fn rec drive_until_conclusive
   (#endpoint #state #output #error #result:Type0)
   (ep:buffered_stream_endpoint endpoint state output error result)
@@ -772,7 +813,11 @@ fn rec drive_until_conclusive
     drive_post
       ep
       e
-      outcome
+      (Ghost.reveal st)
+      outcome **
+    pure (
+      FStar.SizeT.v (drive_fuel_left outcome) <=
+        FStar.SizeT.v fuel)
   decreases (FStar.SizeT.v fuel)
 {
   if (fuel = 0sz) {
@@ -780,26 +825,63 @@ fn rec drive_until_conclusive
       (drive_post
         ep
         e
+        (Ghost.reveal st)
         DriveExhausted);
     DriveExhausted
   } else {
     let owns_wf = ep.bse_owns_wf;
     owns_wf e st received committed b;
-    let process = ep.bse_process;
     let processed =
-      process e st received committed b;
+      endpoint_process ep e st received committed b;
     match processed {
       ProcessBufferFull r -> {
+        unfold
+          (process_post
+            ep.bse_decide
+            ep.bse_needs_more
+            ep.bse_result_valid
+            ep.bse_owns
+            ep.bse_terminal
+            ep.bse_buffer_full
+            ep.bse_read_auth
+            e
+            (Ghost.reveal st)
+            (Ghost.reveal received)
+            (Ghost.reveal committed)
+            (Ghost.reveal b)
+            (ProcessBufferFull r));
         assert (exists* st'.
-          ep.bse_buffer_full e st' (Ghost.reveal received));
+          ep.bse_buffer_full e st' (Ghost.reveal received) **
+          pure (
+            ep.bse_result_valid
+              e
+              (Ghost.reveal st)
+              r
+              st'));
         fold
           (drive_post
             ep
             e
-            (DriveBufferFull r));
-        DriveBufferFull r
+            (Ghost.reveal st)
+            (DriveBufferFull r fuel));
+        DriveBufferFull r fuel
       }
       Processed r decision -> {
+        unfold
+          (process_post
+            ep.bse_decide
+            ep.bse_needs_more
+            ep.bse_result_valid
+            ep.bse_owns
+            ep.bse_terminal
+            ep.bse_buffer_full
+            ep.bse_read_auth
+            e
+            (Ghost.reveal st)
+            (Ghost.reveal received)
+            (Ghost.reveal committed)
+            (Ghost.reveal b)
+            (Processed r decision));
         match decision {
           NeedMore -> {
             with st' committed' b'.
@@ -811,6 +893,11 @@ fn rec drive_until_conclusive
                    (Ghost.reveal st)
                    (BT.pending (Ghost.reveal b)) /\
                  decision == ep.bse_decide r /\
+                 ep.bse_result_valid
+                   e
+                   (Ghost.reveal st)
+                   r
+                   st' /\
                  process_transition
                    decision
                    (Ghost.reveal committed)
@@ -860,36 +947,57 @@ fn rec drive_until_conclusive
           }
           Progress consumed -> {
             assert (exists* st' committed' b'.
-              ep.bse_owns e st' (Ghost.reveal received) committed' b');
+              ep.bse_owns e st' (Ghost.reveal received) committed' b' **
+              pure (
+                ep.bse_result_valid
+                  e
+                  (Ghost.reveal st)
+                  r
+                  st'));
             assert (pure (ep.bse_decide r == Progress consumed));
             fold
               (drive_post
                 ep
                 e
-                (DriveProgress r consumed));
-            DriveProgress r consumed
+                (Ghost.reveal st)
+                (DriveProgress r consumed fuel));
+            DriveProgress r consumed fuel
           }
           Yield consumed output -> {
             assert (exists* st' committed' b'.
-              ep.bse_owns e st' (Ghost.reveal received) committed' b');
+              ep.bse_owns e st' (Ghost.reveal received) committed' b' **
+              pure (
+                ep.bse_result_valid
+                  e
+                  (Ghost.reveal st)
+                  r
+                  st'));
             assert (pure (ep.bse_decide r == Yield consumed output));
             fold
               (drive_post
                 ep
                 e
-                (DriveYield r consumed output));
-            DriveYield r consumed output
+                (Ghost.reveal st)
+                (DriveYield r consumed output fuel));
+            DriveYield r consumed output fuel
           }
           Reject error -> {
             assert (exists* st' received'.
-              ep.bse_terminal e st' received');
+              ep.bse_terminal e st' received' **
+              pure (
+                ep.bse_result_valid
+                  e
+                  (Ghost.reveal st)
+                  r
+                  st'));
             assert (pure (ep.bse_decide r == Reject error));
             fold
               (drive_post
                 ep
                 e
-                (DriveReject r error));
-            DriveReject r error
+                (Ghost.reveal st)
+                (DriveReject r error fuel));
+            DriveReject r error fuel
           }
         }
       }

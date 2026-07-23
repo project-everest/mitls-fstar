@@ -17,15 +17,44 @@ module FB = TLS13.Impl.Client.FragmentBound
 module HDispatch = TLS13.Impl.Handle.Dispatch
 module HDecodeError = TLS13.Impl.Handle.DecodeError
 module HLocal = TLS13.Impl.Handle.Local
+module ID = FStar.IndefiniteDescription
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Sem = TLS13.Wire.Semantics
 module P = TLS13.Impl.Parser
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
+
+let lemma_parse_record_wire_exact_positive
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        exists outer_ct outer_fragment.
+          WS.parse_record_wire raw ==
+            Some (outer_ct, outer_fragment, B.length raw))
+      (ensures 0 < B.length raw)
+=
+  let outer_ct =
+    ID.indefinite_description_ghost
+      T.content_type
+      (fun outer_ct -> exists outer_fragment.
+        WS.parse_record_wire raw ==
+          Some (outer_ct, outer_fragment, B.length raw)) in
+  let outer_fragment =
+    ID.indefinite_description_ghost
+      M.sealed_record
+      (fun outer_fragment ->
+        WS.parse_record_wire raw ==
+          Some (outer_ct, outer_fragment, B.length raw)) in
+  WS.lemma_parse_record_wire_some_consumed_positive
+    raw
+    outer_ct
+    outer_fragment
+    (B.length raw)
 
 fn new_client_default ()
   returns c:client
@@ -591,6 +620,8 @@ fn process_network_bytes
                  buffer_resp.CT.consumed_len == 0sz /\
                  WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                  WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
+                (buffer_resp.CT.response.CT.status == CT.StepOk ==>
+                 0 < SZ.v buffer_resp.CT.consumed_len) /\
                 (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
                  buffer_resp.CT.consumed_len == 0sz) /\
                 (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
@@ -739,6 +770,8 @@ fn process_network_bytes
       assert (pure (resp.CT.status == CT.NeedMoreInput ==> False));
       assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
         buffer_resp.CT.consumed_len == 0sz));
+      lemma_parse_record_wire_exact_positive raw_record_bytes;
+      assert (pure (0 < SZ.v decoded_buffer.L.decoded_buffer_consumed_len));
       assert (pure (Seq.equal
         raw_record_bytes
         (CT.network_consumed_prefix

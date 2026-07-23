@@ -195,6 +195,19 @@ ghost fn recall_model
 (* Reusable fixed-capacity storage while it is detached from a channel. *)
 val storage : Type0
 
+val same_storage :
+  t ->
+  storage ->
+  prop
+
+val lemma_same_storage_unique :
+  b:t ->
+  left:storage ->
+  right:storage ->
+  Lemma
+    (requires same_storage b left /\ same_storage b right)
+    (ensures left == right)
+
 val is_storage :
   storage ->
   model:phys_buffer ->
@@ -239,6 +252,8 @@ fn attach
       (Ghost.reveal 'received)
       (Ghost.reveal 'received)
       (Ghost.reveal 'sent)
+    **
+    pure (same_storage b storage)
 
 fn close_detach
   (b:t)
@@ -258,7 +273,8 @@ fn close_detach
       pure (
        buffer_wf model' /\
        capacity model' == capacity (Ghost.reveal model) /\
-       Seq.equal (pending model') Seq.empty)
+       Seq.equal (pending model') Seq.empty /\
+       same_storage b storage)
 
 fn free_storage
   (storage:storage)
@@ -283,6 +299,27 @@ fn wrap_empty
         buffer_wf model /\
         capacity model == SZ.v buffer_capacity /\
         Seq.equal (pending model) Seq.empty)
+
+fn pending_length
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  returns len:SZ.t
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent) **
+    pure (SZ.v len == Seq.length (pending (Ghost.reveal model)))
 
 (* -------------------------------------------------------------------------- *)
 (* Read-only pending view                                                     *)
@@ -376,6 +413,7 @@ fn commit_prefix
           (SZ.v consumed))
         (Ghost.reveal sent) **
       pure (
+        model' == compact (Ghost.reveal model) (SZ.v consumed) /\
         buffer_wf model' /\
         capacity model' == capacity (Ghost.reveal model) /\
         Seq.equal
@@ -406,6 +444,7 @@ fn read_more
         (Ghost.reveal sent) **
       pure (
         Seq.length chunk == SZ.v read_len /\
+        chunk_fits (Ghost.reveal model) chunk /\
         buffer_wf model' /\
         capacity model' == capacity (Ghost.reveal model) /\
         Seq.equal

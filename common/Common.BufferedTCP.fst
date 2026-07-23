@@ -184,6 +184,25 @@ type storage = {
   bs_capacity: SZ.t;
 }
 
+let same_storage
+  (b:t)
+  (storage:storage)
+  : prop =
+  b.bt_storage == storage.bs_storage /\
+  b.bt_filled == storage.bs_filled /\
+  b.bt_capacity == storage.bs_capacity
+
+let lemma_same_storage_unique
+  (b:t)
+  (left right:storage)
+  : Lemma
+      (requires same_storage b left /\ same_storage b right)
+      (ensures left == right)
+=
+  assert (left.bs_storage == right.bs_storage);
+  assert (left.bs_filled == right.bs_filled);
+  assert (left.bs_capacity == right.bs_capacity)
+
 let is_storage
   (storage:storage)
   (model:phys_buffer)
@@ -266,6 +285,8 @@ fn attach
       (Ghost.reveal 'received)
       (Ghost.reveal 'received)
       (Ghost.reveal 'sent)
+    **
+    pure (same_storage b storage)
 {
   unfold (is_storage storage (Ghost.reveal model));
   with raw.
@@ -322,7 +343,8 @@ fn close_detach
       pure (
         buffer_wf model' /\
         capacity model' == capacity (Ghost.reveal model) /\
-        Seq.equal (pending model') Seq.empty)
+        Seq.equal (pending model') Seq.empty /\
+        same_storage b storage)
 {
   unfold (is_buffered
     b
@@ -401,6 +423,50 @@ fn wrap_empty
         capacity model == SZ.v buffer_capacity /\
         Seq.equal (pending model) Seq.empty));
   attach storage ch
+}
+
+fn pending_length
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  returns len:SZ.t
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent) **
+    pure (SZ.v len == Seq.length (pending (Ghost.reveal model)))
+{
+  unfold (is_buffered
+    b
+    (Ghost.reveal model)
+    (Ghost.reveal received)
+    (Ghost.reveal delivered)
+    (Ghost.reveal sent));
+  with raw filled.
+    assert (
+      V.pts_to b.bt_storage #1.0R raw **
+      Box.pts_to b.bt_filled filled);
+  let len = Box.(!b.bt_filled);
+  assert (pure (len == filled));
+  Seq.lemma_len_slice raw 0 (SZ.v filled);
+  assert (pure (SZ.v len == Seq.length (pending (Ghost.reveal model))));
+  fold (is_buffered
+    b
+    (Ghost.reveal model)
+    (Ghost.reveal received)
+    (Ghost.reveal delivered)
+    (Ghost.reveal sent));
+  len
 }
 
 noeq
@@ -758,6 +824,7 @@ fn commit_prefix
           (SZ.v consumed))
         (Ghost.reveal sent) **
       pure (
+        model' == compact (Ghost.reveal model) (SZ.v consumed) /\
         buffer_wf model' /\
         capacity model' == capacity (Ghost.reveal model) /\
         Seq.equal
@@ -847,6 +914,7 @@ fn read_more
         (Ghost.reveal sent) **
       pure (
         Seq.length chunk == SZ.v read_len /\
+        chunk_fits (Ghost.reveal model) chunk /\
         buffer_wf model' /\
         capacity model' == capacity (Ghost.reveal model) /\
         Seq.equal

@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module BT = Common.BufferedTCP
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
@@ -345,6 +346,21 @@ noeq type driver = {
   driver_initial: Ghost.erased EC.client_initial_state;
 }
 
+noeq type buffered_driver = {
+  buffered_driver_client: C.client;
+  buffered_driver_channel: BT.t;
+  buffered_driver_storage: BT.storage;
+  buffered_driver_tcp_history: MR.mref CI.io_history_preorder;
+  buffered_driver_progress:
+    MR.mref (EC.client_progress_preorder #CTypes.client_local_event);
+  buffered_driver_initial: Ghost.erased EC.client_initial_state;
+}
+
+noeq type top_buffered_driver = {
+  top_buffered_driver_core: buffered_driver;
+  top_buffered_driver_auth: O.auth_context;
+}
+
 let lemma_rejoined_raw_mask_matches_old
   (old_raw raw_prefix:B.bytes)
   (raw_mask raw_prefix_mask raw_joined_mask:Seq.seq (option U8.t))
@@ -633,6 +649,92 @@ let driver_canonical_progress
     st.CS.cs_model.CS.model_config ==
       (Ghost.reveal d.driver_initial).CS.cs_model.CS.model_config /\
     CP.client_initial_wire_logs_empty (Ghost.reveal d.driver_initial))
+
+noextract
+let buffered_driver_canonical_progress
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  : slprop =
+  MR.pts_to
+    d.buffered_driver_progress
+    #1.0R
+    st **
+  MR.snapshot
+    d.buffered_driver_progress
+    (Ghost.reveal d.buffered_driver_initial) **
+  pure (
+    CT.client_end_to_end_invariant st /\
+    st.CS.cs_model.CS.model_config ==
+      (Ghost.reveal d.buffered_driver_initial).CS.cs_model.CS.model_config /\
+    CP.client_initial_wire_logs_empty
+      (Ghost.reveal d.buffered_driver_initial))
+
+noextract
+let buffered_driver_indexed
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  (model:BT.phys_buffer)
+  (received committed sent:B.bytes)
+  : slprop =
+  C.connection_exactly d.buffered_driver_client st **
+  buffered_driver_canonical_progress d st **
+  BT.is_buffered
+    d.buffered_driver_channel
+    model
+    received
+    committed
+    sent **
+  MR.pts_to
+    d.buffered_driver_tcp_history
+    #1.0R
+    (wire_history received sent) **
+  pure (
+    BT.same_storage
+      d.buffered_driver_channel
+      d.buffered_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    Seq.equal (BT.pending model) buffered /\
+    client_driver_wire_logs_match_witness
+      st
+      received
+      sent
+      committed
+      buffered
+      buffered_len)
+
+noextract
+let buffered_driver_exactly
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  exists* model received committed sent.
+    buffered_driver_indexed
+      d
+      st
+      buffered
+      buffered_len
+      model
+      received
+      committed
+      sent
+
+noextract
+let top_buffered_driver_exactly
+  (d:top_buffered_driver)
+  (st:CS.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  buffered_driver_exactly
+    d.top_buffered_driver_core
+    st
+    buffered
+    buffered_len **
+  O.is_auth_context d.top_buffered_driver_auth
 
 noextract
 let driver_exactly
