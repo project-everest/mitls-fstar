@@ -1,6 +1,6 @@
 # Symbolic Security Proof Plan for the TLS 1.3 1-RTT Profile
 
-Status: **approved; Phase 4 complete; Phase 5 in progress**
+Status: **approved; Phase 5 complete; Phase 6 in progress**
 
 This document is the review gate for the symbolic-security work. Until this
 plan is approved, the only repository change in this workstream should be this
@@ -284,6 +284,13 @@ hashes, HKDF, signatures, Finished MACs, AEAD, and X.509 results must have the
 expected symbolic witnesses; and concrete collisions or forgeries must not
 invalidate those witnesses. It must not be defined circularly as merely
 "there exists a product execution."
+
+The implementation keeps structural product reachability separate from DY
+security hygiene. `secure_product_step` combines a real `product_step` with
+`trace_extension_hygienic`, which checks the DY entry invariant for exactly
+the trace entries added by that step. `securely_realizable_execution` requires
+the same explicit per-transition witnesses. It never assumes the invariant of
+the post-state; `trace_extension_preserves_invariant` proves that result.
 
 The authentication, secrecy, and record-security results must therefore be
 exported both for product executions and, through lifting, for every concrete
@@ -850,24 +857,25 @@ properties.
 Purpose: prove the global invariant from which origin and secrecy results
 follow.
 
-- [ ] Instantiate `crypto_invariants`.
-- [ ] Implement the signature predicate and monotonicity proof.
-- [ ] Implement the Finished MAC predicate and monotonicity proof.
-- [ ] Implement handshake/application AEAD predicates and monotonicity proofs.
-- [ ] Implement state predicates.
-- [ ] Implement event predicates.
-- [ ] Prove invariant preservation for each endpoint transition.
-- [ ] Prove invariant preservation for session creation.
-- [ ] Prove invariant preservation for corruption.
-- [ ] Reuse DY* attacker-preservation results for attacker steps.
-- [ ] Prove reachable product traces satisfy `trace_invariant`.
-- [ ] Prove local origin lemmas for signature, Finished, and AEAD terms.
+- [x] Instantiate `crypto_invariants`.
+- [x] Implement the signature predicate and monotonicity proof.
+- [x] Implement the Finished MAC predicate and monotonicity proof.
+- [x] Implement handshake/application AEAD predicates and monotonicity proofs.
+- [x] Implement state predicates.
+- [x] Implement event predicates.
+- [x] Prove invariant preservation for each endpoint transition.
+- [x] Prove invariant preservation for session creation.
+- [x] Prove invariant preservation for corruption.
+- [x] Reuse DY* attacker-preservation results for attacker steps.
+- [x] Prove reachable product traces satisfy `trace_invariant`.
+- [x] Prove local origin lemmas for signature, Finished, and AEAD terms.
 
 Exit gate:
 
-- [ ] All product steps preserve the trace invariant.
-- [ ] `attacker_only_knows_publishable_values` applies to every reachable trace.
-- [ ] There are no admitted lemmas or undocumented assumptions.
+- [x] All secure product steps preserve the trace invariant.
+- [x] `attacker_only_knows_publishable_values` applies to every reachable secure
+      product trace.
+- [x] There are no admitted lemmas or undocumented assumptions.
 
 Commit boundary:
 
