@@ -15,6 +15,7 @@ module BTH = TLS13.Impl.Server.Driver.BufferedTopHandshake
 module BC = TLS13.Impl.Server.Driver.BufferedChannel
 module BA = TLS13.Impl.Server.Driver.BufferedAccept
 module BSnd = TLS13.Impl.Server.Driver.BufferedSend
+module BRcv = TLS13.Impl.Server.Driver.BufferedReceive
 module CI = Common.ChannelImplementation
 module CPI = Common.ProtocolImplementation
 module CTypes = TLS13.Impl.CanonicalTypes
