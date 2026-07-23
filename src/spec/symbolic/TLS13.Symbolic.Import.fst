@@ -1,6 +1,7 @@
 module TLS13.Symbolic.Import
 
 module DY = DY.Core
+module Bridge = TLS13.Symbolic.Bridge
 module Events = TLS13.Symbolic.Events
 module Labels = TLS13.Symbolic.Labels
 module Lemmas = TLS13.Symbolic.Lemmas

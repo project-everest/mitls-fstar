@@ -1,6 +1,6 @@
 # Symbolic Security Proof Plan for the TLS 1.3 1-RTT Profile
 
-Status: **approved; Phase 2 complete; Phase 3 next**
+Status: **approved; Phase 3 complete; Phase 4 in progress**
 
 This document is the review gate for the symbolic-security work. Until this
 plan is approved, the only repository change in this workstream should be this
@@ -786,24 +786,24 @@ Commit boundary:
 
 Purpose: make the trusted boundary explicit before it is used in proofs.
 
-- [ ] Define the execution-indexed `represents` relation.
-- [ ] Define representation rules for literals and exact concatenation.
-- [ ] Define transcript/serializer correspondence.
-- [ ] Add freshness bridge obligations.
-- [ ] Add X25519 bridge obligations.
-- [ ] Add hash/HKDF/HMAC bridge obligations.
-- [ ] Add RSA-PSS signature bridge obligations.
-- [ ] Add X.509 identity bridge obligations.
-- [ ] Add AEAD/canonical-record bridge obligations.
-- [ ] Add a machine-readable or source-adjacent assumption ledger.
-- [ ] Prove that the relation does not require global primitive injectivity.
+- [x] Define the execution-indexed `represents` relation.
+- [x] Define representation rules for literals and exact concatenation.
+- [x] Define transcript/serializer correspondence.
+- [x] Add freshness bridge obligations.
+- [x] Add X25519 bridge obligations.
+- [x] Add hash/HKDF/HMAC bridge obligations.
+- [x] Add RSA-PSS signature bridge obligations.
+- [x] Add X.509 identity bridge obligations.
+- [x] Add AEAD/canonical-record bridge obligations.
+- [x] Add a machine-readable or source-adjacent assumption ledger.
+- [x] Prove that the relation does not require global primitive injectivity.
 
 Exit gate:
 
-- [ ] Every `assume`, abstract `val`, or interface-only security fact is listed
+- [x] Every `assume`, abstract `val`, or interface-only security fact is listed
       in the assumption ledger with its consumers.
-- [ ] Concrete correctness lemmas are reused where they suffice.
-- [ ] Security properties are not derived from correctness-only lemmas.
+- [x] Concrete correctness lemmas are reused where they suffice.
+- [x] Security properties are not derived from correctness-only lemmas.
 
 Commit boundary:
 
