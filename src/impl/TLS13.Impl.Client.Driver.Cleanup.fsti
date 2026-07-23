@@ -45,3 +45,9 @@ fn close_failed_connect
            Box.pts_to d.DS.client_driver_channel DS.no_channel **
            DS.client_driver_buffers d
   ensures DS.client_driver_closed d 'st0
+
+inline_for_extraction
+fn close_connected_client_driver
+  (d:DS.client_driver)
+  requires DS.client_driver_connected d 'st0 'received 'sent
+  ensures DS.client_driver_closed d 'st0

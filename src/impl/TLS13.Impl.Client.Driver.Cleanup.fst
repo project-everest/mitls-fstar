@@ -143,3 +143,91 @@ fn close_failed_connect
     (client_driver_canonical_progress d 'st0);
   free_disconnected_client_driver d;
 }
+
+inline_for_extraction
+fn close_connected_client_driver
+  (d:DS.client_driver)
+  requires DS.client_driver_connected d 'st0 'received 'sent
+  ensures DS.client_driver_closed d 'st0
+{
+  unfold (DS.client_driver_connected
+    d
+    (Ghost.reveal 'st0)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent));
+  with channel model committed buffered_len.
+    assert (DS.client_driver_connected_indexed
+      d
+      (Ghost.reveal 'st0)
+      (Ghost.reveal 'received)
+      (Ghost.reveal 'sent)
+      channel
+      model
+      committed
+      buffered_len);
+  unfold (DS.client_driver_connected_indexed
+    d
+    (Ghost.reveal 'st0)
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    channel
+    model
+    committed
+    buffered_len);
+  let current_channel = Box.(!d.DS.client_driver_channel);
+  assert (pure (current_channel == Some channel));
+  assert (pure (Some? current_channel));
+  let concrete_channel = Some?.v current_channel;
+  assert (pure (concrete_channel == channel));
+  rewrite
+    (DS.buffered_driver_indexed
+      (DS.client_buffered_driver d channel)
+      (Ghost.reveal 'st0)
+      (BT.pending model)
+      buffered_len
+      model
+      (Ghost.reveal 'received)
+      committed
+      (Ghost.reveal 'sent))
+    as
+    (DS.buffered_driver_indexed
+      (DS.client_buffered_driver d concrete_channel)
+      (Ghost.reveal 'st0)
+      (BT.pending model)
+      buffered_len
+      model
+      (Ghost.reveal 'received)
+      committed
+      (Ghost.reveal 'sent));
+  unfold (DS.buffered_driver_indexed
+    (DS.client_buffered_driver d concrete_channel)
+    (Ghost.reveal 'st0)
+    (BT.pending model)
+    buffered_len
+    model
+    (Ghost.reveal 'received)
+    committed
+    (Ghost.reveal 'sent));
+  let detached = BT.close_detach concrete_channel;
+  with detached_model.
+    assert (BT.is_storage detached detached_model);
+  assert (pure (BT.same_storage
+    concrete_channel
+    d.DS.client_driver_storage));
+  assert (pure (BT.same_storage concrete_channel detached));
+  BT.lemma_same_storage_unique
+    concrete_channel
+    d.DS.client_driver_storage
+    detached;
+  assert (pure (detached == d.DS.client_driver_storage));
+  rewrite (BT.is_storage detached detached_model) as
+    (BT.is_storage d.DS.client_driver_storage detached_model);
+  Box.(d.DS.client_driver_channel := DS.no_channel);
+  rewrite
+    (DS.buffered_driver_canonical_progress
+      (DS.client_buffered_driver d concrete_channel)
+      (Ghost.reveal 'st0))
+    as
+    (DS.client_driver_canonical_progress d (Ghost.reveal 'st0));
+  free_disconnected_client_driver d
+}
