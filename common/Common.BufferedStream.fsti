@@ -310,7 +310,8 @@ let drive_post
   match outcome with
   | DriveExhausted ->
     exists* st' received' committed' b'.
-      ep.bse_owns e st' received' committed' b'
+      ep.bse_owns e st' received' committed' b' **
+      pure (st' == initial)
   | DriveBufferFull r _ ->
     exists* st' received'.
       ep.bse_buffer_full e st' received' **
