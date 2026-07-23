@@ -38,8 +38,11 @@ CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
 
 RUN_DIR := _run_http
 RUN_DIR_ABS := $(abspath $(RUN_DIR))
+RUN_DIR_POST := _run_http_post
+RUN_DIR_POST_ABS := $(abspath $(RUN_DIR_POST))
+PORT_POST ?= $(shell echo $$(( $(PORT) + 1 )))
 
-.PHONY: all test build-progs clean help
+.PHONY: all test test-get test-post build-progs clean help
 
 all: test
 
@@ -54,7 +57,9 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: build-progs
+test: test-get test-post
+
+test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
 	@echo " HTTP interop test:  curl (client)  ->  http_server (verified parse + response)"
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -88,8 +93,48 @@ test: build-progs
 	    exit 1; \
 	  fi
 
+# ── curl POST (real request body) <-> our verified-response server ────────────
+# The server DETECTS the method with the verified request-line parser
+# (http_method_eq), recovers Content-Length with the verified header decoder
+# (http_header_dec), reads the body, and ECHOES it back in a verified 200
+# response.  PASS iff curl gets HTTP 200, the echoed body is byte-identical to
+# what we POSTed, and parse.status shows the verified path handled a POST.
+test-post: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " HTTP POST interop:  curl -d (client)  ->  http_server (verified method+CL parse, body echo)"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v curl >/dev/null 2>&1 || { echo "  SKIP: 'curl' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_POST); mkdir -p $(RUN_DIR_POST)
+	@printf 'verified-http POST payload %s: the quick brown fox jumps over the lazy dog\n' "$$(date +%s)" > $(RUN_DIR_POST)/payload.txt
+	@echo "  POSTing payload.txt ($$(wc -c < $(RUN_DIR_POST)/payload.txt) bytes); server echoes it back ..."
+	@cd $(RUN_DIR_POST) && \
+	  HTTP_PARSE_STATUS_FILE=parse.status \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_POST) & srv=$$!; sleep 0.5; \
+	    code=$$(curl -s -o recv.txt -w "%{http_code}" --max-time 5 --data-binary @payload.txt http://127.0.0.1:$(PORT_POST)/submit); rc=$$?; \
+	    echo "curl exit=$$rc http_code=$$code" > curl.log; \
+	    for i in $$(seq 1 40); do [ -s parse.status ] && break; sleep 0.05; done; \
+	    exit $$rc' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  code=$$(sed -n "s/.*http_code=//p" curl.log 2>/dev/null); \
+	  if cmp -s recv.txt payload.txt; then content=match; else content=differ; fi; \
+	  status=$$(cat parse.status 2>/dev/null); \
+	  case "$$status" in post\ *) parsed=ok;; *) parsed=no;; esac; \
+	  if [ $$st -eq 0 ] && [ "$$code" = 200 ] && [ "$$content" = match ] && [ "$$parsed" = ok ]; then \
+	    echo "  RESULT: PASS - curl POST got HTTP $$code + byte-identical echoed body, and the VERIFIED method+Content-Length parser handled it (parse.status='$$status')"; \
+	    rm -rf $(RUN_DIR_POST_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/curl did not terminate: killed after $(TIMEOUT)s (code=$$code content=$$content parsed=$$parsed status='$$status')"; \
+	    else echo "  RESULT: FAIL - exit=$$st http_code=$$code content=$$content parsed=$$parsed status='$$status'"; fi; \
+	    echo "  --- curl.log ---"; cat curl.log 2>/dev/null; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_POST_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post
 
 help:
 	@echo "HTTP interop test (vs curl):"

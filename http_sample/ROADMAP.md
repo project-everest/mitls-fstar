@@ -103,7 +103,10 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       recovers the method + target slices with a full round-trip tie, driven by
       `http_method_eq` (`HTTP.Impl.Loop.Request`) and exercised by
       `verified/request_line_test.c` (POST/GET/DELETE/PUT/OPTIONS/HEAD + rejects).
-      *Remaining:* server-side POST end-to-end (accept `POST` + read body via
-      `http_header_dec` content-length / chunked), and a client POST emitter.
+      *Remaining:* a client POST emitter (byte-exact request with a
+      variable-width `Content-Length`).  The server side is now end-to-end: a
+      real `curl -d` POST is dispatched by the verified method parser, its
+      `Content-Length` is recovered by the verified header decoder, and the body
+      is echoed back (see `interop/` `make test-post`).
 - [ ] 4. Smuggling / limit defenses + error responses
 - [ ] 5. Keep-alive / persistent connections; TLS

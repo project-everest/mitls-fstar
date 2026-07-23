@@ -71,11 +71,15 @@ static uint8_t *read_file(const char *path, size_t *out_len) {
 /* Read the request head from `fd` into `out` (capacity `cap`), up to and
    including the CRLF-CRLF that ends it (or until EOF / cap / error).  Unlike a
    plain drain, the bytes are KEPT so the verified parser can inspect them.
-   Returns the number of bytes stored, or -1 on a hard error. */
-static ssize_t read_request_head(int fd, uint8_t *out, size_t cap) {
+   Sets *head_end to the number of bytes up to and including the terminating
+   CRLF-CRLF (0 if none was seen), and RETURNS the total number of bytes now in
+   the buffer -- which for a request WITH a body may exceed *head_end, since the
+   same recv() often delivers leading body bytes.  Returns -1 on a hard error. */
+static ssize_t read_request_head(int fd, uint8_t *out, size_t cap, size_t *head_end) {
   size_t total = 0;
   int match = 0;                       /* how much of "\r\n\r\n" matched so far */
   static const uint8_t term[4] = { '\r', '\n', '\r', '\n' };
+  *head_end = 0;
   while (total < cap) {
     ssize_t r = recv(fd, out + total, cap - total, 0);
     if (r < 0) { if (errno == EINTR) continue; return -1; }
@@ -83,11 +87,25 @@ static ssize_t read_request_head(int fd, uint8_t *out, size_t cap) {
     for (ssize_t i = 0; i < r; i++) {
       uint8_t b = out[total + (size_t)i];
       match = (b == term[match]) ? match + 1 : (b == term[0] ? 1 : 0);
-      if (match == 4) return (ssize_t)(total + (size_t)i + 1);   /* end of head */
+      if (match == 4 && *head_end == 0) *head_end = total + (size_t)i + 1;
     }
     total += (size_t)r;
+    if (*head_end != 0) break;          /* head complete; body (if any) read separately */
   }
   return (ssize_t)total;
+}
+
+/* Read exactly `want` bytes from `fd` into `out` (blocking).  Returns the
+   number of bytes read (== want on success, less on early EOF/error). */
+static size_t read_exact(int fd, uint8_t *out, size_t want) {
+  size_t got = 0;
+  while (got < want) {
+    ssize_t r = recv(fd, out + got, want - got, 0);
+    if (r < 0) { if (errno == EINTR) continue; break; }
+    if (r == 0) break;
+    got += (size_t)r;
+  }
+  return got;
 }
 
 int main(int argc, char **argv) {
@@ -153,14 +171,61 @@ int main(int argc, char **argv) {
     if (fd < 0) { if (errno == EINTR) continue; perror("accept"); break; }
 
     /* Read the client's request head into reqbuf (socket read is glue). */
-    ssize_t rl = read_request_head(fd, reqbuf, REQ_CAP);
+    size_t head_end = 0;
+    ssize_t rl = read_request_head(fd, reqbuf, REQ_CAP, &head_end);
     if (rl < 0) { close(fd); continue; }
-    size_t reqlen = (size_t)rl;
+    size_t total  = (size_t)rl;
+    size_t reqlen = head_end ? head_end : total;
 
-    /* 3. Hand the connected fd + request buffer to the VERIFIED exchange driver:
-       it PARSES the request head with http_recv_request_head (recovering the
-       target length into ptlen) and writes the 200 head + body, closing the
-       channel (and thus the fd). */
+    /* 3a. POST branch: the VERIFIED method parser detects the method, the
+       VERIFIED header decoder recovers Content-Length, and we ECHO the request
+       body back in a verified 200 response head + body copy.  This exercises a
+       real request body end-to-end (`curl -d ...`). */
+    bool is_post = http_method_eq(reqbuf, reqlen, (uint8_t *)"POST", (size_t)4);
+    if (is_post) {
+      /* Advance past the request line (its terminating CRLF) to the header
+         block, which is what the verified header decoder scans. */
+      size_t block = 0;
+      for (size_t i = 0; i + 1 < reqlen; i++)
+        if (reqbuf[i] == '\r' && reqbuf[i + 1] == '\n') { block = i + 2; break; }
+
+      bool     found = false;
+      uint32_t clen  = 0;
+      http_header_dec(reqbuf + block, reqlen - block,
+                      (uint8_t *)"content-length", (size_t)14, &found, &clen);
+
+      /* Gather the request body: some bytes may already trail the head in
+         reqbuf; read the remainder up to Content-Length. */
+      size_t have = (total > head_end) ? (total - head_end) : 0;
+      size_t clen_sz = (size_t)clen;
+      if (found && clen_sz < 100000000u && head_end + clen_sz <= REQ_CAP) {
+        uint8_t *bodyp = reqbuf + head_end;
+        if (have < clen_sz)
+          have += read_exact(fd, bodyp + have, clen_sz - have);
+        size_t echo_len = (have < clen_sz) ? have : clen_sz;
+
+        /* Verified 200 head (43 bytes, 8-digit Content-Length) + echoed body. */
+        http_emit_response((uint16_t)200, (uint32_t)echo_len, headbuf);
+        Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+        if (echo_len > 0) Common_TCP_write(pch, bodyp, echo_len);
+        Common_TCP_close(pch);
+
+        fprintf(stderr, "http_server: parsed POST (Content-Length %u), echoed %zu-byte body\n",
+                clen, echo_len);
+        if (status_path) {
+          FILE *sf = fopen(status_path, "w");
+          if (sf) { fprintf(sf, "post %zu\n", echo_len); fclose(sf); }
+        }
+        continue;
+      }
+      /* Malformed/oversized POST: fall through to the GET-style handler below. */
+    }
+
+    /* 3b. GET (and fallback) path: hand the connected fd + request buffer to the
+       VERIFIED exchange driver, which PARSES the request head with
+       http_recv_request_head (recovering the target length into ptlen) and
+       writes the 200 head + body, closing the channel (and thus the fd). */
     size_t ptlen = 0;
     Common_TCP_channel ch = Common_TCP_channel_of_fd(fd);
     bool okr = http_server_exchange_length_head(ch, reqbuf, reqlen, &ptlen,
