@@ -824,40 +824,6 @@ let client_channel_inv
       app_log == TChannel.application_log st)
 
 noextract
-let client_channel_io_frame
-  (d:client_driver)
-  (ch:IO.channel)
-  (wire_received:B.bytes)
-  (wire_sent:B.bytes)
-  (pending:B.bytes)
-  (app_log:CI.application_log B.bytes)
-  : slprop =
-  exists* st buffered buffered_len.
-    CP.client_invariant
-      (client_driver_canonical d)
-      st.CS.cs_wire_log.CL.raw_received
-      st.CS.cs_wire_log.CL.raw_sent
-      st **
-    O.is_auth_context d.client_driver_auth **
-    Box.pts_to d.client_driver_channel (Some ch) **
-    MR.pts_to d.client_driver_tcp_history #1.0R (wire_history wire_received wire_sent) **
-    client_driver_buffers d buffered buffered_len **
-    pure (
-      client_driver_wire_logs_match
-        st
-        wire_received
-        wire_sent
-        buffered
-        buffered_len /\
-      CT.connection_control_not_failed st /\
-      Seq.equal pending buffered /\
-      Seq.equal
-        wire_received
-        (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
-      Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
-      app_log == TChannel.application_log st)
-
-noextract
 let client_channel_snapshot
   (d:client_driver)
   (wire_received:B.bytes)

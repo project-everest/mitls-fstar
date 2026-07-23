@@ -668,35 +668,6 @@ let server_channel_inv
       app_log == TChannel.application_log st)
 
 noextract
-let server_channel_io_frame
-  (d:server_driver)
-  (ch:IO.channel)
-  (wire_received:B.bytes)
-  (wire_sent:B.bytes)
-  (pending:B.bytes)
-  (app_log:CI.application_log B.bytes)
-  : slprop =
-  exists* st buffered buffered_len.
-    SP.server_invariant
-      (server_driver_canonical d)
-      st.CS.cs_wire_log.CL.raw_received
-      st.CS.cs_wire_log.CL.raw_sent
-      st **
-    Box.pts_to d.server_driver_channel (Some ch) **
-    server_driver_io_history d wire_received wire_sent **
-    server_driver_buffers d buffered buffered_len **
-    pure (
-      server_driver_wire_logs_match
-        st wire_received wire_sent buffered buffered_len /\
-      ST.server_connection_control_not_failed st /\
-      Seq.equal pending buffered /\
-      Seq.equal
-        wire_received
-        (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
-      Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
-      app_log == TChannel.application_log st)
-
-noextract
 let server_channel_snapshot
   (d:server_driver)
   (wire_received:B.bytes)

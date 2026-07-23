@@ -3695,15 +3695,12 @@ let server_channel_implementation
     CI.ci_message_of_bytes = channel_message_of_bytes;
     CI.ci_channel_inv = DS.server_channel_inv;
     CI.ci_terminal_inv = DS.server_channel_terminal;
-    CI.ci_io_frame = DS.server_channel_io_frame;
     CI.ci_snapshot = DS.server_channel_snapshot;
     CI.ci_send_succeeded = channel_send_succeeded;
     CI.ci_send_usable = channel_send_usable;
     CI.ci_receive_succeeded = channel_receive_succeeded;
     CI.ci_receive_usable = channel_receive_usable;
     CI.ci_receive_length = channel_receive_length;
-    CI.ci_open_io_channel = SChannel.open_io_channel;
-    CI.ci_close_io_channel = SChannel.close_io_channel;
     CI.ci_invariant_valid = SChannel.channel_invariant_valid;
     CI.ci_take_snapshot = SChannel.take_channel_snapshot;
     CI.ci_recall_snapshot = SChannel.recall_channel_snapshot;

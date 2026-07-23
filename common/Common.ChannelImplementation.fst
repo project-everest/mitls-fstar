@@ -244,15 +244,6 @@ class channel_implementation
     application_log message ->
     slprop;
 
-  ci_io_frame:
-    impl ->
-    TCP.channel ->
-    TCP.bytes ->
-    TCP.bytes ->
-    TCP.bytes ->
-    application_log message ->
-    slprop;
-
   ci_snapshot:
     impl ->
     TCP.bytes ->
@@ -274,59 +265,6 @@ class channel_implementation
 
   ci_receive_length:
     receive_result -> GTot SZ.t;
-
-  ci_open_io_channel:
-    i:impl ->
-    wire_received:Ghost.erased TCP.bytes ->
-    wire_sent:Ghost.erased TCP.bytes ->
-    pending:Ghost.erased TCP.bytes ->
-    app_log:Ghost.erased (application_log message) ->
-      stt_ghost TCP.channel emp_inames
-        (ci_channel_inv
-          i
-          (Ghost.reveal wire_received)
-          (Ghost.reveal wire_sent)
-          (Ghost.reveal pending)
-          (Ghost.reveal app_log))
-        (fun ch ->
-          TCP.is_channel
-            ch
-            (Ghost.reveal wire_received)
-            (Ghost.reveal wire_sent) **
-          ci_io_frame
-            i
-            ch
-            (Ghost.reveal wire_received)
-            (Ghost.reveal wire_sent)
-            (Ghost.reveal pending)
-            (Ghost.reveal app_log));
-
-  ci_close_io_channel:
-    i:impl ->
-    ch:TCP.channel ->
-    wire_received:Ghost.erased TCP.bytes ->
-    wire_sent:Ghost.erased TCP.bytes ->
-    pending:Ghost.erased TCP.bytes ->
-    app_log:Ghost.erased (application_log message) ->
-      stt_ghost unit emp_inames
-        (TCP.is_channel
-          ch
-          (Ghost.reveal wire_received)
-          (Ghost.reveal wire_sent) **
-         ci_io_frame
-          i
-          ch
-          (Ghost.reveal wire_received)
-          (Ghost.reveal wire_sent)
-          (Ghost.reveal pending)
-          (Ghost.reveal app_log))
-        (fun _ ->
-          ci_channel_inv
-            i
-            (Ghost.reveal wire_received)
-            (Ghost.reveal wire_sent)
-            (Ghost.reveal pending)
-            (Ghost.reveal app_log));
 
   ci_invariant_valid:
     i:impl ->
