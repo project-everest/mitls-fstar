@@ -9,6 +9,7 @@ Experimental TLS 1.3 client implementation in F*/Pulse, extracted to C.
 - `TLS_OUTLINE.md` - concise task statement and proof requirements.
 - `TLS_DESIGN_AND_IMPL.md` - canonical TLS design, proof plan, TCB, extraction notes, and validation workflow.
 - `src/spec/symbolic/SECURITY_MODEL.md` - symbolic security claims, theorem map, scope, and assumption ledger.
+- `SYMBOLIC_AUDIT.md` - skeptical-reader guide to proof scope, validity, assumptions, and audit surfaces.
 
 A proof of a TLS server is in progress and its design is currently in
 

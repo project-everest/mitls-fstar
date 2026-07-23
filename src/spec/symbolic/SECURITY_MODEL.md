@@ -45,7 +45,7 @@ secret input.
 
 | Claim | Main theorem |
 | --- | --- |
-| Concrete execution coverage | `Product.concrete_execution_has_product_lift` |
+| Conditional concrete execution lifting | `Product.concrete_execution_has_product_lift` |
 | Concrete projection and reachability | `Product.reachable_endpoint_projects_exactly` |
 | DY trace invariant | `Invariant.secure_product_execution_preserves_invariant` |
 | Attacker knowledge closure | `Invariant.attacker_only_knows_publishable` |
@@ -64,32 +64,40 @@ secret input.
 | Exact canonical record linkage | `RecordSecurity.honest_canonical_transition_uses_exact_record_semantics`, `RecordSecurity.protected_send_realization_is_complete` |
 
 Authentication theorems expose credential compromise where server
-impersonation is relevant. Secret-schedule theorems expose the exact
-ephemeral/session labels whose corruption permits disclosure. Record
-integrity exposes the live AEAD key: a successful symbolic decryption has a
-matching sent event unless that exact key is publishable. Application
-confidentiality separately exposes compromise of the application state that
-owned the plaintext.
+impersonation is relevant. Secret-schedule theorems expose the labels supplied
+for the two ephemeral-usage terms; interpreting these as endpoint-state
+compromise additionally requires tying them to the intended non-public
+principal-state labels. Record integrity exposes the live AEAD key: a
+successful symbolic decryption has a matching sent event unless that exact key
+is publishable. Application confidentiality separately exposes compromise of
+the application state that owned the plaintext.
 
 ## Assumption ledger
 
 | Assumption or trusted boundary | Source | Consumers |
 | --- | --- | --- |
-| Fresh concrete bytes correspond to role/session-specific `RandGen` entries | `Bridge.fresh_value_bridge` | Product lifting, injective agreement, ephemeral-key secrecy |
-| X25519 public/shared computations correspond to ideal `DhPub`/`Dh` terms | `Bridge.x25519_public_bridge`, `Bridge.x25519_shared_bridge` | Key-schedule lineage and secrecy |
-| SHA-256, HKDF, and HMAC computations correspond to ideal DY constructors | Hash/HKDF/HMAC predicates in `Bridge` | Transcript realization, Finished origin, key schedule |
+| Intended bridge from fresh concrete bytes to role/session-specific `RandGen` entries | `Bridge.fresh_value_bridge` | Defined boundary; not yet connected to the headline proof chain |
+| Intended bridge from X25519 public/shared computations to ideal `DhPub`/`Dh` terms | `Bridge.x25519_public_bridge`, `Bridge.x25519_shared_bridge` | Defined boundary; not yet connected to product lifting or key lineage |
+| Intended SHA-256 and HKDF bridges | `Bridge.hash_bridge`, `Bridge.hkdf_extract_bridge`, `Bridge.hkdf_expand_label_bridge` | Defined boundary; not yet connected to product lifting or key lineage |
+| HMAC computation corresponds to an ideal DY MAC | `Bridge.hmac_bridge` | Explicit Finished authentication premise |
 | RSA-PSS signing and verification correspond to ideal DY signatures | Signature predicates in `Bridge` | CertificateVerify origin and server authentication |
 | Validated server name and leaf key match a trusted registry entry | `Bridge.x509_identity_bridge` | Named-server authentication |
 | ChaCha20-Poly1305 seal/open correspond to ideal `AeadEnc` | `Bridge.aead_seal_bridge`, `Bridge.aead_open_bridge` | Record origin, integrity, replay, confidentiality |
-| Concrete cryptographic functions and X.509 validation satisfy their abstract F* interfaces | `TLS13.Crypto.Spec`, `TLS13.X509.Spec` | Concrete side of every bridge |
+| Concrete cryptographic functions and X.509 validation satisfy their abstract F* interfaces | `TLS13.Crypto.Spec`, `TLS13.X509.Spec` | Concrete side of the connected bridge predicates |
 | Each honest transition supplies hygienic event/state entries | `Invariant.secure_product_step`, `Invariant.trace_extension_hygienic` | Reachable DY trace invariant |
-| A concrete execution supplies execution-local bridge witnesses to lift | `Product.symbolically_realizable_execution` | Conditional concrete coverage |
+| A concrete execution supplies well-formed product states, endpoint refinement, representation extension, event realization, and exact AEAD record witnesses | `Product.symbolically_realizable_execution` | Conditional concrete lifting |
+| Key-schedule terms have complete symbolic lineage and match the installed target | `Secrecy.complete_key_schedule_lineage`, `Secrecy.schedule_target_matches` | Schedule-secret secrecy |
+| Ephemeral terms have expected usages and caller-supplied labels | `Secrecy.ephemeral_pair_has_labels` | Schedule-secret secrecy; intended endpoint-state labels are not forced |
 | DY constructors model perfect cryptography and attacker deduction | Pinned extrinsic DY* core | All symbolic security theorems |
 
 These assumptions do not assert global injectivity or collision freedom for
 concrete X25519, hashes, HKDF, signatures, or AEAD. Symbolic purpose
 separation is constructor/label separation, not concrete non-collision.
 Forward secrecy is not claimed.
+
+`SYMBOLIC_AUDIT.md` gives the detailed skeptic's review, including bridge
+connectivity, realization inhabitation, label interpretation, context
+agreement, and theorem-by-theorem overclaim checks.
 
 ## Verification
 
