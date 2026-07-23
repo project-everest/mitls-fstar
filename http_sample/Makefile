@@ -194,7 +194,7 @@ vloop-length-test: extract-loops
 	@$(EXTRACT_DIR)/vloop_length_test $(VERIFIED_DIR)/dummy.txt
 
 # Run both framings' verified<->verified interop tests.
-vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test vloop-chunk-stream-test request-emit-test response-parse-test response-emit-var-test header-parse-test get-test get-chunked-test get-chunked-var-test
+vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test vloop-chunk-stream-test request-emit-test response-parse-test response-emit-var-test header-parse-test request-line-test get-test get-chunked-test get-chunked-var-test
 
 vloop-chunk-stream-test: extract-loops
 	@echo "Building the verified chunked streaming transfer test ..."
@@ -294,6 +294,17 @@ header-parse-test: extract-loops
 	@echo " Verified http_parse_header_field / http_count_headers -> parse_field"
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/header_parse_test
+
+request-line-test: extract-loops
+	@echo "Building the verified method-aware request-line parser self-test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_line_test \
+	  $(VERIFIED_DIR)/request_line_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified http_parse_request_line  ->  parse_request_line_m"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/request_line_test
 
 get-test: extract-loops
 	@echo "Building the verified GET client self-test (mock server) ..."

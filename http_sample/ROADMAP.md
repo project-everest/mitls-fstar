@@ -96,6 +96,14 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       Exercised by `verified/header_parse_test.c`. *Emit side* (building header
       blocks from records) and porting the Transfer-Encoding/Host receive scan
       onto the iterator remain as follow-ups.
-- [ ] 3. `POST` + request bodies
+- [~] 3. `POST` + request bodies
+      *Method-aware request-line parse landed:* spec `parse_request_line_m`
+      (`HTTP.Wire.Length`) returns `Some (method, target)` for any method; the
+      verified leaf `http_parse_request_line` (`HTTP.Impl.Codec.RequestLine`)
+      recovers the method + target slices with a full round-trip tie, driven by
+      `http_method_eq` (`HTTP.Impl.Loop.Request`) and exercised by
+      `verified/request_line_test.c` (POST/GET/DELETE/PUT/OPTIONS/HEAD + rejects).
+      *Remaining:* server-side POST end-to-end (accept `POST` + read body via
+      `http_header_dec` content-length / chunked), and a client POST emitter.
 - [ ] 4. Smuggling / limit defenses + error responses
 - [ ] 5. Keep-alive / persistent connections; TLS

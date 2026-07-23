@@ -130,6 +130,25 @@ let parse_request_line (input:TCP.bytes) : GTot (option W.token) =
       then Some target
       else None
 
+(* Method-aware request-line parse.  A real client's request line is
+       METHOD SP target SP "HTTP/1.1" CRLF   header-lines*   CRLF
+   (`parse_request_line` above hard-codes METHOD = "GET").  This recovers BOTH
+   the method token (the bytes before the first space) and the target token (the
+   space-free bytes before the second space), then requires the version token,
+   ignoring every byte after it (all headers).  Both returned components are
+   space-free by construction of `split_sp`.  Used on a server to accept `POST`
+   (and any other method) from a real peer. *)
+let parse_request_line_m (input:TCP.bytes) : GTot (option (TCP.bytes & TCP.bytes)) =
+  match W.split_sp input with
+  | None -> None
+  | Some (meth, rest0) ->
+    (match W.split_sp rest0 with
+     | None -> None
+     | Some (target, tl) ->
+       if Seq.length tl >= 10 && W.bseq_eq (Seq.slice tl 0 10) req_ver
+       then Some (meth, target)
+       else None)
+
 let parse_response (input:TCP.bytes) : GTot (WF.parse_result http_message) =
   if Seq.length input < 9 then None else
   let rest0 = Seq.slice input 9 (Seq.length input) in
