@@ -28,6 +28,7 @@ module Seq = FStar.Seq
 module U8  = FStar.UInt8
 module R   = Pulse.Lib.Reference
 module Hdr = HTTP.Impl.Codec.Header
+module Resp = HTTP.Impl.Codec.Response
 
 open Pulse.Lib.BoundedIntegers
 
@@ -79,4 +80,136 @@ fn http_count_headers (inp: array U8.t) (n: SZ.t)
     }
   };
   !cnt
+}
+
+(* Case-insensitive equality of `inp[pos .. pos+nm_len)` and `nm[0 .. nm_len)`.
+   Both sides are lowercased so the target `nm` need not be pre-normalised.
+   Returns false (safely) if the input is too short.  Memory-safe only — a
+   straight-line `stt` block in the `match_ci_at` idiom (the length check is
+   folded into the `ok` accumulator so the `while` runs unconditionally, dodging
+   the stt/stt_div divergent-block join). *)
+fn ci_eq_at
+  (inp: array U8.t) (n: SZ.t) (pos: SZ.t) (nm: array U8.t) (nm_len: SZ.t)
+  requires
+    pts_to inp 'i ** pts_to nm 'm **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v pos <= SZ.v n /\ SZ.v nm_len <= Seq.length 'm)
+  returns b: bool
+  ensures pts_to inp 'i ** pts_to nm 'm ** pure (SZ.v n <= Seq.length 'i)
+{
+  let mut k  = 0sz;
+  let mut ok = true;
+  if SZ.lt (SZ.sub n pos) nm_len {
+    ok := false;
+  };
+  while (SZ.lt !k nm_len && !ok)
+  invariant exists* (vk:SZ.t) (vok:bool).
+    R.pts_to k vk ** R.pts_to ok vok ** pts_to inp 'i ** pts_to nm 'm **
+    pure (SZ.v vk <= SZ.v nm_len /\ SZ.v n <= Seq.length 'i /\
+          SZ.v nm_len <= Seq.length 'm /\
+          (vok ==> SZ.v pos + SZ.v nm_len <= SZ.v n))
+  {
+    let vk = !k;
+    let c = inp.(SZ.add pos vk);
+    let e = nm.(vk);
+    ok := U8.eq (Resp.to_lower c) (Resp.to_lower e);
+    k := SZ.add vk 1sz;
+  };
+  !ok
+}
+
+(* Find the first header field-line in `inp[0..n)` whose field-name equals `nm`
+   (case-insensitive, exact length `nm_len`) and report its field-value slice.
+   On success `pfound := true`, `pvoff`/`pvlen` delimit the value bytes
+   `inp[voff .. voff+vlen)` (in bounds, from the leaf's postcondition); on
+   failure (terminator, malformed line, no match, or no forward progress)
+   `pfound := false`.  Memory-safe. *)
+fn http_find_header
+  (inp: array U8.t) (n: SZ.t) (nm: array U8.t) (nm_len: SZ.t)
+  (pfound: R.ref bool) (pvoff: R.ref SZ.t) (pvlen: R.ref SZ.t)
+  requires
+    pts_to inp 'i ** pts_to nm 'm **
+    R.pts_to pfound 'f0 ** R.pts_to pvoff 'o0 ** R.pts_to pvlen 'l0 **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\ SZ.v nm_len <= Seq.length 'm)
+  ensures
+    pts_to inp 'i ** pts_to nm 'm **
+    (exists* (found:bool) (voff vlen:SZ.t).
+       R.pts_to pfound found ** R.pts_to pvoff voff ** R.pts_to pvlen vlen **
+       pure (found == true ==> SZ.v voff + SZ.v vlen <= SZ.v n))
+{
+  let mut pos     = 0sz;
+  let mut go      = true;
+  let mut pis_end = false;
+  let mut pok     = false;
+  let mut pnlen   = 0sz;
+  let mut voffr   = 0sz;
+  let mut vlenr   = 0sz;
+  let mut pnext   = 0sz;
+  pfound := false;
+  while (!go)
+  invariant exists* (vpos:SZ.t) (vgo ve vok vfound:bool) (a e1 e2 d vo vl:SZ.t).
+    R.pts_to pos vpos ** R.pts_to go vgo ** R.pts_to pis_end ve ** R.pts_to pok vok **
+    R.pts_to pnlen a ** R.pts_to voffr e1 ** R.pts_to vlenr e2 ** R.pts_to pnext d **
+    R.pts_to pfound vfound ** R.pts_to pvoff vo ** R.pts_to pvlen vl **
+    pts_to inp 'i ** pts_to nm 'm **
+    pure (SZ.v vpos <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\
+          SZ.v nm_len <= Seq.length 'm /\
+          (vfound == true ==> SZ.v vo + SZ.v vl <= SZ.v n))
+  {
+    let vpos = !pos;
+    Hdr.http_parse_header_field inp n vpos pis_end pok pnlen voffr vlenr pnext;
+    let isend = !pis_end;
+    let ok = !pok;
+    if (isend || not ok) {
+      go := false;
+    } else {
+      let nlen = !pnlen;
+      let voff = !voffr;
+      let vlen = !vlenr;
+      let nx   = !pnext;
+      let lenmatch  = SZ.eq nlen nm_len;
+      let bytematch = ci_eq_at inp n vpos nm nm_len;
+      if (lenmatch && bytematch) {
+        pfound := true;
+        pvoff  := voff;
+        pvlen  := vlen;
+        go     := false;
+      } else {
+        if SZ.gt nx vpos {
+          pos := nx;
+        } else {
+          go := false;
+        }
+      }
+    }
+  }
+}
+
+(* Look up a header by name via the general field iterator and parse its value
+   as a decimal, re-expressing the Content-Length lookup on top of the header
+   model rather than a bespoke whitelist scan.  `pfound := true` iff a matching
+   header line was found; `pval` then holds the decimal value of its value slice
+   (clamped by the verified `parse_dec_at`; 0 when the header is absent or its
+   value has no leading digits).  Memory-safe. *)
+fn http_header_dec
+  (inp: array U8.t) (n: SZ.t) (nm: array U8.t) (nm_len: SZ.t)
+  (pfound: R.ref bool) (pval: R.ref FStar.UInt32.t)
+  requires
+    pts_to inp 'i ** pts_to nm 'm **
+    R.pts_to pfound 'f0 ** R.pts_to pval 'v0 **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\ SZ.v nm_len <= Seq.length 'm)
+  ensures
+    pts_to inp 'i ** pts_to nm 'm **
+    (exists* (found:bool) (v:FStar.UInt32.t).
+       R.pts_to pfound found ** R.pts_to pval v)
+{
+  let mut voffr = 0sz;
+  let mut vlenr = 0sz;
+  pval := 0ul;
+  http_find_header inp n nm nm_len pfound voffr vlenr;
+  let found = !pfound;
+  if found {
+    let voff = !voffr;
+    let _numeric = Resp.parse_dec_at inp n voff pval;
+    ()
+  }
 }

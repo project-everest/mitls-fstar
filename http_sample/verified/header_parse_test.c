@@ -95,6 +95,56 @@ static void check_count(const uint8_t *buf, size_t n, size_t want) {
   }
 }
 
+/* Assert http_find_header locates `name` and recovers value == `val`. */
+static void expect_find(const uint8_t *buf, size_t n,
+                        const char *name, const char *val) {
+  bool found = false;
+  size_t voff = 0, vlen = 0;
+  http_find_header((uint8_t *)buf, n,
+                   (uint8_t *)name, strlen(name), &found, &voff, &vlen);
+  if (!found) {
+    printf("FAIL: find '%s' not found\n", name);
+    fails++;
+    return;
+  }
+  size_t evlen = strlen(val);
+  if (vlen != evlen || memcmp(buf + voff, val, evlen) != 0) {
+    printf("FAIL: find '%s' value mismatch (got vlen=%zu '%.*s', want '%s')\n",
+           name, vlen, (int)vlen, buf + voff, val);
+    fails++;
+  }
+}
+
+/* Assert http_header_dec does NOT locate `name`. */
+static void expect_no_find(const uint8_t *buf, size_t n, const char *name) {
+  bool found = true;
+  size_t voff = 0, vlen = 0;
+  http_find_header((uint8_t *)buf, n,
+                   (uint8_t *)name, strlen(name), &found, &voff, &vlen);
+  if (found) {
+    printf("FAIL: find '%s' unexpectedly found\n", name);
+    fails++;
+  }
+}
+
+/* Assert http_header_dec finds `name` and parses its value == `want`. */
+static void expect_dec(const uint8_t *buf, size_t n,
+                       const char *name, uint32_t want) {
+  bool found = false;
+  uint32_t v = 0xFFFFFFFFu;
+  http_header_dec((uint8_t *)buf, n,
+                  (uint8_t *)name, strlen(name), &found, &v);
+  if (!found) {
+    printf("FAIL: header_dec '%s' not found\n", name);
+    fails++;
+    return;
+  }
+  if (v != want) {
+    printf("FAIL: header_dec '%s' got %u, want %u\n", name, v, want);
+    fails++;
+  }
+}
+
 int main(void) {
   /* ---- 1. A normal header block, iterated field-by-field ---------------- */
   {
@@ -117,6 +167,19 @@ int main(void) {
     expect_end(buf, n, p);
 
     check_count(buf, n, 5);
+
+    /* http_find_header: case-insensitive name lookup -> value slice */
+    expect_find(buf, n, "host", "example.com");          /* lowercased target  */
+    expect_find(buf, n, "Content-Length", "42");          /* OWS-skipped value  */
+    expect_find(buf, n, "CONTENT-LENGTH", "42");           /* case-insensitive   */
+    expect_find(buf, n, "X-Trailing", "value  ");          /* trailing OWS kept  */
+    expect_find(buf, n, "A", "B");
+    expect_find(buf, n, "X-Empty", "");                    /* empty value        */
+    expect_no_find(buf, n, "X-Absent");                    /* missing            */
+    expect_no_find(buf, n, "Host-Extra");                  /* not a prefix match */
+
+    /* http_header_dec: locate a header and parse its value as a decimal */
+    expect_dec(buf, n, "content-length", 42);              /* CL via header model */
   }
 
   /* ---- 2. Empty block: first line is the terminator --------------------- */
