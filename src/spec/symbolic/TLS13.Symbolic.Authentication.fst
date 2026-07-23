@@ -1,5 +1,16 @@
 module TLS13.Symbolic.Authentication
 
+(*
+ * Concrete-to-symbolic authentication and agreement theorems for TLS 1.3.
+ *
+ * Acceptance predicates are grounded in endpoint shadows refined by concrete
+ * state.  Explicit X.509, signature, and HMAC bridges connect concrete parsing
+ * and cryptography to DY verification.  Under trace invariance, verification
+ * yields a matching honest origin or corruption of the supplied credential or
+ * traffic label.  Context agreement compares symbolic context fields; it does
+ * not independently derive equality of concrete randoms, key shares, or names.
+ *)
+
 module DY = DY.Core
 module Bridge = TLS13.Symbolic.Bridge
 module C = TLS13.Crypto.Spec
@@ -14,6 +25,7 @@ module Usages = TLS13.Symbolic.Usages
 module Sem = TLS13.Wire.Semantics
 module X = TLS13.X509.Spec
 
+(* Client acceptance milestone: concrete-refined client accepted key and Finished. *)
 let client_accepts_server
   (state:Product.product_state)
   (shadow:Product.endpoint_shadow)
@@ -29,6 +41,7 @@ let client_accepts_server
   shadow.Product.shadow_certificate_verify_accepted == true /\
   shadow.Product.shadow_server_finished_accepted == true
 
+(* Anonymous-client acceptance milestone at a concrete-refined server endpoint. *)
 let server_accepts_anonymous_client
   (state:Product.product_state)
   (shadow:Product.endpoint_shadow)
@@ -40,6 +53,10 @@ let server_accepts_anonymous_client
   shadow.Product.shadow_context == Some context /\
   shadow.Product.shadow_client_finished_accepted == true
 
+(*
+ * Tie client acceptance to a registered server principal, symbolic key, and
+ * configured concrete server name.
+ *)
 let trusted_server_matches_acceptance
   (state:Product.product_state)
   (client_shadow:Product.endpoint_shadow)
@@ -54,6 +71,12 @@ let trusted_server_matches_acceptance
   client_shadow.Product.shadow_concrete.SM.cs_model.SM.model_config.SM.config_server_name ==
     server.Bridge.trusted_server_name
 
+(*
+ * Equality of all symbolic session parameters except transcript.
+ *
+ * This is symbolic agreement only; a separate bridge would be needed to claim
+ * equality of the corresponding concrete handshake fields.
+ *)
 let context_parameters_agree
   (left right:Terms.session_context)
   : prop =
@@ -68,6 +91,10 @@ let context_parameters_agree
   left.Terms.context_client_key_share == right.Terms.context_client_key_share /\
   left.Terms.context_server_key_share == right.Terms.context_server_key_share
 
+(*
+ * Connect a client's stored CertificateVerify and server Finished messages to
+ * symbolic serialization, payload terms, and the transcript-extension chain.
+ *)
 let client_acceptance_transcript_evidence
   (state:Product.product_state)
   (client_shadow:Product.endpoint_shadow)
@@ -108,6 +135,10 @@ let client_acceptance_transcript_evidence
       finished_context.Terms.context_transcript
       server_finished_message
 
+(*
+ * Connect a server's stored client Finished to symbolic serialization, verify
+ * data, and the final transcript extension.
+ *)
 let server_acceptance_transcript_evidence
   (state:Product.product_state)
   (server_shadow:Product.endpoint_shadow)
@@ -132,6 +163,12 @@ let server_acceptance_transcript_evidence
       finished_context.Terms.context_transcript
       client_finished_message
 
+(*
+ * Complete concrete X.509/signature bridge used by server authentication.
+ *
+ * It binds registry identity and name, symbolic signing terms and labels,
+ * concrete peer/input state, X.509 validation, and the signature bridge.
+ *)
 let concrete_server_signature_bridge
   (state:Product.product_state)
   (client_shadow:Product.endpoint_shadow)
@@ -189,6 +226,9 @@ let concrete_server_signature_bridge
        (Sem.certificateVerify_signature_bytes certificate_verify)
    | _, _ -> False)
 
+(*
+ * Complete concrete HMAC bridge for a server or client Finished verification.
+ *)
 let concrete_finished_bridge
   (state:Product.product_state)
   (context:Terms.session_context)
@@ -224,6 +264,9 @@ let concrete_finished_bridge
        (Terms.transcript_hash context.Terms.context_transcript)) /\
   DY.get_label state.Product.product_trace finished_key == traffic_label
 
+(*
+ * Abstract DY verification conditions for a server CertificateVerify.
+ *)
 let server_signature_verification
   (tr:DY.trace)
   (context:Terms.session_context)
@@ -246,6 +289,7 @@ let server_signature_verification
     signature /\
   DY.get_signkey_label tr verification_key == credential_label
 
+(* Abstract DY verification conditions for a server Finished tag. *)
 let server_finished_verification
   (tr:DY.trace)
   (context:Terms.session_context)
@@ -267,6 +311,7 @@ let server_finished_verification
     finished_tag /\
   DY.get_label tr finished_key == traffic_label
 
+(* Abstract DY verification conditions for a client Finished tag. *)
 let client_finished_verification
   (tr:DY.trace)
   (context:Terms.session_context)
@@ -288,6 +333,13 @@ let client_finished_verification
     finished_tag /\
   DY.get_label tr finished_key == traffic_label
 
+(*
+ * Derive abstract signature verification from the complete concrete bridge.
+ *
+ * Requirement: concrete_server_signature_bridge, including registry, X.509,
+ * representation, usage, label, and signature facts.
+ * Guarantee: trusted_server_matches_acceptance and server_signature_verification.
+ *)
 val concrete_server_signature_bridge_implies_verification:
   state:Product.product_state ->
   client_shadow:Product.endpoint_shadow ->
@@ -313,6 +365,7 @@ val concrete_server_signature_bridge_implies_verification:
       server_signature_verification
         state.Product.product_trace
         signature_context verification_key signature credential_label)
+(* Normalize the bridge, extract registry matching, and reveal DY.verify. *)
 let concrete_server_signature_bridge_implies_verification
   state client_shadow acceptance_context signature_context server
   certificate_verify verification_key signature credential_label
@@ -331,6 +384,13 @@ let concrete_server_signature_bridge_implies_verification
     state client_shadow acceptance_context verification_key server);
   reveal_opaque (`%DY.verify) DY.verify
 
+(*
+ * Derive server/client abstract Finished verification from its concrete bridge.
+ *
+ * Requirement: concrete_finished_bridge for the is_server branch.
+ * Guarantee: the corresponding server_finished_verification or
+ * client_finished_verification predicate.
+ *)
 val concrete_finished_bridge_implies_verification:
   state:Product.product_state ->
   context:Terms.session_context ->
@@ -355,6 +415,7 @@ val concrete_finished_bridge_implies_verification:
       else client_finished_verification
         state.Product.product_trace
         context finished_key finished_tag traffic_label))
+(* Reveal DY.mac_verify and split on the Finished sender role. *)
 let concrete_finished_bridge_implies_verification
   state context is_server finished concrete_key concrete_message
   traffic_secret finished_key finished_tag traffic_label =
@@ -369,6 +430,13 @@ let concrete_finished_bridge_implies_verification
           state.Product.product_trace context
           finished_key finished_tag traffic_label)
 
+(*
+ * Reflect symbolic client acceptance back to concrete state milestones.
+ *
+ * Requirement: well-formed product state and client_accepts_server.
+ * Guarantee: concrete role is ClientEndpoint and CertificateVerify and server
+ * Finished have both been verified.
+ *)
 val client_acceptance_reflects_concrete_state:
   state:Product.product_state ->
   shadow:Product.endpoint_shadow ->
@@ -385,6 +453,7 @@ val client_acceptance_reflects_concrete_state:
         true /\
       shadow.Product.shadow_concrete.SM.cs_model.SM.model_handshake.SM.hs_server_finished_verified ==
         true)
+(* Select endpoint_refines for the accepted shadow and project its equalities. *)
 let client_acceptance_reflects_concrete_state
   state shadow context verification_key =
   Product.endpoint_member_refines
@@ -392,6 +461,12 @@ let client_acceptance_reflects_concrete_state
     state.Product.product_endpoints
     shadow
 
+(*
+ * Reflect symbolic server acceptance back to concrete application-data state.
+ *
+ * Requirement: well-formed product state and server_accepts_anonymous_client.
+ * Guarantee: concrete role is ServerEndpoint and control is ApplicationData.
+ *)
 val server_acceptance_reflects_concrete_state:
   state:Product.product_state ->
   shadow:Product.endpoint_shadow ->
@@ -405,12 +480,20 @@ val server_acceptance_reflects_concrete_state:
         SM.ServerEndpoint /\
       shadow.Product.shadow_concrete.SM.cs_model.SM.model_control ==
         SM.ControlApplicationData)
+(* Select endpoint_refines for the accepted shadow and project its equalities. *)
 let server_acceptance_reflects_concrete_state state shadow context =
   Product.endpoint_member_refines
     state.Product.product_representation
     state.Product.product_endpoints
     shadow
 
+(*
+ * Turn successful server-signature verification into origin authentication.
+ *
+ * Requirement: invariant trace and server_signature_verification.
+ * Guarantee: either the supplied credential label is corrupt, or an in-profile
+ * server context with matching principal/transcript emitted the signature event.
+ *)
 val verified_server_signature_has_origin:
   tr:DY.trace ->
   context:Terms.session_context ->
@@ -439,6 +522,7 @@ val verified_server_signature_has_origin:
             verification_key
             (Terms.certificate_verify_input
               context.Terms.context_transcript)))
+(* Apply generic DY verification soundness, then the installed signature predicate. *)
 let verified_server_signature_has_origin
   tr context verification_key signature credential_label =
   let usage =
@@ -460,6 +544,13 @@ let verified_server_signature_has_origin
     verification_key
     (Terms.certificate_verify_input context.Terms.context_transcript)
 
+(*
+ * Turn successful server Finished verification into an origin event.
+ *
+ * Requirement: invariant trace and server_finished_verification.
+ * Guarantee: either the supplied traffic label is corrupt, or a matching
+ * transcript context emitted ServerFinishedSent.
+ *)
 val verified_server_finished_has_origin:
   tr:DY.trace ->
   context:Terms.session_context ->
@@ -485,6 +576,7 @@ val verified_server_finished_has_origin:
             origin_context
             finished_key
             (Terms.transcript_hash context.Terms.context_transcript)))
+(* Apply MAC verification soundness and expose the installed Finished predicate. *)
 let verified_server_finished_has_origin
   tr context finished_key finished_tag traffic_label =
   let usage =
@@ -506,6 +598,13 @@ let verified_server_finished_has_origin
     finished_key
     (Terms.transcript_hash context.Terms.context_transcript)
 
+(*
+ * Turn successful client Finished verification into an origin event.
+ *
+ * Requirement: invariant trace and client_finished_verification.
+ * Guarantee: either the supplied traffic label is corrupt, or a matching
+ * transcript context emitted ClientFinishedSent.
+ *)
 val verified_client_finished_has_origin:
   tr:DY.trace ->
   context:Terms.session_context ->
@@ -531,6 +630,7 @@ val verified_client_finished_has_origin:
             origin_context
             finished_key
             (Terms.transcript_hash context.Terms.context_transcript)))
+(* Apply MAC verification soundness and expose the client Finished origin. *)
 let verified_client_finished_has_origin
   tr context finished_key finished_tag traffic_label =
   let usage =
@@ -552,6 +652,9 @@ let verified_client_finished_has_origin
     finished_key
     (Terms.transcript_hash context.Terms.context_transcript)
 
+(*
+ * State injective occurrence of one exact server Finished origin event.
+ *)
 let fresh_server_finished_origin
   (tr:DY.trace)
   (context:Terms.session_context)
@@ -574,6 +677,12 @@ let fresh_server_finished_origin
         (Terms.transcript_hash context.Terms.context_transcript))
     ==> left == right
 
+(*
+ * Derive freshness of an exact server Finished origin in a reachable trace.
+ *
+ * Requirement: securely_reachable_product_state.
+ * Guarantee: any two timestamps for the selected origin event are equal.
+ *)
 val server_finished_origin_is_fresh:
   initial:Product.product_state ->
   transitions:list Product.product_transition ->
@@ -587,6 +696,7 @@ val server_finished_origin_is_fresh:
     (ensures
       fresh_server_finished_origin
         state.Product.product_trace context finished_key)
+(* Forget hygiene and apply Product's reachable security-event uniqueness theorem. *)
 let server_finished_origin_is_fresh
   initial transitions state context finished_key =
   Invariant.secure_product_execution_is_structural
@@ -594,6 +704,12 @@ let server_finished_origin_is_fresh
   Product.reachable_product_state_has_unique_security_events
     initial transitions state
 
+(*
+ * Package a triggered server Finished origin with its unique timestamp.
+ *
+ * Requirement: secure reachability and occurrence of the exact origin event.
+ * Guarantee: an occurrence time exists and every other occurrence has that time.
+ *)
 val injective_server_agreement:
   initial:Product.product_state ->
   transitions:list Product.product_transition ->
@@ -629,6 +745,7 @@ val injective_server_agreement:
               context finished_key
               (Terms.transcript_hash context.Terms.context_transcript))
           ==> other_time == unique_time)
+(* Combine event existence with server_finished_origin_is_fresh. *)
 let injective_server_agreement
   initial transitions state context finished_key =
   server_finished_origin_is_fresh
@@ -679,6 +796,16 @@ let injective_server_agreement
         ==> other_time == unique_time
     with time and ()
 
+(*
+ * Main named-server authentication theorem for concrete client acceptance.
+ *
+ * Requirement: well-formed invariant state; concrete-refined client acceptance;
+ * transcript evidence; registered X.509/signature bridge; and server Finished
+ * HMAC bridge.
+ * Guarantee: credential-label corruption, server-traffic-label corruption, or
+ * both matching server signature and Finished origin events.  Corruption refers
+ * to the caller-supplied labels in the bridge premises.
+ *)
 val concrete_client_acceptance_authenticates_named_server:
   state:Product.product_state ->
   client_shadow:Product.endpoint_shadow ->
@@ -752,6 +879,7 @@ val concrete_client_acceptance_authenticates_named_server:
               server_finished_key
               (Terms.transcript_hash
                 finished_context.Terms.context_transcript)))))
+(* Compose concrete reflection, bridge-to-verification, and DY origin theorems. *)
 let concrete_client_acceptance_authenticates_named_server
   state client_shadow acceptance_context signature_context finished_context
   server certificate_verify_message server_finished_message
@@ -779,6 +907,14 @@ let concrete_client_acceptance_authenticates_named_server
     finished_context
     server_finished_key server_finished_tag server_traffic_label
 
+(*
+ * Concrete server-side confirmation theorem for an anonymous client.
+ *
+ * Requirement: well-formed invariant state; concrete-refined server acceptance;
+ * transcript evidence; and client Finished HMAC bridge.
+ * Guarantee: supplied client-traffic-label corruption or a matching
+ * ClientFinishedSent origin event.
+ *)
 val concrete_server_acceptance_confirms_anonymous_client:
   state:Product.product_state ->
   server_shadow:Product.endpoint_shadow ->
@@ -820,6 +956,7 @@ val concrete_server_acceptance_confirms_anonymous_client:
             client_finished_key
             (Terms.transcript_hash
               finished_context.Terms.context_transcript)))
+(* Compose concrete reflection, Finished bridge conversion, and origin soundness. *)
 let concrete_server_acceptance_confirms_anonymous_client
   state server_shadow acceptance_context finished_context
   client_finished_message client_finished
@@ -838,6 +975,9 @@ let concrete_server_acceptance_confirms_anonymous_client
     finished_context
     client_finished_key client_finished_tag client_traffic_label
 
+(*
+ * Bundle client and server transcript evidence for a completed symbolic session.
+ *)
 let full_session_transcript_evidence
   (state:Product.product_state)
   (client_shadow server_shadow:Product.endpoint_shadow)
@@ -859,6 +999,17 @@ let full_session_transcript_evidence
     state server_shadow server_acceptance_context client_finished_context
     client_finished_message client_finished client_finished_tag
 
+(*
+ * Full bidirectional concrete acceptance/agreement theorem.
+ *
+ * Requirement: both concrete-refined acceptance predicates, complete transcript
+ * evidence, server X.509/signature bridge, and both Finished HMAC bridges in an
+ * invariant well-formed product state.
+ * Guarantee: corruption of one supplied credential/traffic label, or matching
+ * signature, server Finished, and client Finished origins with the stated
+ * symbolic transcript equalities.  This does not strengthen symbolic context
+ * equality into concrete handshake-parameter equality.
+ *)
 val concrete_full_session_agreement:
   state:Product.product_state ->
   client_shadow:Product.endpoint_shadow ->
@@ -964,6 +1115,7 @@ val concrete_full_session_agreement:
               client_finished_key
               (Terms.transcript_hash
                 client_finished_context.Terms.context_transcript)))))
+(* Compose the one-sided client and server acceptance theorems. *)
 let concrete_full_session_agreement
   state client_shadow server_shadow
   signature_context server_finished_context
