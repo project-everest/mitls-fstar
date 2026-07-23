@@ -35,9 +35,14 @@ let signature_predicate
   (key_usage:DY.usage{DY.SigKey? key_usage})
   (verification_key message:DY.bytes)
   : prop =
-  key_usage == Usages.signing_key_usage verification_key /\
   exists context.
     Terms.session_context_in_profile context /\
+    key_usage ==
+      Usages.signing_key_usage
+        context.Terms.context_server.Terms.session_principal
+        verification_key /\
+    message ==
+      Terms.certificate_verify_input context.Terms.context_transcript /\
     DY.event_triggered
       tr
       context.Terms.context_server.Terms.session_principal
@@ -51,6 +56,7 @@ let finished_predicate
   : prop =
   exists context.
     Terms.session_context_in_profile context /\
+    message == Terms.transcript_hash context.Terms.context_transcript /\
     ((key_usage ==
         DY.MacKey
           "TLS13.ServerFinishedKey"
@@ -129,6 +135,8 @@ let signature_predicate_later
   tr1 tr2 key_usage verification_key message =
   eliminate exists context.
     Terms.session_context_in_profile context /\
+    message ==
+      Terms.certificate_verify_input context.Terms.context_transcript /\
     DY.event_triggered
       tr1
       context.Terms.context_server.Terms.session_principal
@@ -158,6 +166,7 @@ val finished_predicate_later:
 let finished_predicate_later tr1 tr2 key_usage key message =
   eliminate exists context.
     Terms.session_context_in_profile context /\
+    message == Terms.transcript_hash context.Terms.context_transcript /\
     ((key_usage ==
         DY.MacKey
           "TLS13.ServerFinishedKey"
@@ -445,6 +454,15 @@ let rec secure_product_execution
     secure_product_execution
       transition.Product.transition_after rest final
 
+let securely_reachable_product_state
+  (initial:Product.product_state)
+  (transitions:list Product.product_transition)
+  (final:Product.product_state)
+  : prop =
+  Product.initial_product_state initial /\
+  DY.trace_invariant initial.Product.product_trace /\
+  secure_product_execution initial transitions final
+
 val secure_product_execution_is_structural:
   initial:Product.product_state ->
   transitions:list Product.product_transition ->
@@ -480,6 +498,16 @@ let rec secure_product_execution_preserves_invariant
       transition.Product.transition_after.Product.product_trace;
     secure_product_execution_preserves_invariant
       transition.Product.transition_after rest final
+
+val securely_reachable_trace_invariant:
+  initial:Product.product_state ->
+  transitions:list Product.product_transition ->
+  final:Product.product_state ->
+  Lemma
+    (requires securely_reachable_product_state initial transitions final)
+    (ensures DY.trace_invariant final.Product.product_trace)
+let securely_reachable_trace_invariant initial transitions final =
+  secure_product_execution_preserves_invariant initial transitions final
 
 val attacker_only_knows_publishable:
   state:Product.product_state ->
@@ -629,9 +657,15 @@ val signature_origin:
     (requires
       DY.sign_pred.DY.pred tr key_usage verification_key message)
     (ensures
-      key_usage == Usages.signing_key_usage verification_key /\
       exists context.
         Terms.session_context_in_profile context /\
+        key_usage ==
+          Usages.signing_key_usage
+            context.Terms.context_server.Terms.session_principal
+            verification_key /\
+        message ==
+          Terms.certificate_verify_input
+            context.Terms.context_transcript /\
         DY.event_triggered
           tr
           context.Terms.context_server.Terms.session_principal

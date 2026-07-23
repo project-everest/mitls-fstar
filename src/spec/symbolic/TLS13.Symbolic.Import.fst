@@ -1,6 +1,7 @@
 module TLS13.Symbolic.Import
 
 module DY = DY.Core
+module Authentication = TLS13.Symbolic.Authentication
 module Bridge = TLS13.Symbolic.Bridge
 module Events = TLS13.Symbolic.Events
 module Invariant = TLS13.Symbolic.Invariant

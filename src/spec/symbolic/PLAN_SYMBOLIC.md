@@ -1,6 +1,6 @@
 # Symbolic Security Proof Plan for the TLS 1.3 1-RTT Profile
 
-Status: **approved; Phase 5 complete; Phase 6 in progress**
+Status: **approved; Phase 6 complete; Phase 7 in progress**
 
 This document is the review gate for the symbolic-security work. Until this
 plan is approved, the only repository change in this workstream should be this
@@ -297,6 +297,13 @@ exported both for product executions and, through lifting, for every concrete
 execution satisfying `symbolically_realizable_execution`. This premise
 embodies the ideal-cryptography boundary; the lifting theorem does not itself
 constitute a computational proof.
+
+A protocol-origin event produced by an honest transition is required to be
+fresh in the pre-transition trace. This is an explicit realization condition,
+not a field of `product_well_formed`. Initial traces contain no protocol-origin
+events, and freshness is preserved inductively by every product step. Thus
+injective agreement is a theorem of reachable executions rather than an
+assumed global uniqueness property.
 
 A future computational proof may discharge the realizability premises for
 concrete implementations.
@@ -607,6 +614,31 @@ Relate concrete ChaCha20-Poly1305 records to `AeadEnc` with:
 The DY authenticity result is an ideal AEAD assumption. Existing
 open-after-seal correctness alone is not an authenticity theorem.
 
+### 10.7 Authentication consumers and corruption labels
+
+The Phase 6 concrete authentication theorems consume the bridge predicates
+directly:
+
+- `concrete_server_signature_bridge` connects the accepted X.509 leaf key,
+  RSA-PSS CertificateVerify input and signature, trusted server registry, and
+  exact pre-CertificateVerify transcript to symbolic signature verification;
+- `concrete_finished_bridge` connects concrete HMAC-SHA256 computation and the
+  exact pre-Finished transcript to symbolic Finished verification; and
+- the transcript-evidence predicates connect the serialized
+  CertificateVerify, server Finished, and client Finished messages to three
+  distinct transcript checkpoints.
+
+These are caller-provided, execution-local realizability obligations. The
+authentication proof derives DY origin results from them; it does not prove
+computational RSA-PSS, HMAC, or X.509 security.
+
+Each authentication compromise exception uses the label stored on the exact
+symbolic key used by the corresponding verification: the server credential
+label for CertificateVerify, and the relevant role-specific handshake traffic
+label for Finished. `DY.is_corrupt trace label` means that this labeled value
+was exposed in the modeled trace. It does not imply compromise of unrelated
+ephemeral, traffic, or peer state.
+
 ## 11. Proposed module hierarchy
 
 All new TLS proof modules live under `src/spec/symbolic`.
@@ -885,25 +917,30 @@ Commit boundary:
 
 Purpose: obtain the primary handshake authentication result.
 
-- [ ] Define client and server acceptance predicates from concrete TLS fields.
-- [ ] Prove server-signature origin.
-- [ ] Prove server-Finished origin.
-- [ ] Prove client server-aliveness.
-- [ ] Prove non-injective server agreement.
-- [ ] Prove injective server agreement from session freshness.
-- [ ] Prove exact transcript agreement through server Finished.
-- [ ] Prove client-Finished origin.
-- [ ] Prove anonymous client key confirmation.
-- [ ] Prove honest-client/full-session transcript agreement.
-- [ ] State all credential/trust compromise exceptions over the correct trace
+- [x] Define client and server acceptance predicates from concrete TLS fields.
+- [x] Prove server-signature origin.
+- [x] Prove server-Finished origin.
+- [x] Prove client server-aliveness.
+- [x] Prove non-injective server agreement.
+- [x] Prove injective server agreement from session freshness.
+- [x] Prove exact transcript agreement through server Finished.
+- [x] Prove client-Finished origin.
+- [x] Prove anonymous client key confirmation.
+- [x] Prove honest-client/full-session transcript agreement.
+- [x] State all credential/trust compromise exceptions over the correct trace
       prefix.
+- [x] Derive origin-event uniqueness from an origin-free initial trace and
+      fresh honest event emission, rather than assuming uniqueness in product
+      well-formedness.
+- [x] Make concrete X.509, RSA-PSS, and HMAC bridge evidence load-bearing in
+      the concrete authentication theorems.
 
 Exit gate:
 
-- [ ] Client acceptance authenticates the configured server identity or reports
+- [x] Client acceptance authenticates the configured server identity or reports
       the precise compromise exception.
-- [ ] Server acceptance claims only anonymous key confirmation.
-- [ ] Agreement covers exact serialized transcripts, not just key equality.
+- [x] Server acceptance claims only anonymous key confirmation.
+- [x] Agreement covers exact serialized transcripts, not just key equality.
 
 Commit boundary:
 

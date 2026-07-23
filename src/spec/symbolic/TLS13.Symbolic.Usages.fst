@@ -6,8 +6,11 @@ module K = TLS13.Keys
 module Seq = FStar.Seq
 module Terms = TLS13.Symbolic.Terms
 
-let signing_key_usage (credential:DY.bytes) : DY.usage =
-  DY.SigKey "TLS13.ServerSigningKey" credential
+let signing_key_usage
+  (server:DY.principal)
+  (credential:DY.bytes)
+  : DY.usage =
+  DY.SigKey server credential
 
 let signing_nonce_usage : DY.usage =
   DY.SigNonce

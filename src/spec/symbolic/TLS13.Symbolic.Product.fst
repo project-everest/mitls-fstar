@@ -14,6 +14,7 @@ module R = TLS13.Record.Spec
 module Reach = TLS13.Spec.StateMachine.Reachability
 module SM = TLS13.Spec.StateMachine
 module Terms = TLS13.Symbolic.Terms
+module Sem = TLS13.Wire.Semantics
 module X = TLS13.X509.Spec
 
 let option_represents
@@ -488,6 +489,200 @@ let rec sessions_unique
     session_absent head.shadow_session tail /\
     sessions_unique tail
 
+let trace_entry_unique
+  (tr:DY.trace)
+  (entry:DY.trace_entry)
+  : prop =
+  forall left right.
+    DY.entry_at tr left entry /\
+    DY.entry_at tr right entry
+    ==> left == right
+
+let security_events_unique (tr:DY.trace) : prop =
+  forall principal content.
+    trace_entry_unique
+      tr
+      (DY.Event principal
+        (Events.event_tag Events.ServerCertificateVerifySigned)
+        content) /\
+    trace_entry_unique
+      tr
+      (DY.Event principal
+        (Events.event_tag Events.ServerFinishedSent)
+        content) /\
+    trace_entry_unique
+      tr
+      (DY.Event principal
+        (Events.event_tag Events.ClientFinishedSent)
+        content)
+
+val entry_at_snoc_cases:
+  tr:DY.trace ->
+  last:DY.trace_entry ->
+  time:DY.timestamp ->
+  entry:DY.trace_entry ->
+  Lemma
+    (requires DY.entry_at (DY.Snoc tr last) time entry)
+    (ensures
+      (time == DY.trace_length tr /\ entry == last) \/
+      (time < DY.trace_length tr /\ DY.entry_at tr time entry))
+let entry_at_snoc_cases tr last time entry =
+  norm_spec
+    [delta_only
+      [`%DY.entry_at;
+       `%DY.on_trace;
+       `%DY.trace_length;
+       `%DY.get_entry_at;
+       `%DY.last_timestamp;
+       `%DY.last;
+       `%DY.init];
+     iota]
+    (DY.entry_at (DY.Snoc tr last) time entry)
+
+val trace_entry_unique_snoc:
+  tr:DY.trace ->
+  last:DY.trace_entry ->
+  entry:DY.trace_entry ->
+  Lemma
+    (requires
+      trace_entry_unique tr entry /\
+      (~(last == entry) \/ ~(DY.entry_exists tr entry)))
+    (ensures trace_entry_unique (DY.Snoc tr last) entry)
+
+val entry_at_implies_exists:
+  tr:DY.trace ->
+  time:DY.timestamp ->
+  entry:DY.trace_entry ->
+  Lemma
+    (requires DY.entry_at tr time entry)
+    (ensures DY.entry_exists tr entry)
+let entry_at_implies_exists tr time entry =
+  introduce exists witness. DY.entry_at tr witness entry
+  with time and ()
+
+val trace_entry_unique_at:
+  tr:DY.trace ->
+  entry:DY.trace_entry ->
+  left:DY.timestamp ->
+  right:DY.timestamp ->
+  Lemma
+    (requires
+      trace_entry_unique tr entry /\
+      DY.entry_at tr left entry /\
+      DY.entry_at tr right entry)
+    (ensures left == right)
+let trace_entry_unique_at tr entry left right =
+  normalize_term_spec trace_entry_unique
+
+val fresh_entry_not_old:
+  tr:DY.trace ->
+  entry:DY.trace_entry ->
+  time:DY.timestamp ->
+  Lemma
+    (requires
+      ~(DY.entry_exists tr entry) /\
+      DY.entry_at tr time entry)
+    (ensures False)
+let fresh_entry_not_old tr entry time =
+  entry_at_implies_exists tr time entry
+
+let trace_entry_unique_snoc tr last entry =
+  introduce forall left right.
+    DY.entry_at (DY.Snoc tr last) left entry /\
+    DY.entry_at (DY.Snoc tr last) right entry
+    ==> left == right
+  with (
+    introduce _ ==> _ with _. (
+      entry_at_snoc_cases tr last left entry;
+      entry_at_snoc_cases tr last right entry;
+      if left = DY.trace_length tr
+      then
+        if right = DY.trace_length tr
+        then ()
+        else begin
+          assert (entry == last);
+          assert (last == entry);
+          assert (~(DY.entry_exists tr entry));
+          assert (DY.entry_at tr right entry);
+          fresh_entry_not_old tr entry right
+        end
+      else if right = DY.trace_length tr
+      then begin
+        assert (entry == last);
+        assert (last == entry);
+        assert (~(DY.entry_exists tr entry));
+        assert (DY.entry_at tr left entry);
+        fresh_entry_not_old tr entry left
+      end
+      else begin
+        assert (DY.entry_at tr left entry);
+        assert (DY.entry_at tr right entry);
+        trace_entry_unique_at tr entry left right
+      end))
+
+let is_security_event_entry (entry:DY.trace_entry) : prop =
+  match entry with
+  | DY.Event _ tag _ ->
+    tag == Events.event_tag Events.ServerCertificateVerifySigned \/
+    tag == Events.event_tag Events.ServerFinishedSent \/
+    tag == Events.event_tag Events.ClientFinishedSent
+  | _ -> False
+
+val security_target_unique_snoc:
+  tr:DY.trace ->
+  last:DY.trace_entry ->
+  target:DY.trace_entry{is_security_event_entry target} ->
+  Lemma
+    (requires
+      trace_entry_unique tr target /\
+      (is_security_event_entry last ==> ~(DY.entry_exists tr last)))
+    (ensures trace_entry_unique (DY.Snoc tr last) target)
+let security_target_unique_snoc tr last target =
+  assert (~(last == target) \/ ~(DY.entry_exists tr target));
+  trace_entry_unique_snoc tr last target
+
+val security_events_unique_snoc:
+  tr:DY.trace ->
+  last:DY.trace_entry ->
+  Lemma
+    (requires
+      security_events_unique tr /\
+      (is_security_event_entry last ==> ~(DY.entry_exists tr last)))
+    (ensures security_events_unique (DY.Snoc tr last))
+let security_events_unique_snoc tr last =
+  introduce forall principal content.
+    trace_entry_unique
+      (DY.Snoc tr last)
+      (DY.Event principal
+        (Events.event_tag Events.ServerCertificateVerifySigned)
+        content) /\
+    trace_entry_unique
+      (DY.Snoc tr last)
+      (DY.Event principal
+        (Events.event_tag Events.ServerFinishedSent)
+        content) /\
+    trace_entry_unique
+      (DY.Snoc tr last)
+      (DY.Event principal
+        (Events.event_tag Events.ClientFinishedSent)
+        content)
+  with (
+    security_target_unique_snoc
+      tr last
+      (DY.Event principal
+        (Events.event_tag Events.ServerCertificateVerifySigned)
+        content);
+    security_target_unique_snoc
+      tr last
+      (DY.Event principal
+        (Events.event_tag Events.ServerFinishedSent)
+        content);
+    security_target_unique_snoc
+      tr last
+      (DY.Event principal
+        (Events.event_tag Events.ClientFinishedSent)
+        content))
+
 let product_well_formed (state:product_state) : prop =
   state.product_representation.Bridge.representation_trace ==
     state.product_trace /\
@@ -495,6 +690,29 @@ let product_well_formed (state:product_state) : prop =
     state.product_representation
     state.product_endpoints /\
   sessions_unique state.product_endpoints
+
+let security_origin_free (tr:DY.trace) : prop =
+  forall principal content.
+    ~(DY.event_triggered
+        tr principal
+        (Events.event_tag Events.ServerCertificateVerifySigned)
+        content) /\
+    ~(DY.event_triggered
+        tr principal
+        (Events.event_tag Events.ServerFinishedSent)
+        content) /\
+    ~(DY.event_triggered
+        tr principal
+        (Events.event_tag Events.ClientFinishedSent)
+        content) /\
+    ~(DY.event_triggered
+        tr principal
+        (Events.event_tag Events.ProtectedRecordSent)
+        content)
+
+let initial_product_state (state:product_state) : prop =
+  product_well_formed state /\
+  security_origin_free state.product_trace
 
 let rec replace_endpoint
   (before_shadow after_shadow:endpoint_shadow)
@@ -530,39 +748,203 @@ let rec remove_packet
       after == head :: after_tail /\
       remove_packet packet tail after_tail)
 
+noeq
+type protocol_event_realization =
+  | NoProtocolEvent
+  | ServerSignatureGenerated:
+      context:Terms.session_context ->
+      verification_key:DY.bytes ->
+      signing_key:DY.bytes ->
+      signing_nonce:DY.bytes ->
+      protocol_event_realization
+  | ServerFinishedGenerated:
+      context:Terms.session_context ->
+      finished_key:DY.bytes ->
+      protocol_event_realization
+  | ClientFinishedGenerated:
+      context:Terms.session_context ->
+      finished_key:DY.bytes ->
+      protocol_event_realization
+
+let protocol_origin_event (event:SM.conn_event) : bool =
+  match event with
+  | SM.ConnLocalEvent (SM.LocalSignCertificateVerify _) -> true
+  | SM.ConnNetworkEvent directed ->
+    (match directed.CL.message_direction, directed.CL.message_value with
+     | CL.Sent, M.TlsHandshake (M.Finished _) -> true
+     | _, _ -> false)
+  | _ -> false
+
+let protocol_event_entry
+  (shadow:endpoint_shadow)
+  (realization:protocol_event_realization)
+  : option DY.trace_entry =
+  match realization with
+  | NoProtocolEvent -> None
+  | ServerSignatureGenerated context verification_key _ _ ->
+    Some
+      (Events.handshake_event_entry
+        shadow.shadow_session.Terms.session_principal
+        Events.ServerCertificateVerifySigned
+        context
+        (DY.Concat
+          verification_key
+          (Terms.certificate_verify_input
+            context.Terms.context_transcript)))
+  | ServerFinishedGenerated context finished_key ->
+    Some
+      (Events.handshake_event_entry
+        shadow.shadow_session.Terms.session_principal
+        Events.ServerFinishedSent
+        context
+        (DY.Concat
+          finished_key
+          (Terms.transcript_hash context.Terms.context_transcript)))
+  | ClientFinishedGenerated context finished_key ->
+    Some
+      (Events.handshake_event_entry
+        shadow.shadow_session.Terms.session_principal
+        Events.ClientFinishedSent
+        context
+        (DY.Concat
+          finished_key
+          (Terms.transcript_hash context.Terms.context_transcript)))
+
+let protocol_event_realizes
+  (representation:Bridge.representation)
+  (registry:list Bridge.trusted_server)
+  (shadow:endpoint_shadow)
+  (event:SM.conn_event)
+  (realization:protocol_event_realization)
+  : prop =
+  match event, realization with
+  | SM.ConnLocalEvent (SM.LocalSignCertificateVerify cv),
+    ServerSignatureGenerated context verification_key signing_key signing_nonce ->
+    shadow.shadow_session.Terms.session_role == Terms.SymbolicServer /\
+    shadow.shadow_context == Some context /\
+    Terms.session_context_in_profile context /\
+    context.Terms.context_server == shadow.shadow_session /\
+    (exists server selection.
+      Bridge.registered_server registry server /\
+      server.Bridge.trusted_server_principal ==
+        shadow.shadow_session.Terms.session_principal /\
+      server.Bridge.trusted_server_symbolic_key == verification_key /\
+      shadow.shadow_concrete.SM.cs_model.SM.model_handshake.SM.hs_server_selection ==
+        Some selection /\
+      selection.SM.server_selected_credential ==
+        server.Bridge.trusted_server_verification_key /\
+      Bridge.represents
+        representation
+        selection.SM.server_selected_credential
+        (Terms.verification_key signing_key)) /\
+    Bridge.represents
+      representation
+      (Sem.certificateVerify_signature_bytes cv)
+      (Terms.certificate_verify
+        signing_key signing_nonce context.Terms.context_transcript)
+  | SM.ConnNetworkEvent directed,
+    ServerFinishedGenerated context finished_key ->
+    shadow.shadow_session.Terms.session_role == Terms.SymbolicServer /\
+    shadow.shadow_context == Some context /\
+    Terms.session_context_in_profile context /\
+    context.Terms.context_server == shadow.shadow_session /\
+    (match
+       directed.CL.message_direction,
+       directed.CL.message_value,
+       shadow.shadow_key_schedule.symbolic_server_handshake_traffic
+     with
+     | CL.Sent, M.TlsHandshake (M.Finished fin), Some traffic ->
+       finished_key == Terms.finished_key traffic.symbolic_traffic_secret /\
+       Bridge.represents
+         representation
+         (Sem.finished_verify_data fin)
+         (Terms.finished_verify_data
+           traffic.symbolic_traffic_secret
+           context.Terms.context_transcript)
+     | _, _, _ -> False)
+  | SM.ConnNetworkEvent directed,
+    ClientFinishedGenerated context finished_key ->
+    shadow.shadow_session.Terms.session_role == Terms.SymbolicClient /\
+    shadow.shadow_context == Some context /\
+    Terms.session_context_in_profile context /\
+    context.Terms.context_client == shadow.shadow_session /\
+    (match
+       directed.CL.message_direction,
+       directed.CL.message_value,
+       shadow.shadow_key_schedule.symbolic_client_handshake_traffic
+     with
+     | CL.Sent, M.TlsHandshake (M.Finished fin), Some traffic ->
+       finished_key == Terms.finished_key traffic.symbolic_traffic_secret /\
+       Bridge.represents
+         representation
+         (Sem.finished_verify_data fin)
+         (Terms.finished_verify_data
+           traffic.symbolic_traffic_secret
+           context.Terms.context_transcript)
+     | _, _, _ -> False)
+  | _, NoProtocolEvent -> protocol_origin_event event == false
+  | _, _ -> False
+
+let protocol_event_trace
+  (before:DY.trace)
+  (shadow:endpoint_shadow)
+  (realization:protocol_event_realization)
+  : DY.trace =
+  match protocol_event_entry shadow realization with
+  | None -> before
+  | Some entry -> DY.Snoc before entry
+
+let protocol_event_fresh
+  (before:DY.trace)
+  (shadow:endpoint_shadow)
+  (realization:protocol_event_realization)
+  : prop =
+  match protocol_event_entry shadow realization with
+  | None -> True
+  | Some entry -> ~(DY.entry_exists before entry)
+
 let honest_network_trace_delta
   (representation:Bridge.representation)
+  (registry:list Bridge.trusted_server)
   (before_network:list network_packet)
   (before_trace:DY.trace)
+  (before_shadow:endpoint_shadow)
   (after_shadow:endpoint_shadow)
+  (event:SM.conn_event)
   (raw_sent raw_received:B.bytes)
   (after_network:list network_packet)
   (after_trace:DY.trace)
   : prop =
-  (B.length raw_sent == 0 /\
-   B.length raw_received == 0 /\
-   after_network == before_network /\
-   after_trace == DY.Snoc before_trace (endpoint_state_entry after_shadow)) \/
-  (B.length raw_sent <> 0 /\
-   B.length raw_received == 0 /\
-   exists symbolic.
-     Bridge.represents representation raw_sent symbolic /\
-     after_network == {
-       packet_raw = raw_sent;
-       packet_symbolic = symbolic;
-     } :: before_network /\
-     after_trace ==
-       DY.Snoc
-         (DY.Snoc before_trace (DY.MsgSent symbolic))
-         (endpoint_state_entry after_shadow)) \/
-  (B.length raw_sent == 0 /\
-   B.length raw_received <> 0 /\
-   exists packet.
-     packet.packet_raw == raw_received /\
-     Bridge.represents
-       representation packet.packet_raw packet.packet_symbolic /\
-     remove_packet packet before_network after_network /\
-     after_trace == DY.Snoc before_trace (endpoint_state_entry after_shadow))
+  exists realization.
+    protocol_event_realizes
+      representation registry before_shadow event realization /\
+    protocol_event_fresh before_trace before_shadow realization /\
+    (let event_trace =
+       protocol_event_trace before_trace before_shadow realization in
+     (B.length raw_sent == 0 /\
+      B.length raw_received == 0 /\
+      after_network == before_network /\
+      after_trace == DY.Snoc event_trace (endpoint_state_entry after_shadow)) \/
+     (B.length raw_sent <> 0 /\
+      B.length raw_received == 0 /\
+      exists symbolic.
+        Bridge.represents representation raw_sent symbolic /\
+        after_network == {
+          packet_raw = raw_sent;
+          packet_symbolic = symbolic;
+        } :: before_network /\
+        after_trace ==
+          DY.Snoc
+            (DY.Snoc event_trace (DY.MsgSent symbolic))
+            (endpoint_state_entry after_shadow)) \/
+     (B.length raw_sent == 0 /\
+      B.length raw_received <> 0 /\
+      exists packet.
+        packet.packet_raw == raw_received /\
+        Bridge.represents
+          representation packet.packet_raw packet.packet_symbolic /\
+        remove_packet packet before_network after_network /\
+        after_trace == DY.Snoc event_trace (endpoint_state_entry after_shadow)))
 
 let representation_extends
   (before after:Bridge.representation)
@@ -634,9 +1016,12 @@ let symbolic_update_realizes
     before.product_endpoints after.product_endpoints /\
   honest_network_trace_delta
     after.product_representation
+    before.product_registry
     before.product_network
     before.product_trace
+    before_shadow
     after_shadow
+    event
     raw_sent raw_received
     after.product_network
     after.product_trace /\
@@ -803,6 +1188,227 @@ let rec product_execution
       transition.transition_action
       transition.transition_after /\
     product_execution transition.transition_after rest final
+
+val initial_product_state_has_unique_security_events:
+  state:product_state ->
+  Lemma
+    (requires initial_product_state state)
+    (ensures security_events_unique state.product_trace)
+let initial_product_state_has_unique_security_events state =
+  norm_spec
+    [delta_only
+      [`%initial_product_state;
+       `%security_origin_free;
+       `%security_events_unique;
+       `%trace_entry_unique;
+       `%DY.event_triggered;
+       `%DY.event_triggered_at;
+       `%DY.entry_exists]]
+    (initial_product_state state)
+
+val protocol_event_entry_is_security:
+  shadow:endpoint_shadow ->
+  realization:protocol_event_realization ->
+  entry:DY.trace_entry ->
+  Lemma
+    (requires protocol_event_entry shadow realization == Some entry)
+    (ensures is_security_event_entry entry)
+let protocol_event_entry_is_security shadow realization entry =
+  match realization with
+  | NoProtocolEvent -> ()
+  | ServerSignatureGenerated _ _ _ _ -> ()
+  | ServerFinishedGenerated _ _ -> ()
+  | ClientFinishedGenerated _ _ -> ()
+
+val protocol_event_trace_preserves_unique_security_events:
+  before:DY.trace ->
+  shadow:endpoint_shadow ->
+  realization:protocol_event_realization ->
+  Lemma
+    (requires
+      security_events_unique before /\
+      protocol_event_fresh before shadow realization)
+    (ensures
+      security_events_unique
+        (protocol_event_trace before shadow realization))
+let protocol_event_trace_preserves_unique_security_events
+  before shadow realization =
+  match protocol_event_entry shadow realization with
+  | None -> ()
+  | Some entry ->
+    protocol_event_entry_is_security shadow realization entry;
+    security_events_unique_snoc before entry
+
+val honest_network_trace_delta_preserves_unique_security_events:
+  representation:Bridge.representation ->
+  registry:list Bridge.trusted_server ->
+  before_network:list network_packet ->
+  before_trace:DY.trace ->
+  before_shadow:endpoint_shadow ->
+  after_shadow:endpoint_shadow ->
+  event:SM.conn_event ->
+  raw_sent:B.bytes ->
+  raw_received:B.bytes ->
+  after_network:list network_packet ->
+  after_trace:DY.trace ->
+  Lemma
+    (requires
+      security_events_unique before_trace /\
+      honest_network_trace_delta
+        representation registry before_network before_trace
+        before_shadow after_shadow event raw_sent raw_received
+        after_network after_trace)
+    (ensures security_events_unique after_trace)
+let honest_network_trace_delta_preserves_unique_security_events
+  representation registry before_network before_trace
+  before_shadow after_shadow event raw_sent raw_received
+  after_network after_trace =
+  eliminate exists realization.
+    protocol_event_realizes
+      representation registry before_shadow event realization /\
+    protocol_event_fresh before_trace before_shadow realization /\
+    (let event_trace =
+       protocol_event_trace before_trace before_shadow realization in
+     (B.length raw_sent == 0 /\
+      B.length raw_received == 0 /\
+      after_network == before_network /\
+      after_trace == DY.Snoc event_trace (endpoint_state_entry after_shadow)) \/
+     (B.length raw_sent <> 0 /\
+      B.length raw_received == 0 /\
+      exists symbolic.
+        Bridge.represents representation raw_sent symbolic /\
+        after_network == {
+          packet_raw = raw_sent;
+          packet_symbolic = symbolic;
+        } :: before_network /\
+        after_trace ==
+          DY.Snoc
+            (DY.Snoc event_trace (DY.MsgSent symbolic))
+            (endpoint_state_entry after_shadow)) \/
+     (B.length raw_sent == 0 /\
+      B.length raw_received <> 0 /\
+      exists packet.
+        packet.packet_raw == raw_received /\
+        Bridge.represents
+          representation packet.packet_raw packet.packet_symbolic /\
+        remove_packet packet before_network after_network /\
+        after_trace == DY.Snoc event_trace (endpoint_state_entry after_shadow)))
+  returns security_events_unique after_trace
+  with _. (
+    let event_trace =
+      protocol_event_trace before_trace before_shadow realization in
+    protocol_event_trace_preserves_unique_security_events
+      before_trace before_shadow realization;
+    if B.length raw_sent = 0
+    then begin
+      assert (after_trace ==
+        DY.Snoc event_trace (endpoint_state_entry after_shadow));
+      assert (~(is_security_event_entry (endpoint_state_entry after_shadow)));
+      security_events_unique_snoc
+        event_trace (endpoint_state_entry after_shadow)
+    end
+    else begin
+      eliminate exists symbolic.
+        Bridge.represents representation raw_sent symbolic /\
+        after_network == {
+          packet_raw = raw_sent;
+          packet_symbolic = symbolic;
+        } :: before_network /\
+        after_trace ==
+          DY.Snoc
+            (DY.Snoc event_trace (DY.MsgSent symbolic))
+            (endpoint_state_entry after_shadow)
+      returns security_events_unique after_trace
+      with _. (
+        assert (~(is_security_event_entry (DY.MsgSent symbolic)));
+        security_events_unique_snoc event_trace (DY.MsgSent symbolic);
+        assert (~(is_security_event_entry
+          (endpoint_state_entry after_shadow)));
+        security_events_unique_snoc
+          (DY.Snoc event_trace (DY.MsgSent symbolic))
+          (endpoint_state_entry after_shadow))
+    end)
+
+val product_step_preserves_unique_security_events:
+  before:product_state ->
+  action:product_action ->
+  after:product_state ->
+  Lemma
+    (requires
+      security_events_unique before.product_trace /\
+      product_step before action after)
+    (ensures security_events_unique after.product_trace)
+let product_step_preserves_unique_security_events before action after =
+  match action with
+  | CreateEndpoint shadow ->
+    assert (~(is_security_event_entry (session_started_entry shadow)));
+    security_events_unique_snoc
+      before.product_trace (session_started_entry shadow);
+    assert (~(is_security_event_entry (endpoint_state_entry shadow)));
+    security_events_unique_snoc
+      (DY.Snoc before.product_trace (session_started_entry shadow))
+      (endpoint_state_entry shadow)
+  | HonestGenerate shadow usage label length ->
+    assert (~(is_security_event_entry (DY.RandGen usage label length)));
+    security_events_unique_snoc
+      before.product_trace (DY.RandGen usage label length)
+  | HonestLocal
+      before_shadow after_shadow event raw_sent raw_received
+  | HonestCanonical
+      before_shadow after_shadow event raw_sent raw_received ->
+    honest_network_trace_delta_preserves_unique_security_events
+      after.product_representation
+      before.product_registry
+      before.product_network
+      before.product_trace
+      before_shadow after_shadow event raw_sent raw_received
+      after.product_network
+      after.product_trace
+  | AttackerInject _
+  | AttackerRoute _
+  | AttackerDrop _
+  | AttackerReplay _ -> ()
+  | CorruptState _ _ timestamp ->
+    assert (~(is_security_event_entry (DY.Corrupt timestamp)));
+    security_events_unique_snoc
+      before.product_trace (DY.Corrupt timestamp)
+
+val product_execution_preserves_unique_security_events:
+  initial:product_state ->
+  transitions:list product_transition ->
+  final:product_state ->
+  Lemma
+    (requires
+      security_events_unique initial.product_trace /\
+      product_execution initial transitions final)
+    (ensures security_events_unique final.product_trace)
+    (decreases (List.Tot.length transitions))
+let rec product_execution_preserves_unique_security_events
+  initial transitions final =
+  match transitions with
+  | [] -> ()
+  | transition :: rest ->
+    product_step_preserves_unique_security_events
+      transition.transition_before
+      transition.transition_action
+      transition.transition_after;
+    product_execution_preserves_unique_security_events
+      transition.transition_after rest final
+
+val reachable_product_state_has_unique_security_events:
+  initial:product_state ->
+  transitions:list product_transition ->
+  final:product_state ->
+  Lemma
+    (requires
+      initial_product_state initial /\
+      product_execution initial transitions final)
+    (ensures security_events_unique final.product_trace)
+let reachable_product_state_has_unique_security_events
+  initial transitions final =
+  initial_product_state_has_unique_security_events initial;
+  product_execution_preserves_unique_security_events
+    initial transitions final
 
 let transition_projects_exactly
  (concrete:concrete_transition)
