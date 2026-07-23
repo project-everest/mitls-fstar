@@ -1,6 +1,6 @@
 # Symbolic Security Proof Plan for the TLS 1.3 1-RTT Profile
 
-Status: **approved; Phase 3 complete; Phase 4 in progress**
+Status: **approved; Phase 4 complete; Phase 5 in progress**
 
 This document is the review gate for the symbolic-security work. Until this
 plan is approved, the only repository change in this workstream should be this
@@ -813,29 +813,29 @@ Commit boundary:
 
 Purpose: connect DY traces to real TLS state-machine executions.
 
-- [ ] Define endpoint symbolic shadows.
-- [ ] Define `endpoint_refines`.
-- [ ] Define the global multi-session product state.
-- [ ] Define session creation and honest local steps.
-- [ ] Define honest canonical send/receive steps.
-- [ ] Define attacker knowledge, injection, routing, drop, and replay steps.
-- [ ] Define corruption steps.
-- [ ] Prove refinement preservation for every honest TLS event.
-- [ ] Prove every honest state transition is a
+- [x] Define endpoint symbolic shadows.
+- [x] Define `endpoint_refines`.
+- [x] Define the global multi-session product state.
+- [x] Define session creation and honest local steps.
+- [x] Define honest canonical send/receive steps.
+- [x] Define attacker knowledge, injection, routing, drop, and replay steps.
+- [x] Define corruption steps.
+- [x] Prove refinement preservation for every honest TLS event.
+- [x] Prove every honest state transition is a
       `legal_connection_delta`.
-- [ ] Prove every honest raw record transition is a
+- [x] Prove every honest raw record transition is a
       `canonical_wire_step`.
-- [ ] Prove per-session projection to existing reachability.
-- [ ] Prove stepwise lifting from every symbolically realizable concrete
+- [x] Prove per-session projection to existing reachability.
+- [x] Prove stepwise lifting from every symbolically realizable concrete
       transition.
-- [ ] Prove the concrete-to-product lifting theorem for complete executions.
+- [x] Prove the concrete-to-product lifting theorem for complete executions.
 
 Exit gate:
 
-- [ ] An active attacker can drive arbitrarily interleaved sessions.
-- [ ] No honest step bypasses the existing state machine.
-- [ ] Product reachability projects to ordinary TLS reachability.
-- [ ] Every concrete execution satisfying the bridge premises has a product
+- [x] An active attacker can drive arbitrarily interleaved sessions.
+- [x] No honest step bypasses the existing state machine.
+- [x] Product reachability projects to ordinary TLS reachability.
+- [x] Every concrete execution satisfying the bridge premises has a product
       execution with exactly that concrete projection.
 
 Commit boundary:
