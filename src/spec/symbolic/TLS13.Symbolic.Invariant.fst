@@ -24,10 +24,10 @@ let record_origin_content
   (context:Terms.session_context)
   (direction:Events.record_direction)
   (epoch:Events.record_epoch)
-  (nonce plaintext additional_data key:DY.bytes)
+  (sequence_number nonce plaintext additional_data key:DY.bytes)
   : DY.bytes =
   Events.record_event_content
-    context direction epoch nonce plaintext
+    context direction epoch sequence_number plaintext
     (Terms.protected_record key nonce plaintext additional_data)
 
 let signature_predicate
@@ -108,15 +108,17 @@ let aead_predicate
   (key_usage:DY.usage{DY.AeadKey? key_usage})
   (key nonce plaintext additional_data:DY.bytes)
   : prop =
-  exists context direction epoch.
+  exists context direction epoch sequence_number.
     Terms.session_context_in_profile context /\
     aead_usage_matches key_usage direction epoch /\
+    nonce == Terms.record_nonce_from_sequence_token sequence_number /\
     DY.event_triggered
       tr
       (sender_for_direction context direction).Terms.session_principal
       (Events.event_tag Events.ProtectedRecordSent)
       (record_origin_content
-        context direction epoch nonce plaintext additional_data key)
+        context direction epoch sequence_number nonce
+        plaintext additional_data key)
 
 val signature_predicate_later:
   tr1:DY.trace ->
@@ -226,15 +228,17 @@ val aead_predicate_later:
         tr2 key_usage key nonce plaintext additional_data)
 let aead_predicate_later
   tr1 tr2 key_usage key nonce plaintext additional_data =
-  eliminate exists context direction epoch.
+  eliminate exists context direction epoch sequence_number.
     Terms.session_context_in_profile context /\
     aead_usage_matches key_usage direction epoch /\
+    nonce == Terms.record_nonce_from_sequence_token sequence_number /\
     DY.event_triggered
       tr1
       (sender_for_direction context direction).Terms.session_principal
       (Events.event_tag Events.ProtectedRecordSent)
       (record_origin_content
-        context direction epoch nonce plaintext additional_data key)
+        context direction epoch sequence_number nonce
+        plaintext additional_data key)
   returns
     aead_predicate tr2 key_usage key nonce plaintext additional_data
   with _.
@@ -243,7 +247,8 @@ let aead_predicate_later
       (sender_for_direction context direction).Terms.session_principal
       (Events.event_tag Events.ProtectedRecordSent)
       (record_origin_content
-        context direction epoch nonce plaintext additional_data key)
+        context direction epoch sequence_number nonce
+        plaintext additional_data key)
 
 let tls_crypto_predicates : DY.crypto_predicates = {
   DY.default_crypto_predicates with

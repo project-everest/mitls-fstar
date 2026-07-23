@@ -1,6 +1,6 @@
 # Symbolic Security Proof Plan for the TLS 1.3 1-RTT Profile
 
-Status: **approved; Phase 7 complete; Phase 8 in progress**
+Status: **approved; Phase 8 complete; Phase 9 in progress**
 
 This document is the review gate for the symbolic-security work. Until this
 plan is approved, the only repository change in this workstream should be this
@@ -667,6 +667,30 @@ configured DY* KDF usage. Key separation is only constructor and exact-label
 separation in the symbolic model. It is not a claim that concrete HKDF outputs
 cannot collide.
 
+### 10.9 Protected-record consumers
+
+Phase 8 uses structured send/open realizations for every protected record.
+They bind the concrete record state and exact TLS nonce computation to the
+symbolic key, public injective sequence token, five-byte AAD, inner plaintext,
+and `AeadEnc` term. `sent_application_record_contents_realize` follows the same
+recursive split as `sent_application_data_records_seal_from`, so one product
+transition may emit all origins for a segmented application send.
+
+`protocol_event_fresh` recursively excludes prior use of the same symbolic
+key/nonce pair, including records earlier in the same segmented send.
+Successful decryption under a non-publishable live key invokes the DY AEAD
+predicate and yields the exact `ProtectedRecordSent` event. Direction and epoch
+rejection then use the Phase 7 separated keys; replay rejection uses injectivity
+of the public sequence token. Honest application content is represented by a
+session/application-state-labeled term and is never tagged public.
+
+The symbolic nonce token is not asserted to equal the concrete nonce bytes
+globally. `aead_seal_bridge` and `aead_open_bridge` relate it, for the current
+execution, to `tls13_record_nonce static_iv sequence_number`; canonical wire
+semantics independently fixes the raw record bytes. This is the same
+execution-indexed abstraction boundary used for the other cryptographic
+operations.
+
 ## 11. Proposed module hierarchy
 
 All new TLS proof modules live under `src/spec/symbolic`.
@@ -1006,22 +1030,24 @@ Commit boundary:
 
 Purpose: connect the key results to exact handshake and application records.
 
-- [ ] Define structured symbolic plaintext for protected records.
-- [ ] Prove key/direction/epoch/sequence correspondence.
-- [ ] Prove per-key nonce non-reuse.
-- [ ] Prove protected-handshake-record origin.
-- [ ] Prove application-record origin and integrity.
-- [ ] Prove cross-direction and cross-epoch substitution rejection.
-- [ ] Prove replay rejection at an advanced sequence number.
-- [ ] Prove application-plaintext secrecy under an uncompromised traffic key.
-- [ ] Connect every theorem to `canonical_wire_step`.
-- [ ] Reuse existing protected-wire and segmentation lemmas where applicable.
+- [x] Define structured symbolic plaintext for protected records.
+- [x] Prove key/direction/epoch/sequence correspondence.
+- [x] Prove per-key nonce non-reuse.
+- [x] Prove protected-handshake-record origin.
+- [x] Prove application-record origin and integrity.
+- [x] Prove cross-direction and cross-epoch substitution rejection.
+- [x] Prove replay rejection at an advanced sequence number.
+- [x] Prove honest application-plaintext secrecy with the exact application
+      state compromise exception, separately from the live-key exception for
+      record integrity.
+- [x] Connect every theorem to `canonical_wire_step`.
+- [x] Reuse existing protected-wire and segmentation lemmas where applicable.
 
 Exit gate:
 
-- [ ] Claims apply to exact accepted raw records.
-- [ ] Confidentiality and integrity exceptions mention the relevant live key,
-      not an unrelated long-term key.
+- [x] Claims apply to exact accepted raw records.
+- [x] Confidentiality and integrity exceptions mention the relevant live key
+      or application state, not an unrelated long-term key.
 
 Commit boundary:
 
@@ -1084,8 +1110,12 @@ is tested.
      and detailed PKI compromise.
 
 2. **Static IV classification.**
-   - Conservatively classify record IVs/nonces as public while keeping traffic
-     keys secret and proving nonce uniqueness.
+   - Treat concrete record IVs and nonces as non-secret; no theorem relies on
+     static-IV secrecy.
+   - Model each used nonce by a public injective sequence token and relate it
+     execution-locally to the exact concrete TLS nonce through the AEAD bridge.
+   - The internal `record_iv` KDF-lineage term may inherit its traffic-secret
+     label, but this is not used as a confidentiality premise or claim.
 
 3. **Application plaintext source.**
    - Honest application input is opaque and secret by default, under a
@@ -1098,8 +1128,9 @@ is tested.
      plaintext-secrecy premise.
 
 4. **DY* core extensions.**
-   - Do not extend the core for TLS nonce XOR; use public concrete nonce
-     literals plus a nonce-uniqueness invariant.
+   - Do not extend the core for TLS nonce XOR; use a public injective symbolic
+     sequence token, exact concrete nonce bridge evidence, and a per-key
+     nonce-uniqueness invariant.
    - Any genuinely necessary new constructor must be implemented and reviewed
      in the fork first, then pinned by a separate submodule update.
 

@@ -176,6 +176,55 @@ let record_iv (traffic_secret:DY.bytes) : DY.bytes =
     (hkdf_info 0uy 12uy 8uy K.label_iv 0uy (public_bytes B.empty))
     12
 
+let encode_record_sequence_number (sequence_number:nat) : DY.bytes =
+  public_bytes (Seq.create sequence_number 0uy)
+
+let record_nonce_from_sequence_token
+  (sequence_number:DY.bytes)
+  : DY.bytes =
+  DY.Hash sequence_number
+
+val record_nonce_from_sequence_token_injective:
+  left:DY.bytes ->
+  right:DY.bytes ->
+  Lemma
+    (requires
+      record_nonce_from_sequence_token left ==
+      record_nonce_from_sequence_token right)
+    (ensures left == right)
+let record_nonce_from_sequence_token_injective left right = ()
+
+let record_nonce
+  (_static_iv:DY.bytes)
+  (sequence_number:nat)
+  : DY.bytes =
+  record_nonce_from_sequence_token
+    (encode_record_sequence_number sequence_number)
+
+val encode_record_sequence_number_injective:
+  left:nat ->
+  right:nat ->
+  Lemma
+    (requires
+      encode_record_sequence_number left ==
+      encode_record_sequence_number right)
+    (ensures left == right)
+let encode_record_sequence_number_injective left right =
+  assert (Seq.length (Seq.create left 0uy) == left);
+  assert (Seq.length (Seq.create right 0uy) == right)
+
+val record_nonce_injective:
+  static_iv:DY.bytes ->
+  left:nat ->
+  right:nat ->
+  Lemma
+    (requires
+      record_nonce static_iv left ==
+      record_nonce static_iv right)
+    (ensures left == right)
+let record_nonce_injective static_iv left right =
+  encode_record_sequence_number_injective left right
+
 let public_record_nonce (nonce:B.bytes) : DY.bytes =
   public_bytes nonce
 
@@ -183,6 +232,18 @@ let protected_record
   (key nonce plaintext additional_data:DY.bytes)
   : DY.bytes =
   DY.AeadEnc key nonce plaintext additional_data
+
+val protected_record_definition:
+  key:DY.bytes ->
+  nonce:DY.bytes ->
+  plaintext:DY.bytes ->
+  additional_data:DY.bytes ->
+  Lemma
+    (ensures
+      protected_record key nonce plaintext additional_data ==
+      DY.aead_enc key nonce plaintext additional_data)
+let protected_record_definition key nonce plaintext additional_data =
+  normalize_term_spec DY.aead_enc
 
 let protected_record_additional_data (header:B.bytes) : DY.bytes =
   public_bytes header

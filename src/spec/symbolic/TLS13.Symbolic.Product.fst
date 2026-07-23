@@ -8,13 +8,19 @@ module C = TLS13.Crypto.Spec
 module DY = DY.Core
 module Events = TLS13.Symbolic.Events
 module CSL = TLS13.ConnectionState.Lemmas
+module Labels = TLS13.Symbolic.Labels
 module M = TLS13.Messages
 module Profile = TLS13.Symbolic.Profile
 module R = TLS13.Record.Spec
+module RF = TLS13.Spec.StateMachine.RecordFraming
 module Reach = TLS13.Spec.StateMachine.Reachability
+module Seq = FStar.Seq
 module SM = TLS13.Spec.StateMachine
 module Terms = TLS13.Symbolic.Terms
 module Sem = TLS13.Wire.Semantics
+module T = TLS13.Types
+module Usages = TLS13.Symbolic.Usages
+module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
 
 let option_represents
@@ -749,6 +755,382 @@ let rec remove_packet
       remove_packet packet tail after_tail)
 
 noeq
+type sent_record_realization = {
+  sent_record_context: Terms.session_context;
+  sent_record_direction: Events.record_direction;
+  sent_record_epoch: Events.record_epoch;
+  sent_record_sequence_number: nat;
+  sent_record_concrete_key: C.aead_key;
+  sent_record_concrete_static_iv: C.aead_nonce;
+  sent_record_concrete_aad: B.bytes;
+  sent_record_concrete_plaintext: B.bytes;
+  sent_record_symbolic_key: DY.bytes;
+  sent_record_symbolic_static_iv: DY.bytes;
+  sent_record_symbolic_plaintext: DY.bytes;
+}
+
+noeq
+type accepted_record_realization = {
+  accepted_record_context: Terms.session_context;
+  accepted_record_direction: Events.record_direction;
+  accepted_record_epoch: Events.record_epoch;
+  accepted_record_sequence_number: nat;
+  accepted_record_concrete_key: C.aead_key;
+  accepted_record_concrete_static_iv: C.aead_nonce;
+  accepted_record_concrete_aad: B.bytes;
+  accepted_record_concrete_ciphertext: B.bytes;
+  accepted_record_concrete_plaintext:
+    (plaintext:B.bytes{
+      B.length plaintext + 16 ==
+      B.length accepted_record_concrete_ciphertext
+    });
+  accepted_record_symbolic_key: DY.bytes;
+  accepted_record_symbolic_static_iv: DY.bytes;
+  accepted_record_symbolic_plaintext: DY.bytes;
+}
+
+let sent_record_symbolic_nonce
+  (record:sent_record_realization)
+  : DY.bytes =
+  Terms.record_nonce
+    record.sent_record_symbolic_static_iv
+    record.sent_record_sequence_number
+
+let sent_record_protected_term
+  (record:sent_record_realization)
+  : DY.bytes =
+  Terms.protected_record
+    record.sent_record_symbolic_key
+    (sent_record_symbolic_nonce record)
+    record.sent_record_symbolic_plaintext
+    (Terms.protected_record_additional_data
+      record.sent_record_concrete_aad)
+
+let sent_record_wire_term
+  (record:sent_record_realization)
+  : DY.bytes =
+  DY.Concat
+    (Terms.protected_record_additional_data
+      record.sent_record_concrete_aad)
+    (sent_record_protected_term record)
+
+let accepted_record_symbolic_nonce
+  (record:accepted_record_realization)
+  : DY.bytes =
+  Terms.record_nonce
+    record.accepted_record_symbolic_static_iv
+    record.accepted_record_sequence_number
+
+val accepted_record_symbolic_nonce_definition:
+  record:accepted_record_realization ->
+  Lemma
+    (ensures
+      accepted_record_symbolic_nonce record ==
+      Terms.record_nonce_from_sequence_token
+        (Terms.encode_record_sequence_number
+          record.accepted_record_sequence_number))
+let accepted_record_symbolic_nonce_definition record = ()
+
+let accepted_record_protected_term
+  (record:accepted_record_realization)
+  : DY.bytes =
+  Terms.protected_record
+    record.accepted_record_symbolic_key
+    (accepted_record_symbolic_nonce record)
+    record.accepted_record_symbolic_plaintext
+    (Terms.protected_record_additional_data
+      record.accepted_record_concrete_aad)
+
+val accepted_record_protected_term_definition:
+  record:accepted_record_realization ->
+  Lemma
+    (ensures
+      accepted_record_protected_term record ==
+      Terms.protected_record
+        record.accepted_record_symbolic_key
+        (accepted_record_symbolic_nonce record)
+        record.accepted_record_symbolic_plaintext
+        (Terms.protected_record_additional_data
+          record.accepted_record_concrete_aad))
+let accepted_record_protected_term_definition record = ()
+
+let accepted_record_wire_term
+  (record:accepted_record_realization)
+  : DY.bytes =
+  DY.Concat
+    (Terms.protected_record_additional_data
+      record.accepted_record_concrete_aad)
+    (accepted_record_protected_term record)
+
+let rec sent_record_batch_wire_term
+  (records:list sent_record_realization)
+  : Tot DY.bytes (decreases records) =
+  match records with
+  | [] -> Terms.public_bytes B.empty
+  | [record] -> sent_record_wire_term record
+  | record :: rest ->
+    DY.Concat
+      (sent_record_wire_term record)
+      (sent_record_batch_wire_term rest)
+
+let record_direction_for_sender
+  (role:Terms.symbolic_role)
+  : Events.record_direction =
+  match role with
+  | Terms.SymbolicClient -> Events.ClientToServer
+  | Terms.SymbolicServer -> Events.ServerToClient
+
+let record_direction_for_receiver
+  (role:Terms.symbolic_role)
+  : Events.record_direction =
+  match role with
+  | Terms.SymbolicClient -> Events.ServerToClient
+  | Terms.SymbolicServer -> Events.ClientToServer
+
+let record_epoch_matches
+  (symbolic:Events.record_epoch)
+  (concrete:R.epoch)
+  : prop =
+  match symbolic, concrete with
+  | Events.HandshakeEpoch, R.Handshake -> True
+  | Events.ApplicationEpoch, R.Application -> True
+  | _, _ -> False
+
+let sent_symbolic_plaintext_realizes_message
+  (representation:Bridge.representation)
+  (shadow:endpoint_shadow)
+  (message:M.tls_message)
+  (record:sent_record_realization)
+  : prop =
+  match message with
+  | M.TlsApplicationData content ->
+    exists symbolic_content.
+      Bridge.represents representation content symbolic_content /\
+      record.sent_record_symbolic_plaintext ==
+        Terms.application_plaintext symbolic_content (B.singleton 23uy) /\
+      DY.get_label
+        #Usages.tls_crypto_usages
+        representation.Bridge.representation_trace
+        symbolic_content ==
+        Labels.honest_application_data_label
+          shadow.shadow_session
+          shadow.shadow_session.Terms.session_state_id
+  | _ -> True
+
+let accepted_symbolic_plaintext_realizes_message
+  (representation:Bridge.representation)
+  (message:M.tls_message)
+  (record:accepted_record_realization)
+  : prop =
+  match message with
+  | M.TlsApplicationData content ->
+    exists symbolic_content.
+      Bridge.represents representation content symbolic_content /\
+      record.accepted_record_symbolic_plaintext ==
+        Terms.application_plaintext symbolic_content (B.singleton 23uy)
+  | _ -> True
+
+let sent_record_realizes
+  (representation:Bridge.representation)
+  (shadow:endpoint_shadow)
+  (expected_sequence_number:nat)
+  (expected_message:M.tls_message)
+  (raw:B.bytes)
+  (record:sent_record_realization)
+  : prop =
+  Some? shadow.shadow_context /\
+  (match shadow.shadow_context with
+   | Some context -> record.sent_record_context == context
+   | None -> False) /\
+  Terms.session_context_in_profile record.sent_record_context /\
+  record.sent_record_direction ==
+    record_direction_for_sender shadow.shadow_session.Terms.session_role /\
+  record_epoch_matches
+    record.sent_record_epoch shadow.shadow_record_write.symbolic_epoch /\
+  record.sent_record_sequence_number == expected_sequence_number /\
+  Seq.equal
+    record.sent_record_concrete_plaintext
+    (Canonical.sent_tls_inner_plaintext_fragment expected_message) /\
+  sent_symbolic_plaintext_realizes_message
+    representation shadow expected_message record /\
+  Seq.equal
+    record.sent_record_concrete_aad
+    (Canonical.record_header_aad raw) /\
+  (match
+     shadow.shadow_concrete.SM.cs_model.SM.model_record.SM.record_write.R.key,
+     shadow.shadow_concrete.SM.cs_model.SM.model_record.SM.record_write.R.static_iv,
+     shadow.shadow_record_write.symbolic_key,
+     shadow.shadow_record_write.symbolic_static_iv
+   with
+   | Some concrete_key, Some concrete_iv,
+     Some symbolic_key, Some symbolic_iv ->
+     Seq.equal concrete_key record.sent_record_concrete_key /\
+     Seq.equal concrete_iv record.sent_record_concrete_static_iv /\
+     symbolic_key == record.sent_record_symbolic_key /\
+     symbolic_iv == record.sent_record_symbolic_static_iv
+   | _, _, _, _ -> False) /\
+  W.parse_record raw ==
+    Some
+      (T.Application_data,
+       C.chacha20_poly1305_seal
+         record.sent_record_concrete_key
+         (C.tls13_record_nonce
+           record.sent_record_concrete_static_iv
+           record.sent_record_sequence_number)
+         record.sent_record_concrete_aad
+         record.sent_record_concrete_plaintext,
+       B.length raw) /\
+  Bridge.aead_seal_bridge
+    representation
+    record.sent_record_concrete_key
+    record.sent_record_symbolic_key
+    (C.tls13_record_nonce
+      record.sent_record_concrete_static_iv
+      record.sent_record_sequence_number)
+    (sent_record_symbolic_nonce record)
+    record.sent_record_concrete_aad
+    record.sent_record_concrete_plaintext
+    (Terms.protected_record_additional_data
+      record.sent_record_concrete_aad)
+    record.sent_record_symbolic_plaintext
+
+let rec sent_application_record_contents_realize
+  (representation:Bridge.representation)
+  (shadow:endpoint_shadow)
+  (sequence_number:nat)
+  (bytes:B.bytes)
+  (raw:B.bytes)
+  (records:list sent_record_realization)
+  : Tot prop (decreases B.length bytes) =
+  if B.length bytes <= RF.max_application_data_fragment_len
+  then
+    match records with
+    | [record] ->
+      sent_record_realizes
+        representation shadow sequence_number
+        (M.TlsApplicationData bytes) raw record
+    | _ -> False
+  else
+    let head =
+      Seq.slice bytes 0 RF.max_application_data_fragment_len in
+    let tail =
+      Seq.slice
+        bytes
+        RF.max_application_data_fragment_len
+        (B.length bytes) in
+    match records with
+    | record :: rest ->
+      exists raw_head raw_tail.
+        Seq.equal raw (B.append raw_head raw_tail) /\
+        sent_record_realizes
+          representation shadow sequence_number
+          (M.TlsApplicationData head) raw_head record /\
+        sent_application_record_contents_realize
+          representation shadow (sequence_number + 1)
+          tail raw_tail rest
+    | [] -> False
+
+let sent_record_batch_realizes
+  (representation:Bridge.representation)
+  (shadow:endpoint_shadow)
+  (event:SM.conn_event)
+  (raw:B.bytes)
+  (records:list sent_record_realization)
+  : prop =
+  match event with
+  | SM.ConnNetworkEvent directed ->
+    directed.CL.message_direction == CL.Sent /\
+    SM.network_message_is_cleartext
+      directed.CL.message_direction directed.CL.message_value == false /\
+    (match directed.CL.message_value with
+     | M.TlsApplicationData bytes ->
+       sent_application_record_contents_realize
+         representation shadow
+         shadow.shadow_record_write.symbolic_sequence_number
+         bytes raw records
+     | protected_message ->
+       (match records with
+        | [record] ->
+          sent_record_realizes
+            representation shadow
+            shadow.shadow_record_write.symbolic_sequence_number
+            protected_message raw record
+        | _ -> False)) /\
+    Bridge.represents
+      representation raw (sent_record_batch_wire_term records)
+  | _ -> False
+
+let accepted_record_realizes
+  (representation:Bridge.representation)
+  (shadow:endpoint_shadow)
+  (event:SM.conn_event)
+  (raw:B.bytes)
+  (record:accepted_record_realization)
+  : prop =
+  Some? shadow.shadow_context /\
+  (match shadow.shadow_context with
+   | Some context -> record.accepted_record_context == context
+   | None -> False) /\
+  Terms.session_context_in_profile record.accepted_record_context /\
+  record.accepted_record_direction ==
+    record_direction_for_receiver shadow.shadow_session.Terms.session_role /\
+  record_epoch_matches
+    record.accepted_record_epoch shadow.shadow_record_read.symbolic_epoch /\
+  record.accepted_record_sequence_number ==
+    shadow.shadow_record_read.symbolic_sequence_number /\
+  Seq.equal
+    record.accepted_record_concrete_aad
+    (Canonical.record_header_aad raw) /\
+  (match
+     shadow.shadow_concrete.SM.cs_model.SM.model_record.SM.record_read.R.key,
+     shadow.shadow_concrete.SM.cs_model.SM.model_record.SM.record_read.R.static_iv,
+     shadow.shadow_record_read.symbolic_key,
+     shadow.shadow_record_read.symbolic_static_iv
+   with
+   | Some concrete_key, Some concrete_iv,
+     Some symbolic_key, Some symbolic_iv ->
+     Seq.equal concrete_key record.accepted_record_concrete_key /\
+     Seq.equal concrete_iv record.accepted_record_concrete_static_iv /\
+     symbolic_key == record.accepted_record_symbolic_key /\
+     symbolic_iv == record.accepted_record_symbolic_static_iv
+   | _, _, _, _ -> False) /\
+  W.parse_record_wire raw ==
+    Some
+      (T.Application_data,
+       record.accepted_record_concrete_ciphertext,
+       B.length raw) /\
+  (match event with
+   | SM.ConnNetworkEvent directed ->
+     directed.CL.message_direction == CL.Received /\
+     SM.network_message_is_cleartext
+       directed.CL.message_direction directed.CL.message_value == false /\
+     exists plaintext.
+       W.parse_plaintext record.accepted_record_concrete_plaintext ==
+         Some plaintext /\
+       W.parse_tls_message
+         plaintext.M.content_type plaintext.M.fragment ==
+         Some directed.CL.message_value /\
+       accepted_symbolic_plaintext_realizes_message
+         representation directed.CL.message_value record
+   | _ -> False) /\
+  Bridge.aead_open_bridge
+    representation
+    record.accepted_record_concrete_key
+    record.accepted_record_symbolic_key
+    (C.tls13_record_nonce
+      record.accepted_record_concrete_static_iv
+      record.accepted_record_sequence_number)
+    (accepted_record_symbolic_nonce record)
+    record.accepted_record_concrete_aad
+    record.accepted_record_concrete_ciphertext
+    record.accepted_record_concrete_plaintext
+    (Terms.protected_record_additional_data
+      record.accepted_record_concrete_aad)
+    record.accepted_record_symbolic_plaintext /\
+  Bridge.represents
+    representation raw (accepted_record_wire_term record)
+
+noeq
 type protocol_event_realization =
   | NoProtocolEvent
   | ServerSignatureGenerated:
@@ -760,10 +1142,18 @@ type protocol_event_realization =
   | ServerFinishedGenerated:
       context:Terms.session_context ->
       finished_key:DY.bytes ->
+      records:list sent_record_realization ->
       protocol_event_realization
   | ClientFinishedGenerated:
       context:Terms.session_context ->
       finished_key:DY.bytes ->
+      records:list sent_record_realization ->
+      protocol_event_realization
+  | ProtectedRecordsGenerated:
+      records:list sent_record_realization ->
+      protocol_event_realization
+  | ProtectedRecordAccepted:
+      record:accepted_record_realization ->
       protocol_event_realization
 
 let protocol_origin_event (event:SM.conn_event) : bool =
@@ -772,6 +1162,18 @@ let protocol_origin_event (event:SM.conn_event) : bool =
   | SM.ConnNetworkEvent directed ->
     (match directed.CL.message_direction, directed.CL.message_value with
      | CL.Sent, M.TlsHandshake (M.Finished _) -> true
+     | _, message ->
+       not (SM.network_message_is_cleartext
+         directed.CL.message_direction message))
+  | _ -> false
+
+let record_only_origin_event (event:SM.conn_event) : bool =
+  match event with
+  | SM.ConnNetworkEvent directed ->
+    (match directed.CL.message_direction, directed.CL.message_value with
+     | CL.Sent, M.TlsHandshake (M.Finished _) -> false
+     | CL.Sent, message ->
+       not (SM.network_message_is_cleartext CL.Sent message)
      | _, _ -> false)
   | _ -> false
 
@@ -791,7 +1193,7 @@ let protocol_event_entry
           verification_key
           (Terms.certificate_verify_input
             context.Terms.context_transcript)))
-  | ServerFinishedGenerated context finished_key ->
+  | ServerFinishedGenerated context finished_key _ ->
     Some
       (Events.handshake_event_entry
         shadow.shadow_session.Terms.session_principal
@@ -800,7 +1202,7 @@ let protocol_event_entry
         (DY.Concat
           finished_key
           (Terms.transcript_hash context.Terms.context_transcript)))
-  | ClientFinishedGenerated context finished_key ->
+  | ClientFinishedGenerated context finished_key _ ->
     Some
       (Events.handshake_event_entry
         shadow.shadow_session.Terms.session_principal
@@ -809,12 +1211,87 @@ let protocol_event_entry
         (DY.Concat
           finished_key
           (Terms.transcript_hash context.Terms.context_transcript)))
+  | ProtectedRecordsGenerated _
+  | ProtectedRecordAccepted _ ->
+    None
+
+let sent_record_event_entry
+  (record:sent_record_realization)
+  : DY.trace_entry =
+  Events.record_event_entry
+    (match record.sent_record_direction with
+     | Events.ClientToServer ->
+       record.sent_record_context.Terms.context_client.Terms.session_principal
+     | Events.ServerToClient ->
+       record.sent_record_context.Terms.context_server.Terms.session_principal)
+    Events.ProtectedRecordSent
+    record.sent_record_context
+    record.sent_record_direction
+    record.sent_record_epoch
+    (Terms.encode_record_sequence_number
+      record.sent_record_sequence_number)
+    record.sent_record_symbolic_plaintext
+    (sent_record_protected_term record)
+
+let accepted_record_event_entry
+  (shadow:endpoint_shadow)
+  (record:accepted_record_realization)
+  : DY.trace_entry =
+  Events.record_event_entry
+    shadow.shadow_session.Terms.session_principal
+    Events.ProtectedRecordAccepted
+    record.accepted_record_context
+    record.accepted_record_direction
+    record.accepted_record_epoch
+    (Terms.encode_record_sequence_number
+      record.accepted_record_sequence_number)
+    record.accepted_record_symbolic_plaintext
+    (accepted_record_protected_term record)
+
+let rec sent_record_event_trace
+  (before:DY.trace)
+  (records:list sent_record_realization)
+  : Tot DY.trace (decreases records) =
+  match records with
+  | [] -> before
+  | record :: rest ->
+    sent_record_event_trace
+      (DY.Snoc before (sent_record_event_entry record))
+      rest
+
+let record_nonce_used
+  (trace:DY.trace)
+  (key nonce:DY.bytes)
+  : prop =
+  exists principal context direction epoch sequence_number plaintext additional_data.
+    DY.event_triggered
+      trace principal
+      (Events.event_tag Events.ProtectedRecordSent)
+      (Events.record_event_content
+        context direction epoch sequence_number plaintext
+        (Terms.protected_record key nonce plaintext additional_data))
+
+let rec sent_record_batch_fresh
+  (before:DY.trace)
+  (records:list sent_record_realization)
+  : Tot prop (decreases records) =
+  match records with
+  | [] -> True
+  | record :: rest ->
+    ~(record_nonce_used
+        before
+        record.sent_record_symbolic_key
+        (sent_record_symbolic_nonce record)) /\
+    sent_record_batch_fresh
+      (DY.Snoc before (sent_record_event_entry record))
+      rest
 
 let protocol_event_realizes
   (representation:Bridge.representation)
   (registry:list Bridge.trusted_server)
   (shadow:endpoint_shadow)
   (event:SM.conn_event)
+  (raw_sent raw_received:B.bytes)
   (realization:protocol_event_realization)
   : prop =
   match event, realization with
@@ -843,7 +1320,7 @@ let protocol_event_realizes
       (Terms.certificate_verify
         signing_key signing_nonce context.Terms.context_transcript)
   | SM.ConnNetworkEvent directed,
-    ServerFinishedGenerated context finished_key ->
+    ServerFinishedGenerated context finished_key records ->
     shadow.shadow_session.Terms.session_role == Terms.SymbolicServer /\
     shadow.shadow_context == Some context /\
     Terms.session_context_in_profile context /\
@@ -861,9 +1338,13 @@ let protocol_event_realizes
          (Terms.finished_verify_data
            traffic.symbolic_traffic_secret
            context.Terms.context_transcript)
-     | _, _, _ -> False)
+     | _, _, _ -> False) /\
+    B.length raw_sent <> 0 /\
+    B.length raw_received == 0 /\
+    sent_record_batch_realizes
+      representation shadow event raw_sent records
   | SM.ConnNetworkEvent directed,
-    ClientFinishedGenerated context finished_key ->
+    ClientFinishedGenerated context finished_key records ->
     shadow.shadow_session.Terms.session_role == Terms.SymbolicClient /\
     shadow.shadow_context == Some context /\
     Terms.session_context_in_profile context /\
@@ -881,27 +1362,80 @@ let protocol_event_realizes
          (Terms.finished_verify_data
            traffic.symbolic_traffic_secret
            context.Terms.context_transcript)
-     | _, _, _ -> False)
+     | _, _, _ -> False) /\
+    B.length raw_sent <> 0 /\
+    B.length raw_received == 0 /\
+    sent_record_batch_realizes
+      representation shadow event raw_sent records
+  | _,
+    ProtectedRecordsGenerated records ->
+    record_only_origin_event event /\
+    B.length raw_sent <> 0 /\
+    B.length raw_received == 0 /\
+    sent_record_batch_realizes
+      representation shadow event raw_sent records
+  | _,
+    ProtectedRecordAccepted record ->
+    B.length raw_sent == 0 /\
+    B.length raw_received <> 0 /\
+    accepted_record_realizes
+      representation shadow event raw_received record
   | _, NoProtocolEvent -> protocol_origin_event event == false
   | _, _ -> False
+
+let protocol_event_symbolic_message
+  (realization:protocol_event_realization)
+  (symbolic:DY.bytes)
+  : prop =
+  match realization with
+  | ServerFinishedGenerated _ _ records
+  | ClientFinishedGenerated _ _ records
+  | ProtectedRecordsGenerated records ->
+    symbolic == sent_record_batch_wire_term records
+  | _ -> True
 
 let protocol_event_trace
   (before:DY.trace)
   (shadow:endpoint_shadow)
   (realization:protocol_event_realization)
   : DY.trace =
-  match protocol_event_entry shadow realization with
-  | None -> before
-  | Some entry -> DY.Snoc before entry
+  match realization with
+  | ServerFinishedGenerated _ _ records
+  | ClientFinishedGenerated _ _ records ->
+    (match protocol_event_entry shadow realization with
+     | None -> before
+     | Some entry ->
+       sent_record_event_trace (DY.Snoc before entry) records)
+  | ProtectedRecordsGenerated records ->
+    sent_record_event_trace before records
+  | ProtectedRecordAccepted record ->
+    DY.Snoc before (accepted_record_event_entry shadow record)
+  | _ ->
+    (match protocol_event_entry shadow realization with
+     | None -> before
+     | Some entry -> DY.Snoc before entry)
 
 let protocol_event_fresh
   (before:DY.trace)
   (shadow:endpoint_shadow)
   (realization:protocol_event_realization)
   : prop =
-  match protocol_event_entry shadow realization with
-  | None -> True
-  | Some entry -> ~(DY.entry_exists before entry)
+  match realization with
+  | ServerFinishedGenerated _ _ records
+  | ClientFinishedGenerated _ _ records ->
+    (match protocol_event_entry shadow realization with
+     | None -> False
+     | Some entry ->
+       ~(DY.entry_exists before entry) /\
+       sent_record_batch_fresh (DY.Snoc before entry) records)
+  | ProtectedRecordsGenerated records ->
+    sent_record_batch_fresh before records
+  | ProtectedRecordAccepted _ ->
+    True
+  | _ ->
+    (match protocol_event_entry shadow realization with
+     | None -> True
+     | Some entry -> ~(DY.entry_exists before entry))
 
 let honest_network_trace_delta
   (representation:Bridge.representation)
@@ -917,7 +1451,8 @@ let honest_network_trace_delta
   : prop =
   exists realization.
     protocol_event_realizes
-      representation registry before_shadow event realization /\
+      representation registry before_shadow event
+      raw_sent raw_received realization /\
     protocol_event_fresh before_trace before_shadow realization /\
     (let event_trace =
        protocol_event_trace before_trace before_shadow realization in
@@ -929,6 +1464,7 @@ let honest_network_trace_delta
       B.length raw_received == 0 /\
       exists symbolic.
         Bridge.represents representation raw_sent symbolic /\
+        protocol_event_symbolic_message realization symbolic /\
         after_network == {
           packet_raw = raw_sent;
           packet_symbolic = symbolic;
@@ -1217,8 +1753,29 @@ let protocol_event_entry_is_security shadow realization entry =
   match realization with
   | NoProtocolEvent -> ()
   | ServerSignatureGenerated _ _ _ _ -> ()
-  | ServerFinishedGenerated _ _ -> ()
-  | ClientFinishedGenerated _ _ -> ()
+  | ServerFinishedGenerated _ _ _ -> ()
+  | ClientFinishedGenerated _ _ _ -> ()
+  | ProtectedRecordsGenerated _ -> ()
+  | ProtectedRecordAccepted _ -> ()
+
+val sent_record_event_trace_preserves_unique_security_events:
+  before:DY.trace ->
+  records:list sent_record_realization ->
+  Lemma
+    (requires security_events_unique before)
+    (ensures
+      security_events_unique (sent_record_event_trace before records))
+    (decreases (List.Tot.length records))
+let rec sent_record_event_trace_preserves_unique_security_events
+  before records =
+  match records with
+  | [] -> ()
+  | record :: rest ->
+    assert (~(is_security_event_entry (sent_record_event_entry record)));
+    security_events_unique_snoc before (sent_record_event_entry record);
+    sent_record_event_trace_preserves_unique_security_events
+      (DY.Snoc before (sent_record_event_entry record))
+      rest
 
 val protocol_event_trace_preserves_unique_security_events:
   before:DY.trace ->
@@ -1233,11 +1790,29 @@ val protocol_event_trace_preserves_unique_security_events:
         (protocol_event_trace before shadow realization))
 let protocol_event_trace_preserves_unique_security_events
   before shadow realization =
-  match protocol_event_entry shadow realization with
-  | None -> ()
-  | Some entry ->
-    protocol_event_entry_is_security shadow realization entry;
-    security_events_unique_snoc before entry
+  match realization with
+  | ServerFinishedGenerated _ _ records
+  | ClientFinishedGenerated _ _ records ->
+    (match protocol_event_entry shadow realization with
+     | None -> ()
+     | Some entry ->
+       protocol_event_entry_is_security shadow realization entry;
+       security_events_unique_snoc before entry;
+       sent_record_event_trace_preserves_unique_security_events
+         (DY.Snoc before entry) records)
+  | ProtectedRecordsGenerated records ->
+    sent_record_event_trace_preserves_unique_security_events before records
+  | ProtectedRecordAccepted record ->
+    assert (~(is_security_event_entry
+      (accepted_record_event_entry shadow record)));
+    security_events_unique_snoc
+      before (accepted_record_event_entry shadow record)
+  | _ ->
+    (match protocol_event_entry shadow realization with
+     | None -> ()
+     | Some entry ->
+       protocol_event_entry_is_security shadow realization entry;
+       security_events_unique_snoc before entry)
 
 val honest_network_trace_delta_preserves_unique_security_events:
   representation:Bridge.representation ->
@@ -1265,7 +1840,8 @@ let honest_network_trace_delta_preserves_unique_security_events
   after_network after_trace =
   eliminate exists realization.
     protocol_event_realizes
-      representation registry before_shadow event realization /\
+      representation registry before_shadow event
+      raw_sent raw_received realization /\
     protocol_event_fresh before_trace before_shadow realization /\
     (let event_trace =
        protocol_event_trace before_trace before_shadow realization in
@@ -1277,6 +1853,7 @@ let honest_network_trace_delta_preserves_unique_security_events
       B.length raw_received == 0 /\
       exists symbolic.
         Bridge.represents representation raw_sent symbolic /\
+        protocol_event_symbolic_message realization symbolic /\
         after_network == {
           packet_raw = raw_sent;
           packet_symbolic = symbolic;
@@ -1310,6 +1887,7 @@ let honest_network_trace_delta_preserves_unique_security_events
     else begin
       eliminate exists symbolic.
         Bridge.represents representation raw_sent symbolic /\
+        protocol_event_symbolic_message realization symbolic /\
         after_network == {
           packet_raw = raw_sent;
           packet_symbolic = symbolic;
