@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine
@@ -20,6 +21,11 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
+
+type server_flight_result =
+  | ServerFlightOk
+  | ServerFlightDeriveFailed
+  | ServerFlightSendNotReady
 
 noextract
 let selection_from_payload_correct
@@ -82,6 +88,17 @@ let derive_shared_secret_from_payload_correct
             client_public == Some shared
         | None -> False)
       | None -> False))
+
+noextract
+let select_derive_from_payload_success_correct
+  (st0 st2:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : prop =
+  resp.ST.status == ST.StepOk ==>
+  exists st1.
+    selection_from_payload_correct st0 st1 payload /\
+    derive_shared_secret_from_payload_correct st1 st2 resp payload
 
 fn start_server_once
   (d:DS.buffered_driver)
@@ -303,3 +320,67 @@ fn derive_shared_secret_from_payload_once
           st1
           resp
           (Ghost.reveal 'payload_bytes))
+
+fn select_derive_send_server_hello_from_payload_once
+  (d:DS.buffered_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires
+    DS.buffered_driver_exactly
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'buffered
+      'buffered_len **
+    pts_to payload 'payload_bytes **
+    pts_to network_out 'old_network_out **
+    pts_to app_out 'old_app_out **
+    pure (
+      B.length 'payload_bytes == SZ.v payload_len /\
+      SZ.v payload_len == 64 /\
+      B.length 'old_network_out == SZ.v network_out_len /\
+      B.length 'old_app_out == SZ.v app_out_len /\
+      network_out_len == DS.driver_network_out_capacity /\
+      app_out_len == DS.driver_app_out_capacity /\
+      ST.server_local_event_input_ready
+        'st0
+        ST.LocalSelectServerParameters
+        (Ghost.reveal 'payload_bytes) /\
+      (Seq.length
+         (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 ==>
+       (CL.raw_slice
+          (Ghost.reveal 'payload_bytes)
+          0
+          32 <: Seq.lseq U8.t 32) <>
+         GSHbody.serverHello_body_cst) /\
+      (let sh =
+         SS.mk_server_hello_witness
+           (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
+           (CryptoSpec.x25519_public_from_private
+             (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+           T.TLS_CHACHA20_POLY1305_SHA256 in
+       B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) == 90))
+  returns result:server_flight_result
+  ensures
+    exists* st1 network_out_bytes app_out_bytes.
+      DS.buffered_driver_exactly
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'buffered
+        'buffered_len **
+      pts_to payload 'payload_bytes **
+      pts_to network_out network_out_bytes **
+      pts_to app_out app_out_bytes **
+      pure (
+        B.length network_out_bytes == SZ.v network_out_len /\
+        B.length app_out_bytes == SZ.v app_out_len /\
+        (result == ServerFlightOk ==>
+         st1.CS.cs_model.CS.model_control ==
+           CS.ControlHandshaking CS.HsServerHelloSent))
