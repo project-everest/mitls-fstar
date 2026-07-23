@@ -50,7 +50,9 @@ HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
 DY_HOME     = third_party/dolev-yao-star-extrinsic
 DY_CORE_DIR = $(DY_HOME)/src/core
+DY_CORE_TEST_DIR = $(DY_HOME)/test/core
 DY_CACHE_DIR = $(DY_HOME)/cache
+DY_CORE_STAMP = $(DY_CACHE_DIR)/.verified.stamp
 EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
 SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
@@ -121,11 +123,18 @@ FSTAR_EXTRACT_FLAGS = \
 FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
+SYMBOLIC_DIR = src/spec/symbolic
+SYMBOLIC_FILES = $(sort $(wildcard $(SYMBOLIC_DIR)/*.fst $(SYMBOLIC_DIR)/*.fsti))
+SYMBOLIC_CHECKED_FILES = \
+  $(patsubst $(SYMBOLIC_DIR)/%,$(CACHE_DIR)/%.checked,$(SYMBOLIC_FILES))
 COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
-SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
+SPEC_FILES = $(filter-out $(SYMBOLIC_FILES), \
+  $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print)))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
+DY_CORE_FILES = $(sort $(shell find $(DY_CORE_DIR) $(DY_CORE_TEST_DIR) \
+  -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 ROOT_FILES = \
   src/impl/TLS13.System.Temporal.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
@@ -267,6 +276,20 @@ restore-generated-cache:
 .depend: $(ALL_FILES) Makefile | check-toolchain $(GENERATED_STAMP)
 	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ROOT_FILES) --output_deps_to $@
 
+# The symbolic development uses DY* and a different pinned Z3, so analyze its
+# dependency graph separately rather than changing the flags for the existing
+# spec/implementation build.  Rename F*'s aggregate variables to prevent this
+# included makefile from clobbering the corresponding variables in .depend.
+SYMBOLIC_DEPEND = .depend-symbolic
+$(SYMBOLIC_DEPEND): $(SYMBOLIC_FILES) Makefile | check-toolchain $(GENERATED_STAMP) $(DY_CORE_STAMP)
+	@tmp='$@.tmp'; renamed='$@.renamed'; \
+	  rm -f "$$tmp" "$$renamed"; \
+	  $(FSTAR_SYMBOLIC) $(FSTAR_DEP_OPTIONS) --dep full $(SYMBOLIC_FILES) \
+	    --output_deps_to "$$tmp" && \
+	  sed 's/^ALL_/SYMBOLIC_DEP_ALL_/' "$$tmp" > "$$renamed" && \
+	  mv "$$renamed" '$@' && \
+	  rm -f "$$tmp"
+
 # Do NOT pull in .depend (and, through it, the order-only $(GENERATED_STAMP)
 # prerequisite) for the generated-pipeline phony goals or clean.  `parsers` runs
 # regen/verify/extract-generated as recursive $(MAKE) sub-builds; each such
@@ -277,8 +300,25 @@ restore-generated-cache:
 # explicitly via the stamp and never need the spec/impl dependency graph.
 DEPEND_EXCLUDED_GOALS := clean regen-generated verify-generated extract-generated \
   parsers generated-checked save-generated-cache restore-generated-cache \
-  verify-dy-core \
+  verify-dy-core $(SYMBOLIC_DEPEND) \
   $(GENERATED_STAMP)
+
+# Only goals that verify symbolic code need the additional dependency graph.
+# The empty-goal case covers the default `all` target.
+SYMBOLIC_DEPEND_GOALS := all verify test verify-symbolic \
+  verify-symbolic-model verify-symbolic-invariant \
+  verify-symbolic-authentication verify-symbolic-secrecy \
+  verify-symbolic-records
+NEEDS_SYMBOLIC_DEPEND := \
+  $(filter $(SYMBOLIC_DEPEND_GOALS),$(MAKECMDGOALS)) \
+  $(filter $(CACHE_DIR)/TLS13.Symbolic.%.checked,$(MAKECMDGOALS))
+ifeq (,$(strip $(MAKECMDGOALS)))
+NEEDS_SYMBOLIC_DEPEND := default-goal
+endif
+ifneq (,$(strip $(NEEDS_SYMBOLIC_DEPEND)))
+include $(SYMBOLIC_DEPEND)
+endif
+
 ifeq (,$(filter $(DEPEND_EXCLUDED_GOALS),$(MAKECMDGOALS)))
 include .depend
 endif
@@ -286,6 +326,12 @@ endif
 # ── Generic Verification Rules ────────────────────────────────────
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 	$(FSTAR) $<
+
+# F* supplies the actual inter-module prerequisites in .depend-symbolic.  This
+# static pattern only selects the symbolic flags and maps each checked artifact
+# back to its source, allowing independent modules to run in parallel.
+$(SYMBOLIC_CHECKED_FILES): $(CACHE_DIR)/%.checked: $(SYMBOLIC_DIR)/% | $(DY_CORE_STAMP) $(CACHE_DIR) $(OUTPUT_DIR)
+	$(FSTAR_SYMBOLIC) $<
 
 $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
@@ -308,77 +354,21 @@ all: verify
 # via $(GENERATED_STAMP).
 generated-checked: $(GENERATED_STAMP)
 
-verify-dy-core: check-toolchain check-z3
+$(DY_CORE_STAMP): $(DY_CORE_FILES) $(DY_HOME)/Makefile | check-toolchain check-z3
 	+$(MAKE) -C $(DY_HOME) core \
 	  FSTAR_EXE='$(abspath $(FSTAR_EXE))' \
 	  DY_HOME='$(abspath $(DY_HOME))'
+	@touch $@
+
+verify-dy-core: $(DY_CORE_STAMP)
 	@echo "DY* core verified with Z3 $(DY_Z3_VERSION)"
 
-SYMBOLIC_IMPORT_FILE = src/spec/symbolic/TLS13.Symbolic.Import.fst
-SYMBOLIC_PROFILE_FILE = src/spec/symbolic/TLS13.Symbolic.Profile.fst
-SYMBOLIC_TERMS_FILE = src/spec/symbolic/TLS13.Symbolic.Terms.fst
-SYMBOLIC_USAGES_FILE = src/spec/symbolic/TLS13.Symbolic.Usages.fst
-SYMBOLIC_LABELS_FILE = src/spec/symbolic/TLS13.Symbolic.Labels.fst
-SYMBOLIC_EVENTS_FILE = src/spec/symbolic/TLS13.Symbolic.Events.fst
-SYMBOLIC_LEMMAS_FILE = src/spec/symbolic/TLS13.Symbolic.Lemmas.fst
-SYMBOLIC_BRIDGE_FILE = src/spec/symbolic/TLS13.Symbolic.Bridge.fst
-SYMBOLIC_PRODUCT_FILE = src/spec/symbolic/TLS13.Symbolic.Product.fst
-SYMBOLIC_INVARIANT_FILE = src/spec/symbolic/TLS13.Symbolic.Invariant.fst
-SYMBOLIC_AUTHENTICATION_FILE = src/spec/symbolic/TLS13.Symbolic.Authentication.fst
-SYMBOLIC_SECRECY_FILE = src/spec/symbolic/TLS13.Symbolic.Secrecy.fst
-SYMBOLIC_RECORD_SECURITY_FILE = src/spec/symbolic/TLS13.Symbolic.RecordSecurity.fst
-SYMBOLIC_IMPORT_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Import.fst.checked
-SYMBOLIC_PROFILE_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Profile.fst.checked
-SYMBOLIC_TERMS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Terms.fst.checked
-SYMBOLIC_USAGES_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Usages.fst.checked
-SYMBOLIC_LABELS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Labels.fst.checked
-SYMBOLIC_EVENTS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Events.fst.checked
-SYMBOLIC_LEMMAS_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Lemmas.fst.checked
-SYMBOLIC_BRIDGE_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Bridge.fst.checked
+# Named roots for the focused symbolic verification targets.
 SYMBOLIC_PRODUCT_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Product.fst.checked
 SYMBOLIC_INVARIANT_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Invariant.fst.checked
 SYMBOLIC_AUTHENTICATION_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Authentication.fst.checked
 SYMBOLIC_SECRECY_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.Secrecy.fst.checked
 SYMBOLIC_RECORD_SECURITY_CHECKED = $(CACHE_DIR)/TLS13.Symbolic.RecordSecurity.fst.checked
-
-$(SYMBOLIC_PROFILE_CHECKED): $(SYMBOLIC_PROFILE_FILE) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_TERMS_CHECKED): $(SYMBOLIC_TERMS_FILE) $(SYMBOLIC_PROFILE_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_USAGES_CHECKED): $(SYMBOLIC_USAGES_FILE) $(SYMBOLIC_TERMS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_LABELS_CHECKED): $(SYMBOLIC_LABELS_FILE) $(SYMBOLIC_TERMS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_EVENTS_CHECKED): $(SYMBOLIC_EVENTS_FILE) $(SYMBOLIC_TERMS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_LEMMAS_CHECKED): $(SYMBOLIC_LEMMAS_FILE) $(SYMBOLIC_TERMS_CHECKED) $(SYMBOLIC_USAGES_CHECKED) $(SYMBOLIC_LABELS_CHECKED) $(SYMBOLIC_EVENTS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_BRIDGE_CHECKED): $(SYMBOLIC_BRIDGE_FILE) $(SYMBOLIC_LEMMAS_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_PRODUCT_CHECKED): $(SYMBOLIC_PRODUCT_FILE) $(SYMBOLIC_BRIDGE_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_INVARIANT_CHECKED): $(SYMBOLIC_INVARIANT_FILE) $(SYMBOLIC_PRODUCT_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_AUTHENTICATION_CHECKED): $(SYMBOLIC_AUTHENTICATION_FILE) $(SYMBOLIC_INVARIANT_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_SECRECY_CHECKED): $(SYMBOLIC_SECRECY_FILE) $(SYMBOLIC_INVARIANT_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_RECORD_SECURITY_CHECKED): $(SYMBOLIC_RECORD_SECURITY_FILE) $(SYMBOLIC_SECRECY_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
-
-$(SYMBOLIC_IMPORT_CHECKED): $(SYMBOLIC_IMPORT_FILE) $(SYMBOLIC_PROFILE_CHECKED) $(SYMBOLIC_TERMS_CHECKED) $(SYMBOLIC_USAGES_CHECKED) $(SYMBOLIC_LABELS_CHECKED) $(SYMBOLIC_EVENTS_CHECKED) $(SYMBOLIC_LEMMAS_CHECKED) $(SYMBOLIC_BRIDGE_CHECKED) $(SYMBOLIC_PRODUCT_CHECKED) $(SYMBOLIC_INVARIANT_CHECKED) $(SYMBOLIC_AUTHENTICATION_CHECKED) $(SYMBOLIC_SECRECY_CHECKED) $(SYMBOLIC_RECORD_SECURITY_CHECKED) | verify-dy-core $(CACHE_DIR) $(OUTPUT_DIR)
-	$(FSTAR_SYMBOLIC) $<
 
 verify-symbolic-model: verify-tls verify-dy-core $(SYMBOLIC_PRODUCT_CHECKED)
 	@echo "TLS symbolic product model verified with Z3 $(TLS_Z3_VERSION)"
@@ -395,16 +385,7 @@ verify-symbolic-secrecy: verify-tls verify-dy-core $(SYMBOLIC_SECRECY_CHECKED)
 verify-symbolic-records: verify-tls verify-dy-core $(SYMBOLIC_RECORD_SECURITY_CHECKED)
 	@echo "TLS symbolic record security verified with Z3 $(TLS_Z3_VERSION)"
 
-verify-symbolic: verify-tls verify-dy-core \
-  $(SYMBOLIC_PROFILE_CHECKED) $(SYMBOLIC_TERMS_CHECKED) \
-  $(SYMBOLIC_USAGES_CHECKED) $(SYMBOLIC_LABELS_CHECKED) \
-  $(SYMBOLIC_EVENTS_CHECKED) $(SYMBOLIC_LEMMAS_CHECKED) \
-  $(SYMBOLIC_BRIDGE_CHECKED) $(SYMBOLIC_PRODUCT_CHECKED) \
-  $(SYMBOLIC_INVARIANT_CHECKED) \
-  $(SYMBOLIC_AUTHENTICATION_CHECKED) \
-  $(SYMBOLIC_SECRECY_CHECKED) \
-  $(SYMBOLIC_RECORD_SECURITY_CHECKED) \
-  $(SYMBOLIC_IMPORT_CHECKED)
+verify-symbolic: verify-tls verify-dy-core $(SYMBOLIC_CHECKED_FILES)
 	@echo "TLS symbolic modules verified with Z3 $(TLS_Z3_VERSION)"
 
 verify-tls: generated-checked $(ALL_CHECKED_FILES)
@@ -1216,7 +1197,7 @@ check-deps:
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
-	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
+	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend $(SYMBOLIC_DEPEND) \
 	  $(DY_HOME)/hints $(DY_HOME)/obj $(DY_HOME)/cache \
 	  $(DY_HOME)/ml/lib/src \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \

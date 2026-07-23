@@ -170,8 +170,9 @@ Read the modules in this order:
 | Secrecy | `TLS13.Symbolic.Secrecy.fst` | Audit key lineage, labels, and symbolic separation |
 | Records | `TLS13.Symbolic.RecordSecurity.fst` | Audit nonce, AEAD origin, replay, and application-data claims |
 
-`TLS13.Symbolic.Import.fst` imports the complete stack. The Makefile dependency
-closure at `Makefile:317-408` ensures that `verify-symbolic` checks every layer.
+`TLS13.Symbolic.Import.fst` imports the complete stack. The Makefile generates a
+separate `.depend-symbolic` graph and makes `verify-symbolic` check every source
+under `src/spec/symbolic` with the DY*/TLS symbolic toolchain.
 
 ## 5. Concrete specification crosswalk
 

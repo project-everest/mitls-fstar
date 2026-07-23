@@ -8,6 +8,7 @@ generated-checked.tar.gz
 *.krml
 *.smt2
 .depend
+.depend-symbolic
 test/test_hacl_stubs
 test/test_openssl_stubs
 test/test_wire_stubs
