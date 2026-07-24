@@ -43,7 +43,8 @@ fn process_ready_empty_local_action_once
     pure (
       B.length 'empty_payload_bytes == 0 /\
       B.length 'old_network_out == SZ.v network_out_len /\
-      B.length 'old_app_out == SZ.v app_out_len)
+      B.length 'old_app_out == SZ.v app_out_len /\
+      16645 <= SZ.v network_out_len)
   returns status:local_status
   ensures
     exists* st1 network_out_bytes app_out_bytes.
@@ -83,7 +84,8 @@ fn drain_ready_empty_local_actions
     pure (
       B.length 'empty_payload_bytes == 0 /\
       B.length 'old_network_out == SZ.v network_out_len /\
-      B.length 'old_app_out == SZ.v app_out_len)
+      B.length 'old_app_out == SZ.v app_out_len /\
+      16645 <= SZ.v network_out_len)
   returns result:drain_result
   ensures
     exists* st1 network_out_bytes app_out_bytes.

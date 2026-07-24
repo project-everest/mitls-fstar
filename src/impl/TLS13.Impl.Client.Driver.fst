@@ -122,48 +122,6 @@ fn new_client_with_auth_config
     validation_time_seconds
 }
 
-fn new_client
-  (server_name:array U8.t)
-  (server_name_len:SZ.t)
-  (trust_anchors:array U8.t)
-  (trust_anchors_len:SZ.t)
-  (validation_time_seconds:SZ.t)
-  requires pts_to server_name 'server_name_bytes **
-           pts_to trust_anchors 'trust_anchors_bytes **
-           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
-                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
-                 SZ.v server_name_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
-                 SZ.v trust_anchors_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
-  returns result: client_driver
-  ensures pts_to server_name 'server_name_bytes **
-          pts_to trust_anchors 'trust_anchors_bytes **
-          DS.client_driver_live
-            result
-            (CR.configured_initial_state
-              (Ghost.reveal 'server_name_bytes)
-              (Ghost.reveal 'trust_anchors_bytes)
-              validation_time_seconds) **
-          pure (CT.client_state_correct
-            (CR.configured_initial_state
-              (Ghost.reveal 'server_name_bytes)
-              (Ghost.reveal 'trust_anchors_bytes)
-              validation_time_seconds) /\
-                CT.client_end_to_end_invariant
-                  (CR.configured_initial_state
-                    (Ghost.reveal 'server_name_bytes)
-                    (Ghost.reveal 'trust_anchors_bytes)
-                    validation_time_seconds))
-{
-  DNew.new_client
-    server_name
-    server_name_len
-    trust_anchors
-    trust_anchors_len
-    validation_time_seconds
-}
-
 fn connect
   (d:client_driver)
   (connect_host:array U8.t)
@@ -211,7 +169,27 @@ fn connect
   }
 }
 
-fn send
+inline_for_extraction
+let channel_send_reusable_runtime
+  (status:driver_workflow_status)
+  : bool =
+  match status with
+  | DS.DriverWorkflowOk -> true
+  | DS.DriverWorkflowPayloadTooLarge -> true
+  | _ -> false
+
+inline_for_extraction
+let channel_receive_reusable_runtime
+  (result:client_receive_result)
+  : bool =
+  match result.DS.client_receive_status with
+  | DS.DriverWorkflowOk -> true
+  | DS.DriverWorkflowNeedMoreInput -> true
+  | DS.DriverWorkflowExhausted -> true
+  | DS.DriverWorkflowOutputBufferTooSmall -> true
+  | _ -> false
+
+fn channel_send
   (d:client_driver)
   (wire_received0:Ghost.erased B.bytes)
   (wire_sent0:Ghost.erased B.bytes)
@@ -290,7 +268,9 @@ fn send
     (Ghost.reveal payload_bytes)
     (Ghost.reveal wire_sent0)
     transport_sent1;
-  if channel_send_reusable status {
+  let reusable = channel_send_reusable_runtime status;
+  assert (pure (reusable == channel_send_reusable status));
+  if reusable {
     assert (pure (status == DS.DriverWorkflowOk \/
                   status == DS.DriverWorkflowPayloadTooLarge));
     assert (pure (CT.connection_control_not_failed st1));
@@ -356,7 +336,7 @@ fn send
   }
 }
 
-fn receive
+fn channel_receive
   (d:client_driver)
   (wire_received0:Ghost.erased B.bytes)
   (wire_sent0:Ghost.erased B.bytes)
@@ -438,7 +418,9 @@ fn receive
       (Ghost.reveal wire_received0)
       (Ghost.reveal wire_sent0)
       (Ghost.reveal app_log0));
-    if channel_receive_reusable result {
+    let reusable = channel_receive_reusable_runtime result;
+    assert (pure (reusable == channel_receive_reusable result));
+    if reusable {
       assert (pure (result.DS.client_receive_status <> DS.DriverWorkflowStepFailed /\
                     result.DS.client_receive_status <> DS.DriverWorkflowClosed));
       assert (pure (CT.connection_control_not_failed st1));
@@ -559,6 +541,278 @@ fn receive
   }
 }
 
+fn send
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (payload:array U8.t)
+  (payload_bytes:Ghost.erased B.bytes)
+  (payload_len:SZ.t)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0) **
+           pts_to payload (Ghost.reveal payload_bytes) **
+           pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          client_channel_after_operation
+            d
+            (channel_send_reusable status)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1 **
+          pts_to payload (Ghost.reveal payload_bytes) **
+          pure (
+            CI.send_transition
+              channel_message_of_bytes
+              channel_send_succeeded
+              status
+              (Ghost.reveal payload_bytes)
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
+              (Ghost.reveal app_log0)
+              wire_received1
+              wire_sent1
+              app_log1)
+{
+  let status =
+    channel_send
+      d wire_received0 wire_sent0 pending0 app_log0
+      payload payload_bytes payload_len;
+  with wire_received1 wire_sent1 pending1 app_log1.
+    assert (
+      (if channel_send_reusable status
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1) **
+      pts_to payload (Ghost.reveal payload_bytes) **
+      pure (
+        CI.send_transition
+          channel_message_of_bytes
+          channel_send_succeeded
+          status
+          (Ghost.reveal payload_bytes)
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          (Ghost.reveal app_log0)
+          wire_received1
+          wire_sent1
+          app_log1));
+  let reusable = channel_send_reusable_runtime status;
+  assert (pure (reusable == channel_send_reusable status));
+  if reusable {
+    assert (pure (channel_send_reusable status == true));
+    rewrite
+      (if channel_send_reusable status
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.client_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1);
+    rewrite
+      (DS.client_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1)
+      as
+      (client_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    status
+  } else {
+    assert (pure (channel_send_reusable status == false));
+    rewrite
+      (if channel_send_reusable status
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.client_channel_terminal
+        d wire_received1 wire_sent1 app_log1);
+    CChannel.open_terminal
+      d
+      (Ghost.hide wire_received1)
+      (Ghost.hide wire_sent1)
+      (Ghost.hide app_log1);
+    DClose.abort d;
+    with st1. assert (DS.client_driver_closed d st1);
+    rewrite
+      (DS.client_driver_closed d st1)
+      as
+      (client_driver_closed d st1);
+    fold (client_driver_is_closed d);
+    rewrite
+      (client_driver_is_closed d)
+      as
+      (client_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    status
+  }
+}
+
+fn receive
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (out:array U8.t)
+  (old_output:Ghost.erased B.bytes)
+  (out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0) **
+           pts_to out (Ghost.reveal old_output) **
+           pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
+  returns result:client_receive_result
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1 output.
+          client_channel_after_operation
+            d
+            (channel_receive_reusable result)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1 **
+          pts_to out output **
+          pure (
+            B.length output == SZ.v out_len /\
+            SZ.v result.DS.client_receive_len <= SZ.v out_len /\
+            CI.receive_transition
+              channel_message_of_bytes
+              channel_receive_succeeded
+              channel_receive_length
+              result
+              output
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
+              (Ghost.reveal app_log0)
+              wire_received1
+              wire_sent1
+              app_log1)
+{
+  let result =
+    channel_receive
+      d wire_received0 wire_sent0 pending0 app_log0
+      out old_output out_len local_fuel fuel;
+  with wire_received1 wire_sent1 pending1 app_log1 output.
+    assert (
+      (if channel_receive_reusable result
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1) **
+      pts_to out output **
+      pure (
+        B.length output == SZ.v out_len /\
+        SZ.v result.DS.client_receive_len <= SZ.v out_len /\
+        CI.receive_transition
+          channel_message_of_bytes
+          channel_receive_succeeded
+          channel_receive_length
+          result
+          output
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          (Ghost.reveal app_log0)
+          wire_received1
+          wire_sent1
+          app_log1));
+  let reusable = channel_receive_reusable_runtime result;
+  assert (pure (reusable == channel_receive_reusable result));
+  if reusable {
+    assert (pure (channel_receive_reusable result == true));
+    rewrite
+      (if channel_receive_reusable result
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.client_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1);
+    rewrite
+      (DS.client_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1)
+      as
+      (client_channel_after_operation
+        d
+        (channel_receive_reusable result)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    result
+  } else {
+    assert (pure (channel_receive_reusable result == false));
+    rewrite
+      (if channel_receive_reusable result
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.client_channel_terminal
+        d wire_received1 wire_sent1 app_log1);
+    CChannel.open_terminal
+      d
+      (Ghost.hide wire_received1)
+      (Ghost.hide wire_sent1)
+      (Ghost.hide app_log1);
+    DClose.abort d;
+    with st1. assert (DS.client_driver_closed d st1);
+    rewrite
+      (DS.client_driver_closed d st1)
+      as
+      (client_driver_closed d st1);
+    fold (client_driver_is_closed d);
+    rewrite
+      (client_driver_is_closed d)
+      as
+      (client_channel_after_operation
+        d
+        (channel_receive_reusable result)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    result
+  }
+}
+
 fn close
   (d:client_driver)
   (wire_received:Ghost.erased B.bytes)
@@ -609,23 +863,6 @@ fn abort
   DClose.abort d
 }
 
-fn abort_terminal
-  (d:client_driver)
-  (wire_received:Ghost.erased B.bytes)
-  (wire_sent:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  requires DS.client_channel_terminal
-    d
-    (Ghost.reveal wire_received)
-    (Ghost.reveal wire_sent)
-    (Ghost.reveal app_log)
-  ensures exists* st. DS.client_driver_closed d st
-{
-  CChannel.open_terminal
-    d wire_received wire_sent app_log;
-  DClose.abort d
-}
-
 fn free (d:client_driver)
   requires DS.client_driver_closed d 'st
   ensures client_driver_released d 'st
@@ -668,6 +905,6 @@ let client_channel_implementation
     CI.ci_invariant_valid = CChannel.channel_invariant_valid;
     CI.ci_take_snapshot = CChannel.take_channel_snapshot;
     CI.ci_recall_snapshot = CChannel.recall_channel_snapshot;
-    CI.ci_send = send;
-    CI.ci_receive = receive;
+    CI.ci_send = channel_send;
+    CI.ci_receive = channel_receive;
   }

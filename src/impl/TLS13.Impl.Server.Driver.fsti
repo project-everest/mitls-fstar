@@ -225,73 +225,6 @@ fn new_server_with_credentials
                credential_identity))
        | None -> emp))
 
-fn new_server
-  (certificate_chain:array U8.t)
-  (certificate_chain_len:SZ.t)
-  (private_key:array U8.t)
-  (private_key_len:SZ.t)
-  (#supported_profile_provider:erased SP.server_supported_profile_provider)
-  requires
-    pts_to certificate_chain 'certificate_chain_bytes **
-    pts_to private_key 'private_key_bytes **
-    pure (
-      B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
-      B.length 'private_key_bytes == SZ.v private_key_len)
-  returns result:option server_driver
-  ensures
-    pts_to certificate_chain 'certificate_chain_bytes **
-    pts_to private_key 'private_key_bytes **
-    (match result with
-     | Some d ->
-       exists* credential_identity.
-         server_driver_live
-           d
-           (CR.server_initial_state
-             (Ghost.reveal 'certificate_chain_bytes)
-             credential_identity)
-           (Ghost.reveal 'certificate_chain_bytes)
-           credential_identity **
-         pure (
-           ST.server_state_correct
-             (CR.server_initial_state
-               (Ghost.reveal 'certificate_chain_bytes)
-               credential_identity) /\
-           ST.server_end_to_end_invariant
-             (CR.server_initial_state
-               (Ghost.reveal 'certificate_chain_bytes)
-               credential_identity))
-     | None -> emp) **
-    pure (
-      not (B.length 'certificate_chain_bytes <=
-        Bounds.max_server_certificate_chain_len) ==>
-      result == None)
-
-fn accept
-  (d:server_driver)
-  (bind_host:array U8.t)
-  (bind_host_len:SZ.t)
-  (port:U16.t)
-  (local_fuel:SZ.t)
-  (network_fuel:SZ.t)
-  requires
-    server_driver_live d 'st0 'certificate_chain 'credential_identity **
-    pts_to bind_host 'bind_host_bytes **
-    pure (
-      B.length 'bind_host_bytes == SZ.v bind_host_len /\
-      CM.can_start_server 'st0)
-  returns status:server_workflow_status
-  ensures
-    pts_to bind_host 'bind_host_bytes **
-    (match status with
-     | ServerWorkflowOk ->
-       exists* wire_received wire_sent pending app_log.
-         DS.top_server_channel_inv
-           d wire_received wire_sent pending app_log
-     | _ ->
-       exists* st1.
-         DS.top_server_driver_closed
-           d st1 'certificate_chain 'credential_identity)
-
 fn accept_with_listener
   (d:server_driver)
   (listener:server_listener)
@@ -406,23 +339,6 @@ fn close
       (Ghost.reveal pending)
       (Ghost.reveal app_log)
   returns status:server_workflow_status
-  ensures
-    exists* st certificate_chain credential_identity.
-      DS.top_server_driver_closed d st certificate_chain credential_identity
-
-fn abort
-  (d:server_driver)
-  (wire_received:Ghost.erased B.bytes)
-  (wire_sent:Ghost.erased B.bytes)
-  (pending:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received)
-      (Ghost.reveal wire_sent)
-      (Ghost.reveal pending)
-      (Ghost.reveal app_log)
   ensures
     exists* st certificate_chain credential_identity.
       DS.top_server_driver_closed d st certificate_chain credential_identity

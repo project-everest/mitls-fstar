@@ -175,25 +175,32 @@ fn new_client_with_auth_config
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds))
 
+noextract
 let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
 
+noextract
 let channel_send_succeeded (status:driver_workflow_status) : bool =
   match status with
   | DS.DriverWorkflowOk -> true
   | _ -> false
 
+noextract
 let channel_receive_succeeded (result:client_receive_result) : bool =
   match result.DS.client_receive_status with
   | DS.DriverWorkflowOk -> true
   | _ -> false
 
+noextract
 let channel_receive_length (result:client_receive_result) : SZ.t =
   result.DS.client_receive_len
 
 (* A send leaves the channel reusable (live) exactly for success and for the
    payload-too-large rejection (which does not touch the connection). A hard
    step failure is terminal. *)
-let channel_send_reusable (status:driver_workflow_status) : bool =
+noextract
+let channel_send_reusable
+  (status:driver_workflow_status)
+  : bool =
   match status with
   | DS.DriverWorkflowOk -> true
   | DS.DriverWorkflowPayloadTooLarge -> true
@@ -206,7 +213,10 @@ let channel_send_reusable (status:driver_workflow_status) : bool =
    payload-too-large, which is send-only) — is terminal.  The cases are listed
    explicitly so the live set is exactly {Ok, NeedMoreInput, Exhausted,
    OutputBufferTooSmall} and cannot silently admit an unintended status. *)
-let channel_receive_reusable (result:client_receive_result) : bool =
+noextract
+let channel_receive_reusable
+  (result:client_receive_result)
+  : bool =
   match result.DS.client_receive_status with
   | DS.DriverWorkflowOk -> true
   | DS.DriverWorkflowNeedMoreInput -> true
@@ -214,39 +224,22 @@ let channel_receive_reusable (result:client_receive_result) : bool =
   | DS.DriverWorkflowOutputBufferTooSmall -> true
   | _ -> false
 
-fn new_client
-  (server_name:array U8.t)
-  (server_name_len:SZ.t)
-  (trust_anchors:array U8.t)
-  (trust_anchors_len:SZ.t)
-  (validation_time_seconds:SZ.t)
-  requires pts_to server_name 'server_name_bytes **
-           pts_to trust_anchors 'trust_anchors_bytes **
-           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
-                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
-                 SZ.v server_name_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
-                 SZ.v trust_anchors_len <=
-                   TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
-  returns result: client_driver
-  ensures pts_to server_name 'server_name_bytes **
-          pts_to trust_anchors 'trust_anchors_bytes **
-          client_driver_live
-            result
-            (CR.configured_initial_state
-              (Ghost.reveal 'server_name_bytes)
-              (Ghost.reveal 'trust_anchors_bytes)
-              validation_time_seconds) **
-          pure (CT.client_state_correct
-            (CR.configured_initial_state
-              (Ghost.reveal 'server_name_bytes)
-              (Ghost.reveal 'trust_anchors_bytes)
-              validation_time_seconds) /\
-                CT.client_end_to_end_invariant
-                  (CR.configured_initial_state
-                    (Ghost.reveal 'server_name_bytes)
-                    (Ghost.reveal 'trust_anchors_bytes)
-                    validation_time_seconds))
+noextract
+let client_driver_is_closed
+  (d:client_driver)
+  : slprop =
+  exists* st. client_driver_closed d st
+
+noextract
+let client_channel_after_operation
+  (d:client_driver)
+  (reusable:bool)
+  (wire_received wire_sent pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  if reusable
+  then DS.client_channel_inv d wire_received wire_sent pending app_log
+  else client_driver_is_closed d
 
 fn connect
   (d:client_driver)
@@ -290,11 +283,13 @@ fn send
            pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
   returns status:driver_workflow_status
   ensures exists* wire_received1 wire_sent1 pending1 app_log1.
-          (if channel_send_reusable status
-           then
-             DS.client_channel_inv d wire_received1 wire_sent1 pending1 app_log1
-           else
-             DS.client_channel_terminal d wire_received1 wire_sent1 app_log1) **
+          client_channel_after_operation
+            d
+            (channel_send_reusable status)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1 **
           pts_to payload (Ghost.reveal payload_bytes) **
           pure (
             CI.send_transition
@@ -330,11 +325,13 @@ fn receive
            pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
   returns result:client_receive_result
   ensures exists* wire_received1 wire_sent1 pending1 app_log1 output.
-          (if channel_receive_reusable result
-           then
-             DS.client_channel_inv d wire_received1 wire_sent1 pending1 app_log1
-           else
-             DS.client_channel_terminal d wire_received1 wire_sent1 app_log1) **
+          client_channel_after_operation
+            d
+            (channel_receive_reusable result)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1 **
           pts_to out output **
           pure (
             B.length output == SZ.v out_len /\
@@ -393,26 +390,6 @@ fn abort
     (Ghost.reveal wire_received)
     (Ghost.reveal wire_sent)
     (Ghost.reveal pending)
-    (Ghost.reveal app_log)
-  ensures exists* st. client_driver_closed d st
-
-(**
-  Cleanly disposes a channel left in the terminal state by a hard failure
-  (a send/receive that returned a StepFailed or Closed status). The runtime
-  shim invokes this after a non-retryable send/receive result: the terminal
-  invariant still owns the physical transport, so it is disposed exactly like
-  [abort] but with the weaker [client_channel_terminal] precondition, which
-  makes no live-connection (control-not-failed) claim.
-**)
-fn abort_terminal
-  (d:client_driver)
-  (wire_received:Ghost.erased B.bytes)
-  (wire_sent:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  requires DS.client_channel_terminal
-    d
-    (Ghost.reveal wire_received)
-    (Ghost.reveal wire_sent)
     (Ghost.reveal app_log)
   ensures exists* st. client_driver_closed d st
 

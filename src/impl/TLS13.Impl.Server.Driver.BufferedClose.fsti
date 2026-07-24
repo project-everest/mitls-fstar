@@ -35,24 +35,6 @@ fn run
       DS.top_server_driver_closed
         d st certificate_chain credential_identity
 
-fn abort
-  (d:DS.top_server_driver)
-  (wire_received:Ghost.erased B.bytes)
-  (wire_sent:Ghost.erased B.bytes)
-  (pending:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received)
-      (Ghost.reveal wire_sent)
-      (Ghost.reveal pending)
-      (Ghost.reveal app_log)
-  ensures
-    exists* st certificate_chain credential_identity.
-      DS.top_server_driver_closed
-        d st certificate_chain credential_identity
-
 fn abort_terminal
   (d:DS.top_server_driver)
   (wire_received:Ghost.erased B.bytes)

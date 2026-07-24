@@ -71,29 +71,9 @@ static int driver_fail_status(
   return 1;
 }
 
-/* The live-invariant cleanup: consumes client_channel_inv (via the verified
- * TLS13_Impl_Client_Driver_abort, whose precondition is exactly the live
- * channel invariant).  This is now used ONLY by tls13_client_driver_free when
- * the wrapper is still connected in the live invariant; every non-retryable
- * (StepFailed/Closed) send/receive outcome instead leaves the terminal
- * invariant and is disposed through abort_terminal_driver below. */
 static void abort_connected_driver(tls13_client_driver *driver) {
   if (driver != NULL && driver->connected) {
     TLS13_Impl_Client_Driver_abort(driver->verified_driver);
-    driver->connected = false;
-  }
-}
-
-/* A send/receive that returned a hard-failure status (StepFailed or a peer
- * Closed) leaves the verified channel in the *terminal* invariant
- * (client_channel_terminal), not the live one.  abort_terminal is the verified
- * cleanup whose precondition is exactly that terminal invariant: it disposes
- * the still-owned transport identically to abort.  Routing the terminal
- * outcomes through it keeps the C cleanup path backed by a matching F*
- * contract, so terminal ownership is always consumable. */
-static void abort_terminal_driver(tls13_client_driver *driver) {
-  if (driver != NULL && driver->connected) {
-    TLS13_Impl_Client_Driver_abort_terminal(driver->verified_driver);
     driver->connected = false;
   }
 }
@@ -275,10 +255,7 @@ int tls13_client_driver_send_application_data(
      * single-record (<=16384 byte) chunks. */
     return 1;
   }
-  /* Any other non-Ok status is a real protocol failure: the verified send left
-   * the channel in the terminal invariant, so release the transport through the
-   * matching terminal cleanup rather than leaving the C wrapper connected. */
-  abort_terminal_driver(driver);
+  driver->connected = false;
   return 1;
 }
 
@@ -288,11 +265,6 @@ static bool receive_status_is_retryable(
          status == TLS13_Impl_Client_Driver_State_DriverWorkflowExhausted ||
          status ==
              TLS13_Impl_Client_Driver_State_DriverWorkflowOutputBufferTooSmall;
-}
-
-static bool receive_status_is_closed(
-    TLS13_Impl_Client_Driver_driver_workflow_status status) {
-  return status == TLS13_Impl_Client_Driver_State_DriverWorkflowClosed;
 }
 
 int tls13_client_driver_receive_application_data(
@@ -329,16 +301,7 @@ int tls13_client_driver_receive_application_data(
      * bounded-progress outcomes, so callers may retry. */
     return 1;
   }
-  if (receive_status_is_closed(result.client_receive_status)) {
-    /* A peer close_notify reaches ControlClosed: the verified receive left the
-     * channel in the terminal invariant.  Release the still-owned TCP transport
-     * through the matching terminal cleanup. */
-    abort_terminal_driver(driver);
-    return 1;
-  }
-  /* StepFailed (and any future unknown status) is non-retryable and leaves the
-   * terminal invariant; dispose it through the matching terminal cleanup. */
-  abort_terminal_driver(driver);
+  driver->connected = false;
   return 1;
 }
 
@@ -375,10 +338,6 @@ void tls13_client_driver_free(tls13_client_driver *driver) {
   if (driver == NULL) {
     return;
   }
-  /* A driver still marked connected here is in the live invariant
-   * (client_channel_inv): every terminal (StepFailed/Closed) send/receive
-   * outcome already disposed the transport via abort_terminal_driver and
-   * cleared the flag.  So the ordinary live abort is the correct cleanup. */
   if (driver->connected) {
     abort_connected_driver(driver);
   }

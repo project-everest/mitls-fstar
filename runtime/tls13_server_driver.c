@@ -185,7 +185,7 @@ int tls13_server_driver_accept_with_config(
     return 1;
   }
 
-  FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_server_driver created =
+  FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_top_server_driver created =
       TLS13_Impl_Server_Driver_new_server_with_credentials(
           config->verified_credentials,
           config->certificate_chain,
