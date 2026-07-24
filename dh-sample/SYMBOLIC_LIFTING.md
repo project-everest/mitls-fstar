@@ -49,14 +49,22 @@ noeq type rng_draw = {
 }
 
 noeq type system_state = {
-  sys_init         : endpoint_state;
-  sys_resp         : endpoint_state;
-  sys_net          : list packet;
-  sys_rng          : list rng_draw;
-  sys_init_pending : option dh_scalar;
-  sys_resp_pending : option dh_scalar;
+  sys_init          : endpoint_state;
+  sys_resp          : endpoint_state;
+  sys_net           : list packet;
+  sys_rng           : list rng_draw;
+  sys_init_pending  : option dh_scalar;
+  sys_resp_pending  : option dh_scalar;
+  sys_init_msg1_idx : option nat;
+  sys_resp_msg1_idx : option nat;
 }
 ```
+
+The two indices are write-once run-link provenance: the first records the
+initiator's own Msg1 packet and the second records the Msg1 actually consumed by
+the responder, including an injected packet. They are irrelevant to RNG
+coherence but become load-bearing at authenticated completion; see
+`SYMBOLIC_SECURITY.md`.
 
 Its actions distinguish honest/internal RNG from attacker control:
 
