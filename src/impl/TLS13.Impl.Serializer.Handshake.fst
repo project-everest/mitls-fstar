@@ -1801,6 +1801,7 @@ fn mk_vclist_from_u16_leaf_array
     V.pts_to vec s1 **
     SM.seq_seq_match (PPB.vmatch_conv elem_vmatch elem_conv) s1 (Ghost.reveal sl) 0 (SZ.v i) **
     pure (1 <= SZ.v i /\ SZ.v i <= SZ.v n /\ V.is_full_vec vec /\ Seq.length s1 == SZ.v n)
+  decreases (SZ.v n - SZ.v (!pi))
   {
     let i = !pi;
     with s1. assert (V.pts_to vec s1);

@@ -1264,6 +1264,7 @@ fn build_ch_cipher_suites
               (RV.reveal_synth_cipher_suites
                 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))) ==
               RV.reveal_synth_cipher_suites (Ghost.reveal cm))
+        decreases (SZ.v count - SZ.v (!i))
         {
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
@@ -1456,6 +1457,7 @@ fn copy_ch_signature_schemes_into
               (RV.reveal_synth_sig_schemes
                 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))) ==
               RV.reveal_synth_sig_schemes (Ghost.reveal cm))
+        decreases (SZ.v count - SZ.v (!i))
         {
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
@@ -2718,6 +2720,7 @@ fn scan_ee_alpn
                     SZ.v al <= 255 /\
                     L.optional_byte_prefix_matches true abytes al
                       (Some?.v (RV.reveal_synth_encrypted_extensions cee)))))
+      decreases %[(if !found then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cee));
@@ -3602,6 +3605,7 @@ fn scan_sh_key_share
             RV.reveal_sh_key_share cext false None ==
             RV.reveal_sh_key_share (RV.list_drop (SZ.v iv) cext) svb kacc)
         )
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cext));
@@ -3954,6 +3958,7 @@ fn scan_ch_supported_versions
           ((not f) ==> (FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm) <==>
                         FStar.List.Tot.mem GPV.TLS_1p3
                           (RV.list_drop (SZ.v iv) (Ghost.reveal cm)))))
+      decreases %[(if !found_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
@@ -4101,6 +4106,7 @@ fn scan_ch_key_share
           ((not d) ==> found == false /\
             TLS13.Wire.Semantics.kse_list_find_x25519 (Ghost.reveal cm) ==
             TLS13.Wire.Semantics.kse_list_find_x25519 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))))
+      decreases %[(if !done_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
@@ -4324,6 +4330,7 @@ fn scan_ch_extensions
             RV.reveal_ch_extensions (Ghost.reveal cext) None None false [] ==
             RV.reveal_ch_extensions (RV.list_drop (SZ.v iv) (Ghost.reveal cext))
               sn_acc key_acc sv (Ghost.reveal sig_acc)))
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         with sn_bytes0 kbytes0 sig_bytes0 sn_acc0 key_acc0 sig_acc0.
@@ -5025,6 +5032,7 @@ fn scan_certificate_chain
                 (RV.reveal_synth_cert_chain (RV.list_drop (SZ.v iv) cm))
                 == RV.reveal_synth_cert_chain cm)))
         )
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         let cntv = !cnt_ref;
@@ -6144,7 +6152,8 @@ fn validate_generated_record
    On success returns the inner content-type byte, an owned copy of the inner
    payload, its length, and (in [pure]) the [protected_decoder_fragment_relation]
    that ties the payload to [WS.parse_record]/[R.open_record]/[WS.parse_plaintext].
-   Frees all scratch buffers (aad, cipher, opened) on every path. *)
+   The ciphertext is passed as a verified view into [raw], so only the small
+   header and opened-plaintext scratch buffers are allocated. *)
 fn peek_decrypt_record
   (c: CR.connection_state)
   (raw: array U8.t)
@@ -6187,36 +6196,29 @@ fn peek_decrypt_record
   } else {
     let out_len = SZ.sub flen 16sz;
     let aad_vec = alloc_copy_slice raw raw_len 0sz 5sz;
-    let cipher_vec = alloc_copy_slice raw raw_len 5sz flen;
     let out_vec = V.alloc 0uy out_len;
     with aad_bytes. assert (V.pts_to aad_vec aad_bytes);
-    with cipher_bytes. assert (V.pts_to cipher_vec cipher_bytes);
     assert (pure (Seq.equal aad_bytes (CT.record_header_aad (Ghost.reveal raw_bytes))));
-    assert (pure (Seq.equal cipher_bytes
-      (Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen))));
     V.to_array_pts_to aad_vec;
-    V.to_array_pts_to cipher_vec;
     V.to_array_pts_to out_vec;
     (* Reach the read record-key state inside the connection. *)
     unfold (CR.connection_exactly c st0);
     unfold (CR.connection_model_exactly c st0.CS.cs_model);
     unfold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
-    let ok = Rec.peek_open_application c.records.read
+    let ok = Rec.peek_open_application_suffix c.records.read
                (V.vec_to_array aad_vec) 5sz
-               (V.vec_to_array cipher_vec) flen
+               raw raw_len 5sz flen
                (V.vec_to_array out_vec);
     (* peek does not mutate the connection: re-fold unchanged. *)
     fold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
     fold (CR.connection_model_exactly c st0.CS.cs_model);
     fold (CR.connection_exactly c st0);
     V.to_vec_pts_to aad_vec;
-    V.to_vec_pts_to cipher_vec;
-    V.to_vec_pts_to out_vec;
     if ok {
-      with out_bytes. assert (V.pts_to out_vec out_bytes);
+      with out_bytes. assert (pts_to (V.vec_to_array out_vec) out_bytes);
+      assert (pure (B.length out_bytes == SZ.v out_len));
+      assert (pure (SZ.fits (SZ.v out_len)));
       V.free aad_vec;
-      V.free cipher_vec;
-      V.to_array_pts_to out_vec;
       let inner = decode_inner_plaintext (V.vec_to_array out_vec) out_len;
       V.to_vec_pts_to out_vec;
       match inner {
@@ -6239,7 +6241,7 @@ fn peek_decrypt_record
       }
     } else {
       V.free aad_vec;
-      V.free cipher_vec;
+      V.to_vec_pts_to out_vec;
       V.free out_vec;
       None #decoded_fragment
     }

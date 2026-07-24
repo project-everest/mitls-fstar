@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 open Pulse.Lib.Box { box, (!), (:=) }
 
 module Arr = Pulse.Lib.Array
+module AC = TLS13.Impl.ArrayCopy
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
@@ -495,7 +496,12 @@ fn process_application_data
   V.to_array_pts_to lapp.IM.application_data_bytes;
   pts_to_len (V.vec_to_array lapp.IM.application_data_bytes);
   pts_to_len app_out;
-  Arr.memcpy_l data_len (V.vec_to_array lapp.IM.application_data_bytes) app_out;
+  AC.copy_prefix
+    data_len
+    (V.vec_to_array lapp.IM.application_data_bytes)
+    16640sz
+    app_out
+    app_out_len;
   V.to_vec_pts_to lapp.IM.application_data_bytes;
   with app_out_bytes. assert (pts_to app_out app_out_bytes);
   pts_to_len app_out;

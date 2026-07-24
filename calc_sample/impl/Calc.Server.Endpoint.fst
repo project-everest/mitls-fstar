@@ -1812,6 +1812,7 @@ ensures
         (Ghost.reveal sent_loop)
         (Ghost.reveal log_loop) **
       pure (SZ.v (R.read remaining) <= SZ.v fuel)
+  decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
   {
     with rem_live keep_live received_loop sent_loop log_loop.
       assert (

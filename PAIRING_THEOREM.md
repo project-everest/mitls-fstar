@@ -653,7 +653,7 @@ therefore treats the following as the cryptographic specification/TCB boundary:
 - `lemma_x25519_shared_agreement`;
 - AEAD seal/open and signature verification functions.
 
-See `src/spec/TLS13.Crypto.Spec.fsti:18-77`.
+See `src/spec/assumptions/TLS13.Crypto.Spec.fsti:18-77`.
 
 For this theorem, the crucial crypto assumption is
 `lemma_x25519_shared_agreement`:
@@ -701,7 +701,7 @@ security properties remain outside the postconditions. For example,
 `random_bytes` only proves ownership and output length, not entropy, while the
 runtime X25519 path is connected to `C.x25519_shared` through
 `x25519_shared_call` and `lemma_x25519_shared_call_success`
-(`src/impl/TLS13.Crypto.fsti:16-20`, `119-173`). The default client/server
+(`src/impl/extern/TLS13.Crypto.fsti:16-20`, `119-173`). The default client/server
 configuration fixes the implementation profile to
 `TLS_CHACHA20_POLY1305_SHA256`, `RsaPssRsaeSha256`, and server group `X25519`
 (`src/impl/TLS13.Impl.ConnectionState.Repr.fsti:1183-1247`).

@@ -1204,6 +1204,18 @@ let is_connection_state (c:connection_state) : slprop =
 
 noextract
 
+let connection_released
+  ([@@@mkey] c:connection_state)
+  (st:CS.connection_state)
+  : slprop =
+  MR.pts_to c.ghost_state #1.0R st
+
+fn free_connection (c:connection_state)
+  requires connection_exactly c 'st
+  ensures connection_released c 'st
+
+noextract
+
 let default_connection_config : CS.connection_config = {
   CS.config_role = CS.ClientEndpoint;
   CS.config_server_name = B.empty;
