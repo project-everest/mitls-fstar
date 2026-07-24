@@ -177,6 +177,32 @@ int main(int argc, char **argv) {
     size_t total  = (size_t)rl;
     size_t reqlen = head_end ? head_end : total;
 
+    /* Locate the header block (bytes after the request line's first CRLF),
+       which is what the verified header/framing scanners walk. */
+    size_t hblock = 0;
+    for (size_t i = 0; i + 1 < reqlen; i++)
+      if (reqbuf[i] == '\r' && reqbuf[i + 1] == '\n') { hblock = i + 2; break; }
+
+    /* 3z. Request-smuggling guard (RFC 7230 3.3.3): the VERIFIED framing check
+       rejects a request that carries a Content-Length alongside a
+       Transfer-Encoding, or more than one Content-Length line.  On rejection we
+       answer a verified 400 (no body) and drop the connection. */
+    bool framing_ok = http_request_framing_ok(reqbuf + hblock, reqlen - hblock,
+                                              (uint8_t *)"content-length", (size_t)14,
+                                              (uint8_t *)"transfer-encoding", (size_t)17);
+    if (!framing_ok) {
+      http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
+      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      Common_TCP_close(pch);
+      fprintf(stderr, "http_server: rejected request (smuggling: conflicting/duplicate framing), served 400\n");
+      if (status_path) {
+        FILE *sf = fopen(status_path, "w");
+        if (sf) { fprintf(sf, "smuggling 400\n"); fclose(sf); }
+      }
+      continue;
+    }
+
     /* 3a. POST branch: the VERIFIED method parser detects the method, the
        VERIFIED header decoder recovers Content-Length, and we ECHO the request
        body back in a verified 200 response head + body copy.  This exercises a

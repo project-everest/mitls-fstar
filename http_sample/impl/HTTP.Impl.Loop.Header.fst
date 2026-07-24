@@ -296,3 +296,93 @@ fn http_parse_headers
   };
   pcount := !cnt;
 }
+
+(* ── Request-framing validation (RFC 7230 §3.3.3 anti-smuggling) ───────────────
+
+   Two verified helpers used by the server before it acts on a request's framing:
+
+   `http_count_header_named` counts the well-formed header field-lines in
+   `inp[0..n)` whose field-name equals `nm` (case-insensitive, exact length
+   `nm_len`) — the name-filtered analogue of `http_count_headers`.  Memory-safe;
+   the count is bounded by `n` because every counted line strictly advances the
+   cursor.
+
+   `http_request_framing_ok` applies the anti-smuggling policy on top of it: a
+   request head is UNAMBIGUOUS (returns `true`) unless it carries a
+   `Content-Length` alongside a `Transfer-Encoding`, or more than one
+   `Content-Length` line — both of which are request-smuggling vectors that a
+   conformant server must reject (with `400`).  Memory-safe. *)
+fn http_count_header_named
+  (inp: array U8.t) (n: SZ.t) (nm: array U8.t) (nm_len: SZ.t)
+  requires
+    pts_to inp 'i ** pts_to nm 'm **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\ SZ.v nm_len <= Seq.length 'm)
+  returns _cnt:SZ.t
+  ensures
+    pts_to inp 'i ** pts_to nm 'm
+{
+  let mut pos     = 0sz;
+  let mut cnt     = 0sz;
+  let mut go      = true;
+  let mut pis_end = false;
+  let mut pok     = false;
+  let mut pnlen   = 0sz;
+  let mut pvoff   = 0sz;
+  let mut pvlen   = 0sz;
+  let mut pnext   = 0sz;
+  while (!go)
+  invariant exists* (vpos vcnt:SZ.t) (vgo ve vok:bool) (a b c d:SZ.t).
+    R.pts_to pos vpos ** R.pts_to cnt vcnt ** R.pts_to go vgo **
+    R.pts_to pis_end ve ** R.pts_to pok vok **
+    R.pts_to pnlen a ** R.pts_to pvoff b ** R.pts_to pvlen c ** R.pts_to pnext d **
+    pts_to inp 'i ** pts_to nm 'm **
+    pure (SZ.v vpos <= SZ.v n /\ SZ.v vcnt <= SZ.v vpos /\
+          SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\ SZ.v nm_len <= Seq.length 'm)
+  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
+  {
+    let vpos = !pos;
+    Hdr.http_parse_header_field inp n vpos pis_end pok pnlen pvoff pvlen pnext;
+    let isend = !pis_end;
+    let ok = !pok;
+    if (isend || not ok) {
+      go := false;
+    } else {
+      let nlen = !pnlen;
+      let nx   = !pnext;
+      let lenmatch  = SZ.eq nlen nm_len;
+      let bytematch = ci_eq_at inp n vpos nm nm_len;
+      if (SZ.gt nx vpos) {
+        if (lenmatch && bytematch) {
+          let vcnt = !cnt;
+          Hdr.lemma_fits32 (SZ.v vcnt + 1);
+          cnt := SZ.add vcnt 1sz;
+          pos := nx;
+        } else {
+          pos := nx;
+        }
+      } else {
+        go := false;
+      }
+    }
+  };
+  !cnt
+}
+
+fn http_request_framing_ok
+  (inp: array U8.t) (n: SZ.t)
+  (cl: array U8.t) (cl_len: SZ.t)
+  (te: array U8.t) (te_len: SZ.t)
+  requires
+    pts_to inp 'i ** pts_to cl 'c ** pts_to te 't **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\
+          SZ.v cl_len <= Seq.length 'c /\ SZ.v te_len <= Seq.length 't)
+  returns b: bool
+  ensures
+    pts_to inp 'i ** pts_to cl 'c ** pts_to te 't
+{
+  let clc = http_count_header_named inp n cl cl_len;
+  let tec = http_count_header_named inp n te te_len;
+  let cl_dup    = SZ.gt clc 1sz;
+  let cl_and_te = SZ.gt clc 0sz && SZ.gt tec 0sz;
+  not (cl_dup || cl_and_te)
+}

@@ -41,8 +41,11 @@ RUN_DIR_ABS := $(abspath $(RUN_DIR))
 RUN_DIR_POST := _run_http_post
 RUN_DIR_POST_ABS := $(abspath $(RUN_DIR_POST))
 PORT_POST ?= $(shell echo $$(( $(PORT) + 1 )))
+RUN_DIR_SMUG := _run_http_smug
+RUN_DIR_SMUG_ABS := $(abspath $(RUN_DIR_SMUG))
+PORT_SMUG ?= $(shell echo $$(( $(PORT) + 2 )))
 
-.PHONY: all test test-get test-post build-progs clean help
+.PHONY: all test test-get test-post test-smuggle build-progs clean help
 
 all: test
 
@@ -57,7 +60,7 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post
+test: test-get test-post test-smuggle
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -133,8 +136,48 @@ test-post: build-progs
 	    exit 1; \
 	  fi
 
+# ── raw request-smuggling probe <-> our verified-framing guard ────────────────
+# curl cannot craft a request that carries BOTH Content-Length and
+# Transfer-Encoding (a classic CL.TE smuggling vector), so we send a RAW request
+# over a python3 socket.  The server's VERIFIED http_request_framing_ok rejects
+# it and answers a verified 400.  PASS iff the response status line is
+# "HTTP/1.1 400" and parse.status shows the smuggling path fired.  As a control,
+# we ALSO send a clean single-Content-Length request and require HTTP 200.
+test-smuggle: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " Smuggling guard:  raw CL+TE request  ->  http_server (verified framing check -> 400)"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v python3 >/dev/null 2>&1 || { echo "  SKIP: 'python3' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_SMUG); mkdir -p $(RUN_DIR_SMUG)
+	@cp raw_probe.py $(RUN_DIR_SMUG)/raw_probe.py
+	@echo "  sending a raw Content-Length + Transfer-Encoding request; expecting a verified 400 ..."
+	@cd $(RUN_DIR_SMUG) && \
+	  HTTP_PARSE_STATUS_FILE=parse.status \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_SMUG) & srv=$$!; sleep 0.5; \
+	    python3 raw_probe.py 127.0.0.1 $(PORT_SMUG) smuggle > smug.code 2>err.log; rc=$$?; \
+	    for i in $$(seq 1 40); do [ -s parse.status ] && break; sleep 0.05; done; \
+	    cp parse.status smug.status 2>/dev/null; \
+	    python3 raw_probe.py 127.0.0.1 $(PORT_SMUG) clean > clean.code 2>>err.log; \
+	    exit $$rc' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  scode=$$(cat smug.code 2>/dev/null); ccode=$$(cat clean.code 2>/dev/null); \
+	  status=$$(cat smug.status 2>/dev/null); \
+	  case "$$status" in smuggling\ *) parsed=ok;; *) parsed=no;; esac; \
+	  if [ "$$scode" = 400 ] && [ "$$ccode" = 200 ] && [ "$$parsed" = ok ]; then \
+	    echo "  RESULT: PASS - the VERIFIED framing guard rejected the CL+TE request with HTTP 400 (parse.status='$$status'), and a clean single-CL request still got HTTP 200"; \
+	    rm -rf $(RUN_DIR_SMUG_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/probe did not terminate: killed after $(TIMEOUT)s (smuggle=$$scode clean=$$ccode parsed=$$parsed status='$$status')"; \
+	    else echo "  RESULT: FAIL - smuggle=$$scode (want 400) clean=$$ccode (want 200) parsed=$$parsed status='$$status'"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_SMUG_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG)
 
 help:
 	@echo "HTTP interop test (vs curl):"

@@ -111,5 +111,17 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       (`"POST " target " HTTP/1.1\r\nContent-Length: " <var-width digits> "\r\n\r\n"`),
       driven by `http_build_post_head` (`HTTP.Impl.Loop.RequestPost`) and
       exercised byte-exactly by `verified/request_post_test.c` (len 5/0/255/1000000).
-- [ ] 4. Smuggling / limit defenses + error responses
+- [~] 4. Smuggling / limit defenses + error responses — **in progress**:
+      verified request-smuggling guard DONE. `http_request_framing_ok`
+      (`HTTP.Impl.Loop.Header`) rejects a request whose header block carries a
+      `Content-Length` alongside a `Transfer-Encoding`, or more than one
+      `Content-Length` line (RFC 7230 §3.3.3 CL.TE / duplicate-CL vectors),
+      built on a verified name-filtered header-line counter
+      `http_count_header_named` (case-insensitive). On rejection the interop
+      server answers a verified `400` (`http_emit_response 400 0`). Exercised by
+      `verified/framing_test.c` (`make framing-test`, 6 cases) and a raw-socket
+      CL+TE probe in `interop/` (`make test-smuggle`, asserts HTTP 400 + a clean
+      single-CL control still gets 200). *Remaining:* limits/timeouts (line/header
+      size caps, read timeouts), malformed-chunk-size rejection, and the other
+      error responses (`405`/`411`/`413`/`431`/`501`/`505`).
 - [ ] 5. Keep-alive / persistent connections; TLS
