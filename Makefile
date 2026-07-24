@@ -699,12 +699,17 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 
 HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
+  $(HACL_DIR)/Hacl_Hash_SHA1.c \
   $(HACL_DIR)/Hacl_Hash_SHA2.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2b.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2s.c \
   $(HACL_DIR)/Hacl_HMAC.c \
+  $(HACL_DIR)/Hacl_HKDF.c \
   $(HACL_DIR)/Hacl_Curve25519_51.c \
   $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305.c \
   $(HACL_DIR)/Hacl_Chacha20.c \
   $(HACL_DIR)/Hacl_MAC_Poly1305.c \
+  $(HACL_DIR)/Lib_Memzero0.c \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
 
 HACL_SIMD256 ?= $(shell \
@@ -751,6 +756,8 @@ HACL_ACCEL_C_MODULES = \
   EverCrypt_AutoConfig2 \
   EverCrypt_Hash \
   EverCrypt_HMAC \
+  EverCrypt_HKDF \
+  EverCrypt_Curve25519 \
   Hacl_Curve25519_64
 HACL_ACCEL_ASM_MODULES = \
   cpuid-x86_64-linux \
