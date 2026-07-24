@@ -235,6 +235,7 @@ fn http_emit_chunk
       Seq.index sv 4 == W.bCR /\
       Seq.index sv 5 == W.bLF /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (6 + j) == Seq.index 'd j))
+  decreases (Prims.op_Subtraction (SZ.v data_len) (SZ.v (!i)))
   {
     lemma_szlits ();
     let vi = !i;
@@ -368,6 +369,7 @@ fn http_recv_chunk (hdr: array U8.t) (body: array U8.t) (out: array U8.t) (n: SZ
       Seq.length 'b == SZ.v n + 2 /\
       Seq.length ov == SZ.v n /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'b j))
+  decreases (Prims.op_Subtraction (SZ.v n) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = body.(vi);

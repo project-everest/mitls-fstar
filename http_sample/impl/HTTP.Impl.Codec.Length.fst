@@ -725,6 +725,7 @@ fn http_emit_body
       Seq.length 'd == SZ.v data_len /\
       Seq.length ov == SZ.v data_len /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'd j))
+  decreases (Prims.op_Subtraction (SZ.v data_len) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = data.(vi);
@@ -770,6 +771,7 @@ fn http_recv_body (body: array U8.t) (out: array U8.t) (n: SZ.t)
       Seq.length 'b == SZ.v n /\
       Seq.length ov == SZ.v n /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'b j))
+  decreases (Prims.op_Subtraction (SZ.v n) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = body.(vi);
@@ -835,6 +837,7 @@ fn http_emit_request
       Seq.length 't == SZ.v target_len /\
       Seq.length sv == 4 + SZ.v target_len + 13 /\
       (forall (k:nat). k < SZ.v va ==> Seq.index sv k == Seq.index lit_get k))
+  decreases (Prims.op_Subtraction (SZ.v 4sz) (SZ.v (!a)))
   {
     let va = !a;
     lemma_lit_get_byte va;
@@ -855,6 +858,7 @@ fn http_emit_request
       Seq.length sv == 4 + SZ.v target_len + 13 /\
       (forall (k:nat). k < 4 ==> Seq.index sv k == Seq.index lit_get k) /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (4 + j) == Seq.index 't j))
+  decreases (Prims.op_Subtraction (SZ.v target_len) (SZ.v (!i)))
   {
     let vi = !i;
     lemma_fits32 (4 + SZ.v vi);
@@ -876,6 +880,7 @@ fn http_emit_request
       (forall (j:nat). j < SZ.v target_len ==> Seq.index sv (4 + j) == Seq.index 't j) /\
       (forall (k:nat). k < SZ.v vb ==>
          Seq.index sv (4 + SZ.v target_len + k) == Seq.index (Seq.cons W.bSP req_tail) k))
+  decreases (Prims.op_Subtraction (SZ.v 13sz) (SZ.v (!b)))
   {
     let vb = !b;
     lemma_req_tail_byte vb;
@@ -991,6 +996,7 @@ fn http_emit_response
     R.pts_to i vi ** pts_to out sv **
     pure (SZ.v vi <= 43 /\ Seq.length sv == 43 /\ Seq.length (respbytes code len) == 43 /\
       (forall (k:nat). k < SZ.v vi ==> Seq.index sv k == Seq.index (respbytes code len) k))
+  decreases (Prims.op_Subtraction (SZ.v 43sz) (SZ.v (!i)))
   {
     let vi = !i;
     lemma_head_byte code len vi;
@@ -1047,6 +1053,7 @@ fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
       Seq.length sv == Prims.op_Addition 35 (SZ.v dcount) /\
       Seq.length (srv_bytes code len) == Prims.op_Addition 35 (SZ.v dcount) /\
       (forall (k:nat). k < SZ.v va ==> Seq.index sv k == Seq.index (srv_bytes code len) k))
+  decreases (Prims.op_Subtraction (SZ.v 31sz) (SZ.v (!a)))
   {
     let va = !a;
     lemma_head_pre code len va;
@@ -1074,6 +1081,7 @@ fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
       W.all_dec (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Subtraction (SZ.v vpos) 31)) /\
       Prims.op_Equality #Prims.nat (U32.v vrem)
         (W.dec_dec_var (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Subtraction (SZ.v vpos) 31))))
+  decreases (SZ.v (!pos))
   {
     let vpos = !pos;
     let vrem = !rem;
@@ -1113,6 +1121,7 @@ fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
       (forall (kk:nat). kk < SZ.v vb ==>
          Seq.index sv (Prims.op_Addition (Prims.op_Addition 31 (SZ.v dcount)) kk)
            == Seq.index (srv_bytes code len) (Prims.op_Addition (Prims.op_Addition 31 (SZ.v dcount)) kk)))
+  decreases (Prims.op_Subtraction (SZ.v 4sz) (SZ.v (!b)))
   {
     let vb = !b;
     lemma_srv_index code len;
@@ -1190,6 +1199,7 @@ fn http_recv_response (inp: array U8.t) (pcode: R.ref U16.t) (plen: R.ref U32.t)
           Seq.length (respbytes code len) == 43 /\
           (okv == true ==> (forall (k:nat). k < SZ.v vi ==>
              Seq.index 'i k == Seq.index (respbytes code len) k)))
+      decreases (Prims.op_Subtraction (SZ.v 43sz) (SZ.v (!i)))
       {
         let vi = !i;
         let bv = inp.(vi);
@@ -1259,6 +1269,7 @@ fn http_recv_request (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
       pure (4 <= SZ.v vi /\ SZ.v vi <= SZ.v n /\ Seq.length 'i == SZ.v n /\
         (forall (j:nat). 4 <= j /\ j < SZ.v vi ==> Seq.index 'i j =!= W.bSP) /\
         (vf == true ==> (SZ.v vi < SZ.v n /\ Seq.index 'i (SZ.v vi) == W.bSP)))
+    decreases %[(if !fnd then 0 else 1); Prims.op_Subtraction (SZ.v n) (SZ.v (!i))]
     {
       let vi = !i;
       let c = inp.(vi);
@@ -1283,6 +1294,7 @@ fn http_recv_request (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
           (vt == true ==> (forall (kk:nat). kk < SZ.v vk ==>
              Seq.index 'i (Prims.op_Addition (Prims.op_Addition (SZ.v sp) 1) kk)
                == Seq.index (Seq.cons W.bSP req_tail) (Prims.op_Addition kk 1))))
+      decreases (Prims.op_Subtraction (SZ.v 12sz) (SZ.v (!k)))
       {
         let vk = !k;
         let bv = inp.(SZ.add (SZ.add sp 1sz) vk);
@@ -1350,6 +1362,7 @@ fn http_recv_request_head (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
       pure (4 <= SZ.v vi /\ SZ.v vi <= SZ.v n /\ Seq.length 'i == SZ.v n /\
         (forall (j:nat). 4 <= j /\ j < SZ.v vi ==> Seq.index 'i j =!= W.bSP) /\
         (vf == true ==> (SZ.v vi < SZ.v n /\ Seq.index 'i (SZ.v vi) == W.bSP)))
+    decreases %[(if !fnd then 0 else 1); Prims.op_Subtraction (SZ.v n) (SZ.v (!i))]
     {
       let vi = !i;
       let c = inp.(vi);
@@ -1374,6 +1387,7 @@ fn http_recv_request_head (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
           (vt == true ==> (forall (kk:nat). kk < SZ.v vk ==>
              Seq.index 'i (Prims.op_Addition (Prims.op_Addition (SZ.v sp) 1) kk)
                == Seq.index req_ver kk)))
+      decreases (Prims.op_Subtraction (SZ.v 10sz) (SZ.v (!k)))
       {
         let vk = !k;
         let bv = inp.(SZ.add (SZ.add sp 1sz) vk);

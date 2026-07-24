@@ -145,7 +145,7 @@ let lemma_value_facts (s:Seq.seq U8.t) (voff ei n:nat)
    `cj`, all-`name_char` name, maximal OWS run ending at `voff`, first CR at
    `ei`, terminating LF at `ei+1`), `parse_field` of the suffix `s[start..n)`
    yields exactly `Some (name, value, consumed)`.                              *)
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 2 --split_queries always"
 let lemma_parse_field_tie
   (s:Seq.seq U8.t) (start n cj voff ei:nat)
   : Lemma
@@ -235,6 +235,7 @@ fn scan_name (inp: array U8.t) (n: SZ.t) (start: SZ.t) (pcj: R.ref SZ.t)
     pure (SZ.v start <= SZ.v vj /\ SZ.v vj <= SZ.v n /\ SZ.v n <= Seq.length 'i /\
           (forall (k:nat). SZ.v start <= k /\ k < SZ.v vj ==> H.name_char (Seq.index 'i k)) /\
           (vf == true ==> (SZ.v vj < SZ.v n /\ Seq.index 'i (SZ.v vj) == H.bColon)))
+  decreases %[(if !ng then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!j))]
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -281,6 +282,7 @@ fn skip_ows (inp: array U8.t) (n: SZ.t) (from: SZ.t) (pk: R.ref SZ.t)
           (vg == false ==>
             (SZ.v vk == SZ.v n \/
              (SZ.v vk < SZ.v n /\ not (H.is_ows (Seq.index 'i (SZ.v vk)))))))
+  decreases %[(if !og then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!k))]
   {
     let vk = !k;
     if SZ.lt vk n {
@@ -322,6 +324,7 @@ fn scan_value (inp: array U8.t) (n: SZ.t) (from: SZ.t) (pei: R.ref SZ.t)
     pure (SZ.v from <= SZ.v vm /\ SZ.v vm <= SZ.v n /\ SZ.v n <= Seq.length 'i /\
           (forall (q:nat). SZ.v from <= q /\ q < SZ.v vm ==> H.value_char (Seq.index 'i q)) /\
           (vf == true ==> (SZ.v vm < SZ.v n /\ Seq.index 'i (SZ.v vm) == W.bCR)))
+  decreases %[(if !vg then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!m2))]
   {
     let vm = !m2;
     if SZ.lt vm n {

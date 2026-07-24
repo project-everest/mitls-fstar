@@ -56,6 +56,7 @@ fn http_method_eq
     R.pts_to k vk ** R.pts_to m vm ** pts_to inp 'i ** pts_to nm 'm **
     pure (SZ.v vk <= SZ.v mlen /\
           (vm == true ==> (SZ.v mlen <= Seq.length 'i /\ SZ.v mlen <= Seq.length 'm)))
+  decreases (Prims.op_Subtraction (SZ.v mlen) (SZ.v (!k)))
   {
     let vk = !k;
     let c = inp.(vk);

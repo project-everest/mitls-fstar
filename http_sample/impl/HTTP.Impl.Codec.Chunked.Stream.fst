@@ -136,7 +136,7 @@ let lemma_prefix_extend (oldv newv:Seq.seq U8.t) (off n:nat)
 (* The verified decoder.                                                      *)
 (* ------------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 600 --split_queries always"
 fn http_decode_chunks
     (inp: array U8.t) (inlen: SZ.t)
     (out: array U8.t) (outcap: SZ.t)
@@ -180,6 +180,7 @@ fn http_decode_chunks
             (exists (rest:Seq.seq U8.t).
                S.parse_chunks (Seq.slice 'i 0 (SZ.v inlen)) ==
                  Some (Seq.slice ov 0 (SZ.v voff), rest))))))
+  decreases %[(if (!done || !err) then 0 else 1); Prims.op_Subtraction (SZ.v inlen) (SZ.v (!pos))]
   {
     let vpos = !pos;
     (* need at least a 6-byte header + 2-byte CRLF = 8 bytes for any frame *)
@@ -258,6 +259,7 @@ fn http_decode_chunks
                     (forall (j:nat). j < SZ.v vk ==>
                        Seq.index ov (SZ.v voff + j) ==
                          Seq.index 'i (SZ.v vpos + 6 + j)))
+                decreases (Prims.op_Subtraction (SZ.v n) (SZ.v (!k)))
                 {
                   let vk = !k;
                   lemma_fits_small (SZ.v vpos + 6 + SZ.v vk);
@@ -490,6 +492,7 @@ fn scan_hex_size (inp: array U8.t) (inlen: SZ.t) (vpos: SZ.t) (psize: R.ref SZ.t
           SZ.v vsize <= SZ.v inlen /\ SZ.v inlen <= Seq.length 'i /\ SZ.v inlen < pow2 32 /\
           W.all_hex (Seq.slice 'i (SZ.v vpos) (SZ.v vnp)) /\
           W.dec_hex_var (Seq.slice 'i (SZ.v vpos) (SZ.v vnp)) == SZ.v vsize)
+  decreases %[(if !scanning then 1 else 0); Prims.op_Subtraction (SZ.v inlen) (SZ.v (!np))]
   {
     let vnp = !np;
     if SZ.lt vnp inlen {
@@ -554,6 +557,7 @@ fn copy_payload (inp: array U8.t) (out: array U8.t)
           (forall (j:nat). j < SZ.v voff ==> Seq.index ov j == Seq.index 'o j) /\
           (forall (j:nat). j < SZ.v vk ==>
              Seq.index ov (SZ.v voff + j) == Seq.index 'i (SZ.v datastart + j)))
+  decreases (Prims.op_Subtraction (SZ.v vsize) (SZ.v (!k)))
   {
     let vk = !k;
     lemma_fits_small (SZ.v datastart + SZ.v vk);
@@ -610,6 +614,7 @@ fn http_decode_chunks_var
                 (exists (rest:Seq.seq U8.t).
                    S.parse_chunks_var (Seq.slice 'i 0 (SZ.v inlen)) ==
                      Some (Seq.slice ov 0 (SZ.v voff), rest))))))
+  decreases %[(if (!done || !err) then 0 else 1); Prims.op_Subtraction (SZ.v inlen) (SZ.v (!pos))]
   {
     let vpos = !pos;
     (* ── parse the variable-width hex size line starting at vpos ─────────── *)

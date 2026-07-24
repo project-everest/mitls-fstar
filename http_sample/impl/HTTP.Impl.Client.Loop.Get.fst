@@ -66,6 +66,7 @@ fn recv_to_eof
     pts_to buf bv ** pts_to tmp tv ** R.pts_to prlen rl ** R.pts_to go vg **
     pure (Seq.length bv == SZ.v cap /\ Seq.length tv == SZ.v tmpcap /\
           0 < SZ.v tmpcap /\ SZ.v rl <= SZ.v cap)
+  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v cap) (SZ.v (!prlen))]
   {
     let rl = !prlen;
     if SZ.lt rl cap {
@@ -85,6 +86,7 @@ fn recv_to_eof
                 Seq.length tv == SZ.v tmpcap /\
                 SZ.v ncopy <= SZ.v tmpcap /\
                 SZ.v rl + SZ.v ncopy <= SZ.v cap)
+        decreases (Prims.op_Subtraction (SZ.v ncopy) (SZ.v (!k)))
         {
           let vk = !k;
           let dv = tmp.(vk);
@@ -201,6 +203,7 @@ fn http_get_body_chunked
     R.pts_to k vk ** pts_to buf 'b ** pts_to raw rv **
     pure (SZ.v vk <= SZ.v bodylen /\ Seq.length rv == SZ.v rawcap /\
           SZ.v bodylen <= SZ.v rawcap /\ SZ.v headlen + SZ.v bodylen <= Seq.length 'b)
+  decreases (Prims.op_Subtraction (SZ.v bodylen) (SZ.v (!k)))
   {
     let vk = !k;
     let dv = buf.(SZ.add headlen vk);
@@ -245,6 +248,7 @@ fn http_get_body_chunked_var
     R.pts_to k vk ** pts_to buf 'b ** pts_to raw rv **
     pure (SZ.v vk <= SZ.v bodylen /\ Seq.length rv == SZ.v rawcap /\
           SZ.v bodylen <= SZ.v rawcap /\ SZ.v headlen + SZ.v bodylen <= Seq.length 'b)
+  decreases (Prims.op_Subtraction (SZ.v bodylen) (SZ.v (!k)))
   {
     let vk = !k;
     let dv = buf.(SZ.add headlen vk);

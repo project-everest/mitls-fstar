@@ -60,6 +60,7 @@ fn http_count_headers (inp: array U8.t) (n: SZ.t)
     pts_to inp 'i **
     pure (SZ.v vpos <= SZ.v n /\ SZ.v vcnt <= SZ.v vpos /\
           SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32)
+  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     Hdr.http_parse_header_field inp n vpos pis_end pok pnlen pvoff pvlen pnext;
@@ -107,6 +108,7 @@ fn ci_eq_at
     pure (SZ.v vk <= SZ.v nm_len /\ SZ.v n <= Seq.length 'i /\
           SZ.v nm_len <= Seq.length 'm /\
           (vok ==> SZ.v pos + SZ.v nm_len <= SZ.v n))
+  decreases (Prims.op_Subtraction (SZ.v nm_len) (SZ.v (!k)))
   {
     let vk = !k;
     let c = inp.(SZ.add pos vk);
@@ -154,6 +156,7 @@ fn http_find_header
     pure (SZ.v vpos <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\
           SZ.v nm_len <= Seq.length 'm /\
           (vfound == true ==> SZ.v vo + SZ.v vl <= SZ.v n))
+  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     Hdr.http_parse_header_field inp n vpos pis_end pok pnlen voffr vlenr pnext;
@@ -260,6 +263,7 @@ fn http_parse_headers
           SZ.v vcnt <= SZ.v cap /\ SZ.v cap < pow2 32 /\
           Seq.length no == SZ.v cap /\ Seq.length nl == SZ.v cap /\
           Seq.length vo == SZ.v cap /\ Seq.length vl == SZ.v cap)
+  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     let vcnt = !cnt;

@@ -129,6 +129,7 @@ fn match_ci_at
     R.pts_to k vk ** R.pts_to ok vok ** pts_to inp 'i **
     pure (SZ.v vk <= SZ.v len /\ SZ.v n <= Seq.length 'i /\
           (vok ==> SZ.v pos + SZ.v len <= SZ.v n))
+  decreases (Prims.op_Subtraction (SZ.v len) (SZ.v (!k)))
   {
     let vk = !k;
     let c = inp.(SZ.add pos vk);
@@ -296,6 +297,7 @@ fn parse_dec_at (inp: array U8.t) (n: SZ.t) (start: SZ.t) (pval: R.ref U32.t)
     R.pts_to j vj ** R.pts_to sgo vs ** pts_to inp 'i **
     pure (SZ.v start <= SZ.v vj /\ SZ.v vj <= SZ.v n /\ SZ.v n <= Seq.length 'i /\
           (forall (k:nat{SZ.v start <= k /\ k < SZ.v vj}). Seq.index 'i k == 0x20uy))
+  decreases %[(if !sgo then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!j))]
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -320,6 +322,7 @@ fn parse_dec_at (inp: array U8.t) (n: SZ.t) (start: SZ.t) (pval: R.ref U32.t)
           (vy == true <==> SZ.v dp < SZ.v vj) /\
           (vg == false ==> (SZ.v vj == SZ.v n \/
                             (SZ.v vj < SZ.v n /\ not (W.is_dec (Seq.index 'i (SZ.v vj)))))))
+  decreases %[(if !dgo then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!j))]
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -364,6 +367,7 @@ fn line_has_chunked (inp: array U8.t) (n: SZ.t) (start: SZ.t)
   invariant exists* (vj:SZ.t) (vf:bool) (vg:bool).
     R.pts_to j vj ** R.pts_to found vf ** R.pts_to go vg ** pts_to inp 'i **
     pure (SZ.v vj <= SZ.v n /\ SZ.v n <= Seq.length 'i)
+  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!j))]
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -493,6 +497,7 @@ fn http_parse_framing
     pts_to inp 'i **
     pure (SZ.v vi <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n + 18 < pow2 32 /\
           U32.v cl < CW.max_len8 /\ (ve == true ==> SZ.v hd <= SZ.v n))
+  decreases %[(if !ended then 0 else 1); Prims.op_Subtraction (SZ.v n) (SZ.v (!i))]
   {
     let vi = !i;
     let vsol = !sol;
