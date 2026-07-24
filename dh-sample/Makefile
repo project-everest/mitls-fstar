@@ -53,7 +53,7 @@ IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 # ── Main Targets (MUST come before .depend include) ───────────────
-.PHONY: all verify clean check-admits check-forbidden stats help
+.PHONY: all verify verify-symbolic-lift clean check-admits check-forbidden check-symbolic-forbidden stats help
 
 all: verify
 
@@ -73,9 +73,13 @@ $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 $(CACHE_DIR):
 	@mkdir -p $@
 
-# Verify all modules (ALL_CHECKED_FILES is defined in .depend)
+# Verify all modules (ALL_CHECKED_FILES is defined in .depend).  The symbolic
+# composed-system development (SYMBOLIC_CHECKED_FILES) is added as an extra
+# prerequisite AFTER `-include .depend.symbolic` below (that variable is not yet
+# defined at this point), so the single `make verify` covers the DY-free spec +
+# Pulse impl AND the DY*-backed symbolic product-system simulation.
 verify: $(ALL_CHECKED_FILES)
-	@echo "✅ All DH sample spec + impl modules verified successfully"
+	@echo "✅ All DH sample spec + impl + symbolic system modules verified successfully"
 
 # ── Admit / forbidden-construct hygiene ────────────────────────────
 check-admits:
@@ -85,10 +89,10 @@ check-admits:
 	else echo "✅ None found"; fi
 
 check-forbidden:
-	@echo "Checking that no DY / iso_dh imports are present..."
-	@if grep -rn "DY\.\|dolev-yao\|iso_dh" $(SPEC_DIR) $(IMPL_DIR) 2>/dev/null; then \
+	@echo "Checking that no DY / iso_dh imports are present in the DY-free spec/impl..."
+	@if grep -rn "DY\.\|dolev-yao\|iso_dh" $(SPEC_DIR) $(IMPL_DIR) --exclude-dir=symbolic 2>/dev/null; then \
 		echo "❌ ERROR: Found forbidden dependency!"; exit 1; \
-	else echo "✅ No forbidden DY dependencies"; fi
+	else echo "✅ No forbidden DY dependencies in the DY-free spec/impl"; fi
 
 # ── Statistics ─────────────────────────────────────────────────────
 stats:
@@ -99,16 +103,107 @@ stats:
 
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
-	rm -rf $(CACHE_DIR)
-	rm -f .depend
+	rm -rf $(CACHE_DIR) $(SYM_CACHE_DIR)
+	rm -f .depend .depend.symbolic
 	@echo "Cleaned build artifacts"
 
 help:
 	@echo "DH Sample - Makefile targets:"
-	@echo "  make            - Verify all spec + Pulse impl modules (default)"
-	@echo "  make verify     - Verify all modules (incremental, supports -j)"
+	@echo "  make            - Verify everything: DY-free spec + Pulse impl + symbolic system (default)"
+	@echo "  make verify     - Verify all modules incl. the symbolic composed-system simulation (supports -j)"
+	@echo "  make verify-symbolic-lift - Verify only the symbolic development (DY* core)"
 	@echo "  make -j$$(nproc)     - Parallel verification with all available cores"
-	@echo "  make check-admits    - Ensure no admit/assume/assert_norm"
-	@echo "  make check-forbidden - Ensure no DY/iso_dh dependency"
+	@echo "  make check-admits    - Ensure no admit/assume/assert_norm in spec/impl"
+	@echo "  make check-forbidden - Ensure DY-free spec/impl has no DY/iso_dh dependency"
+	@echo "  make check-symbolic-forbidden - Ensure symbolic uses DY* core, never an example"
 	@echo "  make stats      - Show line counts"
 	@echo "  make clean      - Remove build artifacts"
+
+# ═══════════════════════════════════════════════════════════════════
+# Symbolic (Dolev-Yao / DY*-backed) incremental verification
+# ═══════════════════════════════════════════════════════════════════
+# The symbolic lifting development under spec/symbolic depends on the DY* CORE
+# library (third_party/dolev-yao-star-extrinsic/src/core, consumed via its
+# committed cache) IN ADDITION to the standalone dh-sample pure spec and the
+# neutral common framework.  It has a SEPARATE dependency scan, flag set and
+# cache directory so it never perturbs the DY-free spec/impl build above.  It
+# depends ONLY on DY* CORE and never on any DY* example (examples/iso_dh).
+
+DY_HOME      ?= ../third_party/dolev-yao-star-extrinsic
+DY_CORE_DIR   = $(DY_HOME)/src/core
+DY_CACHE_DIR  = $(DY_HOME)/cache
+SYMBOLIC_DIR  = $(SPEC_DIR)/symbolic
+SYM_CACHE_DIR = _symcache
+
+SYMBOLIC_INCLUDES = \
+  --include ../common \
+  --include $(SPEC_DIR) \
+  --include $(SYMBOLIC_DIR) \
+  --include $(DY_CORE_DIR) \
+  --include $(DY_CACHE_DIR)
+
+SYMBOLIC_FSTAR_FLAGS = \
+  --cache_checked_modules \
+  --cache_dir $(SYM_CACHE_DIR) \
+  --already_cached 'Prims,FStar,Pulse,PulseCore,DY' \
+  --warn_error -321-241-272-288 \
+  --report_assumes warn \
+  --ext optimize_let_vc \
+  $(SYMBOLIC_INCLUDES)
+
+SYMBOLIC_FSTAR = $(FSTAR_EXE) $(SYMBOLIC_FSTAR_FLAGS)
+
+# The DY-free spec + common modules the symbolic development depends on.  The
+# Pulse implementation is intentionally NOT among them: the simulation relates
+# to the pure state machine only.
+SYMBOLIC_SPEC_DEPS = \
+  ../common/Common.StateMachine.fst \
+  ../common/Common.WireFormat.fst \
+  ../common/Common.WireFormatStateMachine.fst \
+  ../common/Common.TCP.fsti \
+  $(SPEC_DIR)/DH.Sample.Types.fst \
+  $(SPEC_DIR)/DH.Sample.Crypto.fst \
+  $(SPEC_DIR)/DH.Sample.Wire.fst \
+  $(SPEC_DIR)/DH.Sample.StateMachine.fst \
+  $(SPEC_DIR)/DH.Sample.System.fst
+
+SYMBOLIC_SRC = $(wildcard $(SYMBOLIC_DIR)/*.fst $(SYMBOLIC_DIR)/*.fsti)
+SYMBOLIC_ALL = $(SYMBOLIC_SPEC_DEPS) $(SYMBOLIC_SRC)
+
+$(SYM_CACHE_DIR):
+	@mkdir -p $@
+
+# Separate dependency scan; rename ALL_CHECKED_FILES to SYMBOLIC_CHECKED_FILES so
+# it cannot collide with the DY-free build's variable of the same name.
+.depend.symbolic: $(SYMBOLIC_ALL) | $(SYM_CACHE_DIR)
+	@echo "Generating symbolic dependencies..."
+	@$(SYMBOLIC_FSTAR) --dep full $(SYMBOLIC_ALL) --output_deps_to $@.tmp
+	@sed 's/ALL_CHECKED_FILES/SYMBOLIC_CHECKED_FILES/g' $@.tmp > $@
+	@rm -f $@.tmp
+
+-include .depend.symbolic
+
+# The symbolic checked files are an EXTRA prerequisite of the top-level `verify`
+# target.  This prerequisite-only line is placed AFTER `-include .depend.symbolic`
+# (which defines SYMBOLIC_CHECKED_FILES); listing it on the earlier `verify:` rule
+# would expand to nothing because the variable is not yet defined there.  So the
+# single `make verify` builds the DY-free spec + Pulse impl AND the symbolic system.
+verify: $(SYMBOLIC_CHECKED_FILES)
+
+$(SYM_CACHE_DIR)/%.checked: | $(SYM_CACHE_DIR)
+	@echo "Verifying (symbolic) $<"
+	@$(SYMBOLIC_FSTAR) $<
+	@touch $@
+
+# The FIRST symbolic milestone: verify the whole symbolic lifting development
+# (Terms, Product, Lifting, Provenance) plus its DY-free dependencies,
+# incrementally and in parallel (supports -j).
+verify-symbolic-lift: $(SYMBOLIC_CHECKED_FILES)
+	@echo "✅ DH sample symbolic lifting milestone verified successfully"
+
+# Guard: the symbolic development may use DY* core but never a DY* example.
+check-symbolic-forbidden:
+	@echo "Checking that symbolic sources avoid DY* examples..."
+	@if grep -rn "iso_dh\|DY\.Example" $(SYMBOLIC_DIR) 2>/dev/null; then \
+		echo "❌ ERROR: symbolic source references a DY* example!"; exit 1; \
+	else echo "✅ symbolic sources depend on DY* core only"; fi
