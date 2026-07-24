@@ -2097,6 +2097,13 @@ let step_tls_message
            };
        }
      | CL.Sent -> None)
+  | M.TlsAlert alert, ControlFailed _ ->
+    // A failed connection is dead: it sends nothing further (a `Sent` alert from
+    // `ControlFailed` is illegal / not a real transition).  Receiving an alert on
+    // an already-failed connection is passive and stays failed (idempotent).
+    (match dir with
+     | CL.Sent -> None
+     | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsAlert alert, _ ->
     Some (fail_model model (T.AlertError alert))
   | M.TlsChangeCipherSpec, ControlHandshaking _ ->

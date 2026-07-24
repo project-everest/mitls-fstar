@@ -63,6 +63,40 @@ let lemma_legal_connection_delta_local_fail_control_failed
     Some (fail_model st0.cs_model err));
   assert (st1.cs_model == fail_model st0.cs_model err)
 
+(** A failed connection sends nothing: a `Sent` alert from `ControlFailed` is not
+    a legal transition (`step_tls_message ... == None`).  Forces the reduction so
+    that vacuity of the `Sent`/`ControlFailed` alert sub-case is discharged. **)
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 30"
+let step_sent_alert_failed_none
+  (model:connection_model)
+  (alert:T.alert_description)
+  : Lemma
+      (requires ControlFailed? model.model_control)
+      (ensures step_tls_message model CL.Sent (M.TlsAlert alert) == None)
+=
+  match model.model_control with
+  | ControlFailed _ -> ()
+  | _ -> ()
+#pop-options
+
+(** A `Received` alert on an already-failed connection is passive: the step is
+    `Some (fail_model ...)` (idempotent).  Pins the reduction so downstream shape
+    proofs do not have to unfold the `ControlFailed` arm of `step_tls_message`. **)
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 30"
+let step_received_alert_failed_fail
+  (model:connection_model)
+  (alert:T.alert_description)
+  : Lemma
+      (requires ControlFailed? model.model_control)
+      (ensures
+        step_tls_message model CL.Received (M.TlsAlert alert) ==
+          Some (fail_model model (T.AlertError alert)))
+=
+  match model.model_control with
+  | ControlFailed _ -> ()
+  | _ -> ()
+#pop-options
+
 let lemma_step_model_from_failed_results_failed
   (model0:connection_model)
   (ev:conn_event)
@@ -71,7 +105,10 @@ let lemma_step_model_from_failed_results_failed
       (requires
         ControlFailed? model0.model_control /\
         step_model model0 ev == Some model1)
-      (ensures ControlFailed? model1.model_control)
+      (ensures
+        ControlFailed? model1.model_control /\
+        model1.model_handshake == model0.model_handshake /\
+        model1.model_record == model0.model_record)
 =
   match model0.model_control with
   | ControlFailed err0 ->
@@ -87,12 +124,23 @@ let lemma_step_model_from_failed_results_failed
      | ConnNetworkEvent msg ->
        (match msg.CL.message_value with
         | M.TlsAlert alert ->
-          assert (step_tls_message
-            model0
-            msg.CL.message_direction
-            msg.CL.message_value ==
-            Some (fail_model model0 (T.AlertError alert)));
-          assert (model1 == fail_model model0 (T.AlertError alert))
+          (match msg.CL.message_direction with
+           | CL.Sent ->
+             // A failed connection sends nothing: this step is `None`, which
+             // contradicts the `step_model ... == Some model1` precondition.
+             step_sent_alert_failed_none model0 alert;
+             assert (step_tls_message
+               model0
+               msg.CL.message_direction
+               msg.CL.message_value == None);
+             assert False
+           | CL.Received ->
+             assert (step_tls_message
+               model0
+               msg.CL.message_direction
+               msg.CL.message_value ==
+               Some (fail_model model0 (T.AlertError alert)));
+             assert (model1 == fail_model model0 (T.AlertError alert)))
         | _ ->
           assert (step_tls_message
             model0
@@ -1600,6 +1648,22 @@ let lemma_connection_delta_client_x25519_reachable_shape
             assert (client_x25519_reachable_shape st1)
           | _, _, _ ->
             (match msg.CL.message_value, msg.CL.message_direction, st0.cs_model.model_control with
+             | M.TlsAlert alert, CL.Sent, ControlFailed _ ->
+               // A failed connection sends nothing: `step_tls_message` is `None`
+               // here, contradicting the legality hypothesis `== Some st1.cs_model`.
+               step_sent_alert_failed_none st0.cs_model alert;
+               assert (step_tls_message
+                 st0.cs_model
+                 msg.CL.message_direction
+                 msg.CL.message_value == Some st1.cs_model);
+               assert False
+             | M.TlsAlert alert, CL.Received, ControlFailed _ ->
+               // Receiving an alert on an already-failed connection is passive
+               // (`fail_model`), which preserves the x25519 reachable shape.  Pin
+               // the reduction so it need not unfold the `ControlFailed` arm.
+               step_received_alert_failed_fail st0.cs_model alert;
+               assert (st1.cs_model == fail_model st0.cs_model (T.AlertError alert));
+               assert (client_x25519_reachable_shape st1)
              | M.TlsHandshake (M.ClientHello _), CL.Sent, ControlHandshaking HsStarted
              | M.TlsHandshake (M.ClientHello _), CL.Received, ControlHandshaking HsAwaitingClientHello
              | M.TlsHandshake (M.ServerHello _), CL.Received, ControlHandshaking HsClientHelloSent
@@ -1631,6 +1695,32 @@ let lemma_connection_delta_client_x25519_reachable_shape
                assert (client_x25519_reachable_shape st1)
              | _, _, _ ->
                assert False)))
+
+(** Transfer the server x25519 reachable shape across a passive `ControlFailed`
+    step.  `fail_model` preserves `model_handshake`, and both server projections
+    read only `model_handshake`, so the `st0` disjunction transfers to `st1`.
+    Proved as a small standalone lemma (single query) so the disjunction unfolds
+    do not multiply under `--split_queries always` in the caller. **)
+#push-options "--split_queries no --z3rlimit 40"
+let lemma_server_failed_shape_transfer
+  (st0:connection_state)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        server_x25519_reachable_shape st0 /\
+        st0.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st0.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        ControlFailed? st0.cs_model.model_control /\
+        ControlFailed? st1.cs_model.model_control /\
+        st1.cs_model.model_config == st0.cs_model.model_config /\
+        st1.cs_model.model_handshake == st0.cs_model.model_handshake)
+      (ensures server_x25519_reachable_shape st1)
+=
+  assert (server_x25519_pre_server_hello_projection st0 \/
+          server_x25519_key_share_projection st0);
+  assert (server_x25519_pre_server_hello_projection st1 \/
+          server_x25519_key_share_projection st1)
+#pop-options
 
 let lemma_connection_delta_server_x25519_reachable_shape
   (st0:connection_state)
@@ -1718,7 +1808,7 @@ let lemma_connection_delta_server_x25519_reachable_shape
            st0.cs_model
            delta.delta_event
            st1.cs_model;
-         assert (server_x25519_reachable_shape st1)
+         lemma_server_failed_shape_transfer st0 st1
        | _ ->
          lemma_legal_connection_delta_stable_server_x25519_key_share_projection
            st0
@@ -1795,6 +1885,22 @@ let lemma_connection_delta_server_x25519_reachable_shape
             assert (server_x25519_reachable_shape st1)
           | _, _, _ ->
             (match msg.CL.message_value, msg.CL.message_direction, st0.cs_model.model_control with
+             | M.TlsAlert alert, CL.Sent, ControlFailed _ ->
+               // A failed connection sends nothing: `step_tls_message` is `None`
+               // here, contradicting the legality hypothesis `== Some st1.cs_model`.
+               step_sent_alert_failed_none st0.cs_model alert;
+               assert (step_tls_message
+                 st0.cs_model
+                 msg.CL.message_direction
+                 msg.CL.message_value == Some st1.cs_model);
+               assert False
+             | M.TlsAlert alert, CL.Received, ControlFailed _ ->
+               // Receiving an alert on an already-failed connection is passive
+               // (`fail_model`), which preserves the x25519 reachable shape.  Pin
+               // the reduction so it need not unfold the `ControlFailed` arm.
+               step_received_alert_failed_fail st0.cs_model alert;
+               assert (st1.cs_model == fail_model st0.cs_model (T.AlertError alert));
+               assert (server_x25519_reachable_shape st1)
              | M.TlsHandshake (M.ClientHello _), CL.Sent, ControlHandshaking HsStarted
              | M.TlsHandshake (M.ClientHello _), CL.Received, ControlHandshaking HsAwaitingClientHello
              | M.TlsHandshake (M.ServerHello _), CL.Received, ControlHandshaking HsClientHelloSent
