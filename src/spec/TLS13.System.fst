@@ -73,6 +73,9 @@ module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
 module PWH = TLS13.ConnectionState.ProtectedWireHead
+module Ord = TLS13.System.Ordering
+module WRRc = TLS13.Wire.Spec.Reveal.Record
+module WRD = TLS13.Wire.Spec.RevealDecode
 
 open FStar.List.Tot
 
@@ -5566,6 +5569,986 @@ let lemma_server_read_epoch_handshake
 
 (** ══════════ END PORTED PURE HELPERS ══════════ **)
 
+
+(* ══════════════════════════════════════════════════════════════════════
+   DELIVERY PRESERVATION — helper lemmas (transplanted; formerly the
+   DeliverSpike/FramingSpike/TransportSpike/AssembleSpike scratch modules).
+   ══════════════════════════════════════════════════════════════════════ *)
+
+(* ── framing: a cleartext Sent record is not Application_data framed ── *)
+(* Unconditional: a Handshake-framed record is 5 + fragment bytes. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 40"
+let lemma_serialize_handshake_record_length (f:B.bytes)
+  : Lemma (B.length (W.serialize_record T.Handshake f) == 5 + B.length f)
+  = WRRc.lemma_serialize_record_reveal T.Handshake f;
+    WRRc.lemma_serialize_handshake_record_header_reveal (B.length f)
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 80"
+let lemma_cleartext_sent_not_appdata_framed
+  (sent:M.tls_message) (raw outer:B.bytes)
+  : Lemma
+      (requires
+        CS.network_message_is_cleartext CL.Sent sent == true /\
+        CS.cleartext_tls_message_raw sent raw /\
+        W.parse_record_wire raw == Some (T.Application_data, outer, B.length raw))
+      (ensures False)
+  = let len = B.length raw in
+    WRD.lemma_parse_record_wire_serialized_length raw T.Application_data outer len;
+    W.lemma_parse_record_wire_fragment_bound raw;
+    assert (B.length outer <= 16640);
+    W.lemma_parse_record_serialize_record T.Application_data outer;
+    assert (len == 5 + B.length outer);
+    (match sent with
+     | M.TlsHandshake (M.ClientHello _)
+     | M.TlsHandshake (M.ServerHello _) ->
+         let hs : M.handshake_msg =
+           (match sent with M.TlsHandshake h -> h | _ -> M.HelloRetryRequest) in
+         WRD.lemma_serialize_tls_message_handshake hs;
+         let frag = W.serialize_handshake hs in
+         assert (CS.serialized_cleartext_tls_message sent ==
+                 W.serialize_record T.Handshake frag);
+         assert (Seq.equal raw (W.serialize_record T.Handshake frag));
+         Seq.lemma_eq_elim raw (W.serialize_record T.Handshake frag);
+         lemma_serialize_handshake_record_length frag;
+         assert (B.length frag == B.length outer);
+         assert (B.length frag <= 16640);
+         WFL.lemma_parse_record_wire_serialize_record T.Handshake frag;
+         assert (W.parse_record_wire raw ==
+                 Some (T.Handshake, frag, B.length (W.serialize_record T.Handshake frag)))
+     | M.TlsChangeCipherSpec ->
+         W.lemma_serialize_tls_message_change_cipher_spec ();
+         let frag = B.singleton 1uy in
+         assert (W.serialize_tls_message sent == (T.Change_cipher_spec, frag));
+         assert (CS.serialized_cleartext_tls_message sent ==
+                 W.serialize_record T.Change_cipher_spec frag);
+         assert (Seq.equal raw (W.serialize_record T.Change_cipher_spec frag));
+         Seq.lemma_eq_elim raw (W.serialize_record T.Change_cipher_spec frag);
+         assert (B.length frag == 1);
+         WFL.lemma_parse_record_wire_serialize_record T.Change_cipher_spec frag;
+         assert (W.parse_record_wire raw ==
+                 Some (T.Change_cipher_spec, frag,
+                       B.length (W.serialize_record T.Change_cipher_spec frag))))
+#pop-options
+
+(* ── transport ordering: snapshot write epoch / pre-appdata control ── *)
+(* A failed connection sends nothing: stepping any Sent message from ControlFailed
+   yields None (step_handshake_message has no ControlFailed arm; every other send
+   arm requires a non-failed control). *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_step_sent_from_failed_none
+  (m:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires CS.ControlFailed? m.CS.model_control)
+      (ensures CS.step_model m (CS.sent_tls_event sent) == None)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_snap_not_failed
+  (m other:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires CS.step_model m (CS.sent_tls_event sent) == Some other)
+      (ensures ~ (CS.ControlFailed? m.CS.model_control))
+  = introduce CS.ControlFailed? m.CS.model_control ==> False
+    with _. lemma_step_sent_from_failed_none m sent
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 150 --split_queries always"
+let lemma_transport_ordering_client
+  (a:tls_system_state) (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
+        B.length raw > 0 /\
+        CS.network_message_is_cleartext CL.Sent sent == false /\
+        WStep.client_recv_region_ctrl a.client.CS.cs_model.CS.model_control)
+      (ensures
+        snap.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+        PC.pre_appdata_control snap.CS.model_control)
+  = FStar.Pervasives.reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable a);
+    FStar.Pervasives.reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling a);
+    assert (CS.step_model snap (CS.sent_tls_event sent) == Some a.server.CS.cs_model);
+    CSL.lemma_step_model_preserves_config snap (CS.sent_tls_event sent) a.server.CS.cs_model;
+    assert (snap.CS.model_config.CS.config_role == CS.ServerEndpoint);
+    lemma_snap_not_failed snap a.server.CS.cs_model sent;
+    eliminate exists (pred:CS.connection_state).
+       WStep.server_reachable (CS.initial pred.CS.cs_model.CS.model_config) pred /\
+       CS.connection_state_consistent pred /\
+       pred.CS.cs_model == snap /\
+       Seq.equal (B.append pred.CS.cs_wire_log.CL.raw_sent raw)
+                 (ipso_sender_endpoint a CS.ClientEndpoint).CS.cs_wire_log.CL.raw_sent
+    returns (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+             PC.pre_appdata_control snap.CS.model_control)
+    with _pf.
+    ( assert (ipso_sender_endpoint a CS.ClientEndpoint == a.server);
+      assert (byte_pairing a);
+      assert (Seq.equal a.server.CS.cs_wire_log.CL.raw_sent
+                        (B.append a.client.CS.cs_wire_log.CL.raw_received raw));
+      Seq.lemma_append_inj pred.CS.cs_wire_log.CL.raw_sent raw
+                           a.client.CS.cs_wire_log.CL.raw_received raw;
+      assert (Seq.equal pred.CS.cs_wire_log.CL.raw_sent
+                        a.client.CS.cs_wire_log.CL.raw_received);
+      Ord.lemma_inflight_sender_write_epoch_not_application_client a.client pred raw;
+      assert (snap.CS.model_record.CS.record_write.R.epoch =!= R.Application);
+      // count-marker: snap.control not in {App, Closing, Closed}
+      Ord.lemma_consistent_server_flight_marker_shape pred;
+      WStep.lemma_server_reachable_sent_ge_marker
+        pred.CS.cs_model.CS.model_config pred;
+      WStep.lemma_client_reachable_recv_region_le3
+        a.client.CS.cs_model.CS.model_config a.client;
+      WStep.lemma_raw_appdata_count_seq_equal
+        pred.CS.cs_wire_log.CL.raw_sent a.client.CS.cs_wire_log.CL.raw_received;
+      assert (PC.pre_appdata_control snap.CS.model_control);
+      // seal: sent != appdata (control not App), so protected_record_count == 1
+      assert (~ (M.TlsApplicationData? sent));
+      assert (CS.protected_record_count CL.Sent sent == 1);
+      assert (inflight_wire_faithful a);
+      assert (CS.sent_single_protected_message_seal snap sent raw);
+      assert (snap.CS.model_record.CS.record_write.R.key =!= None);
+      SCB.lemma_consistent_record_key_epoch_coupling pred;
+      assert (snap.CS.model_record.CS.record_write.R.epoch =!= R.Initial) )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 150 --split_queries always"
+let lemma_transport_ordering_server
+  (a:tls_system_state) (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
+        B.length raw > 0 /\
+        CS.network_message_is_cleartext CL.Sent sent == false /\
+        WStep.server_recv_region_ctrl a.server.CS.cs_model.CS.model_control)
+      (ensures
+        snap.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+        PC.pre_appdata_control snap.CS.model_control)
+  = FStar.Pervasives.reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable a);
+    FStar.Pervasives.reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling a);
+    assert (CS.step_model snap (CS.sent_tls_event sent) == Some a.client.CS.cs_model);
+    CSL.lemma_step_model_preserves_config snap (CS.sent_tls_event sent) a.client.CS.cs_model;
+    assert (snap.CS.model_config.CS.config_role == CS.ClientEndpoint);
+    lemma_snap_not_failed snap a.client.CS.cs_model sent;
+    eliminate exists (pred:CS.connection_state).
+       WStep.client_reachable (CS.initial pred.CS.cs_model.CS.model_config) pred /\
+       CS.connection_state_consistent pred /\
+       pred.CS.cs_model == snap /\
+       Seq.equal (B.append pred.CS.cs_wire_log.CL.raw_sent raw)
+                 (ipso_sender_endpoint a CS.ServerEndpoint).CS.cs_wire_log.CL.raw_sent
+    returns (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+             PC.pre_appdata_control snap.CS.model_control)
+    with _pf.
+    ( assert (ipso_sender_endpoint a CS.ServerEndpoint == a.client);
+      assert (byte_pairing a);
+      assert (Seq.equal a.client.CS.cs_wire_log.CL.raw_sent
+                        (B.append a.server.CS.cs_wire_log.CL.raw_received raw));
+      Seq.lemma_append_inj pred.CS.cs_wire_log.CL.raw_sent raw
+                           a.server.CS.cs_wire_log.CL.raw_received raw;
+      assert (Seq.equal pred.CS.cs_wire_log.CL.raw_sent
+                        a.server.CS.cs_wire_log.CL.raw_received);
+      Ord.lemma_inflight_sender_write_epoch_not_application_server a.server pred raw;
+      assert (snap.CS.model_record.CS.record_write.R.epoch =!= R.Application);
+      // count: client.control in {App,Closing,Closed} => Some hs_client_finished => sent >= 1
+      Ord.lemma_consistent_client_finished_marker_shape pred;
+      introduce (snap.CS.model_control == CS.ControlApplicationData \/
+                 snap.CS.model_control == CS.ControlClosing \/
+                 snap.CS.model_control == CS.ControlClosed) ==> False
+      with _.
+      ( WStep.lemma_client_finished_reachable_sent_ge1
+          pred.CS.cs_model.CS.model_config pred;
+        WStep.lemma_server_reachable_recv_region_le0
+          a.server.CS.cs_model.CS.model_config a.server;
+        WStep.lemma_raw_appdata_count_seq_equal
+          pred.CS.cs_wire_log.CL.raw_sent a.server.CS.cs_wire_log.CL.raw_received );
+      assert (PC.pre_appdata_control snap.CS.model_control);
+      assert (~ (M.TlsApplicationData? sent));
+      assert (CS.protected_record_count CL.Sent sent == 1);
+      assert (inflight_wire_faithful a);
+      assert (CS.sent_single_protected_message_seal snap sent raw);
+      assert (snap.CS.model_record.CS.record_write.R.key =!= None);
+      SCB.lemma_consistent_record_key_epoch_coupling pred;
+      assert (snap.CS.model_record.CS.record_write.R.epoch =!= R.Initial) )
+#pop-options
+
+(* ── build helpers: fresh per-message witness at a protected delivery ── *)
+open FStar.Pervasives
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let spike_build_ee
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (ee:GEE.encryptedExtensions)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap (M.TlsHandshake (M.EncryptedExtensions ee)) /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        CCP.client_step a.client (SM.WireEvent wire) c' out /\
+        client_advances a.client c' /\
+        b == { a with client = c'; channel = TlsQuiet })
+      (ensures incremental_protected_witnesses b)
+  = let sent : M.tls_message = M.TlsHandshake (M.EncryptedExtensions ee) in
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+    Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+    SCB.lemma_wire_serialize_nonempty wire;
+    WStep.lemma_client_wire_event_no_output a.client c' wire out;
+    lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
+    // G1, G3, server_ee from inflight_protected_sender_ok a
+    assert (inflight_protected_sender_ok a);
+    assert (PC.pre_appdata_control snap.CS.model_control);
+    assert (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+    assert ((hsf a.server).CS.hs_encrypted_extensions == Some ee);
+    // seal: raw is an Application_data protected record carrying sent
+    assert (inflight_wire_faithful a);
+    assert (B.length raw > 0);
+    assert (CS.sent_event_nonempty_seal_projection snap (CS.sent_tls_event sent) raw);
+    assert (CS.sent_single_protected_message_seal snap sent raw);
+    let synth_sender : CS.connection_state = { a.client with CS.cs_model = snap } in
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.client
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } c' /\
+       CS.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       (exists content_type fragment.
+          CTy2.network_input_message_projection a.client content_type fragment msg
+            (CW.wire_serialize wire)) /\
+       CCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns incremental_protected_witnesses b
+    with _ps.
+    ( let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (CS.step_model a.client.CS.cs_model conn_ev == Some c'.CS.cs_model);
+      assert (CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev raw);
+      match msg with
+      | M.TlsHandshake (M.EncryptedExtensions ee_r) ->
+          lemma_step_recv_ee_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived);
+          assert (c'.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == Some ee_r);
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (a.client.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake);
+          // fire protected_channel_ready
+          assert (protected_channel_ready a);
+          assert (CS.peer_record_material_agrees
+                    (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic) a.client synth_sender);
+          assert (snap.CS.model_record.CS.record_write.R.seq ==
+                  a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+          // decode-glue: sent decodes to raw under a.client
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model sent raw);
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert (ee_r == ee);
+          // build the EE pair with pm_sender=snap, pm_receiver=a.client.cs_model
+          assert (Seq.equal raw (B.append raw B.empty));
+          PWH.lemma_protected_handshake_event_projection_pair_from_aligned_heads
+            snap a.client.CS.cs_model (M.EncryptedExtensions ee) (M.EncryptedExtensions ee)
+            raw raw raw B.empty raw B.empty;
+          assert (incremental_protected_witnesses b)
+      | M.TlsHandshake (M.Certificate c_r) ->
+          lemma_step_recv_cert_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.CertificateVerify cv_r) ->
+          lemma_step_recv_cv_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.Finished f_r) ->
+          lemma_step_recv_finished_stores_server_finished a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | _ ->
+          // received is not a protected handshake: no incremental field changed.
+          fm_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (incremental_protected_witnesses b) )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let spike_build_cert
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (cert:GCert.certificate)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap (M.TlsHandshake (M.Certificate cert)) /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        CCP.client_step a.client (SM.WireEvent wire) c' out /\
+        client_advances a.client c' /\
+        b == { a with client = c'; channel = TlsQuiet })
+      (ensures incremental_protected_witnesses b)
+  = let sent : M.tls_message = M.TlsHandshake (M.Certificate cert) in
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+    Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+    SCB.lemma_wire_serialize_nonempty wire;
+    WStep.lemma_client_wire_event_no_output a.client c' wire out;
+    lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
+    assert (inflight_protected_sender_ok a);
+    assert (PC.pre_appdata_control snap.CS.model_control);
+    assert (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+    assert ((hsf a.server).CS.hs_certificate == Some cert);
+    assert (inflight_wire_faithful a);
+    assert (B.length raw > 0);
+    assert (CS.sent_event_nonempty_seal_projection snap (CS.sent_tls_event sent) raw);
+    assert (CS.sent_single_protected_message_seal snap sent raw);
+    let synth_sender : CS.connection_state = { a.client with CS.cs_model = snap } in
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.client
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } c' /\
+       CS.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       (exists content_type fragment.
+          CTy2.network_input_message_projection a.client content_type fragment msg
+            (CW.wire_serialize wire)) /\
+       CCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns incremental_protected_witnesses b
+    with _ps.
+    ( let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (CS.step_model a.client.CS.cs_model conn_ev == Some c'.CS.cs_model);
+      assert (CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev raw);
+      match msg with
+      | M.TlsHandshake (M.Certificate cert_r) ->
+          lemma_step_recv_cert_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsEncryptedExtensionsReceived);
+          assert (c'.CS.cs_model.CS.model_handshake.CS.hs_certificate == Some cert_r);
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert (cert_r == cert);
+          assert (Seq.equal raw (B.append raw B.empty));
+          PWH.lemma_protected_handshake_event_projection_pair_from_aligned_heads
+            snap a.client.CS.cs_model (M.Certificate cert) (M.Certificate cert)
+            raw raw raw B.empty raw B.empty;
+          assert (incremental_protected_witnesses b)
+      | M.TlsHandshake (M.EncryptedExtensions ee_r) ->
+          lemma_step_recv_ee_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.CertificateVerify cv_r) ->
+          lemma_step_recv_cv_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.Finished f_r) ->
+          assert (client_stage_ok a.client);
+          assert (a.client.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedSent);
+          lemma_step_recv_finished_stores_server_finished a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | _ ->
+          fm_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (incremental_protected_witnesses b) )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let spike_build_cv
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (cv:GCV.certificateVerify)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap (M.TlsHandshake (M.CertificateVerify cv)) /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        CCP.client_step a.client (SM.WireEvent wire) c' out /\
+        client_advances a.client c' /\
+        b == { a with client = c'; channel = TlsQuiet })
+      (ensures incremental_protected_witnesses b)
+  = let sent : M.tls_message = M.TlsHandshake (M.CertificateVerify cv) in
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+    Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+    SCB.lemma_wire_serialize_nonempty wire;
+    WStep.lemma_client_wire_event_no_output a.client c' wire out;
+    lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
+    assert (inflight_protected_sender_ok a);
+    assert (PC.pre_appdata_control snap.CS.model_control);
+    assert (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+    assert ((hsf a.server).CS.hs_certificate_verify == Some cv);
+    assert (inflight_wire_faithful a);
+    assert (B.length raw > 0);
+    assert (CS.sent_event_nonempty_seal_projection snap (CS.sent_tls_event sent) raw);
+    assert (CS.sent_single_protected_message_seal snap sent raw);
+    let synth_sender : CS.connection_state = { a.client with CS.cs_model = snap } in
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.client
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } c' /\
+       CS.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       (exists content_type fragment.
+          CTy2.network_input_message_projection a.client content_type fragment msg
+            (CW.wire_serialize wire)) /\
+       CCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns incremental_protected_witnesses b
+    with _ps.
+    ( let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (CS.step_model a.client.CS.cs_model conn_ev == Some c'.CS.cs_model);
+      assert (CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev raw);
+      match msg with
+      | M.TlsHandshake (M.CertificateVerify cv_r) ->
+          lemma_step_recv_cv_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsCertificateValidated);
+          assert (c'.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv_r);
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert (cv_r == cv);
+          assert (Seq.equal raw (B.append raw B.empty));
+          PWH.lemma_protected_handshake_event_projection_pair_from_aligned_heads
+            snap a.client.CS.cs_model (M.CertificateVerify cv) (M.CertificateVerify cv)
+            raw raw raw B.empty raw B.empty;
+          assert (incremental_protected_witnesses b)
+      | M.TlsHandshake (M.EncryptedExtensions ee_r) ->
+          lemma_step_recv_ee_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.Certificate cert_r) ->
+          lemma_step_recv_cert_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.Finished f_r) ->
+          assert (client_stage_ok a.client);
+          assert (a.client.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedSent);
+          lemma_step_recv_finished_stores_server_finished a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | _ ->
+          fm_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (incremental_protected_witnesses b) )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let spike_build_fin
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (f:GFin.finished)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap (M.TlsHandshake (M.Finished f)) /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        CCP.client_step a.client (SM.WireEvent wire) c' out /\
+        client_advances a.client c' /\
+        b == { a with client = c'; channel = TlsQuiet })
+      (ensures incremental_protected_witnesses b)
+  = let sent : M.tls_message = M.TlsHandshake (M.Finished f) in
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+    Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+    SCB.lemma_wire_serialize_nonempty wire;
+    WStep.lemma_client_wire_event_no_output a.client c' wire out;
+    lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
+    assert (inflight_protected_sender_ok a);
+    assert (PC.pre_appdata_control snap.CS.model_control);
+    assert (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+    assert ((hsf a.server).CS.hs_server_finished == Some f);
+    assert (inflight_wire_faithful a);
+    assert (B.length raw > 0);
+    assert (CS.sent_event_nonempty_seal_projection snap (CS.sent_tls_event sent) raw);
+    assert (CS.sent_single_protected_message_seal snap sent raw);
+    let synth_sender : CS.connection_state = { a.client with CS.cs_model = snap } in
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.client
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } c' /\
+       CS.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       (exists content_type fragment.
+          CTy2.network_input_message_projection a.client content_type fragment msg
+            (CW.wire_serialize wire)) /\
+       CCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns incremental_protected_witnesses b
+    with _ps.
+    ( let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (CS.step_model a.client.CS.cs_model conn_ev == Some c'.CS.cs_model);
+      assert (CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev raw);
+      assert (client_stage_ok a.client);
+      assert (a.client.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedSent);
+      match msg with
+      | M.TlsHandshake (M.Finished f_r) ->
+          lemma_step_recv_finished_stores_server_finished a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyVerified);
+          assert (c'.CS.cs_model.CS.model_handshake.CS.hs_server_finished == Some f_r);
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert (f_r == f);
+          assert (Seq.equal raw (B.append raw B.empty));
+          PWH.lemma_protected_handshake_event_projection_pair_from_aligned_heads
+            snap a.client.CS.cs_model (M.Finished f) (M.Finished f)
+            raw raw raw B.empty raw B.empty;
+          assert (incremental_protected_witnesses b)
+      | M.TlsHandshake (M.EncryptedExtensions ee_r) ->
+          lemma_step_recv_ee_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.Certificate cert_r) ->
+          lemma_step_recv_cert_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | M.TlsHandshake (M.CertificateVerify cv_r) ->
+          lemma_step_recv_cv_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          lemma_client_read_epoch_handshake a.client msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake a.client synth_sender sent raw;
+          lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert False
+      | _ ->
+          fm_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (incremental_protected_witnesses b) )
+#pop-options
+
+
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let spike_build_client_fin
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (f:GFin.finished)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ServerEndpoint raw snap (M.TlsHandshake (M.Finished f)) /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        SCP.server_step a.server (SM.WireEvent wire) s' out /\
+        server_advances a.server s' /\
+        b == { a with server = s'; channel = TlsQuiet })
+      (ensures incremental_protected_witnesses b)
+  = let sent : M.tls_message = M.TlsHandshake (M.Finished f) in
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+    Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+    SCB.lemma_wire_serialize_nonempty wire;
+    WStep.lemma_server_wire_event_no_output a.server s' wire out;
+    lemma_server_step_pres a.server s' (SM.WireEvent wire) out;
+    assert (inflight_protected_sender_ok a);
+    assert (PC.pre_appdata_control snap.CS.model_control);
+    assert (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+    assert ((hsf a.client).CS.hs_client_finished == Some f);
+    assert (inflight_wire_faithful a);
+    assert (B.length raw > 0);
+    assert (CS.sent_event_nonempty_seal_projection snap (CS.sent_tls_event sent) raw);
+    assert (CS.sent_single_protected_message_seal snap sent raw);
+    let synth_sender : CS.connection_state = { a.server with CS.cs_model = snap } in
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.server
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } s' /\
+       CS.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       SCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns incremental_protected_witnesses b
+    with _ps.
+    ( let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (CS.step_model a.server.CS.cs_model conn_ev == Some s'.CS.cs_model);
+      assert (CS.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev raw);
+      assert (server_stage_ok a.server);
+      assert (a.server.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerHelloReceived);
+      assert (a.server.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsEncryptedExtensionsReceived);
+      assert (a.server.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateReceived);
+      assert (a.server.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateValidated);
+      assert (a.server.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateVerifyReceived);
+      assert (a.server.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateVerifyVerified);
+      match msg with
+      | M.TlsHandshake (M.Finished f_r) ->
+          lemma_step_recv_finished_stores_client_finished a.server.CS.cs_model s'.CS.cs_model msg;
+          assert (a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent);
+          assert (s'.CS.cs_model.CS.model_handshake.CS.hs_client_finished == Some f_r);
+          assert (CS.received_single_protected_message_decode a.server.CS.cs_model msg raw);
+          lemma_server_read_epoch_handshake a.server msg raw;
+          assert (protected_channel_ready a);
+          P.lemma_client_to_server_protected_message_decode_from_peer_record_material
+            CS.TrafficHandshake synth_sender a.server sent raw;
+          lemma_received_single_protected_message_decode_unique a.server.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert (f_r == f);
+          assert (Seq.equal raw (B.append raw B.empty));
+          PWH.lemma_protected_handshake_event_projection_pair_from_aligned_heads
+            snap a.server.CS.cs_model (M.Finished f) (M.Finished f)
+            raw raw raw B.empty raw B.empty;
+          assert (incremental_protected_witnesses b)
+      | _ ->
+          fm_server a.server.CS.cs_model s'.CS.cs_model msg;
+          assert (incremental_protected_witnesses b) )
+#pop-options
+
+(* ── transport helpers: no new protected field stored ── *)
+
+let is_protected_handshake (m:M.tls_message) : bool =
+  match m with
+  | M.TlsHandshake (M.EncryptedExtensions _)
+  | M.TlsHandshake (M.Certificate _)
+  | M.TlsHandshake (M.CertificateVerify _)
+  | M.TlsHandshake (M.Finished _) -> true
+  | _ -> false
+
+(* A protected-handshake RECEIVED under a client whose `sent` label is NOT a
+   protected handshake is impossible: `sent` seals to `raw`, `raw` decodes to
+   the received handshake, and decode is deterministic, so sent==received (a
+   protected handshake) — contradiction. *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let client_transport_false
+  (a:tls_system_state) (raw:B.bytes) (snap:CS.connection_model) (sent msg:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
+        B.length raw > 0 /\
+        is_protected_handshake sent == false /\
+        is_protected_handshake msg == true /\
+        CS.received_single_protected_message_decode a.client.CS.cs_model msg raw /\
+        (a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived \/
+         a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsEncryptedExtensionsReceived \/
+         a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsCertificateValidated \/
+         a.client.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyVerified))
+      (ensures False)
+  = let synth_sender : CS.connection_state = { a.client with CS.cs_model = snap } in
+    assert (inflight_wire_faithful a);
+    if CS.network_message_is_cleartext CL.Sent sent then
+    ( assert (CS.cleartext_tls_message_raw sent raw);
+      eliminate exists (outer opened:B.bytes) (plaintext:M.plaintext).
+          W.parse_record_wire raw == Some (T.Application_data, outer, B.length raw) /\
+          CS.received_record_opened a.client.CS.cs_model raw outer opened /\
+          W.parse_plaintext opened == Some plaintext /\
+          W.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
+      returns False
+      with _pf.
+        lemma_cleartext_sent_not_appdata_framed sent raw outer )
+    else
+    ( lemma_client_read_epoch_handshake a.client msg raw;
+      lemma_transport_ordering_client a raw snap sent;
+      assert (PC.pre_appdata_control snap.CS.model_control);
+      assert (PC.pre_appdata_control a.client.CS.cs_model.CS.model_control);
+      assert (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+      assert (a.client.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake);
+      assert (protected_channel_ready a);
+      assert (CS.peer_record_material_agrees
+                (CS.traffic_id CS.TrafficHandshake CS.ServerTraffic) a.client synth_sender);
+      assert (snap.CS.model_record.CS.record_write.R.seq ==
+              a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+      assert (CS.sent_single_protected_message_seal snap sent raw);
+      P.lemma_server_to_client_protected_message_decode_from_peer_record_material
+        CS.TrafficHandshake a.client synth_sender sent raw;
+      lemma_received_single_protected_message_decode_unique a.client.CS.cs_model msg sent raw;
+      assert (msg == sent);
+      assert False )
+#pop-options
+
+(* ─────────────────────────────────────────────────────────────────────────
+   transport_client : deliver-to-client, `sent` NOT a protected handshake.
+   The client stores no new protected-handshake field, so every
+   incremental_protected_witnesses clause transports from `a`; a protected
+   handshake RECEIVED would (by decode determinism) force sent==received (a
+   protected handshake), contradicting the precondition.
+   ───────────────────────────────────────────────────────────────────────── *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let transport_client
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        CCP.client_step a.client (SM.WireEvent wire) c' out /\
+        client_advances a.client c' /\
+        b == { a with client = c'; channel = TlsQuiet } /\
+        is_protected_handshake sent == false)
+      (ensures incremental_protected_witnesses b)
+  = reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+    Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+    SCB.lemma_wire_serialize_nonempty wire;
+    WStep.lemma_client_wire_event_no_output a.client c' wire out;
+    lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
+    assert (inflight_wire_faithful a);
+    assert (B.length raw > 0);
+    assert (client_stage_ok a.client);
+    let synth_sender : CS.connection_state = { a.client with CS.cs_model = snap } in
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.client
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } c' /\
+       CS.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       (exists content_type fragment.
+          CTy2.network_input_message_projection a.client content_type fragment msg
+            (CW.wire_serialize wire)) /\
+       CCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns incremental_protected_witnesses b
+    with _ps.
+    ( let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (CS.step_model a.client.CS.cs_model conn_ev == Some c'.CS.cs_model);
+      assert (CS.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev raw);
+      assert (a.client.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedSent);
+      match msg with
+      | M.TlsHandshake (M.EncryptedExtensions ee_r) ->
+          lemma_step_recv_ee_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          client_transport_false a raw snap sent msg;
+          assert (incremental_protected_witnesses b)
+      | M.TlsHandshake (M.Certificate cert_r) ->
+          lemma_step_recv_cert_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          client_transport_false a raw snap sent msg;
+          assert (incremental_protected_witnesses b)
+      | M.TlsHandshake (M.CertificateVerify cv_r) ->
+          lemma_step_recv_cv_stores_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          client_transport_false a raw snap sent msg;
+          assert (incremental_protected_witnesses b)
+      | M.TlsHandshake (M.Finished f_r) ->
+          lemma_step_recv_finished_stores_server_finished a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+          client_transport_false a raw snap sent msg;
+          assert (incremental_protected_witnesses b)
+      | _ ->
+          fm_client a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (incremental_protected_witnesses b) )
+#pop-options
+
+let is_finished_msg (m:M.tls_message) : bool =
+  match m with
+  | M.TlsHandshake (M.Finished _) -> true
+  | _ -> false
+
+(* Symmetric to client_transport_false, server recipient / client sender. The
+   server stores hs_client_finished only on a RECEIVED Finished; that Finished
+   decodes from `raw`, `sent` also seals to `raw`, decode is deterministic, so
+   sent==Finished — contradicting the precondition that `sent` is not a Finished. *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let server_transport_false
+  (a:tls_system_state) (raw:B.bytes) (snap:CS.connection_model) (sent msg:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
+        B.length raw > 0 /\
+        is_finished_msg sent == false /\
+        is_finished_msg msg == true /\
+        CS.received_single_protected_message_decode a.server.CS.cs_model msg raw /\
+        a.server.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent)
+      (ensures False)
+  = let synth_sender : CS.connection_state = { a.server with CS.cs_model = snap } in
+    assert (inflight_wire_faithful a);
+    if CS.network_message_is_cleartext CL.Sent sent then
+    ( assert (CS.cleartext_tls_message_raw sent raw);
+      eliminate exists (outer opened:B.bytes) (plaintext:M.plaintext).
+          W.parse_record_wire raw == Some (T.Application_data, outer, B.length raw) /\
+          CS.received_record_opened a.server.CS.cs_model raw outer opened /\
+          W.parse_plaintext opened == Some plaintext /\
+          W.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
+      returns False
+      with _pf.
+        lemma_cleartext_sent_not_appdata_framed sent raw outer )
+    else
+    ( lemma_server_read_epoch_handshake a.server msg raw;
+      lemma_transport_ordering_server a raw snap sent;
+      assert (PC.pre_appdata_control snap.CS.model_control);
+      assert (PC.pre_appdata_control a.server.CS.cs_model.CS.model_control);
+      assert (snap.CS.model_record.CS.record_write.R.epoch == R.Handshake);
+      assert (a.server.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake);
+      assert (protected_channel_ready a);
+      assert (CS.peer_record_material_agrees
+                (CS.traffic_id CS.TrafficHandshake CS.ClientTraffic) synth_sender a.server);
+      assert (snap.CS.model_record.CS.record_write.R.seq ==
+              a.server.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+      assert (CS.sent_single_protected_message_seal snap sent raw);
+      P.lemma_client_to_server_protected_message_decode_from_peer_record_material
+        CS.TrafficHandshake synth_sender a.server sent raw;
+      lemma_received_single_protected_message_decode_unique a.server.CS.cs_model msg sent raw;
+      assert (msg == sent);
+      assert False )
+#pop-options
+
+(* ─────────────────────────────────────────────────────────────────────────
+   transport_server : deliver-to-server, `sent` NOT a client Finished.
+   ───────────────────────────────────────────────────────────────────────── *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let transport_server
+  (a b:tls_system_state)
+  (wire:CW.wire_message) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message CTy.local_output)
+  (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        tls_system_inv a /\
+        a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        SCP.server_step a.server (SM.WireEvent wire) s' out /\
+        server_advances a.server s' /\
+        b == { a with server = s'; channel = TlsQuiet } /\
+        is_finished_msg sent == false)
+      (ensures incremental_protected_witnesses b)
+  = reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
+    reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
+    Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+    SCB.lemma_wire_serialize_nonempty wire;
+    WStep.lemma_server_wire_event_no_output a.server s' wire out;
+    lemma_server_step_pres a.server s' (SM.WireEvent wire) out;
+    assert (inflight_wire_faithful a);
+    assert (B.length raw > 0);
+    assert (server_stage_ok a.server);
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.server
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } s' /\
+       CS.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       CS.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       SCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns incremental_protected_witnesses b
+    with _ps.
+    ( let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (CS.step_model a.server.CS.cs_model conn_ev == Some s'.CS.cs_model);
+      assert (CS.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev raw);
+      assert (a.server.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsCertificateVerifyVerified);
+      match msg with
+      | M.TlsHandshake (M.Finished f_r) ->
+          lemma_step_recv_finished_stores_client_finished a.server.CS.cs_model s'.CS.cs_model msg;
+          assert (CS.received_single_protected_message_decode a.server.CS.cs_model msg raw);
+          server_transport_false a raw snap sent msg;
+          assert (incremental_protected_witnesses b)
+      | _ ->
+          fm_server a.server.CS.cs_model s'.CS.cs_model msg;
+          assert (incremental_protected_witnesses b) )
+#pop-options
+
+
+
 #push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
 let lemma_ipw_pres_deliver_to_client
   (a b:tls_system_state)
@@ -5587,63 +6570,24 @@ let lemma_ipw_pres_deliver_to_client
         inflight_sender_live b /\
         inflight_snap_reachable b /\
         incremental_protected_witnesses b)
-  = // STOP-AND-REPORT (blocked obligation, per task HARD CONSTRAINTS 1 & 2).
-    //
-    // Post channel is TlsQuiet, so inflight_wire_faithful/inflight_sender_coupling/
-    // inflight_protected_sender_ok(b) are vacuously True (dispatch as in the local
-    // templates). The residual is `incremental_protected_witnesses b` in the BUILD
-    // branch (the client freshly stores a protected handshake field F=Some v from
-    // decoding the in-flight record `raw`). That clause is keyed (client F, server F);
-    // to discharge it one must EXCLUDE the case where the ghost in-flight label
-    // `sent` is a FATAL alert, i.e. prove the gateway `M.TlsHandshake? sent`.
-    //
-    // TRACTABLE sub-cases of the gateway (all closable from retained conjuncts):
-    //   * sent a HANDSHAKE: a.server sits at a pre_appdata handshaking control, so
-    //     protected_channel_ready's guard {TlsHandshake? sent; pre_appdata snap;
-    //     pre_appdata client; snap.write.epoch=Handshake; client.read.epoch=Handshake}
-    //     holds and yields snap.write.seq == a.client.read.seq + material + roundtrip;
-    //     seal->decode + decode-uniqueness pin sent==msg and build the projection_pair.
-    //   * sent CLEARTEXT (ClientHello/ServerHello/HRR/CCS): inflight_wire_faithful's
-    //     cleartext clause forces `raw` to a Handshake/CCS content record, contradicting
-    //     `raw` being an Application_data record (from the client's protected decode).
-    //   * sent = AppData / KeyUpdate / IgnoredPostHandshake / Close_notify: legal (via
-    //     step_model, from inflight_sender_coupling) only at ControlApplicationData, ruled
-    //     out by byte_pairing counting (client at a build control sent 0 appdata => server
-    //     received 0 => server not at ControlApplicationData); the Requested/Ignored sub
-    //     cases give step_model == None, contradicting the coupling's == Some.
-    //
-    // BLOCKED sub-case: sent = FATAL alert (M.TlsAlert, not Close_notify). step_model snap
-    // (Sent alert) == fail_model snap (ConnectionState.fst:1116/2100), preserving the record,
-    // so a.server.write == snap.write and a.server is at ControlFailed. In the BUILD branch
-    // the client decoded `raw` to a HANDSHAKE; the ONLY way to contradict that (for an alert
-    // label) is the crypto identity open(seal)=pt (Record.Spec lemma_open_record_after_seal_
-    // peer), which REQUIRES the seq alignment
-    //     snap.write.seq == a.client.read.seq                                    (*)
-    // Indeed if (*) held, crypto correctness would force the client's open to yield the ALERT
-    // plaintext (content_type Alert), contradicting the BUILD premise (decode == handshake);
-    // so the BUILD branch forces MISalignment. Retained conjuncts cannot resolve this:
-    //   - protected_channel_ready carries snap.write.seq == recip.read.seq but GUARDED by
-    //     `M.TlsHandshake? sent`, false for an alert (circular with the goal).
-    //   - SCB.seq_count_ok_pair's pwrite_ok is GATED on pre_appdata_control; a.server at
-    //     ControlFailed => vacuous, no write-seq/appdata-count relation for a.server.
-    //   - inflight_protected_sender_ok's alert arm is `_ -> True`; inflight_wire_faithful pins
-    //     raw as a seal at snap.write.seq but with no numeric value.
-    //   - server_byte_reachable (RTC of the RAW legal_connection_delta, which DOES admit a
-    //     wire-appending Sent(alert) as an Application_data record, ConnectionState.fst:3770)
-    //     yields only the forward-inductive DISJUNCTION, at ControlFailed/handshake write
-    //     epoch, write.seq == raw_appdata_count(raw_sent)  \/  == raw_appdata_count(raw_sent)-1
-    //     (the `-1` = failed via a wire-appending protected Sent(alert); the plain `=` = failed
-    //     via an empty-wire LocalFail or a receive). The fatal-alert FAIL-MODE is erased by
-    //     fail_model (it drops the pre-fail control) and is NOT a function of the reachable
-    //     STATE, so the disjunction is unresolvable; with byte_pairing (ss == cr ++ raw) the
-    //     two branches give snap.write.seq == a.client.read.seq (aligned) resp. +1 (misaligned).
-    // Under the forced-MISaligned BUILD branch, `raw` would have to be simultaneously the
-    // client-decoded handshake record AND seal(snap.write, alert): refuting that needs a
-    // seal/open injectivity-in-nonce axiom (a FORBIDDEN crypto strengthening; Crypto.Spec.fsti
-    // exposes correctness ONLY, no authenticity/injectivity). Pinning (*) instead needs a
-    // receiver-facing coupling conjunct in tls_system_inv (a FORBIDDEN 5th conjunct). No
-    // forbidden-device-free discharge exists. Left admitted; reported to the project lead.
-    admit ()
+  = // Post channel is TlsQuiet, so the five inflight_* conjuncts of `b` are
+    // vacuous; the residual `incremental_protected_witnesses b` is dispatched on
+    // `sent`: a protected-handshake `sent` BUILDS the fresh per-message witness,
+    // any other `sent` TRANSPORTS every clause unchanged.
+    reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling b);
+    reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable b);
+    (match sent with
+     | M.TlsHandshake (M.EncryptedExtensions ee) ->
+         spike_build_ee a b wire c' out raw snap ee
+     | M.TlsHandshake (M.Certificate cert) ->
+         spike_build_cert a b wire c' out raw snap cert
+     | M.TlsHandshake (M.CertificateVerify cv) ->
+         spike_build_cv a b wire c' out raw snap cv
+     | M.TlsHandshake (M.Finished f) ->
+         spike_build_fin a b wire c' out raw snap f
+     | _ ->
+         assert (is_protected_handshake sent == false);
+         transport_client a b wire c' out raw snap sent)
 #pop-options
 
 #push-options "--fuel 2 --ifuel 6 --z3rlimit 80 --split_queries always"
@@ -5667,45 +6611,18 @@ let lemma_ipw_pres_deliver_to_server
         inflight_sender_live b /\
         inflight_snap_reachable b /\
         incremental_protected_witnesses b)
-  = // STOP-AND-REPORT (blocked obligation, symmetric to lemma_ipw_pres_deliver_to_client).
-    //
-    // Post channel is TlsQuiet, so the three inflight_* conjuncts of b are vacuous.
-    // Residual: `incremental_protected_witnesses b`, BUILD branch = the client-Finished
-    // clause (#5); the server freshly stores hs_client_finished from decoding `raw`. The
-    // 4 server clauses transport. As on the client side, discharging the client-Finished
-    // clause requires the gateway `M.TlsHandshake? sent` for the ghost in-flight label.
-    //
-    // Roles swapped: sender = client, receiver = server; a.channel == TlsInFlight
-    // ServerEndpoint raw snap sent; protected_channel_ready's ServerEndpoint branch uses
-    // ClientTraffic material; byte_pairing's ServerEndpoint branch is `cs == sr ++ raw`.
-    // Tractable gateway sub-cases (handshake / cleartext / appdata-keyupdate-close) close
-    // exactly as on the client side.
-    //
-    // BLOCKED sub-case identical in shape: sent = FATAL alert (M.TlsAlert, not Close_notify).
-    // step_model snap (Sent alert) == fail_model snap, so a.client.write == snap.write and
-    // a.client is at ControlFailed. In the BUILD branch the server decoded `raw` to a
-    // HANDSHAKE (the client Finished); contradicting that for an alert label needs the crypto
-    // identity open(seal)=pt (Record.Spec lemma_open_record_after_seal_peer), which REQUIRES
-    //     snap.write.seq == a.server.read.seq                                    (*)
-    // If (*) held, crypto correctness would force the server's open to yield the ALERT
-    // plaintext, contradicting the BUILD premise (decode == handshake); so the BUILD branch
-    // forces MISalignment. Retained conjuncts cannot resolve this:
-    //   - protected_channel_ready's alignment is guarded by `M.TlsHandshake? sent` (circular);
-    //   - SCB.seq_count_ok_pair's pwrite_ok is gated off at the sender's ControlFailed;
-    //   - server_byte_reachable (RTC of the RAW legal_connection_delta, which DOES admit a
-    //     wire-appending Sent(alert) as an Application_data record) yields only the forward-
-    //     inductive DISJUNCTION, at ControlFailed/handshake write epoch, write.seq ==
-    //     raw_appdata_count(raw_sent)  \/  == raw_appdata_count(raw_sent)-1 (the `-1` = failed
-    //     via a wire-appending protected Sent(alert); the plain `=` = failed via empty-wire
-    //     LocalFail or a receive). The fail-mode is erased by fail_model and is not a function
-    //     of the reachable STATE, so the disjunction is unresolvable; with byte_pairing
-    //     (cs == sr ++ raw) the branches give snap.write.seq == a.server.read.seq resp. +1.
-    // Under the forced-MISaligned BUILD branch, `raw` would have to be simultaneously the
-    // server-decoded handshake record AND seal(snap.write, alert): refuting that needs a
-    // seal/open injectivity-in-nonce axiom (FORBIDDEN crypto strengthening); pinning (*) needs
-    // a receiver-facing 5th conjunct in tls_system_inv (FORBIDDEN). No forbidden-device-free
-    // discharge exists. Left admitted; reported to the project lead.
-    admit ()
+  = // Post channel is TlsQuiet, so the five inflight_* conjuncts of `b` are
+    // vacuous; the residual `incremental_protected_witnesses b` is dispatched on
+    // `sent`: a client Finished BUILDS the fresh client-Finished witness, any
+    // other `sent` TRANSPORTS every clause unchanged.
+    reveal_opaque (`%inflight_sender_coupling) (inflight_sender_coupling b);
+    reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable b);
+    (match sent with
+     | M.TlsHandshake (M.Finished f) ->
+         spike_build_client_fin a b wire s' out raw snap f
+     | _ ->
+         assert (is_finished_msg sent == false);
+         transport_server a b wire s' out raw snap sent)
 #pop-options
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
