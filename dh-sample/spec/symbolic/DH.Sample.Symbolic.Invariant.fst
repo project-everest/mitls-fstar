@@ -7,6 +7,13 @@ module DH.Sample.Symbolic.Invariant
 
     product_invariant p = Product.wf p /\ DY.trace_invariant p.ps_trace
 
+  Its step relation is the composed `DH.Sample.System.system_step`.  Msg1
+  delivery is UNRESTRICTED (the attacker may inject a Msg1 that drives the
+  responder to `Resp_Wait3`); completion carries the named
+  `ideal_completion_link_ok` run/session-link boundary.  The Security module adds
+  the explicit inductive run-link invariants that turn that index equality, at
+  completion, into the honest identity/share/scalar agreement.
+
   This module depends ONLY on the DY* CORE library and on
   DH.Sample.Symbolic.{Terms,Product}.  It never imports, opens or reuses any DY*
   example, and never references an example module.

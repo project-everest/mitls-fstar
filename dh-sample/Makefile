@@ -53,7 +53,7 @@ IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 # ── Main Targets (MUST come before .depend include) ───────────────
-.PHONY: all verify verify-symbolic-lift verify-symbolic-invariant clean check-admits check-forbidden check-symbolic-forbidden stats help
+.PHONY: all verify verify-symbolic-lift verify-symbolic-invariant verify-symbolic-security clean check-admits check-forbidden check-symbolic-forbidden stats help
 
 all: verify
 
@@ -113,6 +113,7 @@ help:
 	@echo "  make verify     - Verify all modules incl. the symbolic composed-system simulation (supports -j)"
 	@echo "  make verify-symbolic-lift - Verify only the symbolic development (DY* core)"
 	@echo "  make verify-symbolic-invariant - Verify the protocol_invariants / product_invariant milestone"
+	@echo "  make verify-symbolic-security - Verify the authentication / secrecy security consequences milestone"
 	@echo "  make -j$$(nproc)     - Parallel verification with all available cores"
 	@echo "  make check-admits    - Ensure no admit/assume/assert_norm in spec/impl"
 	@echo "  make check-forbidden - Ensure DY-free spec/impl has no DY/iso_dh dependency"
@@ -213,9 +214,21 @@ verify-symbolic-lift: $(SYMBOLIC_CHECKED_FILES)
 verify-symbolic-invariant: check-admits check-symbolic-forbidden $(SYM_CACHE_DIR)/DH.Sample.Symbolic.Invariant.fst.checked
 	@echo "✅ DH sample symbolic protocol-invariant milestone verified successfully"
 
+# The THIRD symbolic milestone: verify the genuine SECURITY CONSEQUENCES the
+# installed `ideal_product_invariant` buys — mutual authentication, session-key
+# secrecy / agreement, the end-to-end theorem from a concrete system execution,
+# and the honest-run non-vacuity witness (DH.Sample.Symbolic.Security), on top of
+# Terms/Product/Lifting/Provenance/Invariant.  Like the invariant milestone it is
+# gated on the admit- and DY*-example-hygiene checks, and depends on the same
+# incremental `.checked` cache, so it only pays for the ONE extra module when the
+# rest is already up to date.  It is ALSO covered by the top-level `make verify`
+# (Security.fst is part of SYMBOLIC_SRC, hence SYMBOLIC_CHECKED_FILES).
+verify-symbolic-security: check-admits check-symbolic-forbidden $(SYM_CACHE_DIR)/DH.Sample.Symbolic.Security.fst.checked
+	@echo "✅ DH sample symbolic security milestone verified successfully"
+
 # Guard: the symbolic development may use DY* core but never a DY* example.
 check-symbolic-forbidden:
-	@echo "Checking that symbolic sources avoid DY* examples..."
-	@if grep -rn "iso_dh\|DY\.Example" $(SYMBOLIC_DIR) 2>/dev/null; then \
-		echo "❌ ERROR: symbolic source references a DY* example!"; exit 1; \
+	@echo "Checking that symbolic sources use DY* core only..."
+	@if grep -rn "iso_dh\|DY\.Example\|DY\.Lib\|examples/" $(SYMBOLIC_DIR) 2>/dev/null; then \
+		echo "❌ ERROR: symbolic source references a non-core DY* module/example!"; exit 1; \
 	else echo "✅ symbolic sources depend on DY* core only"; fi

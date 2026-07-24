@@ -148,6 +148,24 @@ let lemma_rfinish_completion_event (mep:T.principal) (a_t key:BT.bytes) (tr:TB.t
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 
+(** An honestly-originated Msg1 has the exact structured shadow emitted by the
+    initiator: its identity is structured and its share is a `share_term` of a
+    trace-recorded scalar.  This is the symbolic provenance fact used at
+    responder progress; no equality of concrete share bytes is involved. *)
+let lemma_sent_init_msg1_exact
+  (ish rsh:endpoint_shadow) (pk:packet) (ne:net_entry) (tr:TB.trace)
+  : Lemma
+    (requires
+      pk.pk_origin == Sent Init /\ Msg1? pk.pk_msg /\
+      net_entry_coherent ish.sh_ltk rsh.sh_ltk pk ne tr)
+    (ensures (
+      match pk.pk_msg, ne.ne_smsg, ne.ne_auth with
+      | Msg1 a _, SMsg1 a_t gx_t, NoAuth ->
+        a_t == term_of_principal a /\
+        (exists (s:BT.bytes). gx_t == share_term s /\ scalar_recorded tr s)
+      | _, _, _ -> False))
+= reveal_opaque (`%smsg_provenance) smsg_provenance
+
 let lemma_sent_resp_msg2_exact
   (ish rsh:endpoint_shadow) (pk:packet) (ne:net_entry) (tr:TB.trace)
   : Lemma

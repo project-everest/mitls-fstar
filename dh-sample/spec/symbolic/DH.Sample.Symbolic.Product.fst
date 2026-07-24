@@ -39,11 +39,16 @@ module DH.Sample.Symbolic.Product
 
     * an ATTACKER INJECTION puts a publishable all-literal message on the wire
       (`inject_smsg m`), modelling sound Dolev-Yao traffic (publishability is
-      discharged in DH.Sample.Symbolic.Provenance);
+      discharged in DH.Sample.Symbolic.Provenance).  An injected Msg1 CAN drive
+      responder progress (Msg1 delivery is unrestricted), but its shadow is a
+      public `Literal`, not an honest `share_term`;
 
     * a DELIVERY reads a prior `MsgSent` with the genuine `recv_msg` at the
       delivered packet's recorded position, and the receiver combines its scalar
-      with the STRUCTURED share it actually received.
+      with the STRUCTURED share it actually received.  Completion deliveries
+      additionally carry `system_step`'s `ideal_completion_link_ok` run/session
+      link (same Msg1 index) and the honest `Sent Resp`/`Sent Init` completion
+      origin.
 
   Because one concrete system step performs several DY* operations, the product
   is a stuttering refinement whose observable projection onto the concrete system
@@ -53,8 +58,9 @@ module DH.Sample.Symbolic.Product
   ------------------------------------------------------------------
   This is an IDEAL symbolic-crypto model: signatures are genuine `Sign` terms and
   unforgeability is stipulated (an attacker injection is an all-literal term,
-  which cannot be an honest `Sign`; and the concrete completion step already
-  requires an honest peer origin — see `DH.Sample.System`).  We make NO
+  which cannot be an honest `Sign`; both completion deliveries require the
+  appropriate honest peer origin AND a matching run link — see
+  `DH.Sample.System`).  We make NO
   computational hardness assumption; the toy concrete digest is deliberately weak
   and is never the sole justification for a completion.
 *)

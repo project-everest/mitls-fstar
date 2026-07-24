@@ -168,6 +168,14 @@ position, and the transcript is built from the exact structured shares stored
 when the honest send occurred.  `lemma_sent_resp_msg2_exact` and
 `lemma_sent_init_msg3_exact` expose these equations.
 
+For a `Sent Init` Msg1, `lemma_sent_init_msg1_exact` exposes the exact
+`SMsg1` identity and a `share_term` of a trace-recorded scalar.  Msg1 delivery is
+UNRESTRICTED — an injected Msg1 (all fields public literals) can drive the
+responder to `Resp_Wait3`.  The honest initiator's Msg1 packet is instead
+selected at COMPLETION, by the run link (`sys_resp_msg1_idx == sys_init_msg1_idx`
+records the responder consumed the initiator's own `Sent Init` packet); the
+Security module then applies `lemma_sent_init_msg1_exact` to that packet.
+
 An injected packet is exactly `inject_smsg m`, with all fields public literals.
 It cannot satisfy an honest authentication constructor.  Delivery indexes the
 immutable network shadow and passes its `ne_smsg` to the receiver.
@@ -175,9 +183,9 @@ immutable network shadow and passes its `ne_smsg` to the receiver.
 exactly `flatten ne.ne_smsg`; no delivery re-embeds or substitutes terms.
 
 The concrete toy digest is forgeable.  Consequently, a completion additionally
-requires honest peer packet origin (`deliver_origin_ok`).  This is an ideal
-signature-unforgeability boundary, not a computational theorem about the toy
-digest.
+requires honest peer packet origin (`deliver_origin_ok`) AND the run/session
+link (`ideal_completion_link_ok`).  This is an ideal signature-unforgeability
+boundary, not a computational theorem about the toy digest.
 
 ## 5. Local-machine projection and the Pulse boundary
 
@@ -204,16 +212,19 @@ let lemma_delivery_projects_local ... :
 ```
 
 Therefore every composed start/delivery transition has the corresponding local
-projection.  Conversely, not every arbitrary local transition is a composed
-transition: composition also enforces private RNG provenance, concrete
-no-reuse, network provenance, and ideal completion origin.
+projection.  Conversely, not every arbitrary local transition is a composed transition:
+composition also enforces private RNG provenance, concrete no-reuse, and the
+`ideal_completion_link_ok` run/session-link completion boundary (Msg1 delivery
+itself is unrestricted).
 
 The Pulse `Common.ProtocolImplementation.protocol_implementation` instance in
 `DH.Sample.Impl.Endpoint` refines the **local** initiator/responder wire-format
-state machines.  The ideal RNG, ideal signature provenance, and network
-composition are environment assumptions supplied by `DH.Sample.System` and the
-symbolic product.  We do **not** claim that an arbitrary raw-byte Pulse network
-or arbitrary scalar-producing runtime refines this ideal composed system.
+state machines.  The ideal RNG, run-link/completion boundary, and
+network composition are environment assumptions supplied by `DH.Sample.System`
+and the symbolic product.  Pulse refines **only the local endpoint machines**;
+it does not refine or implement this environment.  We do **not** claim that an
+arbitrary raw-byte Pulse network or arbitrary scalar-producing runtime refines
+this ideal composed system.
 
 ## 6. Full honest run
 

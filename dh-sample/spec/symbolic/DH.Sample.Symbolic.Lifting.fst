@@ -18,9 +18,11 @@ module DH.Sample.Symbolic.Lifting
       caller supplies any symbolic realization, successor, binding, provenance
       witness, or final symbolic state.
 
-    * `lemma_lift_step`: the exhaustive ONE-STEP lift, read off `system_step`.  It
-      establishes the product step, the exact before/action/after/output
-      projection, and preserves the coherence invariant `wf`.
+    * `lemma_lift_step`: the exhaustive ONE-STEP lift, read off `system_step`
+      (whose completion boundary `ideal_completion_link_ok` is opaque and never
+      inspected here).  It establishes the product step, the exact
+      before/action/after/output projection, and preserves the coherence
+      invariant `wf`.
 
     * `lemma_lift_execution`: induction over `Common.StateMachine.trace_reaches`
       lifting a whole system execution.
