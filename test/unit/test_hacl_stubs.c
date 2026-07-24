@@ -116,44 +116,6 @@ static int test_hkdf_sha256_rfc5869_case1(void) {
   return expect_bytes("hkdf-expand RFC5869 case 1", okm, expected_okm, sizeof okm);
 }
 
-static int test_tls13_hkdf_expand_label_encoding(void) {
-  uint8_t prk[32];
-  uint8_t via_label[48];
-  uint8_t via_info[48];
-  static const uint8_t label[] = {'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
-  static const uint8_t context[32] = {
-      0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
-      0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
-      0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
-      0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55};
-  uint8_t info[2 + 1 + 6 + sizeof label + 1 + sizeof context];
-  size_t p = 0;
-
-  for (size_t i = 0; i < sizeof prk; ++i) prk[i] = (uint8_t)(0xa0 + i);
-
-  info[p++] = 0x00;
-  info[p++] = sizeof via_label;
-  info[p++] = 6 + sizeof label;
-  memcpy(&info[p], "tls13 ", 6);
-  p += 6;
-  memcpy(&info[p], label, sizeof label);
-  p += sizeof label;
-  info[p++] = sizeof context;
-  memcpy(&info[p], context, sizeof context);
-  p += sizeof context;
-
-  if (!tls13_hacl_hkdf_expand_label_sha256(
-          via_label, sizeof via_label, prk, label, sizeof label, context, sizeof context)) {
-    fprintf(stderr, "HKDF-Expand-Label wrapper failed\n");
-    return 1;
-  }
-  if (!tls13_hacl_hkdf_expand_sha256(via_info, sizeof via_info, prk, info, p)) {
-    fprintf(stderr, "direct HKDF-Expand for label test failed\n");
-    return 1;
-  }
-  return expect_bytes("TLS 1.3 HKDF label encoding", via_label, via_info, sizeof via_label);
-}
-
 static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
   static const uint8_t derived_secret[32] = {
       0x6f, 0x26, 0x15, 0xa1, 0x08, 0xc7, 0x02, 0xc5,
@@ -170,13 +132,15 @@ static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
       0xdc, 0x0a, 0xad, 0xc1, 0x2f, 0x74, 0x1b, 0x01,
       0x04, 0x6a, 0xa6, 0xb9, 0x9f, 0x69, 0x1e, 0xd2,
       0x21, 0xa9, 0xf0, 0xca, 0x04, 0x3f, 0xbe, 0xac};
-  static const uint8_t transcript_hash[32] = {
+  static const uint8_t c_hs_info[] = {
+      0x00, 0x20, 0x12,
+      't', 'l', 's', '1', '3', ' ',
+      'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c',
+      0x20,
       0x86, 0x0c, 0x06, 0xed, 0xc0, 0x78, 0x58, 0xee,
       0x8e, 0x78, 0xf0, 0xe7, 0x42, 0x8c, 0x58, 0xed,
       0xd6, 0xb4, 0x3f, 0x2c, 0xa3, 0xe6, 0xe9, 0x5f,
       0x02, 0xed, 0x06, 0x3c, 0xf0, 0xe1, 0xca, 0xd8};
-  static const uint8_t c_hs_label[] = {
-      'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
   static const uint8_t expected_client_hs_traffic[32] = {
       0xb3, 0xed, 0xdb, 0x12, 0x6e, 0x06, 0x7f, 0x35,
       0xa7, 0x80, 0xb3, 0xab, 0xf4, 0x5e, 0x2d, 0x8f,
@@ -197,14 +161,12 @@ static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
           sizeof handshake_secret) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hkdf_expand_label_sha256(
+  if (!tls13_hacl_hkdf_expand_sha256(
           client_hs_traffic,
           sizeof client_hs_traffic,
           handshake_secret,
-          c_hs_label,
-          sizeof c_hs_label,
-          transcript_hash,
-          sizeof transcript_hash)) {
+          c_hs_info,
+          sizeof c_hs_info)) {
     fprintf(stderr, "RFC 8448 client handshake traffic secret derivation failed\n");
     return 1;
   }
@@ -256,7 +218,11 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
       0xd2, 0xcb, 0xdc, 0xe7, 0x1d, 0xf4, 0xde, 0xda,
       0x4a, 0xb4, 0x2c, 0x30, 0x95, 0x72, 0xcb, 0x7f,
       0xff, 0xee, 0x54, 0x54, 0xb7, 0x8f, 0x07, 0x18};
-  static const uint8_t label_finished[] = {'f', 'i', 'n', 'i', 's', 'h', 'e', 'd'};
+  static const uint8_t finished_info[] = {
+      0x00, 0x20, 0x0e,
+      't', 'l', 's', '1', '3', ' ',
+      'f', 'i', 'n', 'i', 's', 'h', 'e', 'd',
+      0x00};
   uint8_t transcript[907];
   uint8_t transcript_hash[32];
   uint8_t finished_key[32];
@@ -277,14 +243,12 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
           sizeof transcript_hash) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hkdf_expand_label_sha256(
+  if (!tls13_hacl_hkdf_expand_sha256(
           finished_key,
           sizeof finished_key,
           server_handshake_traffic_secret,
-          label_finished,
-          sizeof label_finished,
-          NULL,
-          0)) {
+          finished_info,
+          sizeof finished_info)) {
     fprintf(stderr, "failed to derive RFC 8448 server Finished key\n");
     return 1;
   }
@@ -406,7 +370,6 @@ int main(void) {
   failed |= test_sha256_empty();
   failed |= test_hmac_sha256_rfc4231_case1();
   failed |= test_hkdf_sha256_rfc5869_case1();
-  failed |= test_tls13_hkdf_expand_label_encoding();
   failed |= test_tls13_hkdf_rfc8448_simple_handshake();
   failed |= test_tls13_finished_rfc8448_simple_handshake();
   failed |= test_x25519_rfc7748();

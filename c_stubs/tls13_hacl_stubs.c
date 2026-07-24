@@ -1,7 +1,6 @@
 #include "tls13_hacl_stubs.h"
 
 #include <limits.h>
-#include <string.h>
 #include <threads.h>
 
 #include "Hacl_AEAD_Chacha20Poly1305.h"
@@ -151,40 +150,6 @@ bool tls13_hacl_hkdf_expand_sha256(
       (uint32_t)info_len,
       (uint32_t)out_len);
   return true;
-}
-
-bool tls13_hacl_hkdf_expand_label_sha256(
-    uint8_t *out,
-    size_t out_len,
-    const uint8_t prk[32],
-    const uint8_t *label,
-    size_t label_len,
-    const uint8_t *context,
-    size_t context_len) {
-  static const uint8_t prefix[] = {'t', 'l', 's', '1', '3', ' '};
-  uint8_t info[2 + 1 + sizeof prefix + 255 + 1 + 255];
-  size_t full_label_len = sizeof prefix + label_len;
-  size_t info_len = 2 + 1 + full_label_len + 1 + context_len;
-
-  if ((out_len != 0 && out == NULL) || prk == NULL ||
-      (label_len != 0 && label == NULL) || (context_len != 0 && context == NULL) ||
-      out_len > UINT16_MAX || label_len > 249 || context_len > 255) {
-    return false;
-  }
-
-  info[0] = (uint8_t)(out_len >> 8);
-  info[1] = (uint8_t)out_len;
-  info[2] = (uint8_t)full_label_len;
-  memcpy(&info[3], prefix, sizeof prefix);
-  if (label_len != 0) {
-    memcpy(&info[3 + sizeof prefix], label, label_len);
-  }
-  info[3 + full_label_len] = (uint8_t)context_len;
-  if (context_len != 0) {
-    memcpy(&info[4 + full_label_len], context, context_len);
-  }
-
-  return tls13_hacl_hkdf_expand_sha256(out, out_len, prk, info, info_len);
 }
 
 bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]) {

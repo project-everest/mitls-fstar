@@ -55,26 +55,13 @@ void TLS13_Crypto_hkdf_extract(
   (void)tls13_hacl_hkdf_extract_sha256(out, salt, salt_len, ikm, ikm_len);
 }
 
-void TLS13_Crypto_hkdf_expand_label(
+void TLS13_Crypto_hkdf_expand(
     uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
-    uint8_t *context,
-    size_t context_len,
+    uint8_t *info,
+    size_t info_len,
     uint8_t *out,
     size_t out_len) {
-  (void)tls13_hacl_hkdf_expand_label_sha256(
-      out, out_len, secret, label, label_len, context, context_len);
-}
-
-void TLS13_Crypto_hkdf_expand_label_empty_context(
-    uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
-    uint8_t *out,
-    size_t out_len) {
-  (void)tls13_hacl_hkdf_expand_label_sha256(
-      out, out_len, secret, label, label_len, NULL, 0);
+  (void)tls13_hacl_hkdf_expand_sha256(out, out_len, secret, info, info_len);
 }
 
 bool TLS13_Crypto_x25519_shared_runtime(

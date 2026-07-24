@@ -961,9 +961,10 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
-  test-openssl-sclient test-hacl-stubs check-c-stubs
+  test-openssl-sclient test-hacl-stubs test-key-schedule-bindings check-c-stubs
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-echo test-openssl-sclient
+test: verify check-c-stubs test-hacl-stubs test-key-schedule-bindings \
+  test-openssl-echo test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
@@ -988,6 +989,25 @@ test/test_hacl_stubs: test/unit/test_hacl_stubs.c \
 
 test-hacl-stubs: test/test_hacl_stubs
 	./test/test_hacl_stubs
+
+test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
+  $(TLS13_BUNDLE_OBJS_STAMP) c_stubs/tls13_crypto_external.c \
+  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(HACL_TEST_OBJECTS) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_KeySchedule.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Serializer_Common.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Server_Material.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Wire_Generated.o \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  test/unit/test_key_schedule_bindings.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -o $@
+
+test-key-schedule-bindings: test/test_key_schedule_bindings
+	./test/test_key_schedule_bindings
 
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
 TEST_CERT_STAMP = test/certs/.generated
@@ -1102,6 +1122,7 @@ clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
+	  test/test_key_schedule_bindings \
 	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
 	  test/openssl_echo_server.log \

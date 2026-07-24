@@ -34,19 +34,10 @@ void TLS13_Crypto_hkdf_extract(
     size_t ikm_len,
     uint8_t *out);
 
-void TLS13_Crypto_hkdf_expand_label(
+void TLS13_Crypto_hkdf_expand(
     uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
-    uint8_t *context,
-    size_t context_len,
-    uint8_t *out,
-    size_t out_len);
-
-void TLS13_Crypto_hkdf_expand_label_empty_context(
-    uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
+    uint8_t *info,
+    size_t info_len,
     uint8_t *out,
     size_t out_len);
 

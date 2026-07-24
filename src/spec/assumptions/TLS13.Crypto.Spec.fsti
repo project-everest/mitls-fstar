@@ -65,6 +65,51 @@ let update_byte
   : GTot B.bytes =
   if i < B.length bytes then Seq.upd bytes i value else bytes
 
+let hkdf_label_info_length
+  (label:B.bytes)
+  (context:B.bytes)
+  : nat =
+  10 + B.length label + B.length context
+
+let copy_bytes_into
+  (dst:B.bytes)
+  (offset:nat)
+  (src:B.bytes)
+  : GTot (bytes_of_len (B.length dst)) =
+  if offset + B.length src <= B.length dst
+  then
+    B.append
+      (Seq.slice dst 0 offset)
+      (B.append
+        src
+        (Seq.slice dst (offset + B.length src) (B.length dst)))
+  else dst
+
+(** Fixed-capacity representation of RFC 8446 HkdfLabel. Only the
+    [hkdf_label_info_length label context] prefix is passed to HKDF-Expand. *)
+[@@ "opaque_to_smt"]
+let hkdf_label_info_buffer
+  (label:B.bytes)
+  (context:B.bytes)
+  (len:nat)
+  : GTot (bytes_of_len 520) =
+  let info0 = B.zeros 520 in
+  let info1 = update_byte info0 0 (U8.uint_to_t ((len / 256) % 256)) in
+  let info2 = update_byte info1 1 (U8.uint_to_t (len % 256)) in
+  let info3 =
+    update_byte info2 2 (U8.uint_to_t ((6 + B.length label) % 256)) in
+  let info4 = update_byte info3 3 0x74uy in
+  let info5 = update_byte info4 4 0x6cuy in
+  let info6 = update_byte info5 5 0x73uy in
+  let info7 = update_byte info6 6 0x31uy in
+  let info8 = update_byte info7 7 0x33uy in
+  let info9 = update_byte info8 8 0x20uy in
+  let info10 = copy_bytes_into info9 9 label in
+  let info11 =
+    update_byte info10 (9 + B.length label)
+      (U8.uint_to_t (B.length context % 256)) in
+  copy_bytes_into info11 (10 + B.length label) context
+
 [@@ "opaque_to_smt"]
 let record_nonce_from_bytes
   (static_iv:B.bytes)
