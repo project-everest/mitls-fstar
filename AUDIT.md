@@ -86,7 +86,7 @@ endpoint architecture is:
 - `common/Common.ProtocolImplementation.fst`
 - `common/Common.ProtocolEndpoint.fst`
 - `common/Common.ProtocolDriver.fst`
-- `src/impl/extern/Common.TCP.fsti`
+- `common/Common.TCP.fsti`
 - `src/impl/TLS13.Impl.Client.Endpoint.fst`
 - `src/impl/TLS13.Impl.Server.Endpoint.fst`
 
@@ -189,7 +189,7 @@ The active TCB surface is intentionally explicit.
 | --- | --- | --- |
 | Crypto primitives and entropy | `src/impl/extern/TLS13.Crypto.fsti`, `c_stubs/tls13_crypto_external.c`, `c_stubs/tls13_hacl_stubs.c`, HACL* sources | Trusted to match `TLS13.Crypto.Spec`, including AEAD, hashes, HKDF/HMAC, random bytes, and X25519. |
 | X509/signature validation | `src/impl/extern/TLS13.OpenSSL.fsti`, `c_stubs/tls13_openssl_karamel.*`, `c_stubs/tls13_openssl_stubs.c` | Typed OpenSSL auth TCB. The Pulse workflow calls this interface directly; successful returns are trusted to establish `CT.local_input_wf` for certificate validation over the exact returned peer-identity prefix and for CertificateVerify. |
-| TCP bridge | `src/impl/extern/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_karamel.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. `Common_TCP.krml` is included in the bundle so KaRaMeL typechecks the exact TCP ABI; the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
+| TCP bridge | `common/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_karamel.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. `Common_TCP.krml` is included in the bundle so KaRaMeL typechecks the exact TCP ABI; the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
 | Extracted runtime infrastructure | F*, Pulse, KaRaMeL, generated C, C compiler/runtime | Trusted extraction/runtime substrate and C platform behavior. |
 | Concrete C ABI wrapper | `runtime/tls13_client_driver.c` | Trusted allocation of the small wrapper object, status-to-error translation, and lifetime tracking around the extracted Pulse workflow. |
 
@@ -243,7 +243,7 @@ Start with these files:
    proofs.
 5. `common/Common.ProtocolImplementation.fst`,
    `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, and
-   `src/impl/extern/Common.TCP.fsti` for the shared endpoint/driver/TCP architecture.
+   `common/Common.TCP.fsti` for the shared endpoint/driver/TCP architecture.
 6. `src/impl/extern/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*` for the
    typed OpenSSL TCB boundary called by the Pulse workflow.
 7. `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` for the
