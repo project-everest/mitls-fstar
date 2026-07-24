@@ -654,6 +654,53 @@ let inflight_sender_live (s:tls_system_state) : prop =
   | TlsInFlight _recipient _raw _snapshot sent ->
     M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify
 
+(** STAGE 3a-ter (in-flight snapshot byte-reachability) — the ghost in-flight
+    `snapshot` is the SENDER's own byte-reachable pre-send model, and the SENDER's
+    current sent-byte stream is `snapshot`'s sent-byte stream extended by the
+    in-flight `raw`.
+
+    STRICTLY SENDER-FACING: this conjunct mentions ONLY the sender endpoint (via
+    `ipso_sender_endpoint`), the ghost `snapshot`/`raw`, and an existential witness
+    `pred`.  It NEVER mentions the recipient's read epoch or any recipient field —
+    the coupling to the recipient lives ONLY in the derived cross-endpoint ordering
+    lemmas (TLS13.System.Ordering), through the EXISTING `byte_pairing` conjunct.
+    That is what keeps it sender-facing (not a forbidden receiver-coupling).
+
+    It hands the ordering lemmas exactly their reachability hypotheses for the
+    snapshot: `server_reachable`/`client_reachable (CS.initial snapshot.config)`
+    (role-matched to the sender), `CS.connection_state_consistent`, and
+    `pred.cs_model == snapshot`.  The byte-pairing hypothesis is then obtained at
+    the delivery by combining this conjunct's `pred.raw_sent ++ raw == sender.raw_sent`
+    with `byte_pairing` (`ss == cr ++ raw` resp. `cs == sr ++ raw`).
+
+    Established at each SEND with `pred := a.<sender>` (byte-reachable + consistent
+    from the pre-state invariant; the send appends `raw`, so
+    `pred.raw_sent ++ raw == b.<sender>.raw_sent`), vacuous at deliveries (post
+    channel TlsQuiet) and locals (channel frozen while quiet) and initial.
+
+    Marked `opaque_to_smt` (like `inflight_sender_coupling` / `incremental_
+    protected_witnesses`) so that unfolding `tls_system_inv` in unrelated lemmas
+    does NOT drag the recursive WireStep reachability closure into every VC that
+    merely carries the invariant as a hypothesis. **)
+[@@ "opaque_to_smt"]
+let inflight_snap_reachable (s:tls_system_state) : prop =
+  match s.channel with
+  | TlsQuiet -> True
+  | TlsInFlight recipient raw snapshot _sent ->
+    let sender = ipso_sender_endpoint s recipient in
+    (exists (pred:CS.connection_state).
+       (match recipient with
+        | CS.ClientEndpoint ->
+            // recipient = client  =>  sender = server
+            WStep.server_reachable (CS.initial pred.CS.cs_model.CS.model_config) pred
+        | CS.ServerEndpoint ->
+            // recipient = server  =>  sender = client
+            WStep.client_reachable (CS.initial pred.CS.cs_model.CS.model_config) pred) /\
+       CS.connection_state_consistent pred /\
+       pred.CS.cs_model == snapshot /\
+       Seq.equal (B.append pred.CS.cs_wire_log.CL.raw_sent raw)
+                 sender.CS.cs_wire_log.CL.raw_sent)
+
 (** The inductive structural invariant. **)
 let tls_system_inv (s:tls_system_state) : prop =
   client_stage_ok s.client /\
@@ -696,6 +743,7 @@ let tls_system_inv (s:tls_system_state) : prop =
   inflight_sender_coupling s /\
   inflight_protected_sender_ok s /\
   inflight_sender_live s /\
+  inflight_snap_reachable s /\
   incremental_protected_witnesses s
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -1197,7 +1245,9 @@ let lemma_initial_inv (cfg_c cfg_s:CS.connection_config)
     reveal_opaque (`%inflight_sender_coupling)
       (inflight_sender_coupling (initial_tls_system cfg_c cfg_s));
     reveal_opaque (`%incremental_protected_witnesses)
-      (incremental_protected_witnesses (initial_tls_system cfg_c cfg_s))
+      (incremental_protected_witnesses (initial_tls_system cfg_c cfg_s));
+    reveal_opaque (`%inflight_snap_reachable)
+      (inflight_snap_reachable (initial_tls_system cfg_c cfg_s))
 
 (** ─────────────────────────────────────────────────────────────────────────
     Wire / projection FACT preservation.
@@ -4715,6 +4765,7 @@ let lemma_ipw_pres_client_send
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
         inflight_sender_live b /\
+        inflight_snap_reachable b /\
         incremental_protected_witnesses b)
   = let raw = emitted_raw out in
     WStep.lemma_serialize_all_single_wire w;
@@ -4735,6 +4786,7 @@ let lemma_ipw_pres_client_send
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
        inflight_sender_live b /\
+       inflight_snap_reachable b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -4796,6 +4848,22 @@ let lemma_ipw_pres_client_send
       // sent in {ClientHello, Finished, TlsApplicationData, KeyUpdate,
       // Close_notify}; no client local kind emits a fatal alert.
       assert (M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify);
+      // inflight_snap_reachable b: witness pred := a.client (sender = b.client = c').
+      // a.client is byte-reachable + consistent from tls_system_inv a; the send
+      // appends raw to its sent stream (legal_connection_delta a.client d c').
+      reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable b);
+      assert (client_byte_reachable a);
+      assert (CS.connection_state_consistent a.client);
+      assert (Seq.equal (B.append a.client.CS.cs_wire_log.CL.raw_sent raw)
+                        c'.CS.cs_wire_log.CL.raw_sent);
+      introduce exists (pred:CS.connection_state).
+        (WStep.client_reachable (CS.initial pred.CS.cs_model.CS.model_config) pred /\
+         CS.connection_state_consistent pred /\
+         pred.CS.cs_model == a.client.CS.cs_model /\
+         Seq.equal (B.append pred.CS.cs_wire_log.CL.raw_sent raw)
+                   c'.CS.cs_wire_log.CL.raw_sent)
+      with a.client and ();
+      assert (inflight_snap_reachable b);
       ()
     )
 #pop-options
@@ -4856,6 +4924,7 @@ let lemma_ipw_pres_server_send
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
         inflight_sender_live b /\
+        inflight_snap_reachable b /\
         incremental_protected_witnesses b)
   = let raw = emitted_raw out in
     WStep.lemma_serialize_all_single_wire w;
@@ -4876,6 +4945,7 @@ let lemma_ipw_pres_server_send
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
        inflight_sender_live b /\
+       inflight_snap_reachable b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -4955,6 +5025,22 @@ let lemma_ipw_pres_server_send
         (CTy.server_local_event_api local).CTy.server_local_kind
         (CTy.server_local_event_api local).CTy.server_local_payload sent;
       assert (M.TlsAlert? sent ==> sent == M.TlsAlert T.Close_notify);
+      // inflight_snap_reachable b: witness pred := a.server (sender = b.server = s').
+      // a.server is byte-reachable + consistent from tls_system_inv a; the send
+      // appends raw to its sent stream (legal_connection_delta a.server d s').
+      reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable b);
+      assert (server_byte_reachable a);
+      assert (CS.connection_state_consistent a.server);
+      assert (Seq.equal (B.append a.server.CS.cs_wire_log.CL.raw_sent raw)
+                        s'.CS.cs_wire_log.CL.raw_sent);
+      introduce exists (pred:CS.connection_state).
+        (WStep.server_reachable (CS.initial pred.CS.cs_model.CS.model_config) pred /\
+         CS.connection_state_consistent pred /\
+         pred.CS.cs_model == a.server.CS.cs_model /\
+         Seq.equal (B.append pred.CS.cs_wire_log.CL.raw_sent raw)
+                   s'.CS.cs_wire_log.CL.raw_sent)
+      with a.server and ();
+      assert (inflight_snap_reachable b);
       ()
     )
 #pop-options
@@ -4978,6 +5064,7 @@ let lemma_ipw_pres_client_local
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
         inflight_sender_live b /\
+        inflight_snap_reachable b /\
         incremental_protected_witnesses b)
   = lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
     let api = CTy.client_local_event_api local in
@@ -4995,6 +5082,7 @@ let lemma_ipw_pres_client_local
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
        inflight_sender_live b /\
+       inflight_snap_reachable b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -5025,7 +5113,11 @@ let lemma_ipw_pres_client_local
       assert (inflight_protected_sender_ok b);
       reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
       reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
-      assert (incremental_protected_witnesses b)
+      assert (incremental_protected_witnesses b);
+      // inflight_snap_reachable b: channel frozen (b.channel == a.channel == TlsQuiet),
+      // so the conjunct is vacuously True.
+      reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable b);
+      assert (inflight_snap_reachable b)
     )
 #pop-options
 
@@ -5048,6 +5140,7 @@ let lemma_ipw_pres_server_local
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
         inflight_sender_live b /\
+        inflight_snap_reachable b /\
         incremental_protected_witnesses b)
   = lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
     let api = CTy.server_local_event_api local in
@@ -5065,6 +5158,7 @@ let lemma_ipw_pres_server_local
        inflight_sender_coupling b /\
        inflight_protected_sender_ok b /\
        inflight_sender_live b /\
+       inflight_snap_reachable b /\
        incremental_protected_witnesses b)
     with _pf2.
     (
@@ -5094,7 +5188,11 @@ let lemma_ipw_pres_server_local
       assert (inflight_protected_sender_ok b);
       reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses a);
       reveal_opaque (`%incremental_protected_witnesses) (incremental_protected_witnesses b);
-      assert (incremental_protected_witnesses b)
+      assert (incremental_protected_witnesses b);
+      // inflight_snap_reachable b: channel frozen (b.channel == a.channel == TlsQuiet),
+      // so the conjunct is vacuously True.
+      reveal_opaque (`%inflight_snap_reachable) (inflight_snap_reachable b);
+      assert (inflight_snap_reachable b)
     )
 #pop-options
 
@@ -5487,6 +5585,7 @@ let lemma_ipw_pres_deliver_to_client
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
         inflight_sender_live b /\
+        inflight_snap_reachable b /\
         incremental_protected_witnesses b)
   = // STOP-AND-REPORT (blocked obligation, per task HARD CONSTRAINTS 1 & 2).
     //
@@ -5566,6 +5665,7 @@ let lemma_ipw_pres_deliver_to_server
         inflight_sender_coupling b /\
         inflight_protected_sender_ok b /\
         inflight_sender_live b /\
+        inflight_snap_reachable b /\
         incremental_protected_witnesses b)
   = // STOP-AND-REPORT (blocked obligation, symmetric to lemma_ipw_pres_deliver_to_client).
     //
