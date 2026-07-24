@@ -2683,7 +2683,49 @@ let lemma_server_appdata_installed_backward
     protected projection-pair witnesses.  This is exactly the middle block of
     `lemma_ready_quiescent_agrees`, factored out so it can be invoked at the
     server-verify instant. **)
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** `client_stage_ok` at `ControlApplicationData` ⇒ all FIVE client-side
+    protected-handshake fields are populated.  Direct reduction of the stage
+    predicate's `ControlApplicationData` arm (raised fuel/ifuel so the big match
+    reliably normalizes). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 30"
+let lemma_client_appdata_all_fields_some (st:CS.connection_state)
+  : Lemma (requires client_stage_ok st /\ ctrl st == CS.ControlApplicationData)
+          (ensures
+            Some? (hsf st).CS.hs_encrypted_extensions /\
+            Some? (hsf st).CS.hs_certificate /\
+            Some? (hsf st).CS.hs_certificate_verify /\
+            Some? (hsf st).CS.hs_server_finished /\
+            Some? (hsf st).CS.hs_client_finished)
+  = ()
+#pop-options
+
+(** `server_stage_ok` at `ControlApplicationData` ⇒ all FIVE server-side
+    protected-handshake fields are populated (mirror of the client lemma). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 30"
+let lemma_server_appdata_all_fields_some (st:CS.connection_state)
+  : Lemma (requires server_stage_ok st /\ ctrl st == CS.ControlApplicationData)
+          (ensures
+            Some? (hsf st).CS.hs_encrypted_extensions /\
+            Some? (hsf st).CS.hs_certificate /\
+            Some? (hsf st).CS.hs_certificate_verify /\
+            Some? (hsf st).CS.hs_server_finished /\
+            Some? (hsf st).CS.hs_client_finished)
+  = ()
+#pop-options
+
+(** Establishment (formerly the sole admit): once both endpoints are ready
+    (`ControlApplicationData` with app keys) the five paired
+    protected-handshake event-projection witnesses hold.
+
+    This is pure ASSEMBLY, no new deep proof.  `client_stage_ok` /
+    `server_stage_ok` at `ControlApplicationData` supply all ten handshake
+    fields (`Some`), and `incremental_protected_witnesses s` already carries the
+    five projection-pair existentials clause-by-clause with matching polarity —
+    revealing it and eliminating the five existentials directly inhabits the
+    target `paired_protected_handshake_event_projection_pairs`.  Both
+    `client_stage_ok`, `server_stage_ok` and `incremental_protected_witnesses`
+    are conjuncts of `tls_system_inv`, so callers supply them for free. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
 let lemma_pw_establish (s:tls_system_state)
   : Lemma
       (requires
@@ -2700,24 +2742,63 @@ let lemma_pw_establish (s:tls_system_state)
         Some? (hsf s.server).CS.hs_server_hello /\
         s.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         s.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        client_stage_ok s.client /\
+        server_stage_ok s.server /\
+        incremental_protected_witnesses s /\
         client_ready s /\
         server_ready s)
       (ensures
         P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server)
   =
-    // ═══════════════════════════════════════════════════════════════════════
-    // TEMPORARY GAP (clean16 removal, Phase 1): to be discharged by the
-    // counting-free C3 incremental-protected-witnesses proof in Phase 2.
-    // Tracked in plan.md.  This is the SOLE admit in the retained build.
-    //
-    // The statement is the TRUE establishment obligation: from an honest,
-    // byte-reachable, byte-paired BOTH-ready quiescent boundary (with the hello
-    // key-share agreement and no rekeying), the protected projection-pair
-    // witnesses hold.  Only the clean16 length==16 counting preconditions were
-    // removed; every honest precondition (reachability, pairing, both-ready,
-    // hellos-present, roles, supported profile, no-rekeying) is retained.
-    // ═══════════════════════════════════════════════════════════════════════
-    admit ()
+    // client_ready / server_ready pin both controls to ControlApplicationData
+    // (both driver `application_ready` predicates assert model_control == App).
+    assert (ctrl s.client == CS.ControlApplicationData);
+    assert (ctrl s.server == CS.ControlApplicationData);
+    // From the stage predicates: all ten handshake message slots are populated.
+    lemma_client_appdata_all_fields_some s.client;
+    lemma_server_appdata_all_fields_some s.server;
+    FStar.Pervasives.reveal_opaque (`%incremental_protected_witnesses)
+      (incremental_protected_witnesses s);
+    let client_hs = s.client.CS.cs_model.CS.model_handshake in
+    let server_hs = s.server.CS.cs_model.CS.model_handshake in
+    // Each incremental clause is now in its (Some, Some) branch: pull the five
+    // projection-pair replays and reassemble them into the paired predicate.
+    eliminate exists (r_ee:PWB.protected_message_replay).
+        PWB.protected_handshake_event_projection_pair r_ee
+          (M.EncryptedExtensions (Some?.v server_hs.CS.hs_encrypted_extensions))
+          (M.EncryptedExtensions (Some?.v client_hs.CS.hs_encrypted_extensions))
+    returns P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server
+    with _pf_ee. begin
+    eliminate exists (r_cert:PWB.protected_message_replay).
+        PWB.protected_handshake_event_projection_pair r_cert
+          (M.Certificate (Some?.v server_hs.CS.hs_certificate))
+          (M.Certificate (Some?.v client_hs.CS.hs_certificate))
+    returns P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server
+    with _pf_cert. begin
+    eliminate exists (r_cv:PWB.protected_message_replay).
+        PWB.protected_handshake_event_projection_pair r_cv
+          (M.CertificateVerify (Some?.v server_hs.CS.hs_certificate_verify))
+          (M.CertificateVerify (Some?.v client_hs.CS.hs_certificate_verify))
+    returns P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server
+    with _pf_cv. begin
+    eliminate exists (r_sf:PWB.protected_message_replay).
+        PWB.protected_handshake_event_projection_pair r_sf
+          (M.Finished (Some?.v server_hs.CS.hs_server_finished))
+          (M.Finished (Some?.v client_hs.CS.hs_server_finished))
+    returns P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server
+    with _pf_sf. begin
+    eliminate exists (r_cf:PWB.protected_message_replay).
+        PWB.protected_handshake_event_projection_pair r_cf
+          (M.Finished (Some?.v client_hs.CS.hs_client_finished))
+          (M.Finished (Some?.v server_hs.CS.hs_client_finished))
+    returns P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server
+    with _pf_cf. begin
+      introduce exists server_ee server_cert server_cv server_finished client_finished.
+        PWB.paired_protected_handshake_event_projection_pairs
+          s.client s.server server_ee server_cert server_cv server_finished client_finished
+      with r_ee r_cert r_cv r_sf r_cf
+      and ()
+    end end end end end
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -2922,6 +3003,7 @@ let lemma_pw_pres_deliver_to_server
         server_byte_reachable b /\
         byte_pairing b /\
         hello_key_shares_ok b /\
+        incremental_protected_witnesses b /\
         b == { a with server = s'; channel = TlsQuiet })
       (ensures protected_witnesses_ok b)
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
@@ -2984,6 +3066,7 @@ let lemma_pw_pres_server_local
         server_stage_ok s' /\
         out.SM.so_wire_outputs == [] /\
         CS.connection_state_no_key_update_trace s' /\
+        incremental_protected_witnesses b /\
           b == { a with server = s' })
       (ensures protected_witnesses_ok b)
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
@@ -6649,9 +6732,9 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_server a wire s' out raw snap sent;
        lemma_wire_facts_deliver_to_server a b;
+       lemma_ipw_pres_deliver_to_server a b wire s' out raw snap sent;
        lemma_pw_pres_deliver_to_server a b wire s' out;
        lemma_scop_deliver_to_server a b;
-       lemma_ipw_pres_deliver_to_server a b wire s' out raw snap sent;
        assert (TlsQuiet? b.channel);
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -6749,9 +6832,9 @@ let lemma_pres_server_local (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
        lemma_bp_server_local a local s' out;
        lemma_wire_facts_server_local a b;
+       lemma_ipw_pres_server_local a b local s' out;
        lemma_pw_pres_server_local a b local s' out;
        lemma_scop_server_local a b;
-       lemma_ipw_pres_server_local a b local s' out;
        assert (TlsQuiet? b.channel);
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
