@@ -415,7 +415,7 @@ There are three related layers of history.
 
 ### 1. Physical TCP history
 
-`src/impl/extern/Common.TCP.fsti` is the trusted transport boundary.
+`common/Common.TCP.fsti` is the trusted transport boundary.
 `Common.TCP.read` appends exactly the returned chunk to `tcp_received`;
 `Common.TCP.write` appends exactly the written prefix to `tcp_sent`.
 
