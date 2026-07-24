@@ -167,6 +167,65 @@ val is_buffered :
   sent:bytes ->
   slprop
 
+val io_frame :
+  b:t ->
+  ch:TCP.channel ->
+  model:phys_buffer ->
+  received:bytes ->
+  delivered:bytes ->
+  sent:bytes ->
+  slprop
+
+ghost fn open_io_channel
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  returns ch:TCP.channel
+  ensures
+    TCP.is_channel
+      ch
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    io_frame
+      b
+      ch
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+
+ghost fn close_io_channel
+  (b:t)
+  (ch:TCP.channel)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    TCP.is_channel
+      ch
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    io_frame
+      b
+      ch
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+
 ghost fn recall_model
   (b:t)
   (#model:erased phys_buffer)

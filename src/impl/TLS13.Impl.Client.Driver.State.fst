@@ -1052,6 +1052,70 @@ let client_channel_inv
       buffered_len
 
 noextract
+let client_channel_io_frame_indexed
+  (d:client_driver)
+  (ch:IO.channel)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  (st:CS.connection_state)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  CP.client_invariant
+    (client_driver_canonical d)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    st **
+  O.is_auth_context d.client_driver_auth **
+  Box.pts_to d.client_driver_channel (Some channel) **
+  BT.io_frame
+    channel
+    ch
+    model
+    wire_received
+    committed
+    wire_sent **
+  MR.pts_to d.client_driver_tcp_history #1.0R
+    (wire_history wire_received wire_sent) **
+  client_driver_buffers d **
+  pure (
+    BT.same_storage channel d.client_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    client_driver_wire_logs_match_witness
+      st
+      wire_received
+      wire_sent
+      committed
+      (BT.pending model)
+      buffered_len /\
+    CT.connection_control_not_failed st /\
+    SZ.v buffered_len == B.length (BT.pending model) /\
+    Seq.equal pending (BT.pending model) /\
+    Seq.equal
+      wire_received
+      (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+    Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
+    app_log == TChannel.application_log st)
+
+noextract
+let client_channel_io_frame
+  (d:client_driver)
+  (ch:IO.channel)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st channel model committed buffered_len.
+    client_channel_io_frame_indexed
+      d ch wire_received wire_sent pending app_log
+      st channel model committed buffered_len
+
+noextract
 let client_channel_snapshot
   (d:client_driver)
   (wire_received:B.bytes)

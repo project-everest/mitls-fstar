@@ -773,6 +773,64 @@ let top_server_channel_inv
       Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent)
 
 noextract
+let top_server_channel_io_frame_indexed
+  (d:top_server_driver)
+  (ch:IO.channel)
+  (wire_received wire_sent pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  SP.server_invariant
+    (top_server_driver_canonical d)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    st **
+  Box.pts_to d.top_server_driver_channel (Some channel) **
+  BT.io_frame
+    channel ch model wire_received committed wire_sent **
+  MR.pts_to
+    d.top_server_driver_tcp_history
+    #1.0R
+    (server_driver_history wire_received wire_sent) **
+  top_server_driver_buffers d **
+  pure (
+    BT.same_storage channel d.top_server_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    server_driver_wire_logs_match_witness
+      st
+      wire_received
+      wire_sent
+      committed
+      (BT.pending model)
+      buffered_len /\
+    SZ.v buffered_len == B.length (BT.pending model) /\
+    app_log == TChannel.application_log st /\
+    ST.server_connection_control_not_failed st /\
+    Seq.equal pending (BT.pending model) /\
+    Seq.equal
+      wire_received
+      (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+    Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent)
+
+noextract
+let top_server_channel_io_frame
+  (d:top_server_driver)
+  (ch:IO.channel)
+  (wire_received wire_sent pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st certificate_chain credential_identity channel model committed buffered_len.
+    top_server_channel_io_frame_indexed
+      d ch wire_received wire_sent pending app_log
+      st certificate_chain credential_identity channel model committed buffered_len
+
+noextract
 let top_server_driver_closed
   (d:top_server_driver)
   (st:CS.connection_state)

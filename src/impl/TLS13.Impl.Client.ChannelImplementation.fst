@@ -886,6 +886,153 @@ ghost fn open_channel_invariant
     d st (Ghost.reveal wire_received) (Ghost.reveal wire_sent))
 }
 
+ghost fn open_io_channel
+  (d:DS.client_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.client_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  returns ch:IO.channel
+  ensures
+    IO.is_channel
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent) **
+    DS.client_channel_io_frame
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+{
+  unfold (DS.client_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log));
+  with st channel model committed buffered_len. _;
+  unfold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  let ch = Common.BufferedTCP.open_io_channel channel;
+  fold (DS.client_channel_io_frame_indexed
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_io_frame
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log));
+  ch
+}
+
+ghost fn close_io_channel
+  (d:DS.client_driver)
+  (ch:IO.channel)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    IO.is_channel
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent) **
+    DS.client_channel_io_frame
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  ensures
+    DS.client_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+{
+  unfold (DS.client_channel_io_frame
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log));
+  with st channel model committed buffered_len.
+    assert (DS.client_channel_io_frame_indexed
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+      st
+      channel
+      model
+      committed
+      buffered_len);
+  unfold (DS.client_channel_io_frame_indexed
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  Common.BufferedTCP.close_io_channel channel ch;
+  fold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log))
+}
+
 ghost fn pack_connected_channel_invariant
   (d:DS.client_driver)
   (st:Ghost.erased CS.connection_state)

@@ -7,6 +7,7 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CS = TLS13.Spec.StateMachine
 module DS = TLS13.Impl.Server.Driver.State
+module IO = Common.TCP
 module ST = TLS13.Impl.Server.Types
 module TChannel = TLS13.Impl.Channel
 module CI = Common.ChannelImplementation
@@ -36,6 +37,60 @@ ghost fn open_channel_invariant
       pure (
         ST.server_connection_control_not_failed st /\
         (Ghost.reveal app_log) == TChannel.application_log st)
+
+ghost fn open_io_channel
+  (d:DS.top_server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  returns ch:IO.channel
+  ensures
+    IO.is_channel
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent) **
+    DS.top_server_channel_io_frame
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+
+ghost fn close_io_channel
+  (d:DS.top_server_driver)
+  (ch:IO.channel)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    IO.is_channel
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent) **
+    DS.top_server_channel_io_frame
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  ensures
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
 
 ghost fn open_terminal_invariant
   (d:DS.top_server_driver)

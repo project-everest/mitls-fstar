@@ -138,6 +138,117 @@ let is_buffered
       Seq.equal (pending model) (Seq.slice raw 0 (SZ.v filled)) /\
       received_split received delivered model)
 
+let io_frame
+  (b:t)
+  (ch:TCP.channel)
+  (model:phys_buffer)
+  (received delivered sent:bytes)
+  : slprop =
+  exists* raw filled.
+    V.pts_to b.bt_storage #1.0R raw **
+    Box.pts_to b.bt_filled filled **
+    pure (
+      ch == b.bt_channel /\
+      V.is_full_vec b.bt_storage /\
+      Seq.length raw == SZ.v b.bt_capacity /\
+      SZ.v filled <= SZ.v b.bt_capacity /\
+      buffer_wf model /\
+      capacity model == SZ.v b.bt_capacity /\
+      Seq.equal (pending model) (Seq.slice raw 0 (SZ.v filled)) /\
+      received_split received delivered model)
+
+ghost fn open_io_channel
+  (b:t)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  returns ch:TCP.channel
+  ensures
+    TCP.is_channel
+      ch
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    io_frame
+      b
+      ch
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+{
+  unfold (is_buffered
+    b
+    (Ghost.reveal model)
+    (Ghost.reveal received)
+    (Ghost.reveal delivered)
+    (Ghost.reveal sent));
+  with raw filled. _;
+  fold (io_frame
+    b
+    b.bt_channel
+    (Ghost.reveal model)
+    (Ghost.reveal received)
+    (Ghost.reveal delivered)
+    (Ghost.reveal sent));
+  b.bt_channel
+}
+
+ghost fn close_io_channel
+  (b:t)
+  (ch:TCP.channel)
+  (#model:erased phys_buffer)
+  (#received #delivered #sent:erased bytes)
+  requires
+    TCP.is_channel
+      ch
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    io_frame
+      b
+      ch
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+  ensures
+    is_buffered
+      b
+      (Ghost.reveal model)
+      (Ghost.reveal received)
+      (Ghost.reveal delivered)
+      (Ghost.reveal sent)
+{
+  unfold (io_frame
+    b
+    ch
+    (Ghost.reveal model)
+    (Ghost.reveal received)
+    (Ghost.reveal delivered)
+    (Ghost.reveal sent));
+  with raw filled. _;
+  assert (pure (ch == b.bt_channel));
+  rewrite (TCP.is_channel
+    ch
+    (Ghost.reveal received)
+    (Ghost.reveal sent))
+    as (TCP.is_channel
+      b.bt_channel
+      (Ghost.reveal received)
+      (Ghost.reveal sent));
+  fold (is_buffered
+    b
+    (Ghost.reveal model)
+    (Ghost.reveal received)
+    (Ghost.reveal delivered)
+    (Ghost.reveal sent))
+}
+
 ghost fn recall_model
   (b:t)
   (#model:erased phys_buffer)
