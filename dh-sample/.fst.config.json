@@ -7,10 +7,12 @@
     "--warn_error", "-321-241-272-288",
     "--ext", "optimize_let_vc",
     "--include", "../common",
-    "--include", "spec"
+    "--include", "spec",
+    "--include", "impl"
   ],
   "include_dirs": [
     "../common",
-    "spec"
+    "spec",
+    "impl"
   ]
 }

@@ -1,10 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════
-# DH Sample: Makefile (pure specification milestone)
+# DH Sample: Makefile (pure specification + Pulse implementation)
 # ═══════════════════════════════════════════════════════════════════
 # Uses F* --dep full for proper incremental and parallel builds, exactly
-# like calc_sample.  This milestone verifies only the pure spec modules
-# under spec/ (plus the neutral framework modules under ../common that they
-# depend on).  There is no extraction step yet.
+# like calc_sample.  This verifies both the pure spec modules under spec/
+# and the verified Pulse implementation under impl/ (plus the neutral
+# framework modules under ../common that they depend on).  There is no
+# extraction step yet.
 
 # ── Toolchain ──────────────────────────────────────────────────────
 # Use the same Pulse-capable EverParse/F* toolchain as the root build.
@@ -19,11 +20,13 @@ export PATH := $(Z3_DIR):$(PATH)
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR = _cache
 SPEC_DIR  = spec
+IMPL_DIR  = impl
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include ../common \
-  --include $(SPEC_DIR)
+  --include $(SPEC_DIR) \
+  --include $(IMPL_DIR)
 
 FSTAR_FLAGS = \
   --cache_checked_modules \
@@ -37,14 +40,17 @@ FSTAR_FLAGS = \
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
-# Only the neutral framework modules actually needed by the spec.
+# The neutral framework modules needed by the spec AND the impl.  The impl
+# refines Common.ProtocolImplementation (a Pulse module), so it is added here.
 COMMON_FILES = \
   ../common/Common.StateMachine.fst \
   ../common/Common.WireFormat.fst \
   ../common/Common.WireFormatStateMachine.fst \
-  ../common/Common.TCP.fsti
+  ../common/Common.TCP.fsti \
+  ../common/Common.ProtocolImplementation.fst
 SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES)
+IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
+ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 # ── Main Targets (MUST come before .depend include) ───────────────
 .PHONY: all verify clean check-admits check-forbidden stats help
@@ -69,18 +75,18 @@ $(CACHE_DIR):
 
 # Verify all modules (ALL_CHECKED_FILES is defined in .depend)
 verify: $(ALL_CHECKED_FILES)
-	@echo "✅ All DH sample spec modules verified successfully"
+	@echo "✅ All DH sample spec + impl modules verified successfully"
 
 # ── Admit / forbidden-construct hygiene ────────────────────────────
 check-admits:
 	@echo "Checking for admits/assumes..."
-	@if grep -rn "admit ()\|admit()\|assume val\|assume (\|assert_norm" $(SPEC_DIR) 2>/dev/null; then \
+	@if grep -rn "admit ()\|admit()\|assume val\|assume (\|assert_norm" $(SPEC_DIR) $(IMPL_DIR) 2>/dev/null; then \
 		echo "❌ ERROR: Found admit/assume/assert_norm!"; exit 1; \
 	else echo "✅ None found"; fi
 
 check-forbidden:
 	@echo "Checking that no DY / iso_dh imports are present..."
-	@if grep -rn "DY\.\|dolev-yao\|iso_dh" $(SPEC_DIR) 2>/dev/null; then \
+	@if grep -rn "DY\.\|dolev-yao\|iso_dh" $(SPEC_DIR) $(IMPL_DIR) 2>/dev/null; then \
 		echo "❌ ERROR: Found forbidden dependency!"; exit 1; \
 	else echo "✅ No forbidden DY dependencies"; fi
 
@@ -88,7 +94,8 @@ check-forbidden:
 stats:
 	@echo "=== DH Sample Statistics ==="
 	@echo "Spec files: $(words $(SPEC_FILES))"
-	@wc -l $(SPEC_DIR)/*.fst 2>/dev/null | tail -1 || echo "  0 total"
+	@echo "Impl files: $(words $(IMPL_FILES))"
+	@wc -l $(SPEC_DIR)/*.fst $(IMPL_DIR)/*.fst 2>/dev/null | tail -1 || echo "  0 total"
 
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
@@ -98,7 +105,7 @@ clean:
 
 help:
 	@echo "DH Sample - Makefile targets:"
-	@echo "  make            - Verify all pure spec modules (default)"
+	@echo "  make            - Verify all spec + Pulse impl modules (default)"
 	@echo "  make verify     - Verify all modules (incremental, supports -j)"
 	@echo "  make -j$$(nproc)     - Parallel verification with all available cores"
 	@echo "  make check-admits    - Ensure no admit/assume/assert_norm"
