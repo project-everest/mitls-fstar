@@ -336,10 +336,71 @@ let drive_post
         ep.bse_decide r == Reject error /\
         ep.bse_result_valid e initial r st')
 
-noextract
+inline_for_extraction noextract
 fn drive_until_conclusive
   (#endpoint #state #output #error #result:Type0)
   (ep:buffered_stream_endpoint endpoint state output error result)
+  (process:(
+    e0:endpoint ->
+    st0:Ghost.erased state ->
+    received0:Ghost.erased TCP.bytes ->
+    committed0:Ghost.erased TCP.bytes ->
+    b0:Ghost.erased BT.phys_buffer ->
+      stt (process_outcome output error result)
+        (ep.bse_owns
+          e0
+          (Ghost.reveal st0)
+          (Ghost.reveal received0)
+          (Ghost.reveal committed0)
+          (Ghost.reveal b0))
+        (fun process_result ->
+          process_post
+            ep.bse_decide
+            ep.bse_needs_more
+            ep.bse_result_valid
+            ep.bse_owns
+            ep.bse_terminal
+            ep.bse_buffer_full
+            ep.bse_read_auth
+            e0
+            (Ghost.reveal st0)
+            (Ghost.reveal received0)
+            (Ghost.reveal committed0)
+            (Ghost.reveal b0)
+            process_result)))
+  (read:(
+    e0:endpoint ->
+    st0:Ghost.erased state ->
+    received0:Ghost.erased TCP.bytes ->
+    committed0:Ghost.erased TCP.bytes ->
+    b0:Ghost.erased BT.phys_buffer ->
+      stt unit
+        (ep.bse_read_auth
+           e0
+           (Ghost.reveal st0)
+           (Ghost.reveal received0)
+           (Ghost.reveal committed0)
+           (Ghost.reveal b0) **
+         pure (
+           BT.buffer_wf (Ghost.reveal b0) /\
+           BT.can_read (Ghost.reveal b0) /\
+           ep.bse_needs_more
+             (Ghost.reveal st0)
+             (BT.pending (Ghost.reveal b0))))
+        (fun _ ->
+          exists* received1 b1.
+            ep.bse_owns
+              e0
+              (Ghost.reveal st0)
+              received1
+              (Ghost.reveal committed0)
+              b1 **
+            pure (
+              read_delivers
+                (Ghost.reveal received0)
+                received1
+                (Ghost.reveal b0)
+                b1))))
   (e:endpoint)
   (st:Ghost.erased state)
   (received:Ghost.erased TCP.bytes)

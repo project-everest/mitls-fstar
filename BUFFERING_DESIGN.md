@@ -289,11 +289,11 @@ that this outcome is unreachable: their `bse_buffer_full` predicate is
 
 `drive_until_conclusive` captures the common algorithm:
 
-1. Invoke `bse_process` on the exact current `pending model`.
-2. Return on `Progress`, `Yield`, or `Reject`.
-3. On `NeedMore`, check the caller-supplied fuel.
-4. If fuel is zero, return `DriveExhausted` without reading.
-5. Otherwise consume `bse_read_auth`, perform exactly one `bse_read`, decrement
+1. If fuel is zero, return `DriveExhausted` without reading.
+2. Invoke `bse_process` on the exact current `pending model`.
+3. Return on `Progress`, `Yield`, or `Reject`.
+4. On `NeedMore`, consume `bse_read_auth`, perform exactly one `bse_read`,
+   decrement
    fuel, and return to step 1.
 
 Fuel counts potentially blocking reads, not processing steps. It establishes
@@ -304,27 +304,33 @@ wall-clock termination guarantee.
 
 ### Production specialization
 
-The endpoint class and its logical dictionary are `noextract`. The generic
-`Common.BufferedStream.drive_until_conclusive` is the specification and
-reusable proof pattern. To avoid runtime dictionaries, indirect calls, and
-unwanted generic representations in extracted C, production uses private
-monomorphic loops:
+The endpoint class and its logical dictionary are `noextract`.
+`Common.BufferedStream.drive_until_conclusive` is the single production
+implementation: an `inline_for_extraction noextract` Pulse `while` loop.
 
-- `client_drive` in
-  `TLS13.Impl.Client.Driver.BufferedNetwork.fst`; and
-- `server_drive` in
-  `TLS13.Impl.Server.Driver.BufferedNetwork.fst`.
+The two dictionaries are explicitly typed concrete values:
 
-Each role proves an actual `buffered_stream_endpoint` instance and the
-monomorphic loop is verified against the same `process_post`, transition,
-read-authorization, and drive-outcome predicates. The loops call only that
-role's verified `process` and `read`.
+- `client_endpoint :
+  buffered_stream_endpoint endpoint endpoint_state unit client_status
+  buffered_network_result`; and
+- `server_endpoint :
+  buffered_stream_endpoint endpoint endpoint_state unit server_status
+  buffered_network_result`.
 
-This specialization is an explicit audit point. Review the two short loops
-against `drive_until_conclusive`: the only recursive edge must follow
-`NeedMore -> read`, fuel must decrease only there, and the recursive call must
-receive the post-read ordinary ownership. The extracted C should contain no
-class dictionary or indirect scheduler dispatch.
+F* and KaRaMeL do not reduce effectful function projections from an inlined
+record dictionary reliably: a standalone extraction probe produced residual
+function-pointer calls. The generic function therefore takes `process` and
+`read` as explicit computational arguments in addition to the proof
+dictionary. Each role calls it with its concrete `process` and `read`
+definitions. The dictionary supplies all relational pre/postconditions and
+erases; extraction inlines the loop and substitutes the two computational
+arguments with direct role-specific calls.
+
+The generated client and server C each contain a specialized `while` loop with
+direct calls to `TLS13_Impl_*_Driver_BufferedNetwork_process` and
+`TLS13_Impl_*_Driver_BufferedNetwork_read`. There is no generated endpoint
+dictionary, generic scheduler function, function pointer, or indirect
+dispatch. Source-level scheduling logic nevertheless exists only once.
 
 ## The TLS-specific read warrant
 
@@ -694,10 +700,10 @@ sent'    = sent ++ exact_written_prefix
    complete state/output stuttering.
 5. In client and server `BufferedNetwork.process`, make sure `read_auth`
    contains `needs_more st (BT.pending model)` for the exact current model.
-6. Compare `client_drive` and `server_drive` with the generic loop:
-   - processing is the first operation;
+6. Inspect the single `Common.BufferedStream.drive_until_conclusive` loop:
+   - zero fuel returns without processing or reading;
+   - every positive-fuel iteration processes first;
    - only `NeedMore` reaches `read`;
-   - zero fuel returns without reading;
    - positive fuel decreases exactly once per read;
    - post-read ownership goes back to processing; and
    - all conclusive outcomes return without reading.
@@ -720,7 +726,7 @@ rg "Common\.BufferedTCP\.Internal" \
   src/impl/TLS13.Impl.Client.Driver* \
   src/impl/TLS13.Impl.Server.Driver*
 
-rg "client_drive|server_drive|drive_until_conclusive|bse_read_auth" \
+rg "drive_until_conclusive|client_endpoint|server_endpoint|bse_read_auth" \
   common src/impl
 
 rg "record_prefix_incomplete" src/spec src/impl
@@ -815,13 +821,16 @@ function from bytes to a classification. `process_post` and
 model, committed history, and output resources instead of wrapping a pure
 classifier.
 
-### Higher-order Pulse extraction was unsuitable for the hot path
+### Dictionary projections did not specialize by themselves
 
-An extracted generic class loop risked dictionaries, indirect dispatch, and
-awkward representations. The reusable generic loop remains the protocol proof,
-while small client/server monomorphic loops are verified against the same
-predicates and extract to direct calls. This avoids runtime abstraction cost at
-the price of one explicit structural-equivalence audit.
+A standalone extraction probe first inlined a `while` loop receiving a concrete
+record dictionary with effectful `process` and `read` fields. KaRaMeL retained
+compound record projections and function-pointer calls, even with aggressive
+inlining. Passing the two computational methods explicitly while retaining the
+dictionary for erased proofs produced direct calls under ordinary extraction.
+The production driver uses this shape, giving one verified source loop and
+zero-cost client/server specializations without a structural-equivalence audit
+between duplicated loops.
 
 ### Ghost values could not drive runtime operations
 

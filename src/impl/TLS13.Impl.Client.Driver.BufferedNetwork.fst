@@ -1194,7 +1194,14 @@ fn process_local_event
 }
 
 noextract
-let client_endpoint = {
+let client_endpoint
+  : BS.buffered_stream_endpoint
+      endpoint
+      endpoint_state
+      unit
+      CT.client_status
+      buffered_network_result
+  = {
   BS.bse_decide = decide;
   BS.bse_needs_more = needs_more;
   BS.bse_result_valid = result_valid;
@@ -1205,266 +1212,6 @@ let client_endpoint = {
   BS.bse_owns_wf = owns_wf;
   BS.bse_process = process;
   BS.bse_read = read;
-}
-
-private
-fn rec client_drive
-  (e:endpoint)
-  (st:Ghost.erased endpoint_state)
-  (received:Ghost.erased B.bytes)
-  (committed:Ghost.erased B.bytes)
-  (model:Ghost.erased BT.phys_buffer)
-  (fuel:SZ.t)
-  requires
-    owns
-      e
-      (Ghost.reveal st)
-      (Ghost.reveal received)
-      (Ghost.reveal committed)
-      (Ghost.reveal model)
-  returns outcome:BS.drive_outcome unit CT.client_status buffered_network_result
-  ensures
-    BS.drive_post
-      client_endpoint
-      e
-      (Ghost.reveal st)
-      outcome **
-    pure (SZ.v (BS.drive_fuel_left outcome) <= SZ.v fuel)
-  decreases (SZ.v fuel)
-{
-  if (fuel = 0sz) {
-    rewrite
-      (owns
-        e
-        (Ghost.reveal st)
-        (Ghost.reveal received)
-        (Ghost.reveal committed)
-        (Ghost.reveal model))
-      as
-      (client_endpoint.BS.bse_owns
-        e
-        (Ghost.reveal st)
-        (Ghost.reveal received)
-        (Ghost.reveal committed)
-        (Ghost.reveal model));
-    fold (BS.drive_post
-      client_endpoint
-      e
-      (Ghost.reveal st)
-      BS.DriveExhausted);
-    BS.DriveExhausted
-  } else {
-    assert (pure (0 < SZ.v fuel));
-    owns_wf e st received committed model;
-    let processed = process e st received committed model;
-    match processed {
-      BS.ProcessBufferFull result -> {
-        unfold (BS.process_post
-          decide
-          needs_more
-          result_valid
-          owns
-          terminal
-          buffer_full
-          read_auth
-          e
-          (Ghost.reveal st)
-          (Ghost.reveal received)
-          (Ghost.reveal committed)
-          (Ghost.reveal model)
-          (BS.ProcessBufferFull result));
-        with st'.
-          assert (
-            buffer_full e st' (Ghost.reveal received) **
-            pure (result_valid e (Ghost.reveal st) result st'));
-        rewrite
-          (buffer_full e
-            st'
-            (Ghost.reveal received))
-          as
-          (client_endpoint.BS.bse_buffer_full
-            e
-            st'
-            (Ghost.reveal received));
-        fold (BS.drive_post
-          client_endpoint
-          e
-          (Ghost.reveal st)
-          (BS.DriveBufferFull result fuel));
-        BS.DriveBufferFull result fuel
-      }
-      BS.Processed result decision -> {
-        unfold (BS.process_post
-          decide
-          needs_more
-          result_valid
-          owns
-          terminal
-          buffer_full
-          read_auth
-          e
-          (Ghost.reveal st)
-          (Ghost.reveal received)
-          (Ghost.reveal committed)
-          (Ghost.reveal model)
-          (BS.Processed result decision));
-        match decision {
-          BS.NeedMore -> {
-            with st' committed' model'.
-              assert (
-                read_auth
-                  e
-                  st'
-                  (Ghost.reveal received)
-                  committed'
-                  model' **
-                pure (
-                  needs_more
-                    (Ghost.reveal st)
-                    (BT.pending (Ghost.reveal model)) /\
-                  decision == decide result /\
-                  result_valid e (Ghost.reveal st) result st' /\
-                  BS.process_transition
-                    decision
-                    (Ghost.reveal committed)
-                    committed'
-                    (Ghost.reveal model)
-                    model' /\
-                  st' == Ghost.reveal st /\
-                  BT.can_read (Ghost.reveal model)));
-            lemma_needmore_transition
-              decision
-              (Ghost.reveal committed)
-              committed'
-              (Ghost.reveal model)
-              model';
-            rewrite
-              (read_auth
-                e
-                st'
-                (Ghost.reveal received)
-                committed'
-                model')
-              as
-              (read_auth
-                e
-                (Ghost.reveal st)
-                (Ghost.reveal received)
-                (Ghost.reveal committed)
-                (Ghost.reveal model));
-            read e st received committed model;
-            with received' model'.
-              assert (
-                owns
-                  e
-                  (Ghost.reveal st)
-                  received'
-                  (Ghost.reveal committed)
-                  model' **
-                pure (
-                  BS.read_delivers
-                    (Ghost.reveal received)
-                    received'
-                    (Ghost.reveal model)
-                    model'));
-            let next_fuel = SZ.sub fuel 1sz;
-            assert (pure (SZ.v next_fuel < SZ.v fuel));
-            client_drive
-              e
-              st
-              (Ghost.hide received')
-              committed
-              (Ghost.hide model')
-              next_fuel
-          }
-          BS.Progress consumed -> {
-            with st' committed' model'.
-              assert (
-                owns
-                  e
-                  st'
-                  (Ghost.reveal received)
-                  committed'
-                  model' **
-                pure (result_valid e (Ghost.reveal st) result st'));
-            assert (pure (decide result == BS.Progress consumed));
-            rewrite
-              (owns
-                e
-                st'
-                (Ghost.reveal received)
-                committed'
-                model')
-              as
-              (client_endpoint.BS.bse_owns
-                e
-                st'
-                (Ghost.reveal received)
-                committed'
-                model');
-            fold (BS.drive_post
-              client_endpoint
-              e
-              (Ghost.reveal st)
-              (BS.DriveProgress result consumed fuel));
-            BS.DriveProgress result consumed fuel
-          }
-          BS.Yield consumed output -> {
-            with st' committed' model'.
-              assert (
-                owns
-                  e
-                  st'
-                  (Ghost.reveal received)
-                  committed'
-                  model' **
-                pure (result_valid e (Ghost.reveal st) result st'));
-            assert (pure (decide result == BS.Yield consumed output));
-            rewrite
-              (owns
-                e
-                st'
-                (Ghost.reveal received)
-                committed'
-                model')
-              as
-              (client_endpoint.BS.bse_owns
-                e
-                st'
-                (Ghost.reveal received)
-                committed'
-                model');
-            fold (BS.drive_post
-              client_endpoint
-              e
-              (Ghost.reveal st)
-              (BS.DriveYield result consumed output fuel));
-            BS.DriveYield result consumed output fuel
-          }
-          BS.Reject error -> {
-            with st' received'.
-              assert (
-                terminal e st' received' **
-                pure (result_valid e (Ghost.reveal st) result st'));
-            rewrite
-              (terminal e st' received')
-              as
-              (client_endpoint.BS.bse_terminal
-                e
-                st'
-                received');
-            assert (pure (decide result == BS.Reject error));
-            fold (BS.drive_post
-              client_endpoint
-              e
-              (Ghost.reveal st)
-              (BS.DriveReject result error fuel));
-            BS.DriveReject result error fuel
-          }
-        }
-      }
-    }
-  }
 }
 
 let make_endpoint
@@ -1659,8 +1406,25 @@ fn drive_until_conclusive
     received
     committed
     model);
+  rewrite
+    (owns
+      e
+      (Ghost.reveal st)
+      received
+      committed
+      model)
+    as
+    (client_endpoint.BS.bse_owns
+      e
+      (Ghost.reveal st)
+      received
+      committed
+      model);
   let outcome =
-    client_drive
+    BS.drive_until_conclusive
+      client_endpoint
+      process
+      read
       e
       st
       (Ghost.hide received)
