@@ -2,6 +2,8 @@ module TLS13.Crypto.Spec
 
 module B = TLS13.Bytes
 module T = TLS13.Types
+module Seq = FStar.Seq
+module U8 = FStar.UInt8
 
 type bytes_of_len (n:nat) = B.bytes_of_len n
 
@@ -50,10 +52,54 @@ val lemma_x25519_shared_agreement:
       x25519_shared client_sk server_pub ==
       x25519_shared server_sk client_pub)
 
-val tls13_record_nonce:
-  static_iv:B.bytes ->
-  seq:nat ->
-  Tot aead_nonce
+let nonce_byte (seq:nat) (divisor:pos) : U8.t =
+  U8.uint_to_t ((seq / divisor) % 256)
+
+let byte_at (bytes:B.bytes) (i:nat) : GTot U8.t =
+  if i < B.length bytes then Seq.index bytes i else 0uy
+
+let update_byte
+  (bytes:B.bytes)
+  (i:nat)
+  (value:U8.t)
+  : GTot B.bytes =
+  if i < B.length bytes then Seq.upd bytes i value else bytes
+
+[@@ "opaque_to_smt"]
+let record_nonce_from_bytes
+  (static_iv:B.bytes)
+  (seq4 seq5 seq6 seq7 seq8 seq9 seq10 seq11:U8.t)
+  : GTot (bytes_of_len (B.length static_iv)) =
+  let nonce4 =
+    update_byte static_iv 4 (U8.logxor (byte_at static_iv 4) seq4) in
+  let nonce5 =
+    update_byte nonce4 5 (U8.logxor (byte_at nonce4 5) seq5) in
+  let nonce6 =
+    update_byte nonce5 6 (U8.logxor (byte_at nonce5 6) seq6) in
+  let nonce7 =
+    update_byte nonce6 7 (U8.logxor (byte_at nonce6 7) seq7) in
+  let nonce8 =
+    update_byte nonce7 8 (U8.logxor (byte_at nonce7 8) seq8) in
+  let nonce9 =
+    update_byte nonce8 9 (U8.logxor (byte_at nonce8 9) seq9) in
+  let nonce10 =
+    update_byte nonce9 10 (U8.logxor (byte_at nonce9 10) seq10) in
+  update_byte nonce10 11 (U8.logxor (byte_at nonce10 11) seq11)
+
+[@@ "opaque_to_smt"]
+let tls13_record_nonce
+  (static_iv:B.bytes)
+  (seq:nat)
+  : GTot (bytes_of_len (B.length static_iv)) =
+  record_nonce_from_bytes static_iv
+    (nonce_byte seq 72057594037927936)
+    (nonce_byte seq 281474976710656)
+    (nonce_byte seq 1099511627776)
+    (nonce_byte seq 4294967296)
+    (nonce_byte seq 16777216)
+    (nonce_byte seq 65536)
+    (nonce_byte seq 256)
+    (nonce_byte seq 1)
 
 val chacha20_poly1305_seal:
   key:B.bytes ->

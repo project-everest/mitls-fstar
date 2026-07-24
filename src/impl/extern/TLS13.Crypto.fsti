@@ -172,15 +172,6 @@ fn x25519_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
           pts_to out out_bytes **
           pure (x25519_shared_call 'sk_bytes 'pk_bytes out_bytes ok)
 
-fn tls13_record_nonce (static_iv: array U8.t) (sequence_number: U64.t) (out: array U8.t)
-  requires pts_to static_iv 'iv_bytes **
-           pts_to out 'old **
-           pure (B.length 'iv_bytes == 12 /\ B.length 'old == 12)
-  returns ok: bool
-  ensures pts_to static_iv 'iv_bytes **
-          pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number)) **
-          pure ok
-
 fn chacha20_poly1305_seal
   (key: array U8.t)
   (nonce: array U8.t)

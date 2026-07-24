@@ -90,13 +90,6 @@ void TLS13_Crypto_x25519_public_from_private(
   (void)tls13_hacl_x25519_public_from_private(out, sk);
 }
 
-bool TLS13_Crypto_tls13_record_nonce(
-    uint8_t *static_iv,
-    uint64_t sequence_number,
-    uint8_t *out) {
-  return tls13_record_nonce(out, static_iv, sequence_number);
-}
-
 void TLS13_Crypto_chacha20_poly1305_seal(
     uint8_t *key,
     uint8_t *nonce,

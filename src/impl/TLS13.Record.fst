@@ -10,6 +10,7 @@ module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module C = TLS13.Crypto.Spec
+module Cast = FStar.Int.Cast
 module Crypto = TLS13.Crypto
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
@@ -92,6 +93,135 @@ let lemma_seq_can_advance_fits (seq:U64.t)
   assert (U64.v u64_max == 18446744073709551615);
   assert (U64.v seq < U64.v u64_max);
   assert (U64.v seq + 1 < 18446744073709551616)
+
+let lemma_record_nonce_byte
+  (sequence_number:U64.t)
+  (divisor:U64.t{U64.v divisor > 0})
+  : Lemma
+      (Cast.uint64_to_uint8 (U64.div sequence_number divisor) ==
+       C.nonce_byte (U64.v sequence_number) (U64.v divisor))
+=
+  let actual = Cast.uint64_to_uint8 (U64.div sequence_number divisor) in
+  let expected = C.nonce_byte (U64.v sequence_number) (U64.v divisor) in
+  assert_norm (U8.v actual ==
+    ((U64.v sequence_number / U64.v divisor) % 256));
+  assert_norm (U8.v expected ==
+    ((U64.v sequence_number / U64.v divisor) % 256));
+  U8.v_inj actual expected
+
+let lemma_record_nonce_from_machine_bytes
+  (static_iv:B.bytes)
+  (sequence_number:U64.t)
+  : Lemma
+      (requires True)
+      (ensures C.record_nonce_from_bytes static_iv
+        (Cast.uint64_to_uint8 (U64.div sequence_number 72057594037927936UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 281474976710656UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 1099511627776UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 4294967296UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 16777216UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 65536UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 256UL))
+        (Cast.uint64_to_uint8 sequence_number) ==
+       C.tls13_record_nonce static_iv (U64.v sequence_number))
+=
+  lemma_record_nonce_byte sequence_number 72057594037927936UL;
+  lemma_record_nonce_byte sequence_number 281474976710656UL;
+  lemma_record_nonce_byte sequence_number 1099511627776UL;
+  lemma_record_nonce_byte sequence_number 4294967296UL;
+  lemma_record_nonce_byte sequence_number 16777216UL;
+  lemma_record_nonce_byte sequence_number 65536UL;
+  lemma_record_nonce_byte sequence_number 256UL;
+  lemma_record_nonce_byte sequence_number 1UL;
+  assert_norm (
+    C.tls13_record_nonce static_iv (U64.v sequence_number) ==
+    C.record_nonce_from_bytes static_iv
+      (C.nonce_byte (U64.v sequence_number) 72057594037927936)
+      (C.nonce_byte (U64.v sequence_number) 281474976710656)
+      (C.nonce_byte (U64.v sequence_number) 1099511627776)
+      (C.nonce_byte (U64.v sequence_number) 4294967296)
+      (C.nonce_byte (U64.v sequence_number) 16777216)
+      (C.nonce_byte (U64.v sequence_number) 65536)
+      (C.nonce_byte (U64.v sequence_number) 256)
+      (C.nonce_byte (U64.v sequence_number) 1));
+  assert (
+    C.record_nonce_from_bytes static_iv
+      (Cast.uint64_to_uint8 (U64.div sequence_number 72057594037927936UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 281474976710656UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 1099511627776UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 4294967296UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 16777216UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 65536UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 256UL))
+      (Cast.uint64_to_uint8 sequence_number) ==
+    C.record_nonce_from_bytes static_iv
+      (C.nonce_byte (U64.v sequence_number) 72057594037927936)
+      (C.nonce_byte (U64.v sequence_number) 281474976710656)
+      (C.nonce_byte (U64.v sequence_number) 1099511627776)
+      (C.nonce_byte (U64.v sequence_number) 4294967296)
+      (C.nonce_byte (U64.v sequence_number) 16777216)
+      (C.nonce_byte (U64.v sequence_number) 65536)
+      (C.nonce_byte (U64.v sequence_number) 256)
+      (C.nonce_byte (U64.v sequence_number) 1))
+
+inline_for_extraction
+fn xor_nonce_byte
+  (out: array U8.t)
+  (idx: SZ.t{SZ.v idx < length out})
+  (value: U8.t)
+  requires pts_to out 'bytes
+  ensures pts_to out
+    (C.update_byte 'bytes (SZ.v idx)
+      (U8.logxor (C.byte_at 'bytes (SZ.v idx)) value))
+{
+  pts_to_len out;
+  let current = out.(idx);
+  out.(idx) <- U8.logxor current value;
+}
+
+fn tls13_record_nonce
+  (static_iv: array U8.t)
+  (sequence_number: U64.t)
+  (out: array U8.t)
+  requires pts_to static_iv 'iv_bytes **
+           pts_to out 'old **
+           pure (B.length 'iv_bytes == 12 /\ B.length 'old == 12)
+  returns ok: bool
+  ensures pts_to static_iv 'iv_bytes **
+          pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number)) **
+          pure ok
+{
+  pts_to_len static_iv;
+  pts_to_len out;
+  Arr.memcpy 12sz static_iv out;
+
+  let seq4 = Cast.uint64_to_uint8 (U64.div sequence_number 72057594037927936UL);
+  let seq5 = Cast.uint64_to_uint8 (U64.div sequence_number 281474976710656UL);
+  let seq6 = Cast.uint64_to_uint8 (U64.div sequence_number 1099511627776UL);
+  let seq7 = Cast.uint64_to_uint8 (U64.div sequence_number 4294967296UL);
+  let seq8 = Cast.uint64_to_uint8 (U64.div sequence_number 16777216UL);
+  let seq9 = Cast.uint64_to_uint8 (U64.div sequence_number 65536UL);
+  let seq10 = Cast.uint64_to_uint8 (U64.div sequence_number 256UL);
+  let seq11 = Cast.uint64_to_uint8 sequence_number;
+
+  xor_nonce_byte out 4sz seq4;
+  xor_nonce_byte out 5sz seq5;
+  xor_nonce_byte out 6sz seq6;
+  xor_nonce_byte out 7sz seq7;
+  xor_nonce_byte out 8sz seq8;
+  xor_nonce_byte out 9sz seq9;
+  xor_nonce_byte out 10sz seq10;
+  xor_nonce_byte out 11sz seq11;
+
+  with out_bytes. assert (pts_to out out_bytes);
+  assert_norm (out_bytes ==
+    C.record_nonce_from_bytes 'iv_bytes
+      seq4 seq5 seq6 seq7 seq8 seq9 seq10 seq11);
+  lemma_record_nonce_from_machine_bytes 'iv_bytes sequence_number;
+  rewrite (pts_to out out_bytes) as
+    (pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number)));
+  true
+}
 
 fn can_advance_seq (st: record_state)
   requires is_record_state st 's
@@ -370,7 +500,7 @@ fn seal_application
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
     Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
     V.to_vec_pts_to st.key;
@@ -446,7 +576,7 @@ fn seal_application_no_update
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
     Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
     V.to_vec_pts_to st.key;
@@ -533,7 +663,7 @@ fn seal_application_runtime
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
     Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
     V.to_vec_pts_to st.key;
@@ -595,7 +725,7 @@ fn open_application
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
     let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
     V.to_vec_pts_to st.key;
@@ -666,7 +796,7 @@ fn peek_open_application
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
     let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
     V.to_vec_pts_to st.key;
@@ -829,7 +959,7 @@ fn open_application_runtime
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
     let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
     V.to_vec_pts_to st.key;

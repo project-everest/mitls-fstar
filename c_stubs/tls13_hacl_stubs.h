@@ -43,8 +43,6 @@ bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]
 
 bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8_t pk[32]);
 
-bool tls13_record_nonce(uint8_t out[12], const uint8_t static_iv[12], uint64_t sequence_number);
-
 bool tls13_hacl_chacha20_poly1305_seal_combined(
     uint8_t *ciphertext_and_tag,
     size_t ciphertext_and_tag_len,

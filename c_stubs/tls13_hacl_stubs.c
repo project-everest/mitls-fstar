@@ -1,8 +1,8 @@
 #include "tls13_hacl_stubs.h"
 
 #include <limits.h>
-#include <stdatomic.h>
 #include <string.h>
+#include <threads.h>
 
 #include "Hacl_AEAD_Chacha20Poly1305.h"
 #if TLS13_HACL_HAS_SIMD256
@@ -41,29 +41,10 @@ static uint8_t *write_ptr(uint8_t *p, size_t len) {
 }
 
 #if TLS13_HACL_HAS_ACCEL
-static atomic_uint tls13_hacl_accel_init_state = ATOMIC_VAR_INIT(0);
+static once_flag tls13_hacl_accel_init_once = ONCE_FLAG_INIT;
 
 static void tls13_hacl_init_acceleration(void) {
-  unsigned int state =
-      atomic_load_explicit(&tls13_hacl_accel_init_state, memory_order_acquire);
-  if (state == 2) {
-    return;
-  }
-
-  unsigned int expected = 0;
-  if (atomic_compare_exchange_strong_explicit(
-          &tls13_hacl_accel_init_state,
-          &expected,
-          1,
-          memory_order_acq_rel,
-          memory_order_acquire)) {
-    EverCrypt_AutoConfig2_init();
-    atomic_store_explicit(&tls13_hacl_accel_init_state, 2, memory_order_release);
-    return;
-  }
-
-  while (atomic_load_explicit(&tls13_hacl_accel_init_state, memory_order_acquire) != 2) {
-  }
+  call_once(&tls13_hacl_accel_init_once, EverCrypt_AutoConfig2_init);
 }
 #endif
 
@@ -229,18 +210,6 @@ bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8
 #else
   return Hacl_Curve25519_51_ecdh(out, (uint8_t *)sk, (uint8_t *)pk);
 #endif
-}
-
-bool tls13_record_nonce(uint8_t out[12], const uint8_t static_iv[12], uint64_t sequence_number) {
-  if (out == NULL || static_iv == NULL) {
-    return false;
-  }
-  memcpy(out, static_iv, 12);
-  for (size_t i = 0; i < 8; ++i) {
-    uint8_t seq_byte = (uint8_t)(sequence_number >> (56 - 8 * i));
-    out[4 + i] ^= seq_byte;
-  }
-  return true;
 }
 
 bool tls13_hacl_chacha20_poly1305_seal_combined(
