@@ -53,7 +53,7 @@ IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 # ── Main Targets (MUST come before .depend include) ───────────────
-.PHONY: all verify verify-symbolic-lift clean check-admits check-forbidden check-symbolic-forbidden stats help
+.PHONY: all verify verify-symbolic-lift verify-symbolic-invariant clean check-admits check-forbidden check-symbolic-forbidden stats help
 
 all: verify
 
@@ -112,6 +112,7 @@ help:
 	@echo "  make            - Verify everything: DY-free spec + Pulse impl + symbolic system (default)"
 	@echo "  make verify     - Verify all modules incl. the symbolic composed-system simulation (supports -j)"
 	@echo "  make verify-symbolic-lift - Verify only the symbolic development (DY* core)"
+	@echo "  make verify-symbolic-invariant - Verify the protocol_invariants / product_invariant milestone"
 	@echo "  make -j$$(nproc)     - Parallel verification with all available cores"
 	@echo "  make check-admits    - Ensure no admit/assume/assert_norm in spec/impl"
 	@echo "  make check-forbidden - Ensure DY-free spec/impl has no DY/iso_dh dependency"
@@ -200,6 +201,17 @@ $(SYM_CACHE_DIR)/%.checked: | $(SYM_CACHE_DIR)
 # incrementally and in parallel (supports -j).
 verify-symbolic-lift: $(SYMBOLIC_CHECKED_FILES)
 	@echo "✅ DH sample symbolic lifting milestone verified successfully"
+
+# The SECOND symbolic milestone: verify the protocol-specific DY* CORE
+# `protocol_invariants` instance and the combined coherence + trace-invariant
+# development (DH.Sample.Symbolic.Invariant), on top of Terms/Product/Lifting/
+# Provenance.  This is the module that installs `product_invariant`, proves
+# `product_step_preserves_invariant` (the case-exhaustive one-step
+# preservation theorem) and the reachable-state theorem.  Depends on the same
+# incremental `.checked` cache as `verify-symbolic-lift`, so it only pays for
+# the ONE extra module when the rest is already up to date.
+verify-symbolic-invariant: check-admits check-symbolic-forbidden $(SYM_CACHE_DIR)/DH.Sample.Symbolic.Invariant.fst.checked
+	@echo "✅ DH sample symbolic protocol-invariant milestone verified successfully"
 
 # Guard: the symbolic development may use DY* core but never a DY* example.
 check-symbolic-forbidden:
