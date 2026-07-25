@@ -616,6 +616,23 @@ fn process_application_data
   assert (pure (ST.server_end_to_end_invariant
     (CM.received_application_data_state 'st0 (Ghost.reveal app_payload) (Ghost.reveal 'raw_bytes))));
 
+  assert (pure (SZ.v resp.ST.network_out_len == B.length B.empty));
+  assert (pure (SZ.v resp.ST.app_out_len <= B.length app_out_bytes));
+  Seq.lemma_eq_elim B.empty (ST.response_network_out resp 'old_network_out);
+  assert (pure (Seq.equal
+    (ST.response_network_out resp 'old_network_out)
+    B.empty));
+  Seq.lemma_eq_elim
+    (Ghost.reveal app_payload)
+    (ST.response_app_out resp app_out_bytes);
+  CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+  Seq.lemma_eq_elim
+    (Ghost.reveal app_payload)
+    (CL.concat_bytes [Ghost.reveal app_payload]);
+  assert (pure (ST.response_app_out_matches_event
+    resp
+    (ST.received_message_event (M.TlsApplicationData (Ghost.reveal app_payload)))
+    app_out_bytes));
   assert (pure (ST.legal_response_for_event
     'st0
     (CM.received_application_data_state 'st0 (Ghost.reveal app_payload) (Ghost.reveal 'raw_bytes))
