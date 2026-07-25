@@ -427,6 +427,32 @@ val parse_record_wire:
   input:B.bytes ->
   GTot (option (T.content_type & M.sealed_record & nat))
 
+(**
+  The exact streaming condition under which another transport read is
+  warranted: either the five-byte record header is incomplete, or a valid,
+  bounded header is present but its declared fragment has not fully arrived.
+  Malformed complete headers do not satisfy this predicate.
+**)
+let record_prefix_incomplete (input:B.bytes) : GTot prop =
+  if B.length input < 5 then
+    True
+  else
+    let b0 = Seq.index input 0 in
+    let b1 = Seq.index input 1 in
+    let b2 = Seq.index input 2 in
+    let fragment_len = read_u16 input 3 in
+    b1 == 0x03uy /\
+    (b2 == 0x03uy \/ (b0 == 0x16uy /\ b2 == 0x01uy)) /\
+    fragment_len <= 16640 /\
+    (b0 == 0x14uy \/ b0 == 0x15uy \/ b0 == 0x16uy \/ b0 == 0x17uy) /\
+    B.length input < 5 + fragment_len
+
+val lemma_record_prefix_incomplete_bound:
+  input:B.bytes ->
+  Lemma
+    (requires record_prefix_incomplete input)
+    (ensures B.length input < 5 + 16640)
+
 val lemma_parse_record_implies_parse_record_wire:
   input:B.bytes ->
   Lemma

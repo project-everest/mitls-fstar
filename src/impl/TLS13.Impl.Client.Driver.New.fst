@@ -7,7 +7,9 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
+module BT = Common.BufferedTCP
 module C = TLS13.Impl.Client
+module CI = Common.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
@@ -90,6 +92,8 @@ fn new_client_with_auth_config
   let progress =
     MR.alloc #_ #(EC.client_progress_preorder #CTypes.client_local_event) (Ghost.reveal initial);
   MR.take_snapshot progress (Ghost.reveal initial);
+  let tcp_history =
+    MR.alloc #_ #CI.io_history_preorder (wire_history B.empty B.empty);
   let c =
     C.new_client
       server_name
@@ -106,9 +110,10 @@ fn new_client_with_auth_config
       c
       (Ghost.reveal initial));
   let channel = Box.alloc no_channel;
-  let buffered_len = Box.alloc 0sz;
+  let storage = BT.alloc_storage driver_rx_capacity;
+  with storage_model.
+    assert (BT.is_storage storage storage_model);
   let empty_payload = V.alloc 0uy 0sz;
-  let raw = V.alloc 0uy driver_rx_capacity;
   let network_out = V.alloc 0uy driver_network_out_capacity;
   let auth_leaf_der = V.alloc 0uy driver_auth_leaf_der_capacity;
   let auth_payload = V.alloc 0uy driver_public_key_payload_capacity;
@@ -127,17 +132,17 @@ fn new_client_with_auth_config
     client_driver_initial = initial;
     client_driver_auth = auth;
     client_driver_channel = channel;
-    client_driver_buffered_len = buffered_len;
+    client_driver_storage = storage;
+    client_driver_tcp_history = tcp_history;
     client_driver_empty_payload = empty_payload;
-    client_driver_raw = raw;
-        client_driver_network_out = network_out;
-        client_driver_auth_leaf_der = auth_leaf_der;
-        client_driver_auth_payload = auth_payload;
-        client_driver_auth_cv_input = auth_cv_input;
-        client_driver_auth_signature = auth_signature;
-        client_driver_app_out = app_out;
-        client_driver_local_app_out = local_app_out;
-      };
+    client_driver_network_out = network_out;
+    client_driver_auth_leaf_der = auth_leaf_der;
+    client_driver_auth_payload = auth_payload;
+    client_driver_auth_cv_input = auth_cv_input;
+    client_driver_auth_signature = auth_signature;
+    client_driver_app_out = app_out;
+    client_driver_local_app_out = local_app_out;
+  };
       rewrite
          (MR.pts_to progress #1.0R (Ghost.reveal initial))
          as
@@ -161,16 +166,14 @@ fn new_client_with_auth_config
            d.client_driver_progress
            (Ghost.reveal d.client_driver_initial));
       fold (client_driver_canonical_progress d (Ghost.reveal initial));
+      rewrite (MR.pts_to tcp_history #1.0R (wire_history B.empty B.empty)) as
+         (MR.pts_to d.client_driver_tcp_history #1.0R (wire_history B.empty B.empty));
       rewrite (Box.pts_to channel no_channel) as
          (Box.pts_to d.client_driver_channel no_channel);
-      rewrite (Box.pts_to buffered_len 0sz) as
-        (Box.pts_to d.client_driver_buffered_len 0sz);
+      rewrite (BT.is_storage storage storage_model) as
+        (BT.is_storage d.client_driver_storage storage_model);
       rewrite (V.pts_to empty_payload #1.0R (Seq.create 0 0uy)) as
         (V.pts_to d.client_driver_empty_payload #1.0R (Seq.create 0 0uy));
-      rewrite
-        (V.pts_to raw #1.0R (Seq.create (SZ.v driver_rx_capacity) 0uy))
-        as
-        (V.pts_to d.client_driver_raw #1.0R (Seq.create (SZ.v driver_rx_capacity) 0uy));
       rewrite
         (V.pts_to network_out #1.0R (Seq.create (SZ.v driver_network_out_capacity) 0uy))
         as
@@ -208,7 +211,18 @@ fn new_client_with_auth_config
           d.client_driver_client
           (Ghost.reveal initial));
       rewrite (O.is_auth_context auth) as (O.is_auth_context d.client_driver_auth);
-      fold (client_driver_buffers d B.empty 0sz);
+      fold (client_driver_buffers d);
+      assert (pure (Ghost.reveal initial ==
+        CS.initial
+          (CR.configured_connection_config
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds)));
+      establish_initial_wire_logs_match
+        (CR.configured_connection_config
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds);
       assert (pure (client_driver_wire_logs_match
         (Ghost.reveal initial)
         B.empty
@@ -217,6 +231,21 @@ fn new_client_with_auth_config
         0sz));
       assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_received));
       assert (pure (Seq.equal B.empty (Ghost.reveal initial).CS.cs_wire_log.CL.raw_sent));
+      Seq.lemma_eq_elim
+        B.empty
+        (Ghost.reveal initial).CS.cs_wire_log.CL.raw_received;
+      Seq.lemma_eq_elim
+        B.empty
+        (Ghost.reveal initial).CS.cs_wire_log.CL.raw_sent;
+      CT.lemma_initial_client_end_to_end_invariant
+        (CR.configured_connection_config
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds);
+      assert (pure (CT.client_end_to_end_invariant
+        (Ghost.reveal initial)));
+      assert (pure (CP.client_initial_wire_logs_empty
+        (Ghost.reveal initial)));
       assert (pure (CP.client_invariant_pure
         (Ghost.reveal initial)
         B.empty

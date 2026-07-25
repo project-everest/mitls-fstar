@@ -71,8 +71,6 @@ static int driver_fail_status(
   return 1;
 }
 
-/* abort has no application-ready precondition, so it is the only safe cleanup
- * operation after a non-retryable verified workflow status. */
 static void abort_connected_driver(tls13_client_driver *driver) {
   if (driver != NULL && driver->connected) {
     TLS13_Impl_Client_Driver_abort(driver->verified_driver);
@@ -257,9 +255,7 @@ int tls13_client_driver_send_application_data(
      * single-record (<=16384 byte) chunks. */
     return 1;
   }
-  /* Any other non-Ok status is a real protocol failure: release the
-   * transport rather than leaving the C wrapper marked connected. */
-  abort_connected_driver(driver);
+  driver->connected = false;
   return 1;
 }
 
@@ -269,11 +265,6 @@ static bool receive_status_is_retryable(
          status == TLS13_Impl_Client_Driver_State_DriverWorkflowExhausted ||
          status ==
              TLS13_Impl_Client_Driver_State_DriverWorkflowOutputBufferTooSmall;
-}
-
-static bool receive_status_is_closed(
-    TLS13_Impl_Client_Driver_driver_workflow_status status) {
-  return status == TLS13_Impl_Client_Driver_State_DriverWorkflowClosed;
 }
 
 int tls13_client_driver_receive_application_data(
@@ -310,14 +301,7 @@ int tls13_client_driver_receive_application_data(
      * bounded-progress outcomes, so callers may retry. */
     return 1;
   }
-  if (receive_status_is_closed(result.client_receive_status)) {
-    /* A peer close_notify reaches ControlClosed.  Release the still-owned TCP
-     * transport rather than leaving the C wrapper marked connected. */
-    abort_connected_driver(driver);
-    return 1;
-  }
-  /* StepFailed (and any future unknown status) is non-retryable. */
-  abort_connected_driver(driver);
+  driver->connected = false;
   return 1;
 }
 

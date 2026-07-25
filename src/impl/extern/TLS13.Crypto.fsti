@@ -77,44 +77,48 @@ fn hkdf_extract (salt: array U8.t) (salt_len: SZ.t) (ikm: array U8.t) (ikm_len: 
           pts_to ikm 'ikm_bytes **
           pts_to out (C.hkdf_extract 'salt_bytes 'ikm_bytes)
 
-fn hkdf_expand_label
+(** The only external HKDF-expand boundary. The erased label and context
+    witnesses pin the concrete info buffer to the verified HkdfLabel encoding
+    without adding label-specific arguments to the extracted ABI. *)
+fn hkdf_expand
   (secret: array U8.t)
-  (lbl: array U8.t)
-  (label_len: SZ.t)
-  (context: array U8.t)
-  (context_len: SZ.t)
+  (info: array U8.t)
+  (info_len: SZ.t)
   (out: array U8.t)
   (out_len: SZ.t)
+  (#lbl: erased B.bytes)
+  (#context: erased B.bytes)
   requires pts_to secret 'secret_bytes **
-           pts_to lbl 'label_bytes **
-           pts_to context 'context_bytes **
-           pts_to out 'old **
-           pure (B.length 'secret_bytes == 32 /\
-                 B.length 'label_bytes == SZ.v label_len /\
-                 B.length 'context_bytes == SZ.v context_len /\
-                 B.length 'old == SZ.v out_len)
-  ensures pts_to secret 'secret_bytes **
-          pts_to lbl 'label_bytes **
-          pts_to context 'context_bytes **
-          pure (B.length (C.hkdf_expand_label 'secret_bytes 'label_bytes 'context_bytes (SZ.v out_len)) == SZ.v out_len) **
-          pts_to out (C.hkdf_expand_label 'secret_bytes 'label_bytes 'context_bytes (SZ.v out_len))
-
-fn hkdf_expand_label_empty_context
-  (secret: array U8.t)
-  (lbl: array U8.t)
-  (label_len: SZ.t)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires pts_to secret 'secret_bytes **
-          pts_to lbl 'label_bytes **
+          pts_to info 'info_bytes **
           pts_to out 'old **
           pure (B.length 'secret_bytes == 32 /\
-                B.length 'label_bytes == SZ.v label_len /\
-                B.length 'old == SZ.v out_len)
+                B.length 'info_bytes == 520 /\
+                B.length 'old == SZ.v out_len /\
+                B.length (Ghost.reveal lbl) <= 249 /\
+                B.length (Ghost.reveal context) <= 255 /\
+                SZ.v out_len <= 8160 /\
+                SZ.v info_len ==
+                  C.hkdf_label_info_length
+                    (Ghost.reveal lbl)
+                    (Ghost.reveal context) /\
+                'info_bytes ==
+                  C.hkdf_label_info_buffer
+                    (Ghost.reveal lbl)
+                    (Ghost.reveal context)
+                    (SZ.v out_len))
   ensures pts_to secret 'secret_bytes **
-          pts_to lbl 'label_bytes **
-          pure (B.length (C.hkdf_expand_label 'secret_bytes 'label_bytes B.empty (SZ.v out_len)) == SZ.v out_len) **
-          pts_to out (C.hkdf_expand_label 'secret_bytes 'label_bytes B.empty (SZ.v out_len))
+          pts_to info 'info_bytes **
+          pure (B.length
+                 (C.hkdf_expand_label
+                   'secret_bytes
+                   (Ghost.reveal lbl)
+                   (Ghost.reveal context)
+                   (SZ.v out_len)) == SZ.v out_len) **
+          pts_to out (C.hkdf_expand_label
+                       'secret_bytes
+                       (Ghost.reveal lbl)
+                       (Ghost.reveal context)
+                       (SZ.v out_len))
 
 fn x25519_public_from_private (sk: array U8.t) (out: array U8.t)
   requires pts_to sk 'sk_bytes **
@@ -171,15 +175,6 @@ fn x25519_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
           pts_to pk 'pk_bytes **
           pts_to out out_bytes **
           pure (x25519_shared_call 'sk_bytes 'pk_bytes out_bytes ok)
-
-fn tls13_record_nonce (static_iv: array U8.t) (sequence_number: U64.t) (out: array U8.t)
-  requires pts_to static_iv 'iv_bytes **
-           pts_to out 'old **
-           pure (B.length 'iv_bytes == 12 /\ B.length 'old == 12)
-  returns ok: bool
-  ensures pts_to static_iv 'iv_bytes **
-          pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number)) **
-          pure ok
 
 fn chacha20_poly1305_seal
   (key: array U8.t)

@@ -34,19 +34,10 @@ void TLS13_Crypto_hkdf_extract(
     size_t ikm_len,
     uint8_t *out);
 
-void TLS13_Crypto_hkdf_expand_label(
+void TLS13_Crypto_hkdf_expand(
     uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
-    uint8_t *context,
-    size_t context_len,
-    uint8_t *out,
-    size_t out_len);
-
-void TLS13_Crypto_hkdf_expand_label_empty_context(
-    uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
+    uint8_t *info,
+    size_t info_len,
     uint8_t *out,
     size_t out_len);
 
@@ -57,11 +48,6 @@ bool TLS13_Crypto_x25519_shared_runtime(
 
 void TLS13_Crypto_x25519_public_from_private(
     uint8_t *sk,
-    uint8_t *out);
-
-bool TLS13_Crypto_tls13_record_nonce(
-    uint8_t *static_iv,
-    uint64_t sequence_number,
     uint8_t *out);
 
 void TLS13_Crypto_chacha20_poly1305_seal(

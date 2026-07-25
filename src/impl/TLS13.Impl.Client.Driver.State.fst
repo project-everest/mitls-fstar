@@ -6,9 +6,11 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module BT = Common.BufferedTCP
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
+module CPI = Common.ProtocolImplementation
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -140,22 +142,25 @@ let client_driver_send_correct
   (sent:B.bytes)
   (sent':B.bytes)
   : prop =
-  if status == DriverWorkflowPayloadTooLarge
-  then
-    st1 == st0 /\
-    Seq.equal sent' sent /\
-    client_driver_payload_too_large payload
-  else
-    exists resp.
-      client_driver_local_write_correct
-        st0
-        st1
-        resp
-        CT.LocalSendApplicationData
-        payload
-        sent
-        sent' /\
-      client_driver_send_status_correct status resp
+  (if status == DriverWorkflowPayloadTooLarge
+   then
+     st1 == st0 /\
+     Seq.equal sent' sent /\
+     client_driver_payload_too_large payload
+   else
+     exists resp.
+       client_driver_local_write_correct
+         st0
+         st1
+         resp
+         CT.LocalSendApplicationData
+         payload
+         sent
+         sent' /\
+       client_driver_send_status_correct status resp) /\
+  Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    st0.CS.cs_wire_log.CL.raw_received
 
 noextract
 let client_driver_close_status_correct
@@ -312,10 +317,10 @@ noeq type client_driver = {
   client_driver_progress: MR.mref (EC.client_progress_preorder #CTypes.client_local_event);
   client_driver_initial: Ghost.erased EC.client_initial_state;
   client_driver_auth: O.auth_context;
-  client_driver_channel: Box.box (option IO.channel);
-  client_driver_buffered_len: Box.box SZ.t;
+  client_driver_channel: Box.box (option BT.t);
+  client_driver_storage: BT.storage;
+  client_driver_tcp_history: MR.mref CI.io_history_preorder;
   client_driver_empty_payload: V.vec U8.t;
-  client_driver_raw: V.vec U8.t;
   client_driver_network_out: V.vec U8.t;
   client_driver_auth_leaf_der: V.vec U8.t;
   client_driver_auth_payload: V.vec U8.t;
@@ -334,92 +339,62 @@ let client_driver_canonical (d:client_driver) : CP.canonical_client = {
 
 noeq type driver = {
   driver_client: C.client;
-  driver_channel: IO.channel;
+  driver_channel: BT.t;
+  driver_storage: BT.storage;
+  driver_tcp_history: MR.mref CI.io_history_preorder;
   driver_progress: MR.mref (EC.client_progress_preorder #CTypes.client_local_event);
   driver_initial: Ghost.erased EC.client_initial_state;
 }
 
-let lemma_read_append_buffer_matches_raw_prefix_index
-  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
-  (current_len read_len total_len:nat)
-  (k:nat { k < total_len })
-  : Lemma
-    (requires
-      B.length buffered == current_len /\
-      B.length read_chunk == read_len /\
-      B.length raw >= current_len /\
-      B.length raw_tail_after >= read_len /\
-      B.length raw_after_read >= total_len /\
-      total_len == current_len + read_len /\
-      Seq.equal buffered (Seq.slice raw 0 current_len) /\
-      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
-      (forall (i:nat). i < current_len ==>
-        Seq.index raw_after_read i == Seq.index raw i) /\
-      (forall (i:nat). i < read_len ==>
-        Seq.index raw_after_read (current_len + i) ==
-        Seq.index raw_tail_after i))
-    (ensures
-      Seq.index (B.append buffered read_chunk) k ==
-      Seq.index (Seq.slice raw_after_read 0 total_len) k)
-  =
-  Seq.lemma_eq_elim buffered (Seq.slice raw 0 current_len);
-  Seq.lemma_eq_elim read_chunk (Seq.slice raw_tail_after 0 read_len);
-  Seq.lemma_len_slice raw_after_read 0 total_len;
-  if k < current_len then (
-    Seq.lemma_index_app1 buffered read_chunk k;
-    Seq.lemma_index_slice raw 0 current_len k;
-    Seq.lemma_index_slice raw_after_read 0 total_len k
-  ) else (
-    assert (current_len <= k);
-    assert (k - current_len < read_len);
-    assert (current_len + (k - current_len) == k);
-    Seq.lemma_index_app2 buffered read_chunk k;
-    Seq.lemma_index_slice raw_tail_after 0 read_len (k - current_len);
-    Seq.lemma_index_slice raw_after_read 0 total_len k
-  )
+noeq type buffered_driver = {
+  buffered_driver_client: C.client;
+  buffered_driver_channel: BT.t;
+  buffered_driver_storage: BT.storage;
+  buffered_driver_tcp_history: MR.mref CI.io_history_preorder;
+  buffered_driver_progress:
+    MR.mref (EC.client_progress_preorder #CTypes.client_local_event);
+  buffered_driver_initial: Ghost.erased EC.client_initial_state;
+}
 
-let lemma_read_append_buffer_matches_raw_prefix
-  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
-  (current_len read_len total_len:nat)
-  : Lemma
-    (requires
-      B.length buffered == current_len /\
-      B.length read_chunk == read_len /\
-      B.length raw >= current_len /\
-      B.length raw_tail_after >= read_len /\
-      B.length raw_after_read >= total_len /\
-      total_len == current_len + read_len /\
-      Seq.equal buffered (Seq.slice raw 0 current_len) /\
-      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
-      (forall (i:nat). i < current_len ==>
-        Seq.index raw_after_read i == Seq.index raw i) /\
-      (forall (i:nat). i < read_len ==>
-        Seq.index raw_after_read (current_len + i) ==
-        Seq.index raw_tail_after i))
-    (ensures
-      Seq.equal (B.append buffered read_chunk)
-        (Seq.slice raw_after_read 0 total_len))
-  =
-  Seq.lemma_len_append buffered read_chunk;
-  Seq.lemma_len_slice raw_after_read 0 total_len;
-  let index_proof (k:nat { k < Seq.length (B.append buffered read_chunk) })
-    : Lemma
-      (Seq.index (B.append buffered read_chunk) k ==
-       Seq.index (Seq.slice raw_after_read 0 total_len) k)
-    =
-    lemma_read_append_buffer_matches_raw_prefix_index
-      raw_after_read raw raw_tail_after buffered read_chunk
-      current_len read_len total_len k
-  in
-  FStar.Classical.forall_intro
-    #(k:nat { k < Seq.length (B.append buffered read_chunk) })
-    #(fun k ->
-      Seq.index (B.append buffered read_chunk) k ==
-      Seq.index (Seq.slice raw_after_read 0 total_len) k)
-    index_proof;
-  Seq.lemma_eq_intro
-    (B.append buffered read_chunk)
-    (Seq.slice raw_after_read 0 total_len)
+inline_for_extraction
+let driver_as_buffered (d:driver) : buffered_driver =
+  {
+    buffered_driver_client = d.driver_client;
+    buffered_driver_channel = d.driver_channel;
+    buffered_driver_storage = d.driver_storage;
+    buffered_driver_tcp_history = d.driver_tcp_history;
+    buffered_driver_progress = d.driver_progress;
+    buffered_driver_initial = d.driver_initial;
+  }
+
+noeq type top_buffered_driver = {
+  top_buffered_driver_core: buffered_driver;
+  top_buffered_driver_auth: O.auth_context;
+}
+
+inline_for_extraction
+let client_buffered_driver
+  (d:client_driver)
+  (channel:BT.t)
+  : buffered_driver =
+  {
+    buffered_driver_client = d.client_driver_client;
+    buffered_driver_channel = channel;
+    buffered_driver_storage = d.client_driver_storage;
+    buffered_driver_tcp_history = d.client_driver_tcp_history;
+    buffered_driver_progress = d.client_driver_progress;
+    buffered_driver_initial = d.client_driver_initial;
+  }
+
+inline_for_extraction
+let client_top_buffered_driver
+  (d:client_driver)
+  (channel:BT.t)
+  : top_buffered_driver =
+  {
+    top_buffered_driver_core = client_buffered_driver d channel;
+    top_buffered_driver_auth = d.client_driver_auth;
+  }
 
 let lemma_rejoined_raw_mask_matches_old
   (old_raw raw_prefix:B.bytes)
@@ -471,6 +446,11 @@ let logged_received_bytes_accounted
   B.length logged <= B.length consumed /\
   (forall b. SeqP.count b logged <= SeqP.count b consumed)
 
+let lemma_empty_received_bytes_accounted ()
+  : Lemma (logged_received_bytes_accounted B.empty B.empty)
+=
+  ()
+
 noextract
 let client_driver_wire_logs_match_witness
   (st:TLS13.Spec.StateMachine.connection_state)
@@ -503,6 +483,80 @@ let client_driver_wire_logs_match
       consumed
       buffered
       buffered_len
+
+let choose_wire_logs_match_witness
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Ghost (Ghost.erased B.bytes)
+      (requires
+        client_driver_wire_logs_match
+          st received sent buffered buffered_len)
+      (ensures fun consumed ->
+        client_driver_wire_logs_match_witness
+          st
+          received
+          sent
+          (Ghost.reveal consumed)
+          buffered
+          buffered_len)
+=
+  assert_norm (
+    client_driver_wire_logs_match
+      st received sent buffered buffered_len ==
+    (exists consumed.
+      client_driver_wire_logs_match_witness
+        st received sent consumed buffered buffered_len));
+  let consumed =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        client_driver_wire_logs_match_witness
+          st received sent consumed buffered buffered_len) in
+  Ghost.hide consumed
+
+ghost fn establish_initial_wire_logs_match
+  (cfg:CS.connection_config{
+    cfg.CS.config_role == CS.ClientEndpoint
+  })
+  requires emp
+  ensures pure (
+    client_driver_wire_logs_match
+      (CS.initial cfg)
+      B.empty
+      B.empty
+      B.empty
+      0sz /\
+    CT.client_state_correct (CS.initial cfg) /\
+    CT.client_end_to_end_invariant (CS.initial cfg))
+{
+  lemma_empty_received_bytes_accounted ();
+  assert (pure (client_driver_wire_logs_match_witness
+    (CS.initial cfg)
+    B.empty
+    B.empty
+    B.empty
+    B.empty
+    0sz));
+  CT.lemma_initial_client_end_to_end_invariant cfg;
+  assert (pure (client_driver_wire_logs_match
+    (CS.initial cfg)
+    B.empty
+    B.empty
+    B.empty
+    0sz));
+  assert (pure (
+    client_driver_wire_logs_match
+      (CS.initial cfg)
+      B.empty
+      B.empty
+      B.empty
+      0sz /\
+    CT.client_state_correct (CS.initial cfg) /\
+    CT.client_end_to_end_invariant (CS.initial cfg)))
+}
 
 let lemma_logged_received_bytes_accounted_transport
   (st:TLS13.Spec.StateMachine.connection_state)
@@ -558,7 +612,12 @@ let lemma_client_driver_wire_logs_match_received_accounted
   lemma_logged_received_bytes_accounted_transport st received (Ghost.reveal consumed) buffered
 
 noextract
+let wire_history (received sent:B.bytes) : IO.history =
+  { IO.tcp_received = received; IO.tcp_sent = sent }
+
+noextract
 let channel_open
+  (hist:MR.mref CI.io_history_preorder)
   (ch:IO.channel)
   (st:TLS13.Spec.StateMachine.connection_state)
   (buffered:B.bytes)
@@ -566,7 +625,47 @@ let channel_open
   : slprop =
   exists* received sent.
     IO.is_channel ch received sent **
+    MR.pts_to hist #1.0R (wire_history received sent) **
     pure (client_driver_wire_logs_match st received sent buffered buffered_len)
+
+(** After a physical [IO.read] appends [chunk] to the received history, the
+    monotonic ghost TCP-history tracker advances accordingly. The step is
+    justified because appending only extends the physical receive history. *)
+ghost
+fn tcp_history_note_read
+  (hist:MR.mref CI.io_history_preorder)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (chunk:Ghost.erased B.bytes)
+  requires MR.pts_to hist #1.0R (wire_history received sent)
+  ensures MR.pts_to hist #1.0R (wire_history (Seq.append received chunk) sent)
+{
+  CPI.lemma_bytes_extends_append received chunk;
+  CPI.lemma_bytes_extends_refl sent;
+  CI.lemma_io_history_preorder_of_extends
+    (wire_history received sent)
+    (wire_history (Seq.append received chunk) sent);
+  MR.update hist (wire_history (Seq.append received chunk) sent)
+}
+
+(** After a physical [IO.write] appends [chunk] to the sent history, the
+    monotonic ghost TCP-history tracker advances accordingly. *)
+ghost
+fn tcp_history_note_write
+  (hist:MR.mref CI.io_history_preorder)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  (chunk:Ghost.erased B.bytes)
+  requires MR.pts_to hist #1.0R (wire_history received sent)
+  ensures MR.pts_to hist #1.0R (wire_history received (Seq.append sent chunk))
+{
+  CPI.lemma_bytes_extends_refl received;
+  CPI.lemma_bytes_extends_append sent chunk;
+  CI.lemma_io_history_preorder_of_extends
+    (wire_history received sent)
+    (wire_history received (Seq.append sent chunk));
+  MR.update hist (wire_history received (Seq.append sent chunk))
+}
 
 noextract
 let driver_canonical_progress
@@ -587,22 +686,117 @@ let driver_canonical_progress
     CP.client_initial_wire_logs_empty (Ghost.reveal d.driver_initial))
 
 noextract
+let buffered_driver_canonical_progress
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  : slprop =
+  MR.pts_to
+    d.buffered_driver_progress
+    #1.0R
+    st **
+  MR.snapshot
+    d.buffered_driver_progress
+    (Ghost.reveal d.buffered_driver_initial) **
+  pure (
+    CT.client_end_to_end_invariant st /\
+    st.CS.cs_model.CS.model_config ==
+      (Ghost.reveal d.buffered_driver_initial).CS.cs_model.CS.model_config /\
+    CP.client_initial_wire_logs_empty
+      (Ghost.reveal d.buffered_driver_initial))
+
+noextract
+let buffered_driver_indexed
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  (model:BT.phys_buffer)
+  (received committed sent:B.bytes)
+  : slprop =
+  C.connection_exactly d.buffered_driver_client st **
+  buffered_driver_canonical_progress d st **
+  BT.is_buffered
+    d.buffered_driver_channel
+    model
+    received
+    committed
+    sent **
+  MR.pts_to
+    d.buffered_driver_tcp_history
+    #1.0R
+    (wire_history received sent) **
+  pure (
+    BT.same_storage
+      d.buffered_driver_channel
+      d.buffered_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    Seq.equal (BT.pending model) buffered /\
+    client_driver_wire_logs_match_witness
+      st
+      received
+      sent
+      committed
+      buffered
+      buffered_len)
+
+noextract
+let buffered_driver_exactly
+  (d:buffered_driver)
+  (st:CS.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  exists* model received committed sent.
+    buffered_driver_indexed
+      d
+      st
+      buffered
+      buffered_len
+      model
+      received
+      committed
+      sent
+
+noextract
+let top_buffered_driver_exactly
+  (d:top_buffered_driver)
+  (st:CS.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  buffered_driver_exactly
+    d.top_buffered_driver_core
+    st
+    buffered
+    buffered_len **
+  O.is_auth_context d.top_buffered_driver_auth
+
+noextract
 let driver_exactly
   (d:driver)
   (st:TLS13.Spec.StateMachine.connection_state)
   (buffered:B.bytes)
   (buffered_len:SZ.t)
   : slprop =
-  C.connection_exactly d.driver_client st **
-  driver_canonical_progress d st **
-  channel_open d.driver_channel st buffered buffered_len
+  buffered_driver_exactly
+    (driver_as_buffered d)
+    st
+    buffered
+    buffered_len
 
 noeq type top_driver = {
   top_driver_core: driver;
   top_driver_auth: O.auth_context;
 }
 
-let no_channel : option IO.channel = None
+inline_for_extraction
+let top_driver_as_buffered (d:top_driver) : top_buffered_driver =
+  {
+    top_buffered_driver_core = driver_as_buffered d.top_driver_core;
+    top_buffered_driver_auth = d.top_driver_auth;
+  }
+
+let no_channel : option BT.t = None
 
 noextract
 let top_driver_exactly
@@ -617,13 +811,9 @@ let top_driver_exactly
 noextract
 let client_driver_buffers
   (d:client_driver)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
   : slprop =
-  Box.pts_to d.client_driver_buffered_len buffered_len **
-  exists* empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
+  exists* empty_payload network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out local_app_out.
     V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
-    V.pts_to d.client_driver_raw #1.0R raw **
     V.pts_to d.client_driver_network_out #1.0R network_out **
     V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
     V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
@@ -633,10 +823,6 @@ let client_driver_buffers
     V.pts_to d.client_driver_local_app_out #1.0R local_app_out **
     pure (
       B.length empty_payload == 0 /\
-      B.length raw == SZ.v driver_rx_capacity /\
-      B.length buffered == SZ.v buffered_len /\
-      SZ.v buffered_len <= SZ.v driver_rx_capacity /\
-      Seq.equal buffered (Seq.slice raw 0 (SZ.v buffered_len)) /\
       B.length network_out == SZ.v driver_network_out_capacity /\
       B.length auth_leaf_der == SZ.v driver_auth_leaf_der_capacity /\
       B.length auth_payload == SZ.v driver_public_key_payload_capacity /\
@@ -650,7 +836,6 @@ let client_driver_buffers
       L.max_signature_len <= SZ.v driver_signature_capacity /\
       L.max_record_fragment_len <= SZ.v driver_app_out_capacity /\
       V.is_full_vec d.client_driver_empty_payload /\
-      V.is_full_vec d.client_driver_raw /\
       V.is_full_vec d.client_driver_network_out /\
       V.is_full_vec d.client_driver_auth_leaf_der /\
       V.is_full_vec d.client_driver_auth_payload /\
@@ -687,15 +872,47 @@ let client_driver_live
   client_driver_canonical_progress d st **
   O.is_auth_context d.client_driver_auth **
   Box.pts_to d.client_driver_channel no_channel **
-  client_driver_buffers d B.empty 0sz **
-  pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
-        st == Ghost.reveal d.client_driver_initial /\
-        CP.client_invariant_pure
-          (Ghost.reveal d.client_driver_initial)
-          B.empty
-          B.empty
-          st /\
-        CT.client_end_to_end_invariant st)
+  MR.pts_to d.client_driver_tcp_history #1.0R (wire_history B.empty B.empty) **
+  client_driver_buffers d **
+  exists* model.
+    BT.is_storage d.client_driver_storage model **
+    pure (
+      BT.buffer_wf model /\
+      BT.capacity model == SZ.v driver_rx_capacity /\
+      Seq.equal (BT.pending model) B.empty /\
+      client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
+      st == Ghost.reveal d.client_driver_initial /\
+      CP.client_invariant_pure
+        (Ghost.reveal d.client_driver_initial)
+        B.empty
+        B.empty
+        st /\
+      CT.client_end_to_end_invariant st)
+
+noextract
+let client_driver_connected_indexed
+  (d:client_driver)
+  (st:TLS13.Spec.StateMachine.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  Box.pts_to d.client_driver_channel (Some channel) **
+  buffered_driver_indexed
+    (client_buffered_driver d channel)
+    st
+    (BT.pending model)
+    buffered_len
+    model
+    received
+    committed
+    sent **
+  O.is_auth_context d.client_driver_auth **
+  client_driver_buffers d **
+  pure (SZ.v buffered_len == B.length (BT.pending model))
 
 noextract
 let client_driver_connected
@@ -704,79 +921,216 @@ let client_driver_connected
   (received:B.bytes)
   (sent:B.bytes)
   : slprop =
-  C.connection_exactly d.client_driver_client st **
-  client_driver_canonical_progress d st **
+  exists* channel model committed buffered_len.
+    client_driver_connected_indexed
+      d st received sent channel model committed buffered_len
+
+noextract
+let client_channel_terminal_indexed
+  (d:client_driver)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  (st:CS.connection_state)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  CP.client_invariant
+    (client_driver_canonical d)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    st **
   O.is_auth_context d.client_driver_auth **
-  exists* ch buffered buffered_len.
-    Box.pts_to d.client_driver_channel (Some ch) **
-    IO.is_channel ch received sent **
-    client_driver_buffers d buffered buffered_len **
-    pure (client_driver_wire_logs_match st received sent buffered buffered_len)
+  Box.pts_to d.client_driver_channel (Some channel) **
+  BT.is_buffered
+    channel
+    model
+    wire_received
+    committed
+    wire_sent **
+  MR.pts_to d.client_driver_tcp_history #1.0R (wire_history wire_received wire_sent) **
+  client_driver_buffers d **
+  pure (
+    BT.same_storage channel d.client_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    client_driver_wire_logs_match_witness
+      st
+      wire_received
+      wire_sent
+      committed
+      (BT.pending model)
+      buffered_len /\
+    SZ.v buffered_len == B.length (BT.pending model) /\
+    app_log == TChannel.application_log st)
 
 noextract
 let client_channel_terminal
   (d:client_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
-  exists* st transport_received transport_sent ch buffered buffered_len.
-    CP.client_invariant
-      (client_driver_canonical d)
-      raw_received
-      raw_sent
-      st **
-    O.is_auth_context d.client_driver_auth **
-    Box.pts_to d.client_driver_channel (Some ch) **
-    IO.is_channel ch transport_received transport_sent **
-    client_driver_buffers d buffered buffered_len **
-    pure (
-      client_driver_wire_logs_match
-        st
-        transport_received
-        transport_sent
-        buffered
-        buffered_len /\
-      app_log == TChannel.application_log st)
+  exists* st channel model committed buffered_len.
+    client_channel_terminal_indexed
+      d
+      wire_received
+      wire_sent
+      app_log
+      st
+      channel
+      model
+      committed
+      buffered_len
+
+noextract
+let client_channel_inv_indexed
+  (d:client_driver)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  (st:CS.connection_state)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  CP.client_invariant
+    (client_driver_canonical d)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    st **
+  O.is_auth_context d.client_driver_auth **
+  Box.pts_to d.client_driver_channel (Some channel) **
+  BT.is_buffered
+    channel
+    model
+    wire_received
+    committed
+    wire_sent **
+  MR.pts_to d.client_driver_tcp_history #1.0R (wire_history wire_received wire_sent) **
+  client_driver_buffers d **
+  pure (
+    BT.same_storage channel d.client_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    client_driver_wire_logs_match_witness
+      st
+      wire_received
+      wire_sent
+      committed
+      (BT.pending model)
+      buffered_len /\
+    CT.connection_control_not_failed st /\
+    SZ.v buffered_len == B.length (BT.pending model) /\
+    Seq.equal pending (BT.pending model) /\
+    Seq.equal
+      wire_received
+      (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+    Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
+    app_log == TChannel.application_log st)
 
 let client_channel_inv
   (d:client_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
-  exists* st transport_received transport_sent ch buffered buffered_len.
-    CP.client_invariant
-      (client_driver_canonical d)
-      raw_received
-      raw_sent
-      st **
-    O.is_auth_context d.client_driver_auth **
-    Box.pts_to d.client_driver_channel (Some ch) **
-    IO.is_channel ch transport_received transport_sent **
-    client_driver_buffers d buffered buffered_len **
-    pure (
-      client_driver_wire_logs_match
-        st
-        transport_received
-        transport_sent
-        buffered
-        buffered_len /\
-      app_log == TChannel.application_log st)
+  exists* st channel model committed buffered_len.
+    client_channel_inv_indexed
+      d
+      wire_received
+      wire_sent
+      pending
+      app_log
+      st
+      channel
+      model
+      committed
+      buffered_len
+
+noextract
+let client_channel_io_frame_indexed
+  (d:client_driver)
+  (ch:IO.channel)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  (st:CS.connection_state)
+  (channel:BT.t)
+  (model:BT.phys_buffer)
+  (committed:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  CP.client_invariant
+    (client_driver_canonical d)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    st **
+  O.is_auth_context d.client_driver_auth **
+  Box.pts_to d.client_driver_channel (Some channel) **
+  BT.io_frame
+    channel
+    ch
+    model
+    wire_received
+    committed
+    wire_sent **
+  MR.pts_to d.client_driver_tcp_history #1.0R
+    (wire_history wire_received wire_sent) **
+  client_driver_buffers d **
+  pure (
+    BT.same_storage channel d.client_driver_storage /\
+    BT.capacity model == SZ.v driver_rx_capacity /\
+    client_driver_wire_logs_match_witness
+      st
+      wire_received
+      wire_sent
+      committed
+      (BT.pending model)
+      buffered_len /\
+    CT.connection_control_not_failed st /\
+    SZ.v buffered_len == B.length (BT.pending model) /\
+    Seq.equal pending (BT.pending model) /\
+    Seq.equal
+      wire_received
+      (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+    Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
+    app_log == TChannel.application_log st)
+
+noextract
+let client_channel_io_frame
+  (d:client_driver)
+  (ch:IO.channel)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st channel model committed buffered_len.
+    client_channel_io_frame_indexed
+      d ch wire_received wire_sent pending app_log
+      st channel model committed buffered_len
 
 noextract
 let client_channel_snapshot
   (d:client_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
   (app_log:CI.application_log B.bytes)
   : slprop =
   exists* st.
     CP.client_snapshot
       (client_driver_canonical d)
-      raw_received
-      raw_sent
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
       st **
+    MR.snapshot
+      d.client_driver_tcp_history
+      (wire_history wire_received wire_sent) **
     pure (app_log == TChannel.application_log st)
 
 noextract
@@ -785,7 +1139,8 @@ let client_driver_closed
   (st:TLS13.Spec.StateMachine.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st **
-  client_driver_canonical_progress d st
+  client_driver_canonical_progress d st **
+  (exists* h. MR.pts_to d.client_driver_tcp_history #1.0R h)
 
 let lemma_client_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
@@ -865,6 +1220,9 @@ let lemma_client_driver_wire_logs_match_received_no_read_ahead
   Seq.lemma_eq_elim st.CS.cs_wire_log.CL.raw_received (Ghost.reveal consumed);
   Seq.lemma_eq_elim (B.append st.CS.cs_wire_log.CL.raw_received buffered) received;
   assert (B.length buffered == 0);
+  Seq.lemma_eq_intro buffered B.empty;
+  Seq.lemma_eq_elim buffered B.empty;
+  Seq.append_empty_r st.CS.cs_wire_log.CL.raw_received;
   assert (B.length received == B.length st.CS.cs_wire_log.CL.raw_received)
 
 type local_write_result = {

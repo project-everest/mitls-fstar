@@ -6595,3 +6595,159 @@ let lemma_driver_trace_from_initial_end_to_end
     (CS.initial cfg)
     st1
     steps
+
+(**
+  Control-state preservation for live (successful) steps.
+
+  These pure lemmas expose that a successful protocol step keeps the connection
+  control state "not failed".  The state machine only ever produces
+  [ControlFailed] via a failing event ([LocalFail] / a fatal received alert);
+  a [StepOk] application-data send, or any network step that delivered
+  application-data output, is necessarily an ApplicationData transition and
+  therefore preserves [connection_control_not_failed].
+**)
+
+#push-options "--z3rlimit 20 --split_queries always"
+
+(* A successful TLS application-data message step keeps control = ControlApplicationData. *)
+let lemma_step_tls_app_data_control
+  (model0 model1:CS.connection_model) (dir:CS.direction) (bytes:B.bytes)
+  : Lemma
+      (requires CS.step_tls_message model0 dir (M.TlsApplicationData bytes) == Some model1)
+      (ensures model1.CS.model_control == CS.ControlApplicationData)
+=
+  match model0.CS.model_control with
+  | CS.ControlApplicationData ->
+    (match dir with
+     | CL.Sent -> ()
+     | CL.Received -> ())
+  | _ -> assert False
+
+(* A successful LocalDeliverApplicationData step keeps control = ControlApplicationData. *)
+let lemma_step_local_deliver_app_data_control
+  (model0 model1:CS.connection_model) (bytes:B.bytes)
+  : Lemma
+      (requires CS.step_local_event model0 (CS.LocalDeliverApplicationData bytes) == Some model1)
+      (ensures model1.CS.model_control == CS.ControlApplicationData)
+=
+  match model0.CS.model_control with
+  | CS.ControlApplicationData -> ()
+  | _ -> assert False
+
+(* SEND: a StepOk LocalSendApplicationData local event preserves not-failed control. *)
+let lemma_local_send_application_data_stepok_preserves_not_failed
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        local_event_end_to_end_correct
+          st0 st1 resp LocalSendApplicationData payload network_out app_out /\
+        resp.status == StepOk)
+      (ensures connection_control_not_failed st1)
+=
+  assert (legal_handled_local_response
+    st0 st1 resp LocalSendApplicationData payload network_out app_out);
+  assert (exists ev raw_sent raw_received.
+    legal_local_response
+      st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_local_response
+          st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_local_response
+          st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_local_response
+          st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out) in
+  assert (legal_local_response
+    st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out);
+  assert (local_event_kind_matches st0 LocalSendApplicationData payload ev);
+  assert (legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsApplicationData bytes ->
+       assert (CS.step_tls_message
+         st0.CS.cs_model msg.CL.message_direction (M.TlsApplicationData bytes)
+         == Some st1.CS.cs_model);
+       lemma_step_tls_app_data_control
+         st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction bytes
+     | _ -> assert False)
+  | CS.ConnLocalEvent _ -> assert False
+
+#pop-options
+
+#push-options "--z3rlimit 30 --split_queries always --fuel 2 --ifuel 2"
+
+(* RECEIVE: a network step that produced application-data output preserves not-failed control. *)
+let lemma_network_bytes_app_out_positive_not_failed
+  (st0 st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input old_network_out network_out old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
+        SZ.v buffer_resp.response.app_out_len > 0)
+      (ensures connection_control_not_failed st1)
+=
+  let resp = buffer_resp.response in
+  assert (network_bytes_step_correct
+    st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out);
+  assert (~(response_stuttered
+    st0 st1 resp old_network_out network_out old_app_out app_out));
+  assert (some_legal_response st0 st1 resp network_out app_out);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  assert (legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (SZ.v resp.app_out_len <= B.length app_out);
+  assert (B.length (response_app_out resp app_out) == SZ.v resp.app_out_len);
+  assert (Seq.equal (response_app_out resp app_out) (event_api_app_out ev));
+  assert (B.length (event_api_app_out ev) > 0);
+  assert (~(TLS13.Spec.StateMachine.Log.conn_event_app_received_delta ev == []));
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Received, M.TlsApplicationData bytes ->
+       assert (CS.step_tls_message
+         st0.CS.cs_model msg.CL.message_direction (M.TlsApplicationData bytes)
+         == Some st1.CS.cs_model);
+       lemma_step_tls_app_data_control
+         st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction bytes
+     | _, _ -> assert False)
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData bytes ->
+       assert (CS.step_local_event
+         st0.CS.cs_model (CS.LocalDeliverApplicationData bytes)
+         == Some st1.CS.cs_model);
+       lemma_step_local_deliver_app_data_control
+         st0.CS.cs_model st1.CS.cs_model bytes
+     | _ -> assert False)
+
+#pop-options
