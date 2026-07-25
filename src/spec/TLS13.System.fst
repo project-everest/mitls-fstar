@@ -63,6 +63,7 @@ module SCB = TLS13.System.SeqCountBase
 module C   = TLS13.Crypto.Spec
 module ID  = FStar.IndefiniteDescription
 module PWB = TLS13.ConnectionState.ProtectedWireBase
+module SP  = Common.SystemProduct
 module RVDH = TLS13.Wire.Spec.Reveal.Handshake
 module RVDF = TLS13.Wire.Spec.Reveal.Finished
 module WRT = TLS13.Wire.Spec.Reveal.FinishedRoundTrip
@@ -842,14 +843,29 @@ let tls_step_server_local (a b:tls_system_state) : prop =
      out.SM.so_wire_outputs == [] /\
      b == { a with server = s' })
 
-(** A single honest system transition. **)
+(** The TLS system as an instance of the generic single-slot directed-channel
+    product (`Common.SystemProduct`).  The channel observations read off
+    `tls_channel`; the six move families are exactly the transition shapes above
+    (verbatim canonical steps); TLS has no fused serve move, so `server_serve` is
+    the empty relation.  `product_step SP` supplies the channel discipline, so the
+    families keep their own `TlsQuiet?`/`TlsInFlight` bindings but no additional
+    gating is imposed. **)
+let tls_iface : SP.prod_iface tls_system_state = {
+  is_quiet     = (fun s -> TlsQuiet? s.channel);
+  in_to_server = (fun s -> TlsInFlight? s.channel /\ TlsInFlight?.recipient s.channel == CS.ServerEndpoint);
+  in_to_client = (fun s -> TlsInFlight? s.channel /\ TlsInFlight?.recipient s.channel == CS.ClientEndpoint);
+  client_send       = tls_step_client_send;
+  server_send       = tls_step_server_send;
+  deliver_to_client = tls_step_deliver_to_client;
+  deliver_to_server = tls_step_deliver_to_server;
+  client_local      = tls_step_client_local;
+  server_local      = tls_step_server_local;
+  server_serve      = SP.no_move;
+}
+
+(** A single honest system transition — the generic product over `tls_iface`. **)
 let tls_sys_step (a b:tls_system_state) : prop =
-  tls_step_client_send a b \/
-  tls_step_server_send a b \/
-  tls_step_deliver_to_client a b \/
-  tls_step_deliver_to_server a b \/
-  tls_step_client_local a b \/
-  tls_step_server_local a b
+  SP.product_step tls_iface a b
 
 (** Reflexive step used by the temporal layer. **)
 let tls_sys_step_stutter (a b:tls_system_state) : prop = tls_sys_step a b \/ a == b
