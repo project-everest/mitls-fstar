@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field legacy_session_id*)
 open TLS13.Wire.Generated.ClientHello_legacy_session_id
 
@@ -103,7 +101,7 @@ let read_clientHello : PPB.copyful_parse clientHello_vmatch clientHello_parser c
   assert_norm (clientHello_parser_kind == clientHello'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair (LPC.jump_nondep_then (LPC.jump_nondep_then protocolVersion_jumper random_jumper) (LPC.jump_nondep_then clientHello_legacy_session_id_jumper clientHello_cipher_suites_jumper)) (PPC.copyful_parse_pair (LPC.jump_nondep_then protocolVersion_jumper random_jumper) (PPC.copyful_parse_pair protocolVersion_jumper read_protocolVersion () read_random) () (PPC.copyful_parse_pair clientHello_legacy_session_id_jumper read_clientHello_legacy_session_id () read_clientHello_cipher_suites)) () (PPC.copyful_parse_pair clientHello_legacy_compression_methods_jumper read_clientHello_legacy_compression_methods () read_clientHello_extensions)) synth_clientHello synth_clientHello_recip
 
-let free_clientHello : PPB.free_t clientHello_vmatch = (PPC.free_pair (PPC.free_pair (PPC.free_pair free_protocolVersion free_random) (PPC.free_pair free_clientHello_legacy_session_id free_clientHello_cipher_suites)) (PPC.free_pair free_clientHello_legacy_compression_methods free_clientHello_extensions))
+let free_clientHello : PPB.free_t clientHello_vmatch = fun x #v -> ((PPC.free_pair (PPC.free_pair (PPC.free_pair free_protocolVersion free_random) (PPC.free_pair free_clientHello_legacy_session_id free_clientHello_cipher_suites)) (PPC.free_pair free_clientHello_legacy_compression_methods free_clientHello_extensions))) x #v
 
 let write_clientHello : PPB.l2r_safe_writer clientHello_vmatch clientHello_serializer clientHello_conv =
   synth_clientHello_injective ();

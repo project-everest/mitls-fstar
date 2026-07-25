@@ -28,7 +28,7 @@
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME ?= $(FSTAR_HOME)/karamel
+KRML_HOME ?= $(EVERPARSE_HOME)/opt/karamel
 KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/src/lowparse
@@ -38,12 +38,14 @@ export PATH := $(Z3_DIR):$(PATH)
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
 IMPL_DIR    = impl
+EXTERN_DIR  = ../src/impl/extern
 OUTPUT_DIR  = _output
 EXTRACT_DIR = _extract
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include ../common \
+  --include $(EXTERN_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse \
   --include $(SPEC_DIR) \
@@ -64,9 +66,10 @@ FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 COMMON_FILES = $(wildcard ../common/*.fst ../common/*.fsti)
+EXTERN_FILES = $(EXTERN_DIR)/Common.Memmove.fsti
 SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
 IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
+ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 .PHONY: all verify clean check-admits help
 

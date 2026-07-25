@@ -35,14 +35,14 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.ServerNameList
 
-type extensionClientHello_extension_data_server_name = x:serverNameList{let l = (serverNameList_bytesize (x)) in 0 <= l /\ l <= 65535}
+noextract type extensionClientHello_extension_data_server_name = x:serverNameList{let l = (serverNameList_bytesize (x)) in 0 <= l /\ l <= 65535}
 
-type extensionClientHello_extension_data_server_name' = LP.parse_bounded_vldata_strong_t 0 65535 serverNameList_serializer
+noextract type extensionClientHello_extension_data_server_name' = LP.parse_bounded_vldata_strong_t 0 65535 serverNameList_serializer
 
-inline_for_extraction let synth_extensionClientHello_extension_data_server_name (x: extensionClientHello_extension_data_server_name') : Tot extensionClientHello_extension_data_server_name =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_server_name (x: extensionClientHello_extension_data_server_name') : Tot extensionClientHello_extension_data_server_name =
   [@inline_let] let _ = (serverNameList_bytesize_eq (x)) in x
 
-inline_for_extraction let synth_extensionClientHello_extension_data_server_name_recip (x: extensionClientHello_extension_data_server_name) : Tot extensionClientHello_extension_data_server_name' =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_server_name_recip (x: extensionClientHello_extension_data_server_name) : Tot extensionClientHello_extension_data_server_name' =
   [@inline_let] let _ = (serverNameList_bytesize_eq (x)) in x
 
 inline_for_extraction noextract let extensionClientHello_extension_data_server_name_parser_kind = LP.strong_parser_kind 5 65537 None

@@ -7,9 +7,10 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CPI = Common.ProtocolImplementation
 module CQ = TLS13.Impl.ConnectionStateQuery
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
 module S = TLS13.Impl.Server
 module SP = TLS13.Impl.Server.CanonicalProtocol
 module ST = TLS13.Impl.Server.Types
@@ -606,7 +607,7 @@ fn finish_server_next_action_network
   (st1:Ghost.erased CS.connection_state)
   (consumed:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   server_next_local_action_network_continuation
     srv
@@ -778,7 +779,7 @@ fn finish_server_next_action_local
   (st0:Ghost.erased CS.connection_state)
   (st1:Ghost.erased CS.connection_state)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   server_next_local_action_local_continuation
     srv

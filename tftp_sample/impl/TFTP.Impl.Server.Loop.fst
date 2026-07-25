@@ -194,6 +194,7 @@ ensures exists* (st1:TP.tftp_server_state) (nsent:TCP.bytes) (oc':Seq.seq U8.t).
     pts_to data dc **
     pts_to out od **
     pure (SZ.v vj <= SZ.v data_len /\ SZ.v data_len <= 512 /\ Seq.length od == 516)
+  decreases (SZ.v data_len - SZ.v (!j))
   {
     let vj = !j;
     let dv = data.(vj);
@@ -369,6 +370,7 @@ ensures exists* (d1:Seq.seq U8.t).
           SZ.fits (SZ.v off + SZ.v len) /\
           (forall (k:nat). k < SZ.v vj ==>
              Seq.index d k == Seq.index (Ghost.reveal contents) (SZ.v off + k)))
+  decreases (SZ.v len - SZ.v (!j))
   {
     let vj = !j;
     FStar.SizeT.fits_lte (SZ.v off + SZ.v vj) (SZ.v off + SZ.v len);
@@ -459,6 +461,7 @@ ensures exists* (chr chs pr ps:TCP.bytes) (st1:TP.tftp_server_state)
             (rv == true ==>
               loop_coupling (Ghost.reveal contents) (Ghost.reveal nblocks)
                 (Ghost.reveal filename) st cv))
+  decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
   {
     with st cv. _;
     assert (pure (loop_coupling (Ghost.reveal contents) (Ghost.reveal nblocks)
@@ -490,6 +493,9 @@ ensures exists* (chr chs pr ps:TCP.bytes) (st1:TP.tftp_server_state)
       (* st_a == send_next_state st; re-derive the shifted plan facts at c+1. *)
       Plan.lemma_send_shift (Ghost.reveal contents) (SZ.v c) (Ghost.reveal nblocks);
       FStar.List.Tot.Properties.append_length st.TP.tss_sent [L.hd st.TP.tss_pending];
+      (* fits_u64-free FStar.SizeT derives `fits 516` only via fits_at_least_16's
+         SMTPat, which needs `516 < pow2 16` concretized here. *)
+      assert_norm (516 < pow2 16);
       FStar.SizeT.fits_lte (4 + SZ.v block_len_c) 516;
       let nw = TCP.write ch out (SZ.add 4sz block_len_c);
       let nr = TCP.read ch ackbuf 4sz;

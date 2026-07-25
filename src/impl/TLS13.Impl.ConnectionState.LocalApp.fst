@@ -10,7 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -29,7 +29,7 @@ module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -73,7 +73,7 @@ fn mark_delivered_application_data
                 st0.CS.cs_model.CS.model_application.CS.app_pending_source_offset));
   assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application.CS.app_pending_received_raw ==
                 st0.CS.cs_model.CS.model_application.CS.app_pending_received_raw));
-  assert (pure (CS.pending_application_consistent
+  assert (pure (TLS13.Spec.StateMachine.Correspondence.pending_application_consistent
     (delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application));
   fold (application_exactly
     c.application

@@ -137,7 +137,7 @@ let crc_bytes_correct (hi lo: U8.t)
    per-region subgoals, so we ask for that split DETERMINISTICALLY (rather than
    relying on F*'s implicit, seed-sensitive fallback — cf. Warning 349).  The
    packaging helpers underneath then discharge trivially. *)
-#push-options "--z3rlimit 40 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2 --split_queries always"
 
 (* Single heavy byte-equality lemma, shared by both leaves.  Its ONLY proof
    goal is one `Seq.lemma_eq_intro` (a 133-element pointwise forall), so the
@@ -300,6 +300,7 @@ fn ymodem_emit_data_block
     R.pts_to c cv **
     pts_to data 'd **
     pure (SZ.v cv <= 128 /\ Seq.length 'd == 128)
+  decreases (Prims.op_Subtraction 128 (SZ.v (!c)))
   {
     let cv = !c;
     let b = data.(cv);
@@ -330,6 +331,7 @@ fn ymodem_emit_data_block
       Seq.index sv 1 == blk /\
       Seq.index sv 2 == bc /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (3 + j) == Seq.index 'd j))
+  decreases (Prims.op_Subtraction 128 (SZ.v (!i)))
   {
     let vi = !i;
     let dv = data.(vi);
@@ -375,6 +377,7 @@ fn ymodem_recv_data_block
       Seq.length 'i == 133 /\
       Seq.length ov == 128 /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'i (3 + j)))
+  decreases (Prims.op_Subtraction 128 (SZ.v (!i)))
   {
     let vi = !i;
     let dv = inp.(3sz + vi);

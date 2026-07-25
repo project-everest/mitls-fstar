@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_parser : LP.parser _ extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation' =
   LP.parse_bounded_vldata_strong 0 65535 protocolNameList_serializer
 
@@ -50,12 +48,12 @@ let extensionEncryptedExtensions_extension_data_application_layer_protocol_negot
 let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_bytesize_eq x = ()
 
 inline_for_extraction let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_validator : LPS.validator extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_parser =
-  PPVD.validate_bounded_vldata_strong 0 65535 protocolNameList_serializer protocolNameList_validator (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 0 65535 protocolNameList_serializer protocolNameList_validator (PPBI.leaf_read_bounded_integer_2 ())
 
 let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_validator = LPC.validate_synth extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_validator synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation
 
 inline_for_extraction let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_jumper : LPS.jumper extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_parser =
-  PPVD.jump_bounded_vldata_strong 0 65535 protocolNameList_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 0 65535 protocolNameList_serializer (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_jumper = LPC.jump_synth extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_jumper synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation
 
@@ -63,7 +61,7 @@ let extensionEncryptedExtensions_extension_data_application_layer_protocol_negot
   PPC.accessor_ext
     (PPC.accessor_compose
       (PPC.accessor_synth synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_recip)
-      (PPVD.accessor_bounded_vldata_strong_payload 0 65535 protocolNameList_serializer (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash) ())
+      (PPVD.accessor_bounded_vldata_strong_payload 0 65535 protocolNameList_serializer (PPBI.leaf_read_bounded_integer_2 ())) ())
     extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_clens ()
 
 
@@ -75,7 +73,7 @@ let read_extensionEncryptedExtensions_extension_data_application_layer_protocol_
   extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_copyful_synth_injective ();
   extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_copyful_synth_inverse ();
   PPC.copyful_parse_synth
-    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 protocolNameList_serializer read_protocolNameList (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 protocolNameList_serializer read_protocolNameList (PPBI.leaf_read_bounded_integer_2 ()))
     synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_recip
 
 let free_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation : PPB.free_t extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_vmatch =
@@ -85,7 +83,7 @@ let write_extensionEncryptedExtensions_extension_data_application_layer_protocol
   extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_copyful_synth_injective ();
   extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_copyful_synth_inverse ();
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz protocolNameList_serializer write_protocolNameList fits_u64_squash) <: PPB.l2r_safe_writer _ extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 0ul 65535 65535ul 2 2sz protocolNameList_serializer write_protocolNameList) <: PPB.l2r_safe_writer _ extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_serializer _)
     synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation synth_extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_recip
 
 let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation_bytesize_eqn x =

@@ -1,0 +1,253 @@
+module TLS13.Spec.Endpoint.Client
+
+module API = TLS13.Spec.Endpoint.API
+module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
+module CS = TLS13.Spec.StateMachine
+module M = TLS13.Messages
+module RTC = FStar.ReflexiveTransitiveClosure
+module Seq = FStar.Seq
+module SM = Common.StateMachine
+module SMCan = TLS13.Spec.StateMachine.Canonical
+module W = TLS13.Spec.Endpoint.Wire
+module WF = Common.WireFormat
+module WFSM = Common.WireFormatStateMachine
+module X = TLS13.X509.Spec
+
+(**
+  Pure client-endpoint vocabulary and state machine.
+
+  The local-event constructors describe semantic client actions.  In
+  particular, they are independent of the extraction ABI enum used by the
+  concrete client.  [client_step] is polymorphic in an implementation event
+  representation and accepts an explicit total projection into this vocabulary.
+ **)
+
+type local_event =
+  | ClientStartHandshake
+  | ClientDeriveSharedSecret
+  | ClientInstallClientHandshakeTrafficKeys
+  | ClientInstallServerHandshakeTrafficKeys
+  | ClientInstallClientApplicationTrafficKeys
+  | ClientInstallServerApplicationTrafficKeys
+  | ClientValidateCertificate of B.bytes
+  | ClientVerifyCertificateSignature
+  | ClientVerifyFinished
+  | ClientDeliverApplicationData of B.bytes
+  | ClientSendClientHello
+  | ClientSendClientFinished
+  | ClientSendApplicationData of B.bytes
+  | ClientSendKeyUpdate
+  | ClientSendCloseNotify
+  | ClientFail
+
+let validation_peer
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  : X.peer_identity =
+  {
+    X.validated_hostname =
+      st.CS.cs_model.CS.model_config.CS.config_server_name;
+    X.leaf_public_key = payload;
+    X.permitted_signature_schemes = [];
+  }
+
+let client_local_event_matches
+  (st:CS.connection_state)
+  (local:local_event)
+  (ev:CS.conn_event)
+  : prop =
+  match local, ev with
+  | ClientDeliverApplicationData payload,
+    CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes) ->
+      Seq.equal bytes payload
+  | ClientSendApplicationData payload, CS.ConnNetworkEvent msg ->
+      msg.CL.message_direction == CL.Sent /\
+      (match msg.CL.message_value with
+       | M.TlsApplicationData bytes -> Seq.equal bytes payload
+       | _ -> False)
+  | ClientSendClientHello, CS.ConnNetworkEvent msg ->
+      msg.CL.message_direction == CL.Sent /\
+      (match msg.CL.message_value with
+       | M.TlsHandshake (M.ClientHello _) -> True
+       | _ -> False)
+  | ClientSendClientFinished, CS.ConnNetworkEvent msg ->
+      msg.CL.message_direction == CL.Sent /\
+      (match msg.CL.message_value with
+       | M.TlsHandshake (M.Finished _) -> True
+       | _ -> False)
+  | ClientSendCloseNotify, CS.ConnNetworkEvent msg ->
+      msg.CL.message_direction == CL.Sent /\
+      msg.CL.message_value == M.TlsAlert TLS13.Types.Close_notify
+  | ClientSendKeyUpdate, CS.ConnNetworkEvent msg ->
+      msg.CL.message_direction == CL.Sent /\
+      msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
+  | ClientStartHandshake,
+    CS.ConnLocalEvent (CS.LocalStartHandshake _) ->
+      True
+  | ClientDeriveSharedSecret,
+    CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) ->
+      True
+  | ClientInstallClientHandshakeTrafficKeys,
+    CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+      install.CS.install_epoch == CS.TrafficHandshake /\
+      install.CS.install_direction == CS.TrafficWrite
+  | ClientInstallServerHandshakeTrafficKeys,
+    CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+      install.CS.install_epoch == CS.TrafficHandshake /\
+      install.CS.install_direction == CS.TrafficRead
+  | ClientInstallClientApplicationTrafficKeys,
+    CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+      install.CS.install_epoch == CS.TrafficApplication /\
+      install.CS.install_direction == CS.TrafficWrite
+  | ClientInstallServerApplicationTrafficKeys,
+    CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+      install.CS.install_epoch == CS.TrafficApplication /\
+      install.CS.install_direction == CS.TrafficRead
+  | ClientValidateCertificate payload,
+    CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ->
+      peer == validation_peer st payload
+  | ClientVerifyCertificateSignature,
+    CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ->
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv
+  | ClientVerifyFinished,
+    CS.ConnLocalEvent (CS.LocalVerifyFinished _) ->
+      True
+  | ClientFail, CS.ConnLocalEvent (CS.LocalFail _) ->
+      True
+  | _, _ ->
+      False
+
+class client_event_representation (a:Type0) = {
+  client_event_semantic: a -> GTot local_event;
+  client_representation_matches:
+    CS.connection_state -> a -> CS.conn_event -> prop;
+  client_representation_exact:
+    st:CS.connection_state ->
+    input:a ->
+    ev:CS.conn_event ->
+      Lemma
+        (client_representation_matches st input ev <==>
+         client_local_event_matches st (client_event_semantic input) ev);
+}
+
+let client_local_outputs_match
+  (ev:CS.conn_event)
+  (outs:list API.local_output)
+  : prop =
+  API.local_outputs_match ev outs
+
+let client_wire_outputs_match
+  (raw_sent:B.bytes)
+  (outs:list W.wire_message)
+  : prop =
+  Seq.equal
+    (WF.serialize_all W.tls_record_wire_format outs)
+    raw_sent
+
+(**
+  Representation-independent meaning of a successfully decoded client network
+  input.  Cleartext messages are tied to their exact raw-record representation;
+  protected messages are tied to the record-layer open and inner-message decode.
+ **)
+let network_input_message_projection
+  (st0:CS.connection_state)
+  (wire:W.wire_message)
+  (msg:M.tls_message)
+  : prop =
+  if CS.network_message_is_cleartext CL.Received msg
+  then CS.received_cleartext_tls_message_raw msg (W.wire_serialize wire)
+  else
+    SMCan.received_single_protected_message_decode
+      st0.CS.cs_model
+      msg
+      (W.wire_serialize wire)
+
+let client_step
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (st0:CS.connection_state)
+  (ev:SM.event W.wire_message local_event_repr)
+  (st1:CS.connection_state)
+  (out:SM.step_output W.wire_message API.local_output)
+  : GTot prop =
+  match ev with
+  | SM.WireEvent wire ->
+    exists msg.
+      let conn_ev =
+        CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        } in
+      SMCan.canonical_wire_step
+        st0
+        st1
+        conn_ev
+        (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+        (W.wire_serialize wire) /\
+      network_input_message_projection st0 wire msg /\
+      client_local_outputs_match conn_ev out.SM.so_local_outputs
+  | SM.LocalEvent local ->
+    exists conn_ev raw_sent.
+      client_representation_matches st0 local conn_ev /\
+      client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      SMCan.canonical_wire_step
+        st0
+        st1
+        conn_ev
+        raw_sent
+        B.empty
+
+type client_initial_state =
+  st:CS.connection_state{
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint
+  }
+
+noextract
+let client_state_machine
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (initial:client_initial_state)
+  : SM.state_machine
+      CS.connection_state
+      W.wire_message
+      local_event_repr
+      API.local_output
+  =
+  {
+    SM.sm_initial_state = initial;
+    SM.sm_step = client_step;
+  }
+
+noextract
+let client_system
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (initial:client_initial_state)
+  : WFSM.wire_format_state_machine
+      CS.connection_state
+      W.wire_message
+      local_event_repr
+      API.local_output
+  =
+  {
+    WFSM.wfsm_state_machine = client_state_machine initial;
+    WFSM.wfsm_wire_format = W.tls_record_wire_format;
+  }
+
+let client_canonical_step_rel
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (st0 st1:CS.connection_state)
+  : prop =
+  exists
+    (ev:SM.event W.wire_message local_event_repr)
+    (out:SM.step_output W.wire_message API.local_output).
+      client_step st0 ev st1 out
+
+let client_progress_preorder
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  =
+  RTC.closure (client_canonical_step_rel #local_event_repr)

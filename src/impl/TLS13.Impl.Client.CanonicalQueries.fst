@@ -10,10 +10,11 @@ module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module CQ = TLS13.Impl.ConnectionStateQuery
 module CR = TLS13.Impl.ConnectionState.Repr
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
 module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
+module CW = TLS13.Spec.Endpoint.Wire
+module EAPI = TLS13.Spec.Endpoint.API
 module L = TLS13.Impl.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -595,7 +596,7 @@ fn finish_client_next_action_network
   (st1:Ghost.erased CS.connection_state)
   (consumed:Ghost.erased B.bytes)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   client_next_local_action_network_continuation
     cc
@@ -757,7 +758,7 @@ fn finish_client_next_action_local
   (st0:Ghost.erased CS.connection_state)
   (st1:Ghost.erased CS.connection_state)
   (wire_outputs:Ghost.erased (list CW.wire_message))
-  (local_outputs:Ghost.erased (list CTypes.local_output))
+  (local_outputs:Ghost.erased (list EAPI.local_output))
 requires
   client_next_local_action_local_continuation
     cc

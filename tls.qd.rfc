@@ -49,8 +49,10 @@ enum {
     (255)
 } ContentType;
 
-enum {
-    /* [covered: this is the only suite emitted/accepted] */
+enum /*@open*/ {
+    /* [covered: 0x1303 selected; others (e.g. the 0x00FF SCSV that OpenSSL
+       always includes) must round-trip as unsupported so a peer ClientHello
+       offering extra suites still parses] */
     TLS_CHACHA20_POLY1305_SHA256(0x1303),
     (0xFFFF)
 } CipherSuite;
@@ -122,7 +124,6 @@ enum { update_not_requested(0), update_requested(1), (255) } KeyUpdateRequest;
 opaque HostName<1..2^16-1>;
 opaque UnknownName<1..2^16-1>;
 opaque ProtocolName<1..2^8-1>;        /* ALPN protocol identifier */
-opaque UnknownExtension<0..2^16-1>;   /* extension_data we do not interpret */
 
 struct { opaque random[32]; } Random;
 

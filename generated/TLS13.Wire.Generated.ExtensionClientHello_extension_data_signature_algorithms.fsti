@@ -35,14 +35,14 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.SignatureSchemeList
 
-type extensionClientHello_extension_data_signature_algorithms = x:signatureSchemeList{let l = (signatureSchemeList_bytesize (x)) in 0 <= l /\ l <= 65535}
+noextract type extensionClientHello_extension_data_signature_algorithms = x:signatureSchemeList{let l = (signatureSchemeList_bytesize (x)) in 0 <= l /\ l <= 65535}
 
-type extensionClientHello_extension_data_signature_algorithms' = LP.parse_bounded_vldata_strong_t 0 65535 signatureSchemeList_serializer
+noextract type extensionClientHello_extension_data_signature_algorithms' = LP.parse_bounded_vldata_strong_t 0 65535 signatureSchemeList_serializer
 
-inline_for_extraction let synth_extensionClientHello_extension_data_signature_algorithms (x: extensionClientHello_extension_data_signature_algorithms') : Tot extensionClientHello_extension_data_signature_algorithms =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_signature_algorithms (x: extensionClientHello_extension_data_signature_algorithms') : Tot extensionClientHello_extension_data_signature_algorithms =
   [@inline_let] let _ = (signatureSchemeList_bytesize_eq (x)) in x
 
-inline_for_extraction let synth_extensionClientHello_extension_data_signature_algorithms_recip (x: extensionClientHello_extension_data_signature_algorithms) : Tot extensionClientHello_extension_data_signature_algorithms' =
+inline_for_extraction noextract let synth_extensionClientHello_extension_data_signature_algorithms_recip (x: extensionClientHello_extension_data_signature_algorithms) : Tot extensionClientHello_extension_data_signature_algorithms' =
   [@inline_let] let _ = (signatureSchemeList_bytesize_eq (x)) in x
 
 inline_for_extraction noextract let extensionClientHello_extension_data_signature_algorithms_parser_kind = LP.strong_parser_kind 6 65537 None

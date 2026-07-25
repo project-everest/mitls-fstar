@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
   tls13_client_driver *driver = NULL;
   int rc = 1;
   static const uint8_t ping[] = {'p', 'i', 'n', 'g'};
-  uint8_t received[sizeof ping] = {0};
+  uint8_t received[TLS13_CLIENT_DRIVER_RECEIVE_BUFFER_SIZE] = {0};
   size_t received_len = 0;
 
   if (tls13_client_driver_connect(

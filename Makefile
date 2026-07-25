@@ -13,7 +13,7 @@
 EVERPARSE_HOME ?= $(CURDIR)/tools/everparse
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE  ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME  ?= $(FSTAR_HOME)/karamel
+KRML_HOME  ?= $(EVERPARSE_HOME)/opt/karamel
 # Use the installed KaRaMeL binary (opt/FStar/karamel/out/bin/krml): unlike the
 # in-tree `krml` symlink to _build/default/src/Karamel.exe, it self-locates its
 # krmllib/share, so no extra symlinks are needed.
@@ -46,12 +46,17 @@ EXTRACT_DIR = _extract
 HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
 HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+EXTERN_DIR  = src/impl/extern
+SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
+SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
+  $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include common \
-  --include src/spec \
+  $(addprefix --include ,$(SPEC_DIRS)) \
   --include src/impl \
+  --include $(EXTERN_DIR) \
   --include $(GENERATED_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse
@@ -95,9 +100,14 @@ FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
-SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
+SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
+EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
+ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
+ROOT_FILES = \
+  src/impl/TLS13.System.Temporal.fst \
+  src/impl/TLS13.Impl.Client.Driver.fst \
+  src/impl/TLS13.Impl.Server.Driver.fst
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
@@ -181,13 +191,59 @@ parsers:
 	$(MAKE) regen-generated
 	$(MAKE) extract-generated
 
+# ── Portable generated-verification cache (for CI) ─────────────────
+# The generated TLS13.Wire.Generated.* .checked files are a pure function of two
+# inputs: the QuackyDucky-generated sources (themselves derived from $(QD_RFC))
+# and the F*/LowParse/QuackyDucky toolchain (pinned by scripts/build-everparse.sh).
+# So a CI cache keyed on the hash of just those two files can carry the whole
+# generated-module verification result across runs.  These targets export/import
+# that result as a single relocatable tarball — exactly the artifacts the
+# $(GENERATED_STAMP) recipe produces (the sub-make cache/, the .checked copies the
+# main build consumes as already-cached, the harness .depend, and the stamp).
+GENERATED_CACHE_TARBALL ?= generated-checked.tar.gz
+
+# Bundle the verification artifacts into $(GENERATED_CACHE_TARBALL).  Only files
+# that exist are added, so a partial tree never aborts the tar.
+.PHONY: save-generated-cache
+save-generated-cache:
+	@test -f $(GENERATED_STAMP) || { \
+	  echo "No verified generated modules to save; run 'make generated-checked' first." >&2; \
+	  exit 1; }
+	@files='$(GENERATED_STAMP)'; \
+	 for f in $(GENERATED_DIR)/.depend $(GENERATED_DIR)/cache \
+	          $(GENERATED_DIR)/TLS13.Wire.Generated.*.checked; do \
+	   [ -e "$$f" ] && files="$$files $$f"; \
+	 done; \
+	 tar czf $(GENERATED_CACHE_TARBALL) $$files; \
+	 echo "Saved generated verification cache -> $(GENERATED_CACHE_TARBALL)"
+
+# Unpack a previously saved tarball, then mark the restored .checked files and
+# stamp newer than the (freshly checked-out) generated sources so Make treats
+# $(GENERATED_STAMP) as up-to-date and skips re-running the verification.  A
+# missing tarball is not an error — the build simply verifies from scratch.  F*
+# still validates every .checked against its source hash when the main build
+# consumes it, so a stale cache is safely re-verified rather than trusted.
+.PHONY: restore-generated-cache
+restore-generated-cache:
+	@if [ ! -f $(GENERATED_CACHE_TARBALL) ]; then \
+	  echo "No cache tarball at $(GENERATED_CACHE_TARBALL); nothing to restore (will verify from scratch)."; \
+	  exit 0; \
+	fi; \
+	if tar xzf $(GENERATED_CACHE_TARBALL); then \
+	  find $(GENERATED_DIR) \( -name '*.checked' -o -name '.checked.stamp' \) -exec touch {} + ; \
+	  echo "Restored generated verification cache from $(GENERATED_CACHE_TARBALL) (stamp marked fresh)."; \
+	else \
+	  echo "WARNING: could not extract $(GENERATED_CACHE_TARBALL); verifying from scratch." >&2; \
+	  rm -f $(GENERATED_STAMP); \
+	fi
+
 # ── Dependency Analysis ────────────────────────────────────────────
 # The generated .checked files must exist before `.depend` is computed, because
 # the dependency scan runs F* with --already_cached +TLS13.Wire.Generated.  The
 # order-only $(GENERATED_STAMP) prerequisite produces them first (without forcing
 # a needless `.depend` rebuild once present).
 .depend: $(ALL_FILES) Makefile | check-toolchain $(GENERATED_STAMP)
-	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ALL_FILES) --output_deps_to $@
+	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ROOT_FILES) --output_deps_to $@
 
 # Do NOT pull in .depend (and, through it, the order-only $(GENERATED_STAMP)
 # prerequisite) for the generated-pipeline phony goals or clean.  `parsers` runs
@@ -198,7 +254,8 @@ parsers:
 # sub-make — racing under -jN.  These goals manage the generated .checked files
 # explicitly via the stamp and never need the spec/impl dependency graph.
 DEPEND_EXCLUDED_GOALS := clean regen-generated verify-generated extract-generated \
-  parsers generated-checked $(GENERATED_STAMP)
+  parsers generated-checked save-generated-cache restore-generated-cache \
+  $(GENERATED_STAMP)
 ifeq (,$(filter $(DEPEND_EXCLUDED_GOALS),$(MAKECMDGOALS)))
 include .depend
 endif
@@ -211,7 +268,7 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated
+.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated save-generated-cache restore-generated-cache benchmark benchmark-build benchmark-profile-build profile
 
 all: verify
 
@@ -248,13 +305,12 @@ check-admits:
 # ── Extraction Bundles ─────────────────────────────────────────────
 # List of modules to extract (dotted names)
 EXTRACT_MODULES = \
-  $(BUNDLE_IMPL_MODULES) \
-  TLS13.Extract.Smoke
+  $(BUNDLE_IMPL_MODULES)
 
 # Convert module names to .krml filenames
 KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(EXTRACT_MODULES)))
 
-.PHONY: extract-krml extract-connection extract-smoke \
+.PHONY: extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle
 
 extract-krml: $(KRML_FILES)
@@ -277,7 +333,6 @@ SERIALIZER_MODULES = \
   TLS13.Impl.Serializer.Handshake \
   TLS13.Impl.Serializer.Finished \
   TLS13.Impl.Serializer.EncryptedExtensions \
-  TLS13.Impl.Serializer.CertificateVerify \
   TLS13.Impl.Serializer.ServerHello \
   TLS13.Impl.Serializer.Certificate \
   TLS13.Impl.Serializer.ProtectedRecord \
@@ -287,7 +342,7 @@ SERIALIZER_INTERNAL_MODULES = \
   TLS13.Impl.Serializer.Common,TLS13.Impl.Serializer.Handshake,\
   TLS13.Impl.Serializer.Finished,\
   TLS13.Impl.Serializer.EncryptedExtensions,\
-  TLS13.Impl.Serializer.CertificateVerify,TLS13.Impl.Serializer.ServerHello,\
+  TLS13.Impl.Serializer.ServerHello,\
   TLS13.Impl.Serializer.Certificate,TLS13.Impl.Serializer.ProtectedRecord,\
   TLS13.Impl.Serializer
 
@@ -311,6 +366,7 @@ PULSE_RUNTIME_MODULES = \
 # Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -339,7 +395,7 @@ BUNDLE_IMPL_MODULES = \
 
 # Non-API modules (everything except TLS13.Impl.Client)
 BUNDLE_INTERNAL_MODULES = \
-  TLS13.Impl.Endpoint.Types,TLS13.Impl.Client.Types,\
+  TLS13.Impl.ArrayCopy,TLS13.Impl.Endpoint.Types,TLS13.Impl.Client.Types,\
   TLS13.Impl.ConnectionState.Bounds,\
   TLS13.Impl.ConnectionState.Model,TLS13.Impl.ConnectionState.Tags,\
   TLS13.Impl.ConnectionState.Repr,TLS13.Impl.ConnectionState.Queries,\
@@ -353,8 +409,8 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Messages,\
   TLS13.KeySchedule,TLS13.Record
 
-# Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, Common.TCP
+# Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
+# models remain under src/spec/assumptions.
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 
@@ -371,30 +427,8 @@ TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
-COMMON_ENDPOINT_MODULES = \
-  Common.StateMachine \
-  Common.WireFormat \
-  Common.WireFormatStateMachine \
-  Common.ProtocolImplementation \
-  Common.ProtocolEndpoint \
-  Common.ProtocolDriver
-TLS13_SHARED_ENDPOINT_MODULES = \
-  TLS13.Impl.ConnectionStateQuery \
-  TLS13.Impl.CanonicalTypes \
-  TLS13.Impl.CanonicalWire
-TLS13_CLIENT_ENDPOINT_MODULES = \
-  $(TLS13_SHARED_ENDPOINT_MODULES) \
-  TLS13.Impl.Client.CanonicalProtocol \
-  TLS13.Impl.Client.CanonicalQueries \
-  TLS13.Impl.Client.Endpoint
-TLS13_SERVER_ENDPOINT_MODULES = \
-  $(TLS13_SHARED_ENDPOINT_MODULES) \
-  TLS13.Impl.Server.CanonicalProtocol \
-  TLS13.Impl.Server.CanonicalQueries \
-  TLS13.Impl.Server.Endpoint
 CLIENT_DRIVER_IMPL_MODULES = \
-  $(COMMON_ENDPOINT_MODULES) \
-  $(TLS13_CLIENT_ENDPOINT_MODULES) \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
@@ -418,29 +452,47 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Messages \
   TLS13.KeySchedule \
   TLS13.Record \
-  TLS13.Impl.Client
+  TLS13.Impl.Client \
+  TLS13.Impl.Client.Driver.State \
+  TLS13.Impl.Client.Driver.BufferedNetwork \
+  TLS13.Impl.Client.Driver.New \
+  TLS13.Impl.Client.Driver.Core \
+  TLS13.Impl.Client.Driver.Cleanup \
+  TLS13.Impl.Client.Driver.Connect \
+  TLS13.Impl.Client.Driver.Send \
+  TLS13.Impl.Client.Driver.Receive \
+  TLS13.Impl.Client.Driver.Close
 CLIENT_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES))) \
+  $(filter-out $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml, \
+    $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES)))) \
   $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml \
+  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
+  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
+  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
+  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Client.CanonicalProtocol,\
+  -TLS13.Impl.Client.CanonicalQueries,\
   -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*,\
-  -TLS13.X509,-TLS13.MachineTypes
+  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 SERVER_DRIVER_EXTRACT_SELECTOR = \
   *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
   +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
+  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
+  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
+  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
+  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Server.CanonicalProtocol,\
+  -TLS13.Impl.Server.CanonicalQueries,\
   -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*,\
-  -TLS13.X509,-TLS13.MachineTypes
+  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
 SERVER_DRIVER_MODULES = \
-  $(COMMON_ENDPOINT_MODULES) \
-  $(TLS13_SERVER_ENDPOINT_MODULES) \
+  TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.ConnectionState.Bounds \
   TLS13.Impl.ConnectionState.Model \
@@ -469,10 +521,20 @@ SERVER_DRIVER_MODULES = \
   Common.TCP \
   TLS13.OpenSSL \
   TLS13.Impl.Server.Driver.State \
-  TLS13.Impl.Server.Driver.Transport \
   TLS13.Impl.Server.Driver.Network \
+  TLS13.Impl.Server.Driver.BufferedNetwork \
+  TLS13.Impl.Server.Driver.BufferedTransport \
+  TLS13.Impl.Server.Driver.BufferedLifecycle \
+  TLS13.Impl.Server.Driver.BufferedHandshake \
+  TLS13.Impl.Server.Driver.BufferedLocal \
+  TLS13.Impl.Server.Driver.BufferedWorkflow \
+  TLS13.Impl.Server.Driver.BufferedTopHandshake \
+  TLS13.Impl.Server.Driver.BufferedChannel \
+  TLS13.Impl.Server.Driver.BufferedAccept \
+  TLS13.Impl.Server.Driver.BufferedSend \
+  TLS13.Impl.Server.Driver.BufferedReceive \
+  TLS13.Impl.Server.Driver.BufferedClose \
   TLS13.Impl.Server.Driver.Local \
-  TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver
 SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
@@ -480,10 +542,16 @@ SERVER_DRIVER_KRML_FILES = \
   $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
+GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 TLS13_BUNDLE_KRML_FILES = \
+  $(OUTPUT_DIR)/Common_BufferedTCP_Internal.krml \
+  $(OUTPUT_DIR)/Common_BufferedTCP.krml \
+  $(OUTPUT_DIR)/Common_BufferedStream.krml \
+  $(OUTPUT_DIR)/Common_Memmove.krml \
+  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
-  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES)))
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
@@ -550,7 +618,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@target_base=$$(basename "$@" .krml); \
 	module=; src=; \
 	for ext in fst fsti; do \
-	  for dir in common src/spec src/impl $(GENERATED_DIR) $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse \
+	  for dir in $(SOURCE_DIRS) \
 	      $(FSTAR_ULIB) $(FSTAR_PULSE_COMMON) $(FSTAR_PULSE_LIB); do \
 	    test -d "$$dir" || continue; \
 	    for candidate in "$$dir"/*.$$ext; do \
@@ -581,7 +649,7 @@ extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
 extract-tls13-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
 
-$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | $(OUTPUT_DIR)
+$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify $(OUTPUT_DIR)
 	$(MAKE) $(TLS13_BUNDLE_KRML_FILES)
 	@touch $@
 
@@ -610,10 +678,10 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library TLS13.X509 -library Common.TCP \
+	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
 	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Bytes,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
-	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
+	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
@@ -625,38 +693,103 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	exit $$status
 	@touch $@
 
-# ── Smoke Test Extraction ───────────────────────────────────────────────
-
-SMOKE_DIR = $(EXTRACT_DIR)/smoke
-SMOKE_KRML = $(OUTPUT_DIR)/TLS13_Extract_Smoke.krml
-SMOKE_C = $(SMOKE_DIR)/TLS13_Extract_Smoke.c
-SMOKE_H = $(SMOKE_DIR)/TLS13_Extract_Smoke.h
-
-$(SMOKE_DIR):
-	mkdir -p $@
-
-$(SMOKE_C) $(SMOKE_H): $(SMOKE_KRML) | $(SMOKE_DIR)
-	$(KRML_EXE) -skip-compilation -skip-makefiles \
-	  -tmpdir $(SMOKE_DIR) $(SMOKE_KRML)
-
-extract-smoke: $(SMOKE_C) $(SMOKE_H)
-
 # ──────────────────────────────────────────────────────────────────────────────
 # C Stubs and Dependencies
 # ──────────────────────────────────────────────────────────────────────────────
 
 HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
+  $(HACL_DIR)/Hacl_Hash_SHA1.c \
   $(HACL_DIR)/Hacl_Hash_SHA2.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2b.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2s.c \
   $(HACL_DIR)/Hacl_HMAC.c \
   $(HACL_DIR)/Hacl_HKDF.c \
   $(HACL_DIR)/Hacl_Curve25519_51.c \
   $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305.c \
   $(HACL_DIR)/Hacl_Chacha20.c \
   $(HACL_DIR)/Hacl_MAC_Poly1305.c \
+  $(HACL_DIR)/Lib_Memzero0.c \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
 
+HACL_SIMD256 ?= $(shell \
+  printf '%s\n' '#include <immintrin.h>' \
+    'int main(void) { __m256i x = _mm256_setzero_si256(); return __builtin_cpu_supports("avx2") ? _mm256_extract_epi32(x, 0) : 0; }' | \
+  $(CC) -mavx2 -x c -c -o /dev/null - >/dev/null 2>&1 && echo 1 || echo 0)
+HACL_SIMD256_CFLAGS = -mavx2 -DHACL_CAN_COMPILE_VEC256=1
+HACL_SIMD256_SOURCES = \
+  $(HACL_DIR)/Hacl_Chacha20_Vec256.c \
+  $(HACL_DIR)/Hacl_MAC_Poly1305_Simd256.c \
+  $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305_Simd256.c
+HACL_SIMD256_MODULES = \
+  Hacl_Chacha20_Vec256 \
+  Hacl_MAC_Poly1305_Simd256 \
+  Hacl_AEAD_Chacha20Poly1305_Simd256
+HACL_SIMD256_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_obj
+HACL_SIMD256_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_benchmark_obj
+HACL_SIMD256_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_profile_obj
+
+ifeq ($(HACL_SIMD256),1)
+HACL_SIMD256_TEST_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_TEST_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+HACL_SIMD256_BENCHMARK_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_BENCHMARK_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+HACL_SIMD256_PROFILE_OBJECTS = \
+  $(addprefix $(HACL_SIMD256_PROFILE_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
+else
+HACL_SIMD256_TEST_OBJECTS =
+HACL_SIMD256_BENCHMARK_OBJECTS =
+HACL_SIMD256_PROFILE_OBJECTS =
+endif
+
+HACL_ACCEL ?= $(shell \
+  printf '%s\n' \
+    '#if !defined(__linux__) || !defined(__x86_64__)' \
+    '#error unsupported HACL acceleration target' \
+    '#endif' \
+    'int main(void) { return 0; }' | \
+  $(CC) -x c -c -o /dev/null - >/dev/null 2>&1 && echo 1 || echo 0)
+HACL_ACCEL_CONFIG_DIR = $(EXTRACT_DIR)/hacl_accel_config
+HACL_ACCEL_CONFIG = $(HACL_ACCEL_CONFIG_DIR)/config.h
+HACL_ACCEL_CFLAGS = -I $(HACL_ACCEL_CONFIG_DIR)
+HACL_ACCEL_C_MODULES = \
+  EverCrypt_AutoConfig2 \
+  EverCrypt_Hash \
+  EverCrypt_HMAC \
+  EverCrypt_HKDF \
+  EverCrypt_Curve25519 \
+  Hacl_Curve25519_64
+HACL_ACCEL_ASM_MODULES = \
+  cpuid-x86_64-linux \
+  sha256-x86_64-linux \
+  curve25519-x86_64-linux
+HACL_ACCEL_MODULES = $(HACL_ACCEL_C_MODULES) $(HACL_ACCEL_ASM_MODULES)
+HACL_ACCEL_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_obj
+HACL_ACCEL_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_benchmark_obj
+HACL_ACCEL_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_profile_obj
+
+ifeq ($(HACL_ACCEL),1)
+HACL_ACCEL_CONFIG_DEP = $(HACL_ACCEL_CONFIG)
+HACL_ACCEL_TEST_OBJECTS = \
+  $(addprefix $(HACL_ACCEL_TEST_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
+HACL_ACCEL_BENCHMARK_OBJECTS = \
+  $(addprefix $(HACL_ACCEL_BENCHMARK_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
+HACL_ACCEL_PROFILE_OBJECTS = \
+  $(addprefix $(HACL_ACCEL_PROFILE_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
+else
+HACL_ACCEL_CONFIG_DEP =
+HACL_ACCEL_TEST_OBJECTS =
+HACL_ACCEL_BENCHMARK_OBJECTS =
+HACL_ACCEL_PROFILE_OBJECTS =
+endif
+
+HACL_TEST_OBJECTS = $(HACL_SIMD256_TEST_OBJECTS) $(HACL_ACCEL_TEST_OBJECTS)
+HACL_BENCHMARK_OBJECTS = \
+  $(HACL_SIMD256_BENCHMARK_OBJECTS) $(HACL_ACCEL_BENCHMARK_OBJECTS)
+HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJECTS)
+
 ECHO_STUB_SOURCES = \
+  runtime/common_memmove.c \
   c_stubs/common_tcp_karamel.c \
   c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
@@ -665,6 +798,7 @@ ECHO_STUB_SOURCES = \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
+  runtime/common_memmove.h \
   c_stubs/common_tcp_karamel.h \
   c_stubs/common_tcp_stubs.h \
   c_stubs/tls13_bytes_karamel.h \
@@ -676,8 +810,11 @@ ECHO_STUB_HEADERS = \
 # Common C flags for all test builds
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -ffunction-sections -fdata-sections \
+  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
+  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
   -I c_stubs \
   -I runtime \
+  -I $(HACL_ACCEL_CONFIG_DIR) \
   -I $(KRML_HOME)/include \
   -I $(KRML_HOME)/krmllib/dist/minimal \
   -I $(HACL_DIR) \
@@ -686,6 +823,129 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -I $(HACL_KL)
 
 LDFLAGS_COMMON = -Wl,--gc-sections
+
+$(HACL_SIMD256_TEST_OBJ_DIR) \
+$(HACL_SIMD256_BENCHMARK_OBJ_DIR) \
+$(HACL_SIMD256_PROFILE_OBJ_DIR) \
+$(HACL_ACCEL_CONFIG_DIR) \
+$(HACL_ACCEL_TEST_OBJ_DIR) \
+$(HACL_ACCEL_BENCHMARK_OBJ_DIR) \
+$(HACL_ACCEL_PROFILE_OBJ_DIR):
+	mkdir -p $@
+
+$(HACL_ACCEL_CONFIG): Makefile | $(HACL_ACCEL_CONFIG_DIR)
+	printf '%s\n' \
+	  '#define TARGET_ARCHITECTURE 2' \
+	  '#define HACL_CAN_COMPILE_VALE 1' \
+	  '#define HACL_CAN_COMPILE_INLINE_ASM 0' \
+	  '#define HACL_CAN_COMPILE_VEC128 0' \
+	  '#define HACL_CAN_COMPILE_VEC256 0' > $@
+
+$(HACL_SIMD256_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_TEST_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_SIMD256_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_BENCHMARK_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_SIMD256_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_PROFILE_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_TEST_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_TEST_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_BENCHMARK_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_BENCHMARK_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_PROFILE_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+$(HACL_ACCEL_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_PROFILE_OBJ_DIR)
+	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+
+# Benchmark builds keep symbols and frame pointers for profiling while using
+# production optimization. Override these variables to compare compiler flags.
+BENCHMARK_CFLAGS ?= -O3 -DNDEBUG -g -fno-omit-frame-pointer
+BENCHMARK_PROFILE_CFLAGS ?= -O2 -DNDEBUG -g -pg -fno-omit-frame-pointer
+BENCHMARK_OBJ_DIR = $(TLS13_BUNDLE_DIR)/benchmark_obj
+BENCHMARK_PROFILE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/benchmark_profile_obj
+BENCHMARK_BUILD_ID := $(shell printf '%s' '$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(TLS13_BUNDLE_INCLUDES) $(LDFLAGS_COMMON)' | cksum | cut -d' ' -f1)
+BENCHMARK_PROFILE_BUILD_ID := $(shell printf '%s' '$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(TLS13_BUNDLE_INCLUDES) $(LDFLAGS_COMMON)' | cksum | cut -d' ' -f1)
+BENCHMARK_OBJ_STAMP = $(BENCHMARK_OBJ_DIR)/.built-$(BENCHMARK_BUILD_ID)
+BENCHMARK_PROFILE_OBJ_STAMP = $(BENCHMARK_PROFILE_OBJ_DIR)/.built-$(BENCHMARK_PROFILE_BUILD_ID)
+BENCHMARK_BINARY = test/perf/tls13_bench
+BENCHMARK_PROFILE_BINARY = test/perf/tls13_bench-gprof
+
+$(BENCHMARK_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+	@rm -rf $(BENCHMARK_OBJ_DIR)
+	@mkdir -p $(BENCHMARK_OBJ_DIR)
+	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	  obj="$(BENCHMARK_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+$(BENCHMARK_PROFILE_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+	@rm -rf $(BENCHMARK_PROFILE_OBJ_DIR)
+	@mkdir -p $(BENCHMARK_PROFILE_OBJ_DIR)
+	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	  obj="$(BENCHMARK_PROFILE_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+define link_benchmark
+	$(CC) $(CFLAGS_COMMON) $(1) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(2)/*.o \
+	  $(4) \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_client_driver.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/perf/tls13_bench.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) $(1) -lssl -lcrypto -o $(3)
+endef
+
+$(BENCHMARK_BINARY): test/perf/tls13_bench.c $(BENCHMARK_OBJ_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_BENCHMARK_OBJECTS) | check-deps
+	$(call link_benchmark,$(BENCHMARK_CFLAGS),$(BENCHMARK_OBJ_DIR),$@,$(HACL_BENCHMARK_OBJECTS))
+
+$(BENCHMARK_PROFILE_BINARY): test/perf/tls13_bench.c \
+  $(BENCHMARK_PROFILE_OBJ_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_PROFILE_OBJECTS) | check-deps
+	$(call link_benchmark,$(BENCHMARK_PROFILE_CFLAGS),$(BENCHMARK_PROFILE_OBJ_DIR),$@,$(HACL_PROFILE_OBJECTS))
+
+benchmark-build: $(BENCHMARK_BINARY) test/certs/ca.pem test/certs/chain.pem \
+  test/certs/leaf.der test/certs/leaf.key
+
+benchmark-profile-build: $(BENCHMARK_PROFILE_BINARY) test/certs/ca.pem \
+  test/certs/chain.pem test/certs/leaf.der test/certs/leaf.key
+
+benchmark: benchmark-build
+	scripts/benchmark-tls13.sh
+
+profile: benchmark-profile-build
+	scripts/profile-tls13.sh
 
 $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile | check-deps
 	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
@@ -701,31 +961,75 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
-  test-openssl-sclient check-c-stubs
+  test-openssl-sclient test-hacl-stubs test-key-schedule-bindings check-c-stubs
 
-test: verify check-c-stubs test-openssl-echo test-openssl-sclient
+test: verify check-c-stubs test-hacl-stubs test-key-schedule-bindings \
+  test-openssl-echo test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
-check-c-stubs: | check-deps
+check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
-	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal \
+	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
+	  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
+	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
+	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \
 	  -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
 	  $(ECHO_STUB_SOURCES)
 
+# ── HACL* Wrapper Tests ─────────────────────────────────────────────
+test/test_hacl_stubs: test/unit/test_hacl_stubs.c \
+  c_stubs/tls13_hacl_stubs.c c_stubs/tls13_hacl_stubs.h \
+  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(HACL_TEST_OBJECTS) \
+	  test/unit/test_hacl_stubs.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -o $@
+
+test-hacl-stubs: test/test_hacl_stubs
+	./test/test_hacl_stubs
+
+test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
+  $(TLS13_BUNDLE_OBJS_STAMP) c_stubs/tls13_crypto_external.c \
+  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(HACL_TEST_OBJECTS) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_KeySchedule.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Serializer_Common.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Server_Material.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Wire_Generated.o \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  test/unit/test_key_schedule_bindings.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -o $@
+
+test-key-schedule-bindings: test/test_key_schedule_bindings
+	./test/test_key_schedule_bindings
+
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
-test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: \
-  scripts/generate-test-certs.sh
+TEST_CERT_STAMP = test/certs/.generated
+
+$(TEST_CERT_STAMP): scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
+	touch $@
+
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: $(TEST_CERT_STAMP)
+	@test -f $@
 
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \
@@ -770,11 +1074,14 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 test/test_extracted_server_openssl_client: \
   test/unit/test_extracted_server_openssl_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) | check-deps
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \
@@ -809,22 +1116,22 @@ check-deps:
 	@scripts/check-openssl.sh >/dev/null
 	@test -d third_party/hacl-star/dist/gcc-compatible || \
 	  { echo "Missing HACL* C snapshot; run scripts/fetch-hacl-star.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8446.txt || \
-	  { echo "Missing RFC 8446 cache; run scripts/fetch-rfcs.sh"; exit 1; }
-	@test -f third_party/rfc/rfc8448.txt || \
-	  { echo "Missing RFC 8448 cache; run scripts/fetch-rfcs.sh"; exit 1; }
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
+	  test/test_key_schedule_bindings \
+	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
-	  test/openssl_echo_server.log
+	  test/openssl_echo_server.log \
+	  $(TEST_CERT_STAMP)
 	find src test -name '*.checked' -delete
 
-.PHONY: all verify test extract-krml extract-connection extract-smoke \
+.PHONY: all verify test extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-openssl-sclient \
-  check-c-stubs check-toolchain check-deps clean
+  check-c-stubs check-toolchain check-deps benchmark benchmark-build \
+  benchmark-profile-build profile clean

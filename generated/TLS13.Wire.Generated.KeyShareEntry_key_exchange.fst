@@ -35,25 +35,23 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let keyShareEntry_key_exchange_parser = LP.parse_bounded_seq_vlbytes 1 65535
 
 noextract let keyShareEntry_key_exchange_serializer = LP.serialize_bounded_seq_vlbytes 1 65535
 
 let keyShareEntry_key_exchange_bytesize_eq x = ()
 
-let keyShareEntry_key_exchange_validator = LSeqB.validate_bounded_seq_vlbytes 1 65535 (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+let keyShareEntry_key_exchange_validator = LSeqB.validate_bounded_seq_vlbytes 1 65535 (PPBI.leaf_read_bounded_integer_2 ())
 
-let keyShareEntry_key_exchange_jumper = LSeqB.jump_bounded_seq_vlbytes 1 65535 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+let keyShareEntry_key_exchange_jumper = LSeqB.jump_bounded_seq_vlbytes 1 65535 (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
-let read_keyShareEntry_key_exchange = LSeqB.copyful_parse_bounded_seq_vlbytes 1 65535 (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+let read_keyShareEntry_key_exchange = LSeqB.copyful_parse_bounded_seq_vlbytes 1 65535 (PPBI.leaf_read_bounded_integer_2 ())
 
 let free_keyShareEntry_key_exchange : PPB.free_t keyShareEntry_key_exchange_vmatch = fun x #v -> LSeqB.free_copy_seqbytes x #(Ghost.hide (Ghost.reveal v <: Seq.seq FStar.UInt8.t))
 
-let write_keyShareEntry_key_exchange = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 1 (LSeqB.mk_seq_sizet 1 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2sz fits_u64_squash
+let write_keyShareEntry_key_exchange = LSeqB.l2r_safe_writer_bounded_seq_vlbytes 1 1ul 65535 65535ul 2sz
 
-let size_keyShareEntry_key_exchange = LSeqB.l2r_safe_size_bounded_seq_vlbytes 1 (LSeqB.mk_seq_sizet 1 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2sz fits_u64_squash
+let size_keyShareEntry_key_exchange = LSeqB.l2r_safe_size_bounded_seq_vlbytes 1 1ul 65535 65535ul 2sz
 
 let keyShareEntry_key_exchange_bytesize_eqn x = LP.length_serialize_bounded_seq_vlbytes 1 65535 x
 

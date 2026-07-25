@@ -9,7 +9,7 @@ open FStar.List.Tot
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -99,6 +99,610 @@ fn store_traffic_key_material
   assert (pure (stored_key == (Ghost.reveal material).CS.traffic_key));
   assert (pure (stored_iv == (Ghost.reveal material).CS.traffic_iv));
   fold (traffic_key_material_exactly slot (Some (Ghost.reveal material)))
+}
+
+fn free_sized_bytes_exactly (slot:sized_bytes)
+  requires exists* cap bytes. sized_bytes_exactly slot cap bytes
+  ensures emp
+{
+  with cap bytes. unfold (sized_bytes_exactly slot cap bytes);
+  with storage len. _;
+  V.free slot.bytes;
+  Box.free slot.len;
+}
+
+fn free_sized_bytes_allocated (slot:sized_bytes)
+  requires exists* cap. sized_bytes_allocated slot cap
+  ensures emp
+{
+  with cap. unfold (sized_bytes_allocated slot cap);
+  with storage len. _;
+  V.free slot.bytes;
+  Box.free slot.len;
+}
+
+fn free_optional_sized_bytes_exactly (slot:optional_sized_bytes)
+  requires exists* cap bytes. optional_sized_bytes_exactly slot cap bytes
+  ensures emp
+{
+  with cap bytes. unfold (optional_sized_bytes_exactly slot cap bytes);
+  with present storage len. _;
+  Box.free slot.present;
+  V.free slot.value.bytes;
+  Box.free slot.value.len;
+}
+
+fn free_fixed_bytes_exactly (bytes:V.vec U8.t)
+  requires exists* n spec. fixed_bytes_exactly bytes n spec
+  ensures emp
+{
+  with n spec. unfold (fixed_bytes_exactly bytes n spec);
+  with storage. _;
+  V.free bytes;
+}
+
+fn free_fixed_bytes_allocated (bytes:V.vec U8.t)
+  requires exists* n. fixed_bytes_allocated bytes n
+  ensures emp
+{
+  with n. unfold (fixed_bytes_allocated bytes n);
+  with storage. _;
+  V.free bytes;
+}
+
+fn free_optional_fixed_bytes_exactly (slot:optional_fixed_bytes)
+  requires exists* n spec. optional_fixed_bytes_exactly slot n spec
+  ensures emp
+{
+  with n spec. unfold (optional_fixed_bytes_exactly slot n spec);
+  with present storage. _;
+  Box.free slot.present;
+  V.free slot.bytes;
+}
+
+fn free_cipher_suite_list_exactly (slot:u16_list_storage)
+  requires exists* cap suites. cipher_suite_list_exactly slot cap suites
+  ensures emp
+{
+  with cap suites. unfold (cipher_suite_list_exactly slot cap suites);
+  with items len. _;
+  V.free slot.items;
+  Box.free slot.len;
+}
+
+fn free_cipher_suite_list_allocated (slot:u16_list_storage)
+  requires exists* cap. cipher_suite_list_allocated slot cap
+  ensures emp
+{
+  with cap. unfold (cipher_suite_list_allocated slot cap);
+  with items len. _;
+  V.free slot.items;
+  Box.free slot.len;
+}
+
+fn free_signature_scheme_list_exactly (slot:u16_list_storage)
+  requires exists* cap schemes. signature_scheme_list_exactly slot cap schemes
+  ensures emp
+{
+  with cap schemes. unfold (signature_scheme_list_exactly slot cap schemes);
+  with items len. _;
+  V.free slot.items;
+  Box.free slot.len;
+}
+
+fn free_signature_scheme_list_allocated (slot:u16_list_storage)
+  requires exists* cap. signature_scheme_list_allocated slot cap
+  ensures emp
+{
+  with cap. unfold (signature_scheme_list_allocated slot cap);
+  with items len. _;
+  V.free slot.items;
+  Box.free slot.len;
+}
+
+fn free_optional_secret_exactly (slot:optional_secret_storage)
+  requires exists* spec. optional_secret_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (optional_secret_exactly slot spec);
+  with present secret. _;
+  Box.free slot.present;
+  V.free slot.secret;
+}
+
+fn free_traffic_key_material_exactly (slot:traffic_key_material_storage)
+  requires exists* spec. traffic_key_material_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (traffic_key_material_exactly slot spec);
+  with present secret key iv. _;
+  Box.free slot.present;
+  V.free slot.traffic_secret;
+  V.free slot.traffic_key;
+  V.free slot.traffic_iv;
+}
+
+fn free_connection_config_exactly (cfg:connection_config_storage)
+  requires exists* spec. connection_config_exactly cfg spec
+  ensures emp
+{
+  with spec. unfold (connection_config_exactly cfg spec);
+  with role validation_time. _;
+  Box.free cfg.role_tag;
+  free_sized_bytes_exactly cfg.server_name;
+  free_sized_bytes_exactly cfg.trust_anchors;
+  Box.free cfg.validation_time_seconds;
+  free_cipher_suite_list_exactly cfg.cipher_suites;
+  free_signature_scheme_list_exactly cfg.signature_schemes;
+}
+
+fn free_control_exactly (control:control_storage)
+  requires exists* model_control failure.
+    control_exactly control model_control failure
+  ensures emp
+{
+  with model_control failure.
+    unfold (control_exactly control model_control failure);
+  with control_tag stage_tag failure_present failure_code failure_alert. _;
+  Box.free control.control_tag;
+  Box.free control.handshake_stage_tag;
+  Box.free control.failure_present;
+  Box.free control.failure_code;
+  Box.free control.failure_alert;
+}
+
+fn free_key_schedule_exactly (keys:key_schedule_storage)
+  requires exists* spec. key_schedule_exactly keys spec
+  ensures emp
+{
+  with spec. unfold (key_schedule_exactly keys spec);
+  free_optional_secret_exactly keys.early_secret;
+  free_optional_secret_exactly keys.shared_secret;
+  free_optional_secret_exactly keys.handshake_secret;
+  free_optional_secret_exactly keys.master_secret;
+  free_traffic_key_material_exactly keys.client_handshake_traffic;
+  free_traffic_key_material_exactly keys.server_handshake_traffic;
+  free_traffic_key_material_exactly keys.client_application_traffic;
+  free_traffic_key_material_exactly keys.server_application_traffic;
+  free_optional_secret_exactly keys.exporter_master_secret;
+  free_optional_secret_exactly keys.resumption_master_secret;
+}
+
+fn free_handshake_start_exactly (start:handshake_start_storage)
+  requires exists* spec. handshake_start_exactly start spec
+  ensures emp
+{
+  with spec. unfold (handshake_start_exactly start spec);
+  with present. _;
+  let stored_present = !start.present;
+  assert (pure (stored_present == present));
+  rewrite (handshake_start_payload_exactly start present spec) as
+    (handshake_start_payload_exactly start stored_present spec);
+  match stored_present {
+    true -> {
+      unfold (handshake_start_payload_exactly start true spec);
+      with value. _;
+      unfold (handshake_start_fields_exactly start value);
+      free_sized_bytes_exactly start.server_name;
+      free_fixed_bytes_exactly start.client_random;
+      free_optional_fixed_bytes_exactly start.client_key_share_private;
+      free_fixed_bytes_exactly start.client_key_share_public;
+      free_cipher_suite_list_exactly start.cipher_suites;
+      free_signature_scheme_list_exactly start.signature_schemes;
+      Box.free start.present;
+    }
+    false -> {
+      unfold (handshake_start_payload_exactly start false spec);
+      unfold (handshake_start_fields_allocated start);
+      free_sized_bytes_allocated start.server_name;
+      free_fixed_bytes_allocated start.client_random;
+      free_optional_fixed_bytes_exactly start.client_key_share_private;
+      free_fixed_bytes_allocated start.client_key_share_public;
+      free_cipher_suite_list_allocated start.cipher_suites;
+      free_signature_scheme_list_allocated start.signature_schemes;
+      Box.free start.present;
+    }
+  }
+}
+
+fn free_client_hello_slot
+  (present_box:box bool)
+  (value:IM.client_hello)
+  requires exists* spec. client_hello_slot_exactly present_box value spec
+  ensures emp
+{
+  with spec. unfold (client_hello_slot_exactly present_box value spec);
+  with present random server_name key_share cipher_suites signature_schemes. _;
+  Box.free present_box;
+  V.free value.IM.client_hello_random;
+  V.free value.IM.client_hello_server_name;
+  V.free value.IM.client_hello_key_share;
+  V.free value.IM.client_hello_cipher_suites;
+  V.free value.IM.client_hello_signature_schemes;
+}
+
+fn free_client_hello_metadata
+  (has_server_name_box:box bool)
+  (server_name_len_box:box SZ.t)
+  (cipher_suites_len_box:box SZ.t)
+  (signature_schemes_len_box:box SZ.t)
+  requires exists* spec.
+    client_hello_metadata_exactly
+      has_server_name_box
+      server_name_len_box
+      cipher_suites_len_box
+      signature_schemes_len_box
+      spec
+  ensures emp
+{
+  with spec.
+    unfold (client_hello_metadata_exactly
+      has_server_name_box
+      server_name_len_box
+      cipher_suites_len_box
+      signature_schemes_len_box
+      spec);
+  with has_server_name server_name_len cipher_suites_len signature_schemes_len. _;
+  Box.free has_server_name_box;
+  Box.free server_name_len_box;
+  Box.free cipher_suites_len_box;
+  Box.free signature_schemes_len_box;
+}
+
+fn free_server_hello_slot (slot:box (option IM.server_hello))
+  requires exists* spec. server_hello_slot_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (server_hello_slot_exactly slot spec);
+  with stored. _;
+  let value = !slot;
+  assert (pure (value == stored));
+  match value {
+    Some message -> {
+      lemma_option_some_v spec;
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_server_hello local model
+         | _, _ -> pure False)
+      as
+        (IM.is_valid_server_hello message (Some?.v spec));
+      IM.free_server_hello message;
+      Box.free slot;
+    }
+    None -> {
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_server_hello local model
+         | _, _ -> pure False)
+      as
+        (pure True);
+      Box.free slot;
+    }
+  }
+}
+
+fn free_encrypted_extensions_slot
+  (slot:box (option IM.encrypted_extensions))
+  requires exists* spec. encrypted_extensions_slot_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (encrypted_extensions_slot_exactly slot spec);
+  with stored. _;
+  let value = !slot;
+  assert (pure (value == stored));
+  match value {
+    Some message -> {
+      lemma_option_some_v spec;
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model ->
+           IM.is_valid_encrypted_extensions local model
+         | _, _ -> pure False)
+      as
+        (IM.is_valid_encrypted_extensions message (Some?.v spec));
+      IM.free_encrypted_extensions message;
+      Box.free slot;
+    }
+    None -> {
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model ->
+           IM.is_valid_encrypted_extensions local model
+         | _, _ -> pure False)
+      as
+        (pure True);
+      Box.free slot;
+    }
+  }
+}
+
+fn free_certificate_slot (slot:box (option IM.certificate_msg))
+  requires exists* spec. certificate_slot_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (certificate_slot_exactly slot spec);
+  with stored. _;
+  let value = !slot;
+  assert (pure (value == stored));
+  match value {
+    Some message -> {
+      lemma_option_some_v spec;
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_certificate_msg local model
+         | _, _ -> pure False)
+      as
+        (IM.is_valid_certificate_msg message (Some?.v spec));
+      IM.free_certificate_msg message;
+      Box.free slot;
+    }
+    None -> {
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_certificate_msg local model
+         | _, _ -> pure False)
+      as
+        (pure True);
+      Box.free slot;
+    }
+  }
+}
+
+fn free_certificate_verify_slot
+  (slot:box (option IM.certificate_verify))
+  requires exists* spec. certificate_verify_slot_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (certificate_verify_slot_exactly slot spec);
+  with stored. _;
+  let value = !slot;
+  assert (pure (value == stored));
+  match value {
+    Some message -> {
+      lemma_option_some_v spec;
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model ->
+           IM.is_valid_certificate_verify local model
+         | _, _ -> pure False)
+      as
+        (IM.is_valid_certificate_verify message (Some?.v spec));
+      IM.free_certificate_verify message;
+      Box.free slot;
+    }
+    None -> {
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model ->
+           IM.is_valid_certificate_verify local model
+         | _, _ -> pure False)
+      as
+        (pure True);
+      Box.free slot;
+    }
+  }
+}
+
+fn free_finished_slot (slot:box (option IM.finished))
+  requires exists* spec. finished_slot_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (finished_slot_exactly slot spec);
+  with stored. _;
+  let value = !slot;
+  assert (pure (value == stored));
+  match value {
+    Some message -> {
+      lemma_option_some_v spec;
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_finished local model
+         | _, _ -> pure False)
+      as
+        (IM.is_valid_finished message (Some?.v spec));
+      IM.free_finished message;
+      Box.free slot;
+    }
+    None -> {
+      rewrite
+        (match stored, spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_finished local model
+         | _, _ -> pure False)
+      as
+        (pure True);
+      Box.free slot;
+    }
+  }
+}
+
+fn free_handshake_messages_exactly (messages:handshake_message_storage)
+  requires exists* spec. handshake_messages_exactly messages spec
+  ensures emp
+{
+  with spec. unfold (handshake_messages_exactly messages spec);
+  free_client_hello_slot
+    messages.client_hello_present
+    messages.client_hello;
+  free_client_hello_metadata
+    messages.client_hello_has_server_name
+    messages.client_hello_server_name_len
+    messages.client_hello_cipher_suites_len
+    messages.client_hello_signature_schemes_len;
+  free_server_hello_slot messages.server_hello;
+  free_encrypted_extensions_slot messages.encrypted_extensions;
+  free_certificate_slot messages.certificate;
+  free_certificate_verify_slot messages.certificate_verify;
+  free_finished_slot messages.server_finished;
+  free_finished_slot messages.client_finished;
+}
+
+noextract
+let optional_fixed_bytes_allocated
+  ([@@@mkey] slot:optional_fixed_bytes)
+  (n:nat)
+  : slprop =
+  exists* present storage.
+    Box.pts_to slot.present present **
+    V.pts_to slot.bytes storage **
+    pure (V.is_full_vec slot.bytes /\
+          V.length slot.bytes == n /\
+          B.length storage == n)
+
+ghost fn forget_server_key_share_private_value
+  (slot:optional_fixed_bytes)
+  (hs:Ghost.erased CS.handshake_state)
+  requires server_key_share_private_exactly slot (Ghost.reveal hs)
+  ensures optional_fixed_bytes_allocated slot 32
+{
+  let hs_value = Ghost.reveal hs;
+  match hs_value.CS.hs_server_selection {
+    Some selection -> {
+      match selection.CS.server_key_share_private {
+        Some sk -> {
+          rewrite (server_key_share_private_exactly slot hs_value) as
+            (optional_fixed_bytes_exactly slot 32 (Some sk));
+          unfold (optional_fixed_bytes_exactly slot 32 (Some sk));
+          with present storage. _;
+          fold (optional_fixed_bytes_allocated slot 32);
+        }
+        None -> {
+          rewrite (server_key_share_private_exactly slot hs_value) as
+            (optional_fixed_bytes_exactly slot 32 None);
+          unfold (optional_fixed_bytes_exactly slot 32 None);
+          with present storage. _;
+          fold (optional_fixed_bytes_allocated slot 32);
+        }
+      }
+    }
+    None -> {
+      rewrite (server_key_share_private_exactly slot hs_value) as
+        (optional_fixed_bytes_exactly slot 32 None);
+      unfold (optional_fixed_bytes_exactly slot 32 None);
+      with present storage. _;
+      fold (optional_fixed_bytes_allocated slot 32);
+    }
+  }
+}
+
+fn free_server_key_share_private_exactly (slot:optional_fixed_bytes)
+  requires exists* spec. server_key_share_private_exactly slot spec
+  ensures emp
+{
+  with spec.
+    assert (server_key_share_private_exactly slot spec);
+  call_ghost
+    (forget_server_key_share_private_value slot)
+    (Ghost.hide spec);
+  unfold (optional_fixed_bytes_allocated slot 32);
+  with present storage. _;
+  Box.free slot.present;
+  V.free slot.bytes;
+}
+
+fn free_peer_exactly (peer:peer_storage)
+  requires exists* spec. peer_exactly peer spec
+  ensures emp
+{
+  with spec. unfold (peer_exactly peer spec);
+  with present hostname hostname_len public_key public_key_len schemes schemes_len. _;
+  Box.free peer.present;
+  V.free peer.validated_hostname.bytes;
+  Box.free peer.validated_hostname.len;
+  V.free peer.leaf_public_key.bytes;
+  Box.free peer.leaf_public_key.len;
+  V.free peer.permitted_signature_schemes.items;
+  Box.free peer.permitted_signature_schemes.len;
+}
+
+fn free_handshake_buffers_exactly (buffers:handshake_buffer_storage)
+  requires exists* spec. handshake_buffers_exactly buffers spec
+  ensures emp
+{
+  with spec. unfold (handshake_buffers_exactly buffers spec);
+  with parsed. _;
+  free_sized_bytes_exactly buffers.client_hello_bytes;
+  free_sized_bytes_exactly buffers.server_hello_bytes;
+  free_sized_bytes_exactly buffers.encrypted_server_handshake_bytes;
+  Box.free buffers.encrypted_server_handshake_parsed;
+  free_optional_sized_bytes_exactly buffers.certificate_leaf_der;
+  free_optional_sized_bytes_exactly buffers.certificate_verify_input;
+}
+
+fn free_handshake_exactly (handshake:handshake_storage)
+  requires exists* spec. handshake_exactly handshake spec
+  ensures emp
+{
+  with spec. unfold (handshake_exactly handshake spec);
+  with cv_verified server_finished_verified. _;
+  free_handshake_start_exactly handshake.start;
+  free_handshake_messages_exactly handshake.messages;
+  unfold (server_selection_presence_exactly
+    handshake.server_selection_present
+    spec.CS.hs_server_selection);
+  with selection_present. _;
+  Box.free handshake.server_selection_present;
+  unfold (server_key_share_exactly handshake.server_key_share spec);
+  free_optional_fixed_bytes_exactly handshake.server_key_share;
+  free_server_key_share_private_exactly handshake.server_key_share_private;
+  free_peer_exactly handshake.validated_peer;
+  Box.free handshake.certificate_verify_verified;
+  Box.free handshake.server_finished_verified;
+  free_sized_bytes_exactly handshake.transcript;
+  free_handshake_buffers_exactly handshake.buffers;
+  free_key_schedule_exactly handshake.keys;
+}
+
+fn free_record_layer_exactly (records:record_storage)
+  requires exists* spec. record_layer_exactly records spec
+  ensures emp
+{
+  with spec. unfold (record_layer_exactly records spec);
+  Rec.record_state_free records.read;
+  Rec.record_state_free records.write;
+}
+
+fn free_application_exactly (application:application_storage)
+  requires exists* spec. application_exactly application spec
+  ensures emp
+{
+  with spec. unfold (application_exactly application spec);
+  with source_offset key_update_response_pending. _;
+  free_sized_bytes_exactly application.pending_plaintext;
+  free_sized_bytes_exactly application.pending_source_record;
+  Box.free application.pending_source_offset;
+  free_sized_bytes_exactly application.pending_received_raw;
+  Box.free application.key_update_response_pending;
+}
+
+fn free_connection_model_exactly (c:connection_state)
+  requires exists* model. connection_model_exactly c model
+  ensures emp
+{
+  with model. unfold (connection_model_exactly c model);
+  free_connection_config_exactly c.config;
+  free_control_exactly c.control;
+  free_record_layer_exactly c.records;
+  free_handshake_exactly c.handshake;
+  free_application_exactly c.application;
+}
+
+fn free_connection (c:connection_state)
+  requires connection_exactly c 'st
+  ensures connection_released c 'st
+{
+  unfold (connection_exactly c 'st);
+  free_connection_model_exactly c;
+  fold (connection_released c 'st);
 }
 
 fn alloc_empty_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
@@ -1126,7 +1730,12 @@ fn alloc_handshake_empty ()
   assert (pure (handshake.server_key_share_private == server_key_share_private));
   rewrite (optional_fixed_bytes_exactly server_key_share_private 32 None) as
     (optional_fixed_bytes_exactly handshake.server_key_share_private 32 None);
-  rewrite (optional_fixed_bytes_exactly handshake.server_key_share_private 32 None) as
+  assert (pure (
+    server_key_share_private_option CS.empty_handshake_state == None));
+  rewrite (optional_fixed_bytes_exactly
+    handshake.server_key_share_private
+    32
+    None) as
     (server_key_share_private_exactly
       handshake.server_key_share_private
       CS.empty_handshake_state);
@@ -1175,7 +1784,7 @@ fn alloc_application_empty ()
     (sized_bytes_exactly app.pending_received_raw max_pending_raw_len CS.empty_application_state.CS.app_pending_received_raw);
   rewrite (Box.pts_to key_update_response_pending false) as
     (Box.pts_to app.key_update_response_pending false);
-  assert (pure (CS.pending_application_consistent CS.empty_application_state));
+  assert (pure (TLS13.Spec.StateMachine.Correspondence.pending_application_consistent CS.empty_application_state));
   fold (application_exactly app CS.empty_application_state);
   app
 }

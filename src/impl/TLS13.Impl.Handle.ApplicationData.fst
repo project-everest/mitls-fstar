@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module Arr = Pulse.Lib.Array
+module AC = TLS13.Impl.ArrayCopy
 module B = TLS13.Bytes
 module CR = TLS13.Impl.ConnectionState.Repr
 module CF = TLS13.Impl.ConnectionState.Fail
@@ -187,6 +188,9 @@ fn handle_application_data
                     resp
                     'old_network_out
                     app_out_bytes) /\
+                (SZ.v resp.CT.app_out_len > 0 ==>
+                  resp.CT.status == CT.StepOk /\
+                  resp.CT.network_out_len == 0sz) /\
                 (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
   let ready = CQ.can_receive_application_data c;
@@ -214,7 +218,12 @@ fn handle_application_data
         V.to_array_pts_to lapp.L.application_data_bytes;
         pts_to_len (V.vec_to_array lapp.L.application_data_bytes);
         pts_to_len app_out;
-        Arr.memcpy_l data_len (V.vec_to_array lapp.L.application_data_bytes) app_out;
+        AC.copy_prefix
+          data_len
+          (V.vec_to_array lapp.L.application_data_bytes)
+          16640sz
+          app_out
+          app_out_len;
         V.to_vec_pts_to lapp.L.application_data_bytes;
         with app_out_bytes. assert (pts_to app_out app_out_bytes);
         assert (pure (B.length app_out_bytes == SZ.v app_out_len));
@@ -282,6 +291,9 @@ fn handle_application_data
               app_out_bytes /\
             Seq.equal bytes (CT.response_app_out resp app_out_bytes)));
         assert (pure (resp.CT.status == CT.IllegalTransition ==> False));
+        assert (pure (SZ.v resp.CT.app_out_len > 0 ==>
+          resp.CT.status == CT.StepOk /\
+          resp.CT.network_out_len == 0sz));
     resp
   } else {
     let resp =
@@ -315,6 +327,9 @@ fn handle_application_data
         resp
         'old_network_out
         'old_app_out));
+    assert (pure (SZ.v resp.CT.app_out_len > 0 ==>
+      resp.CT.status == CT.StepOk /\
+      resp.CT.network_out_len == 0sz));
     resp
   }
 }

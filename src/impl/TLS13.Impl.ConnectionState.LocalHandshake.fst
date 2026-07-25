@@ -10,7 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -29,7 +29,7 @@ module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -5388,10 +5388,10 @@ fn try_install_client_handshake_traffic_keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model);
 
     lemma_installed_traffic_keys_state_evolves st0 (Ghost.reveal install);
-    assert (pure (CS.connection_state_evolves
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
       st0
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
-    assert (pure (CS.connection_state_consistent
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
     MR.update c.ghost_state (installed_traffic_keys_state st0 (Ghost.reveal install));
     fold (connection_exactly c (installed_traffic_keys_state st0 (Ghost.reveal install)));
@@ -5674,10 +5674,10 @@ fn try_install_server_handshake_traffic_keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model);
 
     lemma_installed_traffic_keys_state_evolves st0 (Ghost.reveal install);
-    assert (pure (CS.connection_state_evolves
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
       st0
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
-    assert (pure (CS.connection_state_consistent
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
     MR.update c.ghost_state (installed_traffic_keys_state st0 (Ghost.reveal install));
     fold (connection_exactly c (installed_traffic_keys_state st0 (Ghost.reveal install)));
@@ -5949,10 +5949,10 @@ fn try_install_client_application_traffic_keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model);
 
     lemma_installed_traffic_keys_state_evolves st0 (Ghost.reveal install);
-    assert (pure (CS.connection_state_evolves
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
       st0
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
-    assert (pure (CS.connection_state_consistent
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
     MR.update c.ghost_state (installed_traffic_keys_state st0 (Ghost.reveal install));
     fold (connection_exactly c (installed_traffic_keys_state st0 (Ghost.reveal install)));
@@ -6235,10 +6235,10 @@ fn try_install_server_application_traffic_keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model);
 
     lemma_installed_traffic_keys_state_evolves st0 (Ghost.reveal install);
-    assert (pure (CS.connection_state_evolves
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
       st0
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
-    assert (pure (CS.connection_state_consistent
+    assert (pure (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
       (installed_traffic_keys_state st0 (Ghost.reveal install))));
     MR.update c.ghost_state (installed_traffic_keys_state st0 (Ghost.reveal install));
     fold (connection_exactly c (installed_traffic_keys_state st0 (Ghost.reveal install)));

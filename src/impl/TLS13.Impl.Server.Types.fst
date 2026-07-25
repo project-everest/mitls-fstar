@@ -4,7 +4,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module H = TLS13.Handshake.Spec
 module Tr = TLS13.Transcript
@@ -21,7 +21,7 @@ module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
 module R = TLS13.Record.Spec
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -675,23 +675,23 @@ let server_state_core_correct
      B.length cfg.CS.server_certificate_chain <=
        Bounds.max_server_certificate_chain_len
    | None -> False) /\
-  CS.connection_state_consistent st /\
-  CS.connection_state_full_log_consistent_for_role CS.ServerEndpoint st
+  TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+  TLS13.Spec.StateMachine.Replay.connection_state_full_log_consistent_for_role CS.ServerEndpoint st
 
 let server_state_correct
   (st:CS.connection_state)
   : prop =
   server_state_core_correct st /\
-  CS.connection_state_sent_seal_replay_consistent st /\
-  CS.connection_state_received_decode_replay_consistent st
+  TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st /\
+  TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st
 
 let server_raw_to_message_replay_consistent
   (st:CS.connection_state)
   : prop =
-  CS.connection_state_raw_event_replay_consistent st /\
-  CS.connection_state_protected_raw_segmented_replay_consistent st /\
-  CS.connection_state_sent_seal_replay_consistent st /\
-  CS.connection_state_received_decode_replay_consistent st
+  TLS13.Spec.StateMachine.Replay.connection_state_raw_event_replay_consistent st /\
+  TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent st /\
+  TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st /\
+  TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st
 
 let server_end_to_end_invariant
   (st:CS.connection_state)
@@ -715,7 +715,7 @@ let lemma_initial_server_state_correct
   CSL.lemma_connection_state_protected_raw_segmented_replay (CS.initial cfg);
   CSL.lemma_initial_sent_seal_replay_consistent cfg;
   CSL.lemma_initial_received_decode_replay_consistent cfg;
-  assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let lemma_initial_server_end_to_end_invariant
   (cfg:CS.connection_config)
@@ -736,7 +736,7 @@ let lemma_server_state_correct_protected_raw_segmented_replay
   (st:CS.connection_state)
   : Lemma
       (requires server_state_correct st)
-      (ensures CS.connection_state_protected_raw_segmented_replay_consistent st)
+      (ensures TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent st)
 =
   CSL.lemma_connection_state_protected_raw_segmented_replay st
 
@@ -744,15 +744,15 @@ let lemma_model_record_keys_consistent_for_role_record_read_key_schedule_project
   (role:CS.endpoint_role)
   (model:CS.connection_model)
   : Lemma
-      (requires CS.model_record_keys_consistent_for_role role model)
-      (ensures CS.record_read_key_schedule_projection_for_role role model)
+      (requires TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role role model)
+      (ensures TLS13.Spec.StateMachine.KeyMaterial.record_read_key_schedule_projection_for_role role model)
 =
   match model.CS.model_control with
   | CS.ControlFailed _ -> ()
   | _ ->
     let keys = model.CS.model_handshake.CS.hs_keys in
     let read = model.CS.model_record.CS.record_read in
-    assert (CS.record_keys_match_key_schedule_for_role
+    assert (TLS13.Spec.StateMachine.KeyMaterial.record_keys_match_key_schedule_for_role
       role
       CS.TrafficRead
       model.CS.model_control
@@ -761,7 +761,7 @@ let lemma_model_record_keys_consistent_for_role_record_read_key_schedule_project
     (match read.R.epoch with
      | R.Initial -> ()
      | R.Handshake ->
-       assert (CS.traffic_material_option_matches_record_direction
+       assert (TLS13.Spec.StateMachine.KeyMaterial.traffic_material_option_matches_record_direction
          (CS.traffic_material_for_label
            keys
            CS.TrafficHandshake
@@ -781,7 +781,7 @@ let lemma_model_record_keys_consistent_for_role_record_read_key_schedule_project
             CS.traffic_material_matches_record_direction material' read)
         | None -> assert False)
      | R.Application ->
-       assert (CS.traffic_material_option_matches_record_direction
+       assert (TLS13.Spec.StateMachine.KeyMaterial.traffic_material_option_matches_record_direction
          (CS.traffic_material_for_label
            keys
            CS.TrafficApplication
@@ -805,14 +805,14 @@ let lemma_server_state_correct_record_read_key_schedule_projection
   (st:CS.connection_state)
   : Lemma
       (requires server_state_correct st)
-      (ensures CS.record_read_key_schedule_projection_for_role
+      (ensures TLS13.Spec.StateMachine.KeyMaterial.record_read_key_schedule_projection_for_role
         CS.ServerEndpoint
         st.CS.cs_model)
 =
   assert (server_state_core_correct st);
-  assert (CS.connection_state_full_log_consistent_for_role CS.ServerEndpoint st);
-  assert (CS.connection_state_layered_log_consistent_for_role CS.ServerEndpoint st);
-  assert (CS.connection_state_record_keys_consistent_for_role CS.ServerEndpoint st);
+  assert (TLS13.Spec.StateMachine.Replay.connection_state_full_log_consistent_for_role CS.ServerEndpoint st);
+  assert (TLS13.Spec.StateMachine.Log.connection_state_layered_log_consistent_for_role CS.ServerEndpoint st);
+  assert (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role CS.ServerEndpoint st);
   lemma_model_record_keys_consistent_for_role_record_read_key_schedule_projection
     CS.ServerEndpoint
     st.CS.cs_model
@@ -833,7 +833,7 @@ noextract
 let event_api_app_out
   (ev:CS.conn_event)
   : B.bytes =
-  CL.concat_bytes (CS.conn_event_app_received_delta ev)
+  CL.concat_bytes (TLS13.Spec.StateMachine.Log.conn_event_app_received_delta ev)
 
 noextract
 let response_app_out_matches_event
@@ -845,7 +845,7 @@ let response_app_out_matches_event
 
 noextract
 let event_api_app_sent (ev:CS.conn_event) : GTot B.bytes =
-  CL.concat_bytes (CS.conn_event_app_sent_delta ev)
+  CL.concat_bytes (TLS13.Spec.StateMachine.Log.conn_event_app_sent_delta ev)
 
 noextract
 let local_event_kind_matches
@@ -975,6 +975,63 @@ let legal_response_for_event
   Seq.equal (response_network_out resp network_out) raw_sent /\
   response_app_out_matches_event resp ev app_out
 
+let lemma_legal_response_for_event_app_log_delta
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out)
+      (ensures TLS13.Spec.StateMachine.Log.model_app_log_delta
+        st0.CS.cs_model ev st1.CS.cs_model)
+=
+  CSL.lemma_legal_connection_delta_app_log_delta
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1
+
+let lemma_legal_response_closed_app_out_empty
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        st1.CS.cs_model.CS.model_control == CS.ControlClosed)
+      (ensures B.length (response_app_out resp app_out) == 0)
+=
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsApplicationData _ ->
+       (match msg.CL.message_direction with
+        | CL.Sent -> assert False
+        | CL.Received -> assert False)
+     | _ ->
+       assert (Seq.equal (response_app_out resp app_out) B.empty);
+       Seq.lemma_eq_elim (response_app_out resp app_out) B.empty)
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData _ -> assert False
+     | _ ->
+       assert (Seq.equal (response_app_out resp app_out) B.empty);
+       Seq.lemma_eq_elim (response_app_out resp app_out) B.empty)
+
 noextract
 let unexpected_message_response
   (st0:CS.connection_state)
@@ -1063,7 +1120,7 @@ let legal_local_response
   local_event_kind_matches kind payload ev /\
   local_payload_matches_app_sent_delta kind payload ev /\
   local_event_supported_profile kind payload ev /\
-  CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
+  TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
   resp.status == StepOk /\
   legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
@@ -1169,13 +1226,13 @@ let server_local_event_end_to_end_correct
    exists ev raw_sent raw_received.
      legal_local_response
        st0 st1 resp kind payload ev raw_sent raw_received network_out app_out /\
-     CS.event_protected_raw_segmented_success ev raw_sent raw_received /\
-     CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
+     TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success ev raw_sent raw_received /\
+     TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
      (match ev with
       | CS.ConnNetworkEvent msg ->
          if msg.CL.message_direction == CL.Sent &&
            CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false
-        then CS.record_write_key_schedule_projection_for_role
+        then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
                CS.ServerEndpoint
                st0.CS.cs_model
         else True
@@ -1385,12 +1442,12 @@ let server_network_bytes_end_to_end_correct
        raw_received
        network_out
        app_out /\
-     CS.event_protected_raw_segmented_success ev raw_sent raw_received /\
+     TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success ev raw_sent raw_received /\
      (match ev with
       | CS.ConnNetworkEvent msg ->
          if msg.CL.message_direction == CL.Sent &&
            CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false
-        then CS.record_write_key_schedule_projection_for_role
+        then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
                CS.ServerEndpoint
                st0.CS.cs_model
         else True
@@ -1477,7 +1534,7 @@ let server_protected_record_decode_uses_scheduled_read_key
     WS.parse_record_wire raw_received ==
       Some (T.Application_data, outer_fragment, B.length raw_received) /\
     CT.protected_record_opened st0 raw_received outer_fragment opened /\
-    CS.record_read_key_schedule_projection_for_role
+    TLS13.Spec.StateMachine.KeyMaterial.record_read_key_schedule_projection_for_role
       CS.ServerEndpoint
       st0.CS.cs_model
 
@@ -1499,17 +1556,17 @@ let lemma_server_received_message_event_decode_projection
          then True
          else server_protected_record_decode_correct st0 raw_received msg))
       (ensures
-        CS.received_event_nonempty_decode_projection
+        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
           st0.CS.cs_model
           (received_message_event msg)
           raw_received)
 =
   if CS.network_message_is_cleartext CL.Received msg then (
-    assert (CS.received_event_decode_projection
+    assert (TLS13.Spec.StateMachine.Canonical.received_event_decode_projection
       st0.CS.cs_model
       (received_message_event msg)
       raw_received);
-    assert (CS.received_event_nonempty_decode_projection
+    assert (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
       st0.CS.cs_model
       (received_message_event msg)
       raw_received)
@@ -1519,15 +1576,15 @@ let lemma_server_received_message_event_decode_projection
       st0
       raw_received
       msg;
-    assert (CS.received_single_protected_message_decode
+    assert (TLS13.Spec.StateMachine.Canonical.received_single_protected_message_decode
       st0.CS.cs_model
       msg
       raw_received);
-    assert (CS.received_event_decode_projection
+    assert (TLS13.Spec.StateMachine.Canonical.received_event_decode_projection
       st0.CS.cs_model
       (received_message_event msg)
       raw_received);
-    assert (CS.received_event_nonempty_decode_projection
+    assert (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
       st0.CS.cs_model
       (received_message_event msg)
       raw_received)
@@ -1589,7 +1646,7 @@ let server_network_connection_failed_consumed_prefix
         raw_received
         network_out
         app_out /\
-      CS.received_event_nonempty_decode_projection
+      TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
         st0.CS.cs_model
         (received_message_event (M.TlsAlert alert))
         raw_received

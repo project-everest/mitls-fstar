@@ -1,9 +1,9 @@
 tools/FStar/
 tools/everparse/
-third_party/rfc/
 _cache/
 _output/
 _extract/
+generated-checked.tar.gz
 *.checked
 *.krml
 *.smt2
@@ -26,3 +26,6 @@ test/openssl_echo_server.log
 test/openssl_echo_server.port
 test/openssl-echo.*
 test/certs/
+test/perf/tls13_bench
+test/perf/tls13_bench-gprof
+benchmark-results/

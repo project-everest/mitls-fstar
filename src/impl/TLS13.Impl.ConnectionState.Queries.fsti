@@ -11,7 +11,7 @@ module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -29,7 +29,7 @@ module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -424,10 +424,6 @@ fn can_receive_client_finished
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-            Some?
-              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
-              max_transcript_len /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             CS.legal_event
               st0.CS.cs_model
@@ -739,10 +735,6 @@ fn can_receive_server_finished
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished == None /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
-            Some?
-              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
-              max_transcript_len /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             CS.legal_event
               st0.CS.cs_model

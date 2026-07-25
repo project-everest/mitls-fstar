@@ -9,7 +9,7 @@ open Pulse.Lib.Box { box, (!), (:=) }
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module Crypto = TLS13.Crypto
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CF = TLS13.Impl.ConnectionState.Fail
@@ -338,11 +338,6 @@ fn process_sign_certificate_verify
         (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))));
       fold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
 
-      W.lemma_certificateVerify_representable (Ghost.reveal cv);
-      assert (pure (B.length
-        (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))
-        <= M.signature_max_len));
-      assert (pure (W.certificateVerify_representable (Ghost.reveal cv)));
       assert (pure (CS.legal_event
         'st0.CS.cs_model
         (CS.ConnLocalEvent (CS.LocalSignCertificateVerify (Ghost.reveal cv)))));

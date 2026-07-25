@@ -46,6 +46,22 @@ inline_for_extraction let max_trust_anchors_len_sz : SZ.t = 65535sz
 inline_for_extraction let max_pending_plaintext_len_sz : SZ.t = 32768sz
 inline_for_extraction let max_pending_raw_len_sz : SZ.t = 32768sz
 
+(* Executable [SZ.t] companion of [max_server_certificate_chain_len].
+
+   Unlike the [inline_for_extraction] [sz] literals above, this one is kept
+   ABSTRACT: it is declared here as a [val] with a refinement pinning its value
+   to the authoritative spec bound, and realized once in the [.fst].  The abstract
+   [val] means KaRaMeL cannot inline it, so the runtime certificate-chain length
+   check in the server driver extracts to a reference to the single named C
+   constant [..._max_server_certificate_chain_len_sz] rather than baking the
+   literal bound into the driver's C at the check site.
+
+   The refinement [SZ.v c == max_server_certificate_chain_len] lets callers relate
+   the runtime check to the spec bound directly, with no separate connecting
+   lemma. *)
+val max_server_certificate_chain_len_sz
+  : c:SZ.t { SZ.v c == max_server_certificate_chain_len }
+
 let option_is_some #a (x:option a) : prop =
   match x with
   | Some _ -> True

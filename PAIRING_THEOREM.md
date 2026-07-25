@@ -4,8 +4,8 @@ This note explains the audit-facing theorem
 `TLS13.Impl.Driver.Pairing.lemma_client_server_driver_end_to_end_key_material_agrees`.
 It is grounded in the current code in
 `src/impl/TLS13.Impl.Driver.Pairing.{fsti,fst}` and the supporting pure
-connection-state lemmas in `src/spec/TLS13.Spec.ConnectionState.fst` and
-`src/spec/TLS13.ConnectionState.Lemmas.{fsti,fst}`.
+state-machine definitions in `src/spec/core/TLS13.Spec.StateMachine.fst` and
+supporting lemmas in `src/spec/properties/TLS13.ConnectionState.Lemmas.{fsti,fst}`.
 
 The short version: the theorem is a compositional bridge. Given two
 application-ready client/server model states, matching external transport byte
@@ -109,7 +109,7 @@ where:
   both endpoints' current application traffic material matches the expected
   derived application traffic key/IV material
   (`Pairing.fsti:402-408`,
-  `TLS13.Spec.ConnectionState.fst:2084-2090`).
+  `TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees`).
 
 So the theorem assumes, rather than proves from raw bytes, that:
 
@@ -486,7 +486,7 @@ paired no-tail valid byte traces
 The old `15`-event client shape had to be treated skeptically.  The
 abstract legality condition for sending the client Finished requires
 `ks_client_handshake_traffic` as well as both application traffic secrets
-(`TLS13.Spec.ConnectionState.legal_handshake_message`, the
+(`TLS13.Spec.StateMachine.legal_handshake_message`, the
 `CL.Sent, M.Finished, HsServerFinishedVerified` case).  The legacy
 client suffix installs the server handshake read traffic keys but does not
 include a separate client handshake write-key install before sending Finished.
@@ -653,7 +653,7 @@ therefore treats the following as the cryptographic specification/TCB boundary:
 - `lemma_x25519_shared_agreement`;
 - AEAD seal/open and signature verification functions.
 
-See `src/spec/TLS13.Crypto.Spec.fsti:18-77`.
+See `src/spec/assumptions/TLS13.Crypto.Spec.fsti:18-77`.
 
 For this theorem, the crucial crypto assumption is
 `lemma_x25519_shared_agreement`:
@@ -701,7 +701,7 @@ security properties remain outside the postconditions. For example,
 `random_bytes` only proves ownership and output length, not entropy, while the
 runtime X25519 path is connected to `C.x25519_shared` through
 `x25519_shared_call` and `lemma_x25519_shared_call_success`
-(`src/impl/TLS13.Crypto.fsti:16-20`, `119-173`). The default client/server
+(`src/impl/extern/TLS13.Crypto.fsti:16-20`, `119-173`). The default client/server
 configuration fixes the implementation profile to
 `TLS_CHACHA20_POLY1305_SHA256`, `RsaPssRsaeSha256`, and server group `X25519`
 (`src/impl/TLS13.Impl.ConnectionState.Repr.fsti:1183-1247`).

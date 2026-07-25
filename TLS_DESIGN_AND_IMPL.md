@@ -29,11 +29,12 @@ and application-log projection.
 | State mutations | `src/impl/TLS13.Impl.ConnectionState.{Fail,Network,LocalHandshake,LocalAuth,LocalSend,LocalApp}.fst` | Responsibility-specific stateful mutation functions and protocol-transition proof boundaries. |
 | Protocol handlers | `src/impl/TLS13.Impl.Handle.*` | Handshake, local-driver, alert, application data, ChangeCipherSpec, decode-error, and dispatch logic. |
 | Low-level message layer | `src/impl/TLS13.Impl.Messages.fst` | Extractable `L` messages and Pulse validity predicates relating them to pure `M` messages. |
-| Pure wire/message specs | `src/spec/TLS13.Wire.Spec.*`, `src/spec/TLS13.Messages.fst` | Mathematical parse/serialize model and pure TLS messages. |
-| Pure connection spec | `src/spec/TLS13.Spec.ConnectionState.fst` | Audit-facing TLS client state model, log invariants, and legal per-step deltas. |
-| Connection-state proof support | `src/spec/TLS13.ConnectionState.Lemmas.fst` | Preservation/projection lemmas for the connection-state spec; not part of the primary review surface. |
-| Layered log vocabulary | `src/spec/TLS13.ConnectionLog.fst` | Raw I/O logs, records/messages, directed messages, app projection, and stream-shape facts. |
-| Lightweight trace automaton | `src/spec/TLS13.StateMachine.fst` | Compact client-only trace/state vocabulary used by `ConnectionLog` and implementation proof projections; it is not the authoritative connection-state model. |
+| Pure wire/message specs | `src/spec/core/TLS13.Wire.Spec.*`, `src/spec/core/TLS13.Messages.fst` | Mathematical parse/serialize model and pure TLS messages. |
+| Pure connection spec | `src/spec/core/TLS13.Spec.StateMachine.fst` | Audit-facing, role-parametric TLS connection state, legal events, and per-step deltas. |
+| Endpoint machines | `src/spec/core/TLS13.Spec.Endpoint.{Client,Server,Wire}.fst` | Client/server step relations, state-machine instances, and their canonical TLS record wire format. |
+| Connection-state proof support | `src/spec/properties/TLS13.ConnectionState.Lemmas.fst` | Preservation/projection lemmas for the connection-state spec; not part of the primary review surface. |
+| Layered log vocabulary | `src/spec/core/TLS13.ConnectionLog.fst` | Raw I/O logs, records/messages, directed messages, app projection, and stream-shape facts. |
+| Lightweight trace projection | `src/spec/core/TLS13.Spec.StateMachine.ClientTrace.fst` | Compact client-only trace vocabulary used by log/projection proofs; it is not the authoritative connection-state model. |
 | Record/crypto implementation | `src/impl/TLS13.Record.*`, `src/impl/TLS13.KeySchedule.*` | Extracted record-layer and key-schedule implementation against crypto TCBs. |
 | Parser/serializer implementation | `src/impl/TLS13.Impl.Parser.*`, `src/impl/TLS13.Impl.Serializer.*` | Verified Pulse facades for the supported parser/serializer hooks, with postconditions tied to `TLS13.Wire.Spec` and the extracted low-level record/key code. |
 | Runtime tests | `test/unit/test_extracted_client_openssl_echo.c`, `test/openssl_echo_server.c` | Local OpenSSL TLS 1.3 interop through the extracted client driver. |
@@ -179,7 +180,7 @@ The public client API is buffer/event oriented:
   payload; certificate-validation readiness now also proves the parsed
   Certificate and copied leaf DER are present, while certificate validation and
   CertificateVerify signature checking remain explicit external TCB actions.
-  `TLS13.Spec.ConnectionState` now packages
+  `TLS13.Spec.StateMachine` now packages
   the layered log invariant, cumulative connection-log view consistency, and
   cumulative raw-event replay as `connection_state_full_log_consistent`.
   `TLS13.Impl.Client.Types` uses that package in compact step theorems:
@@ -243,7 +244,7 @@ The public client API is buffer/event oriented:
   the network theorem exposes `CT.network_bytes_network_out_seal_projection`,
   which now carries the same output-seal surface for every network step,
   including exact `LocalFail tls_decode_error` witnesses for `DecodeError`
-  responses. `TLS13.Spec.ConnectionState` also has parallel cumulative replay
+  responses. `TLS13.Spec.StateMachine` also has parallel cumulative replay
   predicates for sent single-record protected seals and accepted received
   protected decodes:
   `connection_state_sent_seal_replay_consistent` and
@@ -420,7 +421,7 @@ Other trusted runtime boundaries remain:
 1. Lock `TLS13.Impl.Client.fsti` as the public proof/API boundary.
    Keep it buffer/event oriented and avoid driver-supplied ghost artifacts.
 2. State the final `process_network_bytes` theorem in terms of
-   `TLS13.Spec.ConnectionState` and a strengthened layered invariant. It should
+   `TLS13.Spec.StateMachine` and a strengthened layered invariant. It should
    prove that consumed network prefixes, emitted network prefixes, and app
    observations are justified by legal spec deltas. The current named predicate
    already exposes the consumed prefix as `network_consumed_prefix` and carries
@@ -432,7 +433,7 @@ Other trusted runtime boundaries remain:
    for ready non-external local actions, and certificate-validation readiness
    exposes the stored Certificate plus copied leaf DER that the external driver
    must validate.
-4. Strengthen `TLS13.ConnectionLog` / `TLS13.Spec.ConnectionState` so raw bytes,
+4. Strengthen `TLS13.ConnectionLog` / `TLS13.Spec.StateMachine` so raw bytes,
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
    epochs, pending buffers, and app-log projection live in one invariant. The
    spec now has admit-free one-record, non-empty-prefix, head/tail,

@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let keyShareClientHello_list_bytesize_nil = LP.serialize_list_nil keyShareEntry_parser keyShareEntry_serializer
 
 let keyShareClientHello_list_bytesize_cons x y = LP.serialize_list_cons keyShareEntry_parser keyShareEntry_serializer x y; (keyShareEntry_bytesize_eq (x))
@@ -54,12 +52,12 @@ let keyShareClientHello_serializer = LP.serialize_synth _ synth_keyShareClientHe
 let keyShareClientHello_bytesize_eq x = ()
 
 inline_for_extraction let keyShareClientHello'_validator : LPS.validator keyShareClientHello'_parser =
-  PPVD.validate_bounded_vldata_strong 0 65535 (LP.serialize_list _ keyShareEntry_serializer) (PPLS.validate_list keyShareEntry_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 0 65535 (LP.serialize_list _ keyShareEntry_serializer) (PPLS.validate_list keyShareEntry_validator ()) (PPBI.leaf_read_bounded_integer_2 ())
 
 let keyShareClientHello_validator = LPC.validate_synth keyShareClientHello'_validator synth_keyShareClientHello
 
 inline_for_extraction let keyShareClientHello'_jumper : LPS.jumper keyShareClientHello'_parser =
-  PPVD.jump_bounded_vldata_strong 0 65535 (LP.serialize_list _ keyShareEntry_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 0 65535 (LP.serialize_list _ keyShareEntry_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 ()))
 
 let keyShareClientHello_jumper = LPC.jump_synth keyShareClientHello'_jumper synth_keyShareClientHello
 
@@ -76,7 +74,7 @@ let read_keyShareClientHello : PPB.copyful_parse keyShareClientHello_vmatch keyS
   PPC.copyful_parse_synth
     (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 (LP.serialize_list _ keyShareEntry_serializer)
        (PPLS.copyful_parse_list read_keyShareEntry keyShareEntry_jumper ())
-       (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
+       (PPBI.leaf_read_bounded_integer_2 ()))
     synth_keyShareClientHello synth_keyShareClientHello_recip
 
 let free_keyShareClientHello : PPB.free_t keyShareClientHello_vmatch =
@@ -88,7 +86,7 @@ let write_keyShareClientHello : PPB.l2r_safe_writer keyShareClientHello_vmatch k
   assert_norm ((LP.get_parser_kind keyShareEntry_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
   assert_norm ((LP.get_parser_kind keyShareEntry_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ keyShareEntry_serializer)
-       (PPLS.l2r_safe_writer_list keyShareEntry_serializer write_keyShareEntry ()) fits_u64_squash) <: PPB.l2r_safe_writer _ keyShareClientHello'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 0ul 65535 65535ul 2 2sz (LP.serialize_list _ keyShareEntry_serializer)
+       (PPLS.l2r_safe_writer_list keyShareEntry_serializer write_keyShareEntry ())) <: PPB.l2r_safe_writer _ keyShareClientHello'_serializer _)
     synth_keyShareClientHello synth_keyShareClientHello_recip
 

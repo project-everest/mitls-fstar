@@ -33,6 +33,10 @@ module LSeqB = LowParse.Pulse.SeqBytes
 
 module GHS = TLS13.Wire.Generated.Handshake
 module GHST = TLS13.Wire.Generated.HandshakeType
+module GA = TLS13.Wire.Generated.Alert
+module GAL = TLS13.Wire.Generated.AlertLevel
+module GAD = TLS13.Wire.Generated.AlertDescription
+module GCCS = TLS13.Wire.Generated.ChangeCipherSpec
 module GFin = TLS13.Wire.Generated.Finished
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GSS = TLS13.Wire.Generated.SignatureScheme
@@ -61,7 +65,7 @@ module DW = TLS13.Impl.Parser.DecoderWF
 module RVD = TLS13.Wire.Spec.RevealDecode
 module Rec = TLS13.Record
 module RecSpec = TLS13.Record.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 
 (* ServerHello-related generated modules (aliases match TLS13.Wire.Spec.Reveal). *)
 module GSH = TLS13.Wire.Generated.ServerHello
@@ -77,6 +81,7 @@ module GSV = TLS13.Wire.Generated.SupportedVersionsServerHello
 module GKSEKE = TLS13.Wire.Generated.KeyShareEntry_key_exchange
 module GESHKS = TLS13.Wire.Generated.ExtensionServerHello_extension_data_key_share
 module GESHSV = TLS13.Wire.Generated.ExtensionServerHello_extension_data_supported_versions
+module GCTX = TLS13.Wire.Generated.TLSCiphertext
 module LPITE = LowParse.PulseParse.IfThenElse
 
 (* Certificate-related generated modules (aliases match TLS13.Wire.Spec.Reveal). *)
@@ -300,42 +305,76 @@ fn alloc_copy_slice
 (* parse_tls_message                                                       *)
 (* ----------------------------------------------------------------------- *)
 
-(* Bridges between the spec-reveal alert lemma and the L-level alert helpers. *)
+inline_for_extraction
+let alert_description_wire (a:T.alert_description) : U8.t =
+  match a with
+  | T.Close_notify -> 0uy
+  | T.Unexpected_message -> 10uy
+  | T.Bad_record_mac -> 20uy
+  | T.Handshake_failure -> 40uy
+  | T.Certificate_unknown -> 46uy
+  | T.Illegal_parameter -> 47uy
+  | T.Decode_error -> 50uy
+  | T.Decrypt_error -> 51uy
+  | T.Protocol_version -> 70uy
+  | T.Unsupported_extension -> 110uy
 
-let alert_byte_recognized (b:U8.t) : prop =
-  U8.v b == 0 \/ U8.v b == 10 \/ U8.v b == 20 \/ U8.v b == 40 \/
-  U8.v b == 46 \/ U8.v b == 47 \/ U8.v b == 50 \/ U8.v b == 51 \/
-  U8.v b == 70 \/ U8.v b == 110
+let lemma_alert_description_wire_matches (a:T.alert_description)
+  : Lemma (L.alert_description_matches (alert_description_wire a) a)
+  = match a with
+    | T.Close_notify -> ()
+    | T.Unexpected_message -> ()
+    | T.Bad_record_mac -> ()
+    | T.Handshake_failure -> ()
+    | T.Certificate_unknown -> ()
+    | T.Illegal_parameter -> ()
+    | T.Decode_error -> ()
+    | T.Decrypt_error -> ()
+    | T.Protocol_version -> ()
+    | T.Unsupported_extension -> ()
 
-let lemma_alert_recognized (b:U8.t)
-  : Lemma (requires alert_byte_recognized b)
-          (ensures L.alert_description_matches b
-                     (L.alert_description_of_wire_or_unexpected b))
+let lemma_alert_conv_description (mid:GA.alert_mid) (alert:GA.alert)
+  : Lemma
+    (requires GA.alert_conv mid == Some alert)
+    (ensures snd mid == alert.GA.description)
   = ()
 
-let lemma_alert_arm (fragment:B.bytes) (b1:U8.t)
+let lemma_alert_description_matches_unique
+  (wire:U8.t)
+  (a1 a2:T.alert_description)
   : Lemma
-    (requires B.length fragment == 2 /\
-              Seq.index fragment 1 == b1 /\
-              alert_byte_recognized b1)
-    (ensures WS.parse_tls_message T.Alert fragment ==
-             Some (M.TlsAlert (L.alert_description_of_wire_or_unexpected b1)))
-  = RV.lemma_ptm_alert fragment
+    (requires L.alert_description_matches wire a1 /\
+              L.alert_description_matches wire a2)
+    (ensures a1 == a2)
+  = match a1, a2 with
+    | T.Close_notify, T.Close_notify
+    | T.Unexpected_message, T.Unexpected_message
+    | T.Bad_record_mac, T.Bad_record_mac
+    | T.Handshake_failure, T.Handshake_failure
+    | T.Certificate_unknown, T.Certificate_unknown
+    | T.Illegal_parameter, T.Illegal_parameter
+    | T.Decode_error, T.Decode_error
+    | T.Decrypt_error, T.Decrypt_error
+    | T.Protocol_version, T.Protocol_version
+    | T.Unsupported_extension, T.Unsupported_extension -> ()
+    | _, _ -> ()
 
-let lemma_alert_wire_success (fragment:B.bytes) (b1:U8.t)
+let lemma_alert_wire_success
+  (fragment:B.bytes)
+  (b1:U8.t)
+  (a:T.alert_description)
   : Lemma
-    (requires B.length fragment == 2 /\
-              Seq.index fragment 1 == b1 /\
-              alert_byte_recognized b1)
+    (requires WS.parse_tls_message T.Alert fragment == Some (M.TlsAlert a) /\
+              L.alert_description_matches b1 a)
     (ensures CT.parsed_message_wire_success 0x15uy fragment (L.LTlsAlert b1))
-  = RV.lemma_ptm_alert fragment;
-    introduce forall (alert:T.alert_description).
-      L.alert_description_matches b1 alert ==>
-      CT.wire_parse_success 0x15uy fragment (M.TlsAlert alert)
-    with introduce _ ==> _
-    with _. (
-      L.lemma_alert_description_of_wire_matches b1 alert
-    )
+  =
+  introduce forall (alert:T.alert_description).
+    L.alert_description_matches b1 alert ==>
+    CT.wire_parse_success 0x15uy fragment (M.TlsAlert alert)
+  with introduce _ ==> _
+  with _. (
+    lemma_alert_description_matches_unique b1 a alert
+  )
 
 (* Generic "simple-bodied" existential lambda used as the bridge slprop. *)
 unfold let eqlam (#t:Type) (a:t) : (t -> slprop) = fun (x:t) -> pure (x == a)
@@ -1225,6 +1264,7 @@ fn build_ch_cipher_suites
               (RV.reveal_synth_cipher_suites
                 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))) ==
               RV.reveal_synth_cipher_suites (Ghost.reveal cm))
+        decreases (SZ.v count - SZ.v (!i))
         {
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
@@ -1417,6 +1457,7 @@ fn copy_ch_signature_schemes_into
               (RV.reveal_synth_sig_schemes
                 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))) ==
               RV.reveal_synth_sig_schemes (Ghost.reveal cm))
+        decreases (SZ.v count - SZ.v (!i))
         {
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
@@ -2679,6 +2720,7 @@ fn scan_ee_alpn
                     SZ.v al <= 255 /\
                     L.optional_byte_prefix_matches true abytes al
                       (Some?.v (RV.reveal_synth_encrypted_extensions cee)))))
+      decreases %[(if !found then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cee));
@@ -3563,6 +3605,7 @@ fn scan_sh_key_share
             RV.reveal_sh_key_share cext false None ==
             RV.reveal_sh_key_share (RV.list_drop (SZ.v iv) cext) svb kacc)
         )
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cext));
@@ -3915,6 +3958,7 @@ fn scan_ch_supported_versions
           ((not f) ==> (FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm) <==>
                         FStar.List.Tot.mem GPV.TLS_1p3
                           (RV.list_drop (SZ.v iv) (Ghost.reveal cm)))))
+      decreases %[(if !found_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
@@ -4062,6 +4106,7 @@ fn scan_ch_key_share
           ((not d) ==> found == false /\
             TLS13.Wire.Semantics.kse_list_find_x25519 (Ghost.reveal cm) ==
             TLS13.Wire.Semantics.kse_list_find_x25519 (RV.list_drop (SZ.v iv) (Ghost.reveal cm))))
+      decreases %[(if !done_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
@@ -4285,6 +4330,7 @@ fn scan_ch_extensions
             RV.reveal_ch_extensions (Ghost.reveal cext) None None false [] ==
             RV.reveal_ch_extensions (RV.list_drop (SZ.v iv) (Ghost.reveal cext))
               sn_acc key_acc sv (Ghost.reveal sig_acc)))
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         with sn_bytes0 kbytes0 sig_bytes0 sn_acc0 key_acc0 sig_acc0.
@@ -4986,6 +5032,7 @@ fn scan_certificate_chain
                 (RV.reveal_synth_cert_chain (RV.list_drop (SZ.v iv) cm))
                 == RV.reveal_synth_cert_chain cm)))
         )
+      decreases %[(if !failed then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
         let iv = !i;
         let cntv = !cnt_ref;
@@ -5409,6 +5456,17 @@ fn parse_handshake_message
                     fold (L.is_valid_tls_message
                             (L.LTlsHandshake (L.LServerHello lsh))
                             (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+                    (* Prime the precondition of [lemma_handshake_wire_success_fixed]
+                       with focused asserts (mirroring the ClientHello arm): the
+                       [fold]s above bloat the slprop context, so proving the
+                       three-way conjunction in a single query is unstable.
+                       Splitting it into individual obligations keeps each Z3
+                       query small and deterministic. *)
+                    assert (pure (L.content_type_matches content_type T.Handshake));
+                    assert (pure (LP.parse GHS.handshake_parser (Ghost.reveal 'input_bytes) ==
+                                  Some (Ghost.reveal gv, B.length (Ghost.reveal 'input_bytes))));
+                    assert (pure (RV.handshake_synth (Ghost.reveal gv) ==
+                                  Some (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
                     lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes)
                       (Ghost.reveal gv) (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
                     Some (L.LTlsHandshake (L.LServerHello lsh))
@@ -5836,39 +5894,129 @@ fn parse_tls_message
 {
   Arr.pts_to_len input;
   if (content_type = 0x14uy) {
-    (* ChangeCipherSpec: spec accepts exactly the single byte 0x01. *)
-    RV.lemma_ptm_change_cipher_spec 'input_bytes;
-    if (input_len = 1sz) {
-      let b0 = input.(0sz);
-      if (b0 = 1uy) {
+    let s = S.from_array input input_len;
+    let mut poffset = 0sz;
+    let valid = LPS.validate GCCS.changeCipherSpec_validator s poffset;
+    let off = !poffset;
+    let exact = SZ.eq off input_len;
+    if (valid && exact) {
+      let gv = Ghost.hide (
+        fst (Some?.v (LP.parse GCCS.changeCipherSpec_parser
+          (Ghost.reveal 'input_bytes))));
+      assert (pure (LP.parse GCCS.changeCipherSpec_parser 'input_bytes ==
+        Some (Ghost.reveal gv, SZ.v input_len)));
+      PPB.pts_to_parsed_intro GCCS.changeCipherSpec_parser s gv;
+      let value = GCCS.read_changeCipherSpec s;
+      PPB.elim_vmatch_conv
+        GCCS.changeCipherSpec_vmatch
+        GCCS.changeCipherSpec_conv
+        value
+        (Ghost.reveal gv);
+      with mid. assert (
+        GCCS.changeCipherSpec_vmatch value mid **
+        pure (GCCS.changeCipherSpec_conv mid == Some (Ghost.reveal gv)));
+      rewrite (GCCS.changeCipherSpec_vmatch value mid)
+           as (LPS.eq_as_slprop U8.t value mid);
+      unfold (LPS.eq_as_slprop U8.t value mid);
+      assert (pure (value == Ghost.reveal gv));
+      fold (LPS.eq_as_slprop U8.t value mid);
+      rewrite (LPS.eq_as_slprop U8.t value mid)
+           as (GCCS.changeCipherSpec_vmatch value mid);
+      PPB.intro_vmatch_conv
+        GCCS.changeCipherSpec_vmatch
+        GCCS.changeCipherSpec_conv
+        value
+        mid
+        (Ghost.reveal gv);
+      PPB.free_vmatch_conv
+        GCCS.changeCipherSpec_vmatch
+        GCCS.changeCipherSpec_conv
+        GCCS.free_changeCipherSpec
+        value;
+      Trade.elim
+        (PPB.pts_to_parsed GCCS.changeCipherSpec_parser s
+          #(1.0R /. 2.0R) (Ghost.reveal gv))
+        (S.pts_to s 'input_bytes);
+      S.to_array s;
+      RV.lemma_ptm_change_cipher_spec 'input_bytes;
+      if (value = 1uy) {
         fold (L.is_valid_tls_message L.LTlsChangeCipherSpec M.TlsChangeCipherSpec);
+        assert (pure (
+          L.content_type_matches content_type T.Change_cipher_spec /\
+          WS.parse_tls_message T.Change_cipher_spec 'input_bytes ==
+            Some M.TlsChangeCipherSpec));
         lemma_wire_exists content_type T.Change_cipher_spec M.TlsChangeCipherSpec 'input_bytes;
         Some L.LTlsChangeCipherSpec
       } else {
+        assert (pure (
+          WS.parse_tls_message T.Change_cipher_spec 'input_bytes == None));
+        assert (pure (forall (ct:T.content_type).
+          L.content_type_matches content_type ct ==>
+          WS.parse_tls_message ct 'input_bytes == None));
         None #L.tls_message
       }
     } else {
+      S.to_array s;
+      RV.lemma_ptm_change_cipher_spec 'input_bytes;
       None #L.tls_message
     }
   } else if (content_type = 0x15uy) {
-    (* Alert: spec accepts exactly a 2-byte fragment whose second byte is a
-       recognised alert description. *)
-    RV.lemma_ptm_alert 'input_bytes;
-    if (input_len = 2sz) {
-      let b1 = input.(1sz);
-      if (b1 = 0uy || b1 = 10uy || b1 = 20uy || b1 = 40uy || b1 = 46uy ||
-          b1 = 47uy || b1 = 50uy || b1 = 51uy || b1 = 70uy || b1 = 110uy) {
-        let a = L.alert_description_of_wire_or_unexpected b1;
-        lemma_alert_recognized b1;
-        lemma_alert_arm 'input_bytes b1;
-        lemma_alert_wire_success 'input_bytes b1;
-        intro_is_valid_alert b1 a;
-        lemma_wire_exists content_type T.Alert (M.TlsAlert a) 'input_bytes;
-        Some (L.LTlsAlert b1)
-      } else {
-        None #L.tls_message
-      }
+    let s = S.from_array input input_len;
+    let mut poffset = 0sz;
+    let valid = LPS.validate GA.alert_validator s poffset;
+    let off = !poffset;
+    let exact = SZ.eq off input_len;
+    if (valid && exact) {
+      let gv = Ghost.hide (
+        fst (Some?.v (LP.parse GA.alert_parser (Ghost.reveal 'input_bytes))));
+      assert (pure (LP.parse GA.alert_parser 'input_bytes ==
+        Some (Ghost.reveal gv, SZ.v input_len)));
+      PPB.pts_to_parsed_intro GA.alert_parser s gv;
+      let parsed = GA.read_alert s;
+      PPB.elim_vmatch_conv GA.alert_vmatch GA.alert_conv parsed (Ghost.reveal gv);
+      with mid. assert (
+        GA.alert_vmatch parsed mid **
+        pure (GA.alert_conv mid == Some (Ghost.reveal gv)));
+      lemma_alert_conv_description mid (Ghost.reveal gv);
+      rewrite (GA.alert_vmatch parsed mid)
+           as (LPC.vmatch_pair
+             GAL.alertLevel_vmatch GAD.alertDescription_vmatch parsed mid);
+      unfold (LPC.vmatch_pair
+        GAL.alertLevel_vmatch GAD.alertDescription_vmatch parsed mid);
+      rewrite (GAD.alertDescription_vmatch (snd parsed) (snd mid))
+           as (LPS.eq_as_slprop GAD.alertDescription (snd parsed) (snd mid));
+      unfold (LPS.eq_as_slprop GAD.alertDescription (snd parsed) (snd mid));
+      let a = snd parsed;
+      assert (pure (a == (Ghost.reveal gv).GA.description));
+      let b1 = alert_description_wire a;
+      lemma_alert_description_wire_matches a;
+      fold (LPS.eq_as_slprop GAD.alertDescription (snd parsed) (snd mid));
+      rewrite (LPS.eq_as_slprop GAD.alertDescription (snd parsed) (snd mid))
+           as (GAD.alertDescription_vmatch (snd parsed) (snd mid));
+      fold (LPC.vmatch_pair
+        GAL.alertLevel_vmatch GAD.alertDescription_vmatch parsed mid);
+      rewrite
+        (LPC.vmatch_pair
+          GAL.alertLevel_vmatch GAD.alertDescription_vmatch parsed mid)
+        as (GA.alert_vmatch parsed mid);
+      PPB.intro_vmatch_conv GA.alert_vmatch GA.alert_conv
+        parsed mid (Ghost.reveal gv);
+      PPB.free_vmatch_conv GA.alert_vmatch GA.alert_conv GA.free_alert parsed;
+      Trade.elim
+        (PPB.pts_to_parsed GA.alert_parser s
+          #(1.0R /. 2.0R) (Ghost.reveal gv))
+        (S.pts_to s 'input_bytes);
+      S.to_array s;
+      RV.lemma_ptm_alert 'input_bytes;
+      assert (pure (WS.parse_tls_message T.Alert 'input_bytes ==
+        Some (M.TlsAlert a)));
+      lemma_alert_wire_success 'input_bytes b1 a;
+      intro_is_valid_alert b1 a;
+      lemma_wire_exists content_type T.Alert (M.TlsAlert a) 'input_bytes;
+      Some (L.LTlsAlert b1)
     } else {
+      S.to_array s;
+      RV.lemma_ptm_alert 'input_bytes;
       None #L.tls_message
     }
   } else if (content_type = 0x16uy) {
@@ -5966,6 +6114,37 @@ fn decode_inner_plaintext
   }
 }
 
+fn validate_generated_record
+  (raw: array U8.t)
+  (raw_len: SZ.t)
+  requires pts_to raw 'raw_bytes **
+           pure (B.length 'raw_bytes == SZ.v raw_len)
+  returns valid: bool
+  ensures pts_to raw 'raw_bytes **
+          pure (valid ==>
+            Some? (LP.parse GCTX.tLSCiphertext_parser
+              (Ghost.reveal 'raw_bytes)))
+{
+  Arr.pts_to_len raw;
+  let s = S.from_array raw raw_len;
+  let mut poffset = 0sz;
+  let valid = LPS.validate GCTX.tLSCiphertext_validator s poffset;
+  let off = !poffset;
+  let exact = SZ.eq off raw_len;
+  if (valid && exact) {
+    let gv = Ghost.hide (
+      fst (Some?.v (LP.parse GCTX.tLSCiphertext_parser
+        (Ghost.reveal 'raw_bytes))));
+    assert (pure (LP.parse GCTX.tLSCiphertext_parser
+      (Ghost.reveal 'raw_bytes) == Some (Ghost.reveal gv, SZ.v raw_len)));
+    S.to_array s;
+    true
+  } else {
+    S.to_array s;
+    false
+  }
+}
+
 (* Decrypt an ApplicationData (protected) record and strip the inner-plaintext
    trailer.  Reaches the read record-key state from the connection, calls the
    record-layer [peek_open_application] (which does NOT mutate the connection),
@@ -5973,7 +6152,8 @@ fn decode_inner_plaintext
    On success returns the inner content-type byte, an owned copy of the inner
    payload, its length, and (in [pure]) the [protected_decoder_fragment_relation]
    that ties the payload to [WS.parse_record]/[R.open_record]/[WS.parse_plaintext].
-   Frees all scratch buffers (aad, cipher, opened) on every path. *)
+   The ciphertext is passed as a verified view into [raw], so only the small
+   header and opened-plaintext scratch buffers are allocated. *)
 fn peek_decrypt_record
   (c: CR.connection_state)
   (raw: array U8.t)
@@ -6016,36 +6196,29 @@ fn peek_decrypt_record
   } else {
     let out_len = SZ.sub flen 16sz;
     let aad_vec = alloc_copy_slice raw raw_len 0sz 5sz;
-    let cipher_vec = alloc_copy_slice raw raw_len 5sz flen;
     let out_vec = V.alloc 0uy out_len;
     with aad_bytes. assert (V.pts_to aad_vec aad_bytes);
-    with cipher_bytes. assert (V.pts_to cipher_vec cipher_bytes);
     assert (pure (Seq.equal aad_bytes (CT.record_header_aad (Ghost.reveal raw_bytes))));
-    assert (pure (Seq.equal cipher_bytes
-      (Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen))));
     V.to_array_pts_to aad_vec;
-    V.to_array_pts_to cipher_vec;
     V.to_array_pts_to out_vec;
     (* Reach the read record-key state inside the connection. *)
     unfold (CR.connection_exactly c st0);
     unfold (CR.connection_model_exactly c st0.CS.cs_model);
     unfold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
-    let ok = Rec.peek_open_application c.records.read
+    let ok = Rec.peek_open_application_suffix c.records.read
                (V.vec_to_array aad_vec) 5sz
-               (V.vec_to_array cipher_vec) flen
+               raw raw_len 5sz flen
                (V.vec_to_array out_vec);
     (* peek does not mutate the connection: re-fold unchanged. *)
     fold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
     fold (CR.connection_model_exactly c st0.CS.cs_model);
     fold (CR.connection_exactly c st0);
     V.to_vec_pts_to aad_vec;
-    V.to_vec_pts_to cipher_vec;
-    V.to_vec_pts_to out_vec;
     if ok {
-      with out_bytes. assert (V.pts_to out_vec out_bytes);
+      with out_bytes. assert (pts_to (V.vec_to_array out_vec) out_bytes);
+      assert (pure (B.length out_bytes == SZ.v out_len));
+      assert (pure (SZ.fits (SZ.v out_len)));
       V.free aad_vec;
-      V.free cipher_vec;
-      V.to_array_pts_to out_vec;
       let inner = decode_inner_plaintext (V.vec_to_array out_vec) out_len;
       V.to_vec_pts_to out_vec;
       match inner {
@@ -6068,7 +6241,7 @@ fn peek_decrypt_record
       }
     } else {
       V.free aad_vec;
-      V.free cipher_vec;
+      V.to_vec_pts_to out_vec;
       V.free out_vec;
       None #decoded_fragment
     }
@@ -6123,7 +6296,9 @@ fn build_decoded_record_ok
   ensures
     (match r with
      | L.NetworkRecordNeedMoreInput ->
-       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
+       pure (
+         WS.record_prefix_incomplete (Ghost.reveal raw_bytes) /\
+         WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkRecordDecodeError -> emp
      | L.NetworkRecordOk decoded ->
       exists* fragment_bytes2.
@@ -6187,7 +6362,9 @@ fn decode_network_record
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkRecordNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkRecordDecodeError -> emp
            | L.NetworkRecordOk decoded ->
             exists* fragment_bytes.
@@ -6243,8 +6420,15 @@ fn decode_network_record
     let b3 = raw.(3sz);
     let b4 = raw.(4sz);
     let flen = SZ.add (SZ.mul (u8_to_sz b3) 256sz) (u8_to_sz b4);
+    let generated_valid =
+      if (b2 = 0x03uy) {
+        validate_generated_record raw raw_len
+      } else {
+        false
+      };
     if (b1 = 0x03uy &&
-        (b2 = 0x03uy || (b0 = 0x16uy && b2 = 0x01uy)) &&
+        ((b2 = 0x03uy && generated_valid) ||
+         (b0 = 0x16uy && b2 = 0x01uy)) &&
         SZ.lte flen 16640sz &&
         (b0 = 0x14uy || b0 = 0x15uy || b0 = 0x16uy || b0 = 0x17uy)) {
       (* flen <= 16640, so flen + 5 fits in SizeT; require EXACT consumption. *)
@@ -6416,7 +6600,9 @@ fn build_decoded_buffer_ok
   ensures
     (match r with
      | L.NetworkBufferNeedMoreInput ->
-       pure (WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
+       pure (
+         WS.record_prefix_incomplete (Ghost.reveal raw_bytes) /\
+         WS.parse_record_wire (Ghost.reveal raw_bytes) == None)
      | L.NetworkBufferDecodeError -> emp
      | L.NetworkBufferOk decoded ->
       exists* raw_record_bytes2 fragment_bytes2.
@@ -6455,6 +6641,7 @@ fn build_decoded_buffer_ok
             SZ.v decoded.L.decoded_buffer_raw_record_len /\
           decoded.L.decoded_buffer_raw_record_len ==
             decoded.L.decoded_buffer_consumed_len /\
+          0 < SZ.v decoded.L.decoded_buffer_consumed_len /\
           SZ.v decoded.L.decoded_buffer_consumed_len <=
             B.length (Ghost.reveal raw_bytes) /\
           Seq.equal
@@ -6477,6 +6664,9 @@ fn build_decoded_buffer_ok
             fragment_bytes2
             raw_record_bytes2))
 {
+  CT.lemma_raw_record_parse_success_nonempty
+    (Ghost.reveal raw_record_bytes);
+  assert (pure (0 < SZ.v consumed_len));
   L.NetworkBufferOk
     { L.decoded_buffer_raw_record = raw_record_vec;
       L.decoded_buffer_raw_record_len = consumed_len;
@@ -6499,7 +6689,9 @@ fn decode_network_buffer
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkBufferNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkBufferDecodeError -> emp
            | L.NetworkBufferOk decoded ->
             exists* raw_record_bytes fragment_bytes.
@@ -6538,6 +6730,7 @@ fn decode_network_buffer
                   SZ.v decoded.L.decoded_buffer_raw_record_len /\
                 decoded.L.decoded_buffer_raw_record_len ==
                   decoded.L.decoded_buffer_consumed_len /\
+                0 < SZ.v decoded.L.decoded_buffer_consumed_len /\
                 SZ.v decoded.L.decoded_buffer_consumed_len <=
                   B.length (Ghost.reveal 'raw_bytes) /\
                 Seq.equal
@@ -6701,6 +6894,11 @@ fn decode_network_buffer
         }
       } else {
         (* header parsed but the full fragment has not arrived yet *)
+        WS.lemma_read_u16_definition (Ghost.reveal 'raw_bytes) 3;
+        assert (pure (
+          WS.read_u16 (Ghost.reveal 'raw_bytes) 3 == SZ.v flen));
+        assert (pure (
+          WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes)));
         RVD.lemma_parse_record_wire_none_incomplete 'raw_bytes;
         L.NetworkBufferNeedMoreInput
       }

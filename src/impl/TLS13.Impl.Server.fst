@@ -11,7 +11,7 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
@@ -32,7 +32,7 @@ module O = TLS13.OpenSSL
 module P = TLS13.Impl.Parser
 module R = TLS13.Record.Spec
 module Ser = TLS13.Impl.Serializer
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module SMat = TLS13.Impl.Server.Material
 module SSch = TLS13.Impl.Server.Schedule
 module SSetup = TLS13.Impl.Server.Setup
@@ -92,15 +92,15 @@ fn new_server
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)) /\
-                CS.connection_state_sent_seal_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)) /\
-                CS.connection_state_received_decode_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)) /\
-                CS.connection_state_protected_raw_segmented_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)))
@@ -170,15 +170,15 @@ fn new_server_erased_credential_identity
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)) /\
-                CS.connection_state_sent_seal_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)) /\
-                CS.connection_state_received_decode_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)) /\
-                CS.connection_state_protected_raw_segmented_replay_consistent
+                TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)))
@@ -3021,8 +3021,6 @@ fn process_local_event_with_credentials
           if (network_out_len = expected_network_out_len) {
             assert (pure (SZ.v network_out_len ==
               13 + B.length (Ghost.reveal 'certificate_chain) + 22));
-            SS.lemma_mk_cert_witness_representable_and_bytesize
-              (Ghost.reveal 'certificate_chain);
             IM.free_certificate_msg lcert;
             process_send_certificate_from_credentials
               s
@@ -3313,7 +3311,7 @@ fn process_client_finished
                    'st0
                    (Ghost.reveal fin)
                    (Ghost.reveal 'raw_bytes) /\
-                 CS.received_event_nonempty_decode_projection
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
                    'st0.CS.cs_model
                    (ST.received_message_event
                      (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
@@ -3399,8 +3397,12 @@ fn process_network_bytes
                    network_out_bytes
                    app_out_bytes /\
                 (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                   W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)))
+                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+                  Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)) /\
+                 (buffer_resp.ST.response.ST.status == ST.StepOk ==>
+                  0 < SZ.v buffer_resp.ST.consumed_len))
 {
   rewrite (connection_exactly s 'st0) as (SN.connection_exactly s 'st0);
   let buffer_resp = SN.process_network_bytes
@@ -3417,8 +3419,10 @@ fn process_network_bytes
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
   assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+    W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
     W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-    Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)));
+    Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+    Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)));
   rewrite (SN.connection_exactly s st1) as (connection_exactly s st1);
   buffer_resp
 }

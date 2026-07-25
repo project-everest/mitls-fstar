@@ -6,6 +6,24 @@
 #include <stdint.h>
 
 typedef struct tls13_client_driver_s tls13_client_driver;
+typedef struct tls13_client_config_s tls13_client_config;
+
+#define TLS13_CLIENT_DRIVER_RECEIVE_BUFFER_SIZE ((size_t)16640u)
+
+int tls13_client_config_new(
+    tls13_client_config **out,
+    const char *server_name,
+    const uint8_t *trust_anchor_pem,
+    size_t trust_anchor_pem_len,
+    size_t validation_time_seconds);
+
+void tls13_client_config_free(tls13_client_config *config);
+
+int tls13_client_driver_connect_with_config(
+    tls13_client_driver **out,
+    const char *connect_host,
+    uint16_t port,
+    const tls13_client_config *config);
 
 int tls13_client_driver_connect(
     tls13_client_driver **out,

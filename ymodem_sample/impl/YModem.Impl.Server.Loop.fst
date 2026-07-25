@@ -391,6 +391,7 @@ ensures exists* (d1:Seq.seq U8.t).
           SZ.fits (SZ.v off + 128) /\
           (forall (k:nat). k < SZ.v vj ==>
              Seq.index d k == Seq.index (Ghost.reveal contents) (SZ.v off + k)))
+  decreases (128 - SZ.v (!j))
   {
     let vj = !j;
     FStar.SizeT.fits_lte (SZ.v off + SZ.v vj) (SZ.v off + 128);
@@ -477,6 +478,7 @@ ensures exists* (chr chs pr ps:TCP.bytes) (st1:YP.ymodem_server_state)
             (rv == true ==>
               loop_coupling (Ghost.reveal contents) (Ghost.reveal nblocks)
                 (Ghost.reveal filename) (Ghost.reveal len) st cv))
+  decreases %[(if !running then 1 else 0); SZ.v (!remaining)]
   {
     with st cv. _;
     assert (pure (loop_coupling (Ghost.reveal contents) (Ghost.reveal nblocks)

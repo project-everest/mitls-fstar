@@ -1,15 +1,16 @@
 module TLS13.Impl.Driver.PairingNoTailWireLogs
 
 module B = TLS13.Bytes
-module ClientCP = TLS13.Impl.Client.CanonicalProtocol
 module CL = TLS13.ConnectionLog
-module CS = TLS13.Spec.ConnectionState
-module CW = TLS13.Impl.CanonicalWire
+module CS = TLS13.Spec.StateMachine
+module EC = TLS13.Spec.Endpoint.Client
+module ES = TLS13.Spec.Endpoint.Server
+module CW = TLS13.Spec.Endpoint.Wire
 module CTypes = TLS13.Impl.CanonicalTypes
+module EAPI = TLS13.Spec.Endpoint.API
 module L = FStar.List.Tot
 module RVD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
-module ServerCP = TLS13.Impl.Server.CanonicalProtocol
 module SM = Common.StateMachine
 module TCP = Common.TCP
 module WF = Common.WireFormat
@@ -387,9 +388,9 @@ let lemma_client_step_wire_log_delta
   (st0:CS.connection_state)
   (ev:SM.event CW.wire_message CTypes.client_local_event)
   (st1:CS.connection_state)
-  (out:SM.step_output CW.wire_message CTypes.local_output)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
   : Lemma
-      (requires ClientCP.client_step st0 ev st1 out)
+      (requires EC.client_step st0 ev st1 out)
       (ensures
         Seq.equal
           st1.CS.cs_wire_log.CL.raw_sent
@@ -425,7 +426,7 @@ let lemma_client_step_wire_log_delta
           CS.delta_raw_received = CW.wire_serialize wire;
         }
         st1 /\
-      ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns
       Seq.equal
         st1.CS.cs_wire_log.CL.raw_sent
@@ -447,11 +448,10 @@ let lemma_client_step_wire_log_delta
       Seq.append_empty_r (CW.wire_serialize wire)
     )
   | SM.LocalEvent local ->
-    let api = CTypes.client_local_event_api local in
     eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-      ClientCP.client_api_event_matches st0 api conn_ev /\
-      ClientCP.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-      ClientCP.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      CTypes.client_local_event_matches st0 local conn_ev /\
+      EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
       CS.legal_connection_delta
         st0
         {
@@ -493,9 +493,9 @@ let lemma_server_step_wire_log_delta
   (st0:CS.connection_state)
   (ev:SM.event CW.wire_message CTypes.server_local_event)
   (st1:CS.connection_state)
-  (out:SM.step_output CW.wire_message CTypes.local_output)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
   : Lemma
-      (requires ServerCP.server_step st0 ev st1 out)
+      (requires ES.server_step st0 ev st1 out)
       (ensures
         Seq.equal
           st1.CS.cs_wire_log.CL.raw_sent
@@ -531,7 +531,7 @@ let lemma_server_step_wire_log_delta
           CS.delta_raw_received = CW.wire_serialize wire;
         }
         st1 /\
-      ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns
       Seq.equal
         st1.CS.cs_wire_log.CL.raw_sent
@@ -553,11 +553,10 @@ let lemma_server_step_wire_log_delta
       Seq.append_empty_r (CW.wire_serialize wire)
     )
   | SM.LocalEvent local ->
-    let api = CTypes.server_local_event_api local in
     eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-      ServerCP.server_api_event_matches api conn_ev /\
-      ServerCP.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-      ServerCP.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      CTypes.server_local_event_matches local conn_ev /\
+      ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
       CS.legal_connection_delta
         st0
         {
@@ -596,19 +595,19 @@ let lemma_server_step_wire_log_delta
     )
 
 let rec lemma_client_trace_wire_logs_match
-  (initial:CS.connection_state)
+  (initial:EC.client_initial_state)
   (st0:CS.connection_state)
   (trace:list
     (SM.transition
       CS.connection_state
       CW.wire_message
       CTypes.client_local_event
-      CTypes.local_output))
+      EAPI.local_output))
   (st1:CS.connection_state)
   : Lemma
       (requires
         SM.trace_reaches
-          (ClientCP.client_state_machine initial)
+          (EC.client_state_machine #CTypes.client_local_event initial)
           st0
           trace
           st1)
@@ -634,7 +633,7 @@ let rec lemma_client_trace_wire_logs_match
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_sent;
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
   | tr :: rest ->
-    assert (ClientCP.client_step
+    assert (EC.client_step
       st0
       tr.SM.tr_event
       tr.SM.tr_next_state
@@ -691,19 +690,19 @@ let rec lemma_client_trace_wire_logs_match
         (B.append step_received rest_received)))
 
 let rec lemma_server_trace_wire_logs_match
-  (initial:CS.connection_state)
+  (initial:ES.server_initial_state)
   (st0:CS.connection_state)
   (trace:list
     (SM.transition
       CS.connection_state
       CW.wire_message
       CTypes.server_local_event
-      CTypes.local_output))
+      EAPI.local_output))
   (st1:CS.connection_state)
   : Lemma
       (requires
         SM.trace_reaches
-          (ServerCP.server_state_machine initial)
+          (ES.server_state_machine #CTypes.server_local_event initial)
           st0
           trace
           st1)
@@ -729,7 +728,7 @@ let rec lemma_server_trace_wire_logs_match
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_sent;
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
   | tr :: rest ->
-    assert (ServerCP.server_step
+    assert (ES.server_step
       st0
       tr.SM.tr_event
       tr.SM.tr_next_state
@@ -810,7 +809,7 @@ let lemma_wire_parses_as_serialize_all
    existential (with a bare [parses_as]) that the strong-prefix consumers below
    [eliminate] unchanged. *)
 let lemma_client_valid_byte_trace_strong_parse
-  (client_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
   (client_received:B.bytes)
   (client:CS.connection_state)
   (client_sent:B.bytes)
@@ -818,7 +817,7 @@ let lemma_client_valid_byte_trace_strong_parse
   : Lemma
       (requires
         WFSM.valid_byte_trace
-          (ClientCP.client_system client_initial)
+          (EC.client_system #CTypes.client_local_event client_initial)
           client_received
           client
           client_sent
@@ -828,40 +827,40 @@ let lemma_client_valid_byte_trace_strong_parse
                               CS.connection_state
                               CW.wire_message
                               CTypes.client_local_event
-                              CTypes.local_output)).
+                              EAPI.local_output)).
           SM.trace_reaches
-            (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
-            (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+            (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine
+            (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
             trace
             client /\
           WF.parses_as
-            (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+            (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
             client_received
             (WFSM.trace_input_messages trace)
             residual /\
           Seq.equal
             client_sent
             (WF.serialize_all
-              (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+              (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
               (SM.trace_wire_outputs trace)))
       [SMTPat
         (WFSM.valid_byte_trace
-          (ClientCP.client_system client_initial)
+          (EC.client_system #CTypes.client_local_event client_initial)
           client_received
           client
           client_sent
           residual)]
 =
-  assert ((ClientCP.client_system client_initial).WFSM.wfsm_wire_format ==
+  assert ((EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format ==
     CW.tls_record_wire_format);
   eliminate exists trace.
     SM.trace_reaches
-      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
-      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine
+      (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       client /\
     (WF.parses_as
-       (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+       (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
        client_received
        (WFSM.trace_input_messages trace)
        residual
@@ -870,34 +869,34 @@ let lemma_client_valid_byte_trace_strong_parse
        client_received
        (Seq.append
          (WF.serialize_all
-           (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+           (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
            (WFSM.trace_input_messages trace))
          residual)) /\
     Seq.equal
       client_sent
       (WF.serialize_all
-        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
   returns
     exists (trace:list (SM.transition
                           CS.connection_state
                           CW.wire_message
                           CTypes.client_local_event
-                          CTypes.local_output)).
+                          EAPI.local_output)).
       SM.trace_reaches
-        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
-        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
         trace
         client /\
       WF.parses_as
-        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         client_received
         (WFSM.trace_input_messages trace)
         residual /\
       Seq.equal
         client_sent
         (WF.serialize_all
-          (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+          (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
           (SM.trace_wire_outputs trace))
   with _.
   (
@@ -906,12 +905,12 @@ let lemma_client_valid_byte_trace_strong_parse
         client_received
         (Seq.append
           (WF.serialize_all
-            (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+            (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
             (WFSM.trace_input_messages trace))
           residual)
       ==>
       WF.parses_as
-        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         client_received
         (WFSM.trace_input_messages trace)
         residual
@@ -941,7 +940,7 @@ let lemma_client_valid_byte_trace_strong_parse
         (WFSM.trace_input_messages trace)
         residual;
       assert (WF.parses_as
-        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         client_received
         (WFSM.trace_input_messages trace)
         residual)
@@ -950,26 +949,26 @@ let lemma_client_valid_byte_trace_strong_parse
                                   CS.connection_state
                                   CW.wire_message
                                   CTypes.client_local_event
-                                  CTypes.local_output)).
+                                  EAPI.local_output)).
       SM.trace_reaches
-        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
-        (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
         trace'
         client /\
       WF.parses_as
-        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         client_received
         (WFSM.trace_input_messages trace')
         residual /\
       Seq.equal
         client_sent
         (WF.serialize_all
-          (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+          (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
           (SM.trace_wire_outputs trace')))
   )
 
 let lemma_server_valid_byte_trace_strong_parse
-  (server_initial:CS.connection_state)
+  (server_initial:ES.server_initial_state)
   (server_received:B.bytes)
   (server:CS.connection_state)
   (server_sent:B.bytes)
@@ -977,7 +976,7 @@ let lemma_server_valid_byte_trace_strong_parse
   : Lemma
       (requires
         WFSM.valid_byte_trace
-          (ServerCP.server_system server_initial)
+          (ES.server_system #CTypes.server_local_event server_initial)
           server_received
           server
           server_sent
@@ -987,40 +986,40 @@ let lemma_server_valid_byte_trace_strong_parse
                               CS.connection_state
                               CW.wire_message
                               CTypes.server_local_event
-                              CTypes.local_output)).
+                              EAPI.local_output)).
           SM.trace_reaches
-            (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
-            (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+            (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine
+            (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
             trace
             server /\
           WF.parses_as
-            (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+            (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
             server_received
             (WFSM.trace_input_messages trace)
             residual /\
           Seq.equal
             server_sent
             (WF.serialize_all
-              (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+              (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
               (SM.trace_wire_outputs trace)))
       [SMTPat
         (WFSM.valid_byte_trace
-          (ServerCP.server_system server_initial)
+          (ES.server_system #CTypes.server_local_event server_initial)
           server_received
           server
           server_sent
           residual)]
 =
-  assert ((ServerCP.server_system server_initial).WFSM.wfsm_wire_format ==
+  assert ((ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format ==
     CW.tls_record_wire_format);
   eliminate exists trace.
     SM.trace_reaches
-      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
-      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine
+      (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       server /\
     (WF.parses_as
-       (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+       (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
        server_received
        (WFSM.trace_input_messages trace)
        residual
@@ -1029,34 +1028,34 @@ let lemma_server_valid_byte_trace_strong_parse
        server_received
        (Seq.append
          (WF.serialize_all
-           (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+           (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
            (WFSM.trace_input_messages trace))
          residual)) /\
     Seq.equal
       server_sent
       (WF.serialize_all
-        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
   returns
     exists (trace:list (SM.transition
                           CS.connection_state
                           CW.wire_message
                           CTypes.server_local_event
-                          CTypes.local_output)).
+                          EAPI.local_output)).
       SM.trace_reaches
-        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
-        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
         trace
         server /\
       WF.parses_as
-        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         server_received
         (WFSM.trace_input_messages trace)
         residual /\
       Seq.equal
         server_sent
         (WF.serialize_all
-          (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+          (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
           (SM.trace_wire_outputs trace))
   with _.
   (
@@ -1065,12 +1064,12 @@ let lemma_server_valid_byte_trace_strong_parse
         server_received
         (Seq.append
           (WF.serialize_all
-            (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+            (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
             (WFSM.trace_input_messages trace))
           residual)
       ==>
       WF.parses_as
-        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         server_received
         (WFSM.trace_input_messages trace)
         residual
@@ -1100,7 +1099,7 @@ let lemma_server_valid_byte_trace_strong_parse
         (WFSM.trace_input_messages trace)
         residual;
       assert (WF.parses_as
-        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         server_received
         (WFSM.trace_input_messages trace)
         residual)
@@ -1109,41 +1108,46 @@ let lemma_server_valid_byte_trace_strong_parse
                                   CS.connection_state
                                   CW.wire_message
                                   CTypes.server_local_event
-                                  CTypes.local_output)).
+                                  EAPI.local_output)).
       SM.trace_reaches
-        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
-        (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
         trace'
         server /\
       WF.parses_as
-        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         server_received
         (WFSM.trace_input_messages trace')
         residual /\
       Seq.equal
         server_sent
         (WF.serialize_all
-          (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+          (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
           (SM.trace_wire_outputs trace')))
   )
 
 let lemma_client_valid_byte_trace_inverts_to_serialized_trace
-  (client_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
   (client_received:B.bytes)
   (client:CS.connection_state)
   (client_sent:B.bytes)
   : Lemma
       (requires
         WFSM.valid_byte_trace
-          (ClientCP.client_system client_initial)
+          (EC.client_system #CTypes.client_local_event client_initial)
           client_received
           client
           client_sent
           Seq.empty)
       (ensures
-        exists trace.
+        exists (trace:list
+          (SM.transition
+            CS.connection_state
+            CW.wire_message
+            CTypes.client_local_event
+            EAPI.local_output)).
           SM.trace_reaches
-            (ClientCP.client_state_machine client_initial)
+            (EC.client_state_machine #CTypes.client_local_event client_initial)
             client_initial
             trace
             client /\
@@ -1160,24 +1164,29 @@ let lemma_client_valid_byte_trace_inverts_to_serialized_trace
 =
   eliminate exists trace.
     SM.trace_reaches
-      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine
-      (ClientCP.client_system client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine
+      (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       client /\
     WF.parses_as
-      (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+      (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
       client_received
       (WFSM.trace_input_messages trace)
       Seq.empty /\
     Seq.equal
       client_sent
       (WF.serialize_all
-        (ClientCP.client_system client_initial).WFSM.wfsm_wire_format
+        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
   returns
-    exists trace.
+    exists (trace:list
+      (SM.transition
+        CS.connection_state
+        CW.wire_message
+        CTypes.client_local_event
+        EAPI.local_output)).
       SM.trace_reaches
-        (ClientCP.client_state_machine client_initial)
+        (EC.client_state_machine #CTypes.client_local_event client_initial)
         client_initial
         trace
         client /\
@@ -1196,15 +1205,20 @@ let lemma_client_valid_byte_trace_inverts_to_serialized_trace
     lemma_wire_parses_as_serialize_all
       client_received
       (WFSM.trace_input_messages trace);
-    assert ((ClientCP.client_system client_initial).WFSM.wfsm_wire_format ==
+    assert ((EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format ==
       CW.tls_record_wire_format);
-    assert ((ClientCP.client_system client_initial).WFSM.wfsm_state_machine ==
-      ClientCP.client_state_machine client_initial);
-    assert ((ClientCP.client_state_machine client_initial).SM.sm_initial_state ==
+    assert ((EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine ==
+      EC.client_state_machine #CTypes.client_local_event client_initial);
+    assert ((EC.client_state_machine #CTypes.client_local_event client_initial).SM.sm_initial_state ==
       client_initial);
-    assert (exists trace'.
+    assert (exists (trace':list
+      (SM.transition
+        CS.connection_state
+        CW.wire_message
+        CTypes.client_local_event
+        EAPI.local_output)).
       SM.trace_reaches
-        (ClientCP.client_state_machine client_initial)
+        (EC.client_state_machine #CTypes.client_local_event client_initial)
         client_initial
         trace'
         client /\
@@ -1221,22 +1235,27 @@ let lemma_client_valid_byte_trace_inverts_to_serialized_trace
   )
 
 let lemma_server_valid_byte_trace_inverts_to_serialized_trace
-  (server_initial:CS.connection_state)
+  (server_initial:ES.server_initial_state)
   (server_received:B.bytes)
   (server:CS.connection_state)
   (server_sent:B.bytes)
   : Lemma
       (requires
         WFSM.valid_byte_trace
-          (ServerCP.server_system server_initial)
+          (ES.server_system #CTypes.server_local_event server_initial)
           server_received
           server
           server_sent
           Seq.empty)
       (ensures
-        exists trace.
+        exists (trace:list
+          (SM.transition
+            CS.connection_state
+            CW.wire_message
+            CTypes.server_local_event
+            EAPI.local_output)).
           SM.trace_reaches
-            (ServerCP.server_state_machine server_initial)
+            (ES.server_state_machine #CTypes.server_local_event server_initial)
             server_initial
             trace
             server /\
@@ -1253,24 +1272,29 @@ let lemma_server_valid_byte_trace_inverts_to_serialized_trace
 =
   eliminate exists trace.
     SM.trace_reaches
-      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine
-      (ServerCP.server_system server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
+      (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine
+      (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
       trace
       server /\
     WF.parses_as
-      (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+      (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
       server_received
       (WFSM.trace_input_messages trace)
       Seq.empty /\
     Seq.equal
       server_sent
       (WF.serialize_all
-        (ServerCP.server_system server_initial).WFSM.wfsm_wire_format
+        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
   returns
-    exists trace.
+    exists (trace:list
+      (SM.transition
+        CS.connection_state
+        CW.wire_message
+        CTypes.server_local_event
+        EAPI.local_output)).
       SM.trace_reaches
-        (ServerCP.server_state_machine server_initial)
+        (ES.server_state_machine #CTypes.server_local_event server_initial)
         server_initial
         trace
         server /\
@@ -1289,15 +1313,20 @@ let lemma_server_valid_byte_trace_inverts_to_serialized_trace
     lemma_wire_parses_as_serialize_all
       server_received
       (WFSM.trace_input_messages trace);
-    assert ((ServerCP.server_system server_initial).WFSM.wfsm_wire_format ==
+    assert ((ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format ==
       CW.tls_record_wire_format);
-    assert ((ServerCP.server_system server_initial).WFSM.wfsm_state_machine ==
-      ServerCP.server_state_machine server_initial);
-    assert ((ServerCP.server_state_machine server_initial).SM.sm_initial_state ==
+    assert ((ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine ==
+      ES.server_state_machine #CTypes.server_local_event server_initial);
+    assert ((ES.server_state_machine #CTypes.server_local_event server_initial).SM.sm_initial_state ==
       server_initial);
-    assert (exists trace'.
+    assert (exists (trace':list
+      (SM.transition
+        CS.connection_state
+        CW.wire_message
+        CTypes.server_local_event
+        EAPI.local_output)).
       SM.trace_reaches
-        (ServerCP.server_state_machine server_initial)
+        (ES.server_state_machine #CTypes.server_local_event server_initial)
         server_initial
         trace'
         server /\
@@ -1314,7 +1343,7 @@ let lemma_server_valid_byte_trace_inverts_to_serialized_trace
   )
 
 let lemma_client_valid_byte_trace_wire_logs_exact
-  (client_initial:CS.connection_state)
+  (client_initial:EC.client_initial_state)
   (client_received:B.bytes)
   (client:CS.connection_state)
   (client_sent:B.bytes)
@@ -1323,7 +1352,7 @@ let lemma_client_valid_byte_trace_wire_logs_exact
         client_initial ==
           CS.initial client_initial.CS.cs_model.CS.model_config /\
         WFSM.valid_byte_trace
-          (ClientCP.client_system client_initial)
+          (EC.client_system #CTypes.client_local_event client_initial)
           client_received
           client
           client_sent
@@ -1339,7 +1368,7 @@ let lemma_client_valid_byte_trace_wire_logs_exact
     client_sent;
   eliminate exists trace.
     SM.trace_reaches
-      (ClientCP.client_state_machine client_initial)
+      (EC.client_state_machine #CTypes.client_local_event client_initial)
       client_initial
       trace
       client /\
@@ -1386,7 +1415,7 @@ let lemma_client_valid_byte_trace_wire_logs_exact
   )
 
 let lemma_server_valid_byte_trace_wire_logs_exact
-  (server_initial:CS.connection_state)
+  (server_initial:ES.server_initial_state)
   (server_received:B.bytes)
   (server:CS.connection_state)
   (server_sent:B.bytes)
@@ -1395,7 +1424,7 @@ let lemma_server_valid_byte_trace_wire_logs_exact
         server_initial ==
           CS.initial server_initial.CS.cs_model.CS.model_config /\
         WFSM.valid_byte_trace
-          (ServerCP.server_system server_initial)
+          (ES.server_system #CTypes.server_local_event server_initial)
           server_received
           server
           server_sent
@@ -1411,7 +1440,7 @@ let lemma_server_valid_byte_trace_wire_logs_exact
     server_sent;
   eliminate exists trace.
     SM.trace_reaches
-      (ServerCP.server_state_machine server_initial)
+      (ES.server_state_machine #CTypes.server_local_event server_initial)
       server_initial
       trace
       server /\

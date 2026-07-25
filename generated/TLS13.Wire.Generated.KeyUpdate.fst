@@ -35,27 +35,25 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 noextract let keyUpdate_parser = keyUpdateRequest_parser
 
 noextract let keyUpdate_serializer = keyUpdateRequest_serializer
 
 let keyUpdate_bytesize_eq x = ()
 
-let keyUpdate_validator = keyUpdateRequest_validator
+let keyUpdate_validator = fun input poffset #offset #pm #v -> (keyUpdateRequest_validator) input poffset #offset #pm #v
 
-let keyUpdate_reader = keyUpdateRequest_reader
+let keyUpdate_reader = fun input #pm #v -> (keyUpdateRequest_reader) input #pm #v
 
-let keyUpdate_writer = keyUpdateRequest_writer
+let keyUpdate_writer = fun x out offset #v -> (keyUpdateRequest_writer) x out offset #v
 
-let keyUpdate_leaf_size = keyUpdateRequest_leaf_size
+let keyUpdate_leaf_size = fun x -> (keyUpdateRequest_leaf_size) x
 
-let read_keyUpdate : PPB.copyful_parse keyUpdate_vmatch keyUpdate_parser keyUpdate_conv = read_keyUpdateRequest
+let read_keyUpdate : PPB.copyful_parse keyUpdate_vmatch keyUpdate_parser keyUpdate_conv = fun input #pm #v -> (read_keyUpdateRequest) input #pm #v
 
-let free_keyUpdate : PPB.free_t keyUpdate_vmatch = free_keyUpdateRequest
+let free_keyUpdate : PPB.free_t keyUpdate_vmatch = fun x #v -> (free_keyUpdateRequest) x #v
 
-let write_keyUpdate : PPB.l2r_safe_writer keyUpdate_vmatch keyUpdate_serializer keyUpdate_conv = write_keyUpdateRequest
+let write_keyUpdate : PPB.l2r_safe_writer keyUpdate_vmatch keyUpdate_serializer keyUpdate_conv = fun x #y out #v perr -> (write_keyUpdateRequest) x #y out #v perr
 
 let keyUpdate_bytesize_eqn x = (keyUpdateRequest_bytesize_eq (x))
 

@@ -37,8 +37,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 // Need high Z3 limits for large sum types
 #set-options "--z3rlimit 60"
 
@@ -83,7 +81,7 @@ noextract inline_for_extraction let synth_serverName_cases_recip (k:LP.enum_key 
   | Host_name -> [@inline_let] let _ = synth_serverName_cases_recip_pre_intro Host_name x in
     (match x with Name_host_name y -> (from_serverName_case_of_nameType Host_name y))
 
-inline_for_extraction let serverName_sum = LP.make_sum' nameType_enum key_of_serverName
+inline_for_extraction noextract let serverName_sum = LP.make_sum' nameType_enum key_of_serverName
   serverName_case_of_nameType synth_serverName_cases synth_serverName_cases_recip
   (_ by (LP.make_sum_synth_case_recip_synth_case_tac ()))
   (_ by (LP.synth_case_synth_case_recip_tac ()))

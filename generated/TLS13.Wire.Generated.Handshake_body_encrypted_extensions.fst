@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 let handshake_body_encrypted_extensions_parser =
   LP.parse_bounded_vldata 0 16777215 encryptedExtensions_parser
 
@@ -46,20 +44,20 @@ let handshake_body_encrypted_extensions_serializer =
 let handshake_body_encrypted_extensions_bytesize_eq x = ()
 
 let handshake_body_encrypted_extensions_validator =
-  PPVD.validate_bounded_vldata 0 16777215 encryptedExtensions_validator (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata 0 16777215 encryptedExtensions_validator (PPBI.leaf_read_bounded_integer_3 ())
 
 let handshake_body_encrypted_extensions_jumper =
-  PPVD.jump_bounded_vldata 0 16777215 encryptedExtensions_parser (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata 0 16777215 encryptedExtensions_parser (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 16777215)) (PPBI.leaf_read_bounded_integer_3 ()))
 
-let handshake_body_encrypted_extensions_accessor = PPVD.accessor_bounded_vldata_payload 0 16777215 (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+let handshake_body_encrypted_extensions_accessor = PPVD.accessor_bounded_vldata_payload 0 16777215 (PPBI.leaf_read_bounded_integer_3 ())
 
 let read_handshake_body_encrypted_extensions : PPB.copyful_parse handshake_body_encrypted_extensions_vmatch handshake_body_encrypted_extensions_parser handshake_body_encrypted_extensions_conv =
-  PPVD.copyful_parse_bounded_vldata_payload 0 16777215 read_encryptedExtensions (PPBI.leaf_read_bounded_integer_3 fits_u64_squash) fits_u64_squash
+  PPVD.copyful_parse_bounded_vldata_payload 0 16777215 read_encryptedExtensions (PPBI.leaf_read_bounded_integer_3 ())
 
-let free_handshake_body_encrypted_extensions : PPB.free_t handshake_body_encrypted_extensions_vmatch = free_encryptedExtensions
+let free_handshake_body_encrypted_extensions : PPB.free_t handshake_body_encrypted_extensions_vmatch = fun x #v -> (free_encryptedExtensions) x #v
 
 let write_handshake_body_encrypted_extensions : PPB.l2r_safe_writer handshake_body_encrypted_extensions_vmatch handshake_body_encrypted_extensions_serializer handshake_body_encrypted_extensions_conv =
-  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0sz 16777215 (LSeqB.mk_seq_sizet 16777215 fits_u64_squash) encryptedExtensions_serializer write_encryptedExtensions fits_u64_squash
+  PPVD.l2r_safe_writer_bounded_vldata_payload 0 0ul 16777215 16777215ul 3 3sz encryptedExtensions_serializer write_encryptedExtensions
 
 let handshake_body_encrypted_extensions_bytesize_eqn x =
   (encryptedExtensions_bytesize_eq (x))

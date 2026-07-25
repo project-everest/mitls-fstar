@@ -10,11 +10,10 @@
 # (clang, cmake, rust, python3-pip/venv, code-server, libsqlite3-dev, ...).
 # The heavy toolchain build is performed by ./setup.sh as a post-create step,
 # not baked into the image, so the image stays small and cache-friendly.
-FROM ubuntu:24.04
-
-ENV DEBIAN_FRONTEND=noninteractive
+FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04
 
 # Minimal apt set:
+#   time                      - build Karamel
 #   ca-certificates,curl,git  - fetch the EverParse fork, HACL* submodule, RFCs, Z3
 #   opam                      - drives the local OCaml switch for the F*/KaRaMeL build
 #   build-essential           - gcc/make for the OCaml build and the agentic-tls C code
@@ -26,8 +25,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   python3                   - agentic-tls test scripts (port picker, payload gen)
 #   tftp-hpa,tftpd-hpa         - TFTP reference client (tftp) / server (in.tftpd)
 #                               for the tftp_sample interop tests (RFC 1350)
+#   lrzsz                     - XMODEM/YMODEM/ZMODEM reference client/server (sb/rb)
+#                               for the ymodem_sample interop tests
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
+      time \
       ca-certificates \
       curl \
       git \
@@ -42,6 +44,7 @@ RUN apt-get update \
       python3 \
       tftp-hpa \
       tftpd-hpa \
+      lrzsz \
       libcap2-bin \
  && rm -rf /var/lib/apt/lists/*
 
@@ -59,16 +62,11 @@ RUN setcap cap_net_bind_service,cap_setgid,cap_setuid,cap_sys_chroot+ep /usr/sbi
 ENV OPAMYES=1
 ENV OPAMCONFIRMLEVEL=unsafe-yes
 
-# Run as a non-root user (opam refuses to operate as root, and bind-mounted
-# workspace files stay owned by a normal user).  ubuntu:24.04 ships a default
-# uid-1000 "ubuntu" user; replace it with the conventional "vscode" user.
-ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=1000
-RUN userdel -r ubuntu 2>/dev/null || true \
- && groupadd --gid ${USER_GID} ${USERNAME} \
- && useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME}
+# Run as the conventional "vscode" user.
+USER vscode
+ENV HOME=/home/vscode
+WORKDIR /home/vscode
 
-USER ${USERNAME}
-ENV HOME=/home/${USERNAME}
-WORKDIR ${HOME}
+# Put F*, Z3, and QD on the PATH
+RUN ep=/workspaces/agentic-tls/tools/everparse/; \
+  echo "export PATH=$ep/opt/FStar/out/bin:$ep/opt/karamel/out/bin:$ep/bin:$ep/opt/z3:\$PATH" | tee --append $HOME/.profile $HOME/.bashrc $HOME/.bash_profile

@@ -6,427 +6,104 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module C = TLS13.Impl.Client
-module CPI = Common.ProtocolImplementation
+module CI = Common.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
-module CQueries = TLS13.Impl.Client.CanonicalQueries
-module CTypes = TLS13.Impl.CanonicalTypes
-module CW = TLS13.Impl.CanonicalWire
-module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
-module EP = TLS13.Impl.Client.Endpoint
-module IO = Common.TCP
+module CTypes = TLS13.Impl.CanonicalTypes
+module CW = TLS13.Spec.Endpoint.Wire
+module DS = TLS13.Impl.Client.Driver.State
+module EAPI = TLS13.Spec.Endpoint.API
+module MR = Pulse.Lib.MonotonicGhostRef
 module O = TLS13.OpenSSL
-module Seq = FStar.Seq
-module SeqP = FStar.Seq.Properties
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
-module WFSM = Common.WireFormatStateMachine
 
-val client_driver : Type0
+type client_driver = DS.client_driver
+type client_auth_config = O.auth_config
 
 noextract
-val client_driver_canonical
+let client_driver_wire_logs_match = DS.client_driver_wire_logs_match
+
+noextract
+let client_driver_live = DS.client_driver_live
+
+noextract
+let client_driver_connected = DS.client_driver_connected
+
+noextract
+let client_driver_closed = DS.client_driver_closed
+
+noextract
+let client_driver_released
   (d:client_driver)
-  : CP.canonical_client
-
-noextract
-val client_driver_endpoint_config
-  (d:client_driver)
-  : CQueries.client_next_local_action_config
-
-noextract
-val client_driver_endpoint_frame
-  (d:client_driver)
-  (network_app_out:array U8.t)
-  (network_app_out_len:SZ.t)
-  (local_payload:array U8.t)
-  (local_payload_len:SZ.t)
-  (local_app_out:array U8.t)
-  (local_app_out_len:SZ.t)
-  : EP.client_endpoint_frame
-
-noextract
-val client_driver_endpoint_workflow_frame
-  (d:client_driver)
-  : EP.client_endpoint_frame
-
-noextract
-val client_driver_wire_logs_match
-  (st:TLS13.Spec.ConnectionState.connection_state)
-  (received:B.bytes)
-  (sent:B.bytes)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
-  : prop
-
-noextract
-val client_driver_live
-  (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
-  : slprop
-
-noextract
-(**
-  Owns a connected driver together with the actual TCP byte histories tracked by
-  Common.TCP. The protocol-level processed wire log is in st.cs_wire_log; received
-  may also include bytes retained in the driver's input buffer. The predicate
-  includes client_driver_wire_logs_match for the hidden retained bytes, making
-  the public API relation between transport byte contents and protocol wire-log
-  contents explicit.
-**)
-val client_driver_connected
-  (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
-  (received:B.bytes)
-  (sent:B.bytes)
-  : slprop
-
-noextract
-val client_driver_endpoint_live
-  (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
-  : slprop
-
-noextract
-ghost fn client_driver_live_to_endpoint_live
-  (d:client_driver)
-  (st:Ghost.erased CS.connection_state)
-  requires client_driver_live d (Ghost.reveal st)
-  ensures client_driver_endpoint_live d (Ghost.reveal st)
-
-noextract
-ghost fn client_driver_endpoint_live_to_live
-  (d:client_driver)
-  (st:Ghost.erased CS.connection_state)
-  requires client_driver_endpoint_live d (Ghost.reveal st)
-  ensures client_driver_live d (Ghost.reveal st)
-
-noextract
-(**
-  Endpoint-owned connected driver state.
-
-  This is the canonical endpoint-side counterpart of [client_driver_connected]:
-  it owns the canonical progress/current-state resource, the endpoint frame
-  resources, endpoint IO state, the driver's channel cell, and the retained
-  input-buffer length cell.  Its byte histories are the canonical endpoint
-  histories from [Client.CanonicalProtocol]; it is intentionally separate from
-  the legacy public connected predicate, which still carries only the initial
-  canonical seed.
-**)
-val client_driver_endpoint_connected
-  (d:client_driver)
-  (cfg:CQueries.client_next_local_action_config)
-  (frame:EP.client_endpoint_frame)
-  (st:TLS13.Spec.ConnectionState.connection_state)
-  (canonical_received:B.bytes)
-  (canonical_sent:B.bytes)
-  : slprop
-
-noextract
-ghost fn client_driver_endpoint_connected_valid_byte_trace
-  (d:client_driver)
-  (cfg:CQueries.client_next_local_action_config)
-  (frame:EP.client_endpoint_frame)
-  (canonical_received:Ghost.erased B.bytes)
-  (canonical_sent:Ghost.erased B.bytes)
-  (st:Ghost.erased CS.connection_state)
-  requires client_driver_endpoint_connected
-             d
-             cfg
-             frame
-             (Ghost.reveal st)
-             (Ghost.reveal canonical_received)
-             (Ghost.reveal canonical_sent)
-  ensures client_driver_endpoint_connected
-            d
-            cfg
-            frame
-            (Ghost.reveal st)
-            (Ghost.reveal canonical_received)
-            (Ghost.reveal canonical_sent) **
-          pure (WFSM.valid_byte_trace
-            (CP.client_system
-              (Ghost.reveal
-                (client_driver_canonical d).CP.canonical_client_initial))
-            (Ghost.reveal canonical_received)
-            (Ghost.reveal st)
-            (Ghost.reveal canonical_sent)
-            Seq.empty)
-
-noextract
-val client_driver_closed
-  (d:client_driver)
-  (st:TLS13.Spec.ConnectionState.connection_state)
-  : slprop
-
-noextract
-let client_driver_application_ready
   (st:CS.connection_state)
-  : prop =
-  CT.client_end_to_end_invariant st /\
-  st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-  CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model
+  : slprop =
+  CR.connection_released d.DS.client_driver_client st **
+  DS.client_driver_canonical_progress d st **
+  (exists* h. MR.pts_to d.DS.client_driver_tcp_history #1.0R h)
 
 noextract
-let client_driver_sent_log_exact
-  (st:CS.connection_state)
-  (sent:B.bytes)
-  : prop =
-  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
+let client_driver_application_ready = DS.client_driver_application_ready
 
 noextract
-let client_driver_received_log_accounted
-  (st:CS.connection_state)
-  (received:B.bytes)
-  : prop =
-  B.length st.CS.cs_wire_log.CL.raw_received <= B.length received /\
-  (forall b.
-    SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
-    SeqP.count b received)
+let client_driver_sent_log_exact = DS.client_driver_sent_log_exact
 
 noextract
-let client_driver_received_log_exact_prefix
-  (st:CS.connection_state)
-  (received:B.bytes)
-  : prop =
-  exists retained.
-    Seq.equal received
-      (B.append st.CS.cs_wire_log.CL.raw_received retained)
+let client_driver_received_log_accounted =
+  DS.client_driver_received_log_accounted
 
 noextract
-let client_driver_received_no_read_ahead
-  (st:CS.connection_state)
-  (received:B.bytes)
-  : prop =
-  B.length received == B.length st.CS.cs_wire_log.CL.raw_received
-
-val lemma_client_driver_wire_logs_match_received_exact_prefix
-  (st:CS.connection_state)
-  (received:B.bytes)
-  (sent:B.bytes)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
-  : Lemma
-      (requires
-        client_driver_wire_logs_match st received sent buffered buffered_len /\
-        CT.connection_control_not_failed st)
-      (ensures client_driver_received_log_exact_prefix st received)
-
-val lemma_client_driver_wire_logs_match_received_no_read_ahead
-  (st:CS.connection_state)
-  (received:B.bytes)
-  (sent:B.bytes)
-  (buffered:B.bytes)
-  (buffered_len:SZ.t)
-  : Lemma
-      (requires
-        client_driver_wire_logs_match st received sent buffered buffered_len /\
-        CT.connection_control_not_failed st /\
-        buffered_len == 0sz)
-      (ensures client_driver_received_no_read_ahead st received)
+let client_driver_received_log_exact_prefix =
+  DS.client_driver_received_log_exact_prefix
 
 noextract
-let client_driver_local_write_correct
-  (st0:CS.connection_state)
-  (st1:CS.connection_state)
-  (resp:CT.client_response)
-  (kind:CT.local_event_kind)
-  (payload:B.bytes)
-  (sent:B.bytes)
-  (sent':B.bytes)
-  : prop =
-  exists network_out_bytes app_out_bytes.
-    CT.local_event_end_to_end_correct
-      st0
-      st1
-      resp
-      kind
-      payload
-      network_out_bytes
-      app_out_bytes /\
-    Seq.equal
-      sent'
-      (B.append sent (CT.response_network_out resp network_out_bytes))
+let client_driver_received_no_read_ahead =
+  DS.client_driver_received_no_read_ahead
 
-type driver_workflow_status =
-  | DriverWorkflowOk
-  | DriverWorkflowNeedMoreInput
-  | DriverWorkflowStepFailed
-  | DriverWorkflowExhausted
-  | DriverWorkflowClosed
+type driver_workflow_status = DS.driver_workflow_status
 
 noextract
-let client_driver_send_status_correct
-  (status:driver_workflow_status)
-  (resp:CT.client_response)
-  : prop =
-  if resp.CT.status == CT.StepOk
-  then status == DriverWorkflowOk
-  else status == DriverWorkflowStepFailed
+let client_driver_local_write_correct = DS.client_driver_local_write_correct
 
 noextract
-let client_driver_send_correct
-  (st0:CS.connection_state)
-  (st1:CS.connection_state)
-  (status:driver_workflow_status)
-  (payload:B.bytes)
-  (sent:B.bytes)
-  (sent':B.bytes)
-  : prop =
-  exists resp.
-    client_driver_local_write_correct
-      st0
-      st1
-      resp
-      CT.LocalSendApplicationData
-      payload
-      sent
-      sent' /\
-    client_driver_send_status_correct status resp
+let client_driver_send_status_correct = DS.client_driver_send_status_correct
 
 noextract
-let client_driver_endpoint_send_event
-  (payload:B.bytes)
-  : CTypes.client_local_event =
-  CTypes.ClientAPI {
-    CTypes.client_local_kind = CT.LocalSendApplicationData;
-    CTypes.client_local_payload = payload;
-  }
+let client_driver_payload_too_large = DS.client_driver_payload_too_large
 
 noextract
-let client_driver_endpoint_close_event
-  : CTypes.client_local_event =
-  CTypes.ClientAPI {
-    CTypes.client_local_kind = CT.LocalSendCloseNotify;
-    CTypes.client_local_payload = B.empty;
-  }
+let client_driver_send_correct = DS.client_driver_send_correct
 
 noextract
-let client_driver_close_status_correct
-  (wait_for_peer:bool)
-  (status:driver_workflow_status)
-  (resp:CT.client_response)
-  : prop =
-  (resp.CT.status <> CT.StepOk ==> status == DriverWorkflowStepFailed) /\
-  (resp.CT.status == CT.StepOk /\ wait_for_peer == false ==>
-    status == DriverWorkflowClosed)
+let client_driver_close_status_correct = DS.client_driver_close_status_correct
 
 noextract
-let client_driver_close_correct
-  (st0:CS.connection_state)
-  (st_close_notify:CS.connection_state)
-  (status:driver_workflow_status)
-  (wait_for_peer:bool)
-  : prop =
-  exists resp.
-    client_driver_local_write_correct
-      st0
-      st_close_notify
-      resp
-      CT.LocalSendCloseNotify
-      B.empty
-      st0.CS.cs_wire_log.CL.raw_sent
-      st_close_notify.CS.cs_wire_log.CL.raw_sent /\
-    client_driver_close_status_correct wait_for_peer status resp
+let client_driver_close_correct = DS.client_driver_close_correct
 
-type client_receive_result = {
-  client_receive_status: driver_workflow_status;
-  client_receive_len: SZ.t;
-}
-
-noeq type client_receive_observation = {
-  client_receive_observed_status: driver_workflow_status;
-  client_receive_observed_response: CT.client_buffer_response;
-}
+type client_receive_result = DS.client_receive_result
 
 noextract
-let client_receive_observation_network_correct
-  (st0:CS.connection_state)
-  (st1:CS.connection_state)
-  (obs:client_receive_observation)
-  (app_out:B.bytes)
-  : prop =
-  obs.client_receive_observed_status <> DriverWorkflowExhausted ==>
-    exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
-      CT.network_bytes_end_to_end_correct
-        st_before
-        st_network
-        obs.client_receive_observed_response
-        input
-        old_network_out
-        network_out
-        old_app_out
-        observed_app_out /\
-      (obs.client_receive_observed_status == DriverWorkflowOk ==>
-        st_network == st1 /\ Seq.equal observed_app_out app_out)
+type client_receive_observation = DS.client_receive_observation
 
 noextract
-let client_driver_receive_status_correct
-  (result:client_receive_result)
-  (obs:client_receive_observation)
-  (app_out:B.bytes)
-  (out_bytes:B.bytes)
-  : prop =
-  let resp = obs.client_receive_observed_response.CT.response in
-  if obs.client_receive_observed_status == DriverWorkflowOk then
-    if SZ.v resp.CT.app_out_len <= B.length out_bytes /\
-       SZ.v resp.CT.app_out_len <= B.length app_out
-    then
-      result.client_receive_status == DriverWorkflowOk /\
-      result.client_receive_len == resp.CT.app_out_len
-    else
-      result.client_receive_status == DriverWorkflowStepFailed /\
-      result.client_receive_len == 0sz
-  else
-    result.client_receive_status == obs.client_receive_observed_status /\
-    result.client_receive_len == 0sz
+let client_receive_observation_network_correct =
+  DS.client_receive_observation_network_correct
 
 noextract
-let client_driver_receive_copyout_correct
-  (result:client_receive_result)
-  (resp:CT.client_response)
-  (app_out:B.bytes)
-  (out_bytes:B.bytes)
-  : prop =
-  if result.client_receive_status == DriverWorkflowOk then
-    SZ.v result.client_receive_len <= B.length out_bytes /\
-    result.client_receive_len == resp.CT.app_out_len /\
-    (if SZ.v result.client_receive_len <= B.length out_bytes then
-      Seq.equal
-        (Seq.slice out_bytes 0 (SZ.v result.client_receive_len))
-        (CT.response_app_out resp app_out)
-     else False)
-  else
-    True
+let client_driver_receive_status_correct =
+  DS.client_driver_receive_status_correct
 
 noextract
-let client_driver_receive_correct
-  (st0:CS.connection_state)
-  (st1:CS.connection_state)
-  (result:client_receive_result)
-  (obs:client_receive_observation)
-  (app_out:B.bytes)
-  (out_bytes:B.bytes)
-  : prop =
-  client_driver_receive_status_correct
-    result
-    obs
-    app_out
-    out_bytes /\
-  client_receive_observation_network_correct st0 st1 obs app_out /\
-  SZ.v result.client_receive_len <= B.length out_bytes /\
-  (result.client_receive_status == DriverWorkflowOk ==>
-    client_driver_receive_copyout_correct
-      result
-      obs.client_receive_observed_response.CT.response
-      app_out
-      out_bytes)
+let client_driver_receive_copyout_correct =
+  DS.client_driver_receive_copyout_correct
 
-fn new_client
+noextract
+let client_driver_receive_correct = DS.client_driver_receive_correct
+
+fn new_auth_config
   (server_name:array U8.t)
   (server_name_len:SZ.t)
   (trust_anchors:array U8.t)
@@ -435,13 +112,51 @@ fn new_client
   requires pts_to server_name 'server_name_bytes **
            pts_to trust_anchors 'trust_anchors_bytes **
            pure (B.length 'server_name_bytes == SZ.v server_name_len /\
+                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len)
+  returns config: client_auth_config
+  ensures pts_to server_name 'server_name_bytes **
+          pts_to trust_anchors 'trust_anchors_bytes **
+          O.is_auth_config
+            config
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds
+
+fn free_auth_config (config:client_auth_config)
+  requires O.is_auth_config
+    config
+    'server_name_bytes
+    'trust_anchors_bytes
+    'validation_time_seconds
+  ensures emp
+
+fn new_client_with_auth_config
+  (config:client_auth_config)
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  requires O.is_auth_config
+             config
+             (Ghost.reveal 'server_name_bytes)
+             (Ghost.reveal 'trust_anchors_bytes)
+             validation_time_seconds **
+           pts_to server_name 'server_name_bytes **
+           pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
                  B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
                  SZ.v server_name_len <=
                    TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
                  SZ.v trust_anchors_len <=
                    TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
   returns result: client_driver
-  ensures pts_to server_name 'server_name_bytes **
+  ensures O.is_auth_config
+            config
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds **
+          pts_to server_name 'server_name_bytes **
           pts_to trust_anchors 'trust_anchors_bytes **
           client_driver_live
             result
@@ -461,167 +176,237 @@ fn new_client
                     validation_time_seconds))
 
 noextract
-fn connect_endpoint
+let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
+
+noextract
+let channel_send_succeeded (status:driver_workflow_status) : bool =
+  match status with
+  | DS.DriverWorkflowOk -> true
+  | _ -> false
+
+noextract
+let channel_receive_succeeded (result:client_receive_result) : bool =
+  match result.DS.client_receive_status with
+  | DS.DriverWorkflowOk -> true
+  | _ -> false
+
+noextract
+let channel_receive_length (result:client_receive_result) : SZ.t =
+  result.DS.client_receive_len
+
+(* A send leaves the channel reusable (live) exactly for success and for the
+   payload-too-large rejection (which does not touch the connection). A hard
+   step failure is terminal. *)
+noextract
+let channel_send_reusable
+  (status:driver_workflow_status)
+  : bool =
+  match status with
+  | DS.DriverWorkflowOk -> true
+  | DS.DriverWorkflowPayloadTooLarge -> true
+  | _ -> false
+
+(* A receive leaves the channel reusable (live) for exactly the statuses where
+   the connection remains open: success, need-more-input, exhausted, and
+   output-buffer-too-small.  Every other status — a hard step failure, a peer
+   close, or any status that cannot arise on the receive path (e.g.
+   payload-too-large, which is send-only) — is terminal.  The cases are listed
+   explicitly so the live set is exactly {Ok, NeedMoreInput, Exhausted,
+   OutputBufferTooSmall} and cannot silently admit an unintended status. *)
+noextract
+let channel_receive_reusable
+  (result:client_receive_result)
+  : bool =
+  match result.DS.client_receive_status with
+  | DS.DriverWorkflowOk -> true
+  | DS.DriverWorkflowNeedMoreInput -> true
+  | DS.DriverWorkflowExhausted -> true
+  | DS.DriverWorkflowOutputBufferTooSmall -> true
+  | _ -> false
+
+noextract
+let client_driver_is_closed
+  (d:client_driver)
+  : slprop =
+  exists* st. client_driver_closed d st
+
+noextract
+let client_channel_after_operation
+  (d:client_driver)
+  (reusable:bool)
+  (wire_received wire_sent pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  if reusable
+  then DS.client_channel_inv d wire_received wire_sent pending app_log
+  else client_driver_is_closed d
+
+fn connect
   (d:client_driver)
   (connect_host:array U8.t)
   (connect_host_len:SZ.t)
   (port:U16.t)
+  (local_fuel:SZ.t)
   (fuel:SZ.t)
-  requires client_driver_endpoint_live d 'st0 **
+  requires client_driver_live d 'st0 **
            pts_to connect_host 'connect_host_bytes **
            pure (B.length 'connect_host_bytes == SZ.v connect_host_len)
-  returns result:option EP.client_endpoint_run_result
+  returns status:driver_workflow_status
   ensures pts_to connect_host 'connect_host_bytes **
-          (let cfg = client_driver_endpoint_config d in
-           let frame = client_driver_endpoint_workflow_frame d in
-           match result with
-           | None ->
-             client_driver_endpoint_live d 'st0
-           | Some _ ->
-             exists* st1 received1 sent1.
-               client_driver_endpoint_connected d cfg frame st1 received1 sent1)
+          (match status with
+           | DS.DriverWorkflowOk ->
+             exists* wire_received wire_sent pending app_log.
+               DS.client_channel_inv d wire_received wire_sent pending app_log
+           | _ ->
+             exists* st1. client_driver_closed d st1)
 
-noextract
-fn send_endpoint
+(**
+  Sends [payload] as one TLS 1.3 application-data record. Payloads above the
+  16,384-byte record limit are rejected without changing the connection.
+**)
+fn send
   (d:client_driver)
-  (cfg:CQueries.client_next_local_action_config)
-  (frame:EP.client_endpoint_frame)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
   (payload:array U8.t)
+  (payload_bytes:Ghost.erased B.bytes)
   (payload_len:SZ.t)
-  (payload_bytes:B.bytes)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires client_driver_endpoint_connected
-              d
-              cfg
-              frame
-              (Ghost.reveal st0)
-              (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0) **
-           pts_to payload payload_bytes **
-           pure (B.length payload_bytes == SZ.v payload_len /\
-                 CT.connection_control_not_failed (Ghost.reveal st0) /\
-                 CT.local_input_wf
-                  (Ghost.reveal st0)
-                  CT.LocalSendApplicationData
-                  payload_bytes)
-  returns result:CPI.process_result
-  ensures exists* (canonical_received1:Ghost.erased B.bytes)
-                 (canonical_sent1:Ghost.erased B.bytes)
-                 (st1:Ghost.erased CS.connection_state).
-           client_driver_endpoint_connected
+  requires DS.client_channel_inv
              d
-             cfg
-             frame
-             (Ghost.reveal st1)
-             (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1) **
-           pts_to payload payload_bytes **
-           pure (exists (old_out:B.bytes)
-                       (out_contents:B.bytes)
-                       (wire_outputs:list CW.wire_message)
-                       (local_outputs:list CTypes.local_output).
-             CPI.local_process_correct
-               (CP.client_system
-                 (Ghost.reveal
-                  (client_driver_canonical d).CP.canonical_client_initial))
-               (client_driver_endpoint_send_event payload_bytes)
-               old_out
-               out_contents
-               frame.EP.client_ep_network_out_len
-               (Ghost.reveal canonical_received0)
-               (Ghost.reveal canonical_sent0)
-               (Ghost.reveal st0)
-               result
-               (Ghost.reveal canonical_received1)
-               (Ghost.reveal canonical_sent1)
-               (Ghost.reveal st1)
-               wire_outputs
-               local_outputs)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0) **
+           pts_to payload (Ghost.reveal payload_bytes) **
+           pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          client_channel_after_operation
+            d
+            (channel_send_reusable status)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1 **
+          pts_to payload (Ghost.reveal payload_bytes) **
+          pure (
+            CI.send_transition
+              channel_message_of_bytes
+              channel_send_succeeded
+              status
+              (Ghost.reveal payload_bytes)
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
+              (Ghost.reveal app_log0)
+              wire_received1
+              wire_sent1
+              app_log1)
 
-noextract
-fn receive_endpoint
+fn receive
   (d:client_driver)
-  (cfg:CQueries.client_next_local_action_config)
-  (frame:EP.client_endpoint_frame)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (out:array U8.t)
+  (old_output:Ghost.erased B.bytes)
+  (out_len:SZ.t)
+  (local_fuel:SZ.t)
   (fuel:SZ.t)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires client_driver_endpoint_connected
-              d
-              cfg
-              frame
-              (Ghost.reveal st0)
-              (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0)
-  returns result:EP.client_endpoint_run_result
-  ensures exists* (canonical_received1:Ghost.erased B.bytes)
-                (canonical_sent1:Ghost.erased B.bytes)
-                (st1:Ghost.erased CS.connection_state).
-           client_driver_endpoint_connected
+  requires DS.client_channel_inv
              d
-             cfg
-             frame
-             (Ghost.reveal st1)
-             (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0) **
+           pts_to out (Ghost.reveal old_output) **
+           pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
+  returns result:client_receive_result
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1 output.
+          client_channel_after_operation
+            d
+            (channel_receive_reusable result)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1 **
+          pts_to out output **
+          pure (
+            B.length output == SZ.v out_len /\
+            SZ.v result.DS.client_receive_len <= SZ.v out_len /\
+            CI.receive_transition
+              channel_message_of_bytes
+              channel_receive_succeeded
+              channel_receive_length
+              result
+              output
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
+              (Ghost.reveal app_log0)
+              wire_received1
+              wire_sent1
+              app_log1)
+
+fn close
+  (d:client_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  (wait_for_peer:bool)
+  (fuel:SZ.t)
+  requires DS.client_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+  returns status:driver_workflow_status
+  ensures exists* st1.
+          client_driver_closed d st1 **
+          pure (exists st0 st_close_notify.
+            st1.CS.cs_model.CS.model_config ==
+              st0.CS.cs_model.CS.model_config /\
+            client_driver_close_correct
+              st0
+              st_close_notify
+              status
+              wait_for_peer)
+
+(**
+  Safely disposes a connected transport after a workflow failure without
+  attempting to send close_notify.
+**)
+fn abort
+  (d:client_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires DS.client_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+  ensures exists* st. client_driver_closed d st
+
+fn free (d:client_driver)
+  requires client_driver_closed d 'st
+  ensures client_driver_released d 'st
 
 noextract
-fn close_endpoint
-  (d:client_driver)
-  (cfg:CQueries.client_next_local_action_config)
-  (frame:EP.client_endpoint_frame)
-  (payload:array U8.t)
-  (payload_len:SZ.t)
-  (canonical_received0:Ghost.erased B.bytes)
-  (canonical_sent0:Ghost.erased B.bytes)
-  (st0:Ghost.erased CS.connection_state)
-  requires client_driver_endpoint_connected
-              d
-              cfg
-              frame
-              (Ghost.reveal st0)
-              (Ghost.reveal canonical_received0)
-              (Ghost.reveal canonical_sent0) **
-           pts_to payload B.empty **
-           pure (SZ.v payload_len == 0 /\
-                 CT.connection_control_not_failed (Ghost.reveal st0) /\
-                 CT.local_input_wf
-                   (Ghost.reveal st0)
-                   CT.LocalSendCloseNotify
-                   B.empty)
-  returns result:CPI.process_result
-  ensures exists* (canonical_received1:Ghost.erased B.bytes)
-                 (canonical_sent1:Ghost.erased B.bytes)
-                 (st1:Ghost.erased CS.connection_state).
-           client_driver_endpoint_connected
-             d
-             cfg
-             frame
-             (Ghost.reveal st1)
-             (Ghost.reveal canonical_received1)
-             (Ghost.reveal canonical_sent1) **
-           pts_to payload B.empty **
-           pure (exists (old_out:B.bytes)
-                        (out_contents:B.bytes)
-                        (wire_outputs:list CW.wire_message)
-                        (local_outputs:list CTypes.local_output).
-             CPI.local_process_correct
-               (CP.client_system
-                 (Ghost.reveal
-                  (client_driver_canonical d).CP.canonical_client_initial))
-               client_driver_endpoint_close_event
-               old_out
-               out_contents
-               frame.EP.client_ep_network_out_len
-               (Ghost.reveal canonical_received0)
-               (Ghost.reveal canonical_sent0)
-               (Ghost.reveal st0)
-               result
-               (Ghost.reveal canonical_received1)
-               (Ghost.reveal canonical_sent1)
-               (Ghost.reveal st1)
-               wire_outputs
-               local_outputs)
+val client_channel_implementation
+  : CI.channel_implementation
+      DS.client_driver
+      CP.canonical_client
+      CS.connection_state
+      CW.wire_message
+      CTypes.client_local_event
+      EAPI.local_output
+      B.bytes
+      DS.driver_workflow_status
+      DS.client_receive_result
+      CP.client_protocol_implementation

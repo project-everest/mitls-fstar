@@ -9,7 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module DN = TLS13.Impl.Server.Driver.Network
@@ -628,11 +628,13 @@ fn select_and_derive_shared_secret_if_ready_once
 
 fn accept_start_read_client_hello_select_derive_once
   (d:DS.server_driver)
+  (source:DT.server_transport_source)
   (bind_host:array U8.t)
   (bind_host_len:SZ.t)
   (port:U16.t)
   (network_fuel:SZ.t)
-  requires DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
+  requires DT.owns_server_transport_source source 'bind_host_bytes port **
+           DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
            pts_to bind_host 'bind_host_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
                  CM.can_start_server 'st0 /\
@@ -651,7 +653,8 @@ fn accept_start_read_client_hello_select_derive_once
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns result:server_driver_accept_select_derive_result
-  ensures pts_to bind_host 'bind_host_bytes **
+  ensures DT.owns_server_transport_source source 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
           (match result with
            | ServerDriverAcceptSelectDeriveListenFailed ->
              DS.server_driver_live d 'st0 'certificate_chain 'credential_identity
@@ -711,11 +714,13 @@ fn accept_start_read_client_hello_select_derive_once
 
 fn accept_start_read_client_hello_select_derive_send_server_hello_once
   (d:DS.server_driver)
+  (source:DT.server_transport_source)
   (bind_host:array U8.t)
   (bind_host_len:SZ.t)
   (port:U16.t)
   (network_fuel:SZ.t)
-  requires DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
+  requires DT.owns_server_transport_source source 'bind_host_bytes port **
+           DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
            pts_to bind_host 'bind_host_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
                    CM.can_start_server 'st0 /\
@@ -734,7 +739,8 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                       cfg.CS.server_sni_policy == None
                     | None -> False))
   returns result:server_driver_accept_server_hello_result
-  ensures pts_to bind_host 'bind_host_bytes **
+  ensures DT.owns_server_transport_source source 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
           (match result with
            | ServerDriverAcceptServerHelloListenFailed ->
                DS.server_driver_live d 'st0 'certificate_chain 'credential_identity
@@ -782,12 +788,14 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
 
 fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
   (d:DS.server_driver)
+  (source:DT.server_transport_source)
   (bind_host:array U8.t)
   (bind_host_len:SZ.t)
   (port:U16.t)
   (network_fuel:SZ.t)
   (local_fuel:SZ.t)
-  requires DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
+  requires DT.owns_server_transport_source source 'bind_host_bytes port **
+           DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
            pts_to bind_host 'bind_host_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
                    CM.can_start_server 'st0 /\
@@ -806,7 +814,8 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
                       cfg.CS.server_sni_policy == None
                     | None -> False))
   returns result:server_driver_accept_server_hello_drain_result
-  ensures pts_to bind_host 'bind_host_bytes **
+  ensures DT.owns_server_transport_source source 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
           (match result with
            | ServerDriverAcceptServerHelloDrainListenFailed ->
              DS.server_driver_live d 'st0 'certificate_chain 'credential_identity
@@ -841,15 +850,18 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_on
 
 fn accept_transport_and_start_once
   (d:DS.server_driver)
+  (source:DT.server_transport_source)
   (bind_host:array U8.t)
   (bind_host_len:SZ.t)
   (port:U16.t)
-  requires DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
+  requires DT.owns_server_transport_source source 'bind_host_bytes port **
+           DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
            pts_to bind_host 'bind_host_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
                  CM.can_start_server 'st0)
   returns status:DS.server_driver_transport_status
-  ensures pts_to bind_host 'bind_host_bytes **
+  ensures DT.owns_server_transport_source source 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
           (match status with
            | DS.ServerDriverTransportOk ->
              DS.server_driver_connected
@@ -864,16 +876,19 @@ fn accept_transport_and_start_once
 
 fn accept_transport_start_and_read_client_hello
   (d:DS.server_driver)
+  (source:DT.server_transport_source)
   (bind_host:array U8.t)
   (bind_host_len:SZ.t)
   (port:U16.t)
   (network_fuel:SZ.t)
-  requires DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
+  requires DT.owns_server_transport_source source 'bind_host_bytes port **
+           DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
            pts_to bind_host 'bind_host_bytes **
            pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
                  CM.can_start_server 'st0)
   returns result:server_driver_accept_client_hello_result
-  ensures pts_to bind_host 'bind_host_bytes **
+  ensures DT.owns_server_transport_source source 'bind_host_bytes port **
+          pts_to bind_host 'bind_host_bytes **
           (match result with
            | ServerDriverAcceptClientHelloTransportOk wait ->
              exists* st1 received sent.

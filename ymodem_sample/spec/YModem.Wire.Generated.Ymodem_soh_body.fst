@@ -35,8 +35,6 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-assume val fits_u64_squash : squash FStar.SizeT.fits_u64
-
 (* Type of field data*)
 open YModem.Wire.Generated.Ymodem_soh_body_data
 
@@ -77,7 +75,7 @@ let read_ymodem_soh_body : PPB.copyful_parse ymodem_soh_body_vmatch ymodem_soh_b
   assert_norm (ymodem_soh_body_parser_kind == ymodem_soh_body'_parser_kind);
   PPC.copyful_parse_synth (PPC.copyful_parse_pair (LPC.jump_nondep_then LPPI.jump_u8 LPPI.jump_u8) (PPC.copyful_parse_pair LPPI.jump_u8 (PPB.copyful_parse_leaf (PPB.leaf_reader_of_serialized (LPPI.read_u8' ()))) () (PPB.copyful_parse_leaf (PPB.leaf_reader_of_serialized (LPPI.read_u8' ())))) () (PPC.copyful_parse_pair ymodem_soh_body_data_jumper read_ymodem_soh_body_data () (PPB.copyful_parse_leaf (PPB.leaf_reader_of_serialized (LPPI.read_u16' ()))))) synth_ymodem_soh_body synth_ymodem_soh_body_recip
 
-let free_ymodem_soh_body : PPB.free_t ymodem_soh_body_vmatch = (PPC.free_pair (PPC.free_pair (PPB.free_leaf #U8.t) (PPB.free_leaf #U8.t)) (PPC.free_pair free_ymodem_soh_body_data (PPB.free_leaf #U16.t)))
+let free_ymodem_soh_body : PPB.free_t ymodem_soh_body_vmatch = fun x #v -> ((PPC.free_pair (PPC.free_pair (PPB.free_leaf #U8.t) (PPB.free_leaf #U8.t)) (PPC.free_pair free_ymodem_soh_body_data (PPB.free_leaf #U16.t)))) x #v
 
 let write_ymodem_soh_body : PPB.l2r_safe_writer ymodem_soh_body_vmatch ymodem_soh_body_serializer ymodem_soh_body_conv =
   synth_ymodem_soh_body_injective ();
@@ -86,7 +84,7 @@ let write_ymodem_soh_body : PPB.l2r_safe_writer ymodem_soh_body_vmatch ymodem_so
 
 let size_ymodem_soh_body : PPB.l2r_safe_size ymodem_soh_body_vmatch ymodem_soh_body_serializer ymodem_soh_body_conv =
   synth_ymodem_soh_body_injective ();
-  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair fits_u64_squash (PPC.l2r_safe_size_pair fits_u64_squash (PPB.l2r_safe_size_leaf LPI.serialize_u8 1sz) () (PPB.l2r_safe_size_leaf LPI.serialize_u8 1sz)) () (PPC.l2r_safe_size_pair fits_u64_squash size_ymodem_soh_body_data () (PPB.l2r_safe_size_leaf LPI.serialize_u16 2sz))) synth_ymodem_soh_body synth_ymodem_soh_body_recip
+  PPC.l2r_safe_size_synth (PPC.l2r_safe_size_pair (PPC.l2r_safe_size_pair (PPB.l2r_safe_size_leaf LPI.serialize_u8 1sz) () (PPB.l2r_safe_size_leaf LPI.serialize_u8 1sz)) () (PPC.l2r_safe_size_pair size_ymodem_soh_body_data () (PPB.l2r_safe_size_leaf LPI.serialize_u16 2sz))) synth_ymodem_soh_body synth_ymodem_soh_body_recip
 
 let ymodem_soh_body_bytesize_eqn x =
   [@inline_let] let _ = synth_ymodem_soh_body_injective () in

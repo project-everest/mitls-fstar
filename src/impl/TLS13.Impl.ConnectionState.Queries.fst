@@ -12,7 +12,7 @@ module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
-module CS = TLS13.Spec.ConnectionState
+module CS = TLS13.Spec.StateMachine
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -30,7 +30,7 @@ module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
-module SM = TLS13.StateMachine
+module SM = TLS13.Spec.StateMachine.ClientTrace
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -1342,10 +1342,6 @@ fn can_receive_client_finished
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-            Some?
-              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
-              max_transcript_len /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             CS.legal_event
               st0.CS.cs_model
@@ -1369,13 +1365,6 @@ fn can_receive_client_finished
   unfold (traffic_key_material_exactly
     c.handshake.keys.client_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
-  unfold (optional_secret_exactly
-    c.handshake.keys.master_secret
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret);
-  unfold (sized_bytes_exactly
-    c.handshake.transcript
-    max_transcript_len
-    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
 
   let role_ok = config_role_is_server c.config;
 
@@ -1407,36 +1396,8 @@ fn can_receive_client_finished
   let has_client_handshake_keys = !c.handshake.keys.client_handshake_traffic.present;
   assert (pure (has_client_handshake_keys == client_hs_present));
 
-  with master_present.
-    assert (Box.pts_to c.handshake.keys.master_secret.present master_present);
-  with master_secret_bytes.
-    assert (V.pts_to c.handshake.keys.master_secret.secret master_secret_bytes);
-  let has_master = !c.handshake.keys.master_secret.present;
-  assert (pure (has_master == master_present));
-
   let seq_ok = Rec.can_advance_seq c.records.read;
-
-  with transcript_storage transcript_len_g.
-    assert (V.pts_to c.handshake.transcript.bytes transcript_storage **
-            Box.pts_to c.handshake.transcript.len transcript_len_g);
-  let current_transcript_len = !c.handshake.transcript.len;
-  assert (pure (current_transcript_len == transcript_len_g));
-  assert (pure (B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
-    SZ.v current_transcript_len));
-  assert (pure (SZ.fits max_transcript_len));
-  let max_len = max_transcript_len_sz;
-  let max_start = SZ.sub max_len 36sz;
-  let transcript_room = sizet_lte_plain current_transcript_len max_start;
-  lemma_sizet_lte_plain current_transcript_len max_start;
-
-  let ok = role_ok && tag_ok && stage_ok && no_fin && has_client_handshake_keys && has_master && seq_ok && transcript_room;
-
-  assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
-  assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
-    max_transcript_len));
-
-  assert (pure (ok ==>
-    Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret));
+  let ok = role_ok && tag_ok && stage_ok && no_fin && has_client_handshake_keys && seq_ok;
 
   assert (pure (ok ==> U8.v tag == 1));
   assert (pure (ok ==> U8.v stage == 16));
@@ -1462,13 +1423,6 @@ fn can_receive_client_finished
   fold (traffic_key_material_exactly
     c.handshake.keys.client_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
-  fold (optional_secret_exactly
-    c.handshake.keys.master_secret
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret);
-  fold (sized_bytes_exactly
-    c.handshake.transcript
-    max_transcript_len
-    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
   fold (key_schedule_exactly
     c.handshake.keys
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
@@ -3382,13 +3336,6 @@ fn can_send_certificate_verify_runtime
       B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 8 +
         B.length (Sem.certificateVerify_signature_bytes (Ghost.reveal cv)) <=
           max_transcript_len));
-    // The signature is bounded by [signature_max_len] (4096), so the sent
-    // CertificateVerify is [certificateVerify_representable] as the strengthened
-    // Sent-CV [legal_handshake_message] arm now requires.
-    W.lemma_certificateVerify_representable (Ghost.reveal cv);
-    assert (pure (B.length (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))
-      <= M.signature_max_len));
-    assert (pure (W.certificateVerify_representable (Ghost.reveal cv)));
     assert (pure (ok ==> CS.legal_event
       st0.CS.cs_model
       (CS.ConnNetworkEvent {
@@ -4216,10 +4163,6 @@ fn can_receive_server_finished
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished == None /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
-            Some?
-              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
-              max_transcript_len /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             CS.legal_event
               st0.CS.cs_model
@@ -4243,13 +4186,6 @@ fn can_receive_server_finished
   unfold (traffic_key_material_exactly
     c.handshake.keys.server_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
-  unfold (optional_secret_exactly
-    c.handshake.keys.master_secret
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret);
-  unfold (sized_bytes_exactly
-    c.handshake.transcript
-    max_transcript_len
-    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
 
   let role_ok = config_role_is_client c.config;
 
@@ -4281,36 +4217,8 @@ fn can_receive_server_finished
   let has_server_handshake_keys = !c.handshake.keys.server_handshake_traffic.present;
   assert (pure (has_server_handshake_keys == server_hs_present));
 
-  with master_present.
-    assert (Box.pts_to c.handshake.keys.master_secret.present master_present);
-  with master_secret_bytes.
-    assert (V.pts_to c.handshake.keys.master_secret.secret master_secret_bytes);
-  let has_master = !c.handshake.keys.master_secret.present;
-  assert (pure (has_master == master_present));
-
   let seq_ok = Rec.can_advance_seq c.records.read;
-
-  with transcript_storage transcript_len_g.
-    assert (V.pts_to c.handshake.transcript.bytes transcript_storage **
-            Box.pts_to c.handshake.transcript.len transcript_len_g);
-  let current_transcript_len = !c.handshake.transcript.len;
-  assert (pure (current_transcript_len == transcript_len_g));
-  assert (pure (B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
-    SZ.v current_transcript_len));
-  assert (pure (SZ.fits max_transcript_len));
-  let max_len = max_transcript_len_sz;
-  let max_start = SZ.sub max_len 36sz;
-  let transcript_room = sizet_lte_plain current_transcript_len max_start;
-  lemma_sizet_lte_plain current_transcript_len max_start;
-
-  let ok = role_ok && tag_ok && stage_ok && no_fin && has_server_handshake_keys && has_master && seq_ok && transcript_room;
-
-  assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
-  assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
-    max_transcript_len));
-
-  assert (pure (ok ==>
-    Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret));
+  let ok = role_ok && tag_ok && stage_ok && no_fin && has_server_handshake_keys && seq_ok;
 
   assert (pure (ok ==> U8.v tag == 1));
   assert (pure (ok ==> U8.v stage == 8));
@@ -4334,13 +4242,6 @@ fn can_receive_server_finished
   fold (traffic_key_material_exactly
     c.handshake.keys.server_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
-  fold (optional_secret_exactly
-    c.handshake.keys.master_secret
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret);
-  fold (sized_bytes_exactly
-    c.handshake.transcript
-    max_transcript_len
-    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
   fold (key_schedule_exactly
     c.handshake.keys
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys);

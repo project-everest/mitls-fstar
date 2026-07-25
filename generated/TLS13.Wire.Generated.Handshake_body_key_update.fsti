@@ -35,7 +35,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.KeyUpdate
 
-type handshake_body_key_update = keyUpdate
+noextract type handshake_body_key_update = keyUpdate
 
 inline_for_extraction noextract let handshake_body_key_update_parser_kind = LP.strong_parser_kind 4 4 None
 
