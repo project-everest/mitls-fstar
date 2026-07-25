@@ -32,6 +32,7 @@ module Calc.System
 module R = FStar.ReflexiveTransitiveClosure
 module Seq = FStar.Seq
 module CalcP = Calc.Protocol
+module SP = Common.SystemProduct
 
 open Calc.Spec
 open Calc.Wire
@@ -126,18 +127,37 @@ let do_recv (s:system_state) : system_state =
     The system step relation
     ───────────────────────────────────────────────────────────────────────── **)
 
+(** The calculator system as an instance of the generic single-slot
+    directed-channel product (`Common.SystemProduct`).  The channel observations
+    read off `channel_state`.  The calculator is a strict request/response
+    protocol: the client `issue`s (an OUTPUT to the server), the server `serve`s
+    (a FUSED receive-and-respond, the product's `server_serve`), and the client
+    `recv`s the response (a DELIVER to the client).  There is no plain server
+    output, no server-directed delivery, and no purely internal move, so those
+    four families are the empty relation.  `product_step SP` supplies the channel
+    discipline (issue needs Quiet, serve needs a request in flight, recv needs a
+    response in flight). **)
+let calc_iface : SP.prod_iface system_state = {
+  is_quiet     = (fun s -> Quiet? s.channel);
+  in_to_server = (fun s -> InReq? s.channel);
+  in_to_client = (fun s -> InResp? s.channel);
+  // issue: client OUTPUT (Quiet gate supplied by product_step)
+  client_send       = (fun s s' -> None? s.client.pending /\ (exists (b:CalcP.calc_frame). s' == do_issue b s));
+  server_send       = SP.no_move;
+  // recv: client DELIVER (InResp gate supplied by product_step)
+  deliver_to_client = (fun s s' -> Some? s.client.pending /\ s' == do_recv s);
+  deliver_to_server = SP.no_move;
+  client_local      = SP.no_move;
+  server_local      = SP.no_move;
+  // serve: server FUSED receive-and-respond (InReq gate supplied by product_step)
+  server_serve      = (fun s s' -> InReq? s.channel /\
+                                    Some? s.client.pending /\
+                                    Some?.v s.client.pending == InReq?._0 s.channel /\
+                                    s' == do_serve s);
+}
+
 let sys_step : R.binrel system_state =
-  fun s s' ->
-    // issue: Quiet & Idle -> InReq b
-    (Quiet? s.channel /\ None? s.client.pending /\
-     (exists (b:CalcP.calc_frame). s' == do_issue b s)) \/
-    // serve: InReq b (matching the pending request) -> InResp
-    (InReq? s.channel /\ Some? s.client.pending /\
-     Some?.v s.client.pending == InReq?._0 s.channel /\
-     s' == do_serve s) \/
-    // recv: InResp -> Quiet
-    (InResp? s.channel /\ Some? s.client.pending /\
-     s' == do_recv s)
+  fun s s' -> SP.product_step calc_iface s s'
 
 (** Stutter-tolerant step: a real step or "no delivery yet". Used for runs where
     the environment may delay delivery (needed for the liveness statement). **)
