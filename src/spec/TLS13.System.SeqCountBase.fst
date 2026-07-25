@@ -421,10 +421,10 @@ let lemma_consistent_record_key_epoch_coupling
     handshake-traffic key-schedule slot is populated.  A handshake key install
     sets BOTH the record epoch (`Handshake`) and the matching schedule slot;
     `next_seq`/`advance` preserve the epoch and never touch the schedule; and no
-    step ever clears a schedule slot.  Used to EXCLUDE a redundant handshake key
-    re-install: since the slot is already `Some`, the re-install cannot raise the
-    progress rank (which counts only slot presence), and it never changes the
-    control state — so the `*_local_advances` guard forbids it.
+    step ever clears a schedule slot.  Part of the record/schedule coupling used
+    by the reachable seq-count preservation argument (the redundant handshake key
+    re-install is handled by the count==0-at-install-stage reachability facts, not
+    by any progress guard).
     ───────────────────────────────────────────────────────────────────────── **)
 let hs_traffic_slot
   (keys:CS.key_schedule_state) (label:CS.traffic_label)
@@ -701,64 +701,6 @@ let lemma_recv_server_hello_stored
   = ()
 #pop-options
 
-
-
-(** ─────────────────────────────────────────────────────────────────────────
-    PROGRESS congruence: `client_progress`/`server_progress` depend only on the
-    control state and the Some?/None status of the key-schedule slots (and, for
-    the server, the encrypted-flight message fields) — NEVER on `model_record`.
-    A handshake key re-install that re-populates an already-`Some` slot therefore
-    leaves progress unchanged; combined with the fact that an install keeps the
-    control state, this violates the `*_local_advances` guard, EXCLUDING the
-    redundant re-install (the seq-resetting stutter).
-    ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 40 --split_queries always"
-let lemma_client_progress_congruence (m m':CS.connection_model)
-  : Lemma
-      (requires
-        m'.CS.model_control == m.CS.model_control /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic))
-      (ensures PC.client_progress m' == PC.client_progress m)
-  = ()
-#pop-options
-
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_server_progress_congruence (m m':CS.connection_model)
-  : Lemma
-      (requires
-        m'.CS.model_control == m.CS.model_control /\
-        (Some? m'.CS.model_handshake.CS.hs_server_selection
-           <==> Some? m.CS.model_handshake.CS.hs_server_selection) /\
-        m'.CS.model_handshake.CS.hs_certificate_verify_verified
-           == m.CS.model_handshake.CS.hs_certificate_verify_verified /\
-        (Some? m'.CS.model_handshake.CS.hs_certificate_verify
-           <==> Some? m.CS.model_handshake.CS.hs_certificate_verify) /\
-        (Some? m'.CS.model_handshake.CS.hs_certificate
-           <==> Some? m.CS.model_handshake.CS.hs_certificate) /\
-        (Some? m'.CS.model_handshake.CS.hs_encrypted_extensions
-           <==> Some? m.CS.model_handshake.CS.hs_encrypted_extensions) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic) /\
-        PNI.option_missing (m'.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
-          == PNI.option_missing (m.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic))
-      (ensures PC.server_progress m' == PC.server_progress m)
-  = ()
-#pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
     LOCAL record-seq stability (client / server).  A LOCAL step changes the
@@ -1587,11 +1529,12 @@ let lemma_discharge_server_read
 
 (** ─────────────────────────────────────────────────────────────────────────
     CLIENT LOCAL, WRITE side.  Given a legal LOCAL delta (empty byte-deltas) from
-    a client state whose model couplings hold and which satisfies the
-    `client_local_advances` guard, `pwrite_ok` transports to the post-state.  The
-    three gated premises of `lemma_pwrite_algebra` are discharged from the
-    per-transition record facts: `lemma_client_local_record_seq_stable`
-    (P_seqdelta), `lemma_client_local_record_install_char` (P_installHS/P_initial),
+    a client state whose model couplings hold and which is reachable, `pwrite_ok`
+    transports to the post-state.  The three gated premises of
+    `lemma_pwrite_algebra` are discharged from the per-transition record facts:
+    `lemma_client_local_record_seq_stable_write` (P_seqdelta — its redundant-install
+    gate discharged reachably below), `lemma_client_local_record_install_char`
+    (P_installHS/P_initial),
     and `lemma_network_empty_delta_record_unchanged` (network conn-events leave the
     record fixed).  The `raw_sent` log is unchanged (empty delta), so
     `raw_appdata_count c'.raw_sent == raw_appdata_count a.raw_sent`; when the source
