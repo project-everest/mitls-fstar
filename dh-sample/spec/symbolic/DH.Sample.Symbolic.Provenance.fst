@@ -61,81 +61,90 @@ open DH.Sample.Symbolic.Product
     The initiator's message-3 authorization `Event` (at n+1) is STRICTLY before the
     network `MsgSent` carrying its signature term (at n+2). *)
 let lemma_ifinish_authorizes_before_sign
-  (mep:T.principal) (ltk scalar b_t peer_share:BT.bytes) (tr:TB.trace)
+  (ltk scalar b_t peer_share content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
+      let mep = role_dy_principal Init in
       let transcript = transcript_term b_t (share_term scalar) peer_share in
-      let tr' = ifinish_trace mep ltk scalar b_t peer_share tr in
+      let tr' = ifinish_trace ltk scalar b_t peer_share content tr in
       TB.entry_at tr' n (T.Event mep tag_initiator_finish transcript) /\
       TB.entry_at tr' (n + 2) (T.MsgSent (flatten (SMsg3 (sig_term ltk (signonce_term (n + 1)) transcript)))) /\
       n < (n + 2) /\
       TB.event_triggered tr' mep tag_initiator_finish transcript))
-= ifinish_facts mep ltk scalar b_t peer_share tr
+= ifinish_facts ltk scalar b_t peer_share content tr
 
 (** The responder's message-2 authorization `Event` (at n) is STRICTLY before
     the network `MsgSent` carrying its signature term (at n+2).  Its ephemeral
     was recorded by a separate, earlier RNG transition. *)
 let lemma_respond_authorizes_before_sign
-  (mep:T.principal) (ltk me_t a_t peer_share scalar:BT.bytes) (tr:TB.trace)
+  (ltk me_t a_t peer_share scalar content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
+      let mep = role_dy_principal Resp in
       let transcript = transcript_term a_t peer_share (share_term scalar) in
-      let tr' = respond_trace mep ltk me_t a_t peer_share scalar tr in
+      let tr' = respond_trace ltk me_t a_t peer_share scalar content tr in
       TB.entry_at tr' n (T.Event mep tag_responder_respond transcript) /\
-      TB.entry_at tr' (n + 1) (T.RandGen signonce_usage signonce_label signonce_len) /\
+      TB.entry_at tr' (n + 1) (T.RandGen signonce_usage (signonce_label Resp) signonce_len) /\
       TB.entry_at tr' (n + 2) (T.MsgSent (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk (signonce_term (n + 1)) transcript)))) /\
       n < (n + 2) /\
       TB.event_triggered tr' mep tag_responder_respond transcript))
-= respond_facts mep ltk me_t a_t peer_share scalar tr
+= respond_facts ltk me_t a_t peer_share scalar content tr
 
 (** The explicit RNG segment records the ephemeral origin before any protocol
     step can consume it. *)
-let lemma_rng_origin (tr:TB.trace)
+let lemma_rng_origin (who:endpoint_id) (content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
       let scalar = eph_term n in
-      let tr' = rng_trace tr in
+      let tr' = rng_trace who content tr in
       TB.rand_generated_at tr' n scalar /\
-      scalar_recorded tr' scalar))
-= rng_facts tr;
+      scalar_recorded_for who tr' scalar))
+= rng_facts who content tr;
   let n = TB.trace_length tr in
   introduce exists (t:nat).
     eph_term n == eph_term t /\
-    TB.entry_at (rng_trace tr) t (T.RandGen eph_usage eph_label eph_len)
+    TB.entry_at (rng_trace who content tr) t (T.RandGen eph_usage (eph_label who) eph_len)
   with n and ()
 
 (** Start consumes an already recorded scalar, authorizes, and sends Msg1. *)
 let lemma_start_origins
-  (mep:T.principal) (me_t peer_t scalar:BT.bytes) (tr:TB.trace)
+  (me_t peer_t scalar content:BT.bytes) (tr:TB.trace)
   : Lemma
-    (requires scalar_recorded tr scalar)
+    (requires scalar_recorded_for Init tr scalar)
     (ensures (
       let n = TB.trace_length tr in
-      let tr' = start_trace mep me_t peer_t scalar tr in
-      scalar_recorded tr' scalar /\
+      let mep = role_dy_principal Init in
+      let tr' = start_trace me_t peer_t scalar content tr in
+      scalar_recorded_for Init tr' scalar /\
       TB.entry_at tr' n (T.Event mep tag_initiate (initiate_content me_t peer_t (share_term scalar))) /\
       TB.entry_at tr' (n + 1) (T.MsgSent (flatten (SMsg1 me_t (share_term scalar)))) /\
       TB.event_triggered tr' mep tag_initiate (initiate_content me_t peer_t (share_term scalar))))
-= start_facts mep me_t peer_t scalar tr;
-  scalar_recorded_grows tr (start_trace mep me_t peer_t scalar tr) scalar
+= start_facts me_t peer_t scalar content tr;
+  scalar_recorded_for_grows Init tr (start_trace me_t peer_t scalar content tr) scalar
 
 (** Setup records the long-term key's origin and binds it to the identity. *)
-let lemma_setup_binds_identity (mep:T.principal) (me_t:BT.bytes) (tr:TB.trace)
+let lemma_setup_binds_identity (who:endpoint_id) (me_t:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
-      let tr' = setup_trace mep me_t tr in
+      let mep = role_dy_principal who in
+      let tr' = setup_trace who me_t tr in
       TB.rand_generated_at tr' n (ltk_term n) /\
-      TB.event_triggered tr' mep tag_keygen (keygen_content me_t (vkey_term (ltk_term n)))))
-= setup_facts mep me_t tr
+      TB.event_triggered tr' mep tag_keygen (keygen_content me_t (vkey_term (ltk_term n))) /\
+      (* the role's INITIAL stored state — the object a later `Corrupt` targets *)
+      TB.entry_at tr' (n + 2)
+        (T.SetState mep (role_state_id who)
+          (snapshot_term (ltk_term n) None None None None))))
+= setup_facts who me_t tr
 
 (** The responder's completion event is recorded (its trace position is n). *)
-let lemma_rfinish_completion_event (mep:T.principal) (a_t key:BT.bytes) (tr:TB.trace)
+let lemma_rfinish_completion_event (a_t key:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
-      let tr' = rfinish_trace mep a_t key tr in
+      let mep = role_dy_principal Resp in
+      let tr' = rfinish_trace a_t key tr in
       TB.entry_at tr' n (T.Event mep tag_responder_finish (session_content a_t key)) /\
       TB.event_triggered tr' mep tag_responder_finish (session_content a_t key)))
-= rfinish_facts mep a_t key tr
+= rfinish_facts a_t key tr
 
 #pop-options
 
@@ -162,7 +171,7 @@ let lemma_sent_init_msg1_exact
       match pk.pk_msg, ne.ne_smsg, ne.ne_auth with
       | Msg1 a _, SMsg1 a_t gx_t, NoAuth ->
         a_t == term_of_principal a /\
-        (exists (s:BT.bytes). gx_t == share_term s /\ scalar_recorded tr s)
+        (exists (s:BT.bytes). gx_t == share_term s /\ scalar_recorded_for Init tr s)
       | _, _, _ -> False))
 = reveal_opaque (`%smsg_provenance) smsg_provenance
 
@@ -176,7 +185,7 @@ let lemma_sent_resp_msg2_exact
       match pk.pk_msg, ne.ne_smsg, ne.ne_auth with
       | Msg2 b _ _, SMsg2 b_t gy_t sig_t, RespAuth partner gx_t ->
         b_t == term_of_principal b /\
-        (exists (s:BT.bytes). gy_t == share_term s /\ scalar_recorded tr s) /\
+        (exists (s:BT.bytes). gy_t == share_term s /\ scalar_recorded_for Resp tr s) /\
         sig_t == sig_term rsh.sh_ltk
           (signonce_term (auth_nonce_pos ne.ne_pos))
           (transcript_term partner gx_t gy_t)
@@ -227,19 +236,20 @@ let lemma_recv_reads_prior_send (rpos:nat) (m:BT.bytes) (tr:TB.trace)
     completion sits at `trace_length tr`).  For an HONEST delivery the delivered
     term is the initiator's STRUCTURED signature (sender provenance). *)
 let lemma_rfinish_completes_after_delivery
-  (mep:T.principal) (a_t key:BT.bytes) (tr:TB.trace) (rpos:nat) (delivered:BT.bytes)
+  (a_t key:BT.bytes) (tr:TB.trace) (rpos:nat) (delivered:BT.bytes)
   : Lemma
     (requires rpos < TB.trace_length tr /\ TB.entry_at tr rpos (T.MsgSent delivered))
     (ensures (
       let n = TB.trace_length tr in
-      let (_, tr') = rfinish_run mep a_t key tr rpos in
+      let mep = role_dy_principal Resp in
+      let (_, tr') = rfinish_run a_t key tr rpos in
       fst (recv_msg rpos tr) == Some delivered /\
       TB.entry_at tr' rpos (T.MsgSent delivered) /\
       TB.entry_at tr' n (T.Event mep tag_responder_finish (session_content a_t key)) /\
       rpos < n))
 = reveal_opaque (`%recv_msg) recv_msg;
-  rfinish_structure mep a_t key tr rpos;
-  rfinish_facts mep a_t key tr
+  rfinish_structure a_t key tr rpos;
+  rfinish_facts a_t key tr
 
 #pop-options
 

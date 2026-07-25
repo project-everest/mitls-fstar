@@ -176,20 +176,34 @@ let scalars_persist (p0:product_state) (tr':TB.trace)
   : Lemma
     (requires wf p0 /\ p0.ps_trace `TB.grows` tr')
     (ensures
-      (match p0.ps_init.sh_scalar with None -> True | Some s -> scalar_recorded tr' s) /\
-      (match p0.ps_resp.sh_scalar with None -> True | Some s -> scalar_recorded tr' s))
-= (match p0.ps_init.sh_scalar with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
-  (match p0.ps_resp.sh_scalar with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ())
+      (match p0.ps_init.sh_scalar with None -> True | Some s -> scalar_recorded_for Init tr' s) /\
+      (match p0.ps_resp.sh_scalar with None -> True | Some s -> scalar_recorded_for Resp tr' s) /\
+      (match p0.ps_init.sh_pending with None -> True | Some s -> scalar_recorded_for Init tr' s) /\
+      (match p0.ps_resp.sh_pending with None -> True | Some s -> scalar_recorded_for Resp tr' s))
+= (match p0.ps_init.sh_scalar with Some s -> scalar_recorded_for_grows Init p0.ps_trace tr' s | None -> ());
+  (match p0.ps_resp.sh_scalar with Some s -> scalar_recorded_for_grows Resp p0.ps_trace tr' s | None -> ());
+  (match p0.ps_init.sh_pending with Some s -> scalar_recorded_for_grows Init p0.ps_trace tr' s | None -> ());
+  (match p0.ps_resp.sh_pending with Some s -> scalar_recorded_for_grows Resp p0.ps_trace tr' s | None -> ())
+
+(** The OTHER role's stored-state pointer survives a step that only refreshes
+    THIS role's state: its `SetState` entry stays on the (grown) trace. *)
+let state_pos_persists (who:endpoint_id) (sh:endpoint_shadow) (tr tr':TB.trace)
+  : Lemma
+    (requires state_pos_coherent who sh tr /\ tr `TB.grows` tr')
+    (ensures state_pos_coherent who sh tr')
+= TB.trace_length_grows tr tr';
+  TB.entry_at_grows tr tr' sh.sh_state_pos
+    (T.SetState (role_dy_principal who) (role_state_id who) (shadow_snapshot sh))
 #pop-options
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
-let new_scalar_recorded (tr':TB.trace) (newsc:BT.bytes) (n:nat)
+let new_scalar_recorded (who:endpoint_id) (tr':TB.trace) (newsc:BT.bytes) (n:nat)
   : Lemma
     (requires newsc == eph_term n /\
-              TB.entry_at tr' n (T.RandGen eph_usage eph_label eph_len))
-    (ensures scalar_recorded tr' newsc)
+              TB.entry_at tr' n (T.RandGen eph_usage (eph_label who) eph_len))
+    (ensures scalar_recorded_for who tr' newsc)
 = introduce exists (t:nat). newsc == eph_term t /\
-            TB.entry_at tr' t (T.RandGen eph_usage eph_label eph_len)
+            TB.entry_at tr' t (T.RandGen eph_usage (eph_label who) eph_len)
   with n and ()
 #pop-options
 
@@ -230,13 +244,12 @@ let net_coherent_append_msg3_with_nonce
 let ifinish_net_coherent
   (net:list packet) (sh:list net_entry) (tr:TB.trace)
   (init_ltk resp_ltk:BT.bytes) (sigA:signature)
-  (partner scalar peer_share:BT.bytes)
+  (partner scalar peer_share content:BT.bytes)
   : Lemma
     (requires net_coherent net sh tr init_ltk resp_ltk)
     (ensures (
       let n = TB.trace_length tr in
-      let tr' =
-        ifinish_trace init_dy_principal init_ltk scalar partner peer_share tr in
+      let tr' = ifinish_trace init_ltk scalar partner peer_share content tr in
       net_coherent
         (L.append net [ { pk_msg = Msg3 sigA; pk_origin = Sent Init } ])
         (L.append sh [ {
@@ -247,10 +260,10 @@ let ifinish_net_coherent
           ne_auth = InitAuth partner (share_term scalar) peer_share } ])
         tr' init_ltk resp_ltk))
 = let n = TB.trace_length tr in
-  ifinish_facts init_dy_principal init_ltk scalar partner peer_share tr;
+  ifinish_facts init_ltk scalar partner peer_share content tr;
   lemma_auth_nonce_pos_succ (n + 1);
   net_coherent_append_msg3_with_nonce net sh tr
-    (ifinish_trace init_dy_principal init_ltk scalar partner peer_share tr)
+    (ifinish_trace init_ltk scalar partner peer_share content tr)
     init_ltk resp_ltk sigA partner (share_term scalar) peer_share
     (n + 1) (n + 2)
 #pop-options
@@ -262,12 +275,16 @@ let ifinish_net_coherent
     In every SENDING case the network grows by exactly one packet, discharged by
     an origin-specific `net_coherent_append_sent_msg*` (or `_injected`) lemma on
     the concrete packet `system_step` appends and the exact shadow `sym_extend`
-    records; in the responder-finish case the network is unchanged, discharged
-    by `net_coherent_grows`.  Long-term-key coherence and ephemeral recordings
-    persist across the segment's `grows` fact. *)
+    records; in the responder-finish, injection and COMPROMISE cases the network
+    is unchanged, discharged by `net_coherent_grows`.  Long-term-key coherence,
+    ephemeral recordings and the two roles' stored-state pointers persist across
+    the segment's `grows` fact; the role whose live material changed gets a FRESH
+    stored-state pointer from its segment's trailing `SetState`. *)
 
 (** Explicit honest/internal RNG draw.  This is the ONLY case that creates an
-    ephemeral Rand; protocol steps merely consume a pending draw. *)
+    ephemeral Rand; protocol steps merely consume a pending draw.  It also
+    REFRESHES the drawing role's stored state, so the new pending secret is
+    inside the snapshot a later compromise of that role would hand over. *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_lift_step_rng
       (p0:product_state) (ctr:Sys.system_transition)
@@ -280,28 +297,51 @@ let lemma_lift_step_rng
     (ensures lift_step_ensures p0 ctr)
 = let c0 = p0.ps_sys in
   let n  = TB.trace_length p0.ps_trace in
-  rng_structure p0.ps_trace;
-  rng_facts p0.ps_trace;
-  let (scalar, tr') = rng_run p0.ps_trace in
-  ltk_coherent_grows init_dy_principal (term_of_principal c0.sys_init.ep_me)
-                     p0.ps_trace tr' p0.ps_init.sh_ltk 0;
-  ltk_coherent_grows resp_dy_principal (term_of_principal c0.sys_resp.ep_me)
-                     p0.ps_trace tr' p0.ps_resp.sh_ltk 2;
-  scalars_persist p0 tr';
-  (match p0.ps_init.sh_pending with
-   | Some s -> scalar_recorded_grows p0.ps_trace tr' s
-   | None -> ());
-  (match p0.ps_resp.sh_pending with
-   | Some s -> scalar_recorded_grows p0.ps_trace tr' s
-   | None -> ());
-  new_scalar_recorded tr' scalar n;
-  rng_coherent_cons c0.sys_rng p0.ps_rng p0.ps_trace tr' owner x scalar n;
-  net_coherent_grows c0.sys_net p0.ps_net p0.ps_trace tr'
-    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
+  let scalar = eph_term n in
+  match owner with
+  | Init ->
+    (match p0.ps_init.sh_pending with
+     | Some _ -> ()
+     | None ->
+       let i' = { p0.ps_init with sh_pending = Some scalar; sh_state_pos = n + 1 } in
+       let content = shadow_snapshot i' in
+       rng_structure Init content p0.ps_trace;
+       rng_facts Init content p0.ps_trace;
+       let tr' = rng_trace Init content p0.ps_trace in
+       ltk_coherent_grows Init (term_of_principal c0.sys_init.ep_me)
+                          p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+       ltk_coherent_grows Resp (term_of_principal c0.sys_resp.ep_me)
+                          p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
+       scalars_persist p0 tr';
+       new_scalar_recorded Init tr' scalar n;
+       rng_coherent_cons c0.sys_rng p0.ps_rng p0.ps_trace tr' Init x scalar n;
+       state_pos_persists Resp p0.ps_resp p0.ps_trace tr';
+       net_coherent_grows c0.sys_net p0.ps_net p0.ps_trace tr'
+         p0.ps_init.sh_ltk p0.ps_resp.sh_ltk)
+  | Resp ->
+    (match p0.ps_resp.sh_pending with
+     | Some _ -> ()
+     | None ->
+       let r' = { p0.ps_resp with sh_pending = Some scalar; sh_state_pos = n + 1 } in
+       let content = shadow_snapshot r' in
+       rng_structure Resp content p0.ps_trace;
+       rng_facts Resp content p0.ps_trace;
+       let tr' = rng_trace Resp content p0.ps_trace in
+       ltk_coherent_grows Init (term_of_principal c0.sys_init.ep_me)
+                          p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+       ltk_coherent_grows Resp (term_of_principal c0.sys_resp.ep_me)
+                          p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
+       scalars_persist p0 tr';
+       new_scalar_recorded Resp tr' scalar n;
+       rng_coherent_cons c0.sys_rng p0.ps_rng p0.ps_trace tr' Resp x scalar n;
+       state_pos_persists Init p0.ps_init p0.ps_trace tr';
+       net_coherent_grows c0.sys_net p0.ps_net p0.ps_trace tr'
+         p0.ps_init.sh_ltk p0.ps_resp.sh_ltk)
 #pop-options
 
-(** Initiator start consumes its pending RNG draw and sends message 1. *)
-#push-options "--fuel 4 --ifuel 2 --z3rlimit 10"
+(** Initiator start consumes its pending RNG draw, sends message 1, and refreshes
+    its stored state (which now holds the live ephemeral scalar). *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_lift_step_start (p0:product_state) (ctr:Sys.system_transition)
   : Lemma
     (requires
@@ -315,17 +355,19 @@ let lemma_lift_step_start (p0:product_state) (ctr:Sys.system_transition)
   let met = term_of_principal me in
   match c0.sys_init.ep_peer, c0.sys_init_pending, p0.ps_init.sh_pending with
   | Some peer, Some x, Some scalar ->
-    start_structure init_dy_principal met (term_of_principal peer) scalar p0.ps_trace;
-    start_facts     init_dy_principal met (term_of_principal peer) scalar p0.ps_trace;
-    let (_, tr') =
-      start_run init_dy_principal met (term_of_principal peer) scalar p0.ps_trace in
-    ltk_coherent_grows init_dy_principal met
-                       p0.ps_trace tr' p0.ps_init.sh_ltk 0;
-    ltk_coherent_grows resp_dy_principal (term_of_principal c0.sys_resp.ep_me)
-                       p0.ps_trace tr' p0.ps_resp.sh_ltk 2;
+    let i' = { p0.ps_init with sh_pending = None; sh_scalar = Some scalar;
+                               sh_state_pos = n + 2 } in
+    let content = shadow_snapshot i' in
+    start_structure met (term_of_principal peer) scalar content p0.ps_trace;
+    start_facts     met (term_of_principal peer) scalar content p0.ps_trace;
+    let tr' = start_trace met (term_of_principal peer) scalar content p0.ps_trace in
+    ltk_coherent_grows Init met p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+    ltk_coherent_grows Resp (term_of_principal c0.sys_resp.ep_me)
+                       p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
     rng_coherent_grows c0.sys_rng p0.ps_rng p0.ps_trace tr';
     scalars_persist p0 tr';
-    scalar_recorded_grows p0.ps_trace tr' scalar;
+    scalar_recorded_for_grows Init p0.ps_trace tr' scalar;
+    state_pos_persists Resp p0.ps_resp p0.ps_trace tr';
     assert (ctr.SM.tr_next_state.sys_net ==
             L.append c0.sys_net
               [ { pk_msg = Msg1 me (Cr.dh_exp x);
@@ -336,7 +378,8 @@ let lemma_lift_step_start (p0:product_state) (ctr:Sys.system_transition)
   | _, _, _ -> ()
 #pop-options
 
-(** Responder receives message 1, consumes its pending draw, and sends Msg2. *)
+(** Responder receives message 1, consumes its pending draw, sends Msg2, and
+    refreshes its stored state (scalar, received peer share AND session key). *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_lift_step_resp_msg1
       (p0:product_state) (ctr:Sys.system_transition)
@@ -361,13 +404,15 @@ let lemma_lift_step_resp_msg1
     let at = term_of_principal a in
     let peer_share =
       (match ne0.ne_smsg with SMsg1 _ gxs -> gxs | _ -> term_of_blob gx) in
-    respond_structure resp_dy_principal p0.ps_resp.sh_ltk met at
-                     peer_share scalar p0.ps_trace ne0.ne_pos;
-    respond_facts resp_dy_principal p0.ps_resp.sh_ltk met at
-                 peer_share scalar p0.ps_trace;
-    let (_, tr') =
-      respond_run resp_dy_principal p0.ps_resp.sh_ltk met at peer_share scalar
-                 p0.ps_trace ne0.ne_pos in
+    let r' = { p0.ps_resp with sh_pending = None; sh_scalar = Some scalar;
+                 sh_peer_share = Some peer_share;
+                 sh_key = Some (secret_term scalar peer_share);
+                 sh_state_pos = n + 3 } in
+    let content = shadow_snapshot r' in
+    respond_structure p0.ps_resp.sh_ltk met at peer_share scalar content
+                      p0.ps_trace ne0.ne_pos;
+    respond_facts p0.ps_resp.sh_ltk met at peer_share scalar content p0.ps_trace;
+    let tr' = respond_trace p0.ps_resp.sh_ltk met at peer_share scalar content p0.ps_trace in
     let transcript = transcript_term at peer_share (share_term scalar) in
     let ne = {
       ne_smsg = SMsg2 met (share_term scalar)
@@ -375,18 +420,15 @@ let lemma_lift_step_resp_msg1
       ne_pos  = n + 2;
       ne_auth = RespAuth at peer_share } in
     assert (sym_extend p0 ctr.SM.tr_event ==
-            Some (tr', p0.ps_init,
-                  ({ p0.ps_resp with sh_pending = None; sh_scalar = Some scalar;
-                                     sh_peer_share = Some peer_share;
-                                     sh_key = Some (secret_term scalar peer_share) }),
-                  L.append p0.ps_net [ ne ], p0.ps_rng));
-    ltk_coherent_grows init_dy_principal (term_of_principal c0.sys_init.ep_me)
-                      p0.ps_trace tr' p0.ps_init.sh_ltk 0;
-    ltk_coherent_grows resp_dy_principal met
-                      p0.ps_trace tr' p0.ps_resp.sh_ltk 2;
+            Some (tr', p0.ps_init, r', L.append p0.ps_net [ ne ], p0.ps_rng));
+    ltk_coherent_grows Init (term_of_principal c0.sys_init.ep_me)
+                      p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+    ltk_coherent_grows Resp met
+                      p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
     rng_coherent_grows c0.sys_rng p0.ps_rng p0.ps_trace tr';
     scalars_persist p0 tr';
-    scalar_recorded_grows p0.ps_trace tr' scalar;
+    scalar_recorded_for_grows Resp p0.ps_trace tr' scalar;
+    state_pos_persists Init p0.ps_init p0.ps_trace tr';
     lemma_auth_nonce_pos_succ (n + 1);
     (match ctr.SM.tr_next_state.sys_resp.ep_scalar with
      | Some yc ->
@@ -403,7 +445,8 @@ let lemma_lift_step_resp_msg1
 #pop-options
 
 (** Responder receives message 3: completes, emits no wire packet (network
-    unchanged). *)
+    unchanged) and stores no new state — its PHASE changes, its live key material
+    does not (the session key was already retained at its Msg1 delivery). *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_lift_step_resp_msg3
       (p0:product_state) (ctr:Sys.system_transition)
@@ -425,32 +468,196 @@ let lemma_lift_step_resp_msg3
     (match c0.sys_resp.ep_peer, p0.ps_resp.sh_key with
      | Some a, Some key ->
        let me = c0.sys_resp.ep_me in
-       rfinish_structure resp_dy_principal (term_of_principal a) key
-                         p0.ps_trace ne0.ne_pos;
-       rfinish_facts resp_dy_principal (term_of_principal a) key p0.ps_trace;
-       let (_, tr') =
-         rfinish_run resp_dy_principal (term_of_principal a) key
-                     p0.ps_trace ne0.ne_pos in
-       ltk_coherent_grows init_dy_principal (term_of_principal c0.sys_init.ep_me)
-                          p0.ps_trace tr' p0.ps_init.sh_ltk 0;
-       ltk_coherent_grows resp_dy_principal (term_of_principal me)
-                          p0.ps_trace tr' p0.ps_resp.sh_ltk 2;
+       rfinish_structure (term_of_principal a) key p0.ps_trace ne0.ne_pos;
+       rfinish_facts (term_of_principal a) key p0.ps_trace;
+       let tr' = rfinish_trace (term_of_principal a) key p0.ps_trace in
+       ltk_coherent_grows Init (term_of_principal c0.sys_init.ep_me)
+                          p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+       ltk_coherent_grows Resp (term_of_principal me)
+                          p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
        rng_coherent_grows c0.sys_rng p0.ps_rng p0.ps_trace tr';
-       (match p0.ps_init.sh_pending with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
-       (match p0.ps_resp.sh_pending with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
-       (match p0.ps_init.sh_scalar with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
-       (match p0.ps_resp.sh_scalar with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
+       scalars_persist p0 tr';
+       state_pos_persists Init p0.ps_init p0.ps_trace tr';
+       state_pos_persists Resp p0.ps_resp p0.ps_trace tr';
        L.append_l_nil c0.sys_net;
        assert (ctr.SM.tr_next_state.sys_net == c0.sys_net);
+       assert (p0.ps_trace `TB.grows` tr');
+       assert (net_coherent c0.sys_net p0.ps_net p0.ps_trace
+                 p0.ps_init.sh_ltk p0.ps_resp.sh_ltk);
        net_coherent_grows c0.sys_net p0.ps_net p0.ps_trace tr'
          p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
      | _, _ -> ())
   | _ -> ()
 #pop-options
 
+(** The endpoint-representation half of the initiator's completion, in a context
+    that carries ONLY the endpoint coherence of `p0` (never the network / key /
+    state-pointer coherence, nor the trace segment), so the five-way `init_repr` /
+    `resp_repr` matches are re-established in a small query. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10"
+let lemma_lift_step_init_msg2_repr
+      (p0:product_state) (ctr:Sys.system_transition)
+      (idx:nat{idx < L.length p0.ps_sys.sys_net /\ idx < L.length p0.ps_net})
+  : Lemma
+    (requires
+      endpoint_state_coherent p0 /\
+      Sys.system_step p0.ps_sys ctr.SM.tr_event ctr.SM.tr_next_state ctr.SM.tr_output /\
+      ctr.SM.tr_event == SM.LocalEvent (Sys.ActDeliver idx Init) /\
+      Msg2? (L.index p0.ps_sys.sys_net idx).pk_msg)
+    (ensures endpoint_state_coherent (lift_next p0 ctr))
+= let c0  = p0.ps_sys in
+  let n   = TB.trace_length p0.ps_trace in
+  let ne0  = L.index p0.ps_net idx in
+  match (L.index c0.sys_net idx).pk_msg with
+  | Msg2 b gy sigB ->
+    (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
+     | Some xc, Some scalar ->
+       let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
+       init_repr_finish c0.sys_init p0.ps_init xc gy scalar peer_share (n + 3)
+     | _, _ -> ())
+  | _ -> ()
+#pop-options
+
 (** Initiator receives message 2: completes, sends message 3 (packet with origin
-    `Sent Init`). *)
+    `Sent Init`) and refreshes its stored state (received peer share AND session
+    key).  NOTE this case is admissible EITHER on an honest `Sent Resp` packet
+    with a matching run link OR — after `ActCorrupt Resp` — on a FORGED injected
+    packet; the lift is oblivious to which, since `Sys.system_step` already
+    decided admissibility.
+
+    The `wf` obligation is discharged one COMPONENT at a time (endpoint
+    representation, long-term keys + stored-state pointers, RNG registry, network),
+    each in its own small query; the assembling lemma below then only has to
+    conjoin four already-proven facts. *)
+
+(** Long-term-key coherence and the two stored-state pointers.  The initiator's
+    pointer is the FRESH `SetState` this segment appended (position n+3, holding
+    the new snapshot with the peer share and session key); the responder's old
+    pointer persists under trace growth. *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+let lemma_lift_step_init_msg2_keys
+      (p0:product_state) (ctr:Sys.system_transition)
+      (idx:nat{idx < L.length p0.ps_sys.sys_net})
+  : Lemma
+    (requires
+      wf p0 /\
+      Sys.system_step p0.ps_sys ctr.SM.tr_event ctr.SM.tr_next_state ctr.SM.tr_output /\
+      ctr.SM.tr_event == SM.LocalEvent (Sys.ActDeliver idx Init) /\
+      Msg2? (L.index p0.ps_sys.sys_net idx).pk_msg)
+    (ensures
+      key_state_coherent (lift_next p0 ctr) /\
+      state_state_coherent (lift_next p0 ctr))
+= let c0  = p0.ps_sys in
+  let n   = TB.trace_length p0.ps_trace in
+  net_coherent_length c0.sys_net p0.ps_net p0.ps_trace
+    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
+  let ne0  = L.index p0.ps_net idx in
+  match (L.index c0.sys_net idx).pk_msg with
+  | Msg2 b gy sigB ->
+    (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
+     | Some xc, Some scalar ->
+       let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
+       let i' = { p0.ps_init with sh_peer_share = Some peer_share;
+                    sh_key = Some (secret_term scalar peer_share);
+                    sh_state_pos = n + 3 } in
+       let content = shadow_snapshot i' in
+       ifinish_structure p0.ps_init.sh_ltk scalar
+                         (term_of_principal b) peer_share content p0.ps_trace ne0.ne_pos;
+       ifinish_facts p0.ps_init.sh_ltk scalar
+                     (term_of_principal b) peer_share content p0.ps_trace;
+       let tr' = ifinish_trace p0.ps_init.sh_ltk scalar
+                               (term_of_principal b) peer_share content p0.ps_trace in
+       ltk_coherent_grows Init (term_of_principal c0.sys_init.ep_me)
+                          p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+       ltk_coherent_grows Resp (term_of_principal c0.sys_resp.ep_me)
+                          p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
+       state_pos_persists Resp p0.ps_resp p0.ps_trace tr'
+     | _, _ -> ())
+  | _ -> ()
+#pop-options
+
+(** The RNG registry: unchanged by this step (no draw is made or consumed), so it
+    only has to survive trace growth. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+let lemma_lift_step_init_msg2_rng
+      (p0:product_state) (ctr:Sys.system_transition)
+      (idx:nat{idx < L.length p0.ps_sys.sys_net})
+  : Lemma
+    (requires
+      wf p0 /\
+      Sys.system_step p0.ps_sys ctr.SM.tr_event ctr.SM.tr_next_state ctr.SM.tr_output /\
+      ctr.SM.tr_event == SM.LocalEvent (Sys.ActDeliver idx Init) /\
+      Msg2? (L.index p0.ps_sys.sys_net idx).pk_msg)
+    (ensures rng_state_coherent (lift_next p0 ctr))
+= let c0  = p0.ps_sys in
+  let n   = TB.trace_length p0.ps_trace in
+  net_coherent_length c0.sys_net p0.ps_net p0.ps_trace
+    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
+  let ne0  = L.index p0.ps_net idx in
+  match (L.index c0.sys_net idx).pk_msg with
+  | Msg2 b gy sigB ->
+    (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
+     | Some xc, Some scalar ->
+       let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
+       let i' = { p0.ps_init with sh_peer_share = Some peer_share;
+                    sh_key = Some (secret_term scalar peer_share);
+                    sh_state_pos = n + 3 } in
+       let content = shadow_snapshot i' in
+       ifinish_structure p0.ps_init.sh_ltk scalar
+                         (term_of_principal b) peer_share content p0.ps_trace ne0.ne_pos;
+       ifinish_facts p0.ps_init.sh_ltk scalar
+                     (term_of_principal b) peer_share content p0.ps_trace;
+       rng_state_coherent_grows_to p0 (lift_next p0 ctr)
+     | _, _ -> ())
+  | _ -> ()
+#pop-options
+
+(** The network: exactly one new packet — the initiator's `Sent Init` Msg3 —
+    paired with the structured `Sign` shadow the segment put on the wire. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+let lemma_lift_step_init_msg2_net
+      (p0:product_state) (ctr:Sys.system_transition)
+      (idx:nat{idx < L.length p0.ps_sys.sys_net})
+  : Lemma
+    (requires
+      wf p0 /\
+      Sys.system_step p0.ps_sys ctr.SM.tr_event ctr.SM.tr_next_state ctr.SM.tr_output /\
+      ctr.SM.tr_event == SM.LocalEvent (Sys.ActDeliver idx Init) /\
+      Msg2? (L.index p0.ps_sys.sys_net idx).pk_msg)
+    (ensures network_state_coherent (lift_next p0 ctr))
+= let c0  = p0.ps_sys in
+  let n   = TB.trace_length p0.ps_trace in
+  net_coherent_length c0.sys_net p0.ps_net p0.ps_trace
+    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
+  let ne0  = L.index p0.ps_net idx in
+  match (L.index c0.sys_net idx).pk_msg with
+  | Msg2 b gy sigB ->
+    (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
+     | Some xc, Some scalar ->
+       let me  = c0.sys_init.ep_me in
+       let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
+       let i' = { p0.ps_init with sh_peer_share = Some peer_share;
+                    sh_key = Some (secret_term scalar peer_share);
+                    sh_state_pos = n + 3 } in
+       let content = shadow_snapshot i' in
+       ifinish_structure p0.ps_init.sh_ltk scalar
+                         (term_of_principal b) peer_share content p0.ps_trace ne0.ne_pos;
+       ifinish_facts p0.ps_init.sh_ltk scalar
+                     (term_of_principal b) peer_share content p0.ps_trace;
+       assert (c0.sys_init.ep_my_share == Some (Cr.dh_exp xc));
+       assert (ctr.SM.tr_next_state.sys_net ==
+               L.append c0.sys_net
+                 [ { pk_msg = Msg3 (Cr.sign me (Cr.transcript b (Cr.dh_exp xc) gy)); pk_origin = Sent Init } ]);
+       ifinish_net_coherent c0.sys_net p0.ps_net p0.ps_trace
+         p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
+         (Cr.sign me (Cr.transcript b (Cr.dh_exp xc) gy))
+         (term_of_principal b) scalar peer_share content
+     | _, _ -> ())
+  | _ -> ()
+#pop-options
+
+(** Assembling the four components into `wf` of the lifted state. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 let lemma_lift_step_init_msg2_wf
       (p0:product_state) (ctr:Sys.system_transition)
       (idx:nat{idx < L.length p0.ps_sys.sys_net})
@@ -461,42 +668,12 @@ let lemma_lift_step_init_msg2_wf
       ctr.SM.tr_event == SM.LocalEvent (Sys.ActDeliver idx Init) /\
       Msg2? (L.index p0.ps_sys.sys_net idx).pk_msg)
     (ensures wf (lift_next p0 ctr))
-= let c0  = p0.ps_sys in
-  let n   = TB.trace_length p0.ps_trace in
-  net_coherent_length c0.sys_net p0.ps_net p0.ps_trace
+= net_coherent_length p0.ps_sys.sys_net p0.ps_net p0.ps_trace
     p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
-  let ne0  = L.index p0.ps_net idx in
-  let cmsg = (L.index c0.sys_net idx).pk_msg in
-  match cmsg with
-  | Msg2 b gy sigB ->
-    (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
-     | Some xc, Some scalar ->
-       let me  = c0.sys_init.ep_me in
-       let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
-       ifinish_structure init_dy_principal p0.ps_init.sh_ltk scalar
-                         (term_of_principal b) peer_share p0.ps_trace ne0.ne_pos;
-       ifinish_facts init_dy_principal p0.ps_init.sh_ltk scalar
-                     (term_of_principal b) peer_share p0.ps_trace;
-       let (_, tr') =
-         ifinish_run init_dy_principal p0.ps_init.sh_ltk scalar
-                     (term_of_principal b) peer_share p0.ps_trace ne0.ne_pos in
-       let transcript = transcript_term (term_of_principal b) (share_term scalar) peer_share in
-       ltk_coherent_grows init_dy_principal (term_of_principal me)
-                          p0.ps_trace tr' p0.ps_init.sh_ltk 0;
-       ltk_coherent_grows resp_dy_principal (term_of_principal c0.sys_resp.ep_me)
-                          p0.ps_trace tr' p0.ps_resp.sh_ltk 2;
-       let p1 = lift_next p0 ctr in
-       rng_state_coherent_grows_to p0 p1;
-       assert (c0.sys_init.ep_my_share == Some (Cr.dh_exp xc));
-       assert (ctr.SM.tr_next_state.sys_net ==
-               L.append c0.sys_net
-                 [ { pk_msg = Msg3 (Cr.sign me (Cr.transcript b (Cr.dh_exp xc) gy)); pk_origin = Sent Init } ]);
-       ifinish_net_coherent c0.sys_net p0.ps_net p0.ps_trace
-         p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
-         (Cr.sign me (Cr.transcript b (Cr.dh_exp xc) gy))
-         (term_of_principal b) scalar peer_share
-     | _, _ -> ())
-  | _ -> ()
+  lemma_lift_step_init_msg2_repr p0 ctr idx;
+  lemma_lift_step_init_msg2_keys p0 ctr idx;
+  lemma_lift_step_init_msg2_rng  p0 ctr idx;
+  lemma_lift_step_init_msg2_net  p0 ctr idx
 #pop-options
 
 (** The operational/projection half is definitional once `sym_extend` is known
@@ -551,17 +728,46 @@ let lemma_lift_step_inject (p0:product_state) (ctr:Sys.system_transition) (m:dh_
   inject_structure (inject_smsg m) p0.ps_trace;
   inject_facts     (inject_smsg m) p0.ps_trace;
   let (pos, tr') = inject_run (inject_smsg m) p0.ps_trace in
-  ltk_coherent_grows init_dy_principal (term_of_principal c0.sys_init.ep_me)
-                     p0.ps_trace tr' p0.ps_init.sh_ltk 0;
-  ltk_coherent_grows resp_dy_principal (term_of_principal c0.sys_resp.ep_me)
-                     p0.ps_trace tr' p0.ps_resp.sh_ltk 2;
+  ltk_coherent_grows Init (term_of_principal c0.sys_init.ep_me)
+                     p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+  ltk_coherent_grows Resp (term_of_principal c0.sys_resp.ep_me)
+                     p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
   rng_coherent_grows c0.sys_rng p0.ps_rng p0.ps_trace tr';
-  (match p0.ps_init.sh_pending with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
-  (match p0.ps_resp.sh_pending with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
-  (match p0.ps_init.sh_scalar with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
-  (match p0.ps_resp.sh_scalar with Some s -> scalar_recorded_grows p0.ps_trace tr' s | None -> ());
+  scalars_persist p0 tr';
+  state_pos_persists Init p0.ps_init p0.ps_trace tr';
+  state_pos_persists Resp p0.ps_resp p0.ps_trace tr';
   net_coherent_append_injected c0.sys_net p0.ps_net p0.ps_trace tr'
     p0.ps_init.sh_ltk p0.ps_resp.sh_ltk m pos
+#pop-options
+
+(** DYNAMIC COMPROMISE: appends exactly one `Corrupt` entry pointing at the
+    target role's CURRENT stored state.  Nothing else moves — no shadow, no
+    packet, no RNG entry, no stored-state pointer — so every coherence component
+    is preserved purely by trace growth. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+let lemma_lift_step_corrupt
+      (p0:product_state) (ctr:Sys.system_transition) (who:endpoint_id)
+  : Lemma
+    (requires
+      wf p0 /\
+      Sys.system_step p0.ps_sys ctr.SM.tr_event ctr.SM.tr_next_state ctr.SM.tr_output /\
+      ctr.SM.tr_event == SM.LocalEvent (Sys.ActCorrupt who))
+    (ensures lift_step_ensures p0 ctr)
+= let c0  = p0.ps_sys in
+  let sh = (match who with Init -> p0.ps_init | Resp -> p0.ps_resp) in
+  corrupt_structure sh.sh_state_pos p0.ps_trace;
+  corrupt_facts sh.sh_state_pos p0.ps_trace;
+  let tr' = corrupt_trace sh.sh_state_pos p0.ps_trace in
+  ltk_coherent_grows Init (term_of_principal c0.sys_init.ep_me)
+                     p0.ps_trace tr' p0.ps_init.sh_ltk (role_ltk_pos Init);
+  ltk_coherent_grows Resp (term_of_principal c0.sys_resp.ep_me)
+                     p0.ps_trace tr' p0.ps_resp.sh_ltk (role_ltk_pos Resp);
+  rng_coherent_grows c0.sys_rng p0.ps_rng p0.ps_trace tr';
+  scalars_persist p0 tr';
+  state_pos_persists Init p0.ps_init p0.ps_trace tr';
+  state_pos_persists Resp p0.ps_resp p0.ps_trace tr';
+  net_coherent_grows c0.sys_net p0.ps_net p0.ps_trace tr'
+    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
 #pop-options
 
 (** The exhaustive one-step lift: dispatch on the concrete event shape to the
@@ -594,6 +800,7 @@ let lemma_lift_step (p0:product_state) (ctr:Sys.system_transition)
      | Init, Msg2 _ _ _ -> lemma_lift_step_init_msg2 p0 ctr idx
      | _, _ -> ())
   | SM.LocalEvent (Sys.ActInject m) -> lemma_lift_step_inject p0 ctr m
+  | SM.LocalEvent (Sys.ActCorrupt who) -> lemma_lift_step_corrupt p0 ctr who
   | _ -> ()
 #pop-options
 

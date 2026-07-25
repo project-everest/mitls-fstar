@@ -7,8 +7,16 @@ over the COMBINED coherence + trace invariant
 
 ```fstar
 let product_invariant (p:product_state) : prop =
-  wf p /\ TI.trace_invariant #dh_sample_protocol_invariants p.ps_trace
+  wf p /\
+  TI.trace_invariant #dh_sample_protocol_invariants p.ps_trace /\
+  corruption_coherent p
 ```
+
+The third conjunct is what makes this a **dynamic-compromise** model: the
+product genuinely performs DY* `set_state` and `corrupt` operations, and
+`corruption_coherent` reconciles the concrete per-role compromise flags of
+`DH.Sample.System` with real `Corrupt` entries and with corruption of the roles'
+state labels (§3.2).  There is **no** no-corruption profile here any more.
 
 It depends ONLY on the DY* CORE library and on
 `DH.Sample.Symbolic.{Terms,Product,Lifting,Provenance}` (all DY*-core-only —
@@ -88,7 +96,7 @@ its own fields would be circular).
   lit` satisfies it on EVERY trace.
 * NOT `True`: a bare secret-labelled term — e.g. the raw `Rand eph_len time`
   ephemeral scalar underlying a `share_term` — has `get_label = eph_label =
-  L.secret`, which is NOT `L.public` (`DH.Sample.Symbolic.Terms.eph_label`),
+  role_label who`, which is NOT `L.public` (`DH.Sample.Symbolic.Terms.eph_label`),
   so it genuinely rejects a real, non-degenerate case.
 * `pred_later` holds by `B.get_label_later`, using exactly the
   `bytes_well_formed` hypothesis each predicate's own `pred_later` obligation
@@ -100,22 +108,25 @@ its own fields would be circular).
 let dh_sign_pred_fun
   (tr:TB.trace) (sk_usage:BT.usage{BT.SigKey? sk_usage}) (vk:BT.bytes) (msg:BT.bytes)
   : prop =
-  (vk == vkey_term (ltk_term 0) /\ TB.event_triggered tr init_dy_principal tag_initiator_finish msg) \/
-  (vk == vkey_term (ltk_term 2) /\ TB.event_triggered tr resp_dy_principal tag_responder_respond msg)
+  (vk == vkey_term (ltk_term (role_ltk_pos Init)) /\
+     TB.event_triggered tr init_dy_principal tag_initiator_finish msg) \/
+  (vk == vkey_term (ltk_term (role_ltk_pos Resp)) /\
+     TB.event_triggered tr resp_dy_principal tag_responder_respond msg)
 ```
 
 Read against `DY.Core.Bytes.bytes_invariant`'s `Sign` case, this says: a
 signature `Sign sk nonce msg` is honestly well-formed ONLY IF EITHER
 
 * `Vk sk` is EXACTLY the initiator's fixed verification key
-  (`vkey_term (ltk_term 0)` — the literal term `Product.product_initial`
-  records at trace position 0) AND the INITIATOR role principal
+  (`vkey_term (ltk_term (role_ltk_pos Init))`, where `role_ltk_pos Init = 0`)
+  AND the INITIATOR role principal
   (`init_dy_principal`) has `event_triggered` `tag_initiator_finish` with
   content EXACTLY `msg` (the very message parameter, not a separately
   quantified "some transcript"),
 
 * OR `Vk sk` is EXACTLY the responder's fixed verification key
-  (`vkey_term (ltk_term 2)`) AND the RESPONDER role principal
+  (`vkey_term (ltk_term (role_ltk_pos Resp))`, where
+  `role_ltk_pos Resp = 3`) AND the RESPONDER role principal
   (`resp_dy_principal`) has `event_triggered` `tag_responder_respond` with
   content EXACTLY `msg`.
 
@@ -157,43 +168,70 @@ is no circularity: the event's content is fixed BEFORE the signature exists
 predicate is checked against the PREFIX before its own entry, never against
 itself.
 
-## 3. The state predicate — genuinely inhabited, precise and harmless
+## 3. The state predicate — real, EXERCISED, and genuinely inhabited
 
-None of `Product.setup_run`, `rng_run`, `start_run`, `respond_run`,
-`ifinish_run`, `rfinish_run`, `inject_run` calls
-`DY.Core.Trace.Manipulation.set_state`: there is no `SetState` entry anywhere
-in this development (grep confirms it — every entry the product appends is a
-`RandGen`, an `Event`, or a `MsgSent`).  So `dh_state_pred` is NEVER exercised
-on any trace this development actually reaches — but it is still installed
-as a genuinely INHABITED, real predicate, never `False`:
+`Product.setup_run`, `rng_run`, `start_run`, `respond_run` and `ifinish_run` ALL
+call `DY.Core.Trace.Manipulation.set_state`; `Product.corrupt_run` calls DY*
+core's `corrupt`.  So `SetState` and `Corrupt` entries are genuinely produced by
+this development, and the state predicate is exercised on **every** trace it
+reaches.  It is the canonical DY* rule:
 
 ```fstar
 let dh_state_pred_fun tr prin sess_id content : prop =
-  B.is_publishable #dh_sample_crypto_invariants tr content
+  B.is_knowable_by #dh_sample_crypto_invariants
+    (L.principal_state_label prin sess_id) tr content
 ```
 
-i.e. "an honest principal may only ever store ALREADY-PUBLIC content" — a
-real, sound, harmless restriction on a HYPOTHETICAL future `SetState`
-extension, rather than a vacuous `False` that would make the never-exercised
-obligations trivial for the wrong reason.
+i.e. "a principal only ever stores material that is **knowable at its own state
+label**".  This is exactly what makes a later `Corrupt` of that state sound: DY*'s
+attacker theorem turns a corrupted state into publishable content, and the label
+discipline guarantees the leaked material was already accounted for by that
+role's compromise-sensitive `Terms.role_label`.
 
-* **Genuinely inhabited**: `content = B.literal_to_bytes lit` for any literal
-  `lit` is `is_publishable` on EVERY trace (`B.literal_to_bytes_is_publishable`).
-* **NOT `True`**: a secret-labelled term (e.g. a raw ephemeral scalar, label
-  `L.secret`) is NOT `is_publishable` — a real, non-degenerate rejection.
-* **`pred_later`** is `is_publishable_grows` (already used throughout this
-  module for the very same fact about `MsgSent` publishability).
-* **`pred_knowable` is discharged from the GENUINE definition of
-  `is_knowable_by`, never from a `False` hypothesis**: `is_publishable` means
-  knowable at `L.public`, and `L.public` is the flow lattice's TOP element —
-  it flows to EVERY label (`L.public_is_top`) — so by transitivity
-  (`L.can_flow_transitive`) the content is knowable at ANY label, in
-  particular at `L.principal_state_content_label prin sess_id content`.
+* **Genuinely inhabited**: any public literal is knowable at any label
+  (`lemma_state_pred_inhabited`); and — the case that matters — every snapshot
+  this product stores satisfies it (`lemma_snapshot_knowable`, used at all five
+  `SetState` sites).
+* **NOT `True`**: a `Rand` term that was never generated on the trace is not even
+  `bytes_invariant`, hence not storable (`lemma_state_pred_not_trivial`).
+* **`pred_later`** is `bytes_invariant_later` + `get_label_later` +
+  `can_flow_later`.
+* **`pred_knowable` is discharged from the GENUINE label lattice**, never from a
+  `False` hypothesis: a role's state label flows to the state-CONTENT label of
+  anything it stores (`L.state_pred_label_can_flow_state_pred_label`), so
+  knowability at the former transitively gives knowability at the latter.
 
-This is the "precise, harmless, genuinely inhabited state predicate; explain
-irrelevance" the audit calls for: it is not merely unused, and it is not
-`False` either — it is a real rule that a hypothetical future state store
-would have to honestly satisfy.
+### 3.1 What a snapshot contains, and when it is written
+
+The stored content is `Terms.snapshot_term ltk pending scalar peer_share key`
+(absent fields rendered as the public empty literal), i.e. the role's **complete
+live secret material**.  `Product.wf` pins the role shadow's `sh_state_pos` — its
+*current-state pointer* — to a `SetState` holding exactly that snapshot
+(`state_pos_coherent`).  Snapshots are refreshed after every state-changing role
+action (setup, `ActRng`, `ActStart`, the responder's Msg1 delivery, the
+initiator's Msg2 delivery); the responder's **Msg3 completion writes nothing**
+because it changes only its phase, not its key material.  Nothing is ever erased,
+so there is **no forward secrecy** (see `SYMBOLIC_SECURITY.md` §0).
+
+### 3.2 Compromise coherence
+
+`corruption_coherent` (a conjunct of `product_invariant`, marked
+`opaque_to_smt` so its `forall` does not pollute unrelated queries) states:
+
+```fstar
+(p.ps_sys.sys_init_corrupt ==> role_state_corrupt p Init) /\
+(p.ps_sys.sys_resp_corrupt ==> role_state_corrupt p Resp) /\
+(forall (time:nat). TB.entry_exists p.ps_trace (T.Corrupt time) ==>
+   corrupt_entry_authorized p time)
+```
+
+where `corrupt_entry_authorized p time` says the `Corrupt` entry points at a
+`SetState` of a role whose compromise flag is set.  It is inductive: no
+non-`ActCorrupt` step adds a `Corrupt` entry (`product_step_no_new_corrupt`,
+proved case by case exactly like the trace-invariant family), and `ActCorrupt who`
+adds exactly one, at that role's current pointer, while setting that role's flag
+(`lemma_corruption_coherent_corrupt`).  `lemma_corruption_coherence` then derives
+the **iff** between flags and DY* label corruption.
 
 ## 4. The event predicate — EXACT disjunction over the five reserved tags
 
@@ -259,25 +297,25 @@ above — discharged by the `lemma_*_event_pred` lemmas with an explicit
 witness, never by an unassisted existential search) and it is NOT `True`: an
 event using one of the five reserved tags with the WRONG principal, or with
 content that is not of the corresponding shape, OR an event using ANY OTHER
-tag whatsoever, violates it.  This is the structural fact a future
-mutual-authentication / session-key-secrecy proof would use to recover the
+tag whatsoever, violates it.  This is the structural fact the proofs in `DH.Sample.Symbolic.Security` use to recover the
 exact partner / share / key fields — AND the exact role that produced them —
 out of a trace-recorded event uniformly, without guessing, AND to rule out any
 event outside the five-tag vocabulary altogether.
 
 ## 5. Per-action mapping: entries appended, predicates discharged
 
-`Product.sym_extend`'s six shapes, the trace entries each appends, and the
+`Product.sym_extend`'s seven shapes, the trace entries each appends, and the
 lemma that discharges `trace_entry_invariant` for every one of them:
 
 | Action (event) | Entries appended | `trace_entry_invariant` obligation(s) | Discharged by |
 |---|---|---|---|
-| `ActRng owner x` | `RandGen eph_usage eph_label eph_len` | none (`RandGen` ⟹ `True`) | `lemma_step_trace_invariant_rng` |
-| `ActStart` (initiator sends Msg1) | `Event tag_initiate`, `MsgSent (SMsg1 me share)` | event shape + `p == init_dy_principal`; `is_publishable` of `concat me (dh_pk scalar)` | `lemma_step_trace_invariant_start`: `lemma_initiate_event_pred` (called with `mep = init_dy_principal`); `literal_to_bytes_is_publishable` (identity) + `lemma_share_publishable` (share, from `rng_state_coherent`'s recorded pending scalar) + `concat_preserves_publishability` |
-| `ActDeliver idx Resp` on Msg1 (responder sends Msg2) | `Event tag_responder_respond`, `RandGen` (nonce), `MsgSent (SMsg2 me share sig)` | event shape + `p == resp_dy_principal`; `is_publishable` of the SIGNATURE, hence `dh_sign_pred`'s responder disjunct | `lemma_step_trace_invariant_resp_msg1` → `lemma_respond_trace_invariant`: Msg1 delivery is UNRESTRICTED (any origin, including an injected packet, can drive it); `lemma_responder_respond_event_pred` fixes `mep = resp_dy_principal`; the origin-generic helper `lemma_net_entry_share_publishable` proves publishability for honest AND injected shares, and `lemma_share_publishable` handles the responder share; `lemma_sig_term_publishable` discharges the signature from the JUST-triggered `tag_responder_respond` event over that EXACT transcript |
+| `ActRng owner x` | `RandGen eph_usage (eph_label owner) eph_len`, `SetState` (owner's refreshed snapshot) | `RandGen` ⟹ `True`; the `SetState` needs the state predicate | `lemma_step_trace_invariant_rng` → `lemma_rng_trace_invariant` (`lemma_ltk_knowable` + `lemma_scalar_knowable` + `lemma_snapshot_knowable`) |
+| `ActStart` (initiator sends Msg1) | `Event tag_initiate`, `MsgSent (SMsg1 me share)`, refreshed `SetState` | event shape + `p == init_dy_principal`; `is_publishable` of `concat me (dh_pk scalar)`; snapshot state predicate | `lemma_step_trace_invariant_start`: `lemma_initiate_event_pred` (called with `mep = init_dy_principal`); `literal_to_bytes_is_publishable` (identity) + `lemma_share_publishable` (share, from `rng_state_coherent`'s recorded pending scalar) + `concat_preserves_publishability`; `lemma_snapshot_knowable` |
+| `ActDeliver idx Resp` on Msg1 (responder sends Msg2) | `Event tag_responder_respond`, `RandGen` (nonce), `MsgSent (SMsg2 me share sig)`, refreshed `SetState` | event shape + `p == resp_dy_principal`; `is_publishable` of the SIGNATURE, hence `dh_sign_pred`'s responder disjunct; snapshot state predicate | `lemma_step_trace_invariant_resp_msg1` → `lemma_respond_trace_invariant`: Msg1 delivery is UNRESTRICTED (any origin, including an injected packet, can drive it); `lemma_responder_respond_event_pred` fixes `mep = resp_dy_principal`; the origin-generic helper `lemma_net_entry_share_publishable` proves publishability for honest AND injected shares, and `lemma_share_publishable` handles the responder share; `lemma_sig_term_publishable` discharges the signature from the JUST-triggered `tag_responder_respond` event over that EXACT transcript; `lemma_snapshot_knowable` |
 | `ActDeliver idx Resp` on Msg3 (responder completes) | `Event tag_responder_finish` | event shape + `p == resp_dy_principal` | `lemma_step_trace_invariant_resp_msg3` → `lemma_rfinish_trace_invariant`: `lemma_responder_finish_event_pred` (called with `mep = resp_dy_principal`) |
-| `ActDeliver idx Init` on Msg2 (initiator sends Msg3) | `Event tag_initiator_finish`, `RandGen` (nonce), `MsgSent (SMsg3 sig)` | event shape + `p == init_dy_principal`; `is_publishable` of the bare SIGNATURE, hence `dh_sign_pred`'s initiator disjunct | `lemma_step_trace_invariant_init_msg2` → `lemma_ifinish_trace_invariant`: `lemma_initiator_finish_event_pred` (called with `mep = init_dy_principal`); `lemma_net_entry_share_publishable` (received Msg2 share) + `lemma_share_publishable` (own share) build the transcript; `lemma_sig_term_publishable` discharges the signature from the JUST-triggered `tag_initiator_finish` event |
+| `ActDeliver idx Init` on Msg2 (initiator sends Msg3) | `Event tag_initiator_finish`, `RandGen` (nonce), `MsgSent (SMsg3 sig)`, refreshed `SetState` | event shape + `p == init_dy_principal`; `is_publishable` of the bare SIGNATURE, hence `dh_sign_pred`'s initiator disjunct; snapshot state predicate | `lemma_step_trace_invariant_init_msg2` → `lemma_ifinish_trace_invariant`: `lemma_initiator_finish_event_pred` (called with `mep = init_dy_principal`); `lemma_net_entry_share_publishable` (received Msg2 share) + `lemma_share_publishable` (own share) build the transcript; `lemma_sig_term_publishable` discharges the signature from the JUST-triggered `tag_initiator_finish` event; `lemma_snapshot_knowable` |
 | `ActInject m` (attacker injection) | `MsgSent (inject_smsg m)` | `is_publishable` of the all-literal term | `lemma_step_trace_invariant_inject` → `lemma_inject_trace_invariant`: `DH.Sample.Symbolic.Provenance.lemma_inject_publishable` (publishable on ANY trace under ANY crypto invariants) |
+| `ActCorrupt who` | `Corrupt sh_state_pos` | no new `trace_entry_invariant` premise; DY* validates compromise through the previously checked state predicate | `lemma_step_trace_invariant_corrupt` uses core `corrupt_invariant`; `lemma_corruption_coherent_corrupt` ties the entry to the target role's flag and exact current `SetState` |
 
 `Common.StateMachine`'s non-transition shapes (a `WireEvent`, or a delivery
 whose `(destination, message)` pair fires no endpoint step) make
@@ -288,12 +326,16 @@ predicate), so every remaining case of `product_step_preserves_invariant`'s
 dispatch is vacuously discharged, exactly mirroring
 `DH.Sample.Symbolic.Lifting.lemma_lift_step`'s own exhaustive dispatch.
 
-**No `SetState` action exists**, so the state predicate (§3) is never
-exercised by any of the six cases above — this is the "precise, genuinely
-inhabited, harmless state predicate; explain irrelevance" the audit calls
-for, made explicit case by case: none of these six rows ever needs a state
-predicate, and if one hypothetically did, `dh_state_pred`'s real
-`is_publishable` rule (not `False`) is what it would have to satisfy.
+**`SetState` and `Corrupt` are real actions here.**  Every state-changing row
+above additionally appends the acting role's refreshed `SetState`, whose state
+predicate is discharged by `lemma_snapshot_knowable` (long-term key and ephemeral
+knowable at the role's own label by reflexivity; peer share publishable hence
+knowable; session key `dh scalar peer_share` knowable because
+`join (role_label who) _` flows to `role_label who`).  The seventh action,
+`ActCorrupt who`, appends exactly one `Corrupt sh_state_pos` entry, which carries
+**no** `trace_entry_invariant` obligation — precisely DY* core's own
+`corrupt_invariant` — because the burden was already discharged by the state
+predicate when that snapshot was stored.
 
 **Honest `MsgSent` publishable from bytes invariants / crypto predicates.**
 Every honest send above is discharged from `DY.Core.Bytes.bytes_invariant`'s
@@ -307,7 +349,15 @@ structure of `inject_smsg`.
 ```fstar
 (* the combined invariant *)
 let product_invariant (p:product_state) : prop =
-  wf p /\ TI.trace_invariant #dh_sample_protocol_invariants p.ps_trace
+  wf p /\
+  TI.trace_invariant #dh_sample_protocol_invariants p.ps_trace /\
+  corruption_coherent p
+
+(* compromise coherence, in BOTH directions *)
+let lemma_corruption_coherence (p:product_state)
+  : Lemma (requires product_invariant p)
+          (ensures (p.ps_sys.sys_init_corrupt <==> role_state_corrupt p Init) /\
+                   (p.ps_sys.sys_resp_corrupt <==> role_state_corrupt p Resp))
 
 (* the case-exhaustive one-step preservation theorem *)
 let product_step_preserves_invariant
@@ -346,75 +396,55 @@ let lemma_product_invariant_key_provenance (p:product_state)
     (ensures (
       let c = p.ps_sys in
       ltk_coherent_at init_dy_principal (term_of_principal c.sys_init.ep_me)
-        p.ps_trace p.ps_init.sh_ltk 0 /\
+        p.ps_trace p.ps_init.sh_ltk (role_ltk_pos Init) /\
       ltk_coherent_at resp_dy_principal (term_of_principal c.sys_resp.ep_me)
-        p.ps_trace p.ps_resp.sh_ltk 2 /\
-      (match p.ps_init.sh_scalar with None -> True | Some s -> scalar_recorded p.ps_trace s) /\
-      (match p.ps_resp.sh_scalar with None -> True | Some s -> scalar_recorded p.ps_trace s)))
+        p.ps_trace p.ps_resp.sh_ltk (role_ltk_pos Resp) /\
+      (match p.ps_init.sh_scalar with
+       | None -> True | Some s -> scalar_recorded_for Init p.ps_trace s) /\
+      (match p.ps_resp.sh_scalar with
+       | None -> True | Some s -> scalar_recorded_for Resp p.ps_trace s) /\
+      state_pos_coherent Init p.ps_init p.ps_trace /\
+      state_pos_coherent Resp p.ps_resp p.ps_trace))
 
-(* the EXPLICIT, general two-party no-corruption profile predicate and theorem
-   — Product.sys_action has no corruption constructor at all, and none of the
-   six sym_extend cases ever appends a Corrupt entry; proved directly from the
-   step relation, for EVERY execution, not merely exhibited by one witness run *)
-let product_no_corruption (p:product_state) : prop =
-  trace_has_no_corrupt p.ps_trace
+(* COMPROMISE COHERENCE — replaces the former no-corruption profile entirely *)
+let corruption_coherent (p:product_state) : prop =        (* opaque_to_smt *)
+  (p.ps_sys.sys_init_corrupt ==> role_state_corrupt p Init) /\
+  (p.ps_sys.sys_resp_corrupt ==> role_state_corrupt p Resp) /\
+  (forall (time:nat). TB.entry_exists p.ps_trace (T.Corrupt time) ==>
+     corrupt_entry_authorized p time)
 
-let product_step_preserves_no_corruption
+(* no step except ActCorrupt introduces a Corrupt entry — the structural fact
+   that makes corruption_coherent inductive (case-exhaustive, same dispatch as
+   the trace-invariant family) *)
+let product_step_no_new_corrupt
   (p0:product_state) (ev:sys_event) (p1:product_state) (out:sys_output)
   : Lemma
-    (requires wf p0 /\ product_no_corruption p0 /\ product_step p0 ev p1 out)
-    (ensures wf p1 /\ product_no_corruption p1)
+    (requires
+      wf p0 /\ product_step p0 ev p1 out /\
+      (forall (who:endpoint_id). ev =!= SM.LocalEvent (Sys.ActCorrupt who)))
+    (ensures no_new_corrupt p0.ps_trace p1.ps_trace)
 
-let lemma_product_initial_no_corruption (a b:principal)
-  : Lemma (ensures product_no_corruption (product_initial a b))
-
-let rec product_trace_reaches_preserves_no_corruption
-  (a b:principal) (p0:product_state) (pt:list product_transition) (p1:product_state)
-  : Lemma
-    (requires wf p0 /\ product_no_corruption p0 /\ SM.trace_reaches (product_sm a b) p0 pt p1)
-    (ensures wf p1 /\ product_no_corruption p1)
-    (decreases pt)
-
-let product_reaches_no_corruption
-  (a b:principal) (pt:list product_transition) (pfinal:product_state)
-  : Lemma
-    (requires product_execution (product_sm a b) (product_initial a b) pt pfinal)
-    (ensures product_no_corruption pfinal)
-
-(* the first-class, combined "two-party no-corruption ideal profile"
-   predicate, with its own one-step preservation and reachability theorems —
-   each proved ENTIRELY from the two pairs of theorems above, with no new
-   premise and no caller-supplied hygiene *)
-let ideal_product_invariant (p:product_state) : prop =
-  product_invariant p /\ product_no_corruption p
-
-let ideal_product_step_preserves_invariant
+let product_step_preserves_corruption_coherent
   (p0:product_state) (ev:sys_event) (p1:product_state) (out:sys_output)
   : Lemma
-    (requires ideal_product_invariant p0 /\ product_step p0 ev p1 out)
-    (ensures ideal_product_invariant p1)
+    (requires wf p0 /\ corruption_coherent p0 /\ product_step p0 ev p1 out)
+    (ensures corruption_coherent p1)
 
-let lemma_product_initial_ideal_invariant (a b:principal)
-  : Lemma (ensures ideal_product_invariant (product_initial a b))
-
-let rec product_trace_reaches_preserves_ideal_invariant
-  (a b:principal) (p0:product_state) (pt:list product_transition) (p1:product_state)
+(* the iff between the concrete compromise flags and DY* label corruption *)
+let lemma_corruption_coherence (p:product_state)
   : Lemma
-    (requires ideal_product_invariant p0 /\ SM.trace_reaches (product_sm a b) p0 pt p1)
-    (ensures ideal_product_invariant p1)
-    (decreases pt)
+    (requires product_invariant p)
+    (ensures
+      (p.ps_sys.sys_init_corrupt <==> role_state_corrupt p Init) /\
+      (p.ps_sys.sys_resp_corrupt <==> role_state_corrupt p Resp))
 
-(* THE headline "explicit two-party no-corruption ideal profile" theorem:
-   for EVERY product_execution of EVERY product_sm a b, the final state
-   satisfies BOTH product_invariant AND product_no_corruption *)
-let product_reaches_ideal_invariant
-  (a b:principal) (pt:list product_transition) (pfinal:product_state)
+let lemma_uncorrupt_role_label (p:product_state) (who:endpoint_id)
   : Lemma
-    (requires product_execution (product_sm a b) (product_initial a b) pt pfinal)
-    (ensures ideal_product_invariant pfinal)
+    (requires product_invariant p /\ Sys.corrupt_flag p.ps_sys who == false)
+    (ensures ~(role_state_corrupt p who))
 
-(* the non-vacuous, two-party honest-run witness, satisfying ideal_product_invariant
-   (the same general theorem above, instantiated at this one concrete run) *)
+(* the non-vacuous two-party honest-run witness: reachable, invariant-satisfying,
+   with BOTH compromise flags clear and NEITHER role label corrupt *)
 let lemma_honest_run_invariant_reachable (a b:principal) (x y:dh_scalar)
   : Lemma
     (requires x =!= y)
@@ -424,51 +454,38 @@ let lemma_honest_run_invariant_reachable (a b:principal) (x y:dh_scalar)
         execution_projects_exactly (Sys.honest_run a b x y) pt /\
         proj pfinal == Sys.h_s4 a b x y /\
         product_invariant pfinal /\
-        product_no_corruption pfinal /\
-        ideal_product_invariant pfinal))
+        pfinal.ps_sys.sys_init_corrupt == false /\
+        pfinal.ps_sys.sys_resp_corrupt == false /\
+        ~(role_state_corrupt pfinal Init) /\
+        ~(role_state_corrupt pfinal Resp)))
 ```
+
+### 6.1 Proof structure
 
 `product_step_preserves_invariant` proceeds by: (1) packaging `(ev, p1.ps_sys,
 out)` into a `Sys.system_transition ctr` and showing `lift_next p0 ctr == p1`
-(`lemma_product_step_is_lift_next` — both `product_step` and `lift_next`
-dispatch through the SAME deterministic `sym_extend p0 ev`, so pinning `p1`'s
-fields via `product_step`'s equalities pins them to `lift_next`'s Some-branch
-components too); (2) reusing `DH.Sample.Symbolic.Lifting.lemma_lift_step` for
-the `wf` half; (3) dispatching on `ev`'s shape, EXACTLY as `sym_extend` and
-`lemma_lift_step` do, to one of the six per-action lemmas in §5 for the
-`trace_invariant` half.
+(`lemma_product_step_is_lift_next` — both `product_step` and `lift_next` dispatch
+through the SAME deterministic `sym_extend p0 ev`); (2) reusing
+`DH.Sample.Symbolic.Lifting.lemma_lift_step` for the `wf` half; (3) dispatching
+on `ev`'s shape, EXACTLY as `sym_extend` and `lemma_lift_step` do, to one of the
+**seven** per-action lemmas (§5) for the `trace_invariant` half; (4) calling
+`product_step_preserves_corruption_coherent` for the compromise-coherence half.
 
-`product_step_preserves_no_corruption` proceeds by the SAME dispatch (same
-six cases, same `lemma_product_step_is_lift_next` + `lemma_lift_step`
-wiring), but each per-action lemma (`lemma_step_no_corruption_*`) concludes
-the much cheaper `trace_has_no_corrupt` fact instead of `trace_invariant`,
-directly from the same entry-shape facts (`rng_trace` / `start_trace` /
-`respond_trace` / `rfinish_trace` / `ifinish_trace` / `inject_trace`, all of
-which append only `RandGen` / `Event` / `MsgSent` entries, never `Corrupt`)
-— this is a genuine, general, step-relation-level fact, not a premise added
-to `Product.product_step` and not something smuggled into a caller's
-premises.  It does NOT claim `trace_invariant` itself excludes `Corrupt`
-(`DY.Core.Trace.Manipulation.corrupt_invariant` shows a `Corrupt` entry is
-ALWAYS `trace_invariant`-compatible, for any protocol) — the no-corruption
-fact is proved SEPARATELY, from `Product.sys_action`/`sym_extend` never
-producing a `Corrupt` entry at all.
+That last one splits into: the `ActCorrupt` case
+(`lemma_corruption_coherent_corrupt`, which uses `Product.lemma_corrupt_step_effect`
+— "the step appends exactly `Corrupt sh_state_pos`, and `wf` says that position
+holds this role's current `SetState`" — plus `Terms.lemma_state_corrupt_implies_label_corrupt`),
+and every other case (`product_step_no_new_corrupt` + `lemma_corruption_coherent_frame`,
+using `is_corrupt`'s monotonicity and the persistence of `entry_at`).
+
+It does NOT claim `trace_invariant` excludes `Corrupt`
+(`DY.Core.Trace.Manipulation.corrupt_invariant` shows a `Corrupt` entry is ALWAYS
+`trace_invariant`-compatible, for any protocol); it tracks *which* corruptions
+happened and reconciles them with the concrete flags.
 
 `lemma_product_invariant_key_provenance` is proved by `()` alone: neither
 `product_invariant` nor `wf` nor `key_state_coherent`/`rng_state_coherent` is
-marked `opaque_to_smt`, so the SMT solver unfolds the conjunction on its own —
-this corollary is a genuine restatement, not a new fact, made available as one
-explicitly-named lemma about `product_invariant` directly.
-
-`ideal_product_step_preserves_invariant` is proved by calling
-`product_step_preserves_invariant` (needs `product_invariant p0`, which
-`ideal_product_invariant p0` already conjoins) then
-`product_step_preserves_no_corruption` (needs `wf p0` — already inside
-`product_invariant p0` — and `product_no_corruption p0`, the other conjunct)
-— no new premise is introduced. `lemma_product_initial_ideal_invariant`,
-`product_trace_reaches_preserves_ideal_invariant` and
-`product_reaches_ideal_invariant` mirror the corresponding pairs of
-already-established `product_invariant` / `product_no_corruption` lemmas
-exactly, combining their conclusions.
+marked `opaque_to_smt`, so the SMT solver unfolds the conjunction on its own.
 
 ## 7. Engineering note: keeping rlimits low
 
@@ -479,10 +496,15 @@ ONLY plain `bytes` / `trace` parameters — no `product_state`, `system_step`,
 or `sym_extend` in scope.  The "wiring" lemma that DOES need the full
 product/system context (to identify which concrete call `sym_extend`
 performed) then reuses that standalone fact as a black box.  The
-no-corruption per-action lemmas (`lemma_step_no_corruption_*`) mirror the
+"no new corruption" per-action lemmas (`lemma_step_no_new_corrupt_*`) mirror the
 SAME wiring case-by-case, but their own concluding fact
-(`no_corrupt_snoc`/`_snoc2`/`_snoc3`) is a one-line structural unfolding, so
-they add negligible extra rlimit cost on top of the wiring they share. This
+(`no_new_corrupt_snoc`/`_snoc2`/`_snoc3`/`_snoc4`) is a one-line structural
+unfolding, so they add negligible extra rlimit cost on top of the wiring they
+share.  Two predicates are `opaque_to_smt` purely for cost: `no_new_corrupt` and
+`corruption_coherent` (both carry a `forall (time:nat)` that must not be
+instantiated in the many queries that only carry them in the context), as is
+`Product.shadow_snapshot` (a five-way nested concatenation that per-step queries
+only ever need as an atom). This
 keeps every individual SMT query's context small; `--query_stats` over the
 whole module shows a maximum observed `rlimit` usage well under the
 `--z3rlimit 10` budget used throughout (no query anywhere needs more).
@@ -536,30 +558,19 @@ Established here, on top of `SYMBOLIC_LIFTING.md`'s claims:
   share/secret (`lemma_share_publishable`, `lemma_dh_agreement`) facts as the
   ingredients a later mutual-authentication / session-key-secrecy proof would
   consume;
-* an EXPLICIT, general two-party no-corruption profile theorem
-  (`product_reaches_no_corruption`): for EVERY execution of EVERY
-  `product_sm a b` (not merely one witness run), the final state's trace has
-  NEVER recorded a `Corrupt` entry — proved directly from `Product`'s step
-  relation (`sys_action` has no corruption constructor, and no
-  `sym_extend` case ever appends `Corrupt`), independently of
-  `trace_invariant` (which does not itself exclude `Corrupt`);
-* `ideal_product_invariant` — the two-party no-corruption ideal profile
-  packaged as ONE first-class, genuinely inhabited predicate
-  (`product_invariant p /\ product_no_corruption p`), with its own one-step
-  preservation theorem (`ideal_product_step_preserves_invariant`) and its own
-  reachability theorem (`product_reaches_ideal_invariant`) covering EVERY
-  execution of EVERY `product_sm a b` — each proved entirely from the two
-  already-established pairs of preservation/reachability theorems above, with
-  no new premise and no caller-supplied hygiene;
+* REAL DYNAMIC COMPROMISE: `Sys.ActCorrupt who` and the DY* core
+  `SetState`/`Corrupt` machinery, with `corruption_coherent` proved inductive and
+  `lemma_corruption_coherence` proving the **iff** between the concrete
+  per-role compromise flags and DY* corruption of the roles' state labels — the
+  former `product_no_corruption` / `ideal_product_invariant` "no-corruption ideal
+  profile" is GONE, and no headline result assumes a `Corrupt`-free trace;
 * a concrete, non-vacuous two-party honest run reaching a state satisfying
-  `ideal_product_invariant` (equivalently, BOTH `product_invariant` AND
-  `product_no_corruption`).
+  `product_invariant` with BOTH compromise flags clear and NEITHER role label
+  corrupt (so the compromise machinery does not secretly force corruption).
 
-Not claimed here (unchanged from `SYMBOLIC_LIFTING.md` §7): computational
-security of the toy DH/signature functions; a final authentication or
-session-key-secrecy THEOREM (the exact `dh_sign_pred`, the exact-disjunction
-`dh_event_pred_fun`, `lemma_product_invariant_key_provenance`, and the general
-`ideal_product_invariant` reachability theorem are the ingredients a later
-proof of those properties would consume — see §2, §4 and §6 — but no such
-theorem is stated or proved by this module); refinement from an arbitrary
-raw-byte network/RNG runtime to the ideal composed environment.
+Not claimed by this module itself: computational security of the toy
+DH/signature functions or refinement from an arbitrary raw-byte network/RNG
+runtime to the ideal composed environment.  The authentication, agreement, and
+session-key secrecy theorems modulo compromise are stated and proved by
+`DH.Sample.Symbolic.Security`, using this module's invariant and provenance
+lemmas.

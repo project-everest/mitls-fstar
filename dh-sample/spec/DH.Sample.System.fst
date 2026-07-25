@@ -35,18 +35,31 @@ module DH.Sample.System
   identity/share agreement of a completed session is DERIVED from that link and
   from the local transition semantics — it is never restated by the guard.
 
-  ── Ideal signature / session-binding completion boundary.
-  `deliver_origin_ok` already reserves the two completion messages to an honest
-  sender (a `Sent Resp` Msg2, a `Sent Init` Msg3) — the permitted ideal
-  unforgeability boundary, under which an injected Msg2/Msg3 can never complete a
-  peer.  `ideal_completion_link_ok` ADDS only the run-link (same Msg1 index) plus
-  the minimum genuine phase facts (the peer having reached the corresponding
-  phase).  It states NO identity or share the completion later concludes; those
-  are consequences of the run link, not premises.  It is the ideal signature
-  binding to the run/session identifier, documented as such (see
-  dh-sample/SYMBOLIC_SECURITY.md); the local endpoint state machines the Pulse
-  implementation refines never observe it.  This is a FIXED, one-session,
-  NON-injective model: there is no per-session index inside the signed content.
+  ── Dynamic compromise.  `ActCorrupt who` is a REAL attacker action: it sets the
+  persistent per-role compromise flag `sys_init_corrupt` / `sys_resp_corrupt`
+  (monotone: once set, never cleared) and changes NOTHING else — no endpoint
+  state, no packet, no RNG registry entry, no run-link index, no output (see
+  `lemma_corrupt_step_changes_only_compromise_metadata`).  Compromise is therefore
+  purely environment/compromise METADATA at the concrete level; its effect is felt
+  only through the two completion boundaries below (and, symbolically, through the
+  DY* `Corrupt` entry the product records — see DH.Sample.Symbolic.Product).
+
+  ── Signature / session-binding completion boundary MODULO COMPROMISE.
+  `deliver_origin_ok` reserves the two completion messages to an honest sender (a
+  `Sent Resp` Msg2, a `Sent Init` Msg3) UNLESS the role that signs that message is
+  already compromised: a compromised signer's key is the attacker's, so an
+  INJECTED Msg2 may complete the initiator once the responder is corrupt, and an
+  INJECTED Msg3 may complete the responder once the initiator is corrupt.
+  `ideal_completion_link_ok` ADDS the run-link (same Msg1 index) plus the minimum
+  genuine phase facts — but, again, ONLY while the relevant signer role is
+  uncompromised; after that compromise it imposes nothing, so a forged or replayed
+  completion is accepted.  Neither guard states any identity or share the
+  completion later concludes; those are consequences of the run link, not
+  premises.  This is the signature binding to the run/session identifier,
+  documented as such (see dh-sample/SYMBOLIC_SECURITY.md); the local endpoint
+  state machines the Pulse implementation refines never observe it.  This is a
+  FIXED, one-session, NON-injective model: there is no per-session index inside
+  the signed content.
 *)
 
 module SM  = Common.StateMachine
@@ -117,7 +130,29 @@ type system_state = {
      at its Msg1 delivery, from ANY origin — including an injected packet). *)
   sys_init_msg1_idx : option nat;
   sys_resp_msg1_idx : option nat;
+  (* PERSISTENT per-role dynamic-compromise flags.  Set (and never cleared) by
+     `ActCorrupt`; they are pure compromise metadata — no endpoint transition, no
+     packet and no output ever reads them, only the two completion boundaries
+     `deliver_origin_ok` / `ideal_completion_link_ok` do. *)
+  sys_init_corrupt  : bool;
+  sys_resp_corrupt  : bool;
 }
+
+(** The compromise flag of a role. *)
+let corrupt_flag (st:system_state) (who:endpoint_id) : bool =
+  match who with
+  | Init -> st.sys_init_corrupt
+  | Resp -> st.sys_resp_corrupt
+
+(** The role whose long-term signing key authenticates a completion message:
+    the responder signs Msg2 (which completes the initiator), the initiator signs
+    Msg3 (which completes the responder).  Any other (destination, message) pair
+    carries no completion signature. *)
+let completion_signer (dst:endpoint_id) (m:dh_message) : option endpoint_id =
+  match dst, m with
+  | Init, Msg2 _ _ _ -> Some Resp
+  | Resp, Msg3 _     -> Some Init
+  | _, _             -> None
 
 (** Every reserved or consumed local scalar occurs in the honest registry, and
     the registry contains no repeated concrete scalar. *)
@@ -145,6 +180,8 @@ let system_initial (a b:principal) : system_state = {
   sys_resp_pending  = None;
   sys_init_msg1_idx = None;
   sys_resp_msg1_idx = None;
+  sys_init_corrupt  = false;
+  sys_resp_corrupt  = false;
 }
 
 (** ── Actions ───────────────────────────────────────────────────────────────
@@ -153,13 +190,15 @@ let system_initial (a b:principal) : system_state = {
     lets the concrete relational model choose bytes, but the freshness check and
     registry make that choice neither attacker-originated nor reusable.
     `ActStart` contains no arbitrary scalar: it consumes the initiator's pending
-    honest draw. *)
+    honest draw.  `ActCorrupt who` is the attacker's DYNAMIC COMPROMISE of one
+    role: it only sets that role's persistent compromise flag. *)
 noeq
 type sys_action =
   | ActRng     : owner:endpoint_id -> scalar:dh_scalar -> sys_action
   | ActStart   : sys_action
   | ActDeliver : idx:nat -> dst:endpoint_id -> sys_action
   | ActInject  : m:dh_message -> sys_action
+  | ActCorrupt : who:endpoint_id -> sys_action
 
 type sys_event  = SM.event dh_message sys_action
 type sys_output = SM.step_output dh_message local_output
@@ -180,22 +219,27 @@ let append_honest (net:list packet) (who:endpoint_id) (msgs:list dh_message) : l
 let wire_public (m:dh_message) : prop = True
 let attacker_can_inject (net:list packet) (m:dh_message) : prop = wire_public m
 
-let deliver_origin_ok (dst:endpoint_id) (m:dh_message) (o:pkt_origin) : prop =
+(** A completion message must come from its honest signer UNLESS that signer role
+    is already compromised — a compromised role's long-term signing key is the
+    attacker's, so it can forge (or replay) that role's completion message. *)
+let deliver_origin_ok
+  (st0:system_state) (dst:endpoint_id) (m:dh_message) (o:pkt_origin) : prop =
   match dst, m with
-  | Init, Msg2 _ _ _ -> o == Sent Resp
-  | Resp, Msg3 _     -> o == Sent Init
+  | Init, Msg2 _ _ _ -> o == Sent Resp \/ st0.sys_resp_corrupt
+  | Resp, Msg3 _     -> o == Sent Init \/ st0.sys_init_corrupt
   | _, _             -> True
 
-(** ── The ideal signature / session-binding completion boundary ──────────────
+(** ── The signature / session-binding completion boundary, modulo compromise ──
 
-    `deliver_origin_ok` (above) already reserves the two COMPLETION messages to an
-    honest sender — a `Sent Resp` Msg2, a `Sent Init` Msg3.  This is the permitted
-    ideal unforgeability boundary: an ATTACKER-injected Msg2/Msg3 (origin
-    `Injected`) can never complete a peer.  Msg1 delivery is deliberately NOT
-    restricted, so an injected Msg1 CAN drive responder progress.
+    `deliver_origin_ok` (above) reserves the two COMPLETION messages to an honest
+    sender — a `Sent Resp` Msg2, a `Sent Init` Msg3 — while the SIGNING role is
+    uncompromised.  That is the unforgeability boundary: as long as the signer is
+    honest, an ATTACKER-injected Msg2/Msg3 (origin `Injected`) can never complete a
+    peer.  Msg1 delivery is deliberately NOT restricted, so an injected Msg1 CAN
+    drive responder progress, corrupt or not.
 
     `ideal_completion_link_ok` ADDS, on top of that honest-origin restriction, the
-    RUN/SESSION LINK plus the minimum genuine phase facts, and NOTHING that names
+    RUN/SESSION LINK plus the minimum genuine phase facts — and NOTHING that names
     an identity or a share the completion later concludes:
 
       * an initiator accepting the responder's Msg2:  the responder must have
@@ -208,27 +252,39 @@ let deliver_origin_ok (dst:endpoint_id) (m:dh_message) (o:pkt_origin) : prop =
         finished (`Init_Done` — a phase fact), and the same run-link index equality
         must hold.
 
-    The concrete identity/share agreement of a completed session is DERIVED from
-    this index equality (via the append-only, immutable network provenance and the
-    local transition semantics — see DH.Sample.Symbolic.Security), never restated
-    here.  This is an explicit IDEAL-ENVIRONMENT boundary over the composed
-    system, documented as such (see dh-sample/SYMBOLIC_SECURITY.md); the local
-    endpoint machines the Pulse implementation refines never observe it.  It is a
-    FIXED one-session, NON-injective ideal signature model.  It is marked
-    `opaque_to_smt` so it does not bloat the many lift/coherence/invariant queries
-    that carry a `system_step` hypothesis but never inspect this guard; the few
-    lemmas that DO need its content `reveal` it locally. *)
+    Both requirements are imposed ONLY BEFORE the relevant SIGNER role is
+    compromised.  Once `sys_resp_corrupt` (resp. `sys_init_corrupt`) is set, the
+    guard for an initiator (resp. responder) completion is vacuously satisfied: a
+    FORGED or REPLAYED completion signed with the compromised role's key is
+    accepted with no run link at all, exactly as a Dolev-Yao attacker holding that
+    key could produce.  This is where dynamic compromise really bites, and it is
+    why every authentication/agreement statement below is stated MODULO the
+    corresponding role compromise.
+
+    The concrete identity/share agreement of an UNCOMPROMISED completed session is
+    still DERIVED from this index equality (via the append-only, immutable network
+    provenance and the local transition semantics — see
+    DH.Sample.Symbolic.Security), never restated here.  This is an explicit
+    IDEAL-ENVIRONMENT boundary over the composed system, documented as such (see
+    dh-sample/SYMBOLIC_SECURITY.md); the local endpoint machines the Pulse
+    implementation refines never observe it.  It is a FIXED one-session,
+    NON-injective signature model.  It is marked `opaque_to_smt` so it does not
+    bloat the many lift/coherence/invariant queries that carry a `system_step`
+    hypothesis but never inspect this guard; the few lemmas that DO need its
+    content `reveal` it locally. *)
 [@@"opaque_to_smt"]
 let ideal_completion_link_ok (st0:system_state) (dst:endpoint_id) (m:dh_message) : prop =
   match dst, m with
   | Init, Msg2 _ _ _ ->
-    (st0.sys_resp.ep_phase == Resp_Wait3 \/ st0.sys_resp.ep_phase == Resp_Done) /\
-    Some? st0.sys_resp_msg1_idx /\
-    st0.sys_resp_msg1_idx == st0.sys_init_msg1_idx
+    st0.sys_resp_corrupt \/
+    ((st0.sys_resp.ep_phase == Resp_Wait3 \/ st0.sys_resp.ep_phase == Resp_Done) /\
+     Some? st0.sys_resp_msg1_idx /\
+     st0.sys_resp_msg1_idx == st0.sys_init_msg1_idx)
   | Resp, Msg3 _ ->
-    st0.sys_init.ep_phase == Init_Done /\
-    Some? st0.sys_resp_msg1_idx /\
-    st0.sys_resp_msg1_idx == st0.sys_init_msg1_idx
+    st0.sys_init_corrupt \/
+    (st0.sys_init.ep_phase == Init_Done /\
+     Some? st0.sys_resp_msg1_idx /\
+     st0.sys_resp_msg1_idx == st0.sys_init_msg1_idx)
   | _, _ -> True
 
 (** ── Composed step relation ──────────────────────────────────────────────── *)
@@ -274,12 +330,14 @@ let system_step
        st1.sys_resp_pending == st0.sys_resp_pending /\
        (* record the network index of the initiator's own Msg1 (appended at the end) *)
        st1.sys_init_msg1_idx == Some (L.length st0.sys_net) /\
-       st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx)
+       st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx /\
+       st1.sys_init_corrupt == st0.sys_init_corrupt /\
+       st1.sys_resp_corrupt == st0.sys_resp_corrupt)
 
   | SM.LocalEvent (ActDeliver idx dst) ->
     idx < L.length st0.sys_net /\
     (let pkt = L.index st0.sys_net idx in
-     deliver_origin_ok dst pkt.pk_msg pkt.pk_origin /\
+     deliver_origin_ok st0 dst pkt.pk_msg pkt.pk_origin /\
      ideal_completion_link_ok st0 dst pkt.pk_msg /\
      (match dst with
      | Init ->
@@ -290,7 +348,9 @@ let system_step
        st1.sys_init_pending == st0.sys_init_pending /\
        st1.sys_resp_pending == st0.sys_resp_pending /\
        st1.sys_init_msg1_idx == st0.sys_init_msg1_idx /\
-       st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx
+       st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx /\
+       st1.sys_init_corrupt == st0.sys_init_corrupt /\
+       st1.sys_resp_corrupt == st0.sys_resp_corrupt
      | Resp ->
        (match pkt.pk_msg with
         | Msg1 _ _ ->
@@ -306,7 +366,9 @@ let system_step
              st1.sys_resp_pending == None /\
              st1.sys_init_msg1_idx == st0.sys_init_msg1_idx /\
              (* record the index of the Msg1 the responder consumed (any origin) *)
-             st1.sys_resp_msg1_idx == Some idx)
+             st1.sys_resp_msg1_idx == Some idx /\
+             st1.sys_init_corrupt == st0.sys_init_corrupt /\
+             st1.sys_resp_corrupt == st0.sys_resp_corrupt)
         | _ ->
           SMc.responder_step st0.sys_resp (SM.WireEvent pkt.pk_msg) st1.sys_resp out /\
           st1.sys_init == st0.sys_init /\
@@ -315,7 +377,9 @@ let system_step
           st1.sys_init_pending == st0.sys_init_pending /\
           st1.sys_resp_pending == st0.sys_resp_pending /\
           st1.sys_init_msg1_idx == st0.sys_init_msg1_idx /\
-          st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx)))
+          st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx /\
+          st1.sys_init_corrupt == st0.sys_init_corrupt /\
+          st1.sys_resp_corrupt == st0.sys_resp_corrupt)))
 
   | SM.LocalEvent (ActInject m) ->
     attacker_can_inject st0.sys_net m /\
@@ -328,7 +392,20 @@ let system_step
     st1.sys_resp_pending == st0.sys_resp_pending /\
     st1.sys_init_msg1_idx == st0.sys_init_msg1_idx /\
     st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx /\
+    st1.sys_init_corrupt == st0.sys_init_corrupt /\
+    st1.sys_resp_corrupt == st0.sys_resp_corrupt /\
     out == empty_output
+
+  (* DYNAMIC COMPROMISE.  The attacker compromises one role: the ONLY change is
+     that role's persistent compromise flag.  Both endpoint states, the network,
+     the RNG registry, both pending draws, both run-link indices and the output
+     are literally unchanged (`st1 == { st0 with sys_*_corrupt = true }` pins
+     every other field), so corruption can never be a disguised protocol step. *)
+  | SM.LocalEvent (ActCorrupt who) ->
+    out == empty_output /\
+    (match who with
+     | Init -> st1 == { st0 with sys_init_corrupt = true }
+     | Resp -> st1 == { st0 with sys_resp_corrupt = true })
 
   | _ -> False)
 
@@ -397,6 +474,61 @@ let lemma_system_initial_valid (a b:principal)
   : Lemma (ensures SM.valid_state (system_state_machine a b)
                      (system_state_machine a b).SM.sm_initial_state)
 = SM.lemma_initial_state_valid (system_state_machine a b)
+
+(** ── Dynamic compromise is pure compromise metadata ──────────────────────────
+
+    A legal `ActCorrupt` step changes NOTHING except the target role's persistent
+    compromise flag: both endpoint states, the network, the RNG registry, both
+    pending draws, both run-link indices and the step output are identical before
+    and after.  So compromise can never smuggle in a protocol step, a packet, or
+    an output — it only records that the attacker now holds that role's state. *)
+let lemma_corrupt_step_changes_only_compromise_metadata
+  (st0 st1:system_state) (who:endpoint_id) (out:sys_output)
+  : Lemma
+    (requires system_step st0 (SM.LocalEvent (ActCorrupt who)) st1 out)
+    (ensures
+      st1.sys_init == st0.sys_init /\
+      st1.sys_resp == st0.sys_resp /\
+      st1.sys_net == st0.sys_net /\
+      st1.sys_rng == st0.sys_rng /\
+      st1.sys_init_pending == st0.sys_init_pending /\
+      st1.sys_resp_pending == st0.sys_resp_pending /\
+      st1.sys_init_msg1_idx == st0.sys_init_msg1_idx /\
+      st1.sys_resp_msg1_idx == st0.sys_resp_msg1_idx /\
+      corrupt_flag st1 who == true /\
+      (* the OTHER role's compromise flag is untouched *)
+      (who == Init ==> st1.sys_resp_corrupt == st0.sys_resp_corrupt) /\
+      (who == Resp ==> st1.sys_init_corrupt == st0.sys_init_corrupt) /\
+      out == empty_output)
+= match who with Init -> () | Resp -> ()
+
+(** Compromise flags are PERSISTENT: no step of the composed system ever clears
+    one.  (Read off every branch of `system_step`: the four protocol/environment
+    actions copy both flags verbatim, and `ActCorrupt` only ever sets one.) *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+let lemma_corruption_monotone
+  (st0 st1:system_state) (ev:sys_event) (out:sys_output)
+  : Lemma
+    (requires system_step st0 ev st1 out)
+    (ensures
+      (st0.sys_init_corrupt ==> st1.sys_init_corrupt) /\
+      (st0.sys_resp_corrupt ==> st1.sys_resp_corrupt))
+= match ev with
+  | SM.LocalEvent (ActRng owner x) -> (match owner with Init -> () | Resp -> ())
+  | SM.LocalEvent (ActCorrupt who) -> (match who with Init -> () | Resp -> ())
+  | SM.LocalEvent ActStart -> ()
+  | SM.LocalEvent (ActInject m) -> ()
+  | SM.LocalEvent (ActDeliver idx dst) ->
+    assert (idx < L.length st0.sys_net);
+    let pkt = L.index st0.sys_net idx in
+    (match dst, pkt.pk_msg with
+     | Init, _ -> ()
+     | Resp, Msg1 _ _ ->
+       (match st0.sys_resp_pending with None -> () | Some _ -> ())
+     | Resp, Msg2 _ _ _ -> ()
+     | Resp, Msg3 _ -> ())
+  | _ -> ()
+#pop-options
 
 #pop-options
 
@@ -636,4 +768,128 @@ let lemma_attacker_run_reaches (a b am:principal) (ash:dh_share) (y:dh_scalar)
             == [ a_pkt_inj am ash; a_pkt_msg2 b am ash y ]);
   assert (system_step (a_s1 a b am ash y) (SM.LocalEvent (ActDeliver 0 Resp))
             (a_s2 a b am ash y) (a_t_deliver a b am ash y).SM.tr_output)
+#pop-options
+
+(** ── Compromised-completion witness (non-vacuity of dynamic compromise) ───────
+
+    `ActCorrupt` is load-bearing, not decorative, and the compromised branch of
+    every completion boundary is genuinely REACHABLE.  The run below is:
+
+      draw x; ActStart (the initiator publishes its own honest Msg1 at index 0);
+      ActCorrupt Resp (the responder's long-term signing state is compromised);
+      ActInject of a FORGED Msg2 that carries an ARBITRARY attacker share `agy`
+      and the responder-key signature the attacker can now produce;
+      ActDeliver of that INJECTED packet to the initiator.
+
+    The delivery is admissible ONLY because `sys_resp_corrupt` is set: with an
+    honest responder, `deliver_origin_ok` would reject the `Injected` origin AND
+    `ideal_completion_link_ok` would demand a run link the responder never
+    established.  The initiator nevertheless reaches `Init_Done`, with the
+    attacker's share as its peer share, while the responder NEVER left
+    `Resp_Start`.  So after compromise a completion is genuinely FORGED: no
+    honest-peer authorization, no matching session, no key secrecy — exactly what
+    the "modulo compromise" security statements allow, and nothing less. *)
+let c_sigB (a b:principal) (x:dh_scalar) (agy:dh_share) : signature =
+  sign b (transcript a (hgx x) agy)
+let c_msg2 (a b:principal) (x:dh_scalar) (agy:dh_share) : dh_message =
+  Msg2 b agy (c_sigB a b x agy)
+let c_pkt2 (a b:principal) (x:dh_scalar) (agy:dh_share) : packet =
+  { pk_msg = c_msg2 a b x agy; pk_origin = Injected }
+
+let c_sigA (a b:principal) (x:dh_scalar) (agy:dh_share) : signature =
+  sign a (transcript b (hgx x) agy)
+let c_msg3 (a b:principal) (x:dh_scalar) (agy:dh_share) : dh_message =
+  Msg3 (c_sigA a b x agy)
+let c_pkt3 (a b:principal) (x:dh_scalar) (agy:dh_share) : packet =
+  { pk_msg = c_msg3 a b x agy; pk_origin = Sent Init }
+
+let c_ist2 (a b:principal) (x:dh_scalar) (agy:dh_share) : endpoint_state =
+  { h_ist1 a b x with
+    ep_phase = Init_Done; ep_peer_share = Some agy;
+    ep_key = Some (dh_agree x agy) }
+
+let c_s0 (a b:principal) : system_state = system_initial a b
+let c_s0x (a b:principal) (x:dh_scalar) : system_state =
+  { c_s0 a b with sys_rng = [ h_dx x ]; sys_init_pending = Some x }
+let c_s1 (a b:principal) (x:dh_scalar) : system_state =
+  { c_s0x a b x with
+    sys_init = h_ist1 a b x; sys_net = [ h_p1 a x ]; sys_init_pending = None;
+    sys_init_msg1_idx = Some 0 }
+let c_s2 (a b:principal) (x:dh_scalar) : system_state =
+  { c_s1 a b x with sys_resp_corrupt = true }
+let c_s3 (a b:principal) (x:dh_scalar) (agy:dh_share) : system_state =
+  { c_s2 a b x with sys_net = [ h_p1 a x; c_pkt2 a b x agy ] }
+let c_s4 (a b:principal) (x:dh_scalar) (agy:dh_share) : system_state =
+  { c_s3 a b x agy with
+    sys_init = c_ist2 a b x agy;
+    sys_net = [ h_p1 a x; c_pkt2 a b x agy; c_pkt3 a b x agy ] }
+
+let c_t_rng (a b:principal) (x:dh_scalar) : system_transition = {
+  SM.tr_event      = SM.LocalEvent (ActRng Init x);
+  SM.tr_next_state = c_s0x a b x;
+  SM.tr_output     = empty_output;
+}
+let c_t_start (a b:principal) (x:dh_scalar) : system_transition = {
+  SM.tr_event      = SM.LocalEvent ActStart;
+  SM.tr_next_state = c_s1 a b x;
+  SM.tr_output     = { SM.so_wire_outputs = [ Msg1 a (hgx x) ];
+                       SM.so_local_outputs = [] };
+}
+let c_t_corrupt (a b:principal) (x:dh_scalar) : system_transition = {
+  SM.tr_event      = SM.LocalEvent (ActCorrupt Resp);
+  SM.tr_next_state = c_s2 a b x;
+  SM.tr_output     = empty_output;
+}
+let c_t_inject (a b:principal) (x:dh_scalar) (agy:dh_share) : system_transition = {
+  SM.tr_event      = SM.LocalEvent (ActInject (c_msg2 a b x agy));
+  SM.tr_next_state = c_s3 a b x agy;
+  SM.tr_output     = empty_output;
+}
+let c_t_deliver (a b:principal) (x:dh_scalar) (agy:dh_share) : system_transition = {
+  SM.tr_event      = SM.LocalEvent (ActDeliver 1 Init);
+  SM.tr_next_state = c_s4 a b x agy;
+  SM.tr_output     = { SM.so_wire_outputs  = [ c_msg3 a b x agy ];
+                       SM.so_local_outputs = [ SessionEstablished b (dh_agree x agy) ] };
+}
+
+let corrupt_run (a b:principal) (x:dh_scalar) (agy:dh_share) : list system_transition =
+  [ c_t_rng a b x; c_t_start a b x; c_t_corrupt a b x;
+    c_t_inject a b x agy; c_t_deliver a b x agy ]
+
+#push-options "--fuel 10 --ifuel 2 --z3rlimit 10"
+let lemma_corrupt_run_reaches (a b:principal) (x:dh_scalar) (agy:dh_share)
+  : Lemma
+      (ensures (
+        SM.trace_reaches (system_state_machine a b) (system_initial a b)
+          (corrupt_run a b x agy) (c_s4 a b x agy) /\
+        (* the responder was compromised, and never ran at all *)
+        (c_s4 a b x agy).sys_resp_corrupt == true /\
+        (c_s4 a b x agy).sys_init_corrupt == false /\
+        (c_s4 a b x agy).sys_resp.ep_phase == Resp_Start /\
+        (* yet the initiator COMPLETED, on an INJECTED, forged Msg2 ... *)
+        (c_s4 a b x agy).sys_init.ep_phase == Init_Done /\
+        (L.index (c_s4 a b x agy).sys_net 1).pk_origin == Injected /\
+        (* ... with the ATTACKER's share as its peer share and session key *)
+        (c_s4 a b x agy).sys_init.ep_peer_share == Some agy /\
+        (c_s4 a b x agy).sys_init.ep_key == Some (dh_agree x agy) /\
+        (* and no run link whatsoever *)
+        (c_s4 a b x agy).sys_resp_msg1_idx == None))
+= let gx = hgx x in
+  reveal_opaque (`%ideal_completion_link_ok) ideal_completion_link_ok;
+  lemma_sign_verify b (transcript a gx agy);
+  assert (system_step (c_s0 a b) (SM.LocalEvent (ActRng Init x)) (c_s0x a b x)
+            (c_t_rng a b x).SM.tr_output);
+  assert (append_honest [] Init [ Msg1 a gx ] == [ h_p1 a x ]);
+  assert (system_step (c_s0x a b x) (SM.LocalEvent ActStart) (c_s1 a b x)
+            (c_t_start a b x).SM.tr_output);
+  assert (system_step (c_s1 a b x) (SM.LocalEvent (ActCorrupt Resp)) (c_s2 a b x)
+            (c_t_corrupt a b x).SM.tr_output);
+  assert (L.append [ h_p1 a x ] [ c_pkt2 a b x agy ] == [ h_p1 a x; c_pkt2 a b x agy ]);
+  assert (system_step (c_s2 a b x) (SM.LocalEvent (ActInject (c_msg2 a b x agy)))
+            (c_s3 a b x agy) (c_t_inject a b x agy).SM.tr_output);
+  assert (L.index (c_s3 a b x agy).sys_net 1 == c_pkt2 a b x agy);
+  assert (append_honest [ h_p1 a x; c_pkt2 a b x agy ] Init [ c_msg3 a b x agy ]
+            == [ h_p1 a x; c_pkt2 a b x agy; c_pkt3 a b x agy ]);
+  assert (system_step (c_s3 a b x agy) (SM.LocalEvent (ActDeliver 1 Init))
+            (c_s4 a b x agy) (c_t_deliver a b x agy).SM.tr_output)
 #pop-options

@@ -112,11 +112,12 @@ consumed concrete scalars to their corresponding symbolic terms.  Only
 `ActRng` runs `rng_run`/`mk_rand`.  Start and responder-response transitions
 consume an already generated term and never invent a symbolic representative.
 
-`eph_label = DY.Core.Label.secret`, and
-`lemma_eph_label_private` proves that label is never corrupt.  The scalar term
-itself is never sent; only `share_term scalar = dh_pk scalar` is sent.  This is
-the precise ideal claim: generation is fresh, private, role-owned, and
-non-reusing by construction.  It is not a computational claim about an
+`eph_label who = role_label who`, where `role_label` is the role's
+`principal_state_label`.  The scalar is private while that role remains
+uncorrupted and becomes compromise-exposed through the role's current
+`SetState`; only `share_term scalar = dh_pk scalar` is sent directly.  This is
+the precise ideal claim: generation is fresh, role-owned, non-reusing, and
+private modulo state compromise.  It is not a computational claim about an
 external RNG.
 
 ## 3. Fixed role identities
@@ -259,7 +260,7 @@ Established here:
 
 * concrete scalar freshness/no-reuse and role provenance in every legal
   composed step;
-* one secret-labelled DY `RandGen` for each concrete ideal RNG draw;
+* one role-state-labelled DY `RandGen` for each concrete ideal RNG draw;
 * fixed distinct role principals for DY key/event attribution;
 * exact role-key, nonce-position, transcript, share, and delivery provenance
   for honest signature-bearing packets;
@@ -272,6 +273,39 @@ Not claimed here:
 * refinement from an arbitrary raw-byte network/RNG runtime to the ideal
   composed environment;
 * a final authentication or session-key-secrecy theorem under corruption.
+
+## 7b. Dynamic compromise in the lift
+
+`Sys.sys_action` has a fifth constructor, `ActCorrupt who`, and `sym_extend` has
+a matching seventh case.  The lift handles it like any other action:
+
+```fstar
+| SM.LocalEvent (ActCorrupt who) ->
+  let sh = (match who with Init -> p0.ps_init | Resp -> p0.ps_resp) in
+  let (_, tr') = corrupt_run sh.sh_state_pos p0.ps_trace in
+  Some (tr', p0.ps_init, p0.ps_resp, p0.ps_net, p0.ps_rng)
+```
+
+* **Deterministic**: the corrupted position is READ OFF the target role's own
+  shadow (`sh_state_pos`, its current-state pointer), never supplied by a caller.
+* **Shadow-preserving**: no key material, packet or RNG entry changes; only the
+  trace records the compromise (`lemma_lift_step_corrupt` therefore discharges
+  every `wf` component by pure trace growth).
+* **State-changing actions now also write a `SetState`.**  Setup, `ActRng`,
+  `ActStart`, the responder's Msg1 delivery and the initiator's Msg2 delivery
+  each end with `set_state` storing the acting role's refreshed snapshot, and the
+  lift moves that role's pointer to the new entry (positions n+1 / n+2 / n+3 as
+  listed in `SYMBOLIC_SECURITY.md` §0.2).  The responder's Msg3 completion writes
+  none: it changes its phase, not its key material.
+* **Fixed setup positions** are named, not hard-coded numerals:
+  `role_ltk_pos Init = 0`, `role_setup_state_pos Init = 2`,
+  `role_ltk_pos Resp = 3`, `role_setup_state_pos Resp = 5`.
+* `wf` gained one conjunct, `state_state_coherent`, pinning each role's pointer
+  to a `SetState` of that role holding EXACTLY its current snapshot — this is
+  what makes `ActCorrupt` hand the attacker exactly the live material.
+
+The one-step lift `lemma_lift_step` and the whole-execution lift are otherwise
+unchanged, and still take **no caller-provided symbolic witness**.
 
 ## 8. Verification
 

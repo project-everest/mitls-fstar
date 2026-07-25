@@ -13,51 +13,58 @@ module DH.Sample.Symbolic.Security
 
     * DH.Sample.Symbolic.Lifting — every concrete execution of the composed
       system lifts to an EXACT symbolic product execution;
-    * DH.Sample.Symbolic.Invariant — `ideal_product_invariant` holds initially
-      and is preserved by every `product_step`, hence at every reachable state,
-      with NO hygiene premise.
+    * DH.Sample.Symbolic.Invariant — `product_invariant` (coherence `wf` +
+      DY* `trace_invariant` + COMPROMISE COHERENCE) holds initially and is
+      preserved by every `product_step`, hence at every reachable state, with NO
+      hygiene premise.
 
-  This module turns `ideal_product_invariant` into real, non-tautological
-  security guarantees.  Everything below is derived FROM the installed invariant
-  and the DY* CORE crypto/label/attacker API; nothing assumes the desired
-  authentication event, a matching session, or non-knowledge.
+  This module turns `product_invariant` into real, non-tautological security
+  guarantees, MODULO DYNAMIC COMPROMISE.  Everything below is derived FROM the
+  installed invariant and the DY* CORE crypto/label/attacker API; nothing assumes
+  the desired authentication event, a matching session, or non-knowledge.
 
   ────────────────────────────────────────────────────────────────────────────
   What is a genuine security consequence here (and what is NOT assumed)
   ────────────────────────────────────────────────────────────────────────────
   The headline theorems quantify over ARBITRARY reachable product executions —
   `product_execution (product_sm a b) (product_initial a b) pt pfinal` — under
-  exactly three explicitly named boundaries, and NOTHING else:
+  exactly two explicitly named boundaries, and NOTHING else:
 
-    (I)   the installed IDEAL PROFILE `ideal_product_invariant` (coherence `wf`
-          + `trace_invariant` + no `Corrupt` trace entry), which
-          DH.Sample.Symbolic.Invariant proves holds at every reachable state;
-    (N)   NO-CORRUPTION: a conjunct of the ideal profile (`product_no_corruption`
-          = `trace_has_no_corrupt`);
-    (E)   the ideal ENVIRONMENT boundaries of `DH.Sample.System`: the packet
-          origin metadata (`deliver_origin_ok`, restricting the two COMPLETION
-          messages to an honest sender) AND the run/session-link completion
-          boundary (`ideal_completion_link_ok`, requiring sender/receiver flights
-          linked to the SAME Msg1 index) — see dh-sample/SYMBOLIC_SECURITY.md
-          §"Ideal boundaries".  Msg1 delivery is NOT restricted: an injected Msg1
-          may drive the responder to `Resp_Wait3`, for which no honest secrecy or
-          agreement is claimed.
+    (I)   the installed `product_invariant` (coherence `wf` + `trace_invariant` +
+          `corruption_coherent`), which DH.Sample.Symbolic.Invariant proves holds
+          at every reachable state;
+    (E)   the ENVIRONMENT boundaries of `DH.Sample.System`: the packet origin
+          metadata (`deliver_origin_ok`, restricting the two COMPLETION messages
+          to an honest sender WHILE THE SIGNING ROLE IS UNCOMPROMISED) AND the
+          run/session-link completion boundary (`ideal_completion_link_ok`,
+          requiring sender/receiver flights linked to the SAME Msg1 index, again
+          only while the signing role is uncompromised) — see
+          dh-sample/SYMBOLIC_SECURITY.md §"Boundaries".  Msg1 delivery is NOT
+          restricted: an injected Msg1 may drive the responder to `Resp_Wait3`,
+          for which no honest secrecy or agreement is claimed.
+
+  There is NO no-corruption assumption.  `ActCorrupt` is a real attacker action;
+  after it, the corresponding role's long-term key label is genuinely corrupt,
+  the DY* signature `bytes_invariant` offers its ATTACKER disjunct, and every
+  statement below degrades EXPLICITLY to "... OR that role's signing state is
+  compromised" — never silently.
 
   The authentication core does NOT rest on the origin metadata alone.  Per the
   audit, "packet-origin metadata cannot itself be the whole authentication
   proof": the actual authorization is extracted with the DY* CORE trace
   invariant — a signature that appears (inside a `MsgSent`) on a
-  `trace_invariant` trace is `bytes_invariant`, and its signing key is the fixed
-  role long-term key carrying the DY* bottom (`secret`) label, which never flows
-  to `public`; hence the honest (`dh_sign_pred`) disjunct of the signature bytes
-  invariant holds, pinning the EXACT prior authorization `Event` of the signer.
-  The completion identity/share agreement is then DERIVED from the run link (the
-  two Msg1-index invariants + immutable packet provenance), never stated by a
-  guard.
+  `trace_invariant` trace is `bytes_invariant`, and its signing key carries the
+  signer role's COMPROMISE-SENSITIVE state label, so the signature invariant
+  yields EITHER the honest (`dh_sign_pred`) disjunct — pinning the EXACT prior
+  authorization `Event` of the signer — OR "that role's key flows to public",
+  i.e. exactly that role's compromise.  The completion identity/share agreement
+  of an uncompromised run is then DERIVED from the run link (the two Msg1-index
+  invariants + immutable packet provenance), never stated by a guard.
 
-  A separate honest-run witness (`lemma_secure_honest_run`) shows every headline
-  is non-vacuous; `lemma_attacker_injected_msg1_nonvacuous` shows the injected-Msg1
-  attack is a genuine reachable execution that cannot complete.
+  Non-vacuity witnesses (Parts 6–8) show: an honest run with NO compromise where
+  every honest branch and both key-secrecy statements hold; the injected-Msg1
+  attack; and a genuine post-compromise FORGED completion where the honest branch
+  is unavailable and only the compromise disjunct carries the statement.
 *)
 
 module B    = DY.Core.Bytes
@@ -92,22 +99,31 @@ open DH.Sample.Symbolic.Invariant
     exact prior authorization event.  This is the DY* CORE EUF-CMA idealization,
     NOT the toy digest. *)
 
-(** A term carrying the DY* bottom (`secret`) label never flows to `public`:
-    `flow_to_public_eq` turns flow-to-public into corruption, and `secret` is
-    unconditionally non-corrupt (`is_corrupt_secret`). *)
+(** A role's long-term signing key carries that role's COMPROMISE-SENSITIVE state
+    label (`Terms.role_label`), so "the key flows to `public`" is EXACTLY "that
+    role's state has been corrupted" (`flow_to_public_eq`).  This replaces the
+    old unconditional `L.secret` reasoning, which asserted that a role key can
+    never leak and therefore could not express dynamic compromise at all. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
-let lemma_secret_not_public (tr:TB.trace)
-  : Lemma (ensures ~(L.secret `L.can_flow tr` L.public))
-= ()
-
-(** The two fixed role long-term signing keys are secret-labelled: a `RandGen`
-    with the `secret` label at the key's position gives its `get_label`, which is
-    `L.secret`, so it never flows to public. *)
-let lemma_ltk_not_public (tr:TB.trace) (pos:nat)
+let lemma_ltk_label (tr:TB.trace) (who:endpoint_id)
   : Lemma
-    (requires TB.entry_at tr pos (T.RandGen ltk_usage ltk_label ltk_len))
-    (ensures ~((B.get_label #dh_sample_crypto_usages tr (ltk_term pos)) `L.can_flow tr` L.public))
-= lemma_rand_usage_label_of_entry tr ltk_usage ltk_label ltk_len pos
+    (requires
+      TB.entry_at tr (role_ltk_pos who) (T.RandGen ltk_usage (ltk_label who) ltk_len))
+    (ensures
+      B.get_label #dh_sample_crypto_usages tr (ltk_term (role_ltk_pos who))
+        == role_label who)
+= lemma_rand_usage_label_of_entry tr ltk_usage (ltk_label who) ltk_len (role_ltk_pos who)
+
+let lemma_ltk_public_iff_corrupt (tr:TB.trace) (who:endpoint_id)
+  : Lemma
+    (requires
+      TB.entry_at tr (role_ltk_pos who) (T.RandGen ltk_usage (ltk_label who) ltk_len))
+    (ensures
+      ((B.get_label #dh_sample_crypto_usages tr (ltk_term (role_ltk_pos who)))
+         `L.can_flow tr` L.public
+       <==> L.is_corrupt tr (role_label who)))
+= lemma_ltk_label tr who;
+  L.flow_to_public_eq tr (role_label who)
 #pop-options
 
 (** The subterms of a `bytes_invariant` signature term are themselves
@@ -126,31 +142,45 @@ let lemma_sign_parts_invariant (tr:TB.trace) (sk nonce msg:BT.bytes)
   reveal_opaque (`%B.bytes_invariant) (B.bytes_invariant #dh_sample_crypto_invariants)
 #pop-options
 
-(** The EUF-CMA extraction, via the DY* CORE forward lemma `bytes_invariant_verify`.
-    A signature `sig_term (ltk_term pos) nonce msg` that is `bytes_invariant` on
-    `tr`, whose signing key is the fixed role long-term key recorded (secret) at
-    `pos`, must satisfy the honest `dh_sign_pred` disjunct — the attacker
-    disjunct (`get_signkey_label (vk sk) can_flow public`) reduces to the signing
-    key flowing to `public`, which is excluded because the key is secret.  This
-    recovers the signer's EXACT prior authorization event; the toy digest plays
-    no part. *)
+(** ── The EUF-CMA extraction, MODULO COMPROMISE ───────────────────────────────
+
+    Via the DY* CORE forward lemma `bytes_invariant_verify`: a signature
+    `sig_term (ltk_term (role_ltk_pos who)) nonce msg` that is `bytes_invariant`
+    on `tr` satisfies EITHER
+
+      * the HONEST disjunct — `dh_sign_pred` holds, pinning the signer role's
+        EXACT prior authorization `Event` with content EXACTLY `msg`; OR
+      * the ATTACKER disjunct — the signing key's label flows to `public`, which
+        (the key being labelled with the role's state label) is EXACTLY "that
+        role's state has been corrupted".
+
+    Before this change the attacker disjunct was refuted outright (the key was
+    unconditionally `L.secret`).  Under dynamic compromise it is a REAL
+    possibility, and it is exactly the escape hatch every authentication theorem
+    below carries as "... OR the peer's signing state is compromised".  The toy
+    concrete digest plays no part in either disjunct. *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
-let lemma_ltk_sig_authorized (tr:TB.trace) (pos:nat) (nonce msg:BT.bytes)
+let lemma_ltk_sig_authorized
+  (tr:TB.trace) (who:endpoint_id) (nonce msg:BT.bytes)
   : Lemma
     (requires
-      TB.entry_at tr pos (T.RandGen ltk_usage ltk_label ltk_len) /\
-      B.bytes_invariant #dh_sample_crypto_invariants tr (sig_term (ltk_term pos) nonce msg))
-    (ensures dh_sign_pred_fun tr ltk_usage (vkey_term (ltk_term pos)) msg)
-= let sk = ltk_term pos in
+      TB.entry_at tr (role_ltk_pos who) (T.RandGen ltk_usage (ltk_label who) ltk_len) /\
+      B.bytes_invariant #dh_sample_crypto_invariants tr
+        (sig_term (ltk_term (role_ltk_pos who)) nonce msg))
+    (ensures
+      dh_sign_pred_fun tr ltk_usage (vkey_term (ltk_term (role_ltk_pos who))) msg \/
+      L.is_corrupt tr (role_label who))
+= let pos = role_ltk_pos who in
+  let sk = ltk_term pos in
   lemma_sign_parts_invariant tr sk nonce msg;
-  lemma_rand_usage_label_of_entry tr ltk_usage ltk_label ltk_len pos;
+  lemma_rand_usage_label_of_entry tr ltk_usage (ltk_label who) ltk_len pos;
   B.bytes_invariant_vk #dh_sample_crypto_invariants tr sk;
   B.has_signkey_usage_vk #dh_sample_crypto_usages tr sk ltk_usage;
   B.verify_sign sk nonce msg;
   B.bytes_invariant_verify #dh_sample_crypto_invariants tr (vkey_term sk) ltk_usage msg
     (sig_term sk nonce msg);
   B.get_signkey_label_vk #dh_sample_crypto_usages tr sk;
-  lemma_ltk_not_public tr pos
+  lemma_ltk_public_iff_corrupt tr who
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
@@ -159,11 +189,12 @@ let lemma_ltk_sig_authorized (tr:TB.trace) (pos:nat) (nonce msg:BT.bytes)
 
     For ANY reachable product state under `product_invariant`, an honestly-sent
     (`Sent Resp` Msg2 / `Sent Init` Msg3) packet's SIGNATURE — a genuine `Sign`
-    term on the shared trace — pins the signer's EXACT prior authorization event.
-    This is the crypto core of authentication: the origin metadata only tells us
-    the shadow is a genuine structured `Sign` (never a literal); the actual
-    authorization is recovered from the trace invariant, NOT from the origin and
-    NOT from the toy digest. *)
+    term on the shared trace — yields the signer's EXACT prior authorization
+    event OR corruption of that signer's state label.  This is the crypto core
+    of authentication modulo compromise: origin metadata only tells us the
+    shadow is a genuine structured `Sign` (never a literal); the authorization
+    or compromise alternative is recovered from the trace invariant, NOT from
+    the origin and NOT from the toy digest. *)
 
 (** A `MsgSent` term on a `trace_invariant` trace is `bytes_invariant`
     (`msg_sent_on_network_are_publishable` + `is_publishable` ⇒ `bytes_invariant`). *)
@@ -209,21 +240,25 @@ let lemma_msg3_sig_bytes_invariant (tr:TB.trace) (sgt:BT.bytes)
     disjunct, the initiator key only the initiator disjunct. *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 10"
 let lemma_vkey_positions_distinct ()
-  : Lemma (ensures vkey_term (ltk_term 0) =!= vkey_term (ltk_term 2))
+  : Lemma (ensures
+      vkey_term (ltk_term (role_ltk_pos Init)) =!= vkey_term (ltk_term (role_ltk_pos Resp)))
 = normalize_term_spec B.vk;
-  assert (vkey_term (ltk_term 0) == BT.Vk (BT.Rand ltk_len 0));
-  assert (vkey_term (ltk_term 2) == BT.Vk (BT.Rand ltk_len 2))
+  assert (vkey_term (ltk_term (role_ltk_pos Init))
+          == BT.Vk (BT.Rand ltk_len (role_ltk_pos Init)));
+  assert (vkey_term (ltk_term (role_ltk_pos Resp))
+          == BT.Vk (BT.Rand ltk_len (role_ltk_pos Resp)))
 #pop-options
 
-(** NETWORK RESPONDER AUTHENTICATION.  In any reachable state under
-    `product_invariant`, every honestly-sent (`Sent Resp`) Msg2 packet's shadow
-    is the responder's genuine `Sign` term over an exact transcript `(partner,
-    gx, gy)`, and the RESPONDER role principal has triggered
-    `tag_responder_respond` with EXACTLY that transcript on the trace.  The gy
-    field is a trace-recorded honest DH share.  Derived purely from the trace
-    invariant + `dh_sign_pred`; the origin only fixes that the shadow is a
-    structured `Sign`, never a literal. *)
-#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+(** NETWORK RESPONDER AUTHENTICATION, MODULO COMPROMISE.  In any reachable state
+    under `product_invariant`, every honestly-sent (`Sent Resp`) Msg2 packet's
+    shadow is the responder's genuine `Sign` term over an exact transcript
+    `(partner, gx, gy)`, its `gy` field is a trace-recorded honest DH share, and
+    EITHER the RESPONDER role principal has triggered `tag_responder_respond` with
+    EXACTLY that transcript on the trace, OR the responder's signing state has
+    been corrupted.  Derived purely from the trace invariant + `dh_sign_pred` (and
+    its attacker branch); the origin only fixes that the shadow is a structured
+    `Sign`, never a literal. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_net_responder_authorized (p:product_state) (j:nat)
   : Lemma
     (requires
@@ -238,9 +273,10 @@ let lemma_net_responder_authorized (p:product_state) (j:nat)
        (match pk.pk_msg, ne.ne_smsg, ne.ne_auth with
         | Msg2 b _ _, SMsg2 b_t gy_t sig_t, RespAuth partner gx_t ->
           b_t == term_of_principal b /\
-          (exists (s:BT.bytes). gy_t == share_term s /\ scalar_recorded p.ps_trace s) /\
-          TB.event_triggered p.ps_trace resp_dy_principal tag_responder_respond
-            (transcript_term partner gx_t gy_t)
+          (exists (s:BT.bytes). gy_t == share_term s /\ scalar_recorded_for Resp p.ps_trace s) /\
+          (TB.event_triggered p.ps_trace resp_dy_principal tag_responder_respond
+             (transcript_term partner gx_t gy_t) \/
+           role_state_corrupt p Resp)
         | _, _, _ -> False))))
 = let c = p.ps_sys in
   let tr = p.ps_trace in
@@ -257,19 +293,28 @@ let lemma_net_responder_authorized (p:product_state) (j:nat)
      lemma_msg2_sig_bytes_invariant tr b_t gy_t sig_t;
      let nonce = signonce_term (auth_nonce_pos ne.ne_pos) in
      let transcript = transcript_term partner gx_t gy_t in
-     assert (resp_ltk == ltk_term 2);
-     assert (sig_t == sig_term (ltk_term 2) nonce transcript);
-     lemma_ltk_sig_authorized tr 2 nonce transcript;
-     lemma_vkey_positions_distinct ()
+     assert (resp_ltk == ltk_term (role_ltk_pos Resp));
+     assert (TB.entry_at tr (role_ltk_pos Resp)
+               (T.RandGen ltk_usage (ltk_label Resp) ltk_len));
+     assert (sig_t == sig_term (ltk_term (role_ltk_pos Resp)) nonce transcript);
+     lemma_ltk_sig_authorized tr Resp nonce transcript;
+     eliminate
+         dh_sign_pred_fun tr ltk_usage (vkey_term (ltk_term (role_ltk_pos Resp))) transcript
+       \/ L.is_corrupt tr (role_label Resp)
+     returns
+       (TB.event_triggered tr resp_dy_principal tag_responder_respond transcript \/
+        role_state_corrupt p Resp)
+     with _. lemma_vkey_positions_distinct ()
+     and  _. ()
    | _, _, _ -> ())
 #pop-options
 
-(** NETWORK INITIATOR AUTHENTICATION.  Symmetric: every honestly-sent
-    (`Sent Init`) Msg3 packet's shadow is the initiator's genuine `Sign` term
-    over an exact transcript `(partner, gx, gy)`, and the INITIATOR role
-    principal has triggered `tag_initiator_finish` with EXACTLY that transcript
-    on the trace. *)
-#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+(** NETWORK INITIATOR AUTHENTICATION, MODULO COMPROMISE.  Symmetric: every
+    honestly-sent (`Sent Init`) Msg3 packet's shadow is the initiator's genuine
+    `Sign` term over an exact transcript, and EITHER the INITIATOR role principal
+    triggered `tag_initiator_finish` with EXACTLY that transcript, OR the
+    initiator's signing state has been corrupted. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_net_initiator_authorized (p:product_state) (j:nat)
   : Lemma
     (requires
@@ -283,7 +328,8 @@ let lemma_net_initiator_authorized (p:product_state) (j:nat)
        (match ne.ne_smsg, ne.ne_auth with
         | SMsg3 sig_t, InitAuth partner gx_t gy_t ->
           TB.event_triggered p.ps_trace init_dy_principal tag_initiator_finish
-            (transcript_term partner gx_t gy_t)
+            (transcript_term partner gx_t gy_t) \/
+          role_state_corrupt p Init
         | _, _ -> False))))
 = let c = p.ps_sys in
   let tr = p.ps_trace in
@@ -300,10 +346,19 @@ let lemma_net_initiator_authorized (p:product_state) (j:nat)
      lemma_msg3_sig_bytes_invariant tr sig_t;
      let nonce = signonce_term (auth_nonce_pos ne.ne_pos) in
      let transcript = transcript_term partner gx_t gy_t in
-     assert (init_ltk == ltk_term 0);
-     assert (sig_t == sig_term (ltk_term 0) nonce transcript);
-     lemma_ltk_sig_authorized tr 0 nonce transcript;
-     lemma_vkey_positions_distinct ()
+     assert (init_ltk == ltk_term (role_ltk_pos Init));
+     assert (TB.entry_at tr (role_ltk_pos Init)
+               (T.RandGen ltk_usage (ltk_label Init) ltk_len));
+     assert (sig_t == sig_term (ltk_term (role_ltk_pos Init)) nonce transcript);
+     lemma_ltk_sig_authorized tr Init nonce transcript;
+     eliminate
+         dh_sign_pred_fun tr ltk_usage (vkey_term (ltk_term (role_ltk_pos Init))) transcript
+       \/ L.is_corrupt tr (role_label Init)
+     returns
+       (TB.event_triggered tr init_dy_principal tag_initiator_finish transcript \/
+        role_state_corrupt p Init)
+     with _. lemma_vkey_positions_distinct ()
+     and  _. ()
    | _, _ -> ())
 #pop-options
 
@@ -313,7 +368,8 @@ let lemma_net_initiator_authorized (p:product_state) (j:nat)
 
     The network theorems above are about packets; the reachability deliverable is
     about ENDPOINT COMPLETION.  We install a small extra invariant, conjoined
-    with the ideal profile, recording — for a COMPLETED endpoint — BOTH:
+    with the compromise-aware product invariant, recording — for a COMPLETED
+    endpoint — BOTH:
 
       * the CONCRETE full matching of the two endpoints' identities and both DH
         shares — DERIVED at completion from the run link `sys_resp_msg1_idx ==
@@ -519,12 +575,17 @@ let resp_shadow_link (p:product_state) : prop =
     (answering an injected Msg1) does not satisfy honest peer-share secrecy. *)
 let responder_peer_share_invariant (p:product_state) : prop =
   (p.ps_sys.sys_resp.ep_phase == Resp_Done) ==>
-    Some? p.ps_init.sh_scalar /\
-    scalar_recorded p.ps_trace (Some?.v p.ps_init.sh_scalar) /\
-    p.ps_resp.sh_peer_share ==
-      Some (share_term (Some?.v p.ps_init.sh_scalar))
+    (* MODULO COMPROMISE: if the INITIATOR's signing state is compromised, the
+       attacker can forge the Msg3 that completes the responder, so the responder
+       may have completed on an attacker-chosen peer share. *)
+    p.ps_sys.sys_init_corrupt \/
+    (Some? p.ps_init.sh_scalar /\
+     scalar_recorded_for Init p.ps_trace (Some?.v p.ps_init.sh_scalar) /\
+     p.ps_resp.sh_peer_share ==
+       Some (share_term (Some?.v p.ps_init.sh_scalar)))
 
-(** Initiator completion.  Under the ideal profile, once the initiator completes:
+(** Initiator completion.  Under the compromise-aware security invariant, once
+    the initiator completes:
       * the CONCRETE full matching of identities and both shares, DERIVED (not
         stated) from the run link: the responder's recorded consumed-Msg1 index
         equals the initiator's own-Msg1 index, so (by `init_msg1_pkt_invariant` +
@@ -546,6 +607,10 @@ let responder_peer_share_invariant (p:product_state) : prop =
     completed initiator endpoint used for key agreement. *)
 let init_completed_auth (p:product_state) : prop =
   (p.ps_sys.sys_init.ep_phase == Init_Done) ==>
+    (* MODULO COMPROMISE: a compromised RESPONDER signing state lets the attacker
+       forge the Msg2 that completes this initiator, so nothing below is claimed
+       in that case. *)
+    p.ps_sys.sys_resp_corrupt \/
     (let ini = p.ps_sys.sys_init in
      let res = p.ps_sys.sys_resp in
      (res.ep_phase == Resp_Wait3 \/ res.ep_phase == Resp_Done) /\
@@ -557,20 +622,22 @@ let init_completed_auth (p:product_state) : prop =
      Some? p.ps_resp.sh_scalar /\
      Some?.v p.ps_init.sh_peer_share == share_term (Some?.v p.ps_resp.sh_scalar) /\
      (exists (s:BT.bytes).
-        Some?.v p.ps_init.sh_peer_share == share_term s /\ scalar_recorded p.ps_trace s) /\
+        Some?.v p.ps_init.sh_peer_share == share_term s /\
+        scalar_recorded_for Resp p.ps_trace s) /\
      TB.event_triggered p.ps_trace resp_dy_principal tag_responder_respond
        (transcript_term (term_of_principal ini.ep_me)
                         (Some?.v p.ps_resp.sh_peer_share)
                         (Some?.v p.ps_init.sh_peer_share)))
 
 (** Responder completion.  Once the responder completes:
-      * the CONCRETE full matching of identities and both shares, DERIVED (not
-        stated) from the run link at the Msg3 completion plus the persisted
-        initiator completion: `id_link_invariant` gives `ini.ep_peer == Some
-        res.ep_me`; the run link + the two Msg1 packet invariants give
-        `ini.ep_my_share == res.ep_peer_share`; and the initiator's own completion
-        (`init_completed_auth`, available because the guard requires `Init_Done`)
-        gives `ini.ep_peer_share == res.ep_my_share`; and
+      * modulo INITIATOR compromise, the concrete identity and initiator-share
+        agreement derived from the run link at Msg3: `id_link_invariant` gives
+        `ini.ep_peer == Some res.ep_me`, while the two Msg1 packet invariants give
+        `ini.ep_my_share == res.ep_peer_share`.  Equality between the initiator's
+        received share and this responder's own share additionally requires the
+        RESPONDER to be uncorrupted; the completed-session concrete-agreement
+        theorem below states that two-sided fact modulo EITHER role's compromise;
+        and
       * a CONNECTED initiator authorization event — the initiator role principal
         triggered `tag_initiator_finish` over a transcript whose
           - identity component is EXACTLY `term_of_principal res.ep_me` (this
@@ -584,12 +651,20 @@ let init_completed_auth (p:product_state) : prop =
     all three transcript components — none is left unconnected. *)
 let resp_completed_auth (p:product_state) : prop =
   (p.ps_sys.sys_resp.ep_phase == Resp_Done) ==>
+    (* MODULO COMPROMISE: a compromised INITIATOR signing state lets the attacker
+       forge the Msg3 that completes this responder. *)
+    p.ps_sys.sys_init_corrupt \/
     (let ini = p.ps_sys.sys_init in
      let res = p.ps_sys.sys_resp in
      ini.ep_phase == Init_Done /\
      ini.ep_peer == Some res.ep_me /\
      ini.ep_my_share == res.ep_peer_share /\
-     ini.ep_peer_share == res.ep_my_share /\
+     (* NOTE the initiator's own RECEIVED share is deliberately NOT claimed to be
+        this responder's own share: a COMPROMISED RESPONDER can forge a Msg2 that
+        feeds the initiator an attacker share, which does not stop the responder
+        from later accepting the initiator's genuine Msg3.  That one conjunct is
+        exactly the peer's-view fact a responder compromise can break, so it is
+        claimed only by `init_completed_auth` (modulo responder compromise). *)
      Some? p.ps_init.sh_scalar /\
      Some? p.ps_init.sh_peer_share /\
      Some? p.ps_resp.sh_scalar /\
@@ -600,11 +675,12 @@ let resp_completed_auth (p:product_state) : prop =
                         (share_term (Some?.v p.ps_init.sh_scalar))
                         (Some?.v p.ps_init.sh_peer_share)))
 
-(** The combined security invariant: the ideal profile, the concrete run/session
-    link invariants (C1–C4), the symbolic Msg1/completion provenance bindings, the
+(** The combined security invariant: the compromise-aware product invariant,
+    the concrete run/session link invariants (C1–C4), the symbolic
+    Msg1/completion provenance bindings, the
     responder shadow link, PLUS the two completion facts. *)
 let security_invariant (p:product_state) : prop =
-  ideal_product_invariant p /\
+  product_invariant p /\
   id_link_invariant p /\
   init_msg1_pkt_invariant p /\
   resp_msg1_pkt_invariant p /\
@@ -617,52 +693,10 @@ let security_invariant (p:product_state) : prop =
   init_completed_auth p /\
   resp_completed_auth p
 
-(** Every product step grows the shared trace (each `sym_extend` case only appends
-    trace entries).  Dispatch mirrors `sym_extend`; the per-segment `*_facts`
-    lemmas each deliver the `grows` fact. *)
-#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
-let lemma_product_step_grows
-  (p0:product_state) (ev:sys_event) (p1:product_state) (out:sys_output)
-  : Lemma
-    (requires product_step p0 ev p1 out)
-    (ensures p0.ps_trace `TB.grows` p1.ps_trace)
-= let c0 = p0.ps_sys in
-  match ev with
-  | SM.LocalEvent (Sys.ActRng owner x) -> rng_facts p0.ps_trace
-  | SM.LocalEvent Sys.ActStart ->
-    (match c0.sys_init.ep_peer, p0.ps_init.sh_pending with
-     | Some peer, Some scalar ->
-       start_facts init_dy_principal (term_of_principal c0.sys_init.ep_me)
-                   (term_of_principal peer) scalar p0.ps_trace
-     | _, _ -> ())
-  | SM.LocalEvent (Sys.ActDeliver idx dst) ->
-    if idx < Lst.length c0.sys_net && idx < Lst.length p0.ps_net then begin
-      let ne0  = Lst.index p0.ps_net idx in
-      let cmsg = (Lst.index c0.sys_net idx).pk_msg in
-      match dst, cmsg with
-      | Resp, Msg1 a gx ->
-        (match p0.ps_resp.sh_pending with
-         | Some scalar ->
-           let peer_share = (match ne0.ne_smsg with SMsg1 _ gxs -> gxs | _ -> term_of_blob gx) in
-           respond_facts resp_dy_principal p0.ps_resp.sh_ltk
-             (term_of_principal c0.sys_resp.ep_me) (term_of_principal a) peer_share scalar p0.ps_trace
-         | None -> ())
-      | Resp, Msg3 _ ->
-        (match c0.sys_resp.ep_peer, p0.ps_resp.sh_key with
-         | Some a, Some key -> rfinish_facts resp_dy_principal (term_of_principal a) key p0.ps_trace
-         | _ -> ())
-      | Init, Msg2 b gy _ ->
-        (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
-         | Some _xc, Some scalar ->
-           let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
-           ifinish_facts init_dy_principal p0.ps_init.sh_ltk scalar
-             (term_of_principal b) peer_share p0.ps_trace
-         | _ -> ())
-      | _, _ -> ()
-    end else ()
-  | SM.LocalEvent (Sys.ActInject m) -> inject_facts (inject_smsg m) p0.ps_trace
-  | _ -> ()
-#pop-options
+(** Every product step only GROWS the shared trace: this is
+    `DH.Sample.Symbolic.Product.lemma_product_step_grows`, proved there once (its
+    dispatch mirrors `sym_extend`, including the COMPROMISE case, whose single
+    `Corrupt` entry also only extends the trace) and used throughout below. *)
 
 (** ═══════════════════════════════════════════════════════════════════════════
     Part 3a — Preserving the auditable provenance bindings
@@ -842,7 +876,7 @@ let lemma_injected_msg1_authbind_entry
 (** Isolate the initiator-completion case from the case-exhaustive dispatcher.
     This keeps unfolding of the Msg2 `sym_extend` arm out of the quantified
     list-preservation query. *)
-#push-options "--fuel 6 --ifuel 2 --z3rlimit 10 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_init_msg1_send_authbind_init_msg2
   (p0 p1:product_state) (out:sys_output) (idx:nat)
   : Lemma
@@ -855,15 +889,14 @@ let lemma_init_msg1_send_authbind_init_msg2
     (ensures init_msg1_send_authbind p1)
 = let c0 = p0.ps_sys in
   let n = TB.trace_length p0.ps_trace in
-  net_coherent_length c0.sys_net p0.ps_net p0.ps_trace
-    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
-  assert (idx < Lst.length p0.ps_net);
+  lemma_init_msg2_step_shape p0 idx p1 out;
   let ne0 = Lst.index p0.ps_net idx in
-  match (Lst.index c0.sys_net idx).pk_msg,
-        c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
-  | Msg2 b gy _, Some _xc, Some scalar ->
+  let scalar = Some?.v p0.ps_init.sh_scalar in
+  match (Lst.index c0.sys_net idx).pk_msg with
+  | Msg2 b gy _ ->
     let peer_share =
       (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
+    lemma_init_msg2_step_next p0 idx p1 out b gy scalar peer_share;
     let transcript =
       transcript_term (term_of_principal b) (share_term scalar) peer_share in
     let ne_new = {
@@ -871,11 +904,8 @@ let lemma_init_msg1_send_authbind_init_msg2
                         (signonce_term (n + 1)) transcript);
       ne_pos = n + 2;
       ne_auth = InitAuth (term_of_principal b) (share_term scalar) peer_share } in
-    assert (p1.ps_net == Lst.append p0.ps_net [ne_new]);
-    assert (init_msg1_authbind_entry p1 ne_new);
-    assert (p1.ps_init.sh_scalar == p0.ps_init.sh_scalar);
     lemma_init_msg1_authbind_snoc p0 p1 ne_new
-  | _, _, _ -> ()
+  | _ -> ()
 #pop-options
 
 (** One-step preservation of the initiator's Msg1 send binding. *)
@@ -943,6 +973,10 @@ let lemma_init_msg1_send_authbind_step
     lemma_injected_msg1_authbind_entry p1 m ne_new;
     assert (p1.ps_net == Lst.append p0.ps_net [ne_new]);
     assert (p1.ps_init.sh_scalar == p0.ps_init.sh_scalar);
+    assert (p1.ps_net == Lst.append p0.ps_net [ne_new]);
+    assert (p1.ps_init.sh_scalar == p0.ps_init.sh_scalar);
+    assert (init_msg1_authbind_entry p1 ne_new);
+    assert (init_msg1_send_authbind p0);
     lemma_init_msg1_authbind_snoc p0 p1 ne_new
   | _ -> ()
 #pop-options
@@ -970,13 +1004,16 @@ let lemma_responder_peer_share_establish
   reveal_opaque (`%Sys.ideal_completion_link_ok) Sys.ideal_completion_link_ok;
   lemma_deliver_completion_link p0 p1 out idx Resp;
   lemma_delivery_projects_local c0 p1.ps_sys idx Resp out;
+  lemma_resp_msg3_step_shape p0 idx p1 out;
   assert (c0.sys_resp.ep_phase == Resp_Wait3);
-  assert (wf p0);
-  assert (resp_repr c0.sys_resp p0.ps_resp);
   (* the Msg3 delivery leaves both shadows unchanged and advances the responder *)
   assert (p1.ps_init == p0.ps_init);
   assert (p1.ps_resp == p0.ps_resp);
   assert (p1.ps_sys.sys_resp.ep_phase == Resp_Done);
+  if c0.sys_init_corrupt then
+    (* COMPROMISED INITIATOR: the guard imposes no run link, and none is claimed *)
+    assert (p1.ps_sys.sys_init_corrupt)
+  else begin
   assert (Some? c0.sys_resp_msg1_idx /\ c0.sys_resp_msg1_idx == c0.sys_init_msg1_idx);
   net_coherent_length c0.sys_net p0.ps_net p0.ps_trace p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
   let k = Some?.v c0.sys_resp_msg1_idx in
@@ -994,17 +1031,18 @@ let lemma_responder_peer_share_establish
   (match ne0.ne_smsg with
    | SMsg1 a_t gxs ->
      assert (p0.ps_resp.sh_peer_share == Some gxs);
-     eliminate exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded p0.ps_trace s
+     eliminate exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded_for Init p0.ps_trace s
      returns responder_peer_share_invariant p1
      with _pf.
        (assert (Some? p0.ps_init.sh_scalar);
         assert (gxs == share_term (Some?.v p0.ps_init.sh_scalar));
-        assert (scalar_recorded p0.ps_trace (Some?.v p0.ps_init.sh_scalar));
-        scalar_recorded_grows p0.ps_trace p1.ps_trace (Some?.v p0.ps_init.sh_scalar);
+        assert (scalar_recorded_for Init p0.ps_trace (Some?.v p0.ps_init.sh_scalar));
+        scalar_recorded_for_grows Init p0.ps_trace p1.ps_trace (Some?.v p0.ps_init.sh_scalar);
         assert (p1.ps_init.sh_scalar == p0.ps_init.sh_scalar);
         assert (p1.ps_resp.sh_peer_share == Some gxs);
         assert (p1.ps_sys.sys_resp.ep_phase == Resp_Done))
    | _ -> ())
+  end
 #pop-options
 
 (** Persistence.  Once completed, the responder's peer share and the initiator
@@ -1016,13 +1054,19 @@ let lemma_responder_peer_share_persist (p0 p1:product_state)
     (requires
        responder_peer_share_invariant p0 /\
        (p1.ps_sys.sys_resp.ep_phase == Resp_Done ==>
-          (p0.ps_sys.sys_resp.ep_phase == Resp_Done /\
-           p1.ps_init.sh_scalar == p0.ps_init.sh_scalar /\
+          p0.ps_sys.sys_resp.ep_phase == Resp_Done) /\
+       ((p0.ps_sys.sys_resp.ep_phase == Resp_Done /\
+         ~(p0.ps_sys.sys_init_corrupt)) ==>
+          (p1.ps_init.sh_scalar == p0.ps_init.sh_scalar /\
            p1.ps_resp.sh_peer_share == p0.ps_resp.sh_peer_share)) /\
+       (p0.ps_sys.sys_init_corrupt ==> p1.ps_sys.sys_init_corrupt) /\
        p0.ps_trace `TB.grows` p1.ps_trace)
     (ensures responder_peer_share_invariant p1)
 = if p1.ps_sys.sys_resp.ep_phase = Resp_Done
-   then scalar_recorded_grows p0.ps_trace p1.ps_trace (Some?.v p0.ps_init.sh_scalar)
+   then
+     (if p0.ps_sys.sys_init_corrupt then ()
+      else scalar_recorded_for_grows Init p0.ps_trace p1.ps_trace
+             (Some?.v p0.ps_init.sh_scalar))
    else ()
 #pop-options
 
@@ -1033,6 +1077,7 @@ let lemma_responder_peer_share_step
     (requires security_invariant p0 /\ product_step p0 ev p1 out)
     (ensures responder_peer_share_invariant p1)
 = lemma_product_step_grows p0 ev p1 out;
+  Sys.lemma_corruption_monotone p0.ps_sys p1.ps_sys ev out;
   let c0 = p0.ps_sys in
   match ev with
   | SM.LocalEvent (Sys.ActDeliver idx Resp) ->
@@ -1864,70 +1909,75 @@ let lemma_init_auth_establish
     (ensures init_completed_auth p1)
 = let c0 = p0.ps_sys in
   let pk = Lst.index c0.sys_net idx in
-  net_coherent_length c0.sys_net p0.ps_net p0.ps_trace p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
-  let ne0 = Lst.index p0.ps_net idx in
   lemma_product_step_grows p0 ev p1 out;
-  assert (pk.pk_origin == Sent Resp);
-  lemma_net_responder_authorized p0 idx;
-  (* run link: expose the guard, then derive the concrete peer/peer-share match *)
-  reveal_opaque (`%Sys.ideal_completion_link_ok) Sys.ideal_completion_link_ok;
-  lemma_deliver_completion_link p0 p1 out idx Init;
-  assert (Some? c0.sys_resp_msg1_idx /\ c0.sys_resp_msg1_idx == c0.sys_init_msg1_idx);
-  lemma_runlink_concrete_match p0;
-  assert (c0.sys_resp.ep_peer == Some c0.sys_init.ep_me);
-  assert (c0.sys_resp.ep_peer_share == c0.sys_init.ep_my_share);
-  (* responder's own share matches the delivered gy (C4) *)
-  assert (resp_msg2_pkt_entry p0 pk);
-  (* the sender's own recorded provenance for this exact delivered Msg2 shadow *)
-  assert (resp_authbind_entry p0 ne0);
-  (match pk.pk_msg, ne0.ne_smsg, ne0.ne_auth with
-   | Msg2 b gy sigB, SMsg2 b_t gy_t sig_t, RespAuth partner gx_t ->
-     assert (TB.event_triggered p0.ps_trace resp_dy_principal tag_responder_respond
-               (transcript_term partner gx_t gy_t));
-     (* CONNECT the recovered event to THIS completion.  From `resp_send_authbind`:
-        partner is the responder's recorded peer, gx_t its recorded peer share,
-        gy_t its own genuine ephemeral share.  From the run link: the responder's
-        recorded peer IS this initiator. *)
-     assert (partner == term_of_principal (Some?.v c0.sys_resp.ep_peer));
-     assert (gx_t == Some?.v p0.ps_resp.sh_peer_share);
-     assert (gy_t == share_term (Some?.v p0.ps_resp.sh_scalar));
-     assert (partner == term_of_principal c0.sys_init.ep_me);
-     assert (p1.ps_sys.sys_init.ep_me == c0.sys_init.ep_me);
-     assert (p1.ps_sys.sys_resp == c0.sys_resp);
-     assert (p1.ps_init.sh_peer_share == Some gy_t);
-     assert (Some?.v p1.ps_init.sh_peer_share == gy_t);
-     assert (p1.ps_sys.sys_init.ep_peer_share == Some gy);
-     assert (c0.sys_resp.ep_my_share == Some gy);      (* from resp_msg2_pkt_entry *)
-     (* the connected event, at p1's trace, over p1's connected fields *)
-     assert (transcript_term partner gx_t gy_t ==
-             transcript_term (term_of_principal p1.ps_sys.sys_init.ep_me)
-                             (Some?.v p1.ps_resp.sh_peer_share)
-                             (Some?.v p1.ps_init.sh_peer_share));
-     TB.event_triggered_grows p0.ps_trace p1.ps_trace resp_dy_principal
-       tag_responder_respond (transcript_term partner gx_t gy_t);
-     (* the initiator's peer share is the responder's genuine own ephemeral share *)
-     assert (Some?.v p1.ps_init.sh_peer_share == share_term (Some?.v p1.ps_resp.sh_scalar));
-     (* ... hence a genuine recorded DH share *)
-     eliminate exists (s:BT.bytes). gy_t == share_term s /\ scalar_recorded p0.ps_trace s
-     returns
-       (exists (s:BT.bytes).
-          Some?.v p1.ps_init.sh_peer_share == share_term s /\ scalar_recorded p1.ps_trace s)
-     with _pf.
-       (scalar_recorded_grows p0.ps_trace p1.ps_trace s;
-        introduce exists (s':BT.bytes).
-          Some?.v p1.ps_init.sh_peer_share == share_term s' /\ scalar_recorded p1.ps_trace s'
-        with s and ())
-   | _, _, _ -> ())
+  lemma_init_msg2_step_shape p0 idx p1 out;
+  Sys.lemma_corruption_monotone p0.ps_sys p1.ps_sys ev out;
+  let ne0 = Lst.index p0.ps_net idx in
+  if c0.sys_resp_corrupt then
+    (* COMPROMISED RESPONDER: the completion may be a forgery; the guard imposes
+       neither an honest origin nor a run link, and NOTHING is claimed. *)
+    assert (p1.ps_sys.sys_resp_corrupt)
+  else begin
+    (* UNCOMPROMISED RESPONDER: `deliver_origin_ok` forces the honest origin ... *)
+    assert (pk.pk_origin == Sent Resp);
+    lemma_net_responder_authorized p0 idx;
+    (* ... and `ideal_completion_link_ok` forces the run link *)
+    reveal_opaque (`%Sys.ideal_completion_link_ok) Sys.ideal_completion_link_ok;
+    lemma_deliver_completion_link p0 p1 out idx Init;
+    assert (Some? c0.sys_resp_msg1_idx /\ c0.sys_resp_msg1_idx == c0.sys_init_msg1_idx);
+    lemma_runlink_concrete_match p0;
+    assert (c0.sys_resp.ep_peer == Some c0.sys_init.ep_me);
+    assert (c0.sys_resp.ep_peer_share == c0.sys_init.ep_my_share);
+    (* responder's own share matches the delivered gy (C4) *)
+    assert (resp_msg2_pkt_entry p0 pk);
+    (* the sender's own recorded provenance for this exact delivered Msg2 shadow *)
+    assert (resp_authbind_entry p0 ne0);
+    (match pk.pk_msg, ne0.ne_smsg, ne0.ne_auth with
+     | Msg2 b gy sigB, SMsg2 b_t gy_t sig_t, RespAuth partner gx_t ->
+       (* the RECOVERED responder authorization event — or responder compromise,
+          which `corruption_coherent` would turn into the flag we just excluded *)
+       lemma_corruption_coherence p0;
+       assert (TB.event_triggered p0.ps_trace resp_dy_principal tag_responder_respond
+                 (transcript_term partner gx_t gy_t));
+       (* CONNECT the recovered event to THIS completion. *)
+       assert (partner == term_of_principal (Some?.v c0.sys_resp.ep_peer));
+       assert (gx_t == Some?.v p0.ps_resp.sh_peer_share);
+       assert (gy_t == share_term (Some?.v p0.ps_resp.sh_scalar));
+       assert (partner == term_of_principal c0.sys_init.ep_me);
+       assert (p1.ps_sys.sys_init.ep_me == c0.sys_init.ep_me);
+       assert (p1.ps_sys.sys_resp == c0.sys_resp);
+       assert (p1.ps_init.sh_peer_share == Some gy_t);
+       assert (p1.ps_sys.sys_init.ep_peer_share == Some gy);
+       assert (c0.sys_resp.ep_my_share == Some gy);      (* from resp_msg2_pkt_entry *)
+       assert (transcript_term partner gx_t gy_t ==
+               transcript_term (term_of_principal p1.ps_sys.sys_init.ep_me)
+                               (Some?.v p1.ps_resp.sh_peer_share)
+                               (Some?.v p1.ps_init.sh_peer_share));
+       TB.event_triggered_grows p0.ps_trace p1.ps_trace resp_dy_principal
+         tag_responder_respond (transcript_term partner gx_t gy_t);
+       assert (Some?.v p1.ps_init.sh_peer_share == share_term (Some?.v p1.ps_resp.sh_scalar));
+       eliminate exists (s:BT.bytes). gy_t == share_term s /\ scalar_recorded_for Resp p0.ps_trace s
+       returns
+         (exists (s:BT.bytes).
+            Some?.v p1.ps_init.sh_peer_share == share_term s /\
+            scalar_recorded_for Resp p1.ps_trace s)
+       with _pf.
+         (scalar_recorded_for_grows Resp p0.ps_trace p1.ps_trace s;
+          introduce exists (s':BT.bytes).
+            Some?.v p1.ps_init.sh_peer_share == share_term s' /\
+            scalar_recorded_for Resp p1.ps_trace s'
+          with s and ())
+     | _, _, _ -> ())
+  end
 #pop-options
 
 (** ── Establishing case: the responder completes on delivering the initiator's
-    Msg3.  The concrete matching is DERIVED: `id_link_invariant` gives `ini.ep_peer
-    == Some res.ep_me`; the run link (`lemma_runlink_concrete_match`) gives
-    `ini.ep_my_share == res.ep_peer_share`; the persisted `init_completed_auth`
-    gives `ini.ep_peer_share == res.ep_my_share`; and
-    `lemma_responder_peer_share_establish` supplies the completed responder's
-    honest peer-share equality.  The initiator's symbolic authorization comes from
-    the network authentication theorem on the delivered Sent-Init Msg3. *)
+    Msg3 — MODULO INITIATOR COMPROMISE.  With an uncompromised initiator, the
+    concrete matching is DERIVED exactly as before (id link + run link + the
+    persisted initiator completion + the honest responder peer share), and the
+    initiator's symbolic authorization comes from the network authentication
+    theorem on the delivered Sent-Init Msg3.  With a COMPROMISED initiator the
+    Msg3 may be forged and nothing is claimed. *)
 #push-options "--fuel 6 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_resp_auth_establish
   (p0:product_state) (ev:sys_event) (p1:product_state) (out:sys_output) (idx:nat)
@@ -1940,44 +1990,48 @@ let lemma_resp_auth_establish
     (ensures resp_completed_auth p1)
 = let c0 = p0.ps_sys in
   let pk = Lst.index c0.sys_net idx in
-  net_coherent_length c0.sys_net p0.ps_net p0.ps_trace p0.ps_init.sh_ltk p0.ps_resp.sh_ltk;
-  let ne0 = Lst.index p0.ps_net idx in
   lemma_product_step_grows p0 ev p1 out;
-  assert (pk.pk_origin == Sent Init);
-  lemma_net_initiator_authorized p0 idx;
-  (* run link + the honest completed responder peer share *)
-  reveal_opaque (`%Sys.ideal_completion_link_ok) Sys.ideal_completion_link_ok;
-  lemma_deliver_completion_link p0 p1 out idx Resp;
-  assert (Some? c0.sys_resp_msg1_idx /\ c0.sys_resp_msg1_idx == c0.sys_init_msg1_idx);
-  assert (c0.sys_init.ep_phase == Init_Done);
-  lemma_runlink_concrete_match p0;
-  assert (c0.sys_resp.ep_peer_share == c0.sys_init.ep_my_share);
-  lemma_responder_peer_share_establish p0 p1 out idx;
-  (* the initiator's own recorded provenance for this exact delivered Msg3 shadow *)
-  assert (init_authbind_entry p0 ne0);
-  (match ne0.ne_smsg, ne0.ne_auth with
-   | SMsg3 sig_t, InitAuth partner gx_t gy_t ->
-     assert (TB.event_triggered p0.ps_trace init_dy_principal tag_initiator_finish
-               (transcript_term partner gx_t gy_t));
-     (* CONNECT: `init_send_authbind` pins partner to the initiator's fixed peer,
-        gx_t to the initiator's OWN genuine share, gy_t to the initiator's received
-        peer share; `id_link_invariant` says that fixed peer IS this responder. *)
-     assert (partner == term_of_principal (Some?.v c0.sys_init.ep_peer));
-     assert (gx_t == share_term (Some?.v p0.ps_init.sh_scalar));
-     assert (gy_t == Some?.v p0.ps_init.sh_peer_share);
-     assert (c0.sys_init.ep_peer == Some c0.sys_resp.ep_me);
-     assert (partner == term_of_principal c0.sys_resp.ep_me);
-     assert (p1.ps_sys.sys_init == c0.sys_init);
-     assert (p1.ps_sys.sys_resp.ep_me == c0.sys_resp.ep_me);
-     assert (p1.ps_sys.sys_resp.ep_peer_share == c0.sys_resp.ep_peer_share);
-     assert (p1.ps_sys.sys_resp.ep_my_share == c0.sys_resp.ep_my_share);
-     assert (transcript_term partner gx_t gy_t ==
-             transcript_term (term_of_principal p1.ps_sys.sys_resp.ep_me)
-                             (share_term (Some?.v p1.ps_init.sh_scalar))
-                             (Some?.v p1.ps_init.sh_peer_share));
-     TB.event_triggered_grows p0.ps_trace p1.ps_trace init_dy_principal
-       tag_initiator_finish (transcript_term partner gx_t gy_t)
-   | _, _ -> ())
+  lemma_resp_msg3_step_shape p0 idx p1 out;
+  lemma_delivery_projects_local c0 p1.ps_sys idx Resp out;
+  Sys.lemma_corruption_monotone p0.ps_sys p1.ps_sys ev out;
+  let ne0 = Lst.index p0.ps_net idx in
+  if c0.sys_init_corrupt then
+    assert (p1.ps_sys.sys_init_corrupt)
+  else begin
+    assert (pk.pk_origin == Sent Init);
+    lemma_net_initiator_authorized p0 idx;
+    (* run link + the honest completed responder peer share *)
+    reveal_opaque (`%Sys.ideal_completion_link_ok) Sys.ideal_completion_link_ok;
+    lemma_deliver_completion_link p0 p1 out idx Resp;
+    assert (Some? c0.sys_resp_msg1_idx /\ c0.sys_resp_msg1_idx == c0.sys_init_msg1_idx);
+    assert (c0.sys_init.ep_phase == Init_Done);
+    lemma_runlink_concrete_match p0;
+    assert (c0.sys_resp.ep_peer_share == c0.sys_init.ep_my_share);
+    lemma_responder_peer_share_establish p0 p1 out idx;
+    (* the initiator's own recorded provenance for this exact delivered Msg3 shadow *)
+    assert (init_authbind_entry p0 ne0);
+    (match ne0.ne_smsg, ne0.ne_auth with
+     | SMsg3 sig_t, InitAuth partner gx_t gy_t ->
+       lemma_corruption_coherence p0;
+       assert (TB.event_triggered p0.ps_trace init_dy_principal tag_initiator_finish
+                 (transcript_term partner gx_t gy_t));
+       assert (partner == term_of_principal (Some?.v c0.sys_init.ep_peer));
+       assert (gx_t == share_term (Some?.v p0.ps_init.sh_scalar));
+       assert (gy_t == Some?.v p0.ps_init.sh_peer_share);
+       assert (c0.sys_init.ep_peer == Some c0.sys_resp.ep_me);
+       assert (partner == term_of_principal c0.sys_resp.ep_me);
+       assert (p1.ps_sys.sys_init == c0.sys_init);
+       assert (p1.ps_sys.sys_resp.ep_me == c0.sys_resp.ep_me);
+       assert (p1.ps_sys.sys_resp.ep_peer_share == c0.sys_resp.ep_peer_share);
+       assert (p1.ps_sys.sys_resp.ep_my_share == c0.sys_resp.ep_my_share);
+       assert (transcript_term partner gx_t gy_t ==
+               transcript_term (term_of_principal p1.ps_sys.sys_resp.ep_me)
+                               (share_term (Some?.v p1.ps_init.sh_scalar))
+                               (Some?.v p1.ps_init.sh_peer_share));
+       TB.event_triggered_grows p0.ps_trace p1.ps_trace init_dy_principal
+         tag_initiator_finish (transcript_term partner gx_t gy_t)
+     | _, _ -> ())
+  end
 #pop-options
 
 (** ── Persistence: once an endpoint has completed, its own fields and its
@@ -1998,9 +2052,10 @@ let lemma_init_auth_persist_generic (p0 p1:product_state)
       p1.ps_init.sh_peer_share == p0.ps_init.sh_peer_share /\
       p1.ps_resp.sh_peer_share == p0.ps_resp.sh_peer_share /\
       p1.ps_resp.sh_scalar == p0.ps_resp.sh_scalar /\
+      (p0.ps_sys.sys_resp_corrupt ==> p1.ps_sys.sys_resp_corrupt) /\
       p0.ps_trace `TB.grows` p1.ps_trace)
     (ensures init_completed_auth p1)
-= if p1.ps_sys.sys_init.ep_phase = Init_Done then begin
+= if p1.ps_sys.sys_init.ep_phase = Init_Done && not p0.ps_sys.sys_resp_corrupt then begin
     let ini0 = p0.ps_sys.sys_init in
     (* the connected event is a SPECIFIC term over frozen fields — just persist it *)
     TB.event_triggered_grows p0.ps_trace p1.ps_trace resp_dy_principal
@@ -2009,14 +2064,17 @@ let lemma_init_auth_persist_generic (p0 p1:product_state)
                        (Some?.v p0.ps_resp.sh_peer_share)
                        (Some?.v p0.ps_init.sh_peer_share));
     eliminate exists (s:BT.bytes).
-        Some?.v p0.ps_init.sh_peer_share == share_term s /\ scalar_recorded p0.ps_trace s
+        Some?.v p0.ps_init.sh_peer_share == share_term s /\
+        scalar_recorded_for Resp p0.ps_trace s
     returns
       (exists (s:BT.bytes).
-        Some?.v p1.ps_init.sh_peer_share == share_term s /\ scalar_recorded p1.ps_trace s)
+        Some?.v p1.ps_init.sh_peer_share == share_term s /\
+        scalar_recorded_for Resp p1.ps_trace s)
     with _pf.
-      (scalar_recorded_grows p0.ps_trace p1.ps_trace s;
+      (scalar_recorded_for_grows Resp p0.ps_trace p1.ps_trace s;
        introduce exists (s':BT.bytes).
-         Some?.v p1.ps_init.sh_peer_share == share_term s' /\ scalar_recorded p1.ps_trace s'
+         Some?.v p1.ps_init.sh_peer_share == share_term s' /\
+         scalar_recorded_for Resp p1.ps_trace s'
        with s and ())
   end else ()
 
@@ -2033,9 +2091,10 @@ let lemma_resp_auth_persist_generic (p0 p1:product_state)
       p1.ps_init.sh_peer_share == p0.ps_init.sh_peer_share /\
       p1.ps_resp.sh_scalar == p0.ps_resp.sh_scalar /\
       p1.ps_resp.sh_peer_share == p0.ps_resp.sh_peer_share /\
+      (p0.ps_sys.sys_init_corrupt ==> p1.ps_sys.sys_init_corrupt) /\
       p0.ps_trace `TB.grows` p1.ps_trace)
     (ensures resp_completed_auth p1)
-= if p1.ps_sys.sys_resp.ep_phase = Resp_Done then begin
+= if p1.ps_sys.sys_resp.ep_phase = Resp_Done && not p0.ps_sys.sys_init_corrupt then begin
     let res0 = p0.ps_sys.sys_resp in
     TB.event_triggered_grows p0.ps_trace p1.ps_trace init_dy_principal
       tag_initiator_finish
@@ -2055,6 +2114,7 @@ let lemma_init_completed_auth_step
     (requires security_invariant p0 /\ product_step p0 ev p1 out)
     (ensures init_completed_auth p1)
 = lemma_product_step_grows p0 ev p1 out;
+  Sys.lemma_corruption_monotone p0.ps_sys p1.ps_sys ev out;
   let c0 = p0.ps_sys in
   match ev with
   | SM.LocalEvent (Sys.ActRng owner x) -> lemma_init_auth_persist_generic p0 p1
@@ -2064,10 +2124,22 @@ let lemma_init_completed_auth_step
       let cmsg = (Lst.index c0.sys_net idx).pk_msg in
       match dst, cmsg with
       | Init, Msg2 _ _ _ -> lemma_init_auth_establish p0 ev p1 out idx
-      | Resp, Msg3 _     -> lemma_init_auth_persist_generic p0 p1
+      | Resp, Msg3 _     ->
+        lemma_resp_msg3_step_shape p0 idx p1 out;
+        lemma_init_auth_persist_generic p0 p1
+      | Resp, Msg1 _ _   ->
+        (* the responder is still `Resp_Start` here, so — unless it is already
+           compromised, in which case the compromised disjunct persists — the
+           initiator cannot have completed (`init_completed_auth p0`) *)
+        lemma_resp_msg1_step_shape p0 idx p1 out;
+        assert (p0.ps_sys.sys_resp.ep_phase == Resp_Start)
       | _, _             -> ()
     end else ()
   | SM.LocalEvent (Sys.ActInject m) -> lemma_init_auth_persist_generic p0 p1
+  | SM.LocalEvent (Sys.ActCorrupt who) ->
+    lemma_corrupt_step_effect p0 who p1 out;
+    Sys.lemma_corrupt_step_changes_only_compromise_metadata p0.ps_sys p1.ps_sys who out;
+    lemma_init_auth_persist_generic p0 p1
   | _ -> ()
 #pop-options
 
@@ -2081,6 +2153,7 @@ let lemma_resp_completed_auth_step
     (requires security_invariant p0 /\ product_step p0 ev p1 out)
     (ensures resp_completed_auth p1)
 = lemma_product_step_grows p0 ev p1 out;
+  Sys.lemma_corruption_monotone p0.ps_sys p1.ps_sys ev out;
   let c0 = p0.ps_sys in
   match ev with
   | SM.LocalEvent (Sys.ActRng owner x) -> lemma_resp_auth_persist_generic p0 p1
@@ -2090,9 +2163,24 @@ let lemma_resp_completed_auth_step
       let cmsg = (Lst.index c0.sys_net idx).pk_msg in
       match dst, cmsg with
       | Resp, Msg3 _     -> lemma_resp_auth_establish p0 ev p1 out idx
+      | Resp, Msg1 _ _   ->
+        (* the responder only reaches `Resp_Wait3` here, where the completion
+           fact is vacuous *)
+        lemma_resp_msg1_step_shape p0 idx p1 out;
+        assert (p1.ps_sys.sys_resp.ep_phase == Resp_Wait3)
+      | Init, Msg2 _ _ _ ->
+        (* the initiator is still `Init_Wait2` here, so — unless it is already
+           compromised — the responder cannot have completed
+           (`resp_completed_auth p0` would force `Init_Done`) *)
+        lemma_init_msg2_step_shape p0 idx p1 out;
+        assert (p0.ps_sys.sys_init.ep_phase == Init_Wait2)
       | _, _             -> ()
     end else ()
   | SM.LocalEvent (Sys.ActInject m) -> lemma_resp_auth_persist_generic p0 p1
+  | SM.LocalEvent (Sys.ActCorrupt who) ->
+    lemma_corrupt_step_effect p0 who p1 out;
+    Sys.lemma_corrupt_step_changes_only_compromise_metadata p0.ps_sys p1.ps_sys who out;
+    lemma_resp_auth_persist_generic p0 p1
   | _ -> ()
 #pop-options
 
@@ -2103,7 +2191,7 @@ let lemma_security_step_preserves
   : Lemma
     (requires security_invariant p0 /\ product_step p0 ev p1 out)
     (ensures security_invariant p1)
-= ideal_product_step_preserves_invariant p0 ev p1 out;
+= product_step_preserves_invariant p0 ev p1 out;
   lemma_id_link_step p0 ev p1 out;
   lemma_init_msg1_pkt_step p0 ev p1 out;
   lemma_resp_msg1_pkt_step p0 ev p1 out;
@@ -2117,14 +2205,15 @@ let lemma_security_step_preserves
   lemma_resp_completed_auth_step p0 ev p1 out
 #pop-options
 
-(** The security invariant holds at the initial product state: the ideal profile
-    (already established) plus the concrete link invariants and completion facts,
+(** The security invariant holds at the initial product state: the
+    compromise-aware product invariant (already established) plus the concrete
+    link invariants and completion facts,
     which are vacuous because both endpoints start un-completed (Init_Start /
     Resp_Start), the network is empty, and both Msg1 indices are `None`. *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10"
 let lemma_security_initial (a b:principal)
   : Lemma (ensures security_invariant (product_initial a b))
-= lemma_product_initial_ideal_invariant a b
+= lemma_product_initial_invariant a b
 #pop-options
 
 (** Execution induction: every state reachable from a `security_invariant` state
@@ -2144,7 +2233,8 @@ let rec lemma_security_reaches
 #pop-options
 
 (** HEADLINE reachability: EVERY product execution from `product_initial a b`
-    ends in a state satisfying `security_invariant` — the ideal profile PLUS the
+    ends in a state satisfying `security_invariant` — the compromise-aware
+    product invariant PLUS the
     two completion-authentication facts.  Caller supplies ONLY the identities,
     the transition list, and the final state. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
@@ -2158,30 +2248,25 @@ let product_reaches_security_invariant
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
-    Part 3b — Headline completion-authentication theorems
+    Part 3b — Headline completion-authentication theorems, MODULO COMPROMISE
     ═══════════════════════════════════════════════════════════════════════════
 
     Surfaced directly from `security_invariant`.  Each says: a completed endpoint
-    concretely agrees with its peer on both identities and both DH shares (the
-    ideal-environment matching), AND the PEER's role principal has genuinely
-    triggered its authorization Event on the shared DY* trace — over a transcript
-    whose identity AND both share components are CONNECTED, as exactly as the
-    model can honestly support, to this completion.  The event is recovered from
-    the peer's genuine `Sign` term via the trace invariant + `dh_sign_pred` (never
-    the origin metadata or the toy digest); the auditable provenance bindings +
-    the run link then pin its transcript fields to the completion's
-    identities and shares. *)
+    EITHER (a) its peer's signing state has been dynamically compromised — both as
+    the concrete `DH.Sample.System` flag AND as genuine DY* corruption of that
+    role's state label (`lemma_corruption_coherence`) — OR (b) it concretely
+    agrees with its peer on the identities and shares the model can support, AND
+    the PEER's role principal has genuinely triggered its authorization Event on
+    the shared DY* trace over a transcript whose identity AND share components are
+    connected to this completion.
 
-(** INITIATOR AUTHENTICATES RESPONDER.  When the initiator has completed, the
-    responder agrees on the initiator's identity and both shares, and the
-    RESPONDER role principal triggered `tag_responder_respond` over the EXACT
-    transcript
-        (this-initiator-identity, responder's-received-peer-share, gy)
-    where gy is exactly the responder share the initiator now holds, and the
-    initiator-share slot is the responder's recorded peer share — which the
-    concrete matching (`res.ep_peer_share == ini.ep_my_share`) equates,
-    byte-for-byte, to the initiator's own share.  None of the transcript's three
-    components is left unconnected. *)
+    The honest branch's event is recovered from the peer's genuine `Sign` term via
+    the trace invariant + `dh_sign_pred` — NEVER from the packet-origin metadata
+    and never from the toy digest; the origin metadata only fixes that the shadow
+    is a structured `Sign`.  The compromised branch is exactly the DY* attacker
+    disjunct of the signature `bytes_invariant` (`lemma_ltk_sig_authorized`). *)
+
+(** INITIATOR AUTHENTICATES RESPONDER (modulo responder compromise). *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 let theorem_initiator_authenticates_responder (p:product_state)
   : Lemma
@@ -2189,35 +2274,28 @@ let theorem_initiator_authenticates_responder (p:product_state)
     (ensures (
       let ini = p.ps_sys.sys_init in
       let res = p.ps_sys.sys_resp in
-      (res.ep_phase == Resp_Wait3 \/ res.ep_phase == Resp_Done) /\
-      res.ep_peer == Some ini.ep_me /\
-      res.ep_peer_share == ini.ep_my_share /\
-      res.ep_my_share == ini.ep_peer_share /\
-      Some? p.ps_init.sh_peer_share /\
-      Some? p.ps_resp.sh_peer_share /\
-      Some? p.ps_resp.sh_scalar /\
-      (* the initiator's peer share IS the responder's genuine own ephemeral share *)
-      Some?.v p.ps_init.sh_peer_share == share_term (Some?.v p.ps_resp.sh_scalar) /\
-      (exists (s:BT.bytes).
-         Some?.v p.ps_init.sh_peer_share == share_term s /\ scalar_recorded p.ps_trace s) /\
-      (* the CONNECTED responder authorization event — all three transcript
-         components pinned, none existential *)
-      TB.event_triggered p.ps_trace resp_dy_principal tag_responder_respond
-        (transcript_term (term_of_principal ini.ep_me)
-                         (Some?.v p.ps_resp.sh_peer_share)
-                         (Some?.v p.ps_init.sh_peer_share))))
-= ()
+      (* EITHER the responder's signing state is compromised ... *)
+      (p.ps_sys.sys_resp_corrupt /\ role_state_corrupt p Resp) \/
+      (* ... OR the exact honest agreement AND the responder's authorization *)
+      ((res.ep_phase == Resp_Wait3 \/ res.ep_phase == Resp_Done) /\
+       res.ep_peer == Some ini.ep_me /\
+       res.ep_peer_share == ini.ep_my_share /\
+       res.ep_my_share == ini.ep_peer_share /\
+       Some? p.ps_init.sh_peer_share /\
+       Some? p.ps_resp.sh_peer_share /\
+       Some? p.ps_resp.sh_scalar /\
+       Some?.v p.ps_init.sh_peer_share == share_term (Some?.v p.ps_resp.sh_scalar) /\
+       (exists (s:BT.bytes).
+          Some?.v p.ps_init.sh_peer_share == share_term s /\
+          scalar_recorded_for Resp p.ps_trace s) /\
+       TB.event_triggered p.ps_trace resp_dy_principal tag_responder_respond
+         (transcript_term (term_of_principal ini.ep_me)
+                          (Some?.v p.ps_resp.sh_peer_share)
+                          (Some?.v p.ps_init.sh_peer_share)))))
+= lemma_corruption_coherence p
 #pop-options
 
-(** RESPONDER AUTHENTICATES INITIATOR.  When the responder has completed, the
-    initiator has completed too, agrees on the responder's identity and both
-    shares, and the INITIATOR role principal triggered `tag_initiator_finish`
-    over the EXACT transcript
-        (this-responder-identity, initiator's-own-genuine-share, initiator's-peer-share)
-    where the responder-share slot (the initiator's received peer share) is
-    equated by the concrete matching (`ini.ep_peer_share == res.ep_my_share`),
-    byte-for-byte, to the responder's own share.  None of the transcript's three
-    components is left unconnected. *)
+(** RESPONDER AUTHENTICATES INITIATOR (modulo initiator compromise). *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 let theorem_responder_authenticates_initiator (p:product_state)
   : Lemma
@@ -2225,101 +2303,189 @@ let theorem_responder_authenticates_initiator (p:product_state)
     (ensures (
       let ini = p.ps_sys.sys_init in
       let res = p.ps_sys.sys_resp in
-      ini.ep_phase == Init_Done /\
-      ini.ep_peer == Some res.ep_me /\
-      ini.ep_my_share == res.ep_peer_share /\
-      ini.ep_peer_share == res.ep_my_share /\
-      Some? p.ps_init.sh_scalar /\
-      Some? p.ps_init.sh_peer_share /\
-      Some? p.ps_resp.sh_scalar /\
-      p.ps_resp.sh_peer_share ==
-        Some (share_term (Some?.v p.ps_init.sh_scalar)) /\
-      TB.event_triggered p.ps_trace init_dy_principal tag_initiator_finish
-        (transcript_term (term_of_principal res.ep_me)
-                         (share_term (Some?.v p.ps_init.sh_scalar))
-                         (Some?.v p.ps_init.sh_peer_share))))
-= ()
+      (p.ps_sys.sys_init_corrupt /\ role_state_corrupt p Init) \/
+      (ini.ep_phase == Init_Done /\
+       ini.ep_peer == Some res.ep_me /\
+       ini.ep_my_share == res.ep_peer_share /\
+       Some? p.ps_init.sh_scalar /\
+       Some? p.ps_init.sh_peer_share /\
+       Some? p.ps_resp.sh_scalar /\
+       p.ps_resp.sh_peer_share ==
+         Some (share_term (Some?.v p.ps_init.sh_scalar)) /\
+       TB.event_triggered p.ps_trace init_dy_principal tag_initiator_finish
+         (transcript_term (term_of_principal res.ep_me)
+                          (share_term (Some?.v p.ps_init.sh_scalar))
+                          (Some?.v p.ps_init.sh_peer_share)))))
+= lemma_corruption_coherence p
+#pop-options
+
+(** Concrete identity/share agreement for a completed two-party session. *)
+let concrete_session_agreement (p:product_state) : prop =
+  let ini = p.ps_sys.sys_init in
+  let res = p.ps_sys.sys_resp in
+  ini.ep_peer == Some res.ep_me /\
+  res.ep_peer == Some ini.ep_me /\
+  ini.ep_my_share == res.ep_peer_share /\
+  ini.ep_peer_share == res.ep_my_share
+
+(** COMPLETED concrete agreement, MODULO EITHER role's compromise.  There is no
+    matching-session premise: both endpoint completions and the security
+    invariant derive the identities and both share equalities. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
+let theorem_completed_concrete_agreement (p:product_state)
+  : Lemma
+    (requires
+      security_invariant p /\
+      p.ps_sys.sys_init.ep_phase == Init_Done /\
+      p.ps_sys.sys_resp.ep_phase == Resp_Done)
+    (ensures
+      concrete_session_agreement p \/
+      p.ps_sys.sys_init_corrupt \/
+      p.ps_sys.sys_resp_corrupt)
+= theorem_initiator_authenticates_responder p;
+  theorem_responder_authenticates_initiator p
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
-    Part 4 — Session-key secrecy and agreement
+    Part 4 — Session-key secrecy and agreement, MODULO COMPROMISE
     ═══════════════════════════════════════════════════════════════════════════ *)
 
-(** The DH shared secret of two honest (trace-recorded, secret-labelled)
-    ephemerals is NOT publishable: its label is `secret join secret`, which is
-    never corrupt, so it does not flow to `public`. *)
+(** The DH shared secret of the two roles' recorded ephemerals carries the label
+    `join (role_label Init) (role_label Resp)`, so — by DY* CORE's attacker
+    theorem — the attacker can only know it if ONE of the two roles' states has
+    been corrupted.  This is the compromise-sensitive replacement of the old
+    "`secret join secret` is never corrupt" argument, and it uses ONLY the library
+    API (`attacker_only_knows_publishable_values`, `flow_to_public_eq`,
+    `is_corrupt_join`) — no custom attacker predicate. *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 10"
-let lemma_dh_secret_not_public (tr:TB.trace) (s s':BT.bytes)
+let lemma_dh_key_label (tr:TB.trace) (s_i s_r:BT.bytes)
   : Lemma
-    (requires scalar_recorded tr s /\ scalar_recorded tr s')
-    (ensures ~(B.is_publishable #dh_sample_crypto_invariants tr (secret_term s (share_term s'))))
-= eliminate exists (t:nat). s == eph_term t /\ TB.entry_at tr t (T.RandGen eph_usage eph_label eph_len)
-  returns ~(B.is_publishable #dh_sample_crypto_invariants tr (secret_term s (share_term s')))
-  with _pf1.
-    eliminate exists (t':nat). s' == eph_term t' /\ TB.entry_at tr t' (T.RandGen eph_usage eph_label eph_len)
-    returns ~(B.is_publishable #dh_sample_crypto_invariants tr (secret_term s (share_term s')))
-    with _pf2.
-      (lemma_rand_usage_label_of_entry tr eph_usage eph_label eph_len t;
-       lemma_rand_usage_label_of_entry tr eph_usage eph_label eph_len t';
-       B.get_label_dh #dh_sample_crypto_usages tr s (share_term s');
-       B.get_dh_label_dh_pk #dh_sample_crypto_usages tr s';
-       L.is_corrupt_join tr L.secret L.secret;
-       L.is_corrupt_secret tr;
-       assert (B.get_label #dh_sample_crypto_usages tr s == L.secret);
-       assert (B.get_label #dh_sample_crypto_usages tr s' == L.secret);
-       assert (B.get_label #dh_sample_crypto_usages tr (secret_term s (share_term s'))
-               == L.secret `L.join` L.secret))
+    (requires scalar_recorded_for Init tr s_i /\ scalar_recorded_for Resp tr s_r)
+    (ensures
+      B.get_label #dh_sample_crypto_usages tr (secret_term s_i (share_term s_r))
+        == L.join (role_label Init) (role_label Resp))
+= lemma_scalar_invariant_label Init tr s_i;
+  lemma_scalar_invariant_label Resp tr s_r;
+  B.get_label_dh #dh_sample_crypto_usages tr s_i (share_term s_r);
+  B.get_dh_label_dh_pk #dh_sample_crypto_usages tr s_r
 #pop-options
 
-(** Consequently the attacker never knows that shared secret on a
-    `trace_invariant` trace (contrapositive of "attacker only knows publishable
-    values"). *)
-#push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
-let lemma_dh_not_attacker_known (tr:TB.trace) (s s':BT.bytes)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10"
+let lemma_dh_key_knowledge_implies_corruption (tr:TB.trace) (s_i s_r:BT.bytes)
   : Lemma
     (requires
-      scalar_recorded tr s /\ scalar_recorded tr s' /\
-      TI.trace_invariant #dh_sample_protocol_invariants tr)
-    (ensures ~(AK.attacker_knows tr (secret_term s (share_term s'))))
-= lemma_dh_secret_not_public tr s s';
-  introduce AK.attacker_knows tr (secret_term s (share_term s')) ==> False
-  with _contra.
-    AK.attacker_only_knows_publishable_values #dh_sample_protocol_invariants
-      tr (secret_term s (share_term s'))
+      scalar_recorded_for Init tr s_i /\ scalar_recorded_for Resp tr s_r /\
+      TI.trace_invariant #dh_sample_protocol_invariants tr /\
+      AK.attacker_knows tr (secret_term s_i (share_term s_r)))
+    (ensures
+      L.is_corrupt tr (role_label Init) \/ L.is_corrupt tr (role_label Resp))
+= AK.attacker_only_knows_publishable_values #dh_sample_protocol_invariants
+    tr (secret_term s_i (share_term s_r));
+  lemma_dh_key_label tr s_i s_r;
+  L.flow_to_public_eq tr (L.join (role_label Init) (role_label Resp));
+  L.is_corrupt_join tr (role_label Init) (role_label Resp)
 #pop-options
 
-(** INITIATOR SESSION-KEY SECRECY (derived, unconditional under the ideal
-    profile).  A completed initiator's session key is a DH secret of its OWN
-    recorded ephemeral and a genuine recorded responder share (the latter from
-    `init_completed_auth`'s honest-peer-share fact), so the DY* attacker never
-    knows it. *)
+(** INITIATOR SESSION-KEY SECRECY, MODULO COMPROMISE.  A completed initiator's
+    session key can be known to the DY* attacker ONLY IF one of the two roles'
+    states has been dynamically compromised. *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
 let theorem_initiator_key_secret (p:product_state)
   : Lemma
     (requires security_invariant p /\ p.ps_sys.sys_init.ep_phase == Init_Done)
     (ensures
       Some? p.ps_init.sh_key /\
-      ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key)))
+      (AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key) ==>
+         role_state_corrupt p Init \/ role_state_corrupt p Resp))
 = let tr = p.ps_trace in
+  lemma_corruption_coherence p;
   match p.ps_init.sh_scalar, p.ps_init.sh_peer_share, p.ps_init.sh_key with
   | Some s, Some psh, Some k ->
-    assert (scalar_recorded tr s);
+    assert (scalar_recorded_for Init tr s);
     assert (k == secret_term s psh);
-    eliminate exists (s':BT.bytes).
-        Some?.v p.ps_init.sh_peer_share == share_term s' /\ scalar_recorded tr s'
-    returns ~(AK.attacker_knows tr (Some?.v p.ps_init.sh_key))
-    with _pf.
-      (assert (k == secret_term s (share_term s'));
-       lemma_dh_not_attacker_known tr s s')
+    if p.ps_sys.sys_resp_corrupt then ()
+    else
+      introduce AK.attacker_knows tr (Some?.v p.ps_init.sh_key) ==>
+                (role_state_corrupt p Init \/ role_state_corrupt p Resp)
+      with _.
+        (eliminate exists (s':BT.bytes).
+             Some?.v p.ps_init.sh_peer_share == share_term s' /\
+             scalar_recorded_for Resp tr s'
+         returns role_state_corrupt p Init \/ role_state_corrupt p Resp
+         with _pf.
+           (assert (k == secret_term s (share_term s'));
+            lemma_dh_key_knowledge_implies_corruption tr s s'))
   | _, _, _ -> ()
+#pop-options
+
+(** RESPONDER SESSION-KEY SECRECY, MODULO COMPROMISE. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+let theorem_responder_key_secret (p:product_state)
+  : Lemma
+    (requires security_invariant p /\ p.ps_sys.sys_resp.ep_phase == Resp_Done)
+    (ensures
+      Some? p.ps_resp.sh_key /\
+      (AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key) ==>
+         role_state_corrupt p Init \/ role_state_corrupt p Resp))
+= let tr = p.ps_trace in
+  lemma_corruption_coherence p;
+  assert (resp_repr p.ps_sys.sys_resp p.ps_resp);
+  match p.ps_resp.sh_scalar, p.ps_resp.sh_peer_share, p.ps_resp.sh_key with
+  | Some s_r, Some psh, Some k ->
+    assert (scalar_recorded_for Resp tr s_r);
+    assert (k == secret_term s_r psh);
+    if p.ps_sys.sys_init_corrupt then ()
+    else begin
+      (* the honest branch of `responder_peer_share_invariant`: the responder's
+         peer share IS the initiator's genuine recorded share *)
+      assert (Some? p.ps_init.sh_scalar);
+      let s_i = Some?.v p.ps_init.sh_scalar in
+      assert (psh == share_term s_i);
+      assert (scalar_recorded_for Init tr s_i);
+      introduce AK.attacker_knows tr (Some?.v p.ps_resp.sh_key) ==>
+                (role_state_corrupt p Init \/ role_state_corrupt p Resp)
+      with _.
+        (lemma_dh_agreement s_i s_r;
+         assert (secret_term s_r (share_term s_i) == secret_term s_i (share_term s_r));
+         lemma_dh_key_knowledge_implies_corruption tr s_i s_r)
+    end
+  | _, _, _ -> ()
+#pop-options
+
+(** ── The UNCOMPROMISED corollaries ──────────────────────────────────────────
+
+    When NEITHER role has been compromised (concretely: both `DH.Sample.System`
+    compromise flags are clear, which `lemma_corruption_coherence` turns into
+    "neither role label is DY*-corrupt"), the session key of a completed endpoint
+    is genuinely unknown to the DY* attacker — the classical statement, recovered
+    as the special case of the theorems above. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
+let theorem_initiator_key_secret_uncompromised (p:product_state)
+  : Lemma
+    (requires
+      security_invariant p /\ p.ps_sys.sys_init.ep_phase == Init_Done /\
+      p.ps_sys.sys_init_corrupt == false /\ p.ps_sys.sys_resp_corrupt == false)
+    (ensures
+      Some? p.ps_init.sh_key /\
+      ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key)))
+= theorem_initiator_key_secret p;
+  lemma_corruption_coherence p
+
+let theorem_responder_key_secret_uncompromised (p:product_state)
+  : Lemma
+    (requires
+      security_invariant p /\ p.ps_sys.sys_resp.ep_phase == Resp_Done /\
+      p.ps_sys.sys_init_corrupt == false /\ p.ps_sys.sys_resp_corrupt == false)
+    (ensures
+      Some? p.ps_resp.sh_key /\
+      ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key)))
+= theorem_responder_key_secret p;
+  lemma_corruption_coherence p
 #pop-options
 
 (** SESSION-KEY AGREEMENT for matching key structures.  This algebraic helper is
     intentionally lower-level; the completed-session theorem below derives both
-    structures from `security_invariant` rather than asking its caller for them.
-    When the initiator's key has algebraic form `(s_i, g^{s_r})` and the
-    responder's has `(s_r, g^{s_i})`, the two shadow keys are the SAME term by
-    symbolic DH agreement. *)
+    structures from `security_invariant` rather than asking its caller for them. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 let theorem_matching_key_agreement (p:product_state) (s_i s_r:BT.bytes)
   : Lemma
@@ -2330,14 +2496,11 @@ let theorem_matching_key_agreement (p:product_state) (s_i s_r:BT.bytes)
 = lemma_dh_agreement s_i s_r
 #pop-options
 
-(** COMPLETED-SESSION KEY AGREEMENT.  Both matching structures are DERIVED from
-    the explicit model invariant and endpoint completion.  `init_completed_auth`
-    connects the initiator's peer share to the responder scalar;
-    `responder_peer_share_invariant` connects the responder's peer share to the
-    initiator scalar because completion's run-link equality selects the
-    initiator's exact honest Msg1 shadow.  Responder progress itself remains open
-    to injected Msg1 packets.  There is no caller-supplied share, key shape, or
-    scalar witness. *)
+(** COMPLETED-SESSION KEY AGREEMENT, MODULO COMPROMISE.  When both endpoints have
+    completed, EITHER one of the two roles' signing states was compromised (in
+    which case a forged completion may have installed an attacker-chosen key at
+    one side) OR the two session keys are the SAME symbolic term.  There is NO
+    matching premise: both key structures are DERIVED from the invariant. *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
 let theorem_completed_session_key_agreement (p:product_state)
   : Lemma
@@ -2347,68 +2510,49 @@ let theorem_completed_session_key_agreement (p:product_state)
        p.ps_sys.sys_resp.ep_phase == Resp_Done)
     (ensures
        Some? p.ps_init.sh_key /\ Some? p.ps_resp.sh_key /\
-       p.ps_init.sh_key == p.ps_resp.sh_key)
+       (p.ps_init.sh_key == p.ps_resp.sh_key \/
+        p.ps_sys.sys_init_corrupt \/ p.ps_sys.sys_resp_corrupt))
 = assert (init_repr p.ps_sys.sys_init p.ps_init);
   assert (resp_repr p.ps_sys.sys_resp p.ps_resp);
   assert (Some? p.ps_init.sh_scalar);
   assert (Some? p.ps_resp.sh_scalar);
   let s_i = Some?.v p.ps_init.sh_scalar in
   let s_r = Some?.v p.ps_resp.sh_scalar in
-  (* Both sides are derived from named invariant conjuncts. *)
-  assert (p.ps_init.sh_peer_share == Some (share_term s_r));
-  assert (p.ps_resp.sh_peer_share == Some (share_term s_i));
-  assert (Some? p.ps_init.sh_key);
-  assert (Some? p.ps_resp.sh_key);
-  assert (Some?.v p.ps_init.sh_key == secret_term s_i (share_term s_r));
-  assert (Some?.v p.ps_resp.sh_key == secret_term s_r (share_term s_i));
-  lemma_dh_agreement s_i s_r
-#pop-options
-
-(** RESPONDER SESSION-KEY SECRECY.  A completed responder consumed the actual
-    initiator Msg1, so `responder_peer_share_invariant` derives that its peer
-    share is the initiator's trace-recorded `share_term`.  Endpoint coherence
-    supplies the responder's own recorded scalar and exact key structure.  The
-    caller supplies no matching share, key structure, or scalar witness. *)
-#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
-let theorem_responder_key_secret (p:product_state)
-  : Lemma
-    (requires
-      security_invariant p /\
-      p.ps_sys.sys_resp.ep_phase == Resp_Done)
-    (ensures
-      Some? p.ps_resp.sh_key /\
-      ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key)))
-= assert (resp_repr p.ps_sys.sys_resp p.ps_resp);
-  assert (Some? p.ps_resp.sh_scalar);
-  assert (Some? p.ps_init.sh_scalar);
-  assert (Some? p.ps_resp.sh_key);
-  let s_r = Some?.v p.ps_resp.sh_scalar in
-  let s_i = Some?.v p.ps_init.sh_scalar in
-  assert (scalar_recorded p.ps_trace s_r);
-  assert (scalar_recorded p.ps_trace s_i);
-  assert (p.ps_resp.sh_peer_share == Some (share_term s_i));
-  assert (Some?.v p.ps_resp.sh_key == secret_term s_r (share_term s_i));
-  lemma_dh_not_attacker_known p.ps_trace s_r s_i
+  if p.ps_sys.sys_init_corrupt || p.ps_sys.sys_resp_corrupt then ()
+  else begin
+    (* Both matching structures are derived from named invariant conjuncts. *)
+    assert (p.ps_init.sh_peer_share == Some (share_term s_r));
+    assert (p.ps_resp.sh_peer_share == Some (share_term s_i));
+    assert (Some?.v p.ps_init.sh_key == secret_term s_i (share_term s_r));
+    assert (Some?.v p.ps_resp.sh_key == secret_term s_r (share_term s_i));
+    lemma_dh_agreement s_i s_r
+  end
 #pop-options
 
 (** The meaningful endpoint consequences exposed by the no-witness concrete
     theorem below.  Authentication is represented by the exact connected
-    `*_completed_auth` predicates defined above; secrecy and agreement are stated
-    directly. *)
+    `*_completed_auth` predicates defined above (each already MODULO the peer's
+    compromise); secrecy and agreement are stated directly, also modulo
+    compromise. *)
 let endpoint_security_consequences (p:product_state) : prop =
   (p.ps_sys.sys_init.ep_phase == Init_Done ==>
      init_completed_auth p /\
      Some? p.ps_init.sh_key /\
-     ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key))) /\
+     (AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key) ==>
+        role_state_corrupt p Init \/ role_state_corrupt p Resp)) /\
   (p.ps_sys.sys_resp.ep_phase == Resp_Done ==>
      resp_completed_auth p /\
      Some? p.ps_resp.sh_key /\
-     ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key))) /\
+     (AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key) ==>
+        role_state_corrupt p Init \/ role_state_corrupt p Resp)) /\
   ((p.ps_sys.sys_init.ep_phase == Init_Done /\
     p.ps_sys.sys_resp.ep_phase == Resp_Done) ==>
+     (concrete_session_agreement p \/
+      p.ps_sys.sys_init_corrupt \/ p.ps_sys.sys_resp_corrupt) /\
      Some? p.ps_init.sh_key /\
      Some? p.ps_resp.sh_key /\
-     p.ps_init.sh_key == p.ps_resp.sh_key)
+     (p.ps_init.sh_key == p.ps_resp.sh_key \/
+      p.ps_sys.sys_init_corrupt \/ p.ps_sys.sys_resp_corrupt))
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10 --split_queries always"
 let lemma_security_invariant_endpoint_consequences (p:product_state)
@@ -2425,12 +2569,16 @@ let lemma_security_invariant_endpoint_consequences (p:product_state)
    end;
    if p.ps_sys.sys_init.ep_phase = Init_Done /\
       p.ps_sys.sys_resp.ep_phase = Resp_Done
-   then theorem_completed_session_key_agreement p
+   then begin
+     theorem_completed_concrete_agreement p;
+     theorem_completed_session_key_agreement p
+   end
 #pop-options
 
 (** Direct arbitrary-reachability endpoint theorems.  Callers provide a product
     execution and completion only; these lemmas derive the invariant internally
-    and return authentication / secrecy / agreement consequences directly. *)
+    and return authentication / secrecy / agreement consequences directly — each
+    modulo the corresponding role compromise. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10 --split_queries always"
 let theorem_reachable_initiator_secure
   (a b:principal) (pt:list product_transition) (p:product_state)
@@ -2442,7 +2590,8 @@ let theorem_reachable_initiator_secure
        security_invariant p /\
        init_completed_auth p /\
        Some? p.ps_init.sh_key /\
-       ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key)))
+       (AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key) ==>
+          role_state_corrupt p Init \/ role_state_corrupt p Resp))
 = product_reaches_security_invariant a b pt p;
   theorem_initiator_authenticates_responder p;
   theorem_initiator_key_secret p
@@ -2457,7 +2606,8 @@ let theorem_reachable_responder_secure
        security_invariant p /\
        resp_completed_auth p /\
        Some? p.ps_resp.sh_key /\
-       ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key)))
+       (AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key) ==>
+          role_state_corrupt p Init \/ role_state_corrupt p Resp))
 = product_reaches_security_invariant a b pt p;
   theorem_responder_authenticates_initiator p;
   theorem_responder_key_secret p
@@ -2473,16 +2623,22 @@ let theorem_reachable_completed_session_secure
        security_invariant p /\
        init_completed_auth p /\
        resp_completed_auth p /\
+       (concrete_session_agreement p \/
+        p.ps_sys.sys_init_corrupt \/ p.ps_sys.sys_resp_corrupt) /\
        Some? p.ps_init.sh_key /\
        Some? p.ps_resp.sh_key /\
-       p.ps_init.sh_key == p.ps_resp.sh_key /\
-       ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key)) /\
-       ~(AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key)))
+       (p.ps_init.sh_key == p.ps_resp.sh_key \/
+        p.ps_sys.sys_init_corrupt \/ p.ps_sys.sys_resp_corrupt) /\
+       (AK.attacker_knows p.ps_trace (Some?.v p.ps_init.sh_key) ==>
+          role_state_corrupt p Init \/ role_state_corrupt p Resp) /\
+       (AK.attacker_knows p.ps_trace (Some?.v p.ps_resp.sh_key) ==>
+          role_state_corrupt p Init \/ role_state_corrupt p Resp))
 = product_reaches_security_invariant a b pt p;
   theorem_initiator_authenticates_responder p;
   theorem_responder_authenticates_initiator p;
   theorem_initiator_key_secret p;
   theorem_responder_key_secret p;
+  theorem_completed_concrete_agreement p;
   theorem_completed_session_key_agreement p
 #pop-options
 
@@ -2499,8 +2655,9 @@ let theorem_reachable_completed_session_secure
     product execution projecting EXACTLY onto the concrete execution, at whose
     final state the whole `security_invariant` holds AND
     `endpoint_security_consequences` directly exposes completion authentication,
-    key secrecy, and completed-session agreement.  The concrete matching facts
-    are also read directly off the concrete final state. *)
+    key secrecy and completed-session agreement — each MODULO the corresponding
+    role compromise, which is itself read off the concrete final state's
+    persistent compromise flags. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 let theorem_concrete_execution_secure
   (a b:principal) (ct:list Sys.system_transition) (cfinal:system_state)
@@ -2516,15 +2673,15 @@ let theorem_concrete_execution_secure
         proj pfinal == cfinal /\
         security_invariant pfinal /\
         endpoint_security_consequences pfinal /\
-        (cfinal.sys_init.ep_phase == Init_Done ==>
+        (* the concrete matching an UNCOMPROMISED completion still gives *)
+        ((cfinal.sys_init.ep_phase == Init_Done /\ cfinal.sys_resp_corrupt == false) ==>
            cfinal.sys_resp.ep_peer == Some cfinal.sys_init.ep_me /\
            cfinal.sys_resp.ep_peer_share == cfinal.sys_init.ep_my_share /\
            cfinal.sys_resp.ep_my_share == cfinal.sys_init.ep_peer_share) /\
-        (cfinal.sys_resp.ep_phase == Resp_Done ==>
+        ((cfinal.sys_resp.ep_phase == Resp_Done /\ cfinal.sys_init_corrupt == false) ==>
            cfinal.sys_init.ep_phase == Init_Done /\
            cfinal.sys_init.ep_peer == Some cfinal.sys_resp.ep_me /\
-           cfinal.sys_init.ep_my_share == cfinal.sys_resp.ep_peer_share /\
-           cfinal.sys_init.ep_peer_share == cfinal.sys_resp.ep_my_share)))
+           cfinal.sys_init.ep_my_share == cfinal.sys_resp.ep_peer_share)))
 = lemma_lift_system_execution a b ct cfinal;
   eliminate exists (pt:list product_transition) (pfinal:product_state).
       product_execution (product_sm a b) (product_initial a b) pt pfinal /\
@@ -2537,15 +2694,14 @@ let theorem_concrete_execution_secure
       proj pfinal' == cfinal /\
       security_invariant pfinal' /\
       endpoint_security_consequences pfinal' /\
-      (cfinal.sys_init.ep_phase == Init_Done ==>
+      ((cfinal.sys_init.ep_phase == Init_Done /\ cfinal.sys_resp_corrupt == false) ==>
          cfinal.sys_resp.ep_peer == Some cfinal.sys_init.ep_me /\
          cfinal.sys_resp.ep_peer_share == cfinal.sys_init.ep_my_share /\
          cfinal.sys_resp.ep_my_share == cfinal.sys_init.ep_peer_share) /\
-      (cfinal.sys_resp.ep_phase == Resp_Done ==>
+      ((cfinal.sys_resp.ep_phase == Resp_Done /\ cfinal.sys_init_corrupt == false) ==>
          cfinal.sys_init.ep_phase == Init_Done /\
          cfinal.sys_init.ep_peer == Some cfinal.sys_resp.ep_me /\
-         cfinal.sys_init.ep_my_share == cfinal.sys_resp.ep_peer_share /\
-         cfinal.sys_init.ep_peer_share == cfinal.sys_resp.ep_my_share))
+         cfinal.sys_init.ep_my_share == cfinal.sys_resp.ep_peer_share))
   with _pf.
     (product_reaches_security_invariant a b pt pfinal;
      lemma_security_invariant_endpoint_consequences pfinal;
@@ -2554,31 +2710,34 @@ let theorem_concrete_execution_secure
        proj pfinal' == cfinal /\
        security_invariant pfinal' /\
        endpoint_security_consequences pfinal' /\
-       (cfinal.sys_init.ep_phase == Init_Done ==>
+       ((cfinal.sys_init.ep_phase == Init_Done /\ cfinal.sys_resp_corrupt == false) ==>
           cfinal.sys_resp.ep_peer == Some cfinal.sys_init.ep_me /\
           cfinal.sys_resp.ep_peer_share == cfinal.sys_init.ep_my_share /\
           cfinal.sys_resp.ep_my_share == cfinal.sys_init.ep_peer_share) /\
-       (cfinal.sys_resp.ep_phase == Resp_Done ==>
+       ((cfinal.sys_resp.ep_phase == Resp_Done /\ cfinal.sys_init_corrupt == false) ==>
           cfinal.sys_init.ep_phase == Init_Done /\
           cfinal.sys_init.ep_peer == Some cfinal.sys_resp.ep_me /\
-          cfinal.sys_init.ep_my_share == cfinal.sys_resp.ep_peer_share /\
-          cfinal.sys_init.ep_peer_share == cfinal.sys_resp.ep_my_share)
+          cfinal.sys_init.ep_my_share == cfinal.sys_resp.ep_peer_share)
      with pt pfinal and ())
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
-    Part 6 — Honest-run non-vacuity witness
+    Part 6 — Honest-run non-vacuity witness (NO compromise)
     ═══════════════════════════════════════════════════════════════════════════
 
-    The general theorems above must not be vacuously true.  The composed system's
-    full honest three-message run (both endpoints complete, keys agree) is a
+    The general theorems above must not be vacuously true, and the compromise
+    disjuncts must not swallow them.  The composed system's full honest
+    three-message run (both endpoints complete, keys agree, NO `ActCorrupt`) is a
     genuine reachable execution whose lifted final product state satisfies
-    `security_invariant` AND at which BOTH completion-authentication facts hold
-    NON-vacuously in their CONNECTED form: the responder's `tag_responder_respond`
-    and the initiator's `tag_initiator_finish` events are BOTH genuinely present on
-    the shared DY* trace over transcripts whose identity AND both share components
-    are pinned to this completion, and the two endpoints' concrete session keys
-    agree. *)
+    `security_invariant`, has BOTH compromise flags CLEAR (hence, by
+    `lemma_corruption_coherence`, NEITHER role label DY*-corrupt), and at which:
+
+      * BOTH completion-authentication facts hold in their HONEST branch, with the
+        responder's `tag_responder_respond` and the initiator's
+        `tag_initiator_finish` events genuinely on the shared DY* trace over
+        transcripts pinned to this completion;
+      * the two endpoints' session keys are the SAME symbolic term; and
+      * the DY* attacker does NOT know that key (the uncompromised corollaries). *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 let lemma_secure_honest_run (a b:principal) (x y:dh_scalar)
   : Lemma
@@ -2590,6 +2749,11 @@ let lemma_secure_honest_run (a b:principal) (x y:dh_scalar)
         security_invariant pfinal /\
         pfinal.ps_sys.sys_init.ep_phase == Init_Done /\
         pfinal.ps_sys.sys_resp.ep_phase == Resp_Done /\
+        (* no compromise happened, and no role label is corrupt *)
+        pfinal.ps_sys.sys_init_corrupt == false /\
+        pfinal.ps_sys.sys_resp_corrupt == false /\
+        ~(role_state_corrupt pfinal Init) /\
+        ~(role_state_corrupt pfinal Resp) /\
         Some? pfinal.ps_init.sh_peer_share /\
         Some? pfinal.ps_resp.sh_peer_share /\
         Some? pfinal.ps_init.sh_scalar /\
@@ -2622,6 +2786,10 @@ let lemma_secure_honest_run (a b:principal) (x y:dh_scalar)
       security_invariant pfinal' /\
       pfinal'.ps_sys.sys_init.ep_phase == Init_Done /\
       pfinal'.ps_sys.sys_resp.ep_phase == Resp_Done /\
+      pfinal'.ps_sys.sys_init_corrupt == false /\
+      pfinal'.ps_sys.sys_resp_corrupt == false /\
+      ~(role_state_corrupt pfinal' Init) /\
+      ~(role_state_corrupt pfinal' Resp) /\
       Some? pfinal'.ps_init.sh_peer_share /\
       Some? pfinal'.ps_resp.sh_peer_share /\
       Some? pfinal'.ps_init.sh_scalar /\
@@ -2644,15 +2812,22 @@ let lemma_secure_honest_run (a b:principal) (x y:dh_scalar)
       Sys.hikey x y == Sys.hrkey x y)
   with _pf.
     (product_reaches_security_invariant a b pt pfinal;
+     lemma_corruption_coherence pfinal;
      theorem_initiator_authenticates_responder pfinal;
      theorem_responder_authenticates_initiator pfinal;
-    theorem_reachable_completed_session_secure a b pt pfinal;
-    introduce exists (pt':list product_transition) (pfinal':product_state).
+     theorem_completed_session_key_agreement pfinal;
+     theorem_initiator_key_secret_uncompromised pfinal;
+     theorem_responder_key_secret_uncompromised pfinal;
+     introduce exists (pt':list product_transition) (pfinal':product_state).
        product_execution (product_sm a b) (product_initial a b) pt' pfinal' /\
        proj pfinal' == Sys.h_s4 a b x y /\
        security_invariant pfinal' /\
        pfinal'.ps_sys.sys_init.ep_phase == Init_Done /\
        pfinal'.ps_sys.sys_resp.ep_phase == Resp_Done /\
+       pfinal'.ps_sys.sys_init_corrupt == false /\
+       pfinal'.ps_sys.sys_resp_corrupt == false /\
+       ~(role_state_corrupt pfinal' Init) /\
+       ~(role_state_corrupt pfinal' Resp) /\
        Some? pfinal'.ps_init.sh_peer_share /\
        Some? pfinal'.ps_resp.sh_peer_share /\
        Some? pfinal'.ps_init.sh_scalar /\
@@ -2687,13 +2862,9 @@ let lemma_secure_honest_run (a b:principal) (x y:dh_scalar)
     (`Sys.attacker_run`) lifts to a genuine product execution that STILL satisfies
     `security_invariant` — the invariant is consistent with the active attacker,
     because it makes NO honest-peer-share/secrecy claim at `Resp_Wait3`.  In this
-    state the run link is BROKEN (`sys_resp_msg1_idx = Some 0`, `sys_init_msg1_idx
-    = None`), the consumed packet has `Injected` origin, and the initiator has not
-    even started (`Init_Start`).  Hence `theorem_responder_key_secret` (which
-    requires `Resp_Done`) does NOT apply: no authentication or key secrecy is
-    claimed for the attacker-selected intermediate responder key.  The responder
-    can be started / DoS'd by the network but cannot be completed without a genuine
-    peer signature AND a matching run link. *)
+    state the run link is BROKEN, the consumed packet has `Injected` origin, the
+    initiator has not even started, and NO role is compromised — so this is an
+    attack on availability, NOT on authentication. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 let lemma_attacker_injected_msg1_nonvacuous
   (a b am:principal) (ash:dh_share) (y:dh_scalar)
@@ -2711,7 +2882,10 @@ let lemma_attacker_injected_msg1_nonvacuous
         (* the run link is broken and the consumed Msg1 was injected *)
         pfinal.ps_sys.sys_resp_msg1_idx == Some 0 /\
         pfinal.ps_sys.sys_init_msg1_idx == None /\
-        (Lst.index pfinal.ps_sys.sys_net 0).pk_origin == Injected))
+        (Lst.index pfinal.ps_sys.sys_net 0).pk_origin == Injected /\
+        (* and NO role was compromised: this is availability, not authentication *)
+        pfinal.ps_sys.sys_init_corrupt == false /\
+        pfinal.ps_sys.sys_resp_corrupt == false))
 = Sys.lemma_attacker_run_reaches a b am ash y;
   lemma_lift_system_execution a b (Sys.attacker_run a b am ash y) (Sys.a_s2 a b am ash y);
   eliminate exists (pt:list product_transition) (pfinal:product_state).
@@ -2730,7 +2904,9 @@ let lemma_attacker_injected_msg1_nonvacuous
       pfinal'.ps_sys.sys_init.ep_phase == Init_Start /\
       pfinal'.ps_sys.sys_resp_msg1_idx == Some 0 /\
       pfinal'.ps_sys.sys_init_msg1_idx == None /\
-      (Lst.index pfinal'.ps_sys.sys_net 0).pk_origin == Injected)
+      (Lst.index pfinal'.ps_sys.sys_net 0).pk_origin == Injected /\
+      pfinal'.ps_sys.sys_init_corrupt == false /\
+      pfinal'.ps_sys.sys_resp_corrupt == false)
   with _pf.
     (product_reaches_security_invariant a b pt pfinal;
      introduce exists (pt':list product_transition) (pfinal':product_state).
@@ -2742,6 +2918,165 @@ let lemma_attacker_injected_msg1_nonvacuous
        pfinal'.ps_sys.sys_init.ep_phase == Init_Start /\
        pfinal'.ps_sys.sys_resp_msg1_idx == Some 0 /\
        pfinal'.ps_sys.sys_init_msg1_idx == None /\
-       (Lst.index pfinal'.ps_sys.sys_net 0).pk_origin == Injected
+       (Lst.index pfinal'.ps_sys.sys_net 0).pk_origin == Injected /\
+       pfinal'.ps_sys.sys_init_corrupt == false /\
+       pfinal'.ps_sys.sys_resp_corrupt == false
+     with pt pfinal and ())
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    Part 8 — DYNAMIC-COMPROMISE non-vacuity: a FORGED completion after corruption
+    ═══════════════════════════════════════════════════════════════════════════
+
+    The compromise disjuncts of Parts 3b/4 must not be idle: they have to be
+    REACHABLE, and they have to be the ONLY thing that saves the statement in the
+    state they cover.  `Sys.corrupt_run` (see `DH.Sample.System`) is exactly such
+    a run:
+
+      draw x; ActStart; ActCorrupt Resp; ActInject of a FORGED Msg2 carrying an
+      ARBITRARY attacker share and the responder-key signature the attacker can
+      now produce; ActDeliver of that INJECTED packet to the initiator.
+
+    At the lifted final state:
+
+      * the responder's compromise FLAG is set, its DY* state LABEL is genuinely
+        corrupt, and there is a real `Corrupt` entry pointing at a real `SetState`
+        of the responder's state — so the attacker HOLDS that stored snapshot: it
+        is `is_publishable` and `attacker_knows` it (DY* CORE's own attacker
+        rules, no custom predicate);
+      * the initiator has COMPLETED (`Init_Done`) on a packet with `Injected`
+        origin, with the attacker's share as its peer share and session key;
+      * the responder is still in `Resp_Start` — it never responded — so the
+        HONEST branch of `init_completed_auth` is FALSE at this state (its first
+        conjunct demands `Resp_Wait3`/`Resp_Done`).  Hence the compromised
+        disjunct is genuinely load-bearing, and the honest branch is genuinely
+        unavailable: this is a real forgery, not a relabelled honest run. *)
+
+(** A corrupted stored state is publishable AND known to the DY* attacker — by
+    DY* CORE's own `corrupted_state_is_publishable` and the attacker rules. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10"
+let lemma_corrupted_state_known
+  (tr:TB.trace) (prin:T.principal) (sid:T.state_id) (content:BT.bytes)
+  : Lemma
+    (requires
+      TB.state_was_corrupt tr prin sid content /\
+      TI.trace_invariant #dh_sample_protocol_invariants tr)
+    (ensures
+      B.is_publishable #dh_sample_crypto_invariants tr content /\
+      AK.attacker_knows tr content)
+= AK.corrupted_state_is_publishable #dh_sample_protocol_invariants tr prin sid content;
+  introduce exists (pr:T.principal) (sid':T.state_id). TB.state_was_corrupt tr pr sid' content
+  with prin sid and ();
+  AK.attacker_knows_obeys_attacker_rules tr content
+#pop-options
+
+(** The compromised role's stored snapshot is in the attacker's hands. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10"
+let lemma_compromised_role_state_known (p:product_state) (who:endpoint_id)
+  : Lemma
+    (requires product_invariant p /\ Sys.corrupt_flag p.ps_sys who == true)
+    (ensures
+      role_state_corrupt p who /\
+      (exists (content:BT.bytes).
+         TB.state_was_corrupt p.ps_trace
+           (role_dy_principal who) (role_state_id who) content /\
+         B.is_publishable #dh_sample_crypto_invariants p.ps_trace content /\
+         AK.attacker_knows p.ps_trace content))
+= lemma_corruption_coherence p;
+  lemma_role_label_corrupt_iff p.ps_trace who;
+  eliminate exists (prin:T.principal) (sid:T.state_id) (content:BT.bytes).
+      TB.state_was_corrupt p.ps_trace prin sid content /\
+      prin == role_dy_principal who /\ sid == role_state_id who
+  returns (exists (content:BT.bytes).
+             TB.state_was_corrupt p.ps_trace
+               (role_dy_principal who) (role_state_id who) content /\
+             B.is_publishable #dh_sample_crypto_invariants p.ps_trace content /\
+             AK.attacker_knows p.ps_trace content)
+  with _pf.
+    (lemma_corrupted_state_known p.ps_trace prin sid content;
+     introduce exists (c:BT.bytes).
+       TB.state_was_corrupt p.ps_trace
+         (role_dy_principal who) (role_state_id who) c /\
+       B.is_publishable #dh_sample_crypto_invariants p.ps_trace c /\
+       AK.attacker_knows p.ps_trace c
+     with content and ())
+#pop-options
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
+let lemma_compromised_completion_nonvacuous
+  (a b:principal) (x:dh_scalar) (agy:dh_share)
+  : Lemma
+    (ensures (
+      exists (pt:list product_transition) (pfinal:product_state).
+        product_execution (product_sm a b) (product_initial a b) pt pfinal /\
+        proj pfinal == Sys.c_s4 a b x agy /\
+        security_invariant pfinal /\
+        (* the responder IS compromised — flag, DY* label, and a genuinely
+           corrupted stored state the attacker now knows *)
+        pfinal.ps_sys.sys_resp_corrupt == true /\
+        role_state_corrupt pfinal Resp /\
+        (exists (content:BT.bytes).
+           TB.state_was_corrupt pfinal.ps_trace
+             (role_dy_principal Resp) (role_state_id Resp) content /\
+           B.is_publishable #dh_sample_crypto_invariants pfinal.ps_trace content /\
+           AK.attacker_knows pfinal.ps_trace content) /\
+        (* the initiator COMPLETED on the FORGED, injected Msg2 (that the packet
+           it consumed has `Injected` origin is `Sys.lemma_corrupt_run_reaches`) *)
+        pfinal.ps_sys.sys_init.ep_phase == Init_Done /\
+        pfinal.ps_sys.sys_init.ep_peer_share == Some agy /\
+        (* ... while the responder NEVER responded, so the honest branch of
+           `init_completed_auth` is unavailable and the compromised disjunct is
+           what carries the statement *)
+        pfinal.ps_sys.sys_resp.ep_phase == Resp_Start /\
+        ~(pfinal.ps_sys.sys_resp.ep_phase == Resp_Wait3 \/
+          pfinal.ps_sys.sys_resp.ep_phase == Resp_Done) /\
+        (* the initiator itself was never compromised *)
+        pfinal.ps_sys.sys_init_corrupt == false))
+= Sys.lemma_corrupt_run_reaches a b x agy;
+  lemma_lift_system_execution a b (Sys.corrupt_run a b x agy) (Sys.c_s4 a b x agy);
+  eliminate exists (pt:list product_transition) (pfinal:product_state).
+      product_execution (product_sm a b) (product_initial a b) pt pfinal /\
+      execution_projects_exactly (Sys.corrupt_run a b x agy) pt /\
+      execution_frames_project_exactly (proj (product_initial a b)) (product_initial a b)
+        (Sys.corrupt_run a b x agy) pt /\
+      proj pfinal == Sys.c_s4 a b x agy
+  returns (
+    exists (pt':list product_transition) (pfinal':product_state).
+      product_execution (product_sm a b) (product_initial a b) pt' pfinal' /\
+      proj pfinal' == Sys.c_s4 a b x agy /\
+      security_invariant pfinal' /\
+      pfinal'.ps_sys.sys_resp_corrupt == true /\
+      role_state_corrupt pfinal' Resp /\
+      (exists (content:BT.bytes).
+         TB.state_was_corrupt pfinal'.ps_trace
+           (role_dy_principal Resp) (role_state_id Resp) content /\
+         B.is_publishable #dh_sample_crypto_invariants pfinal'.ps_trace content /\
+         AK.attacker_knows pfinal'.ps_trace content) /\
+      pfinal'.ps_sys.sys_init.ep_phase == Init_Done /\
+      pfinal'.ps_sys.sys_init.ep_peer_share == Some agy /\
+      pfinal'.ps_sys.sys_resp.ep_phase == Resp_Start /\
+      ~(pfinal'.ps_sys.sys_resp.ep_phase == Resp_Wait3 \/
+        pfinal'.ps_sys.sys_resp.ep_phase == Resp_Done) /\
+      pfinal'.ps_sys.sys_init_corrupt == false)
+  with _pf.
+    (product_reaches_security_invariant a b pt pfinal;
+     lemma_compromised_role_state_known pfinal Resp;
+     introduce exists (pt':list product_transition) (pfinal':product_state).
+       product_execution (product_sm a b) (product_initial a b) pt' pfinal' /\
+       proj pfinal' == Sys.c_s4 a b x agy /\
+       security_invariant pfinal' /\
+       pfinal'.ps_sys.sys_resp_corrupt == true /\
+       role_state_corrupt pfinal' Resp /\
+       (exists (content:BT.bytes).
+          TB.state_was_corrupt pfinal'.ps_trace
+            (role_dy_principal Resp) (role_state_id Resp) content /\
+          B.is_publishable #dh_sample_crypto_invariants pfinal'.ps_trace content /\
+          AK.attacker_knows pfinal'.ps_trace content) /\
+       pfinal'.ps_sys.sys_init.ep_phase == Init_Done /\
+        pfinal'.ps_sys.sys_init.ep_peer_share == Some agy /\
+       pfinal'.ps_sys.sys_resp.ep_phase == Resp_Start /\
+       ~(pfinal'.ps_sys.sys_resp.ep_phase == Resp_Wait3 \/
+         pfinal'.ps_sys.sys_resp.ep_phase == Resp_Done) /\
+       pfinal'.ps_sys.sys_init_corrupt == false
      with pt pfinal and ())
 #pop-options

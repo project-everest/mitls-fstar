@@ -31,6 +31,14 @@ module DH.Sample.Symbolic.Terms
       (lemma_sign_verifies).  Both are proved from DY* CORE reduction rules; no
       obligation is left open, and no equation is taken on faith.
 
+    * Dynamic compromise is modelled with the DY* CORE state/corruption
+      vocabulary: each role owns ONE `state_id`, and every secret it holds (its
+      long-term signing key, its DH scalar, each signing nonce) is labelled with
+      that role's `principal_state_label` (`role_label`), which DY* makes corrupt
+      EXACTLY when a `Corrupt` entry points at one of that role's `SetState`
+      entries.  `snapshot_term` is the layout of the material a role stores (and
+      therefore of what a compromise of that role hands the attacker).
+
   Honest provenance
   -----------------
     The vocabulary is chosen so that the product model can attach an HONEST
@@ -56,18 +64,36 @@ module U8  = FStar.UInt8
 
 open DH.Sample.Types
 open DH.Sample.Wire
+open DH.Sample.System
 
-(** ── Fixed, role-distinct DY principals ─────────────────────────────────────
+(** ── Fixed, role-distinct DY principals and role state identifiers ───────────
 
-    This is a fixed two-party sample.  DY event/key ownership is attributed to
-    two constant, definitionally distinct principals, never to an unproved
-    encoding of arbitrary concrete bytes.  Concrete principal bytes are still
-    embedded in messages and signed transcript terms below. *)
+    This is a fixed two-party sample.  DY event/key/state ownership is attributed
+    to two constant, definitionally distinct principals, never to an unproved
+    encoding of arbitrary concrete bytes.  Each role owns exactly ONE DY* session
+    (state) identifier — its single live protocol state — so the "current state"
+    of a role is a `SetState` entry for `(role_dy_principal who, role_state_id
+    who)`, and corrupting the role means a DY* `Corrupt` entry pointing AT such an
+    entry.  Concrete principal bytes are still embedded in messages and signed
+    transcript terms below. *)
 let init_dy_principal : T.principal = "DH.Sample.Initiator"
 let resp_dy_principal : T.principal = "DH.Sample.Responder"
 
 let lemma_role_principals_distinct ()
   : Lemma (ensures init_dy_principal =!= resp_dy_principal)
+= ()
+
+let role_dy_principal (who:endpoint_id) : T.principal =
+  match who with
+  | Init -> init_dy_principal
+  | Resp -> resp_dy_principal
+
+(** The single DY* session identifier each role's live state lives at.  Both roles
+    use identifier 0 because the two OWNING PRINCIPALS already differ. *)
+let role_state_id (who:endpoint_id) : T.state_id = { T.the_id = 0 }
+
+let lemma_role_state_owners_distinct ()
+  : Lemma (ensures role_dy_principal Init =!= role_dy_principal Resp)
 = ()
 
 (** ── Abstract symbolic lengths ─────────────────────────────────────────────
@@ -91,21 +117,59 @@ let eph_usage      : BT.usage = BT.DhKey  "DH.Sample.ephemeral" empty_data
 let ltk_usage      : BT.usage = BT.SigKey "DH.Sample.longterm"  empty_data
 let signonce_usage : BT.usage = BT.SigNonce
 
-(** ── Labels ────────────────────────────────────────────────────────────────
+(** ── Compromise-sensitive role/state labels ─────────────────────────────────
 
-    Secrets carry the most restrictive DY* label, `secret`; public material
-    (network blobs, DH public shares) is `public`.  Using `secret` for locally
-    generated key material is the conservative, honest choice: it claims no more
-    than that the material is not, by construction, public. *)
-let eph_label      : LT.label = L.secret
-let ltk_label      : LT.label = L.secret
-let signonce_label : LT.label = L.secret
+    Every long-lived or ephemeral SECRET of a role — its long-term signing key,
+    its DH scalar, and each of its per-signature nonces — is labelled with that
+    role's STATE label `L.principal_state_label (role_dy_principal who)
+    (role_state_id who)`.  That DY* label is corrupt EXACTLY when some `SetState`
+    entry of that role's state has been hit by a `Corrupt` entry
+    (`L.is_corrupt_state_pred_label`), i.e. exactly when the attacker has
+    dynamically compromised that role.
 
-(** A generated ephemeral carries the bottom/secret label, which DY* proves is
-    never corrupt.  The product also never sends the scalar itself—only dh_pk. *)
-let lemma_eph_label_private (tr:TB.trace)
-  : Lemma (ensures ~(L.is_corrupt tr eph_label))
-= L.is_corrupt_secret tr
+    This replaces the previous unconditional `L.secret` labelling, which asserted
+    that role secrets are NEVER corrupt and therefore could not express dynamic
+    compromise at all.  With the state label:
+
+      * before any compromise, the label is not corrupt, so all the old secrecy
+        consequences still hold (see `DH.Sample.Symbolic.Security`);
+      * after `ActCorrupt who`, the label IS corrupt, DY* immediately allows the
+        attacker to hold that role's key material, the signature `bytes_invariant`
+        offers its ATTACKER branch (`get_label sk` flows to `public`), and every
+        security statement degrades to "... OR that role is compromised".
+
+    Because a role's signing key, scalar and signing nonces all carry the SAME
+    label, the DY* `Sign` invariant's side condition "the signing key is at most
+    as secret as the nonce" holds reflexively. *)
+let role_label (who:endpoint_id) : LT.label =
+  L.principal_state_label (role_dy_principal who) (role_state_id who)
+
+let eph_label      (who:endpoint_id) : LT.label = role_label who
+let ltk_label      (who:endpoint_id) : LT.label = role_label who
+let signonce_label (who:endpoint_id) : LT.label = role_label who
+
+(** A role's label is corrupt EXACTLY when one of that role's stored states has
+    been corrupted on the trace.  This is the single bridge between DY* label
+    corruption and the `SetState`/`Corrupt` trace entries the product records. *)
+let lemma_role_label_corrupt_iff (tr:TB.trace) (who:endpoint_id)
+  : Lemma
+    (ensures
+      L.is_corrupt tr (role_label who) <==>
+      (exists (prin:T.principal) (sid:T.state_id) (content:BT.bytes).
+         TB.state_was_corrupt tr prin sid content /\
+         prin == role_dy_principal who /\ sid == role_state_id who))
+= L.is_corrupt_state_pred_label tr
+    (L.principal_state_label_input (role_dy_principal who) (role_state_id who))
+
+(** The "compromised" direction, in the form the product uses: a `Corrupt` entry
+    pointing at one of the role's `SetState` entries corrupts its label. *)
+let lemma_state_corrupt_implies_label_corrupt
+  (tr:TB.trace) (who:endpoint_id) (content:BT.bytes)
+  : Lemma
+    (requires
+      TB.state_was_corrupt tr (role_dy_principal who) (role_state_id who) content)
+    (ensures L.is_corrupt tr (role_label who))
+= lemma_role_label_corrupt_iff tr who
 
 (** ── Embedding of concrete public blobs ────────────────────────────────────
 
@@ -195,6 +259,36 @@ let inject_smsg (m:dh_message) : sym_msg =
     of the concrete message. *)
 let delivery_term (m:dh_message) : BT.bytes = flatten (inject_smsg m)
 
+
+(** ── The stored state snapshot of a role ────────────────────────────────────
+
+    The DY* `SetState` content the product writes for a role.  It EXPLICITLY
+    RETAINS every piece of material that role currently holds, in a fixed layout:
+
+        ltk ++ (pending ++ (scalar ++ (peer_share ++ key)))
+
+    A field that does not exist yet (or does not exist any more, in a model that
+    erased it) is rendered as the public empty literal `no_material`.
+
+    NO ERASURE IS MODELLED.  Once a role has drawn its ephemeral scalar or derived
+    its session key, that material stays in every later snapshot of that role, so
+    a compromise at ANY later time hands the attacker the CURRENT session key as
+    well as the long-term key.  Consequently this model deliberately offers NO
+    forward secrecy (see dh-sample/SYMBOLIC_SECURITY.md §"No erasure, no PFS"):
+    a post-session compromise of a role is as damaging as a pre-session one. *)
+let no_material : BT.bytes = empty_data
+
+let opt_material (o:option BT.bytes) : BT.bytes =
+  match o with
+  | None   -> no_material
+  | Some b -> b
+
+let snapshot_term (ltk:BT.bytes) (pending scalar peer_share key:option BT.bytes)
+  : BT.bytes =
+  B.concat ltk
+    (B.concat (opt_material pending)
+      (B.concat (opt_material scalar)
+        (B.concat (opt_material peer_share) (opt_material key))))
 
 (** ── Protocol event vocabulary ─────────────────────────────────────────────
 

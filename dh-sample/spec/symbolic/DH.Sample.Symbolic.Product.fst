@@ -20,7 +20,7 @@ module DH.Sample.Symbolic.Product
   trace-monad operations (`mk_rand`, `trigger_event`, `send_msg`, `recv_msg`)
   threaded in causal order on the ONE shared trace.  Both endpoints run their
   setups on this single trace, so their long-term keys are DISTINCT `RandGen`
-  entries (times 0 and 2), attributed to fixed distinct DY role principals.
+  entries (times 0 and 3), attributed to fixed distinct DY role principals.
   Consequently:
 
     * only an explicit composed `ActRng` runs `mk_rand` for an ephemeral.  Its
@@ -54,13 +54,31 @@ module DH.Sample.Symbolic.Product
   is a stuttering refinement whose observable projection onto the concrete system
   is nonetheless EXACT (same before state, event, after state, outputs).
 
-  The ideal-symbolic-crypto boundary versus computational assumptions
-  ------------------------------------------------------------------
-  This is an IDEAL symbolic-crypto model: signatures are genuine `Sign` terms and
-  unforgeability is stipulated (an attacker injection is an all-literal term,
-  which cannot be an honest `Sign`; both completion deliveries require the
-  appropriate honest peer origin AND a matching run link — see
-  `DH.Sample.System`).  We make NO
+  Dynamic compromise
+  ------------------
+  Each role owns ONE DY* state (`Terms.role_state_id`).  Every segment that
+  changes a role's live secret material ENDS with a genuine `set_state` storing
+  that role's CURRENT snapshot — long-term key, pending draw, ephemeral scalar,
+  received peer share AND session key (`Terms.snapshot_term`) — and the role's
+  shadow records the trace POSITION of that `SetState` (`sh_state_pos`), which
+  `wf` pins to hold exactly that snapshot.  `ActCorrupt who` then runs the
+  genuine DY* CORE `corrupt` on THAT position, so a compromise deterministically
+  hands the attacker exactly the material the role holds at that moment.  The
+  responder's Msg3 completion stores nothing new: it changes its PHASE, not its
+  key material (whose snapshot was already written at its Msg1 delivery).
+
+  NO ERASURE is modelled: material is never dropped from a later snapshot, so a
+  post-session compromise still reveals the session key.  Consequently this model
+  offers NO forward secrecy, by design and explicitly (see
+  dh-sample/SYMBOLIC_SECURITY.md).
+
+  The symbolic-crypto boundary versus computational assumptions
+  ------------------------------------------------------------
+  This is a symbolic-crypto model: signatures are genuine `Sign` terms and
+  unforgeability holds only while the SIGNING ROLE is uncompromised (an attacker
+  injection is an all-literal term, which cannot be an honest `Sign`; a
+  completion delivery requires the appropriate honest peer origin AND a matching
+  run link UNLESS that peer is compromised — see `DH.Sample.System`).  We make NO
   computational hardness assumption; the toy concrete digest is deliberately weak
   and is never the sole justification for a completion.
 *)
@@ -113,157 +131,223 @@ let recv_msg_effect (i:T.timestamp) (tr:TB.trace)
     [SMTPat (recv_msg i tr)]
 = reveal_opaque (`%recv_msg) recv_msg
 
+(** The genuine DY* CORE state-storing operation: appending one `SetState` entry
+    for the principal / session identifier / content given. *)
+let set_state_effect (prin:T.principal) (sid:T.state_id) (content:BT.bytes) (tr:TB.trace)
+  : Lemma
+    (ensures set_state prin sid content tr ==
+             ((), TB.append_entry tr (T.SetState prin sid content)))
+    [SMTPat (set_state prin sid content tr)]
+= reveal_opaque (`%set_state) set_state
+
+(** The genuine DY* CORE compromise operation: appending one `Corrupt` entry
+    naming the trace position of the state being compromised. *)
+let corrupt_effect (time:T.timestamp) (tr:TB.trace)
+  : Lemma
+    (ensures corrupt time tr == ((), TB.append_entry tr (T.Corrupt time)))
+    [SMTPat (corrupt time tr)]
+= reveal_opaque (`%corrupt) corrupt
+
 #pop-options
 
 (** ── Genuine DY* trace-monad segments ───────────────────────────────────────
     Each concrete system step's provenance is the trace produced by RUNNING these
     computations.  Receiving segments begin with a genuine `recv_msg` at the
     delivered packet's position (which does not change the trace) and then append
-    the endpoint's own random generations / authorizations / sends. *)
+    the endpoint's own random generations / authorizations / sends.
 
-(** Setup: draw the endpoint's long-term signing key and register it. *)
-let setup_run (mep:T.principal) (me_t:BT.bytes) (tr:TB.trace) : (BT.bytes & TB.trace) =
-  let (ltk, tr) = mk_rand ltk_usage ltk_label ltk_len tr in
+    EVERY segment that changes a role's live secret material ENDS with a genuine
+    DY* `set_state` writing that role's NEW snapshot (`content`, supplied by the
+    caller, which is exactly `shadow_snapshot` of the updated shadow — see
+    `sym_extend`).  That `SetState` entry is the object a later `Corrupt` entry
+    points at, so a compromise always hands the attacker EXACTLY the material the
+    role holds at that moment.  The responder's Msg3 completion changes only its
+    PHASE — no new key material — so it writes no new state (its session key was
+    already retained in the snapshot written at its Msg1 delivery). *)
+
+(** Setup: draw the endpoint's long-term signing key, register it, and store the
+    initial role state (the long-term key only). *)
+let setup_run (who:endpoint_id) (me_t:BT.bytes) (tr:TB.trace) : (BT.bytes & TB.trace) =
+  let mep = role_dy_principal who in
+  let (ltk, tr) = mk_rand ltk_usage (ltk_label who) ltk_len tr in
   let (_, tr) = trigger_event mep tag_keygen (keygen_content me_t (vkey_term ltk)) tr in
+  let (_, tr) = set_state mep (role_state_id who) (snapshot_term ltk None None None None) tr in
   (ltk, tr)
 
-(** One explicit ideal-RNG transition: draw a secret-labelled ephemeral. *)
-let rng_run (tr:TB.trace) : (BT.bytes & TB.trace) =
-  mk_rand eph_usage eph_label eph_len tr
+(** One explicit ideal-RNG transition: draw a role-labelled ephemeral, then
+    refresh the drawing role's stored state (which now holds the pending draw). *)
+let rng_run (who:endpoint_id) (content:BT.bytes) (tr:TB.trace) : (BT.bytes & TB.trace) =
+  let (scalar, tr) = mk_rand eph_usage (eph_label who) eph_len tr in
+  let (_, tr) = set_state (role_dy_principal who) (role_state_id who) content tr in
+  (scalar, tr)
 
 (** Initiator start consumes a scalar drawn by an earlier `rng_run`. *)
-let start_run (mep:T.principal) (me_t peer_t scalar:BT.bytes) (tr:TB.trace)
+let start_run (me_t peer_t scalar content:BT.bytes) (tr:TB.trace)
   : (BT.bytes & TB.trace) =
+  let mep = role_dy_principal Init in
   let (_, tr) = trigger_event mep tag_initiate (initiate_content me_t peer_t (share_term scalar)) tr in
   let (_, tr) = send_msg (flatten (SMsg1 me_t (share_term scalar))) tr in
+  let (_, tr) = set_state mep (role_state_id Init) content tr in
   (scalar, tr)
 
 (** Responder respond consumes a scalar drawn by an earlier `rng_run`: read the
-    delivered message 1, authorize, draw a signing nonce, send message 2. *)
-let respond_run (mep:T.principal) (ltk me_t a_t peer_share scalar:BT.bytes)
+    delivered message 1, authorize, draw a signing nonce, send message 2, and
+    store the new responder state (scalar, peer share AND session key). *)
+let respond_run (ltk me_t a_t peer_share scalar content:BT.bytes)
                 (tr:TB.trace) (rpos:nat)
   : (BT.bytes & TB.trace) =
+  let mep = role_dy_principal Resp in
   let (_, tr) = recv_msg rpos tr in
   let transcript = transcript_term a_t peer_share (share_term scalar) in
   let (_, tr) = trigger_event mep tag_responder_respond transcript tr in
-  let (signonce, tr) = mk_rand signonce_usage signonce_label signonce_len tr in
+  let (signonce, tr) = mk_rand signonce_usage (signonce_label Resp) signonce_len tr in
   let (_, tr) = send_msg (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk signonce transcript))) tr in
+  let (_, tr) = set_state mep (role_state_id Resp) content tr in
   (scalar, tr)
 
 (** Initiator finish: read the delivered message 2, authorize, draw a signing
-    nonce, send message 3. *)
-let ifinish_run (mep:T.principal) (ltk scalar b_t peer_share:BT.bytes) (tr:TB.trace) (rpos:nat)
+    nonce, send message 3, and store the new initiator state (peer share AND
+    session key). *)
+let ifinish_run (ltk scalar b_t peer_share content:BT.bytes) (tr:TB.trace) (rpos:nat)
   : (unit & TB.trace) =
+  let mep = role_dy_principal Init in
   let (_, tr) = recv_msg rpos tr in
   let transcript = transcript_term b_t (share_term scalar) peer_share in
   let (_, tr) = trigger_event mep tag_initiator_finish transcript tr in
-  let (signonce, tr) = mk_rand signonce_usage signonce_label signonce_len tr in
+  let (signonce, tr) = mk_rand signonce_usage (signonce_label Init) signonce_len tr in
   let (_, tr) = send_msg (flatten (SMsg3 (sig_term ltk signonce transcript))) tr in
+  let (_, tr) = set_state mep (role_state_id Init) content tr in
   ((), tr)
 
-(** Responder finish: read the delivered message 3, record completion. *)
-let rfinish_run (mep:T.principal) (a_t key:BT.bytes) (tr:TB.trace) (rpos:nat) : (unit & TB.trace) =
+(** Responder finish: read the delivered message 3, record completion.  No new
+    key material, hence no new stored state. *)
+let rfinish_run (a_t key:BT.bytes) (tr:TB.trace) (rpos:nat) : (unit & TB.trace) =
   let (_, tr) = recv_msg rpos tr in
-  trigger_event mep tag_responder_finish (session_content a_t key) tr
+  trigger_event (role_dy_principal Resp) tag_responder_finish (session_content a_t key) tr
 
 (** Attacker injection: put publishable all-literal bytes on the network. *)
 let inject_run (sm:sym_msg) (tr:TB.trace) : (nat & TB.trace) =
   send_msg (flatten sm) tr
 
+(** DYNAMIC COMPROMISE: the genuine DY* CORE `corrupt` operation, applied to the
+    trace position of the target role's CURRENT stored state.  This is the only
+    place a `Corrupt` entry is ever produced, and it is deterministic: the
+    position is read off the role's shadow, never chosen by a caller. *)
+let corrupt_run (pos:nat) (tr:TB.trace) : (unit & TB.trace) =
+  corrupt pos tr
+
 (** ── Transparent trace chains of each segment ───────────────────────────────*)
 
-let setup_trace (mep:T.principal) (me_t:BT.bytes) (tr:TB.trace) : TB.trace =
+let setup_trace (who:endpoint_id) (me_t:BT.bytes) (tr:TB.trace) : TB.trace =
+  let mep = role_dy_principal who in
   let ltk = ltk_term (TB.trace_length tr) in
   TB.append_entry
-    (TB.append_entry tr (T.RandGen ltk_usage ltk_label ltk_len))
-    (T.Event mep tag_keygen (keygen_content me_t (vkey_term ltk)))
+    (TB.append_entry
+      (TB.append_entry tr (T.RandGen ltk_usage (ltk_label who) ltk_len))
+      (T.Event mep tag_keygen (keygen_content me_t (vkey_term ltk))))
+    (T.SetState mep (role_state_id who) (snapshot_term ltk None None None None))
 
-let rng_trace (tr:TB.trace) : TB.trace =
-  TB.append_entry tr (T.RandGen eph_usage eph_label eph_len)
-
-let start_trace (mep:T.principal) (me_t peer_t scalar:BT.bytes) (tr:TB.trace) : TB.trace =
+let rng_trace (who:endpoint_id) (content:BT.bytes) (tr:TB.trace) : TB.trace =
   TB.append_entry
-    (TB.append_entry tr
-      (T.Event mep tag_initiate (initiate_content me_t peer_t (share_term scalar))))
-    (T.MsgSent (flatten (SMsg1 me_t (share_term scalar))))
+    (TB.append_entry tr (T.RandGen eph_usage (eph_label who) eph_len))
+    (T.SetState (role_dy_principal who) (role_state_id who) content)
 
-let respond_trace (mep:T.principal) (ltk me_t a_t peer_share scalar:BT.bytes)
+let start_trace (me_t peer_t scalar content:BT.bytes) (tr:TB.trace) : TB.trace =
+  let mep = role_dy_principal Init in
+  TB.append_entry
+    (TB.append_entry
+      (TB.append_entry tr
+        (T.Event mep tag_initiate (initiate_content me_t peer_t (share_term scalar))))
+      (T.MsgSent (flatten (SMsg1 me_t (share_term scalar)))))
+    (T.SetState mep (role_state_id Init) content)
+
+let respond_trace (ltk me_t a_t peer_share scalar content:BT.bytes)
                   (tr:TB.trace) : TB.trace =
+  let mep = role_dy_principal Resp in
   let transcript = transcript_term a_t peer_share (share_term scalar) in
   let signonce = signonce_term (TB.trace_length tr + 1) in
   TB.append_entry
     (TB.append_entry
-      (TB.append_entry tr
-        (T.Event mep tag_responder_respond transcript))
-      (T.RandGen signonce_usage signonce_label signonce_len))
-    (T.MsgSent (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk signonce transcript))))
+      (TB.append_entry
+        (TB.append_entry tr
+          (T.Event mep tag_responder_respond transcript))
+        (T.RandGen signonce_usage (signonce_label Resp) signonce_len))
+      (T.MsgSent (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk signonce transcript)))))
+    (T.SetState mep (role_state_id Resp) content)
 
-let ifinish_trace (mep:T.principal) (ltk scalar b_t peer_share:BT.bytes) (tr:TB.trace) : TB.trace =
+let ifinish_trace (ltk scalar b_t peer_share content:BT.bytes) (tr:TB.trace) : TB.trace =
+  let mep = role_dy_principal Init in
   let transcript = transcript_term b_t (share_term scalar) peer_share in
   let signonce = signonce_term (TB.trace_length tr + 1) in
   TB.append_entry
     (TB.append_entry
-      (TB.append_entry tr (T.Event mep tag_initiator_finish transcript))
-      (T.RandGen signonce_usage signonce_label signonce_len))
-    (T.MsgSent (flatten (SMsg3 (sig_term ltk signonce transcript))))
+      (TB.append_entry
+        (TB.append_entry tr (T.Event mep tag_initiator_finish transcript))
+        (T.RandGen signonce_usage (signonce_label Init) signonce_len))
+      (T.MsgSent (flatten (SMsg3 (sig_term ltk signonce transcript)))))
+    (T.SetState mep (role_state_id Init) content)
 
-let rfinish_trace (mep:T.principal) (a_t key:BT.bytes) (tr:TB.trace) : TB.trace =
-  TB.append_entry tr (T.Event mep tag_responder_finish (session_content a_t key))
+let rfinish_trace (a_t key:BT.bytes) (tr:TB.trace) : TB.trace =
+  TB.append_entry tr
+    (T.Event (role_dy_principal Resp) tag_responder_finish (session_content a_t key))
 
 let inject_trace (sm:sym_msg) (tr:TB.trace) : TB.trace =
   TB.append_entry tr (T.MsgSent (flatten sm))
+
+let corrupt_trace (pos:nat) (tr:TB.trace) : TB.trace =
+  TB.append_entry tr (T.Corrupt pos)
 
 (** ── Structure lemmas: each run equals its transparent chain ────────────────*)
 
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10"
 
-let setup_structure (mep:T.principal) (me_t:BT.bytes) (tr:TB.trace)
+let setup_structure (who:endpoint_id) (me_t:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
-      let (ltk, tr') = setup_run mep me_t tr in
-      ltk == ltk_term (TB.trace_length tr) /\ tr' == setup_trace mep me_t tr))
-= let (ltk, tr') = setup_run mep me_t tr in
+      let (ltk, tr') = setup_run who me_t tr in
+      ltk == ltk_term (TB.trace_length tr) /\ tr' == setup_trace who me_t tr))
+= let (ltk, tr') = setup_run who me_t tr in
   assert (ltk == ltk_term (TB.trace_length tr));
-  assert (tr' == setup_trace mep me_t tr)
+  assert (tr' == setup_trace who me_t tr)
 
-let rng_structure (tr:TB.trace)
+let rng_structure (who:endpoint_id) (content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
-      let (scalar, tr') = rng_run tr in
-      scalar == eph_term (TB.trace_length tr) /\ tr' == rng_trace tr))
-= let (scalar, tr') = rng_run tr in
+      let (scalar, tr') = rng_run who content tr in
+      scalar == eph_term (TB.trace_length tr) /\ tr' == rng_trace who content tr))
+= let (scalar, tr') = rng_run who content tr in
   assert (scalar == eph_term (TB.trace_length tr));
-  assert (tr' == rng_trace tr)
+  assert (tr' == rng_trace who content tr)
 
-let start_structure (mep:T.principal) (me_t peer_t scalar:BT.bytes) (tr:TB.trace)
+let start_structure (me_t peer_t scalar content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
-      let (scalar', tr') = start_run mep me_t peer_t scalar tr in
-      scalar' == scalar /\ tr' == start_trace mep me_t peer_t scalar tr))
-= let (scalar', tr') = start_run mep me_t peer_t scalar tr in
+      let (scalar', tr') = start_run me_t peer_t scalar content tr in
+      scalar' == scalar /\ tr' == start_trace me_t peer_t scalar content tr))
+= let (scalar', tr') = start_run me_t peer_t scalar content tr in
   assert (scalar' == scalar);
-  assert (tr' == start_trace mep me_t peer_t scalar tr)
+  assert (tr' == start_trace me_t peer_t scalar content tr)
 
-let respond_structure (mep:T.principal) (ltk me_t a_t peer_share scalar:BT.bytes)
+let respond_structure (ltk me_t a_t peer_share scalar content:BT.bytes)
                       (tr:TB.trace) (rpos:nat)
   : Lemma (ensures (
-      let (scalar', tr') = respond_run mep ltk me_t a_t peer_share scalar tr rpos in
+      let (scalar', tr') = respond_run ltk me_t a_t peer_share scalar content tr rpos in
       scalar' == scalar /\
-      tr' == respond_trace mep ltk me_t a_t peer_share scalar tr))
-= let (scalar', tr') = respond_run mep ltk me_t a_t peer_share scalar tr rpos in
+      tr' == respond_trace ltk me_t a_t peer_share scalar content tr))
+= let (scalar', tr') = respond_run ltk me_t a_t peer_share scalar content tr rpos in
   assert (scalar' == scalar);
-  assert (tr' == respond_trace mep ltk me_t a_t peer_share scalar tr)
+  assert (tr' == respond_trace ltk me_t a_t peer_share scalar content tr)
 
-let ifinish_structure (mep:T.principal) (ltk scalar b_t peer_share:BT.bytes) (tr:TB.trace) (rpos:nat)
+let ifinish_structure (ltk scalar b_t peer_share content:BT.bytes) (tr:TB.trace) (rpos:nat)
   : Lemma (ensures (
-      let (_, tr') = ifinish_run mep ltk scalar b_t peer_share tr rpos in
-      tr' == ifinish_trace mep ltk scalar b_t peer_share tr))
-= let (_, tr') = ifinish_run mep ltk scalar b_t peer_share tr rpos in
-  assert (tr' == ifinish_trace mep ltk scalar b_t peer_share tr)
+      let (_, tr') = ifinish_run ltk scalar b_t peer_share content tr rpos in
+      tr' == ifinish_trace ltk scalar b_t peer_share content tr))
+= let (_, tr') = ifinish_run ltk scalar b_t peer_share content tr rpos in
+  assert (tr' == ifinish_trace ltk scalar b_t peer_share content tr)
 
-let rfinish_structure (mep:T.principal) (a_t key:BT.bytes) (tr:TB.trace) (rpos:nat)
+let rfinish_structure (a_t key:BT.bytes) (tr:TB.trace) (rpos:nat)
   : Lemma (ensures (
-      let (_, tr') = rfinish_run mep a_t key tr rpos in
-      tr' == rfinish_trace mep a_t key tr))
-= let (_, tr') = rfinish_run mep a_t key tr rpos in
-  assert (tr' == rfinish_trace mep a_t key tr)
+      let (_, tr') = rfinish_run a_t key tr rpos in
+      tr' == rfinish_trace a_t key tr))
+= let (_, tr') = rfinish_run a_t key tr rpos in
+  assert (tr' == rfinish_trace a_t key tr)
 
 let inject_structure (sm:sym_msg) (tr:TB.trace)
   : Lemma (ensures (
@@ -272,6 +356,12 @@ let inject_structure (sm:sym_msg) (tr:TB.trace)
 = let (pos, tr') = inject_run sm tr in
   assert (pos == TB.trace_length tr);
   assert (tr' == inject_trace sm tr)
+
+let corrupt_structure (pos:nat) (tr:TB.trace)
+  : Lemma (ensures (
+      let (_, tr') = corrupt_run pos tr in
+      tr' == corrupt_trace pos tr))
+= reveal_opaque (`%corrupt) corrupt
 
 #pop-options
 
@@ -301,95 +391,125 @@ let grows4 (tr:TB.trace) (e1 e2 e3 e4:TB.trace_entry)
   TB.grows_transitive tr t3 (TB.append_entry t3 e4)
 #pop-options
 
-(** ── Segment facts: growth and exact entry positions ────────────────────────*)
+(** ── Segment facts: growth and exact entry positions ────────────────────────
+
+    Every segment's `grows` fact plus the EXACT position of each entry it appends,
+    including the trailing `SetState` (whose position is what the role's shadow
+    records as its "current state pointer", and what a later `Corrupt` targets). *)
 
 #push-options "--fuel 6 --ifuel 2 --z3rlimit 10"
 
-let setup_facts (mep:T.principal) (me_t:BT.bytes) (tr:TB.trace)
+let setup_facts (who:endpoint_id) (me_t:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
-      let tr' = setup_trace mep me_t tr in
+      let mep = role_dy_principal who in
+      let tr' = setup_trace who me_t tr in
       tr `TB.grows` tr' /\
-      TB.entry_at tr' n (T.RandGen ltk_usage ltk_label ltk_len) /\
+      TB.trace_length tr' == n + 3 /\
+      TB.entry_at tr' n (T.RandGen ltk_usage (ltk_label who) ltk_len) /\
       TB.entry_at tr' (n + 1) (T.Event mep tag_keygen (keygen_content me_t (vkey_term (ltk_term n)))) /\
+      TB.entry_at tr' (n + 2)
+        (T.SetState mep (role_state_id who) (snapshot_term (ltk_term n) None None None None)) /\
       TB.event_triggered tr' mep tag_keygen (keygen_content me_t (vkey_term (ltk_term n)))))
 = let n = TB.trace_length tr in
-  grows2 tr (T.RandGen ltk_usage ltk_label ltk_len)
+  let mep = role_dy_principal who in
+  grows3 tr (T.RandGen ltk_usage (ltk_label who) ltk_len)
             (T.Event mep tag_keygen (keygen_content me_t (vkey_term (ltk_term n))))
+            (T.SetState mep (role_state_id who) (snapshot_term (ltk_term n) None None None None))
 
-let rng_facts (tr:TB.trace)
+let rng_facts (who:endpoint_id) (content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
-      let tr' = rng_trace tr in
+      let tr' = rng_trace who content tr in
       tr `TB.grows` tr' /\
-      TB.entry_at tr' n (T.RandGen eph_usage eph_label eph_len)))
+      TB.trace_length tr' == n + 2 /\
+      TB.entry_at tr' n (T.RandGen eph_usage (eph_label who) eph_len) /\
+      TB.entry_at tr' (n + 1)
+        (T.SetState (role_dy_principal who) (role_state_id who) content)))
 = let n = TB.trace_length tr in
-  TB.grows_snoc tr (T.RandGen eph_usage eph_label eph_len)
+  grows2 tr (T.RandGen eph_usage (eph_label who) eph_len)
+            (T.SetState (role_dy_principal who) (role_state_id who) content)
 
-let start_facts (mep:T.principal) (me_t peer_t scalar:BT.bytes) (tr:TB.trace)
+let start_facts (me_t peer_t scalar content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
-      let tr' = start_trace mep me_t peer_t scalar tr in
+      let mep = role_dy_principal Init in
+      let tr' = start_trace me_t peer_t scalar content tr in
       tr `TB.grows` tr' /\
+      TB.trace_length tr' == n + 3 /\
       TB.entry_at tr' n (T.Event mep tag_initiate (initiate_content me_t peer_t (share_term scalar))) /\
       TB.entry_at tr' (n + 1) (T.MsgSent (flatten (SMsg1 me_t (share_term scalar)))) /\
+      TB.entry_at tr' (n + 2) (T.SetState mep (role_state_id Init) content) /\
       TB.event_triggered tr' mep tag_initiate (initiate_content me_t peer_t (share_term scalar))))
 = let n = TB.trace_length tr in
-  let tr' = start_trace mep me_t peer_t scalar tr in
-  grows2 tr (T.Event mep tag_initiate (initiate_content me_t peer_t (share_term scalar)))
-            (T.MsgSent (flatten (SMsg1 me_t (share_term scalar))));
+  let mep = role_dy_principal Init in
+  let tr' = start_trace me_t peer_t scalar content tr in
+  grows3 tr (T.Event mep tag_initiate (initiate_content me_t peer_t (share_term scalar)))
+            (T.MsgSent (flatten (SMsg1 me_t (share_term scalar))))
+            (T.SetState mep (role_state_id Init) content);
   assert (TB.entry_at tr' n (T.Event mep tag_initiate (initiate_content me_t peer_t (share_term scalar))));
   assert (TB.entry_at tr' (n + 1) (T.MsgSent (flatten (SMsg1 me_t (share_term scalar)))))
 
-let respond_facts (mep:T.principal) (ltk me_t a_t peer_share scalar:BT.bytes) (tr:TB.trace)
+let respond_facts (ltk me_t a_t peer_share scalar content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
+      let mep = role_dy_principal Resp in
       let transcript = transcript_term a_t peer_share (share_term scalar) in
-      let tr' = respond_trace mep ltk me_t a_t peer_share scalar tr in
+      let tr' = respond_trace ltk me_t a_t peer_share scalar content tr in
       tr `TB.grows` tr' /\
+      TB.trace_length tr' == n + 4 /\
       TB.entry_at tr' n (T.Event mep tag_responder_respond transcript) /\
-      TB.entry_at tr' (n + 1) (T.RandGen signonce_usage signonce_label signonce_len) /\
+      TB.entry_at tr' (n + 1) (T.RandGen signonce_usage (signonce_label Resp) signonce_len) /\
       TB.entry_at tr' (n + 2) (T.MsgSent (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk (signonce_term (n + 1)) transcript)))) /\
+      TB.entry_at tr' (n + 3) (T.SetState mep (role_state_id Resp) content) /\
       TB.event_triggered tr' mep tag_responder_respond transcript))
 = let n = TB.trace_length tr in
+  let mep = role_dy_principal Resp in
   let transcript = transcript_term a_t peer_share (share_term scalar) in
-  let tr' = respond_trace mep ltk me_t a_t peer_share scalar tr in
-  grows3 tr (T.Event mep tag_responder_respond transcript)
-            (T.RandGen signonce_usage signonce_label signonce_len)
-            (T.MsgSent (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk (signonce_term (n + 1)) transcript))));
+  let tr' = respond_trace ltk me_t a_t peer_share scalar content tr in
+  grows4 tr (T.Event mep tag_responder_respond transcript)
+            (T.RandGen signonce_usage (signonce_label Resp) signonce_len)
+            (T.MsgSent (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk (signonce_term (n + 1)) transcript))))
+            (T.SetState mep (role_state_id Resp) content);
   assert (TB.entry_at tr' n (T.Event mep tag_responder_respond transcript));
-  assert (TB.entry_at tr' (n + 1) (T.RandGen signonce_usage signonce_label signonce_len));
+  assert (TB.entry_at tr' (n + 1) (T.RandGen signonce_usage (signonce_label Resp) signonce_len));
   assert (TB.entry_at tr' (n + 2) (T.MsgSent (flatten (SMsg2 me_t (share_term scalar) (sig_term ltk (signonce_term (n + 1)) transcript)))))
 
-let ifinish_facts (mep:T.principal) (ltk scalar b_t peer_share:BT.bytes) (tr:TB.trace)
+let ifinish_facts (ltk scalar b_t peer_share content:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
+      let mep = role_dy_principal Init in
       let transcript = transcript_term b_t (share_term scalar) peer_share in
-      let tr' = ifinish_trace mep ltk scalar b_t peer_share tr in
+      let tr' = ifinish_trace ltk scalar b_t peer_share content tr in
       tr `TB.grows` tr' /\
+      TB.trace_length tr' == n + 4 /\
       TB.entry_at tr' n (T.Event mep tag_initiator_finish transcript) /\
-      TB.entry_at tr' (n + 1) (T.RandGen signonce_usage signonce_label signonce_len) /\
+      TB.entry_at tr' (n + 1) (T.RandGen signonce_usage (signonce_label Init) signonce_len) /\
       TB.entry_at tr' (n + 2) (T.MsgSent (flatten (SMsg3 (sig_term ltk (signonce_term (n + 1)) transcript)))) /\
+      TB.entry_at tr' (n + 3) (T.SetState mep (role_state_id Init) content) /\
       TB.event_triggered tr' mep tag_initiator_finish transcript))
 = let n = TB.trace_length tr in
+  let mep = role_dy_principal Init in
   let transcript = transcript_term b_t (share_term scalar) peer_share in
-  let tr' = ifinish_trace mep ltk scalar b_t peer_share tr in
-  grows3 tr (T.Event mep tag_initiator_finish transcript)
-            (T.RandGen signonce_usage signonce_label signonce_len)
-            (T.MsgSent (flatten (SMsg3 (sig_term ltk (signonce_term (n + 1)) transcript))));
+  let tr' = ifinish_trace ltk scalar b_t peer_share content tr in
+  grows4 tr (T.Event mep tag_initiator_finish transcript)
+            (T.RandGen signonce_usage (signonce_label Init) signonce_len)
+            (T.MsgSent (flatten (SMsg3 (sig_term ltk (signonce_term (n + 1)) transcript))))
+            (T.SetState mep (role_state_id Init) content);
   assert (TB.entry_at tr' n (T.Event mep tag_initiator_finish transcript));
-  assert (TB.entry_at tr' (n + 1) (T.RandGen signonce_usage signonce_label signonce_len));
+  assert (TB.entry_at tr' (n + 1) (T.RandGen signonce_usage (signonce_label Init) signonce_len));
   assert (TB.entry_at tr' (n + 2) (T.MsgSent (flatten (SMsg3 (sig_term ltk (signonce_term (n + 1)) transcript)))))
 
-let rfinish_facts (mep:T.principal) (a_t key:BT.bytes) (tr:TB.trace)
+let rfinish_facts (a_t key:BT.bytes) (tr:TB.trace)
   : Lemma (ensures (
       let n = TB.trace_length tr in
-      let tr' = rfinish_trace mep a_t key tr in
+      let mep = role_dy_principal Resp in
+      let tr' = rfinish_trace a_t key tr in
       tr `TB.grows` tr' /\
       TB.entry_at tr' n (T.Event mep tag_responder_finish (session_content a_t key)) /\
       TB.event_triggered tr' mep tag_responder_finish (session_content a_t key)))
 = let n = TB.trace_length tr in
-  TB.grows_snoc tr (T.Event mep tag_responder_finish (session_content a_t key))
+  TB.grows_snoc tr (T.Event (role_dy_principal Resp) tag_responder_finish (session_content a_t key))
 
 let inject_facts (sm:sym_msg) (tr:TB.trace)
   : Lemma (ensures (
@@ -399,6 +519,21 @@ let inject_facts (sm:sym_msg) (tr:TB.trace)
       TB.entry_at tr' n (T.MsgSent (flatten sm))))
 = let n = TB.trace_length tr in
   TB.grows_snoc tr (T.MsgSent (flatten sm))
+
+(** The compromise segment: the trace grows by exactly one `Corrupt` entry, which
+    names the position given (the target role's current state). *)
+let corrupt_facts (pos:nat) (tr:TB.trace)
+  : Lemma (ensures (
+      let n = TB.trace_length tr in
+      let tr' = corrupt_trace pos tr in
+      tr `TB.grows` tr' /\
+      TB.trace_length tr' == n + 1 /\
+      TB.entry_at tr' n (T.Corrupt pos) /\
+      TB.entry_exists tr' (T.Corrupt pos)))
+= let n = TB.trace_length tr in
+  TB.grows_snoc tr (T.Corrupt pos);
+  introduce exists (i:nat). TB.entry_at (corrupt_trace pos tr) i (T.Corrupt pos)
+  with n and ()
 
 #pop-options
 
@@ -414,7 +549,30 @@ type endpoint_shadow = {
   sh_scalar     : option BT.bytes;  (* ephemeral scalar term, once drawn         *)
   sh_peer_share : option BT.bytes;  (* the symbolic peer share received          *)
   sh_key        : option BT.bytes;  (* derived shared-secret term, once computed *)
+  (* THE CURRENT STATE POINTER: the trace position of the role's most recent DY*
+     `SetState` entry.  `wf` (below) pins that entry to hold EXACTLY this shadow's
+     snapshot, and `ActCorrupt` corrupts EXACTLY this position. *)
+  sh_state_pos  : nat;
 }
+
+(** The DY* state content of a role: every piece of material it currently holds,
+    explicitly retained (no erasure — see `DH.Sample.Symbolic.Terms.snapshot_term`).
+
+    It is `opaque_to_smt`: the five-way nested concatenation must not unfold into
+    every per-step lift/coherence query (which only ever needs the snapshot as an
+    ATOM, matched by congruence from the shadow it is taken of).  The one place
+    that genuinely needs its structure — the DY* state-predicate obligation of
+    each `SetState` entry, in `DH.Sample.Symbolic.Invariant` — `reveal`s it
+    locally, via `lemma_shadow_snapshot_unfold` below. *)
+[@@"opaque_to_smt"]
+let shadow_snapshot (sh:endpoint_shadow) : BT.bytes =
+  snapshot_term sh.sh_ltk sh.sh_pending sh.sh_scalar sh.sh_peer_share sh.sh_key
+
+let lemma_shadow_snapshot_unfold (sh:endpoint_shadow)
+  : Lemma (ensures
+      shadow_snapshot sh ==
+      snapshot_term sh.sh_ltk sh.sh_pending sh.sh_scalar sh.sh_peer_share sh.sh_key)
+= reveal_opaque (`%shadow_snapshot) shadow_snapshot
 
 (** Authentication context stored when an honest signature-bearing packet is
     sent.  It makes the signed transcript first-class and exact—never an
@@ -453,20 +611,43 @@ type product_state = {
 (** The observable projection: the concrete composed system state. *)
 let proj (p:product_state) : system_state = p.ps_sys
 
+(** ── Fixed setup positions ──────────────────────────────────────────────────
+
+    Both endpoints' setups run on the ONE shared trace, in a fixed order, so every
+    setup entry sits at a FIXED, named position:
+
+      0 : initiator long-term key `RandGen`      3 : responder long-term key `RandGen`
+      1 : initiator `Event tag_keygen`           4 : responder `Event tag_keygen`
+      2 : initiator initial `SetState`           5 : responder initial `SetState`
+
+    `role_ltk_pos` / `role_setup_state_pos` name them; nothing below hard-codes a
+    bare numeral. *)
+let role_ltk_pos (who:endpoint_id) : nat =
+  match who with
+  | Init -> 0
+  | Resp -> 3
+
+let role_setup_state_pos (who:endpoint_id) : nat =
+  match who with
+  | Init -> 2
+  | Resp -> 5
+
 (** ── Initial product state ──────────────────────────────────────────────────
 
-    Both endpoints' setups run on the ONE shared trace: the initiator's long-term
-    key `RandGen`/`Event` at positions 0/1, the responder's at 2/3.  The network
-    is empty. *)
+    Both endpoints run their setup on the ONE shared trace; each ends by STORING
+    its initial role state (its long-term signing key), which is what a later
+    `ActCorrupt` of a role that has not yet drawn an ephemeral corrupts. *)
 let product_initial (a b:principal) : product_state =
-  let (ltk_a, tr1) = setup_run init_dy_principal (term_of_principal a) TB.empty_trace in
-  let (ltk_b, tr2) = setup_run resp_dy_principal (term_of_principal b) tr1 in
+  let (ltk_a, tr1) = setup_run Init (term_of_principal a) TB.empty_trace in
+  let (ltk_b, tr2) = setup_run Resp (term_of_principal b) tr1 in
   { ps_sys   = system_initial a b;
     ps_trace = tr2;
     ps_init  = { sh_ltk = ltk_a; sh_pending = None; sh_scalar = None;
-                 sh_peer_share = None; sh_key = None };
+                 sh_peer_share = None; sh_key = None;
+                 sh_state_pos = role_setup_state_pos Init };
     ps_resp  = { sh_ltk = ltk_b; sh_pending = None; sh_scalar = None;
-                 sh_peer_share = None; sh_key = None };
+                 sh_peer_share = None; sh_key = None;
+                 sh_state_pos = role_setup_state_pos Resp };
     ps_net   = [];
     ps_rng   = [] }
 
@@ -489,35 +670,32 @@ let sym_extend (p0:product_state) (ev:sys_event)
        (match p0.ps_init.sh_pending with
         | Some _ -> None
         | None ->
-          let (scalar, tr') = rng_run p0.ps_trace in
-          Some (tr',
-                { p0.ps_init with sh_pending = Some scalar },
-                p0.ps_resp, p0.ps_net,
+          let scalar = eph_term n in
+          let i' = { p0.ps_init with sh_pending = Some scalar; sh_state_pos = n + 1 } in
+          let (_, tr') = rng_run Init (shadow_snapshot i') p0.ps_trace in
+          Some (tr', i', p0.ps_resp, p0.ps_net,
                 { rs_owner = Init; rs_term = scalar; rs_pos = n } :: p0.ps_rng))
      | Resp ->
        (match p0.ps_resp.sh_pending with
         | Some _ -> None
         | None ->
-          let (scalar, tr') = rng_run p0.ps_trace in
-          Some (tr',
-                p0.ps_init,
-                { p0.ps_resp with sh_pending = Some scalar },
-                p0.ps_net,
+          let scalar = eph_term n in
+          let r' = { p0.ps_resp with sh_pending = Some scalar; sh_state_pos = n + 1 } in
+          let (_, tr') = rng_run Resp (shadow_snapshot r') p0.ps_trace in
+          Some (tr', p0.ps_init, r', p0.ps_net,
                 { rs_owner = Resp; rs_term = scalar; rs_pos = n } :: p0.ps_rng)))
   | SM.LocalEvent ActStart ->
     (match c0.sys_init.ep_peer, p0.ps_init.sh_pending with
      | Some peer, Some scalar ->
        let me  = c0.sys_init.ep_me in
        let met = term_of_principal me in
+       let i' = { p0.ps_init with sh_pending = None; sh_scalar = Some scalar;
+                                  sh_state_pos = n + 2 } in
        let (_, tr') =
-         start_run init_dy_principal met (term_of_principal peer) scalar p0.ps_trace in
+         start_run met (term_of_principal peer) scalar (shadow_snapshot i') p0.ps_trace in
        let ne = { ne_smsg = SMsg1 met (share_term scalar);
                   ne_pos = n + 1; ne_auth = NoAuth } in
-       Some (tr',
-             { p0.ps_init with sh_pending = None; sh_scalar = Some scalar },
-             p0.ps_resp,
-             L.append p0.ps_net [ ne ],
-             p0.ps_rng)
+       Some (tr', i', p0.ps_resp, L.append p0.ps_net [ ne ], p0.ps_rng)
      | _, _ -> None)
   | SM.LocalEvent (ActDeliver idx dst) ->
     if idx < L.length c0.sys_net && idx < L.length p0.ps_net then begin
@@ -533,8 +711,12 @@ let sym_extend (p0:product_state) (ev:sys_event)
            let at  = term_of_principal a in
            let peer_share =
             (match ne0.ne_smsg with SMsg1 _ gxs -> gxs | _ -> term_of_blob gx) in
+           let r' = { p0.ps_resp with sh_pending = None; sh_scalar = Some scalar;
+                        sh_peer_share = Some peer_share;
+                        sh_key = Some (secret_term scalar peer_share);
+                        sh_state_pos = n + 3 } in
            let (_, tr') =
-            respond_run resp_dy_principal p0.ps_resp.sh_ltk met at peer_share scalar
+            respond_run p0.ps_resp.sh_ltk met at peer_share scalar (shadow_snapshot r')
                         p0.ps_trace ne0.ne_pos in
            let transcript = transcript_term at peer_share (share_term scalar) in
            let ne = {
@@ -542,40 +724,34 @@ let sym_extend (p0:product_state) (ev:sys_event)
                         (sig_term p0.ps_resp.sh_ltk (signonce_term (n + 1)) transcript);
             ne_pos  = n + 2;
             ne_auth = RespAuth at peer_share } in
-           Some (tr', p0.ps_init,
-                { p0.ps_resp with sh_pending = None; sh_scalar = Some scalar;
-                    sh_peer_share = Some peer_share;
-                    sh_key = Some (secret_term scalar peer_share) },
-                L.append p0.ps_net [ ne ],
-                p0.ps_rng))
+           Some (tr', p0.ps_init, r', L.append p0.ps_net [ ne ], p0.ps_rng))
       | Resp, Msg3 _ ->
+        (* completion changes the responder's PHASE only: no new key material, so
+           no new stored state and no move of the current-state pointer. *)
         (match c0.sys_resp.ep_peer, p0.ps_resp.sh_key with
          | Some a, Some key ->
-           let me = c0.sys_resp.ep_me in
            let (_, tr') =
-             rfinish_run resp_dy_principal (term_of_principal a) key
-                         p0.ps_trace ne0.ne_pos in
+             rfinish_run (term_of_principal a) key p0.ps_trace ne0.ne_pos in
            Some (tr', p0.ps_init, p0.ps_resp, p0.ps_net, p0.ps_rng)
          | _ -> None)
       | Init, Msg2 b gy _ ->
         (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
          | Some _xc, Some scalar ->
-           let me  = c0.sys_init.ep_me in
            let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
+           let i' = { p0.ps_init with sh_peer_share = Some peer_share;
+                        sh_key = Some (secret_term scalar peer_share);
+                        sh_state_pos = n + 3 } in
            let (_, tr') =
-             ifinish_run init_dy_principal p0.ps_init.sh_ltk scalar
-                         (term_of_principal b) peer_share p0.ps_trace ne0.ne_pos in
+             ifinish_run p0.ps_init.sh_ltk scalar
+                         (term_of_principal b) peer_share (shadow_snapshot i')
+                         p0.ps_trace ne0.ne_pos in
            let transcript = transcript_term (term_of_principal b) (share_term scalar) peer_share in
            let ne = {
              ne_smsg = SMsg3 (sig_term p0.ps_init.sh_ltk
                                (signonce_term (n + 1)) transcript);
              ne_pos  = n + 2;
              ne_auth = InitAuth (term_of_principal b) (share_term scalar) peer_share } in
-           Some (tr',
-                 { p0.ps_init with sh_peer_share = Some peer_share; sh_key = Some (secret_term scalar peer_share) },
-                 p0.ps_resp,
-                 L.append p0.ps_net [ ne ],
-                 p0.ps_rng)
+           Some (tr', i', p0.ps_resp, L.append p0.ps_net [ ne ], p0.ps_rng)
          | _ -> None)
       | _, _ -> None
     end else None
@@ -585,6 +761,14 @@ let sym_extend (p0:product_state) (ev:sys_event)
          L.append p0.ps_net
            [ { ne_smsg = inject_smsg m; ne_pos = pos; ne_auth = NoAuth } ],
          p0.ps_rng)
+  (* DYNAMIC COMPROMISE: run the genuine DY* CORE `corrupt` on the target role's
+     CURRENT state position.  Deterministic (the position is read off the role's
+     own shadow) and shadow-preserving: no key material, network packet or RNG
+     entry changes — only the trace records the compromise. *)
+  | SM.LocalEvent (ActCorrupt who) ->
+    let sh = (match who with Init -> p0.ps_init | Resp -> p0.ps_resp) in
+    let (_, tr') = corrupt_run sh.sh_state_pos p0.ps_trace in
+    Some (tr', p0.ps_init, p0.ps_resp, p0.ps_net, p0.ps_rng)
   | _ -> None
 
 (** ── The product step relation ─────────────────────────────────────────────
@@ -620,13 +804,28 @@ let product_sm (a b:principal)
     freshness of each present ephemeral; and per-packet network coherence
     (`net_coherent`). *)
 
-let ltk_coherent_at (mep:T.principal) (me_t:BT.bytes) (tr:TB.trace) (ltk:BT.bytes) (pos:nat) : prop =
+let ltk_coherent_at (who:endpoint_id) (me_t:BT.bytes) (tr:TB.trace) (ltk:BT.bytes) (pos:nat) : prop =
   ltk == ltk_term pos /\
-  TB.entry_at tr pos (T.RandGen ltk_usage ltk_label ltk_len) /\
-  TB.event_triggered tr mep tag_keygen (keygen_content me_t (vkey_term ltk))
+  TB.entry_at tr pos (T.RandGen ltk_usage (ltk_label who) ltk_len) /\
+  TB.event_triggered tr (role_dy_principal who) tag_keygen
+    (keygen_content me_t (vkey_term ltk))
 
+(** An ephemeral scalar generated BY A NAMED ROLE: a `Rand` at a trace position
+    carrying the DH usage AND that role's compromise-sensitive label.  The label
+    is what makes the derived session key's secrecy conditional on exactly the two
+    roles' compromise, so the owning role is part of the fact. *)
+let scalar_recorded_for (who:endpoint_id) (tr:TB.trace) (s:BT.bytes) : prop =
+  exists (t:nat). s == eph_term t /\
+    TB.entry_at tr t (T.RandGen eph_usage (eph_label who) eph_len)
+
+(** The role-agnostic version, used wherever only "this is a generated ephemeral"
+    matters (e.g. publishability of `dh_pk`, which holds for any label). *)
 let scalar_recorded (tr:TB.trace) (s:BT.bytes) : prop =
-  exists (t:nat). s == eph_term t /\ TB.entry_at tr t (T.RandGen eph_usage eph_label eph_len)
+  scalar_recorded_for Init tr s \/ scalar_recorded_for Resp tr s
+
+let lemma_scalar_recorded_weaken (who:endpoint_id) (tr:TB.trace) (s:BT.bytes)
+  : Lemma (requires scalar_recorded_for who tr s) (ensures scalar_recorded tr s)
+= ()
 
 (** The concrete and symbolic RNG registries are parallel.  Every symbolic
     representative is exactly the secret Rand at its recorded generation
@@ -634,7 +833,7 @@ let scalar_recorded (tr:TB.trace) (s:BT.bytes) : prop =
 let rng_entry_coherent (d:rng_draw) (rs:rng_shadow) (tr:TB.trace) : prop =
   rs.rs_owner == d.rd_owner /\
   rs.rs_term == eph_term rs.rs_pos /\
-  TB.entry_at tr rs.rs_pos (T.RandGen eph_usage eph_label eph_len)
+  TB.entry_at tr rs.rs_pos (T.RandGen eph_usage (eph_label rs.rs_owner) eph_len)
 
 let rec rng_coherent (draws:list rng_draw) (sh:list rng_shadow) (tr:TB.trace)
   : Tot prop (decreases draws) =
@@ -713,6 +912,56 @@ let resp_repr (c:endpoint_state) (sh:endpoint_shadow) : prop =
      | _ -> False)
   | _ -> False
 
+(** ── Focused endpoint-representation transfer lemmas ─────────────────────────
+
+    `init_repr` / `resp_repr` are exhaustive five-way matches; re-establishing one
+    inside a per-step lift proof (whose context already carries `wf p0`, the
+    concrete `system_step` and the whole `sym_extend` computation) is exactly the
+    kind of goal that makes a query expensive.  These two lemmas do it ONCE, in a
+    tiny context that mentions only the two endpoint states and the two shadows,
+    so each per-step proof only has to instantiate them. *)
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 10"
+
+(** The initiator completing on message 2: it keeps its scalar and own share,
+    records the peer share it received and the derived key, and refreshes its
+    stored-state pointer. *)
+let init_repr_finish
+  (c0:endpoint_state) (sh0:endpoint_shadow)
+  (x:dh_scalar) (gy:dh_share) (scalar peer_share:BT.bytes) (pos:nat)
+  : Lemma
+    (requires
+      init_repr c0 sh0 /\
+      c0.ep_phase == Init_Wait2 /\
+      c0.ep_scalar == Some x /\
+      sh0.sh_scalar == Some scalar)
+    (ensures
+      init_repr ({ c0 with ep_phase = Init_Done; ep_peer_share = Some gy;
+                           ep_key = Some (Cr.dh_agree x gy) })
+                ({ sh0 with sh_peer_share = Some peer_share;
+                            sh_key = Some (secret_term scalar peer_share);
+                            sh_state_pos = pos }))
+= ()
+
+(** The responder answering message 1: it adopts the scalar it had pending, the
+    peer share it received and the derived key, and refreshes its pointer. *)
+let resp_repr_respond
+  (c0 c1:endpoint_state) (sh0:endpoint_shadow)
+  (y:dh_scalar) (gx:dh_share) (a:principal) (scalar peer_share:BT.bytes) (pos:nat)
+  : Lemma
+    (requires
+      c1 == { c0 with ep_phase = Resp_Wait3; ep_peer = Some a;
+                      ep_scalar = Some y; ep_my_share = Some (Cr.dh_exp y);
+                      ep_peer_share = Some gx; ep_key = Some (Cr.dh_agree y gx) })
+    (ensures
+      resp_repr c1 ({ sh0 with sh_pending = None; sh_scalar = Some scalar;
+                               sh_peer_share = Some peer_share;
+                               sh_key = Some (secret_term scalar peer_share);
+                               sh_state_pos = pos }))
+= ()
+
+#pop-options
+
 (** Whether a symbolic message has the same shape (tag) as a concrete one.  This
     is the OLD, tag-only notion of per-packet coherence.  It is ORIGIN-BLIND: it
     holds for an all-literal (attacker-injection–shaped) `SMsg2` paired with an
@@ -769,10 +1018,10 @@ let smsg_provenance
     sm == inject_smsg pk.pk_msg
   | Sent Init, Msg1 a _, SMsg1 a_s gxs, NoAuth ->
     a_s == term_of_principal a /\
-    (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded tr s)
+    (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded_for Init tr s)
   | Sent Resp, Msg2 b _ _, SMsg2 b_s gys sgs, RespAuth partner peer_share ->
     b_s == term_of_principal b /\
-    (exists (s:BT.bytes). gys == share_term s /\ scalar_recorded tr s) /\
+    (exists (s:BT.bytes). gys == share_term s /\ scalar_recorded_for Resp tr s) /\
     sgs == sig_term resp_ltk (signonce_term (auth_nonce_pos ne.ne_pos))
              (transcript_term partner peer_share gys)
   | Sent Init, Msg3 _, SMsg3 sgs, InitAuth partner my_share peer_share ->
@@ -809,10 +1058,30 @@ let net_coherent
 
 let key_state_coherent (p:product_state) : prop =
   let c = p.ps_sys in
-  ltk_coherent_at init_dy_principal (term_of_principal c.sys_init.ep_me)
-                  p.ps_trace p.ps_init.sh_ltk 0 /\
-  ltk_coherent_at resp_dy_principal (term_of_principal c.sys_resp.ep_me)
-                  p.ps_trace p.ps_resp.sh_ltk 2
+  ltk_coherent_at Init (term_of_principal c.sys_init.ep_me)
+                  p.ps_trace p.ps_init.sh_ltk (role_ltk_pos Init) /\
+  ltk_coherent_at Resp (term_of_principal c.sys_resp.ep_me)
+                  p.ps_trace p.ps_resp.sh_ltk (role_ltk_pos Resp)
+
+(** ── The CURRENT-STATE pointer coherence ────────────────────────────────────
+
+    A role's recorded `sh_state_pos` is a real position on the shared trace, and
+    the entry there is a `SetState` of THAT role holding EXACTLY that role's
+    CURRENT snapshot — its long-term key together with whatever pending draw,
+    ephemeral scalar, received peer share and session key it holds right now.
+
+    This is what makes `ActCorrupt` meaningful and honest: corrupting the role
+    hands the attacker precisely this material, and (because the product refreshes
+    the pointer after every state-changing action) precisely the material the role
+    holds AT THE TIME OF THE COMPROMISE — never a stale, weaker snapshot. *)
+let state_pos_coherent (who:endpoint_id) (sh:endpoint_shadow) (tr:TB.trace) : prop =
+  sh.sh_state_pos < TB.trace_length tr /\
+  TB.entry_at tr sh.sh_state_pos
+    (T.SetState (role_dy_principal who) (role_state_id who) (shadow_snapshot sh))
+
+let state_state_coherent (p:product_state) : prop =
+  state_pos_coherent Init p.ps_init p.ps_trace /\
+  state_pos_coherent Resp p.ps_resp p.ps_trace
 
 let rng_state_coherent (p:product_state) : prop =
   let c = p.ps_sys in
@@ -826,10 +1095,10 @@ let rng_state_coherent (p:product_state) : prop =
     c.sys_init.ep_scalar p.ps_init.sh_scalar /\
   rng_option_binding c.sys_rng p.ps_rng Resp
     c.sys_resp.ep_scalar p.ps_resp.sh_scalar /\
-  (match p.ps_init.sh_pending with None -> True | Some s -> scalar_recorded p.ps_trace s) /\
-  (match p.ps_resp.sh_pending with None -> True | Some s -> scalar_recorded p.ps_trace s) /\
-  (match p.ps_init.sh_scalar with None -> True | Some s -> scalar_recorded p.ps_trace s) /\
-  (match p.ps_resp.sh_scalar with None -> True | Some s -> scalar_recorded p.ps_trace s)
+  (match p.ps_init.sh_pending with None -> True | Some s -> scalar_recorded_for Init p.ps_trace s) /\
+  (match p.ps_resp.sh_pending with None -> True | Some s -> scalar_recorded_for Resp p.ps_trace s) /\
+  (match p.ps_init.sh_scalar with None -> True | Some s -> scalar_recorded_for Init p.ps_trace s) /\
+  (match p.ps_resp.sh_scalar with None -> True | Some s -> scalar_recorded_for Resp p.ps_trace s)
 
 let endpoint_state_coherent (p:product_state) : prop =
   let c = p.ps_sys in
@@ -844,7 +1113,8 @@ let wf (p:product_state) : prop =
   key_state_coherent p /\
   rng_state_coherent p /\
   endpoint_state_coherent p /\
-  network_state_coherent p
+  network_state_coherent p /\
+  state_state_coherent p
 
 (** ── Trace-growth persistence of the coherence components ────────────────────
 
@@ -853,26 +1123,36 @@ let wf (p:product_state) : prop =
     stay on the trace). *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 
-let ltk_coherent_grows (mep:T.principal) (me_t:BT.bytes) (tr tr':TB.trace) (ltk:BT.bytes) (pos:nat)
-  : Lemma (requires ltk_coherent_at mep me_t tr ltk pos /\ tr `TB.grows` tr')
-          (ensures ltk_coherent_at mep me_t tr' ltk pos)
-= TB.entry_at_grows tr tr' pos (T.RandGen ltk_usage ltk_label ltk_len);
-  TB.event_triggered_grows tr tr' mep tag_keygen (keygen_content me_t (vkey_term ltk))
+let ltk_coherent_grows (who:endpoint_id) (me_t:BT.bytes) (tr tr':TB.trace) (ltk:BT.bytes) (pos:nat)
+  : Lemma (requires ltk_coherent_at who me_t tr ltk pos /\ tr `TB.grows` tr')
+          (ensures ltk_coherent_at who me_t tr' ltk pos)
+= TB.entry_at_grows tr tr' pos (T.RandGen ltk_usage (ltk_label who) ltk_len);
+  TB.event_triggered_grows tr tr' (role_dy_principal who) tag_keygen
+    (keygen_content me_t (vkey_term ltk))
+
+let scalar_recorded_for_grows (who:endpoint_id) (tr tr':TB.trace) (s:BT.bytes)
+  : Lemma (requires scalar_recorded_for who tr s /\ tr `TB.grows` tr')
+          (ensures scalar_recorded_for who tr' s)
+= eliminate exists (t:nat). s == eph_term t /\
+    TB.entry_at tr t (T.RandGen eph_usage (eph_label who) eph_len)
+  returns scalar_recorded_for who tr' s
+  with _.
+    TB.entry_at_grows tr tr' t (T.RandGen eph_usage (eph_label who) eph_len)
 
 let scalar_recorded_grows (tr tr':TB.trace) (s:BT.bytes)
   : Lemma (requires scalar_recorded tr s /\ tr `TB.grows` tr')
           (ensures scalar_recorded tr' s)
-= eliminate exists (t:nat). s == eph_term t /\ TB.entry_at tr t (T.RandGen eph_usage eph_label eph_len)
+= eliminate scalar_recorded_for Init tr s \/ scalar_recorded_for Resp tr s
   returns scalar_recorded tr' s
-  with _.
-    TB.entry_at_grows tr tr' t (T.RandGen eph_usage eph_label eph_len)
+  with _. scalar_recorded_for_grows Init tr tr' s
+  and  _. scalar_recorded_for_grows Resp tr tr' s
 
 let rng_entry_coherent_grows (d:rng_draw) (rs:rng_shadow) (tr tr':TB.trace)
   : Lemma
     (requires rng_entry_coherent d rs tr /\ tr `TB.grows` tr')
     (ensures rng_entry_coherent d rs tr')
 = TB.entry_at_grows tr tr' rs.rs_pos
-    (T.RandGen eph_usage eph_label eph_len)
+    (T.RandGen eph_usage (eph_label rs.rs_owner) eph_len)
 
 let rec rng_coherent_grows
   (draws:list rng_draw) (sh:list rng_shadow) (tr tr':TB.trace)
@@ -893,7 +1173,7 @@ let rng_coherent_cons
     (requires
       rng_coherent draws sh tr /\ tr `TB.grows` tr' /\
       s == eph_term pos /\
-      TB.entry_at tr' pos (T.RandGen eph_usage eph_label eph_len))
+      TB.entry_at tr' pos (T.RandGen eph_usage (eph_label owner) eph_len))
     (ensures
       rng_coherent
         ({ rd_owner = owner; rd_scalar = x } :: draws)
@@ -926,16 +1206,16 @@ let rng_state_coherent_grows_to (p0 p1:product_state)
     (ensures rng_state_coherent p1)
 = rng_coherent_grows p0.ps_sys.sys_rng p0.ps_rng p0.ps_trace p1.ps_trace;
   (match p0.ps_init.sh_pending with
-   | Some s -> scalar_recorded_grows p0.ps_trace p1.ps_trace s
+   | Some s -> scalar_recorded_for_grows Init p0.ps_trace p1.ps_trace s
    | None -> ());
   (match p0.ps_resp.sh_pending with
-   | Some s -> scalar_recorded_grows p0.ps_trace p1.ps_trace s
+   | Some s -> scalar_recorded_for_grows Resp p0.ps_trace p1.ps_trace s
    | None -> ());
   (match p0.ps_init.sh_scalar with
-   | Some s -> scalar_recorded_grows p0.ps_trace p1.ps_trace s
+   | Some s -> scalar_recorded_for_grows Init p0.ps_trace p1.ps_trace s
    | None -> ());
   (match p0.ps_resp.sh_scalar with
-   | Some s -> scalar_recorded_grows p0.ps_trace p1.ps_trace s
+   | Some s -> scalar_recorded_for_grows Resp p0.ps_trace p1.ps_trace s
    | None -> ())
 #pop-options
 
@@ -986,16 +1266,16 @@ let net_coherent_index (net:list packet) (sh:list net_entry) (tr:TB.trace)
 = reveal_opaque (`%net_coherent) net_coherent
 
 (** Persistence of the (trace-dependent) share-recording witness under `grows`. *)
-let share_recorded_grows (gxs:BT.bytes) (tr tr':TB.trace)
+let share_recorded_grows (who:endpoint_id) (gxs:BT.bytes) (tr tr':TB.trace)
   : Lemma
-    (requires (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded tr s) /\
+    (requires (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded_for who tr s) /\
               tr `TB.grows` tr')
-    (ensures (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded tr' s))
-= eliminate exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded tr s
-  returns (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded tr' s)
+    (ensures (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded_for who tr' s))
+= eliminate exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded_for who tr s
+  returns (exists (s:BT.bytes). gxs == share_term s /\ scalar_recorded_for who tr' s)
   with _.
-    (scalar_recorded_grows tr tr' s;
-     introduce exists (s':BT.bytes). gxs == share_term s' /\ scalar_recorded tr' s'
+    (scalar_recorded_for_grows who tr tr' s;
+     introduce exists (s':BT.bytes). gxs == share_term s' /\ scalar_recorded_for who tr' s'
      with s and ())
 
 (** Per-packet origin coherence persists as the shared trace grows: the `MsgSent`
@@ -1010,9 +1290,9 @@ let net_entry_coherent_grows
   TB.trace_length_grows tr tr';
   TB.entry_at_grows tr tr' ne.ne_pos (T.MsgSent (flatten ne.ne_smsg));
   match pk.pk_origin, pk.pk_msg, ne.ne_smsg, ne.ne_auth with
-  | Sent Init, Msg1 _ _, SMsg1 _ gxs, NoAuth -> share_recorded_grows gxs tr tr'
+  | Sent Init, Msg1 _ _, SMsg1 _ gxs, NoAuth -> share_recorded_grows Init gxs tr tr'
   | Sent Resp, Msg2 _ _ _, SMsg2 _ gys _, RespAuth _ _ ->
-    share_recorded_grows gys tr tr'
+    share_recorded_grows Resp gys tr tr'
   | _, _, _, _ -> ()
 
 let net_coherent_grows
@@ -1075,14 +1355,14 @@ let coherent_sent_msg1
   (a:principal) (gx:dh_share) (s:BT.bytes) (pos:nat) (tr:TB.trace)
   : Lemma
       (requires
-        scalar_recorded tr s /\ pos < TB.trace_length tr /\
+        scalar_recorded_for Init tr s /\ pos < TB.trace_length tr /\
         TB.entry_at tr pos (T.MsgSent (flatten (SMsg1 (term_of_principal a) (share_term s)))))
       (ensures net_entry_coherent init_ltk resp_ltk
                  ({ pk_msg = Msg1 a gx; pk_origin = Sent Init })
                  ({ ne_smsg = SMsg1 (term_of_principal a) (share_term s);
                    ne_pos = pos; ne_auth = NoAuth }) tr)
 = reveal_opaque (`%smsg_provenance) smsg_provenance;
-  introduce exists (s':BT.bytes). share_term s == share_term s' /\ scalar_recorded tr s'
+  introduce exists (s':BT.bytes). share_term s == share_term s' /\ scalar_recorded_for Init tr s'
   with s and ()
 
 let coherent_sent_msg2
@@ -1091,7 +1371,7 @@ let coherent_sent_msg2
   (s partner peer_share:BT.bytes) (pos:nat) (tr:TB.trace)
   : Lemma
       (requires
-        scalar_recorded tr s /\ pos < TB.trace_length tr /\
+        scalar_recorded_for Resp tr s /\ pos < TB.trace_length tr /\
         TB.entry_at tr pos
           (T.MsgSent (flatten (SMsg2 (term_of_principal b) (share_term s)
             (sig_term resp_ltk (signonce_term (auth_nonce_pos pos))
@@ -1104,7 +1384,7 @@ let coherent_sent_msg2
                    ne_pos = pos;
                    ne_auth = RespAuth partner peer_share }) tr)
 = reveal_opaque (`%smsg_provenance) smsg_provenance;
-  introduce exists (s':BT.bytes). share_term s == share_term s' /\ scalar_recorded tr s'
+  introduce exists (s':BT.bytes). share_term s == share_term s' /\ scalar_recorded_for Resp tr s'
   with s and ()
 
 let coherent_sent_msg3
@@ -1151,7 +1431,7 @@ let net_coherent_append_sent_msg1
   : Lemma
       (requires
         net_coherent net sh tr init_ltk resp_ltk /\ tr `TB.grows` tr' /\
-        scalar_recorded tr' s /\ pos < TB.trace_length tr' /\
+        scalar_recorded_for Init tr' s /\ pos < TB.trace_length tr' /\
         TB.entry_at tr' pos (T.MsgSent (flatten (SMsg1 (term_of_principal a) (share_term s)))))
       (ensures
         net_coherent
@@ -1173,7 +1453,7 @@ let net_coherent_append_sent_msg2
   : Lemma
       (requires
         net_coherent net sh tr init_ltk resp_ltk /\ tr `TB.grows` tr' /\
-        scalar_recorded tr' s /\ pos < TB.trace_length tr' /\
+        scalar_recorded_for Resp tr' s /\ pos < TB.trace_length tr' /\
         TB.entry_at tr' pos
           (T.MsgSent (flatten (SMsg2 (term_of_principal b) (share_term s)
             (sig_term resp_ltk (signonce_term (auth_nonce_pos pos))
@@ -1311,17 +1591,305 @@ let lemma_provenance_rejects_injected_honest_msg2
 let lemma_product_initial_wf (a b:principal)
   : Lemma (ensures wf (product_initial a b))
 = reveal_opaque (`%net_coherent) net_coherent;
+  reveal_opaque (`%shadow_snapshot) shadow_snapshot;
   lemma_role_principals_distinct ();
   let tr0 = TB.empty_trace in
-  setup_structure init_dy_principal (term_of_principal a) tr0;
-  setup_facts init_dy_principal (term_of_principal a) tr0;
-  let (_, tr1) = setup_run init_dy_principal (term_of_principal a) tr0 in
-  setup_structure resp_dy_principal (term_of_principal b) tr1;
-  setup_facts resp_dy_principal (term_of_principal b) tr1
+  setup_structure Init (term_of_principal a) tr0;
+  setup_facts Init (term_of_principal a) tr0;
+  let (_, tr1) = setup_run Init (term_of_principal a) tr0 in
+  setup_structure Resp (term_of_principal b) tr1;
+  setup_facts Resp (term_of_principal b) tr1;
+  let (_, tr2) = setup_run Resp (term_of_principal b) tr1 in
+  TB.entry_at_grows tr1 tr2 (role_setup_state_pos Init)
+    (T.SetState (role_dy_principal Init) (role_state_id Init)
+      (snapshot_term (ltk_term (role_ltk_pos Init)) None None None None))
 
 (** Non-vacuity of the supported profile: a well-formed product state exists. *)
 let lemma_wf_inhabited (a b:principal)
   : Lemma (ensures (exists (p:product_state). wf p))
 = lemma_product_initial_wf a b
+
+#pop-options
+
+(** ── Every product step only GROWS the shared trace ──────────────────────────
+
+    Each `sym_extend` case appends entries to the one shared trace and never
+    rewrites it — including the compromise case, which appends exactly one
+    `Corrupt` entry.  Dispatch mirrors `sym_extend`; the per-segment `*_facts`
+    lemmas each deliver the `grows` fact. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+let lemma_product_step_grows
+  (p0:product_state) (ev:sys_event) (p1:product_state) (out:sys_output)
+  : Lemma
+    (requires product_step p0 ev p1 out)
+    (ensures p0.ps_trace `TB.grows` p1.ps_trace)
+= let c0 = p0.ps_sys in
+  let n = TB.trace_length p0.ps_trace in
+  match ev with
+  | SM.LocalEvent (ActRng owner x) ->
+    (match owner with
+     | Init ->
+       (match p0.ps_init.sh_pending with
+        | None ->
+          rng_facts Init
+            (shadow_snapshot ({ p0.ps_init with sh_pending = Some (eph_term n);
+                                                sh_state_pos = n + 1 }))
+            p0.ps_trace
+        | Some _ -> ())
+     | Resp ->
+       (match p0.ps_resp.sh_pending with
+        | None ->
+          rng_facts Resp
+            (shadow_snapshot ({ p0.ps_resp with sh_pending = Some (eph_term n);
+                                                sh_state_pos = n + 1 }))
+            p0.ps_trace
+        | Some _ -> ()))
+  | SM.LocalEvent ActStart ->
+    (match c0.sys_init.ep_peer, p0.ps_init.sh_pending with
+     | Some peer, Some scalar ->
+       start_facts (term_of_principal c0.sys_init.ep_me)
+                   (term_of_principal peer) scalar
+                   (shadow_snapshot ({ p0.ps_init with sh_pending = None;
+                                         sh_scalar = Some scalar;
+                                         sh_state_pos = n + 2 }))
+                   p0.ps_trace
+     | _, _ -> ())
+  | SM.LocalEvent (ActDeliver idx dst) ->
+    if idx < L.length c0.sys_net && idx < L.length p0.ps_net then begin
+      let ne0  = L.index p0.ps_net idx in
+      let cmsg = (L.index c0.sys_net idx).pk_msg in
+      match dst, cmsg with
+      | Resp, Msg1 a gx ->
+        (match p0.ps_resp.sh_pending with
+         | Some scalar ->
+           let peer_share = (match ne0.ne_smsg with SMsg1 _ gxs -> gxs | _ -> term_of_blob gx) in
+           respond_facts p0.ps_resp.sh_ltk
+             (term_of_principal c0.sys_resp.ep_me) (term_of_principal a) peer_share scalar
+             (shadow_snapshot ({ p0.ps_resp with sh_pending = None;
+                                   sh_scalar = Some scalar;
+                                   sh_peer_share = Some peer_share;
+                                   sh_key = Some (secret_term scalar peer_share);
+                                   sh_state_pos = n + 3 }))
+             p0.ps_trace
+         | None -> ())
+      | Resp, Msg3 _ ->
+        (match c0.sys_resp.ep_peer, p0.ps_resp.sh_key with
+         | Some a, Some key -> rfinish_facts (term_of_principal a) key p0.ps_trace
+         | _ -> ())
+      | Init, Msg2 b gy _ ->
+        (match c0.sys_init.ep_scalar, p0.ps_init.sh_scalar with
+         | Some _xc, Some scalar ->
+           let peer_share = (match ne0.ne_smsg with SMsg2 _ gys _ -> gys | _ -> term_of_blob gy) in
+           ifinish_facts p0.ps_init.sh_ltk scalar
+             (term_of_principal b) peer_share
+             (shadow_snapshot ({ p0.ps_init with sh_peer_share = Some peer_share;
+                                   sh_key = Some (secret_term scalar peer_share);
+                                   sh_state_pos = n + 3 }))
+             p0.ps_trace
+         | _ -> ())
+      | _, _ -> ()
+    end else ()
+  | SM.LocalEvent (ActInject m) -> inject_facts (inject_smsg m) p0.ps_trace
+  | SM.LocalEvent (ActCorrupt who) ->
+    (match who with
+     | Init -> corrupt_facts p0.ps_init.sh_state_pos p0.ps_trace
+     | Resp -> corrupt_facts p0.ps_resp.sh_state_pos p0.ps_trace)
+  | _ -> ()
+#pop-options
+
+(** ── The compromise step, spelled out ────────────────────────────────────────
+
+    A compromise step appends EXACTLY one genuine DY* `Corrupt` entry, naming the
+    target role's CURRENT state position, and changes no shadow, no network entry
+    and no RNG entry.  Combined with `wf p0` (whose `state_state_coherent`
+    conjunct pins that position to a `SetState` of that role holding EXACTLY the
+    role's current snapshot), this is what makes the corruption real: the attacker
+    obtains the role's live long-term key AND its live ephemeral / session
+    material. *)
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10"
+let lemma_corrupt_step_effect
+  (p0:product_state) (who:endpoint_id) (p1:product_state) (out:sys_output)
+  : Lemma
+    (requires
+      wf p0 /\
+      product_step p0 (SM.LocalEvent (ActCorrupt who)) p1 out)
+    (ensures (
+      let sh = (match who with Init -> p0.ps_init | Resp -> p0.ps_resp) in
+      p1.ps_init == p0.ps_init /\ p1.ps_resp == p0.ps_resp /\
+      p1.ps_net == p0.ps_net /\ p1.ps_rng == p0.ps_rng /\
+      p1.ps_trace == corrupt_trace sh.sh_state_pos p0.ps_trace /\
+      p0.ps_trace `TB.grows` p1.ps_trace /\
+      TB.entry_exists p1.ps_trace (T.Corrupt sh.sh_state_pos) /\
+      TB.entry_at p1.ps_trace sh.sh_state_pos
+        (T.SetState (role_dy_principal who) (role_state_id who) (shadow_snapshot sh)) /\
+      TB.state_was_corrupt p1.ps_trace
+        (role_dy_principal who) (role_state_id who) (shadow_snapshot sh)))
+= let sh = (match who with Init -> p0.ps_init | Resp -> p0.ps_resp) in
+  corrupt_structure sh.sh_state_pos p0.ps_trace;
+  corrupt_facts sh.sh_state_pos p0.ps_trace;
+  let tr1 = corrupt_trace sh.sh_state_pos p0.ps_trace in
+  TB.entry_at_grows p0.ps_trace tr1 sh.sh_state_pos
+    (T.SetState (role_dy_principal who) (role_state_id who) (shadow_snapshot sh));
+  introduce exists (time:nat).
+      TB.entry_exists tr1 (T.Corrupt time) /\
+      TB.entry_at tr1 time
+        (T.SetState (role_dy_principal who) (role_state_id who) (shadow_snapshot sh))
+  with sh.sh_state_pos and ()
+#pop-options
+
+(** ── Per-delivery STEP SHAPE lemmas ──────────────────────────────────────────
+
+    Each delivery step can only fire from one endpoint phase, in which `wf`
+    already pins which shadow fields are present.  Establishing that ONCE here (in
+    a context with only `wf` and `system_step`) lets the many downstream
+    invariant-preservation proofs match on the delivered message alone, instead of
+    re-deriving the shadow's shape inside their own (much larger) queries. *)
+
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
+
+(** Delivering a Msg2 to the initiator: it must be waiting for it, holding both
+    its concrete and symbolic scalar and nothing else yet. *)
+let lemma_init_msg2_step_shape
+  (p0:product_state) (idx:nat) (p1:product_state) (out:sys_output)
+  : Lemma
+    (requires
+      wf p0 /\
+      product_step p0 (SM.LocalEvent (ActDeliver idx Init)) p1 out /\
+      idx < L.length p0.ps_sys.sys_net /\
+      Msg2? (L.index p0.ps_sys.sys_net idx).pk_msg)
+    (ensures
+      idx < L.length p0.ps_net /\
+      p0.ps_sys.sys_init.ep_phase == Init_Wait2 /\
+      Some? p0.ps_sys.sys_init.ep_scalar /\
+      Some? p0.ps_sys.sys_init.ep_my_share /\
+      Some? p0.ps_init.sh_scalar /\
+      p0.ps_init.sh_pending == None /\
+      p0.ps_init.sh_peer_share == None /\
+      p0.ps_init.sh_key == None /\
+      p1.ps_resp == p0.ps_resp /\
+      p1.ps_rng == p0.ps_rng /\
+      p1.ps_init.sh_ltk == p0.ps_init.sh_ltk /\
+      p1.ps_init.sh_pending == None /\
+      p1.ps_init.sh_scalar == p0.ps_init.sh_scalar)
+= net_coherent_length p0.ps_sys.sys_net p0.ps_net p0.ps_trace
+    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
+
+(** The EXACT successor shape of that step, with every ingredient supplied by the
+    caller as an explicit argument (so the caller never has to match a nested
+    `let` in this lemma's conclusion, and this lemma — not the caller — pays for
+    unfolding `sym_extend`). *)
+let lemma_init_msg2_step_next
+  (p0:product_state) (idx:nat) (p1:product_state) (out:sys_output)
+  (b:principal) (gy:dh_share) (scalar peer_share:BT.bytes)
+  : Lemma
+    (requires
+      wf p0 /\
+      product_step p0 (SM.LocalEvent (ActDeliver idx Init)) p1 out /\
+      idx < L.length p0.ps_sys.sys_net /\ idx < L.length p0.ps_net /\
+      Msg2? (L.index p0.ps_sys.sys_net idx).pk_msg /\
+      Msg2?.responder (L.index p0.ps_sys.sys_net idx).pk_msg == b /\
+      Msg2?.gy (L.index p0.ps_sys.sys_net idx).pk_msg == gy /\
+      p0.ps_init.sh_scalar == Some scalar /\
+      peer_share == (match (L.index p0.ps_net idx).ne_smsg with
+                     | SMsg2 _ gys _ -> gys
+                     | _ -> term_of_blob gy))
+    (ensures (
+      let n = TB.trace_length p0.ps_trace in
+      let transcript =
+        transcript_term (term_of_principal b) (share_term scalar) peer_share in
+      p1.ps_init == { p0.ps_init with sh_peer_share = Some peer_share;
+                        sh_key = Some (secret_term scalar peer_share);
+                        sh_state_pos = n + 3 } /\
+      p1.ps_net == L.append p0.ps_net
+        [ { ne_smsg = SMsg3 (sig_term p0.ps_init.sh_ltk (signonce_term (n + 1)) transcript);
+            ne_pos  = n + 2;
+            ne_auth = InitAuth (term_of_principal b) (share_term scalar) peer_share } ]))
+= ()
+
+(** Delivering a Msg1 to the responder: it must be fresh, with a pending draw. *)
+let lemma_resp_msg1_step_shape
+  (p0:product_state) (idx:nat) (p1:product_state) (out:sys_output)
+  : Lemma
+    (requires
+      wf p0 /\
+      product_step p0 (SM.LocalEvent (ActDeliver idx Resp)) p1 out /\
+      idx < L.length p0.ps_sys.sys_net /\
+      Msg1? (L.index p0.ps_sys.sys_net idx).pk_msg)
+    (ensures
+      idx < L.length p0.ps_net /\
+      p0.ps_sys.sys_resp.ep_phase == Resp_Start /\
+      Some? p0.ps_sys.sys_resp_pending /\
+      Some? p0.ps_resp.sh_pending /\
+      p0.ps_resp.sh_scalar == None /\
+      p0.ps_resp.sh_peer_share == None /\
+      p0.ps_resp.sh_key == None /\
+      p1.ps_init == p0.ps_init /\
+      p1.ps_rng == p0.ps_rng /\
+      p1.ps_resp.sh_ltk == p0.ps_resp.sh_ltk /\
+      p1.ps_resp.sh_pending == None /\
+      p1.ps_resp.sh_scalar == p0.ps_resp.sh_pending /\
+      p1.ps_sys.sys_resp.ep_phase == Resp_Wait3)
+= net_coherent_length p0.ps_sys.sys_net p0.ps_net p0.ps_trace
+    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
+
+(** The EXACT successor shape of the responder's Msg1 step. *)
+let lemma_resp_msg1_step_next
+  (p0:product_state) (idx:nat) (p1:product_state) (out:sys_output)
+  (a:principal) (gx:dh_share) (scalar peer_share:BT.bytes)
+  : Lemma
+    (requires
+      wf p0 /\
+      product_step p0 (SM.LocalEvent (ActDeliver idx Resp)) p1 out /\
+      idx < L.length p0.ps_sys.sys_net /\ idx < L.length p0.ps_net /\
+      Msg1? (L.index p0.ps_sys.sys_net idx).pk_msg /\
+      Msg1?.initiator (L.index p0.ps_sys.sys_net idx).pk_msg == a /\
+      Msg1?.gx (L.index p0.ps_sys.sys_net idx).pk_msg == gx /\
+      p0.ps_resp.sh_pending == Some scalar /\
+      peer_share == (match (L.index p0.ps_net idx).ne_smsg with
+                     | SMsg1 _ gxs -> gxs
+                     | _ -> term_of_blob gx))
+    (ensures (
+      let n = TB.trace_length p0.ps_trace in
+      let transcript =
+        transcript_term (term_of_principal a) peer_share (share_term scalar) in
+      p1.ps_resp == { p0.ps_resp with sh_pending = None; sh_scalar = Some scalar;
+                        sh_peer_share = Some peer_share;
+                        sh_key = Some (secret_term scalar peer_share);
+                        sh_state_pos = n + 3 } /\
+      p1.ps_net == L.append p0.ps_net
+        [ { ne_smsg = SMsg2 (term_of_principal p0.ps_sys.sys_resp.ep_me)
+                        (share_term scalar)
+                        (sig_term p0.ps_resp.sh_ltk (signonce_term (n + 1)) transcript);
+            ne_pos  = n + 2;
+            ne_auth = RespAuth (term_of_principal a) peer_share } ]))
+= ()
+
+(** Delivering a Msg3 to the responder: it must have responded already, so it
+    holds its scalar, the peer share it accepted and the derived key. *)
+let lemma_resp_msg3_step_shape
+  (p0:product_state) (idx:nat) (p1:product_state) (out:sys_output)
+  : Lemma
+    (requires
+      wf p0 /\
+      product_step p0 (SM.LocalEvent (ActDeliver idx Resp)) p1 out /\
+      idx < L.length p0.ps_sys.sys_net /\
+      Msg3? (L.index p0.ps_sys.sys_net idx).pk_msg)
+    (ensures
+      idx < L.length p0.ps_net /\
+      p0.ps_sys.sys_resp.ep_phase == Resp_Wait3 /\
+      Some? p0.ps_sys.sys_resp.ep_peer /\
+      Some? p0.ps_sys.sys_resp.ep_peer_share /\
+      Some? p0.ps_sys.sys_resp.ep_my_share /\
+      Some? p0.ps_resp.sh_scalar /\
+      Some? p0.ps_resp.sh_peer_share /\
+      Some? p0.ps_resp.sh_key /\
+      p1.ps_sys.sys_resp.ep_phase == Resp_Done /\
+      (* the responder's completion changes NO symbolic state at all *)
+      p1.ps_init == p0.ps_init /\
+      p1.ps_resp == p0.ps_resp /\
+      p1.ps_net == p0.ps_net /\
+      p1.ps_rng == p0.ps_rng)
+= net_coherent_length p0.ps_sys.sys_net p0.ps_net p0.ps_trace
+    p0.ps_init.sh_ltk p0.ps_resp.sh_ltk
 
 #pop-options
