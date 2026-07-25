@@ -2177,6 +2177,46 @@ let lemma_server_preappdata_sent_le4
     )
 #pop-options
 
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ SERVER SENT == 0 at HsServerHelloSent. ═══
+    A reachable server whose control is exactly `HsServerHelloSent` has SENT ZERO
+    ApplicationData-typed records: it has only sent the cleartext ServerHello (and
+    possibly a cleartext ChangeCipherSpec) — the protected server flight begins
+    with the EncryptedExtensions send, which advances the control OUT of
+    `HsServerHelloSent`.  Proof: `server_pre_flight_ctrl HsServerHelloSent` holds,
+    so `server_flight_shape` forces all four flight markers unset, hence
+    `server_sent_marker_count == 0` upper-bounds the sent count. **)
+let lemma_server_hsserverhellosent_sent_zero
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            server.CS.cs_model.CS.model_control
+              == CS.ControlHandshaking CS.HsServerHelloSent /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures raw_appdata_count server.CS.cs_wire_log.CL.raw_sent == 0)
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns raw_appdata_count server.CS.cs_wire_log.CL.raw_sent == 0
+    with _.
+    (
+      lemma_server_trace_sent_marker init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (server_pre_flight_ctrl server.CS.cs_model.CS.model_control);
+      assert (server_sent_marker_count server.CS.cs_model == 0);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      lemma_raw_appdata_count_serialize_all out_msgs;
+      lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_sent sm_bytes
+    )
+#pop-options
+
 (** ═══════════════════════════════════════════════════════════════════════════
     CLIENT SENT == 0 : a reachable client that has not yet reached application
     data has SENT ZERO ApplicationData-typed records.  It has only sent the
@@ -2661,6 +2701,44 @@ let lemma_server_preappdata_recv_le1
       let in_msgs = WFSM.trace_input_messages trace in
       let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
       assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
+      lemma_raw_appdata_count_serialize_all in_msgs;
+      lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_received sm_bytes
+    )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ SERVER RECV == 0 at HsServerHelloSent. ═══
+    A reachable server whose control is exactly `HsServerHelloSent` has RECEIVED
+    ZERO ApplicationData-typed records: it has only received the cleartext
+    ClientHello.  The first (and only) ApplicationData record the server receives
+    is the client Finished, which lands in the post-CF region.  Proof:
+    `server_recv_prior HsServerHelloSent == 0` (not post-CF), so the RECV potential
+    telescoping upper-bounds the received count by 0. **)
+let lemma_server_hsserverhellosent_recv_zero
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            server.CS.cs_model.CS.model_control
+              == CS.ControlHandshaking CS.HsServerHelloSent /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures raw_appdata_count server.CS.cs_wire_log.CL.raw_received == 0)
+  = let init = CS.initial cfg in
+    let sm = ServerCP.server_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace server
+    returns raw_appdata_count server.CS.cs_wire_log.CL.raw_received == 0
+    with _.
+    (
+      lemma_server_trace_recv_potential init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (server_recv_prior server.CS.cs_model == 0);
       assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
       assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
       lemma_raw_appdata_count_serialize_all in_msgs;
@@ -3360,6 +3438,48 @@ let lemma_client_reachable_recv_region_le3
       let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
       assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
       assert (client_recv_potential init.CS.cs_model.CS.model_control == 0);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal client.CS.cs_wire_log.CL.raw_received sm_bytes);
+      lemma_raw_appdata_count_serialize_all in_msgs;
+      lemma_raw_appdata_count_seq_equal client.CS.cs_wire_log.CL.raw_received sm_bytes
+    )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ CLIENT RECV == 0 at HsServerHelloReceived. ═══
+    A reachable client whose control is exactly `HsServerHelloReceived` has
+    RECEIVED ZERO ApplicationData-typed records: it has only received the cleartext
+    ServerHello.  The first protected record the client receives is
+    EncryptedExtensions, whose receipt advances the control OUT of
+    `HsServerHelloReceived`.  `HsServerHelloReceived` is inside the
+    `client_recv_region_ctrl` region where `client_recv_potential` is the EXACT
+    received-record count; there it equals 0, so the RECV UPPER telescoping bounds
+    the received count by 0. **)
+let lemma_client_hsserverhelloreceived_recv_zero
+  (cfg:CS.connection_config)
+  (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            client.CS.cs_model.CS.model_control
+              == CS.ControlHandshaking CS.HsServerHelloReceived /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures raw_appdata_count client.CS.cs_wire_log.CL.raw_received == 0)
+  = let init = CS.initial cfg in
+    let sm = ClientCP.client_state_machine init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.client_local_event CTy.local_output)).
+      SM.trace_reaches sm init trace client
+    returns raw_appdata_count client.CS.cs_wire_log.CL.raw_received == 0
+    with _.
+    (
+      assert (client_recv_region_ctrl client.CS.cs_model.CS.model_control);
+      lemma_client_trace_recv_upper init init client trace;
+      PNTWL.lemma_client_trace_wire_logs_match init init trace client;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (client_recv_potential init.CS.cs_model.CS.model_control == 0);
+      assert (client_recv_potential client.CS.cs_model.CS.model_control == 0);
       assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
       assert (Seq.equal client.CS.cs_wire_log.CL.raw_received sm_bytes);
       lemma_raw_appdata_count_serialize_all in_msgs;

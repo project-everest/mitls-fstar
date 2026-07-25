@@ -35,6 +35,7 @@ module ID    = FStar.IndefiniteDescription
 module W     = TLS13.Wire.Spec
 module PNI   = TLS13.Impl.Driver.PairingNoTailInversion
 module SWR   = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
+module WFL   = TLS13.Spec.WireFormatLemmas
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
@@ -760,63 +761,118 @@ let lemma_server_progress_congruence (m m':CS.connection_model)
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
-    LOCAL record-seq stability (client).  A client LOCAL step changes the record
-    ONLY via a key install (all other locals leave `model_record` fixed).  The
-    only install that resets `record_write.seq` while KEEPING the write epoch at
-    `Handshake` is a redundant handshake-write re-install; by `record_schedule_coupling`
-    the corresponding key slot is already `Some`, so the re-install leaves progress
-    flat (congruence) — but an install also keeps the control state, so the
-    `client_local_advances` guard (progress↑ ∨ control-changed) is violated.  The
-    read side is the mirror.  Hence the record seq is preserved (P_seqdelta with
-    an EMPTY delta).
+    LOCAL record-seq stability (client / server).  A LOCAL step changes the
+    record ONLY via a key install (all other locals leave `model_record` fixed).
+    The only install that resets a direction `seq` while KEEPING that direction's
+    epoch at `Handshake` is a REDUNDANT idempotent handshake re-install
+    (`R.install_keys` unconditionally resets seq to 0).  Such a re-install
+    preserves the seq exactly when the pre-install seq was already 0.  The GATE
+    predicates below capture that per-direction premise; they are TRUE at every
+    reachable install stage — where the direction's appdata count (hence, via
+    `pwrite_ok`/`pread_ok`, its seq) is 0 — and are discharged there by
+    `lemma_discharge_local_redundant_{client,server}`.  The genuine
+    (epoch-changing) `Initial -> Handshake` install has the "both epochs Handshake"
+    antecedent false, so it is vacuous; every non-install local leaves the record
+    fixed, so the gate is vacuously `True`.
     ───────────────────────────────────────────────────────────────────────── **)
+
+(** WRITE-direction gate: a redundant handshake WRITE re-install preserves the
+    write seq (its pre-install write seq is 0). **)
+let install_write_seq_zero
+  (m:CS.connection_model) (install:CS.traffic_key_install) : prop =
+  install.CS.install_epoch == CS.TrafficHandshake /\
+  install.CS.install_direction == CS.TrafficWrite /\
+  m.CS.model_record.CS.record_write.R.epoch == R.Handshake
+  ==> m.CS.model_record.CS.record_write.R.seq == 0
+
+(** READ-direction gate: mirror of `install_write_seq_zero`. **)
+let install_read_seq_zero
+  (m:CS.connection_model) (install:CS.traffic_key_install) : prop =
+  install.CS.install_epoch == CS.TrafficHandshake /\
+  install.CS.install_direction == CS.TrafficRead /\
+  m.CS.model_record.CS.record_read.R.epoch == R.Handshake
+  ==> m.CS.model_record.CS.record_read.R.seq == 0
+
+(** The WRITE gate lifted to a whole local event (vacuous on non-install locals). **)
+let local_write_seq_zero
+  (m:CS.connection_model) (local:CS.local_event) : prop =
+  match local with
+  | CS.LocalInstallTrafficKeys install -> install_write_seq_zero m install
+  | CS.LocalInstallTrafficKeysForRole ri -> install_write_seq_zero m ri.CS.install_payload
+  | _ -> True
+
+(** The READ gate lifted to a whole local event. **)
+let local_read_seq_zero
+  (m:CS.connection_model) (local:CS.local_event) : prop =
+  match local with
+  | CS.LocalInstallTrafficKeys install -> install_read_seq_zero m install
+  | CS.LocalInstallTrafficKeysForRole ri -> install_read_seq_zero m ri.CS.install_payload
+  | _ -> True
+
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_client_local_install_seq_stable
+let lemma_client_local_install_seq_stable_write
   (m:CS.connection_model) (install:CS.traffic_key_install) (m':CS.connection_model)
   : Lemma
       (requires
         m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         record_schedule_coupling m /\
         CS.ControlHandshaking? m.CS.model_control /\
+        install_write_seq_zero m install /\
         m' == { m with
                   CS.model_record = CS.install_record_keys m.CS.model_record install;
                   CS.model_handshake =
                     { m.CS.model_handshake with
                         CS.hs_keys =
                           CS.update_key_schedule_with_install
-                            m.CS.model_handshake.CS.hs_keys install } } /\
-        (PC.client_progress m' > PC.client_progress m \/
-         ~(m'.CS.model_control == m.CS.model_control)))
+                            m.CS.model_handshake.CS.hs_keys install } })
       (ensures
         (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_write.R.seq
-           == m.CS.model_record.CS.record_write.R.seq) /\
-        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
-         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
-         m'.CS.model_record.CS.record_read.R.seq
-           == m.CS.model_record.CS.record_read.R.seq))
-  = assert (m'.CS.model_control == m.CS.model_control);
-    introduce (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+           == m.CS.model_record.CS.record_write.R.seq))
+  = introduce (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
                m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_write.R.seq
                     == m.CS.model_record.CS.record_write.R.seq
     with _pf.
       (match install.CS.install_epoch, install.CS.install_direction with
-       | CS.TrafficHandshake, CS.TrafficWrite -> lemma_client_progress_congruence m m'
-       | _, _ -> ());
-    introduce (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+       | CS.TrafficHandshake, CS.TrafficWrite -> ()
+       | _, _ -> ())
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_install_seq_stable_read
+  (m:CS.connection_model) (install:CS.traffic_key_install) (m':CS.connection_model)
+  : Lemma
+      (requires
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        record_schedule_coupling m /\
+        CS.ControlHandshaking? m.CS.model_control /\
+        install_read_seq_zero m install /\
+        m' == { m with
+                  CS.model_record = CS.install_record_keys m.CS.model_record install;
+                  CS.model_handshake =
+                    { m.CS.model_handshake with
+                        CS.hs_keys =
+                          CS.update_key_schedule_with_install
+                            m.CS.model_handshake.CS.hs_keys install } })
+      (ensures
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_read.R.seq
+           == m.CS.model_record.CS.record_read.R.seq))
+  = introduce (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
                m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_read.R.seq
                     == m.CS.model_record.CS.record_read.R.seq
     with _pf.
       (match install.CS.install_epoch, install.CS.install_direction with
-       | CS.TrafficHandshake, CS.TrafficRead -> lemma_client_progress_congruence m m'
+       | CS.TrafficHandshake, CS.TrafficRead -> ()
        | _, _ -> ())
 #pop-options
 
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_client_local_install_for_role_seq_stable
+let lemma_client_local_install_for_role_seq_stable_write
   (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
   (m':CS.connection_model)
   : Lemma
@@ -825,6 +881,7 @@ let lemma_client_local_install_for_role_seq_stable
         role_install.CS.install_role == CS.ClientEndpoint /\
         record_schedule_coupling m /\
         CS.ControlHandshaking? m.CS.model_control /\
+        install_write_seq_zero m role_install.CS.install_payload /\
         m' == { m with
                   CS.model_record =
                     CS.install_record_keys_for_role
@@ -836,26 +893,50 @@ let lemma_client_local_install_for_role_seq_stable
                           CS.update_key_schedule_with_install_for_role
                             role_install.CS.install_role
                             m.CS.model_handshake.CS.hs_keys
-                            role_install.CS.install_payload } } /\
-        (PC.client_progress m' > PC.client_progress m \/
-         ~(m'.CS.model_control == m.CS.model_control)))
+                            role_install.CS.install_payload } })
       (ensures
         (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_write.R.seq
-           == m.CS.model_record.CS.record_write.R.seq) /\
+           == m.CS.model_record.CS.record_write.R.seq))
+  = lemma_client_local_install_seq_stable_write m role_install.CS.install_payload m'
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_install_for_role_seq_stable_read
+  (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        role_install.CS.install_role == CS.ClientEndpoint /\
+        record_schedule_coupling m /\
+        CS.ControlHandshaking? m.CS.model_control /\
+        install_read_seq_zero m role_install.CS.install_payload /\
+        m' == { m with
+                  CS.model_record =
+                    CS.install_record_keys_for_role
+                      role_install.CS.install_role
+                      m.CS.model_record role_install.CS.install_payload;
+                  CS.model_handshake =
+                    { m.CS.model_handshake with
+                        CS.hs_keys =
+                          CS.update_key_schedule_with_install_for_role
+                            role_install.CS.install_role
+                            m.CS.model_handshake.CS.hs_keys
+                            role_install.CS.install_payload } })
+      (ensures
         (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_read.R.seq
            == m.CS.model_record.CS.record_read.R.seq))
-  = // For role == ClientEndpoint the `_for_role` installs reduce to the plain ones.
-    lemma_client_local_install_seq_stable m role_install.CS.install_payload m'
+  = lemma_client_local_install_seq_stable_read m role_install.CS.install_payload m'
 #pop-options
 
 (** Client LOCAL record-seq stability (dispatch on the local event).  Only the two
     key-install locals touch `model_record`; everything else leaves it fixed. **)
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_client_local_record_seq_stable
+let lemma_client_local_record_seq_stable_write
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
       (requires
@@ -863,14 +944,32 @@ let lemma_client_local_record_seq_stable
         CS.step_local_event m local == Some m' /\
         m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         record_schedule_coupling m /\
-        (PC.client_progress m' > PC.client_progress m \/
-         ~(m'.CS.model_control == m.CS.model_control)))
+        local_write_seq_zero m local)
       (ensures
         (PC.pre_appdata_control m'.CS.model_control /\
          m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_write.R.seq
-           == m.CS.model_record.CS.record_write.R.seq) /\
+           == m.CS.model_record.CS.record_write.R.seq))
+  = match local with
+    | CS.LocalInstallTrafficKeys install ->
+      lemma_client_local_install_seq_stable_write m install m'
+    | CS.LocalInstallTrafficKeysForRole role_install ->
+      lemma_client_local_install_for_role_seq_stable_write m role_install m'
+    | _ -> ()
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_local_record_seq_stable_read
+  (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_local_event m local /\
+        CS.step_local_event m local == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        record_schedule_coupling m /\
+        local_read_seq_zero m local)
+      (ensures
         (PC.pre_appdata_control m'.CS.model_control /\
          m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
@@ -878,23 +977,21 @@ let lemma_client_local_record_seq_stable
            == m.CS.model_record.CS.record_read.R.seq))
   = match local with
     | CS.LocalInstallTrafficKeys install ->
-      lemma_client_local_install_seq_stable m install m'
+      lemma_client_local_install_seq_stable_read m install m'
     | CS.LocalInstallTrafficKeysForRole role_install ->
-      lemma_client_local_install_for_role_seq_stable m role_install m'
+      lemma_client_local_install_for_role_seq_stable_read m role_install m'
     | _ -> ()
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
-    LOCAL record-seq stability (server).  Mirror of the client version: a server
-    installs traffic keys via `LocalInstallTrafficKeysForRole` with
-    `install_role == ServerEndpoint`.  The `(ServerEndpoint,TrafficApplication,
-    TrafficWrite)` install moves the write epoch to `Application` (so the
-    `Handshake` P_seqdelta antecedent is vacuous); the handshake installs are
-    excluded from resetting a `Handshake` seq by the same progress-flat +
-    `server_local_advances`-guard argument.
+    LOCAL record-seq stability (server).  A server installs traffic keys via
+    `LocalInstallTrafficKeysForRole` with `install_role == ServerEndpoint`.  The
+    `(ServerEndpoint,TrafficApplication,TrafficWrite)` install moves the write
+    epoch to `Application` (so the `Handshake` antecedent is vacuous); the handshake
+    installs are excluded from resetting a `Handshake` seq by the gate.
     ───────────────────────────────────────────────────────────────────────── **)
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_server_local_install_for_role_seq_stable
+let lemma_server_local_install_for_role_seq_stable_write
   (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
   (m':CS.connection_model)
   : Lemma
@@ -903,6 +1000,7 @@ let lemma_server_local_install_for_role_seq_stable
         role_install.CS.install_role == CS.ServerEndpoint /\
         record_schedule_coupling m /\
         CS.ControlHandshaking? m.CS.model_control /\
+        install_write_seq_zero m role_install.CS.install_payload /\
         m' == { m with
                   CS.model_record =
                     CS.install_record_keys_for_role
@@ -914,36 +1012,59 @@ let lemma_server_local_install_for_role_seq_stable
                           CS.update_key_schedule_with_install_for_role
                             role_install.CS.install_role
                             m.CS.model_handshake.CS.hs_keys
-                            role_install.CS.install_payload } } /\
-        (PC.server_progress m' > PC.server_progress m \/
-         ~(m'.CS.model_control == m.CS.model_control)))
+                            role_install.CS.install_payload } })
       (ensures
         (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_write.R.seq
-           == m.CS.model_record.CS.record_write.R.seq) /\
-        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
-         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
-         m'.CS.model_record.CS.record_read.R.seq
-           == m.CS.model_record.CS.record_read.R.seq))
-  = assert (m'.CS.model_control == m.CS.model_control);
-    introduce (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
+           == m.CS.model_record.CS.record_write.R.seq))
+  = introduce (m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
                m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_write.R.seq
                     == m.CS.model_record.CS.record_write.R.seq
     with _pf.
       (match role_install.CS.install_payload.CS.install_epoch,
              role_install.CS.install_payload.CS.install_direction with
-       | CS.TrafficHandshake, CS.TrafficWrite -> lemma_server_progress_congruence m m'
-       | _, _ -> ());
-    introduce (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+       | CS.TrafficHandshake, CS.TrafficWrite -> ()
+       | _, _ -> ())
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_local_install_for_role_seq_stable_read
+  (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        role_install.CS.install_role == CS.ServerEndpoint /\
+        record_schedule_coupling m /\
+        CS.ControlHandshaking? m.CS.model_control /\
+        install_read_seq_zero m role_install.CS.install_payload /\
+        m' == { m with
+                  CS.model_record =
+                    CS.install_record_keys_for_role
+                      role_install.CS.install_role
+                      m.CS.model_record role_install.CS.install_payload;
+                  CS.model_handshake =
+                    { m.CS.model_handshake with
+                        CS.hs_keys =
+                          CS.update_key_schedule_with_install_for_role
+                            role_install.CS.install_role
+                            m.CS.model_handshake.CS.hs_keys
+                            role_install.CS.install_payload } })
+      (ensures
+        (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+         m'.CS.model_record.CS.record_read.R.seq
+           == m.CS.model_record.CS.record_read.R.seq))
+  = introduce (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
                m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_read.R.seq
                     == m.CS.model_record.CS.record_read.R.seq
     with _pf.
       (match role_install.CS.install_payload.CS.install_epoch,
              role_install.CS.install_payload.CS.install_direction with
-       | CS.TrafficHandshake, CS.TrafficRead -> lemma_server_progress_congruence m m'
+       | CS.TrafficHandshake, CS.TrafficRead -> ()
        | _, _ -> ())
 #pop-options
 
@@ -951,7 +1072,7 @@ let lemma_server_local_install_for_role_seq_stable
     `model_record`; the plain `LocalInstallTrafficKeys` is client-only (legality),
     so a server install is always the `_ForRole` variant. **)
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
-let lemma_server_local_record_seq_stable
+let lemma_server_local_record_seq_stable_write
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
       (requires
@@ -959,14 +1080,30 @@ let lemma_server_local_record_seq_stable
         CS.step_local_event m local == Some m' /\
         m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         record_schedule_coupling m /\
-        (PC.server_progress m' > PC.server_progress m \/
-         ~(m'.CS.model_control == m.CS.model_control)))
+        local_write_seq_zero m local)
       (ensures
         (PC.pre_appdata_control m'.CS.model_control /\
          m'.CS.model_record.CS.record_write.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_write.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_write.R.seq
-           == m.CS.model_record.CS.record_write.R.seq) /\
+           == m.CS.model_record.CS.record_write.R.seq))
+  = match local with
+    | CS.LocalInstallTrafficKeysForRole role_install ->
+      lemma_server_local_install_for_role_seq_stable_write m role_install m'
+    | _ -> ()
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_server_local_record_seq_stable_read
+  (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_local_event m local /\
+        CS.step_local_event m local == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        record_schedule_coupling m /\
+        local_read_seq_zero m local)
+      (ensures
         (PC.pre_appdata_control m'.CS.model_control /\
          m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
@@ -974,7 +1111,7 @@ let lemma_server_local_record_seq_stable
            == m.CS.model_record.CS.record_read.R.seq))
   = match local with
     | CS.LocalInstallTrafficKeysForRole role_install ->
-      lemma_server_local_install_for_role_seq_stable m role_install m'
+      lemma_server_local_install_for_role_seq_stable_read m role_install m'
     | _ -> ()
 #pop-options
 
@@ -1326,6 +1463,129 @@ let lemma_server_local_record_install_char
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
+    DISCHARGE of the redundant-handshake-install GATE at reachable states.  Each
+    helper proves the per-direction `local_{write,read}_seq_zero` gate for the
+    actual local event `local'` of a REACHABLE endpoint whose control is still in
+    the pre-application-data region.  The proof: a handshake install is legal only
+    at a single control per endpoint (`traffic_install_allowed_at_stage[_for_role]`
+    pins CLIENT handshake installs to `HsServerHelloReceived` and SERVER handshake
+    installs to `HsServerHelloSent`), where the direction's appdata count is 0
+    (WireStep count-at-stage FACTs), so `pwrite_ok`/`pread_ok` forces the pre-install
+    seq to 0.  Non-install locals leave the record fixed, so the gate is vacuous.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_discharge_client_write
+  (a:CS.connection_state) (local':CS.local_event)
+  : Lemma
+      (requires
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        pwrite_ok a /\
+        PC.pre_appdata_control a.CS.cs_model.CS.model_control /\
+        WStep.client_reachable (CS.initial a.CS.cs_model.CS.model_config) a /\
+        WFL.supported_client_config_wire_profile a.CS.cs_model.CS.model_config)
+      (ensures local_write_seq_zero a.CS.cs_model local')
+  = let m = a.CS.cs_model in
+    assert (WStep.pre_appdata_ctrl m.CS.model_control);
+    WStep.lemma_client_preappdata_sent_no_appdata m.CS.model_config a;
+    // count(a.raw_sent)==0, and pwrite_ok (pre_appdata) => write seq == count == 0
+    (match local' with
+     | CS.LocalInstallTrafficKeys install -> ()
+     | CS.LocalInstallTrafficKeysForRole ri -> ()
+     | _ -> ())
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_discharge_client_read
+  (a:CS.connection_state) (local':CS.local_event)
+  : Lemma
+      (requires
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        pread_ok a /\
+        PC.pre_appdata_control a.CS.cs_model.CS.model_control /\
+        WStep.client_reachable (CS.initial a.CS.cs_model.CS.model_config) a /\
+        CS.legal_local_event a.CS.cs_model local')
+      (ensures local_read_seq_zero a.CS.cs_model local')
+  = let m = a.CS.cs_model in
+    match local' with
+    | CS.LocalInstallTrafficKeys install ->
+      introduce (install.CS.install_epoch == CS.TrafficHandshake /\
+                 install.CS.install_direction == CS.TrafficRead /\
+                 m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
+                ==> m.CS.model_record.CS.record_read.R.seq == 0
+      with _pf.
+        ( assert (CS.ControlHandshaking? m.CS.model_control);
+          assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived);
+          WStep.lemma_client_hsserverhelloreceived_recv_zero m.CS.model_config a )
+    | CS.LocalInstallTrafficKeysForRole ri ->
+      introduce (ri.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+                 ri.CS.install_payload.CS.install_direction == CS.TrafficRead /\
+                 m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
+                ==> m.CS.model_record.CS.record_read.R.seq == 0
+      with _pf.
+        ( assert (CS.ControlHandshaking? m.CS.model_control);
+          assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived);
+          WStep.lemma_client_hsserverhelloreceived_recv_zero m.CS.model_config a )
+    | _ -> ()
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_discharge_server_write
+  (a:CS.connection_state) (local':CS.local_event)
+  : Lemma
+      (requires
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        pwrite_ok a /\
+        PC.pre_appdata_control a.CS.cs_model.CS.model_control /\
+        WStep.server_reachable (CS.initial a.CS.cs_model.CS.model_config) a /\
+        CS.legal_local_event a.CS.cs_model local')
+      (ensures local_write_seq_zero a.CS.cs_model local')
+  = let m = a.CS.cs_model in
+    match local' with
+    | CS.LocalInstallTrafficKeysForRole ri ->
+      introduce (ri.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+                 ri.CS.install_payload.CS.install_direction == CS.TrafficWrite /\
+                 m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
+                ==> m.CS.model_record.CS.record_write.R.seq == 0
+      with _pf.
+        ( assert (CS.ControlHandshaking? m.CS.model_control);
+          assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
+          WStep.lemma_server_hsserverhellosent_sent_zero m.CS.model_config a )
+    | CS.LocalInstallTrafficKeys install ->
+      // client-only install; legal_local_event forces role ClientEndpoint,
+      // contradicting the ServerEndpoint requires — vacuous.
+      ()
+    | _ -> ()
+#pop-options
+
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
+let lemma_discharge_server_read
+  (a:CS.connection_state) (local':CS.local_event)
+  : Lemma
+      (requires
+        a.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        pread_ok a /\
+        PC.pre_appdata_control a.CS.cs_model.CS.model_control /\
+        WStep.server_reachable (CS.initial a.CS.cs_model.CS.model_config) a /\
+        CS.legal_local_event a.CS.cs_model local')
+      (ensures local_read_seq_zero a.CS.cs_model local')
+  = let m = a.CS.cs_model in
+    match local' with
+    | CS.LocalInstallTrafficKeysForRole ri ->
+      introduce (ri.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
+                 ri.CS.install_payload.CS.install_direction == CS.TrafficRead /\
+                 m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
+                ==> m.CS.model_record.CS.record_read.R.seq == 0
+      with _pf.
+        ( assert (CS.ControlHandshaking? m.CS.model_control);
+          assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
+          WStep.lemma_server_hsserverhellosent_recv_zero m.CS.model_config a )
+    | CS.LocalInstallTrafficKeys install ->
+      ()
+    | _ -> ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
     CLIENT LOCAL, WRITE side.  Given a legal LOCAL delta (empty byte-deltas) from
     a client state whose model couplings hold and which satisfies the
     `client_local_advances` guard, `pwrite_ok` transports to the post-state.  The
@@ -1350,8 +1610,7 @@ let lemma_client_local_pwrite
         record_schedule_coupling a.CS.cs_model /\
         record_app_epoch_coupling a.CS.cs_model /\
         app_slots_none_shape a.CS.cs_model /\
-        (PC.client_progress c'.CS.cs_model > PC.client_progress a.CS.cs_model \/
-         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
+        WFL.supported_client_config_wire_profile a.CS.cs_model.CS.model_config /\
         WStep.client_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
       (ensures pwrite_ok c')
   = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
@@ -1377,7 +1636,8 @@ let lemma_client_local_pwrite
          | CS.ConnLocalEvent local' ->
            assert (CS.legal_local_event a.CS.cs_model local');
            assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
-           lemma_client_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_discharge_client_write a local';
+           lemma_client_local_record_seq_stable_write a.CS.cs_model local' c'.CS.cs_model;
            lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
@@ -1402,8 +1662,6 @@ let lemma_client_local_pread
         record_schedule_coupling a.CS.cs_model /\
         record_app_epoch_coupling a.CS.cs_model /\
         app_slots_none_shape a.CS.cs_model /\
-        (PC.client_progress c'.CS.cs_model > PC.client_progress a.CS.cs_model \/
-         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
         WStep.client_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
       (ensures pread_ok c')
   = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
@@ -1427,7 +1685,8 @@ let lemma_client_local_pread
          | CS.ConnLocalEvent local' ->
            assert (CS.legal_local_event a.CS.cs_model local');
            assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
-           lemma_client_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_discharge_client_read a local';
+           lemma_client_local_record_seq_stable_read a.CS.cs_model local' c'.CS.cs_model;
            lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
@@ -1456,8 +1715,6 @@ let lemma_server_local_pwrite
         record_schedule_coupling a.CS.cs_model /\
         record_app_epoch_coupling a.CS.cs_model /\
         app_slots_none_shape a.CS.cs_model /\
-        (PC.server_progress c'.CS.cs_model > PC.server_progress a.CS.cs_model \/
-         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
         WStep.server_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
       (ensures pwrite_ok c')
   = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
@@ -1481,7 +1738,8 @@ let lemma_server_local_pwrite
          | CS.ConnLocalEvent local' ->
            assert (CS.legal_local_event a.CS.cs_model local');
            assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
-           lemma_server_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_discharge_server_write a local';
+           lemma_server_local_record_seq_stable_write a.CS.cs_model local' c'.CS.cs_model;
            lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
@@ -1504,8 +1762,6 @@ let lemma_server_local_pread
         record_schedule_coupling a.CS.cs_model /\
         record_app_epoch_coupling a.CS.cs_model /\
         app_slots_none_shape a.CS.cs_model /\
-        (PC.server_progress c'.CS.cs_model > PC.server_progress a.CS.cs_model \/
-         ~(c'.CS.cs_model.CS.model_control == a.CS.cs_model.CS.model_control)) /\
         WStep.server_reachable (CS.initial a.CS.cs_model.CS.model_config) a)
       (ensures pread_ok c')
   = if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then
@@ -1529,7 +1785,8 @@ let lemma_server_local_pread
          | CS.ConnLocalEvent local' ->
            assert (CS.legal_local_event a.CS.cs_model local');
            assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
-           lemma_server_local_record_seq_stable a.CS.cs_model local' c'.CS.cs_model;
+           lemma_discharge_server_read a local';
+           lemma_server_local_record_seq_stable_read a.CS.cs_model local' c'.CS.cs_model;
            lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
