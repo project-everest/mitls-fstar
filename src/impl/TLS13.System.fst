@@ -78,7 +78,7 @@ open FStar.List.Tot
 noeq
 type tls_channel =
   | TlsQuiet    : tls_channel
-  | TlsInFlight : recipient:CS.endpoint_role -> raw:B.bytes -> tls_channel
+  | TlsInFlight : recipient:CS.endpoint_role -> raw:B.bytes -> sender_snapshot:CS.connection_model -> sent:M.tls_message -> tls_channel
 
 (** The combined system state: a client endpoint, a server endpoint, and the raw
     channel between them. **)
@@ -277,7 +277,7 @@ let hello_key_shares_ok (s:tls_system_state) : prop =
 let channel_consistent (s:tls_system_state) : prop =
   match s.channel with
   | TlsQuiet -> True
-  | TlsInFlight CS.ServerEndpoint raw ->
+  | TlsInFlight CS.ServerEndpoint raw _snap _sent ->
     ((exists server_ch.
         CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw)
      ==>
@@ -286,7 +286,7 @@ let channel_consistent (s:tls_system_state) : prop =
         WFL.supported_client_hello_wire_profile client_ch /\
         CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello client_ch)) raw
       | None -> False))
-  | TlsInFlight CS.ClientEndpoint raw ->
+  | TlsInFlight CS.ClientEndpoint raw _snap _sent ->
     ((exists (some_sh:GSH.serverHello).
         B.length (W.serialize_handshake (M.ServerHello some_sh)) <= 16640 /\
         CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello some_sh)) raw)
@@ -354,9 +354,9 @@ let byte_pairing (s:tls_system_state) : prop =
   match s.channel with
   | TlsQuiet ->
     Seq.equal cs sr /\ Seq.equal ss cr
-  | TlsInFlight CS.ServerEndpoint raw ->
+  | TlsInFlight CS.ServerEndpoint raw _snap _sent ->
     Seq.equal cs (B.append sr raw) /\ Seq.equal ss cr
-  | TlsInFlight CS.ClientEndpoint raw ->
+  | TlsInFlight CS.ClientEndpoint raw _snap _sent ->
     Seq.equal ss (B.append cr raw) /\ Seq.equal cs sr
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -574,25 +574,30 @@ let server_local_advances (before after:CS.connection_state) : prop =
 let tls_step_client_send (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
   (exists (local:CTy.client_local_event) (c':CS.connection_state)
-          (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+          (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+          (sent:M.tls_message).
      EC.client_step a.client (SM.LocalEvent local) c' out /\
      out.SM.so_wire_outputs == [w] /\
      client_advances a.client c' /\
-     b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) })
+     c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+     b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent })
 
 let tls_step_server_send (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
   (exists (local:CTy.server_local_event) (s':CS.connection_state)
-          (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+          (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+          (sent:M.tls_message).
      ES.server_step a.server (SM.LocalEvent local) s' out /\
      out.SM.so_wire_outputs == [w] /\
      server_advances a.server s' /\
-     b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) })
+     s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+     b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent })
 
 let tls_step_deliver_to_server (a b:tls_system_state) : prop =
   (exists (wire:CW.wire_message) (s':CS.connection_state)
-          (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-     a.channel == TlsInFlight CS.ServerEndpoint raw /\
+          (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+          (snap:CS.connection_model) (sent:M.tls_message).
+     a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
      Seq.equal (CW.wire_serialize wire) raw /\
      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
      server_advances a.server s' /\
@@ -600,8 +605,9 @@ let tls_step_deliver_to_server (a b:tls_system_state) : prop =
 
 let tls_step_deliver_to_client (a b:tls_system_state) : prop =
   (exists (wire:CW.wire_message) (c':CS.connection_state)
-          (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-     a.channel == TlsInFlight CS.ClientEndpoint raw /\
+          (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+          (snap:CS.connection_model) (sent:M.tls_message).
+     a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
      Seq.equal (CW.wire_serialize wire) raw /\
      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
      client_advances a.client c' /\
@@ -1049,6 +1055,7 @@ let lemma_cc_client_send
   (a:tls_system_state)
   (local:CTy.client_local_event) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
   : Lemma
       (requires
         tls_system_inv a /\ TlsQuiet? a.channel /\
@@ -1057,9 +1064,9 @@ let lemma_cc_client_send
       (ensures
         channel_consistent
           ({ a with client = c';
-                    channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }))
+                    channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent }))
   = let b = { a with client = c';
-                     channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) } in
+                     channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent } in
     lemma_serialize_all_single w;
     let api = CTy.client_local_event_api local in
     eliminate exists conn_ev raw_sent.
@@ -1139,16 +1146,17 @@ val lemma_wire_facts_client_send (a b:tls_system_state)
 #push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
 let lemma_wire_facts_client_send a b =
   eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
-                   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+                   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                   (sent:M.tls_message).
     EC.client_step a.client (SM.LocalEvent local) c' out /\
     out.SM.so_wire_outputs == [w] /\
-    b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
+    b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
           channel_consistent b /\ hello_coupling b
   with _pf. (
     lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
     lemma_client_local_preserves_server_hello a.client c' local out;
-    lemma_cc_client_send a local c' out w;
+    lemma_cc_client_send a local c' out w sent;
     assert (c'.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
             a.client.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
     assert (ch_wire_equiv b);
@@ -1167,6 +1175,7 @@ let lemma_cc_server_send
   (a:tls_system_state)
   (local:CTy.server_local_event) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
   : Lemma
       (requires
         tls_system_inv a /\ TlsQuiet? a.channel /\
@@ -1175,9 +1184,9 @@ let lemma_cc_server_send
       (ensures
         channel_consistent
           ({ a with server = s';
-                    channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }))
+                    channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent }))
   = let b = { a with server = s';
-                     channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) } in
+                     channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent } in
     lemma_serialize_all_single w;
     let api = CTy.server_local_event_api local in
     eliminate exists conn_ev raw_sent.
@@ -1257,16 +1266,17 @@ val lemma_wire_facts_server_send (a b:tls_system_state)
 #push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
 let lemma_wire_facts_server_send a b =
   eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
-                   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+                   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                   (sent:M.tls_message).
     ES.server_step a.server (SM.LocalEvent local) s' out /\
     out.SM.so_wire_outputs == [w] /\
-    b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
+    b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent }
   returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
           channel_consistent b /\ hello_coupling b
   with _pf. (
     lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
     lemma_server_local_preserves_client_hello a.server s' local out;
-    lemma_cc_server_send a local s' out w;
+    lemma_cc_server_send a local s' out w sent;
     assert (s'.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
             a.server.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     assert (ch_wire_equiv b);
@@ -1285,8 +1295,9 @@ val lemma_wire_facts_deliver_to_server (a b:tls_system_state)
 #push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
 let lemma_wire_facts_deliver_to_server a b =
   eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
-                   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-    a.channel == TlsInFlight CS.ServerEndpoint raw /\
+                   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                   (snap:CS.connection_model) (sent:M.tls_message).
+    a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
     Seq.equal (CW.wire_serialize wire) raw /\
     ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
     b == { a with server = s'; channel = TlsQuiet }
@@ -1351,11 +1362,12 @@ let lemma_wire_facts_deliver_to_server a b =
 val lemma_deliver_to_client_sh_bridge
   (a b:tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+  (snap:CS.connection_model) (sent:M.tls_message)
   (client_sh:GSH.serverHello)
   : Lemma
       (requires
         tls_system_inv a /\
-        a.channel == TlsInFlight CS.ClientEndpoint raw /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
         c'.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
@@ -1366,7 +1378,7 @@ val lemma_deliver_to_client_sh_bridge
         b == { a with client = c'; channel = TlsQuiet })
       (ensures sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b)
 #push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
-let lemma_deliver_to_client_sh_bridge a b wire c' out raw client_sh =
+let lemma_deliver_to_client_sh_bridge a b wire c' out raw snap sent client_sh =
   assert (channel_consistent a);
   assert (SMR.connection_state_consistent a.server);
   // c' (the stepped client) is consistent, so its stored ServerHello satisfies the
@@ -1439,8 +1451,9 @@ val lemma_wire_facts_deliver_to_client (a b:tls_system_state)
 #push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --split_queries always"
 let lemma_wire_facts_deliver_to_client a b =
   eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
-                   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-    a.channel == TlsInFlight CS.ClientEndpoint raw /\
+                   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                   (snap:CS.connection_model) (sent:M.tls_message).
+    a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
     Seq.equal (CW.wire_serialize wire) raw /\
     EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
     b == { a with client = c'; channel = TlsQuiet }
@@ -1480,7 +1493,7 @@ let lemma_wire_facts_deliver_to_client a b =
          assert (CS.received_cleartext_tls_message_raw
                    (M.TlsHandshake (M.ServerHello client_sh)) raw);
          assert (c'.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh);
-         lemma_deliver_to_client_sh_bridge a b wire c' out raw client_sh
+         lemma_deliver_to_client_sh_bridge a b wire c' out raw snap sent client_sh
        | M.TlsHandshake (M.ClientHello _) ->
          // A client (role ClientEndpoint) cannot legally RECEIVE a ClientHello.
          assert (a.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
@@ -1700,6 +1713,7 @@ let lemma_server_step_e2e
 let lemma_bp_client_send
   (a:tls_system_state) (local:CTy.client_local_event) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
   : Lemma
       (requires
         byte_pairing a /\ TlsQuiet? a.channel /\
@@ -1708,7 +1722,7 @@ let lemma_bp_client_send
       (ensures
         byte_pairing
           ({ a with client = c';
-                    channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }))
+                    channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent }))
   = PNTWL.lemma_client_step_wire_log_delta a.client (SM.LocalEvent local) c' out;
     Seq.lemma_eq_elim
       a.client.CS.cs_wire_log.CL.raw_sent
@@ -1723,6 +1737,7 @@ let lemma_bp_client_send
 let lemma_bp_server_send
   (a:tls_system_state) (local:CTy.server_local_event) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
   : Lemma
       (requires
         byte_pairing a /\ TlsQuiet? a.channel /\
@@ -1731,7 +1746,7 @@ let lemma_bp_server_send
       (ensures
         byte_pairing
           ({ a with server = s';
-                    channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }))
+                    channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent }))
   = PNTWL.lemma_server_step_wire_log_delta a.server (SM.LocalEvent local) s' out;
     Seq.lemma_eq_elim
       a.client.CS.cs_wire_log.CL.raw_sent
@@ -1746,10 +1761,11 @@ let lemma_bp_server_send
 let lemma_bp_deliver_to_server
   (a:tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+  (snap:CS.connection_model) (sent:M.tls_message)
   : Lemma
       (requires
         byte_pairing a /\
-        a.channel == TlsInFlight CS.ServerEndpoint raw /\
+        a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out)
       (ensures byte_pairing ({ a with server = s'; channel = TlsQuiet }))
@@ -1766,10 +1782,11 @@ let lemma_bp_deliver_to_server
 let lemma_bp_deliver_to_client
   (a:tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+  (snap:CS.connection_model) (sent:M.tls_message)
   : Lemma
       (requires
         byte_pairing a /\
-        a.channel == TlsInFlight CS.ClientEndpoint raw /\
+        a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out)
       (ensures byte_pairing ({ a with client = c'; channel = TlsQuiet }))
@@ -2093,6 +2110,7 @@ let lemma_client_appdata_len_pres_send
   (a b:tls_system_state)
   (local:CTy.client_local_event) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
   : Lemma
       (requires
         tls_system_inv a /\
@@ -2100,7 +2118,7 @@ let lemma_client_appdata_len_pres_send
         out.SM.so_wire_outputs == [w] /\
         SMC.connection_state_no_key_update_trace c' /\
         b == { a with client = c';
-                      channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) } /\
+                      channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent } /\
         WStep.client_reachable (CS.initial c'.CS.cs_model.CS.model_config) c')
       (ensures client_appdata_len_ok b)
   = let cs_a = a.client.CS.cs_wire_log.CL.raw_sent in
@@ -2825,13 +2843,14 @@ let lemma_pw_pres_server_send
   (a b:tls_system_state)
   (local:CTy.server_local_event) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
   : Lemma
       (requires
         tls_system_inv a /\
         ES.server_step a.server (SM.LocalEvent local) s' out /\
         out.SM.so_wire_outputs == [w] /\
         SMC.connection_state_no_key_update_trace s' /\
-        b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) })
+        b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent })
       (ensures protected_witnesses_ok b)
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
@@ -2985,6 +3004,7 @@ let lemma_pw_pres_client_send
   (a b:tls_system_state)
   (local:CTy.client_local_event) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
   : Lemma
       (requires
         tls_system_inv a /\
@@ -2992,7 +3012,7 @@ let lemma_pw_pres_client_send
         EC.client_step a.client (SM.LocalEvent local) c' out /\
         out.SM.so_wire_outputs == [w] /\
         SMC.connection_state_no_key_update_trace c' /\
-        b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) })
+        b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent })
       (ensures protected_witnesses_ok b)
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
@@ -3091,11 +3111,13 @@ let lemma_pres_client_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_client_send a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [w] /\
       client_advances a.client c' /\
-      b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent }
     returns tls_system_inv b
     with _pf.
       (assert (SMC.connection_state_no_key_update_trace c');
@@ -3106,10 +3128,10 @@ let lemma_pres_client_send (a b:tls_system_state)
        lemma_client_step_len_micro a.client c' (SM.LocalEvent local) out;
        lemma_client_step_ksp a.client c' (SM.LocalEvent local) out;
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
-       lemma_bp_client_send a local c' out w;
+       lemma_bp_client_send a local c' out w sent;
        lemma_wire_facts_client_send a b;
-       lemma_client_appdata_len_pres_send a b local c' out w;
-       lemma_pw_pres_client_send a b local c' out w)
+       lemma_client_appdata_len_pres_send a b local c' out w sent;
+       lemma_pw_pres_client_send a b local c' out w sent)
 #pop-options
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
@@ -3117,11 +3139,13 @@ let lemma_pres_server_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_server_send a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [w] /\
       server_advances a.server s' /\
-      b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
+      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent }
     returns tls_system_inv b
     with _pf.
       (assert (SMC.connection_state_no_key_update_trace s');
@@ -3132,9 +3156,9 @@ let lemma_pres_server_send (a b:tls_system_state)
        lemma_server_step_len_micro a.server s' (SM.LocalEvent local) out;
        lemma_server_step_ksp a.server s' (SM.LocalEvent local) out;
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
-       lemma_bp_server_send a local s' out w;
+       lemma_bp_server_send a local s' out w sent;
        lemma_wire_facts_server_send a b;
-       lemma_pw_pres_server_send a b local s' out w)
+       lemma_pw_pres_server_send a b local s' out w sent)
 #pop-options
 
 (** Ready-couple discharge — the single-endpoint reachability-inversion chain.
@@ -3169,8 +3193,9 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_server a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-      a.channel == TlsInFlight CS.ServerEndpoint raw /\
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
       server_advances a.server s' /\
@@ -3185,7 +3210,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        lemma_server_step_len_micro a.server s' (SM.WireEvent wire) out;
        lemma_server_step_ksp a.server s' (SM.WireEvent wire) out;
        lemma_server_step_e2e a.server s' (SM.WireEvent wire) out;
-       lemma_bp_deliver_to_server a wire s' out raw;
+       lemma_bp_deliver_to_server a wire s' out raw snap sent;
        lemma_wire_facts_deliver_to_server a b;
        lemma_pw_pres_deliver_to_server a b wire s' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
@@ -3199,8 +3224,9 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_client a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
   = eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
-                    (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-      a.channel == TlsInFlight CS.ClientEndpoint raw /\
+                    (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                    (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
       client_advances a.client c' /\
@@ -3215,7 +3241,7 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        lemma_client_step_len_micro a.client c' (SM.WireEvent wire) out;
        lemma_client_step_ksp a.client c' (SM.WireEvent wire) out;
        lemma_client_step_e2e a.client c' (SM.WireEvent wire) out;
-       lemma_bp_deliver_to_client a wire c' out raw;
+       lemma_bp_deliver_to_client a wire c' out raw snap sent;
        lemma_wire_facts_deliver_to_client a b;
        lemma_client_appdata_len_pres_deliver a b wire c' out;
        lemma_pw_pres_deliver_to_client a b wire c' out;
@@ -3291,11 +3317,13 @@ let lemma_no_ku_backward_client_send (x y:tls_system_state)
   : Lemma (requires tls_step_client_send x y /\ tls_no_rekeying y)
           (ensures tls_no_rekeying x)
   = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
       EC.client_step x.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [w] /\
       client_advances x.client c' /\
-      y == { x with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) }
+      c'.CS.cs_event_log == x.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      y == { x with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) x.client.CS.cs_model sent }
     returns tls_no_rekeying x
     with _pf. lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
 
@@ -3303,11 +3331,13 @@ let lemma_no_ku_backward_server_send (x y:tls_system_state)
   : Lemma (requires tls_step_server_send x y /\ tls_no_rekeying y)
           (ensures tls_no_rekeying x)
   = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message).
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
       ES.server_step x.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [w] /\
       server_advances x.server s' /\
-      y == { x with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) }
+      s'.CS.cs_event_log == x.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      y == { x with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) x.server.CS.cs_model sent }
     returns tls_no_rekeying x
     with _pf. lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
 
@@ -3315,8 +3345,9 @@ let lemma_no_ku_backward_deliver_to_client (x y:tls_system_state)
   : Lemma (requires tls_step_deliver_to_client x y /\ tls_no_rekeying y)
           (ensures tls_no_rekeying x)
   = eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-      x.channel == TlsInFlight CS.ClientEndpoint raw /\
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      x.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event x.client (SM.WireEvent wire) c' out /\
       client_advances x.client c' /\
@@ -3328,8 +3359,9 @@ let lemma_no_ku_backward_deliver_to_server (x y:tls_system_state)
   : Lemma (requires tls_step_deliver_to_server x y /\ tls_no_rekeying y)
           (ensures tls_no_rekeying x)
   = eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes).
-      x.channel == TlsInFlight CS.ServerEndpoint raw /\
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      x.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event x.server (SM.WireEvent wire) s' out /\
       server_advances x.server s' /\
