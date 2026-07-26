@@ -111,7 +111,9 @@ let lemma_step_model_preserves_hellos
   : Lemma
       (requires CS.legal_event m0 ev /\ CS.step_model m0 ev == Some m1 /\ hellos_shape m0)
       (ensures hellos_shape m1 /\ hs_hellos_stable m0 m1)
-  = ()
+  = match ev with
+    | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnLocalEvent _ -> ()
 #pop-options
 
 (** config profile + start/config + CH/start  ==>  supported CH wire profile. **)

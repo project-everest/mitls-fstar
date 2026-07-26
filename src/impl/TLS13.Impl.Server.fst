@@ -3021,6 +3021,16 @@ fn process_local_event_with_credentials
           if (network_out_len = expected_network_out_len) {
             assert (pure (SZ.v network_out_len ==
               13 + B.length (Ghost.reveal 'certificate_chain) + 22));
+            // The single-entry certificate built from the (1 <= len <= 32768)
+            // chain is [certificate_representable] (1 entry <= 8; total bytes
+            // == |chain| <= 32768), as the strengthened [legal_handshake_message]
+            // Certificate-Sent arm now requires.
+            W.lemma_cert_chain_total_bytes_nil ();
+            W.lemma_cert_chain_total_bytes_cons (Ghost.reveal 'certificate_chain) [];
+            W.lemma_certificate_representable
+              (SS.mk_cert_witness (Ghost.reveal 'certificate_chain));
+            assert (pure (W.certificate_representable
+              (SS.mk_cert_witness (Ghost.reveal 'certificate_chain))));
             IM.free_certificate_msg lcert;
             process_send_certificate_from_credentials
               s
