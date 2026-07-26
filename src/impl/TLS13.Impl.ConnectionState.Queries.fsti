@@ -424,6 +424,10 @@ fn can_receive_client_finished
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+              max_transcript_len /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             CS.legal_event
               st0.CS.cs_model
@@ -735,6 +739,10 @@ fn can_receive_server_finished
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished == None /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+              max_transcript_len /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             CS.legal_event
               st0.CS.cs_model
