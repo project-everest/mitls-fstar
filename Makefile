@@ -106,6 +106,7 @@ EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 ROOT_FILES = \
   src/impl/TLS13.System.Temporal.fst \
+  src/impl/TLS13.System.SeqCountBase.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
   src/impl/TLS13.Impl.Server.Driver.fst
 
