@@ -983,12 +983,18 @@ let lemma_step_handshake_message_supported_profile_key_schedule_reachable_shape
   | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
   | CL.Received, M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
   | CL.Received, M.CertificateVerify _, ControlHandshaking HsCertificateValidated
-  | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified
-  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
     assert (model'.model_handshake.hs_keys == model.model_handshake.hs_keys);
     lemma_same_key_schedule_reachable_shape model model'
+  | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified
+  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
+    // Fix 1 (atomic Finished delivery): these arms now populate the application
+    // traffic slot (server-app for the client delivery, client-app for the server
+    // delivery). The base secrets (shared/early/handshake/master) are unchanged so
+    // the base lineage is preserved; the new slot is backed by ks_master_secret,
+    // which is Some (otherwise the transition would have returned None).
+    ()
   | _, _, _ ->
     assert False
 
@@ -1696,7 +1702,22 @@ let lemma_connection_delta_server_x25519_reachable_shape
            st0.cs_model
            delta.delta_event
            st1.cs_model;
-         assert (server_x25519_reachable_shape st1)
+        // A step from a failed state lands in `fail_model`, which preserves the
+        // handshake state; hence the server x25519 key-share projections (which
+        // depend only on the handshake state) are transported from st0 to st1.
+        (match delta.delta_event with
+         | ConnLocalEvent local ->
+           (match local with
+            | LocalFail err ->
+              assert (st1.cs_model == fail_model st0.cs_model err)
+            | _ -> assert False)
+         | ConnNetworkEvent msg ->
+           (match msg.CL.message_value with
+            | M.TlsAlert alert ->
+              assert (st1.cs_model == fail_model st0.cs_model (T.AlertError alert))
+            | _ -> assert False));
+        assert (st1.cs_model.model_handshake == st0.cs_model.model_handshake);
+        assert (server_x25519_reachable_shape st1)
        | _ ->
          lemma_legal_connection_delta_stable_server_x25519_key_share_projection
            st0
@@ -2213,7 +2234,12 @@ let lemma_step_model_server_handshake_write_key_reachable_shape
         assert (model'.model_control == ControlHandshaking HsServerFinishedSent)
       | M.TlsHandshake (M.Finished _), CL.Received,
         ControlHandshaking HsServerFinishedSent ->
-        assert (model'.model_control == ControlHandshaking HsClientFinishedReceived)
+        // Model-Fix-1: the server processes the client Finished atomically and lands
+        // directly at ControlApplicationData (installing the client's application READ
+        // keys on record_read; record_write and ks_server_handshake_traffic unchanged).
+        // server_handshake_write_key_shape_control ControlApplicationData == false, so
+        // the write-key reachable-shape ensures is vacuous at the new landing stage.
+        assert (model'.model_control == ControlApplicationData)
       | M.TlsApplicationData _, _, ControlApplicationData
       | M.TlsIgnoredPostHandshake _, _, ControlApplicationData
       | M.TlsKeyUpdate _, _, ControlApplicationData
@@ -2607,11 +2633,16 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
           | M.TlsHandshake (M.Certificate _), CL.Received,
             ControlHandshaking HsEncryptedExtensionsReceived
           | M.TlsHandshake (M.CertificateVerify _), CL.Received,
-            ControlHandshaking HsCertificateValidated
-          | M.TlsHandshake (M.Finished _), CL.Received,
-            ControlHandshaking HsCertificateVerifyVerified ->
+            ControlHandshaking HsCertificateValidated ->
             assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
             assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+          | M.TlsHandshake (M.Finished _), CL.Received,
+            ControlHandshaking HsCertificateVerifyVerified ->
+            // Model-Fix-1: atomic delivery installs the server's application READ keys
+            // (record_read epoch -> Application) and populates ks_server_application_traffic,
+            // landing directly at HsServerFinishedVerified; prove the read-epoch link.
+            assert (model'.model_record.record_read.R.epoch == R.Application);
+            assert (client_application_record_read_epoch_link model')
           | M.TlsHandshake (M.Finished _), CL.Sent,
             ControlHandshaking HsServerFinishedVerified ->
             assert (Some? model.model_handshake.hs_keys.ks_server_application_traffic);
@@ -2799,11 +2830,18 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             assert (server_application_record_write_epoch_link model')
           | M.TlsHandshake (M.Finished _), CL.Received,
             ControlHandshaking HsServerFinishedSent ->
-            assert (model.model_handshake.hs_keys.ks_client_application_traffic == None);
-            assert (model'.model_handshake.hs_keys.ks_client_application_traffic == None);
+            // Model-Fix-1: atomic delivery installs the client's application READ keys
+            // (record_read epoch -> Application) and populates ks_client_application_traffic,
+            // landing directly at ControlApplicationData; record_write and
+            // ks_server_application_traffic are unchanged.
             assert (server_application_record_write_epoch_link model);
             assert (model'.model_record.record_write ==
                     model.model_record.record_write);
+            assert (model'.model_handshake.hs_keys.ks_server_application_traffic ==
+                    model.model_handshake.hs_keys.ks_server_application_traffic);
+            assert (model'.model_record.record_read.R.epoch == R.Application);
+            assert (server_application_record_read_epoch_link model');
+            assert (server_application_record_write_epoch_link model');
             assert (server_application_record_epoch_link model')
           | M.TlsApplicationData bytes, CL.Sent, ControlApplicationData ->
             assert (server_application_record_epoch_link model);
@@ -5173,6 +5211,54 @@ let lemma_first_epoch_application_slots_preserved_when_application_labels_unchan
     model0
     model1
 
+// Model-Fix-1: the atomic Finished-delivery network steps now install an application
+// traffic slot in a single step (deriving the secret inline from the transcript through
+// the server Finished).  This lemma shows that such a freshly-installed slot matches the
+// expected derived material, given that the material was derived from the TH_SF-checkpoint
+// transcript `cp` using the model's master secret.
+let lemma_atomic_application_install_matches_expected
+  (label:traffic_label)
+  (model1:connection_model)
+  (cp:B.bytes)
+  : Lemma
+      (requires
+        (match model1.model_handshake.hs_keys.ks_master_secret with
+         | Some master ->
+           transcript_checkpoint_bytes TH_SF model1.model_handshake == Some cp /\
+           traffic_material_for_label
+             model1.model_handshake.hs_keys
+             TrafficApplication
+             label ==
+           Some
+             (traffic_key_material_for_secret
+               (derive_traffic_secret_for_label TrafficApplication label master cp))
+         | None -> False))
+      (ensures
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficApplication label)
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  let st1 = state_of_model_for_first_epoch_application_material model1 in
+  match model1.model_handshake.hs_keys.ks_master_secret with
+  | Some master ->
+    let secret = derive_traffic_secret_for_label TrafficApplication label master cp in
+    assert (traffic_secret_base_for_epoch
+              TrafficApplication
+              model1.model_handshake.hs_keys == Some master);
+    assert_norm (key_checkpoint_for_epoch TrafficApplication == DeriveApplicationTraffic);
+    assert_norm (key_derivation_checkpoint_transcript DeriveApplicationTraffic == Some TH_SF);
+    assert (transcript_bytes_for_key_checkpoint
+              (key_checkpoint_for_epoch TrafficApplication)
+              st1 == Some cp);
+    assert (expected_traffic_secret_for_state
+              (traffic_id TrafficApplication label)
+              st1 == Some secret);
+    let material = traffic_key_material_for_secret secret in
+    assert (material.traffic_key == K.derive_aead_key secret);
+    assert (material.traffic_iv == K.derive_aead_iv secret);
+    Seq.lemma_eq_refl material.traffic_key (K.derive_aead_key secret);
+    Seq.lemma_eq_refl material.traffic_iv (K.derive_aead_iv secret)
+
 let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_match_expected_model
   (role:endpoint_role)
   (model0:connection_model)
@@ -5342,10 +5428,70 @@ let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_ma
          model0
          model1)
   | ConnNetworkEvent msg ->
-    (match msg.CL.message_value with
-     | M.TlsKeyUpdate _ ->
+    (match msg.CL.message_value, msg.CL.message_direction, model0.model_control with
+     | M.TlsKeyUpdate _, _, _ ->
        assert False
-     | _ ->
+     | M.TlsHandshake (M.Finished _), CL.Received,
+       ControlHandshaking HsCertificateVerifyVerified ->
+       // Model-Fix-1 (client atomic delivery): installs ks_server_application_traffic
+       // (deriving from the transcript through the server Finished) and lands at
+       // HsServerFinishedVerified.  ks_client_application_traffic stays None (vacuous).
+       assert (role == ClientEndpoint);
+       assert (application_traffic_install_checkpoint_ready_for_role role model1);
+       assert (model1.model_control == ControlHandshaking HsServerFinishedVerified);
+       assert (transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+               Some model1.model_handshake.hs_transcript);
+       assert (model1.model_handshake.hs_keys.ks_client_application_traffic == None);
+       lemma_atomic_application_install_matches_expected
+         ServerTraffic
+         model1
+         model1.model_handshake.hs_transcript;
+       assert (first_epoch_application_traffic_material_slots_match_expected_model
+         model1)
+     | M.TlsHandshake (M.Finished _), CL.Received,
+       ControlHandshaking HsServerFinishedSent ->
+       // Model-Fix-1 (server atomic delivery): installs ks_client_application_traffic
+       // (deriving from the CURRENT transcript, through the server Finished, before
+       // appending the client Finished) and lands at ControlApplicationData.
+       // ks_server_application_traffic is unchanged; the TH_SF checkpoint only reads the
+       // handshake slots up to the server Finished and is unchanged by the client-Finished
+       // append.
+       assert (role == ServerEndpoint);
+       assert (model1.model_control == ControlApplicationData);
+       assert (application_traffic_install_checkpoint_ready_for_role role model0);
+       assert (transcript_checkpoint_bytes TH_SF model0.model_handshake ==
+               Some model0.model_handshake.hs_transcript);
+       assert (model1.model_handshake.hs_client_hello == model0.model_handshake.hs_client_hello);
+       assert (model1.model_handshake.hs_server_hello == model0.model_handshake.hs_server_hello);
+       assert (model1.model_handshake.hs_encrypted_extensions ==
+               model0.model_handshake.hs_encrypted_extensions);
+       assert (model1.model_handshake.hs_certificate == model0.model_handshake.hs_certificate);
+       assert (model1.model_handshake.hs_certificate_verify ==
+               model0.model_handshake.hs_certificate_verify);
+       assert (model1.model_handshake.hs_server_finished ==
+               model0.model_handshake.hs_server_finished);
+       assert (transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+               transcript_checkpoint_bytes TH_SF model0.model_handshake);
+       assert (transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+               Some model0.model_handshake.hs_transcript);
+       // ServerTraffic slot unchanged and its expected material is stable across the
+       // client-Finished append (master + TH_SF checkpoint unchanged).
+       assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
+               model0.model_handshake.hs_keys.ks_server_application_traffic);
+       assert (model1.model_handshake.hs_keys.ks_master_secret ==
+               model0.model_handshake.hs_keys.ks_master_secret);
+       lemma_first_epoch_application_label_match_expected_preserved
+         ServerTraffic
+         model0
+         model1;
+       // ClientTraffic slot freshly installed: matches the expected derived material.
+       lemma_atomic_application_install_matches_expected
+         ClientTraffic
+         model1
+         model0.model_handshake.hs_transcript;
+       assert (first_epoch_application_traffic_material_slots_match_expected_model
+         model1)
+     | _, _, _ ->
        lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
          model0
          model1)
@@ -5805,7 +5951,6 @@ let lemma_step_model_record_keys_consistent
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Received, M.TlsHandshake (M.Certificate _)
      | CL.Received, M.TlsHandshake (M.CertificateVerify _)
-     | CL.Received, M.TlsHandshake (M.Finished _)
      | CL.Received, M.TlsApplicationData _
      | CL.Received, M.TlsIgnoredPostHandshake _ ->
        assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
@@ -5814,6 +5959,40 @@ let lemma_step_model_record_keys_consistent
        lemma_record_read_keys_next_seq
          model0.model_handshake.hs_keys
          model0.model_record.record_read
+     | CL.Received, M.TlsHandshake (M.Finished _) ->
+       // Model-Fix-1 client atomic delivery: installs the server-app READ keys
+       // (record_read epoch -> Application) and populates ks_server_application_traffic;
+       // write side, handshake-slot keys and client-app slot are unchanged and control
+       // stays within ControlHandshaking.
+       (match model0.model_control with
+        | ControlHandshaking HsCertificateVerifyVerified ->
+          assert (model1.model_control == ControlHandshaking HsServerFinishedVerified);
+          assert (model1.model_record.record_write == model0.model_record.record_write);
+          assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
+                  model0.model_handshake.hs_keys.ks_client_handshake_traffic);
+          assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
+                  model0.model_handshake.hs_keys.ks_server_handshake_traffic);
+          assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
+                  model0.model_handshake.hs_keys.ks_client_application_traffic);
+          // Write side is preserved (record_write and the client-side key slots are
+          // unchanged, and control remains within ControlHandshaking).
+          assert (record_keys_match_key_schedule_for_role
+            ClientEndpoint TrafficWrite model1.model_control
+            model1.model_handshake.hs_keys model1.model_record.record_write);
+          // Read side: record_read1 matches the freshly-installed server-app slot.
+          (match model1.model_handshake.hs_keys.ks_server_application_traffic with
+           | Some material ->
+             assert (model1.model_record.record_read ==
+               R.install_keys model0.model_record.record_read R.Application
+                 material.traffic_key material.traffic_iv);
+             assert (traffic_material_matches_record_direction
+               material model1.model_record.record_read);
+             assert (record_keys_match_key_schedule_for_role
+               ClientEndpoint TrafficRead model1.model_control
+               model1.model_handshake.hs_keys model1.model_record.record_read)
+           | None -> assert False);
+          assert (model_record_keys_consistent model1)
+        | _ -> assert False)
      | CL.Received, M.TlsAlert T.Close_notify ->
        (match model1.model_control with
         | ControlFailed _ -> ()
@@ -5936,9 +6115,9 @@ let lemma_step_model_record_keys_consistent_for_role
          assert (model1.model_record == model0.model_record);
          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)
        | M.TlsHandshake (M.Finished _) ->
-         assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
          (match msg.CL.message_direction with
           | CL.Sent ->
+            assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
             assert (model1.model_record.record_write ==
               R.next_seq model0.model_record.record_write);
             assert (model1.model_record.record_read ==
@@ -5950,16 +6129,38 @@ let lemma_step_model_record_keys_consistent_for_role
               model0.model_handshake.hs_keys
               model0.model_record.record_write
           | CL.Received ->
-            assert (model1.model_record.record_read ==
-              R.next_seq model0.model_record.record_read);
-            assert (model1.model_record.record_write ==
-              model0.model_record.record_write);
-            lemma_record_keys_next_seq_for_role
-              ServerEndpoint
-              TrafficRead
-              model0.model_control
-              model0.model_handshake.hs_keys
-              model0.model_record.record_read)
+            // Model-Fix-1 server atomic delivery: installs the client-app READ keys
+            // (record_read epoch -> Application) and populates ks_client_application_traffic;
+            // write side and the server-side key slots are unchanged.  Lands at
+            // ControlApplicationData.
+            (match model0.model_control with
+             | ControlHandshaking HsServerFinishedSent ->
+               assert (model1.model_control == ControlApplicationData);
+               assert (model1.model_record.record_write ==
+                 model0.model_record.record_write);
+               assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
+                       model0.model_handshake.hs_keys.ks_server_handshake_traffic);
+               assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
+                       model0.model_handshake.hs_keys.ks_server_application_traffic);
+               // Write side is preserved (record_write and the server-side key slots
+               // are unchanged; the server write obligation is control-insensitive).
+               assert (record_keys_match_key_schedule_for_role
+                 ServerEndpoint TrafficWrite model1.model_control
+                 model1.model_handshake.hs_keys model1.model_record.record_write);
+               // Read side: record_read1 matches the freshly-installed client-app slot.
+               (match model1.model_handshake.hs_keys.ks_client_application_traffic with
+                | Some material ->
+                  assert (model1.model_record.record_read ==
+                    R.install_keys model0.model_record.record_read R.Application
+                      material.traffic_key material.traffic_iv);
+                  assert (traffic_material_matches_record_direction
+                    material model1.model_record.record_read);
+                  assert (record_keys_match_key_schedule_for_role
+                    ServerEndpoint TrafficRead model1.model_control
+                    model1.model_handshake.hs_keys model1.model_record.record_read)
+                | None -> assert False);
+               assert (model_record_keys_consistent_for_role ServerEndpoint model1)
+             | _ -> assert False))
        | M.TlsHandshake (M.EncryptedExtensions _)
        | M.TlsHandshake (M.Certificate _)
        | M.TlsHandshake (M.CertificateVerify _) ->
@@ -6158,8 +6359,7 @@ let lemma_step_model_record_layer_delta
         | M.UpdateRequested -> assert False)
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Received, M.TlsHandshake (M.Certificate _)
-     | CL.Received, M.TlsHandshake (M.CertificateVerify _)
-     | CL.Received, M.TlsHandshake (M.Finished _) ->
+     | CL.Received, M.TlsHandshake (M.CertificateVerify _) ->
        assert (model1.model_record == {
          model0.model_record with
            record_read = R.next_seq model0.model_record.record_read
@@ -6175,6 +6375,54 @@ let lemma_step_model_record_layer_delta
                projected_next_seq
                  (projected_record_layer_state_of_record model0.model_record).projected_read });
        assert (model_record_layer_delta model0 ev model1)
+     | CL.Received, M.TlsHandshake (M.Finished _) ->
+       // Model-Fix-1 atomic delivery: recv-Finished installs the peer application
+       // READ keys (record_read epoch -> Application, seq reset to 0), so the
+       // projected read side installs Application keys rather than merely advancing
+       // the sequence number.  step_handshake_message only produces a (non-None)
+       // result for a received Finished at HsCertificateVerifyVerified (client
+       // delivery) or HsServerFinishedSent (server delivery); the projected step is
+       // role-insensitive and installs the Application read keys in both.
+       (match model0.model_control with
+        | ControlHandshaking HsCertificateVerifyVerified ->
+          (match model1.model_handshake.hs_keys.ks_server_application_traffic with
+           | Some material ->
+             assert (model1.model_record == {
+               model0.model_record with
+                 record_read =
+                   R.install_keys
+                     model0.model_record.record_read
+                     R.Application
+                     material.traffic_key
+                     material.traffic_iv
+             });
+             lemma_projected_install_keys_of_record
+               model0.model_record.record_read
+               R.Application
+               material.traffic_key
+               material.traffic_iv;
+             assert (model_record_layer_delta model0 ev model1)
+           | None -> assert False)
+        | ControlHandshaking HsServerFinishedSent ->
+          (match model1.model_handshake.hs_keys.ks_client_application_traffic with
+           | Some material ->
+             assert (model1.model_record == {
+               model0.model_record with
+                 record_read =
+                   R.install_keys
+                     model0.model_record.record_read
+                     R.Application
+                     material.traffic_key
+                     material.traffic_iv
+             });
+             lemma_projected_install_keys_of_record
+               model0.model_record.record_read
+               R.Application
+               material.traffic_key
+               material.traffic_iv;
+             assert (model_record_layer_delta model0 ev model1)
+           | None -> assert False)
+        | _ -> assert False)
      | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Sent, M.TlsHandshake (M.Certificate _)
      | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
@@ -6340,6 +6588,7 @@ let lemma_step_model_transcript_delta
      | CL.Sent, M.TlsHandshake (M.CertificateVerify _) -> ()
      | CL.Received, M.TlsHandshake (M.CertificateVerify _) -> ()
      | CL.Sent, M.TlsHandshake (M.Finished _) -> ()
+     | CL.Received, M.TlsHandshake (M.Finished _) -> ()
      | _, _ ->
        CL.lemma_append_empty_right t0;
        Seq.lemma_eq_refl model1.model_handshake.hs_transcript t0)
