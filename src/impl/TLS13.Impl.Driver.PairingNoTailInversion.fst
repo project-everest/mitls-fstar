@@ -834,8 +834,8 @@ let lemma_client_hs_client_hello_sent_empty_keys_progress_rank
      assert (option_missing keys.CS.ks_shared_secret == 1);
      assert (option_missing keys.CS.ks_client_handshake_traffic == 1);
      assert (option_missing keys.CS.ks_server_handshake_traffic == 1);
-     assert (client_app_obligation_rank keys == 2);
-     assert (client_early_obligation_rank keys == 5);
+     assert (client_app_obligation_rank keys == 1);
+     assert (client_early_obligation_rank keys == 4);
      assert (client_application_progress_rank model == 12)
    | _, _, _, _, _ ->
      assert False)
@@ -868,8 +868,8 @@ let lemma_client_hs_server_hello_received_empty_keys_progress_rank
     assert (option_missing keys.CS.ks_shared_secret == 1);
     assert (option_missing keys.CS.ks_client_handshake_traffic == 1);
     assert (option_missing keys.CS.ks_server_handshake_traffic == 1);
-    assert (client_app_obligation_rank keys == 2);
-    assert (client_early_obligation_rank keys == 5);
+    assert (client_app_obligation_rank keys == 1);
+    assert (client_early_obligation_rank keys == 4);
     assert (client_application_progress_rank model == 11)
    | _, _, _, _, _ ->
     assert False)
@@ -902,8 +902,8 @@ let lemma_client_hs_server_hello_received_derived_no_traffic_progress_rank
       assert (option_missing keys.CS.ks_shared_secret == 0);
       assert (option_missing keys.CS.ks_client_handshake_traffic == 1);
       assert (option_missing keys.CS.ks_server_handshake_traffic == 1);
-      assert (client_app_obligation_rank keys == 2);
-      assert (client_early_obligation_rank keys == 4);
+      assert (client_app_obligation_rank keys == 1);
+      assert (client_early_obligation_rank keys == 3);
       assert (client_application_progress_rank model == 10)
     | _, _, _, _, _ ->
       assert False)

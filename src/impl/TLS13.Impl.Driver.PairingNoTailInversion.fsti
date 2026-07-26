@@ -65,8 +65,7 @@ noextract
 let client_app_obligation_rank
   (keys:CS.key_schedule_state)
   : nat =
-  option_missing keys.CS.ks_client_application_traffic +
-  option_missing keys.CS.ks_server_application_traffic
+  option_missing keys.CS.ks_client_application_traffic
 
 noextract
 let client_early_obligation_rank
@@ -106,21 +105,21 @@ let client_application_progress_rank
   | CS.ControlHandshaking stage ->
     (match stage with
      | CS.HsStarted ->
-      8 + client_early_obligation_rank keys
+     9 + client_early_obligation_rank keys
      | CS.HsClientHelloSent ->
-      7 + client_early_obligation_rank keys
+     8 + client_early_obligation_rank keys
      | CS.HsServerHelloReceived ->
-      6 + client_early_obligation_rank keys
+     7 + client_early_obligation_rank keys
      | CS.HsEncryptedExtensionsReceived ->
-      5 + client_late_obligation_rank keys
+     6 + client_late_obligation_rank keys
      | CS.HsCertificateReceived ->
-      4 + client_late_obligation_rank keys
+     5 + client_late_obligation_rank keys
      | CS.HsCertificateValidated ->
-      3 + client_late_obligation_rank keys
+     4 + client_late_obligation_rank keys
      | CS.HsCertificateVerifyReceived ->
-      2 + client_late_obligation_rank keys
+     3 + client_late_obligation_rank keys
      | CS.HsCertificateVerifyVerified ->
-      1 + client_late_obligation_rank keys
+     2 + client_late_obligation_rank keys
      | CS.HsServerFinishedReceived ->
        2 + client_late_obligation_rank keys
      | CS.HsServerFinishedVerified ->
