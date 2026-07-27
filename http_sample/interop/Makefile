@@ -44,8 +44,11 @@ PORT_POST ?= $(shell echo $$(( $(PORT) + 1 )))
 RUN_DIR_SMUG := _run_http_smug
 RUN_DIR_SMUG_ABS := $(abspath $(RUN_DIR_SMUG))
 PORT_SMUG ?= $(shell echo $$(( $(PORT) + 2 )))
+RUN_DIR_METH := _run_http_meth
+RUN_DIR_METH_ABS := $(abspath $(RUN_DIR_METH))
+PORT_METH ?= $(shell echo $$(( $(PORT) + 3 )))
 
-.PHONY: all test test-get test-post test-smuggle build-progs clean help
+.PHONY: all test test-get test-post test-smuggle test-method build-progs clean help
 
 all: test
 
@@ -60,7 +63,7 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post test-smuggle
+test: test-get test-post test-smuggle test-method
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -176,8 +179,45 @@ test-smuggle: build-progs
 	    exit 1; \
 	  fi
 
+# ── request-line / method guard  ->  400 Bad Request + 501 Not Implemented ────
+# The server runs the VERIFIED http_request_line_ok / http_method_known
+# validators before handling: a malformed request line gets a verified 400, and
+# a syntactically valid but unsupported method gets a verified 501.  We probe an
+# unsupported method with a real `curl -X FROBNICATE` (expecting 501) and a
+# malformed request line with a raw socket (expecting 400), and re-check that a
+# normal GET still gets 200 as a control.
+test-method: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " Method/line guard:  curl -X FROBNICATE -> 501, raw bad line -> 400"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v curl >/dev/null 2>&1 || { echo "  SKIP: 'curl' not found on PATH"; exit 3; }
+	@command -v python3 >/dev/null 2>&1 || { echo "  SKIP: 'python3' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_METH); mkdir -p $(RUN_DIR_METH)
+	@cp raw_probe.py $(RUN_DIR_METH)/raw_probe.py
+	@echo "  probing an unsupported method (501) and a malformed request line (400) ..."
+	@cd $(RUN_DIR_METH) && \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_METH) & srv=$$!; sleep 0.5; \
+	    ncode=$$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -X FROBNICATE http://127.0.0.1:$(PORT_METH)/); echo $$ncode > notimpl.code; \
+	    bcode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_METH) badreq 2>err.log); echo $$bcode > badreq.code; \
+	    gcode=$$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:$(PORT_METH)/); echo $$gcode > get.code; \
+	    exit 0' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  ncode=$$(cat notimpl.code 2>/dev/null); bcode=$$(cat badreq.code 2>/dev/null); gcode=$$(cat get.code 2>/dev/null); \
+	  if [ "$$ncode" = 501 ] && [ "$$bcode" = 400 ] && [ "$$gcode" = 200 ]; then \
+	    echo "  RESULT: PASS - the VERIFIED validators answered 501 to an unsupported method and 400 to a malformed request line, while a normal GET still got 200"; \
+	    rm -rf $(RUN_DIR_METH_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/probe did not terminate: killed after $(TIMEOUT)s (notimpl=$$ncode badreq=$$bcode get=$$gcode)"; \
+	    else echo "  RESULT: FAIL - notimpl=$$ncode (want 501) badreq=$$bcode (want 400) get=$$gcode (want 200)"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_METH_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH)
 
 help:
 	@echo "HTTP interop test (vs curl):"

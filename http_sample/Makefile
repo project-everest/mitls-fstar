@@ -194,7 +194,7 @@ vloop-length-test: extract-loops
 	@$(EXTRACT_DIR)/vloop_length_test $(VERIFIED_DIR)/dummy.txt
 
 # Run both framings' verified<->verified interop tests.
-vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test vloop-chunk-stream-test request-emit-test response-parse-test response-emit-var-test header-parse-test request-line-test request-post-test framing-test get-test get-chunked-test get-chunked-var-test
+vloop-tests: vloop-test vloop-length-test vloop-length-full-test vloop-length-exchange-test chunk-stream-test vloop-chunk-stream-test request-emit-test response-parse-test response-emit-var-test header-parse-test request-line-test request-post-test framing-test method-test get-test get-chunked-test get-chunked-var-test
 
 vloop-chunk-stream-test: extract-loops
 	@echo "Building the verified chunked streaming transfer test ..."
@@ -327,6 +327,17 @@ framing-test: extract-loops
 	@echo " Verified http_request_framing_ok / http_count_header_named"
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/framing_test
+
+method-test: extract-loops
+	@echo "Building the verified request-line / method-classification self-test ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/method_test \
+	  $(VERIFIED_DIR)/method_test.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " Verified http_request_line_ok / http_method_known"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/method_test
 
 
 get-test: extract-loops

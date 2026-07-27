@@ -183,6 +183,36 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i + 1 < reqlen; i++)
       if (reqbuf[i] == '\r' && reqbuf[i + 1] == '\n') { hblock = i + 2; break; }
 
+    /* 3y. Request-line + method guard: the VERIFIED validators reject a request
+       whose request line does not parse (-> 400 Bad Request) or whose method,
+       though syntactically valid, is not one of the eight standard HTTP methods
+       (-> 501 Not Implemented).  Either way we answer with a verified error head
+       (no body) and drop the connection. */
+    if (reqlen == 0 || !http_request_line_ok(reqbuf, reqlen)) {
+      http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
+      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      Common_TCP_close(pch);
+      fprintf(stderr, "http_server: rejected request (malformed request line), served 400\n");
+      if (status_path) {
+        FILE *sf = fopen(status_path, "w");
+        if (sf) { fprintf(sf, "badreq 400\n"); fclose(sf); }
+      }
+      continue;
+    }
+    if (!http_method_known(reqbuf, reqlen)) {
+      http_emit_response((uint16_t)501, (uint32_t)0, headbuf);
+      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      Common_TCP_close(pch);
+      fprintf(stderr, "http_server: rejected request (unsupported method), served 501\n");
+      if (status_path) {
+        FILE *sf = fopen(status_path, "w");
+        if (sf) { fprintf(sf, "notimpl 501\n"); fclose(sf); }
+      }
+      continue;
+    }
+
     /* 3z. Request-smuggling guard (RFC 7230 3.3.3): the VERIFIED framing check
        rejects a request that carries a Content-Length alongside a
        Transfer-Encoding, or more than one Content-Length line.  On rejection we
