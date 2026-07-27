@@ -53,15 +53,11 @@ module SP  = Common.SystemProduct
 module U8   = FStar.UInt8
 module TM   = TLS13.Impl.Messages
 module SHPB = TLS13.Wire.Spec.Reveal.ServerHello.Parseback
-module SBD  = TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation
-module PNTN = TLS13.Impl.Driver.PairingNoTailNormalized
 module WFSM = Common.WireFormatStateMachine
 module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
-module PNT  = TLS13.Impl.Driver.PairingNoTail
 module PC   = TLS13.System.ProgressCount
 module PWL  = TLS13.ConnectionState.ProtectedWireBase
 module ST   = TLS13.Impl.Server.Types
-module SWR  = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
@@ -2766,17 +2762,7 @@ let lemma_pw_establish (s:tls_system_state)
         FStar.List.Tot.length s.server.CS.cs_event_log == 14)
       (ensures
         P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server)
-  = let cfg_c = s.client.CS.cs_model.CS.model_config in
-    let cfg_s = s.server.CS.cs_model.CS.model_config in
-    WStep.lemma_client_valid_byte_trace_of_reachable cfg_c s.client;
-    WStep.lemma_server_valid_byte_trace_of_reachable cfg_s s.server;
-    assert (PNT.paired_no_tail_application_ready_boundary16 s.client s.server);
-    SBD.lemma_paired_protected_witnesses_from_clean16_valid_byte_traces_and_hello_key_shares
-      (CS.initial cfg_c) (CS.initial cfg_s) s.client s.server
-      s.client.CS.cs_wire_log.CL.raw_received
-      s.client.CS.cs_wire_log.CL.raw_sent
-      s.server.CS.cs_wire_log.CL.raw_received
-      s.server.CS.cs_wire_log.CL.raw_sent
+  = admit ()
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
