@@ -1720,6 +1720,13 @@ let lemma_list_appdata_count_single_wire (w:CW.wire_message)
       (WF.serialize_all CW.tls_record_wire_format [w])
       (CW.wire_serialize w)
 
+(** A single wire record contributes at most one ApplicationData record. **)
+#push-options "--fuel 2 --ifuel 2"
+let lemma_list_appdata_count_singleton (w:CW.wire_message)
+  : Lemma (ensures list_appdata_count [w] <= 1)
+  = ()
+#pop-options
+
 (** Local pre-application-data control predicate (matches
     `TLS13.System.ProgressCount.pre_appdata_control`): FALSE exactly at the
     application-data / closing / closed / failed controls. **)
@@ -2678,6 +2685,46 @@ let lemma_server_preappdata_recv_le1
     )
 #pop-options
 
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ TARGET LEMMA 1' : SERVER RECV == 0 at HsServerFinishedSent. ═══
+    A reachable server that has just sent its own Finished (control
+    `HsServerFinishedSent`) has NOT yet received the client Finished, so it has
+    RECEIVED zero ApplicationData-typed records.  This is the tight (==0)
+    specialisation of `lemma_server_preappdata_recv_le1`: at `HsServerFinishedSent`
+    the post-CF receive potential `server_recv_prior` is 0 (it is a pre-CF stage),
+    so the same trace-potential telescoping pins the received count to 0. **)
+let lemma_server_finished_sent_recv_eq0
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            server.CS.cs_model.CS.model_control
+              == CS.ControlHandshaking CS.HsServerFinishedSent /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures raw_appdata_count server.CS.cs_wire_log.CL.raw_received == 0)
+  = let init : ES.server_initial_state = CS.initial cfg in
+    let sm = server_sm init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event EAPI.local_output)).
+      SM.trace_reaches sm init trace server
+    returns raw_appdata_count server.CS.cs_wire_log.CL.raw_received == 0
+    with _.
+    (
+      lemma_server_trace_recv_potential init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
+      lemma_raw_appdata_count_serialize_all in_msgs;
+      lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_received sm_bytes;
+      // server_recv_prior(HsServerFinishedSent) == 0 (a pre-CF stage), so the
+      // trace-potential bound `count(inputs) + 0 <= 0` forces count == 0.
+      assert (server_recv_prior server.CS.cs_model == 0)
+    )
+#pop-options
+
 (** ── CLIENT RECV ≥ 4 : control-based receive potential. ─────────────────────
     A client advances its handshake control by exactly one stage per received
     protected record (EncryptedExtensions, Certificate, CertificateVerify,
@@ -3580,6 +3627,44 @@ let lemma_client_reachable_raw_received_parses
       introduce exists (msgs:list CW.wire_message).
         WF.parses_as CW.tls_record_wire_format
           client.CS.cs_wire_log.CL.raw_received msgs Seq.empty
+      with in_msgs and ()
+    )
+#pop-options
+
+(** REACHABLE PARSES — a reachable server's incoming byte log cleanly decomposes
+    into a wire-record list (the append witness for `lemma_raw_appdata_count_append`). **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_reachable_raw_received_parses
+  (cfg:CS.connection_config) (server:CS.connection_state)
+  : Lemma (requires
+            server_reachable (CS.initial cfg) server /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            (exists (msgs:list CW.wire_message).
+              WF.parses_as CW.tls_record_wire_format
+                server.CS.cs_wire_log.CL.raw_received msgs Seq.empty))
+  = let init : ES.server_initial_state = CS.initial cfg in
+    let sm = server_sm init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event EAPI.local_output)).
+      SM.trace_reaches sm init trace server
+    returns
+      (exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          server.CS.cs_wire_log.CL.raw_received msgs Seq.empty)
+    with _.
+    (
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let in_msgs = WFSM.trace_input_messages trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_received sm_bytes);
+      Seq.lemma_eq_elim server.CS.cs_wire_log.CL.raw_received sm_bytes;
+      PNTWL.lemma_wire_parse_serialize_all_inverse in_msgs;
+      introduce exists (msgs:list CW.wire_message).
+        WF.parses_as CW.tls_record_wire_format
+          server.CS.cs_wire_log.CL.raw_received msgs Seq.empty
       with in_msgs and ()
     )
 #pop-options

@@ -168,6 +168,18 @@ val lemma_connection_application_ready_record_epochs_installed
         application_record_keys_installed_for_role role st.cs_model)
       (ensures application_record_epochs_installed_for_role role st.cs_model)
 
+(** A reachable SERVER endpoint at `HsServerFinishedSent` has not yet installed the
+    client application (read) traffic secret. **)
+val lemma_server_finished_sent_no_client_application_traffic
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedSent)
+      (ensures
+        st.cs_model.model_handshake.hs_keys.ks_client_application_traffic == None)
+
 val lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma

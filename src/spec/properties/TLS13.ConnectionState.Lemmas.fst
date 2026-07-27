@@ -2983,6 +2983,44 @@ let lemma_connection_application_ready_record_epochs_installed
     assert (st.cs_model.model_record.record_read.R.epoch == R.Application);
     assert (st.cs_model.model_record.record_write.R.epoch == R.Application)
 
+(** Model-Fix-1 corollary: a reachable SERVER endpoint at `HsServerFinishedSent`
+    has NOT yet installed the client application (read) traffic secret — that
+    install is legal only at `HsClientFinishedReceived` (or is performed atomically
+    by the recv-Finished step that lands `ControlApplicationData`), both strictly
+    after `HsServerFinishedSent`.  Extracted from the (reachable) server
+    application-record-epoch shape, whose `HsServerFinishedSent` arm records exactly
+    `ks_client_application_traffic == None`.  Used by the System-level FACT-4
+    wire-receive establishment to pin the server pre-verify progress at 13. **)
+let lemma_server_finished_sent_no_client_application_traffic
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedSent)
+      (ensures
+        st.cs_model.model_handshake.hs_keys.ks_client_application_traffic == None)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role ServerEndpoint in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    ServerEndpoint
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    ServerEndpoint;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert (server_application_record_epoch_reachable_shape st.cs_model)
+
 let lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma
