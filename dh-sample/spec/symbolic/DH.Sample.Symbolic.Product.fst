@@ -78,9 +78,10 @@ module DH.Sample.Symbolic.Product
   unforgeability holds only while the SIGNING ROLE is uncompromised (an attacker
   injection is an all-literal term, which cannot be an honest `Sign`; a
   completion delivery requires the appropriate honest peer origin AND a matching
-  run link UNLESS that peer is compromised — see `DH.Sample.System`).  We make NO
-  computational hardness assumption; the toy concrete digest is deliberately weak
-  and is never the sole justification for a completion.
+  run link UNLESS that peer is compromised — see `DH.Sample.System`).  The
+  abstract concrete interface states only functional correctness; no
+  computational hardness theorem is assumed or proved here, and the interface
+  alone is never the justification for a completion.
 *)
 
 module SM   = Common.StateMachine

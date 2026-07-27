@@ -568,9 +568,9 @@ Established here, on top of `SYMBOLIC_LIFTING.md`'s claims:
   `product_invariant` with BOTH compromise flags clear and NEITHER role label
   corrupt (so the compromise machinery does not secretly force corruption).
 
-Not claimed by this module itself: computational security of the toy
-DH/signature functions or refinement from an arbitrary raw-byte network/RNG
-runtime to the ideal composed environment.  The authentication, agreement, and
-session-key secrecy theorems modulo compromise are stated and proved by
-`DH.Sample.Symbolic.Security`, using this module's invariant and provenance
-lemmas.
+Not claimed by this module itself: a computational-security proof or concrete
+implementation of the abstract `DH.Sample.Crypto.fsti` interface, or refinement
+from an arbitrary raw-byte network/RNG runtime to the ideal composed
+environment. The authentication, agreement, and session-key secrecy theorems
+modulo compromise are stated and proved by `DH.Sample.Symbolic.Security`, using
+this module's invariant and provenance lemmas.

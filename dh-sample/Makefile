@@ -83,10 +83,13 @@ verify: $(ALL_CHECKED_FILES)
 
 # ── Admit / forbidden-construct hygiene ────────────────────────────
 check-admits:
-	@echo "Checking for admits/assumes..."
+	@echo "Checking for proof-local admits/assumes..."
 	@if grep -rn "admit ()\|admit()\|assume val\|assume (\|assert_norm" $(SPEC_DIR) $(IMPL_DIR) 2>/dev/null; then \
 		echo "❌ ERROR: Found admit/assume/assert_norm!"; exit 1; \
 	else echo "✅ None found"; fi
+	@test -f $(SPEC_DIR)/DH.Sample.Crypto.fsti
+	@test ! -e $(SPEC_DIR)/DH.Sample.Crypto.fst
+	@echo "ℹ️  DH.Sample.Crypto.fsti is the intentional unimplemented cryptographic trust boundary"
 
 check-forbidden:
 	@echo "Checking that no DY / iso_dh imports are present in the DY-free spec/impl..."
@@ -164,7 +167,7 @@ SYMBOLIC_SPEC_DEPS = \
   ../common/Common.WireFormatStateMachine.fst \
   ../common/Common.TCP.fsti \
   $(SPEC_DIR)/DH.Sample.Types.fst \
-  $(SPEC_DIR)/DH.Sample.Crypto.fst \
+  $(SPEC_DIR)/DH.Sample.Crypto.fsti \
   $(SPEC_DIR)/DH.Sample.Wire.fst \
   $(SPEC_DIR)/DH.Sample.StateMachine.fst \
   $(SPEC_DIR)/DH.Sample.System.fst
@@ -215,7 +218,7 @@ verify-symbolic-invariant: check-admits check-symbolic-forbidden $(SYM_CACHE_DIR
 	@echo "✅ DH sample symbolic protocol-invariant milestone verified successfully"
 
 # The THIRD symbolic milestone: verify the genuine SECURITY CONSEQUENCES the
-# installed `ideal_product_invariant` buys — mutual authentication, session-key
+# installed compromise-aware invariant buys — mutual authentication, session-key
 # secrecy / agreement, the end-to-end theorem from a concrete system execution,
 # and the honest-run non-vacuity witness (DH.Sample.Symbolic.Security), on top of
 # Terms/Product/Lifting/Provenance/Invariant.  Like the invariant milestone it is

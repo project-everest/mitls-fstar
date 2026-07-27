@@ -22,10 +22,11 @@ module DH.Sample.StateMachine
         freshly generated scalar x (key generation modelled as external input);
       * WIRE events carrying the parsed `DH.Sample.Wire.dh_message`s.
 
-  Cryptographic reasoning is entirely delegated to the pure, idealized
+  Cryptographic reasoning is entirely delegated to the abstract, trusted
   `DH.Sample.Crypto` interface — signature checks are the `verify` predicate and
-  key agreement is `dh_agree`.  There is NO dependence on any Dolev–Yao/DY*
-  machinery.
+  key agreement is `dh_agree`.  The interface exposes correctness laws but no
+  concrete or invertible crypto construction.  There is NO dependence on any
+  Dolev–Yao/DY* machinery.
 
   Apart from the responder's intentionally nondeterministic choice of a fresh
   scalar, every relation clause pins down the next state and produced outputs.
@@ -190,7 +191,8 @@ let responder_system (me:principal)
   These small theorems demonstrate that the transition relations are not
   vacuously false and that the protocol's core security-relevant equations hold
   end-to-end: an honest run's signatures verify, and both endpoints derive the
-  SAME session key.  They connect the state machine to the idealized crypto spec.
+  SAME session key.  They connect the state machine to the abstract crypto
+  interface.
 *)
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 10"

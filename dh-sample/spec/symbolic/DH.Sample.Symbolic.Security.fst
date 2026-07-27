@@ -97,7 +97,7 @@ open DH.Sample.Symbolic.Invariant
     that is `bytes_invariant` on a trace, whose signing key is secret-labelled,
     must satisfy the honest `dh_sign_pred` disjunct — which pins the signer's
     exact prior authorization event.  This is the DY* CORE EUF-CMA idealization,
-    NOT the toy digest. *)
+    not a property derived from the abstract concrete crypto interface. *)
 
 (** A role's long-term signing key carries that role's COMPROMISE-SENSITIVE state
     label (`Terms.role_label`), so "the key flows to `public`" is EXACTLY "that
@@ -157,8 +157,8 @@ let lemma_sign_parts_invariant (tr:TB.trace) (sk nonce msg:BT.bytes)
     Before this change the attacker disjunct was refuted outright (the key was
     unconditionally `L.secret`).  Under dynamic compromise it is a REAL
     possibility, and it is exactly the escape hatch every authentication theorem
-    below carries as "... OR the peer's signing state is compromised".  The toy
-    concrete digest plays no part in either disjunct. *)
+    below carries as "... OR the peer's signing state is compromised".  The
+    abstract concrete crypto interface plays no part in either disjunct. *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 10 --split_queries always"
 let lemma_ltk_sig_authorized
   (tr:TB.trace) (who:endpoint_id) (nonce msg:BT.bytes)
@@ -194,7 +194,7 @@ let lemma_ltk_sig_authorized
     of authentication modulo compromise: origin metadata only tells us the
     shadow is a genuine structured `Sign` (never a literal); the authorization
     or compromise alternative is recovered from the trace invariant, NOT from
-    the origin and NOT from the toy digest. *)
+    the origin or the abstract concrete crypto interface. *)
 
 (** A `MsgSent` term on a `trace_invariant` trace is `bytes_invariant`
     (`msg_sent_on_network_are_publishable` + `is_publishable` ⇒ `bytes_invariant`). *)
@@ -378,7 +378,7 @@ let lemma_net_initiator_authorized (p:product_state) (j:nat)
       * the SYMBOLIC authorization event of the PEER, whose own contributed DH
         share is exactly the share this endpoint holds (established at completion
         by the network authentication theorem above, i.e. by the trace invariant
-        + `dh_sign_pred`, NOT by the toy digest).
+        + `dh_sign_pred`, not by the abstract concrete crypto interface).
 
     Both facts PERSIST (events are monotone; a completed endpoint's fields, and
     its already-responded peer's fields, are frozen).  See
@@ -2262,8 +2262,8 @@ let product_reaches_security_invariant
 
     The honest branch's event is recovered from the peer's genuine `Sign` term via
     the trace invariant + `dh_sign_pred` — NEVER from the packet-origin metadata
-    and never from the toy digest; the origin metadata only fixes that the shadow
-    is a structured `Sign`.  The compromised branch is exactly the DY* attacker
+    or the abstract concrete crypto interface; the origin metadata only fixes
+    that the shadow is a structured `Sign`. The compromised branch is exactly the DY* attacker
     disjunct of the signature `bytes_invariant` (`lemma_ltk_sig_authorized`). *)
 
 (** INITIATOR AUTHENTICATES RESPONDER (modulo responder compromise). *)

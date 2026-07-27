@@ -16,8 +16,11 @@ module DH.Sample.Types
       and makes the parse/serialize round-trip proofs tractable.
     * Principals are 4-byte abstract identifiers.
     * DH scalars/shares are 4 bytes, signatures are 8 bytes, derived session
-      secrets are 8 bytes.  These sizes are arbitrary but concrete; the proofs
-      do not rely on the specific numbers beyond their being fixed.
+      secrets are 8 bytes.  These are schematic wire widths chosen to keep the
+      parser and Pulse proofs small, NOT deployable security parameters.  The
+      cryptographic operations over these blobs are abstract in
+      `DH.Sample.Crypto.fsti`; a production instantiation must choose realistic
+      representations and algorithms.
 *)
 
 module Seq = FStar.Seq

@@ -665,6 +665,7 @@ ensures exists* (received1:erased TCP.bytes) (sent1:erased TCP.bytes) (st1:erase
               let expected = sign a (transcript st.ep_me gx gy);
               if (Log.eq8 sigA expected) {
                 Seq.lemma_eq_elim sigA expected;
+                lemma_sign_verify a (transcript st.ep_me gx gy);
                 Log.lemma_parse_msg3 input_contents sigA;
                 Log.lemma_dh_serialize_all_singleton (Msg3 sigA);
                 Seq.lemma_eq_elim (WF.serialize_all Log.fmt [Msg3 sigA]) input_contents;
@@ -732,6 +733,7 @@ ensures exists* (received1:erased TCP.bytes) (sent1:erased TCP.bytes) (st1:erase
                 let expected = sign b (transcript st.ep_me gx gy);
                 if (Log.eq8 sigB expected) {
                   Seq.lemma_eq_elim sigB expected;
+                  lemma_sign_verify b (transcript st.ep_me gx gy);
                   let key = dh_agree x gy;
                   let sigA = sign st.ep_me (transcript b gx gy);
                   let msg3 = Msg3 sigA;

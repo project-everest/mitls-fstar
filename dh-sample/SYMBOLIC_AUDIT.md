@@ -111,8 +111,8 @@ Completion has two explicit ideal boundaries:
 * `deliver_origin_ok` admits completion Msg2/Msg3 only with the corresponding
   honest sender origin while that sender is uncompromised; after compromise it
   admits forged or replayed completion messages. This is the ideal
-  signature-unforgeability boundary needed because the concrete sample uses a
-  collision-prone toy digest.
+  signature-unforgeability boundary: `DH.Sample.Crypto.fsti` exposes only
+  functional correctness, not a computational unforgeability theorem.
 * `ideal_completion_link_ok` requires the responder's consumed-Msg1 index to
   equal the initiator's own-Msg1 index. It states only phase and index facts; it
   does not state identities, share equality, authentication events, agreement,
@@ -547,19 +547,20 @@ concrete composed execution
 |---|---|---|
 | F* kernel, SMT encoding, and DY core library | trusted dependency | The development proves obligations relative to these definitions and lemmas |
 | Ideal RNG action and registry | modeled assumption | Separates honest fresh secret generation from attacker input |
-| Honest origin for completion Msg2/Msg3, **while the signer is uncompromised** | modeled assumption | Replaces computational unforgeability for the toy signature digest; lifted once that role is compromised |
+| Abstract `DH.Sample.Crypto.fsti` operations and correctness laws | trusted interface | No toy implementation or public-share inverse is defined; a real cryptographic library and computational refinement remain external |
+| Honest origin for completion Msg2/Msg3, **while the signer is uncompromised** | modeled assumption | Represents computational unforgeability, which is not proved from the abstract interface; lifted once that role is compromised |
 | Completion run-link equality, **while the signer is uncompromised** | modeled assumption | Replaces collision-resistant transcript/session binding for the fixed sample; lifted once that role is compromised |
 | Dynamic compromise (`ActCorrupt`) | **modeled and reachable** | Real DY* `Corrupt` on the role's current `SetState`; drives the "modulo compromise" form of every security statement |
 | No erasure of stored material | explicit model choice | Snapshots retain scalars and session keys, so **no forward secrecy** is claimed |
 | Attacker Msg1 injection | modeled and reachable | Demonstrates active interference and responder DoS/intermediate key creation |
 | Pulse local refinement | proved | Covers local wire-format endpoint machines |
 | Pulse-to-composed-system refinement | **not proved** | RNG, network origin, and run-link services are outside the local implementation proof |
-| Computational DH/signature security | **not claimed** | Symbolic terms and labels provide an ideal DY result |
+| Computational DH/signature security | **not claimed** | The abstract interface states correctness only; symbolic terms and labels provide an ideal DY result |
 
 The completion run link is the main idealization that a future realistic version
-should eliminate. Replacing the toy digest with a collision-resistant symbolic
-transcript/signature abstraction should make session matching a consequence of
-signature verification rather than a separate environment condition.
+should eliminate. Instantiating `DH.Sample.Crypto.fsti` with a real library and
+proving a computational refinement should make session matching a consequence
+of signature verification rather than a separate environment condition.
 
 ## Suggested audit procedure
 

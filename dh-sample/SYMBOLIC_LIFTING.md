@@ -191,10 +191,12 @@ immutable network shadow and passes its `ne_smsg` to the receiver.
 `lemma_coherent_delivery_reads_exact` proves that `recv_msg ne.ne_pos` returns
 exactly `flatten ne.ne_smsg`; no delivery re-embeds or substitutes terms.
 
-The concrete toy digest is forgeable.  Consequently, a completion additionally
-requires honest peer packet origin (`deliver_origin_ok`) AND the run/session
-link (`ideal_completion_link_ok`).  This is an ideal signature-unforgeability
-boundary, not a computational theorem about the toy digest.
+`DH.Sample.Crypto.fsti` is an abstract correctness interface, not a
+computational security proof. Consequently, a completion additionally requires
+honest peer packet origin (`deliver_origin_ok`) AND the run/session link
+(`ideal_completion_link_ok`). This is an explicit ideal
+signature-unforgeability/session-binding boundary, not a theorem derived from a
+concrete crypto implementation.
 
 ## 5. Local-machine projection and the Pulse boundary
 
@@ -269,7 +271,8 @@ Established here:
 
 Not claimed here:
 
-* computational security of the toy DH/signature functions;
+* a computational-security proof or concrete implementation of the abstract
+  DH/signature interface;
 * refinement from an arbitrary raw-byte network/RNG runtime to the ideal
   composed environment;
 * a final authentication or session-key-secrecy theorem under corruption.

@@ -2,8 +2,11 @@
 
 `spec/symbolic/DH.Sample.Symbolic.Security.fst` proves authentication, session-key
 secrecy, and session-key agreement for the fixed two-party DH sample.  The
-development uses DY* **core only**, has no `admit`, `assume`, or `assert_norm`,
-and keeps every `--z3rlimit` at 10 or below.
+development uses DY* **core only**, has no proof-local `admit`, `assume`, or
+`assert_norm`, and keeps every `--z3rlimit` at 10 or below.
+`DH.Sample.Crypto.fsti` is the one intentional unimplemented interface: F*
+reports it as admitted, and this document treats it explicitly as a trusted
+cryptographic boundary rather than a proved implementation.
 
 The canonical check is:
 
@@ -611,11 +614,12 @@ Three witnesses, all machine-checked:
   UNRESTRICTED: an attacker-injected Msg1 drives the responder to `Resp_Wait3`
   and elicits an honest Msg2 over the attacker-chosen share.  No secrecy or
   honest-peer agreement is claimed there.
-* **Signatures / run link, modulo compromise.** The honest-origin restriction on
-  the two completion messages plus the run/session-index link compensate for the
-  deliberately weak toy digest — but only while the signing role is honest.  A
-  compromised role's completion messages are attacker-forgeable by construction.
-  No computational unforgeability theorem is claimed.
+* **Signatures / run link, modulo compromise.** `DH.Sample.Crypto.fsti` states
+  functional correctness but supplies no computational unforgeability theorem.
+  The honest-origin restriction on the two completion messages plus the
+  run/session-index link are therefore explicit ideal source-machine
+  boundaries, imposed only while the signing role is honest. A compromised
+  role's completion messages are attacker-forgeable by construction.
 * **NO FORWARD SECRECY, by design.** No erasure is modelled: a role's snapshot
   retains its ephemeral scalar and session key for ever, so `ActCorrupt` after a
   completed session reveals that session's key.  Every secrecy statement is
