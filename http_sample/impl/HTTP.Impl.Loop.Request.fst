@@ -156,3 +156,43 @@ fn http_method_known
   is_get || is_put || is_head || is_post || is_trace || is_delete ||
   is_options || is_connect
 }
+
+(* Parse the request line and report whether its method is one this server
+   actually IMPLEMENTS: GET, HEAD, or POST.  A server answers `405 Method Not
+   Allowed` for a syntactically valid, recognized-but-unsupported method (e.g.
+   DELETE/PUT).  Same in-bounds inline-byte matching as `http_method_known`;
+   memory-safe, loop-free. *)
+fn http_method_allowed
+  (inp: array U8.t) (n: SZ.t)
+  requires
+    pts_to inp 'i **
+    pure (0 < SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32)
+  returns b: bool
+  ensures pts_to inp 'i
+{
+  let mut pok   = false;
+  let mut pmlen = 0sz;
+  let mut ptoff = 0sz;
+  let mut ptlen = 0sz;
+  RL.http_parse_request_line inp n pok pmlen ptoff ptlen;
+  let ok   = !pok;
+  let mlen = !pmlen;
+  let i0 = 0sz;
+  let i1 = (if (ok && SZ.lt 1sz mlen) then 1sz else 0sz);
+  let i2 = (if (ok && SZ.lt 2sz mlen) then 2sz else 0sz);
+  let i3 = (if (ok && SZ.lt 3sz mlen) then 3sz else 0sz);
+  let b0 = inp.(i0);
+  let b1 = inp.(i1);
+  let b2 = inp.(i2);
+  let b3 = inp.(i3);
+  let is_get =
+    ok && SZ.eq mlen 3sz &&
+    U8.eq b0 0x47uy && U8.eq b1 0x45uy && U8.eq b2 0x54uy;
+  let is_head =
+    ok && SZ.eq mlen 4sz &&
+    U8.eq b0 0x48uy && U8.eq b1 0x45uy && U8.eq b2 0x41uy && U8.eq b3 0x44uy;
+  let is_post =
+    ok && SZ.eq mlen 4sz &&
+    U8.eq b0 0x50uy && U8.eq b1 0x4Fuy && U8.eq b2 0x53uy && U8.eq b3 0x54uy;
+  is_get || is_head || is_post
+}

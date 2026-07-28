@@ -120,14 +120,16 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       header-line counter `http_count_header_named` (case-insensitive).
       `http_request_line_ok` + `http_method_known` (`HTTP.Impl.Loop.Request`)
       validate the request line and classify the method against the eight
-      standard tokens (GET/HEAD/POST/PUT/DELETE/CONNECT/OPTIONS/TRACE).
-      `http_header_limits_ok` (`HTTP.Impl.Loop.Header`) caps the header-line count
-      and per-line length (DoS defense). The interop server answers verified
-      `400` (malformed line or smuggling), `501` (unsupported method), `431`
-      (header fields too large), all via `http_emit_response`. Exercised by
-      `verified/framing_test.c`, `verified/method_test.c`, `verified/limits_test.c`
-      (`make framing-test`, `make method-test`, `make limits-test`) and interop
-      probes (`make test-smuggle`, `make test-method`, `make test-limits`).
-      *Remaining:* read timeouts, malformed-chunk-size rejection, and the other
-      error responses (`405`/`411`/`413`/`505`).
+      standard tokens (GET/HEAD/POST/PUT/DELETE/CONNECT/OPTIONS/TRACE);
+      `http_method_allowed` narrows that to the methods this server implements
+      (GET/HEAD/POST). `http_header_limits_ok` (`HTTP.Impl.Loop.Header`) caps the
+      header-line count and per-line length (DoS defense). The interop server
+      answers verified `400` (malformed line or smuggling), `405` (unsupported
+      method), `411` (POST without a length), `413` (body over cap), `431`
+      (header fields too large), `501` (unrecognized method), all via
+      `http_emit_response`. Exercised by `verified/framing_test.c`,
+      `verified/method_test.c`, `verified/limits_test.c` (`make framing-test`,
+      `make method-test`, `make limits-test`) and interop probes (`make
+      test-smuggle`, `make test-method`, `make test-limits`, `make test-errors`).
+      *Remaining:* read timeouts and malformed-chunk-size rejection.
 - [ ] 5. Keep-alive / persistent connections; TLS

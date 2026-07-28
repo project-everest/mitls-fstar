@@ -50,8 +50,11 @@ PORT_METH ?= $(shell echo $$(( $(PORT) + 3 )))
 RUN_DIR_LIM := _run_http_lim
 RUN_DIR_LIM_ABS := $(abspath $(RUN_DIR_LIM))
 PORT_LIM ?= $(shell echo $$(( $(PORT) + 4 )))
+RUN_DIR_ERR := _run_http_err
+RUN_DIR_ERR_ABS := $(abspath $(RUN_DIR_ERR))
+PORT_ERR ?= $(shell echo $$(( $(PORT) + 5 )))
 
-.PHONY: all test test-get test-post test-smuggle test-method test-limits build-progs clean help
+.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors build-progs clean help
 
 all: test
 
@@ -66,7 +69,7 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post test-smuggle test-method test-limits
+test: test-get test-post test-smuggle test-method test-limits test-errors
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -252,8 +255,46 @@ test-limits: build-progs
 	    exit 1; \
 	  fi
 
+# ── method/body error responses  ->  405 + 411 + 413 ─────────────────────────
+# 405 Method Not Allowed (recognized but unsupported method, via VERIFIED
+# http_method_allowed), 411 Length Required (POST without Content-Length/
+# Transfer-Encoding), 413 Payload Too Large (Content-Length beyond the cap).
+# curl -X DELETE probes 405; raw sockets probe 411/413; a normal GET is the
+# 200 control.
+test-errors: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " Error responses:  DELETE -> 405, no-length POST -> 411, huge POST -> 413"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v curl >/dev/null 2>&1 || { echo "  SKIP: 'curl' not found on PATH"; exit 3; }
+	@command -v python3 >/dev/null 2>&1 || { echo "  SKIP: 'python3' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_ERR); mkdir -p $(RUN_DIR_ERR)
+	@cp raw_probe.py $(RUN_DIR_ERR)/raw_probe.py
+	@echo "  probing 405 (DELETE), 411 (no-length POST), 413 (oversized POST) ..."
+	@cd $(RUN_DIR_ERR) && \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_ERR) & srv=$$!; sleep 0.5; \
+	    acode=$$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -X DELETE http://127.0.0.1:$(PORT_ERR)/); echo $$acode > notallowed.code; \
+	    lcode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_ERR) lenreq 2>>err.log); echo $$lcode > lenreq.code; \
+	    tcode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_ERR) toobig 2>>err.log); echo $$tcode > toobig.code; \
+	    gcode=$$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:$(PORT_ERR)/); echo $$gcode > get.code; \
+	    exit 0' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  acode=$$(cat notallowed.code 2>/dev/null); lcode=$$(cat lenreq.code 2>/dev/null); \
+	  tcode=$$(cat toobig.code 2>/dev/null); gcode=$$(cat get.code 2>/dev/null); \
+	  if [ "$$acode" = 405 ] && [ "$$lcode" = 411 ] && [ "$$tcode" = 413 ] && [ "$$gcode" = 200 ]; then \
+	    echo "  RESULT: PASS - the VERIFIED validators answered 405 (DELETE), 411 (no-length POST) and 413 (oversized POST), while a normal GET still got 200"; \
+	    rm -rf $(RUN_DIR_ERR_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/probe did not terminate: killed after $(TIMEOUT)s (405=$$acode 411=$$lcode 413=$$tcode get=$$gcode)"; \
+	    else echo "  RESULT: FAIL - 405=$$acode (want 405) 411=$$lcode (want 411) 413=$$tcode (want 413) get=$$gcode (want 200)"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_ERR_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR)
 
 help:
 	@echo "HTTP interop test (vs curl):"

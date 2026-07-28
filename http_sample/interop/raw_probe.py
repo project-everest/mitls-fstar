@@ -5,7 +5,7 @@ curl cannot craft a request that carries BOTH Content-Length and
 Transfer-Encoding, so this sends a raw request over a socket and prints the
 numeric status code from the response status line ("HTTP/1.1 <code> ...").
 
-Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge>
+Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge|lenreq|toobig>
 
   smuggle  -- a CL.TE vector (both Content-Length and Transfer-Encoding present),
               which the server's verified framing guard must reject with 400.
@@ -13,6 +13,8 @@ Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge>
   badreq   -- a malformed request line, which must get 400.
   notimpl  -- a valid line with an unsupported method, which must get 501.
   toolarge -- a request with an over-long header line, which must get 431.
+  lenreq   -- a POST with no Content-Length/Transfer-Encoding, which must get 411.
+  toobig   -- a POST whose Content-Length exceeds the body cap, which must get 413.
 """
 import socket
 import sys
@@ -76,6 +78,22 @@ def main():
             b"GET / HTTP/1.1\r\n"
             b"Host: 127.0.0.1\r\n"
             + big +
+            b"\r\n"
+        )
+    elif mode == "lenreq":
+        # POST with neither Content-Length nor Transfer-Encoding -> 411.
+        payload = (
+            b"POST /submit HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"\r\n"
+        )
+    elif mode == "toobig":
+        # POST whose Content-Length exceeds the server body cap -> 413.
+        # (No body is sent; the server rejects from the head before reading.)
+        payload = (
+            b"POST /submit HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"Content-Length: 2000000\r\n"
             b"\r\n"
         )
     else:

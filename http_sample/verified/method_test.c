@@ -44,6 +44,16 @@ static void check(const char *label, const char *s,
   }
 }
 
+static void check_allowed(const char *label, const char *s, bool want_allowed) {
+  const uint8_t *buf = (const uint8_t *)s;
+  size_t n = strlen(s);
+  bool allowed = http_method_allowed((uint8_t *)buf, n);
+  if (allowed != want_allowed) {
+    printf("FAIL: [%s] method_allowed = %d, want %d\n", label, (int)allowed, (int)want_allowed);
+    fails++;
+  }
+}
+
 int main(void) {
   /* All eight standard methods -> line ok, method known. */
   check("get",     "GET / HTTP/1.1\r\nHost: x\r\n\r\n",            true, true);
@@ -71,6 +81,17 @@ int main(void) {
   check("no-spaces",  "GET/HTTP/1.1\r\n\r\n",                      false, false);
   check("bad-ver",    "GET / HTTP/9.9\r\n\r\n",                    false, false);
   check("empty-meth", " / HTTP/1.1\r\n\r\n",                       false, false);
+
+  /* http_method_allowed: this server implements only GET / HEAD / POST. */
+  check_allowed("allow-get",     "GET / HTTP/1.1\r\n\r\n",         true);
+  check_allowed("allow-head",    "HEAD / HTTP/1.1\r\n\r\n",        true);
+  check_allowed("allow-post",    "POST /s HTTP/1.1\r\n\r\n",       true);
+  check_allowed("deny-put",      "PUT /r HTTP/1.1\r\n\r\n",        false);
+  check_allowed("deny-delete",   "DELETE /r HTTP/1.1\r\n\r\n",     false);
+  check_allowed("deny-options",  "OPTIONS * HTTP/1.1\r\n\r\n",     false);
+  check_allowed("deny-connect",  "CONNECT h:1 HTTP/1.1\r\n\r\n",   false);
+  check_allowed("deny-unknown",  "FROBNICATE / HTTP/1.1\r\n\r\n",  false);
+  check_allowed("deny-badline",  "garbage\r\n\r\n",                false);
 
   if (fails == 0) {
     printf("method_test: ALL PASS\n");

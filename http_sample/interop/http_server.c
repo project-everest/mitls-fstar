@@ -50,6 +50,7 @@
 #define REQ_CAP       65536    /* max request-head bytes we will buffer */
 #define MAX_HEADERS   100      /* header-count cap (431 Request Header Fields Too Large) */
 #define MAX_LINE      8192     /* per-header-line byte cap (431) */
+#define MAX_BODY      1048576  /* request-body cap (413 Payload Too Large) */
 
 static const char DEFAULT_BODY[] =
   "Served by the verified FStar/Pulse HTTP/1.1 server!\n";
@@ -215,6 +216,22 @@ int main(int argc, char **argv) {
       continue;
     }
 
+    /* 3w. Method-not-allowed: the request method is a recognized HTTP method but
+       one this origin server does not implement (it serves only GET/HEAD/POST).
+       The VERIFIED http_method_allowed reports this; answer a verified 405. */
+    if (!http_method_allowed(reqbuf, reqlen)) {
+      http_emit_response((uint16_t)405, (uint32_t)0, headbuf);
+      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      Common_TCP_close(pch);
+      fprintf(stderr, "http_server: rejected request (method not allowed), served 405\n");
+      if (status_path) {
+        FILE *sf = fopen(status_path, "w");
+        if (sf) { fprintf(sf, "notallowed 405\n"); fclose(sf); }
+      }
+      continue;
+    }
+
     /* 3z. Request-smuggling guard (RFC 7230 3.3.3): the VERIFIED framing check
        rejects a request that carries a Content-Length alongside a
        Transfer-Encoding, or more than one Content-Length line.  On rejection we
@@ -268,11 +285,46 @@ int main(int argc, char **argv) {
       uint32_t clen  = 0;
       http_header_dec(reqbuf + block, reqlen - block,
                       (uint8_t *)"content-length", (size_t)14, &found, &clen);
+      size_t clen_sz = (size_t)clen;
+
+      /* 3a-i. Length Required (411): a POST with neither Content-Length nor
+         Transfer-Encoding has no defined body length; reject with a verified
+         411 (the VERIFIED header counter confirms no Transfer-Encoding). */
+      if (!found) {
+        size_t tec = http_count_header_named(reqbuf + block, reqlen - block,
+                                             (uint8_t *)"transfer-encoding", (size_t)17);
+        if (tec == 0) {
+          http_emit_response((uint16_t)411, (uint32_t)0, headbuf);
+          Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+          Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+          Common_TCP_close(pch);
+          fprintf(stderr, "http_server: rejected POST (no Content-Length), served 411\n");
+          if (status_path) {
+            FILE *sf = fopen(status_path, "w");
+            if (sf) { fprintf(sf, "lenreq 411\n"); fclose(sf); }
+          }
+          continue;
+        }
+      }
+
+      /* 3a-ii. Payload Too Large (413): a Content-Length beyond the server cap
+         is rejected up front with a verified 413 (before reading the body). */
+      if (found && clen_sz > (size_t)MAX_BODY) {
+        http_emit_response((uint16_t)413, (uint32_t)0, headbuf);
+        Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+        Common_TCP_close(pch);
+        fprintf(stderr, "http_server: rejected POST (Content-Length %u exceeds cap), served 413\n", clen);
+        if (status_path) {
+          FILE *sf = fopen(status_path, "w");
+          if (sf) { fprintf(sf, "toobig 413\n"); fclose(sf); }
+        }
+        continue;
+      }
 
       /* Gather the request body: some bytes may already trail the head in
          reqbuf; read the remainder up to Content-Length. */
       size_t have = (total > head_end) ? (total - head_end) : 0;
-      size_t clen_sz = (size_t)clen;
       if (found && clen_sz < 100000000u && head_end + clen_sz <= REQ_CAP) {
         uint8_t *bodyp = reqbuf + head_end;
         if (have < clen_sz)
