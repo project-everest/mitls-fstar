@@ -48,6 +48,8 @@
 
 #define RESP_HEAD_LEN 43       /* fixed size of the verified response head */
 #define REQ_CAP       65536    /* max request-head bytes we will buffer */
+#define MAX_HEADERS   100      /* header-count cap (431 Request Header Fields Too Large) */
+#define MAX_LINE      8192     /* per-header-line byte cap (431) */
 
 static const char DEFAULT_BODY[] =
   "Served by the verified FStar/Pulse HTTP/1.1 server!\n";
@@ -229,6 +231,23 @@ int main(int argc, char **argv) {
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
         if (sf) { fprintf(sf, "smuggling 400\n"); fclose(sf); }
+      }
+      continue;
+    }
+
+    /* 3x. Header-block limits (DoS defense): the VERIFIED limit enforcer rejects
+       a request head that carries too many header lines or an over-long single
+       line.  On rejection we answer a verified 431 (no body) and drop. */
+    if (!http_header_limits_ok(reqbuf + hblock, reqlen - hblock,
+                               (size_t)MAX_HEADERS, (size_t)MAX_LINE)) {
+      http_emit_response((uint16_t)431, (uint32_t)0, headbuf);
+      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      Common_TCP_close(pch);
+      fprintf(stderr, "http_server: rejected request (header fields too large), served 431\n");
+      if (status_path) {
+        FILE *sf = fopen(status_path, "w");
+        if (sf) { fprintf(sf, "toolarge 431\n"); fclose(sf); }
       }
       continue;
     }

@@ -120,13 +120,14 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       header-line counter `http_count_header_named` (case-insensitive).
       `http_request_line_ok` + `http_method_known` (`HTTP.Impl.Loop.Request`)
       validate the request line and classify the method against the eight
-      standard tokens (GET/HEAD/POST/PUT/DELETE/CONNECT/OPTIONS/TRACE). The
-      interop server answers verified `400` (malformed line or smuggling), `501`
-      (unsupported method), all via `http_emit_response`. Exercised by
-      `verified/framing_test.c` + `verified/method_test.c` (`make framing-test`,
-      `make method-test`) and interop probes (`make test-smuggle`, `make
-      test-method`; the latter uses `curl -X FROBNICATE` → 501 and a raw
-      malformed line → 400, GET → 200 control). *Remaining:* limits/timeouts
-      (line/header size caps, read timeouts), malformed-chunk-size rejection, and
-      the other error responses (`405`/`411`/`413`/`431`/`505`).
+      standard tokens (GET/HEAD/POST/PUT/DELETE/CONNECT/OPTIONS/TRACE).
+      `http_header_limits_ok` (`HTTP.Impl.Loop.Header`) caps the header-line count
+      and per-line length (DoS defense). The interop server answers verified
+      `400` (malformed line or smuggling), `501` (unsupported method), `431`
+      (header fields too large), all via `http_emit_response`. Exercised by
+      `verified/framing_test.c`, `verified/method_test.c`, `verified/limits_test.c`
+      (`make framing-test`, `make method-test`, `make limits-test`) and interop
+      probes (`make test-smuggle`, `make test-method`, `make test-limits`).
+      *Remaining:* read timeouts, malformed-chunk-size rejection, and the other
+      error responses (`405`/`411`/`413`/`505`).
 - [ ] 5. Keep-alive / persistent connections; TLS

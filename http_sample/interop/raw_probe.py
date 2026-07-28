@@ -5,13 +5,14 @@ curl cannot craft a request that carries BOTH Content-Length and
 Transfer-Encoding, so this sends a raw request over a socket and prints the
 numeric status code from the response status line ("HTTP/1.1 <code> ...").
 
-Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl>
+Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge>
 
-  smuggle -- a CL.TE vector (both Content-Length and Transfer-Encoding present),
-             which the server's verified framing guard must reject with 400.
-  clean   -- a well-formed single-Content-Length request, which must get 200.
-  badreq  -- a malformed request line, which must get 400.
-  notimpl -- a valid line with an unsupported method, which must get 501.
+  smuggle  -- a CL.TE vector (both Content-Length and Transfer-Encoding present),
+              which the server's verified framing guard must reject with 400.
+  clean    -- a well-formed single-Content-Length request, which must get 200.
+  badreq   -- a malformed request line, which must get 400.
+  notimpl  -- a valid line with an unsupported method, which must get 501.
+  toolarge -- a request with an over-long header line, which must get 431.
 """
 import socket
 import sys
@@ -66,6 +67,15 @@ def main():
         payload = (
             b"FROBNICATE / HTTP/1.1\r\n"
             b"Host: 127.0.0.1\r\n"
+            b"\r\n"
+        )
+    elif mode == "toolarge":
+        # A single header line far exceeding the server's per-line cap -> 431.
+        big = b"X-Big: " + (b"a" * 9000) + b"\r\n"
+        payload = (
+            b"GET / HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            + big +
             b"\r\n"
         )
     else:

@@ -386,3 +386,73 @@ fn http_request_framing_ok
   let cl_and_te = SZ.gt clc 0sz && SZ.gt tec 0sz;
   not (cl_dup || cl_and_te)
 }
+
+(* ── Header-block limit enforcement (DoS defense) ─────────────────────────────
+
+   Walk the header block `inp[0..n)` field-line by field-line and report whether
+   it stays within the caller-supplied limits: at most `max_headers` field-lines,
+   and no single field-line longer than `max_line` bytes (its length is the
+   cursor advance `next - pos`, i.e. the whole line up to and including its CRLF).
+   Returns `false` as soon as either bound is exceeded — a server answers `431
+   Request Header Fields Too Large`.  Memory-safe; the walk terminates because
+   every counted line strictly advances the cursor (lexicographic measure on the
+   `go` flag then the remaining bytes). *)
+fn http_header_limits_ok
+  (inp: array U8.t) (n: SZ.t) (max_headers: SZ.t) (max_line: SZ.t)
+  requires
+    pts_to inp 'i **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32)
+  returns b: bool
+  ensures
+    pts_to inp 'i
+{
+  let mut pos     = 0sz;
+  let mut cnt     = 0sz;
+  let mut bad     = false;
+  let mut go      = true;
+  let mut pis_end = false;
+  let mut pok     = false;
+  let mut pnlen   = 0sz;
+  let mut pvoff   = 0sz;
+  let mut pvlen   = 0sz;
+  let mut pnext   = 0sz;
+  while (!go)
+  invariant exists* (vpos vcnt:SZ.t) (vgo vbad ve vok:bool) (a b c d:SZ.t).
+    R.pts_to pos vpos ** R.pts_to cnt vcnt ** R.pts_to bad vbad ** R.pts_to go vgo **
+    R.pts_to pis_end ve ** R.pts_to pok vok **
+    R.pts_to pnlen a ** R.pts_to pvoff b ** R.pts_to pvlen c ** R.pts_to pnext d **
+    pts_to inp 'i **
+    pure (SZ.v vpos <= SZ.v n /\ SZ.v vcnt <= SZ.v vpos /\
+          SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32)
+  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
+  {
+    let vpos = !pos;
+    Hdr.http_parse_header_field inp n vpos pis_end pok pnlen pvoff pvlen pnext;
+    let isend = !pis_end;
+    let ok = !pok;
+    if (isend || not ok) {
+      go := false;
+    } else {
+      let nx = !pnext;
+      if (SZ.gt nx vpos) {
+        let vcnt = !cnt;
+        Hdr.lemma_fits32 (SZ.v vcnt + 1);
+        let ncnt = SZ.add vcnt 1sz;
+        cnt := ncnt;
+        let linelen   = SZ.sub nx vpos;
+        let overline  = SZ.gt linelen max_line;
+        let overcount = SZ.gt ncnt max_headers;
+        if (overline || overcount) {
+          bad := true;
+          pos := nx;
+          go  := false;
+        } else {
+          pos := nx;
+        }
+      } else {
+        go := false;
+      }
+    }
+  };
+  not !bad
+}

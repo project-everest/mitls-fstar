@@ -47,8 +47,11 @@ PORT_SMUG ?= $(shell echo $$(( $(PORT) + 2 )))
 RUN_DIR_METH := _run_http_meth
 RUN_DIR_METH_ABS := $(abspath $(RUN_DIR_METH))
 PORT_METH ?= $(shell echo $$(( $(PORT) + 3 )))
+RUN_DIR_LIM := _run_http_lim
+RUN_DIR_LIM_ABS := $(abspath $(RUN_DIR_LIM))
+PORT_LIM ?= $(shell echo $$(( $(PORT) + 4 )))
 
-.PHONY: all test test-get test-post test-smuggle test-method build-progs clean help
+.PHONY: all test test-get test-post test-smuggle test-method test-limits build-progs clean help
 
 all: test
 
@@ -63,7 +66,7 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post test-smuggle test-method
+test: test-get test-post test-smuggle test-method test-limits
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -216,8 +219,41 @@ test-method: build-progs
 	    exit 1; \
 	  fi
 
+# ── header-block limits  ->  431 Request Header Fields Too Large ──────────────
+# The server runs the VERIFIED http_header_limits_ok enforcer before handling.
+# We send a raw request with an over-long header line (expecting 431) and
+# re-check a normal GET (expecting 200) as a control.
+test-limits: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " Header limits:  raw over-long header line  ->  431, GET -> 200"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v curl >/dev/null 2>&1 || { echo "  SKIP: 'curl' not found on PATH"; exit 3; }
+	@command -v python3 >/dev/null 2>&1 || { echo "  SKIP: 'python3' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_LIM); mkdir -p $(RUN_DIR_LIM)
+	@cp raw_probe.py $(RUN_DIR_LIM)/raw_probe.py
+	@echo "  probing an over-long header line (431) ..."
+	@cd $(RUN_DIR_LIM) && \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_LIM) & srv=$$!; sleep 0.5; \
+	    lcode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_LIM) toolarge 2>err.log); echo $$lcode > toolarge.code; \
+	    gcode=$$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:$(PORT_LIM)/); echo $$gcode > get.code; \
+	    exit 0' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  lcode=$$(cat toolarge.code 2>/dev/null); gcode=$$(cat get.code 2>/dev/null); \
+	  if [ "$$lcode" = 431 ] && [ "$$gcode" = 200 ]; then \
+	    echo "  RESULT: PASS - the VERIFIED limit enforcer answered 431 to an over-long header line, while a normal GET still got 200"; \
+	    rm -rf $(RUN_DIR_LIM_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/probe did not terminate: killed after $(TIMEOUT)s (toolarge=$$lcode get=$$gcode)"; \
+	    else echo "  RESULT: FAIL - toolarge=$$lcode (want 431) get=$$gcode (want 200)"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_LIM_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM)
 
 help:
 	@echo "HTTP interop test (vs curl):"
