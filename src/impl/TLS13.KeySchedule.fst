@@ -6,9 +6,11 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module Crypto = TLS13.Crypto
 module K = TLS13.Keys
 module Seq = FStar.Seq
+module SC = TLS13.Impl.Serializer.Common
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
@@ -201,6 +203,115 @@ fn write_label_traffic_update (lbl: array U8.t)
 }
 
 inline_for_extraction
+fn write_hkdf_info_byte
+  (info: array U8.t)
+  (idx: SZ.t{SZ.v idx < length info})
+  (value: U8.t)
+  requires pts_to info 'bytes
+  ensures pts_to info (C.update_byte 'bytes (SZ.v idx) value)
+{
+  pts_to_len info;
+  info.(idx) <- value;
+}
+
+inline_for_extraction
+fn copy_hkdf_info_bytes
+  (src: array U8.t)
+  (src_len: SZ.t)
+  (info: array U8.t)
+  (info_offset: SZ.t)
+  requires pts_to src 'src_bytes **
+           pts_to info 'info_bytes **
+           pure (B.length 'src_bytes == SZ.v src_len /\
+                 B.length 'info_bytes == 520 /\
+                 SZ.v info_offset + SZ.v src_len <= 520)
+  ensures pts_to src 'src_bytes **
+          pts_to info
+            (C.copy_bytes_into 'info_bytes (SZ.v info_offset) 'src_bytes)
+{
+  SC.copy_array_slice_to_array
+    src src_len 0sz src_len info 520sz info_offset;
+  with copied. assert (pts_to info copied);
+  assert_norm (copied ==
+    C.copy_bytes_into 'info_bytes (SZ.v info_offset) 'src_bytes);
+  rewrite (pts_to info copied) as
+    (pts_to info
+      (C.copy_bytes_into 'info_bytes (SZ.v info_offset) 'src_bytes));
+}
+
+inline_for_extraction
+fn hkdf_expand_label
+  (secret: array U8.t)
+  (lbl: array U8.t)
+  (label_len: SZ.t)
+  (context: array U8.t)
+  (context_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to secret 'secret_bytes **
+           pts_to lbl 'label_bytes **
+           pts_to context 'context_bytes **
+           pts_to out 'old **
+           pure (B.length 'secret_bytes == 32 /\
+                 B.length 'label_bytes == SZ.v label_len /\
+                 B.length 'context_bytes == SZ.v context_len /\
+                 B.length 'old == SZ.v out_len /\
+                 SZ.v label_len <= 249 /\
+                 SZ.v context_len <= 255 /\
+                 SZ.v out_len <= 8160)
+  ensures pts_to secret 'secret_bytes **
+          pts_to lbl 'label_bytes **
+          pts_to context 'context_bytes **
+          pts_to out (C.hkdf_expand_label
+                        'secret_bytes
+                        'label_bytes
+                        'context_bytes
+                        (SZ.v out_len))
+{
+  let mut info = [| 0uy; 520sz |];
+
+  let out_hi = SC.u8_of_sizet (SZ.div out_len 256sz);
+  let out_lo = SC.u8_of_sizet out_len;
+  let full_label_len = SZ.add 6sz label_len;
+  let full_label_len_byte = SC.u8_of_sizet full_label_len;
+  let context_len_byte = SC.u8_of_sizet context_len;
+
+  write_hkdf_info_byte info 0sz out_hi;
+  write_hkdf_info_byte info 1sz out_lo;
+  write_hkdf_info_byte info 2sz full_label_len_byte;
+  write_hkdf_info_byte info 3sz 0x74uy;
+  write_hkdf_info_byte info 4sz 0x6cuy;
+  write_hkdf_info_byte info 5sz 0x73uy;
+  write_hkdf_info_byte info 6sz 0x31uy;
+  write_hkdf_info_byte info 7sz 0x33uy;
+  write_hkdf_info_byte info 8sz 0x20uy;
+  copy_hkdf_info_bytes lbl label_len info 9sz;
+
+  let context_len_offset = SZ.add 9sz label_len;
+  write_hkdf_info_byte info context_len_offset context_len_byte;
+  let context_offset = SZ.add 10sz label_len;
+  copy_hkdf_info_bytes context context_len info context_offset;
+
+  with info_bytes. assert (pts_to info info_bytes);
+  SC.u8_of_sizet_v_byte out_len;
+  SC.u8_of_sizet_v_byte (SZ.div out_len 256sz);
+  SC.u8_of_sizet_v_byte full_label_len;
+  SC.u8_of_sizet_v_byte context_len;
+  reveal_opaque (`%C.hkdf_label_info_buffer)
+    (C.hkdf_label_info_buffer 'label_bytes 'context_bytes (SZ.v out_len));
+  assert_norm (info_bytes ==
+    C.hkdf_label_info_buffer 'label_bytes 'context_bytes (SZ.v out_len));
+  rewrite (pts_to info info_bytes) as
+    (pts_to info
+      (C.hkdf_label_info_buffer 'label_bytes 'context_bytes (SZ.v out_len)));
+
+  let info_len = SZ.add 10sz (SZ.add label_len context_len);
+  Crypto.hkdf_expand
+    secret info info_len out out_len
+    #'label_bytes #'context_bytes;
+}
+
+inline_for_extraction
 fn derived_secret
   (secret: array U8.t)
   (out: array U8.t)
@@ -215,7 +326,7 @@ fn derived_secret
 
   let mut lbl = [| 0uy; 7sz |];
   write_label_derived lbl;
-  Crypto.hkdf_expand_label secret lbl 7sz empty_hash 32sz out 32sz;
+  hkdf_expand_label secret lbl 7sz empty_hash 32sz out 32sz;
 }
 
 fn early_secret_empty
@@ -282,7 +393,7 @@ fn client_handshake_traffic_secret
 {
   let mut lbl = [| 0uy; 12sz |];
   write_label_c_hs_traffic lbl;
-  Crypto.hkdf_expand_label handshake lbl 12sz transcript_hash 32sz out 32sz;
+  hkdf_expand_label handshake lbl 12sz transcript_hash 32sz out 32sz;
 }
 
 fn server_handshake_traffic_secret
@@ -303,7 +414,7 @@ fn server_handshake_traffic_secret
 {
   let mut lbl = [| 0uy; 12sz |];
   write_label_s_hs_traffic lbl;
-  Crypto.hkdf_expand_label handshake lbl 12sz transcript_hash 32sz out 32sz;
+  hkdf_expand_label handshake lbl 12sz transcript_hash 32sz out 32sz;
 }
 
 fn client_application_traffic_secret
@@ -324,7 +435,7 @@ fn client_application_traffic_secret
 {
   let mut lbl = [| 0uy; 12sz |];
   write_label_c_ap_traffic lbl;
-  Crypto.hkdf_expand_label master lbl 12sz transcript_hash 32sz out 32sz;
+  hkdf_expand_label master lbl 12sz transcript_hash 32sz out 32sz;
 }
 
 fn server_application_traffic_secret
@@ -345,7 +456,7 @@ fn server_application_traffic_secret
 {
   let mut lbl = [| 0uy; 12sz |];
   write_label_s_ap_traffic lbl;
-  Crypto.hkdf_expand_label master lbl 12sz transcript_hash 32sz out 32sz;
+  hkdf_expand_label master lbl 12sz transcript_hash 32sz out 32sz;
 }
 
 fn finished_verify_data
@@ -367,7 +478,8 @@ fn finished_verify_data
   let mut lbl = [| 0uy; 8sz |];
   write_label_finished lbl;
   let mut finished_key = [| 0uy; 32sz |];
-  Crypto.hkdf_expand_label_empty_context base_key lbl 8sz finished_key 32sz;
+  let mut empty_context = [| 0uy; 0sz |];
+  hkdf_expand_label base_key lbl 8sz empty_context 0sz finished_key 32sz;
   Crypto.hmac_sha256 finished_key 32sz transcript_hash 32sz out;
 }
 
@@ -384,7 +496,8 @@ fn application_traffic_secret_update
 {
   let mut lbl = [| 0uy; 11sz |];
   write_label_traffic_update lbl;
-  Crypto.hkdf_expand_label_empty_context old_secret lbl 11sz out 32sz;
+  let mut empty_context = [| 0uy; 0sz |];
+  hkdf_expand_label old_secret lbl 11sz empty_context 0sz out 32sz;
 }
 
 fn derive_traffic_key
@@ -398,7 +511,8 @@ fn derive_traffic_key
 {
   let mut lbl = [| 0uy; 3sz |];
   write_label_key lbl;
-  Crypto.hkdf_expand_label_empty_context traffic_secret lbl 3sz out 32sz;
+  let mut empty_context = [| 0uy; 0sz |];
+  hkdf_expand_label traffic_secret lbl 3sz empty_context 0sz out 32sz;
 }
 
 fn derive_traffic_iv
@@ -412,5 +526,6 @@ fn derive_traffic_iv
 {
   let mut lbl = [| 0uy; 2sz |];
   write_label_iv lbl;
-  Crypto.hkdf_expand_label_empty_context traffic_secret lbl 2sz out 12sz;
+  let mut empty_context = [| 0uy; 0sz |];
+  hkdf_expand_label traffic_secret lbl 2sz empty_context 0sz out 12sz;
 }

@@ -37,7 +37,7 @@ let seal
   (st:direction_state)
   (aad:B.bytes)
   (pt:plaintext)
-  : option (sealed_record & direction_state) =
+  : GTot (option (sealed_record & direction_state)) =
   match st.key, st.static_iv with
   | Some key, Some iv ->
     let nonce = C.tls13_record_nonce iv st.seq in
@@ -48,7 +48,7 @@ let open_record
   (st:direction_state)
   (aad:B.bytes)
   (ct:sealed_record)
-  : option (B.bytes & direction_state) =
+  : GTot (option (B.bytes & direction_state)) =
   match st.key, st.static_iv with
   | Some key, Some iv ->
     if B.length ct >= 16 then

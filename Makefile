@@ -454,6 +454,7 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Record \
   TLS13.Impl.Client \
   TLS13.Impl.Client.Driver.State \
+  TLS13.Impl.Client.Driver.BufferedNetwork \
   TLS13.Impl.Client.Driver.New \
   TLS13.Impl.Client.Driver.Core \
   TLS13.Impl.Client.Driver.Cleanup \
@@ -463,8 +464,10 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Client.Driver.Close
 CLIENT_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES))) \
+  $(filter-out $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml, \
+    $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES)))) \
   $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml \
+  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 DRIVER_EXTRACT_SELECTOR = \
@@ -474,7 +477,7 @@ DRIVER_EXTRACT_SELECTOR = \
   -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
   -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
   -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Client.CanonicalProtocol,\
-  -TLS13.Impl.Client.CanonicalQueries,-TLS13.Impl.Client.Endpoint,\
+  -TLS13.Impl.Client.CanonicalQueries,\
   -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 SERVER_DRIVER_EXTRACT_SELECTOR = \
@@ -484,7 +487,7 @@ SERVER_DRIVER_EXTRACT_SELECTOR = \
   -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
   -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
   -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Server.CanonicalProtocol,\
-  -TLS13.Impl.Server.CanonicalQueries,-TLS13.Impl.Server.Endpoint,\
+  -TLS13.Impl.Server.CanonicalQueries,\
   -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
@@ -518,10 +521,20 @@ SERVER_DRIVER_MODULES = \
   Common.TCP \
   TLS13.OpenSSL \
   TLS13.Impl.Server.Driver.State \
-  TLS13.Impl.Server.Driver.Transport \
   TLS13.Impl.Server.Driver.Network \
+  TLS13.Impl.Server.Driver.BufferedNetwork \
+  TLS13.Impl.Server.Driver.BufferedTransport \
+  TLS13.Impl.Server.Driver.BufferedLifecycle \
+  TLS13.Impl.Server.Driver.BufferedHandshake \
+  TLS13.Impl.Server.Driver.BufferedLocal \
+  TLS13.Impl.Server.Driver.BufferedWorkflow \
+  TLS13.Impl.Server.Driver.BufferedTopHandshake \
+  TLS13.Impl.Server.Driver.BufferedChannel \
+  TLS13.Impl.Server.Driver.BufferedAccept \
+  TLS13.Impl.Server.Driver.BufferedSend \
+  TLS13.Impl.Server.Driver.BufferedReceive \
+  TLS13.Impl.Server.Driver.BufferedClose \
   TLS13.Impl.Server.Driver.Local \
-  TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver
 SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
@@ -531,11 +544,14 @@ SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 TLS13_BUNDLE_KRML_FILES = \
+  $(OUTPUT_DIR)/Common_BufferedTCP_Internal.krml \
+  $(OUTPUT_DIR)/Common_BufferedTCP.krml \
+  $(OUTPUT_DIR)/Common_BufferedStream.krml \
+  $(OUTPUT_DIR)/Common_Memmove.krml \
+  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
-  $(OUTPUT_DIR)/TLS13_Lib_Memmove.krml \
-  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES)))
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
@@ -662,7 +678,7 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library TLS13.Lib.Memmove -library Common.TCP \
+	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
 	  -library TLS13.OpenSSL \
 	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
@@ -683,12 +699,17 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 
 HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
+  $(HACL_DIR)/Hacl_Hash_SHA1.c \
   $(HACL_DIR)/Hacl_Hash_SHA2.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2b.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2s.c \
   $(HACL_DIR)/Hacl_HMAC.c \
+  $(HACL_DIR)/Hacl_HKDF.c \
   $(HACL_DIR)/Hacl_Curve25519_51.c \
   $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305.c \
   $(HACL_DIR)/Hacl_Chacha20.c \
   $(HACL_DIR)/Hacl_MAC_Poly1305.c \
+  $(HACL_DIR)/Lib_Memzero0.c \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
 
 HACL_SIMD256 ?= $(shell \
@@ -735,6 +756,8 @@ HACL_ACCEL_C_MODULES = \
   EverCrypt_AutoConfig2 \
   EverCrypt_Hash \
   EverCrypt_HMAC \
+  EverCrypt_HKDF \
+  EverCrypt_Curve25519 \
   Hacl_Curve25519_64
 HACL_ACCEL_ASM_MODULES = \
   cpuid-x86_64-linux \
@@ -766,7 +789,7 @@ HACL_BENCHMARK_OBJECTS = \
 HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJECTS)
 
 ECHO_STUB_SOURCES = \
-  runtime/tls13_lib_memmove.c \
+  runtime/common_memmove.c \
   c_stubs/common_tcp_karamel.c \
   c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
@@ -775,7 +798,7 @@ ECHO_STUB_SOURCES = \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
-  runtime/tls13_lib_memmove.h \
+  runtime/common_memmove.h \
   c_stubs/common_tcp_karamel.h \
   c_stubs/common_tcp_stubs.h \
   c_stubs/tls13_bytes_karamel.h \
@@ -884,7 +907,7 @@ define link_benchmark
 	  $(2)/*.o \
 	  $(4) \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/tls13_lib_memmove.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \
@@ -938,9 +961,10 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
-  test-openssl-sclient test-hacl-stubs check-c-stubs
+  test-openssl-sclient test-hacl-stubs test-key-schedule-bindings check-c-stubs
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-echo test-openssl-sclient
+test: verify check-c-stubs test-hacl-stubs test-key-schedule-bindings \
+  test-openssl-echo test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
@@ -966,6 +990,25 @@ test/test_hacl_stubs: test/unit/test_hacl_stubs.c \
 test-hacl-stubs: test/test_hacl_stubs
 	./test/test_hacl_stubs
 
+test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
+  $(TLS13_BUNDLE_OBJS_STAMP) c_stubs/tls13_crypto_external.c \
+  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(HACL_TEST_OBJECTS) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_KeySchedule.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Serializer_Common.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Server_Material.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Wire_Generated.o \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  test/unit/test_key_schedule_bindings.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -o $@
+
+test-key-schedule-bindings: test/test_key_schedule_bindings
+	./test/test_key_schedule_bindings
+
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
 TEST_CERT_STAMP = test/certs/.generated
 
@@ -986,7 +1029,7 @@ test/test_extracted_client_openssl_echo: \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/tls13_lib_memmove.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \
@@ -1038,7 +1081,7 @@ test/test_extracted_server_openssl_client: \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/tls13_lib_memmove.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \
@@ -1079,6 +1122,7 @@ clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_openssl_client \
+	  test/test_key_schedule_bindings \
 	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
 	  test/openssl_echo_server.log \

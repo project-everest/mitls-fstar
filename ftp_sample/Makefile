@@ -26,11 +26,13 @@ export PATH := $(Z3_DIR):$(PATH)
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
+EXTERN_DIR  = ../src/impl/extern
 OUTPUT_DIR  = _output
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include ../common \
+  --include $(EXTERN_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse \
   --include $(SPEC_DIR)
@@ -50,8 +52,9 @@ FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 COMMON_FILES = $(wildcard ../common/*.fst ../common/*.fsti)
+EXTERN_FILES = $(EXTERN_DIR)/Common.Memmove.fsti
 SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES)
+ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES)
 
 .PHONY: all verify gen clean check-admits help
 

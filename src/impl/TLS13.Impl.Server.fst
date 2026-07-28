@@ -3397,8 +3397,12 @@ fn process_network_bytes
                    network_out_bytes
                    app_out_bytes /\
                 (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                   W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)))
+                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+                  Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)) /\
+                 (buffer_resp.ST.response.ST.status == ST.StepOk ==>
+                  0 < SZ.v buffer_resp.ST.consumed_len))
 {
   rewrite (connection_exactly s 'st0) as (SN.connection_exactly s 'st0);
   let buffer_resp = SN.process_network_bytes
@@ -3415,8 +3419,10 @@ fn process_network_bytes
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
   assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+    W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
     W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-    Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)));
+    Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+    Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)));
   rewrite (SN.connection_exactly s st1) as (connection_exactly s st1);
   buffer_resp
 }

@@ -9,6 +9,7 @@ open TLS13.Impl.Server.Driver.State
 module B = TLS13.Bytes
 module IO = Common.TCP
 module Box = Pulse.Lib.Box
+module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -181,5 +182,13 @@ fn close_live_without_transport
   ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
 {
   unfold (server_driver_live d 'st0 'certificate_chain 'credential_identity);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  let buffered = B.empty;
+  let buffered_len = 0sz;
+  rewrite (server_driver_buffers d B.empty 0sz) as
+    (server_driver_buffers d buffered buffered_len);
+  assert (
+    server_driver_buffers d buffered buffered_len **
+    pure (ST.server_end_to_end_invariant 'st0));
   fold (server_driver_closed d 'st0 'certificate_chain 'credential_identity);
 }

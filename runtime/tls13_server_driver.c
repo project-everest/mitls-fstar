@@ -77,11 +77,6 @@ static int driver_fail_status(
   return 1;
 }
 
-static void abort_connected_driver(tls13_server_driver *driver) {
-  TLS13_Impl_Server_Driver_abort(driver->verified_driver);
-  driver->state = TLS13_SERVER_DRIVER_CLOSED;
-}
-
 int tls13_server_config_new(
     tls13_server_config **out,
     const char *bind_host,
@@ -190,7 +185,7 @@ int tls13_server_driver_accept_with_config(
     return 1;
   }
 
-  FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_server_driver created =
+  FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_top_server_driver created =
       TLS13_Impl_Server_Driver_new_server_with_credentials(
           config->verified_credentials,
           config->certificate_chain,
@@ -215,11 +210,7 @@ int tls13_server_driver_accept_with_config(
           TLS13_SERVER_DRIVER_NETWORK_FUEL);
   if (status != TLS13_Impl_Server_Driver_ServerWorkflowOk) {
     (void)driver_fail_status(driver, "accept", status);
-    if (status != TLS13_Impl_Server_Driver_ServerWorkflowClosed) {
-      abort_connected_driver(driver);
-    } else {
-      driver->state = TLS13_SERVER_DRIVER_CLOSED;
-    }
+    driver->state = TLS13_SERVER_DRIVER_CLOSED;
     TLS13_Impl_Server_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
@@ -285,7 +276,7 @@ int tls13_server_driver_send_application_data(
       TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge) {
     return 1;
   }
-  abort_connected_driver(driver);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
   return 1;
 }
 
@@ -328,8 +319,7 @@ int tls13_server_driver_receive_application_data(
        so the connection remains usable for retry. */
     return 1;
   }
-  /* Hard failure (StepFailed or unknown): abort the connection. */
-  abort_connected_driver(driver);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
   return 1;
 }
 

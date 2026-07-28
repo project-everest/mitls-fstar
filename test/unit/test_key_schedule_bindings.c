@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static bool crypto_failed = false;
-
 static int expect_bytes(
     const char *label,
     const uint8_t *got,
@@ -18,77 +16,6 @@ static int expect_bytes(
     return 1;
   }
   return 0;
-}
-
-void TLS13_Crypto_sha256_empty(uint8_t *out, void *old_out) {
-  (void)old_out;
-  crypto_failed |= !tls13_hacl_sha256(out, NULL, 0);
-}
-
-void TLS13_Crypto_hmac_sha256(
-    uint8_t *key,
-    size_t key_len,
-    uint8_t *msg,
-    size_t msg_len,
-    uint8_t *out,
-    void *key_bytes,
-    void *msg_bytes,
-    void *old_out) {
-  (void)key_bytes;
-  (void)msg_bytes;
-  (void)old_out;
-  crypto_failed |= !tls13_hacl_hmac_sha256(out, key, key_len, msg, msg_len);
-}
-
-void TLS13_Crypto_hkdf_extract(
-    uint8_t *salt,
-    size_t salt_len,
-    uint8_t *ikm,
-    size_t ikm_len,
-    uint8_t *out,
-    void *salt_bytes,
-    void *ikm_bytes,
-    void *old_out) {
-  (void)salt_bytes;
-  (void)ikm_bytes;
-  (void)old_out;
-  crypto_failed |= !tls13_hacl_hkdf_extract_sha256(out, salt, salt_len, ikm, ikm_len);
-}
-
-void TLS13_Crypto_hkdf_expand_label(
-    uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
-    uint8_t *context,
-    size_t context_len,
-    uint8_t *out,
-    size_t out_len,
-    void *secret_bytes,
-    void *label_bytes,
-    void *context_bytes,
-    void *old_out) {
-  (void)secret_bytes;
-  (void)label_bytes;
-  (void)context_bytes;
-  (void)old_out;
-  crypto_failed |= !tls13_hacl_hkdf_expand_label_sha256(
-      out, out_len, secret, label, label_len, context, context_len);
-}
-
-void TLS13_Crypto_hkdf_expand_label_empty_context(
-    uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
-    uint8_t *out,
-    size_t out_len,
-    void *secret_bytes,
-    void *label_bytes,
-    void *old_out) {
-  (void)secret_bytes;
-  (void)label_bytes;
-  (void)old_out;
-  crypto_failed |= !tls13_hacl_hkdf_expand_label_sha256(
-      out, out_len, secret, label, label_len, NULL, 0);
 }
 
 static int test_rfc8448_handshake_secret(void) {
@@ -106,7 +33,6 @@ static int test_rfc8448_handshake_secret(void) {
   uint8_t zero_psk[32] = {0};
   uint8_t got[32];
 
-  crypto_failed = false;
   if (!tls13_hacl_hkdf_extract_sha256(
           early_secret, NULL, 0, zero_psk, sizeof zero_psk)) {
     fprintf(stderr, "early-secret setup failed\n");
@@ -114,10 +40,6 @@ static int test_rfc8448_handshake_secret(void) {
   }
   TLS13_KeySchedule_handshake_secret(
       early_secret, (uint8_t *)shared_secret, sizeof shared_secret, got);
-  if (crypto_failed) {
-    fprintf(stderr, "extracted handshake_secret crypto call failed\n");
-    return 1;
-  }
   return expect_bytes(
       "extracted handshake_secret", got, expected_handshake_secret, sizeof got);
 }
@@ -140,13 +62,8 @@ static int test_rfc8448_client_handshake_traffic(void) {
       0x00, 0x74, 0x6a, 0x0e, 0x27, 0xa5, 0x5a, 0x21};
   uint8_t got[32];
 
-  crypto_failed = false;
   TLS13_KeySchedule_client_handshake_traffic_secret(
       (uint8_t *)handshake_secret, (uint8_t *)transcript_hash, got);
-  if (crypto_failed) {
-    fprintf(stderr, "extracted client_handshake_traffic_secret crypto call failed\n");
-    return 1;
-  }
   return expect_bytes(
       "extracted client_handshake_traffic_secret",
       got,
@@ -160,28 +77,29 @@ static int test_traffic_key_iv_against_hacl(void) {
       0xa7, 0x80, 0xb3, 0xab, 0xf4, 0x5e, 0x2d, 0x8f,
       0x3b, 0x1a, 0x95, 0x07, 0x38, 0xf5, 0x2e, 0x96,
       0x00, 0x74, 0x6a, 0x0e, 0x27, 0xa5, 0x5a, 0x21};
-  static const uint8_t label_key[] = {'k', 'e', 'y'};
-  static const uint8_t label_iv[] = {'i', 'v'};
+  static const uint8_t key_info[] = {
+      0x00, 0x20, 0x09,
+      't', 'l', 's', '1', '3', ' ', 'k', 'e', 'y',
+      0x00};
+  static const uint8_t iv_info[] = {
+      0x00, 0x0c, 0x08,
+      't', 'l', 's', '1', '3', ' ', 'i', 'v',
+      0x00};
   uint8_t expected_key[32];
   uint8_t expected_iv[12];
   uint8_t got_key[32];
   uint8_t got_iv[12];
 
-  if (!tls13_hacl_hkdf_expand_label_sha256(
-          expected_key, sizeof expected_key, traffic_secret, label_key, sizeof label_key, NULL, 0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          expected_iv, sizeof expected_iv, traffic_secret, label_iv, sizeof label_iv, NULL, 0)) {
+  if (!tls13_hacl_hkdf_expand_sha256(
+          expected_key, sizeof expected_key, traffic_secret, key_info, sizeof key_info) ||
+      !tls13_hacl_hkdf_expand_sha256(
+          expected_iv, sizeof expected_iv, traffic_secret, iv_info, sizeof iv_info)) {
     fprintf(stderr, "direct traffic key/iv setup failed\n");
     return 1;
   }
 
-  crypto_failed = false;
   TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret, got_key);
   TLS13_KeySchedule_derive_traffic_iv((uint8_t *)traffic_secret, got_iv);
-  if (crypto_failed) {
-    fprintf(stderr, "extracted traffic key/iv crypto call failed\n");
-    return 1;
-  }
   return expect_bytes("extracted traffic key", got_key, expected_key, sizeof got_key) ||
          expect_bytes("extracted traffic iv", got_iv, expected_iv, sizeof got_iv);
 }
