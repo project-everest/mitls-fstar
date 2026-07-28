@@ -51,6 +51,7 @@
 #define MAX_HEADERS   100      /* header-count cap (431 Request Header Fields Too Large) */
 #define MAX_LINE      8192     /* per-header-line byte cap (431) */
 #define MAX_BODY      1048576  /* request-body cap (413 Payload Too Large) */
+#define READ_TIMEOUT_SECS 5    /* default per-connection read timeout (408) */
 
 static const char DEFAULT_BODY[] =
   "Served by the verified FStar/Pulse HTTP/1.1 server!\n";
@@ -77,7 +78,9 @@ static uint8_t *read_file(const char *path, size_t *out_len) {
    Sets *head_end to the number of bytes up to and including the terminating
    CRLF-CRLF (0 if none was seen), and RETURNS the total number of bytes now in
    the buffer -- which for a request WITH a body may exceed *head_end, since the
-   same recv() often delivers leading body bytes.  Returns -1 on a hard error. */
+   same recv() often delivers leading body bytes.  Returns -1 on a hard error, or
+   -2 if a read timed out (SO_RCVTIMEO fired: recv gave EAGAIN/EWOULDBLOCK)
+   before the head was complete -- the caller answers 408 Request Timeout. */
 static ssize_t read_request_head(int fd, uint8_t *out, size_t cap, size_t *head_end) {
   size_t total = 0;
   int match = 0;                       /* how much of "\r\n\r\n" matched so far */
@@ -85,7 +88,11 @@ static ssize_t read_request_head(int fd, uint8_t *out, size_t cap, size_t *head_
   *head_end = 0;
   while (total < cap) {
     ssize_t r = recv(fd, out + total, cap - total, 0);
-    if (r < 0) { if (errno == EINTR) continue; return -1; }
+    if (r < 0) {
+      if (errno == EINTR) continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK) return -2;  /* read timeout */
+      return -1;
+    }
     if (r == 0) break;                 /* client closed without a full head */
     for (ssize_t i = 0; i < r; i++) {
       uint8_t b = out[total + (size_t)i];
@@ -141,6 +148,15 @@ int main(int argc, char **argv) {
      (persisting past the server being killed, unlike a racy stderr log). */
   const char *status_path = getenv("HTTP_PARSE_STATUS_FILE");
 
+  /* Per-connection read timeout (env HTTP_READ_TIMEOUT overrides the default),
+     in whole seconds.  A client that opens a connection and then stalls without
+     completing the request head is dropped with a verified 408 Request Timeout
+     instead of holding the single-threaded accept loop open indefinitely (a
+     slow-loris style resource-exhaustion defense). */
+  long read_timeout = READ_TIMEOUT_SECS;
+  { const char *t = getenv("HTTP_READ_TIMEOUT");
+    if (t && *t) { long v = atol(t); if (v > 0) read_timeout = v; } }
+
   /* Resolve the response body: an optional file, else the built-in string. */
   uint8_t *body = NULL;
   size_t   body_len = 0;
@@ -189,9 +205,28 @@ int main(int argc, char **argv) {
     int fd = accept(lfd, NULL, NULL);
     if (fd < 0) { if (errno == EINTR) continue; perror("accept"); break; }
 
+    /* Arm a read timeout on this connection so a stalled client cannot hold the
+       accept loop open (slow-loris defense).  On expiry recv() returns EAGAIN,
+       which read_request_head surfaces as -2 -> a verified 408 below. */
+    { struct timeval tv; tv.tv_sec = read_timeout; tv.tv_usec = 0;
+      setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv); }
+
     /* Read the client's request head into reqbuf (socket read is glue). */
     size_t head_end = 0;
     ssize_t rl = read_request_head(fd, reqbuf, REQ_CAP, &head_end);
+    if (rl == -2) {
+      /* The client stalled before completing the request head -> verified 408. */
+      http_emit_response((uint16_t)408, (uint32_t)0, headbuf);
+      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      Common_TCP_close(pch);
+      fprintf(stderr, "http_server: read timed out on request head, served 408\n");
+      if (status_path) {
+        FILE *sf = fopen(status_path, "w");
+        if (sf) { fprintf(sf, "timeout 408\n"); fclose(sf); }
+      }
+      continue;
+    }
     if (rl < 0) { close(fd); continue; }
     size_t total  = (size_t)rl;
     size_t reqlen = head_end ? head_end : total;

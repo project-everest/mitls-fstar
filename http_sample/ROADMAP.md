@@ -111,7 +111,7 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       (`"POST " target " HTTP/1.1\r\nContent-Length: " <var-width digits> "\r\n\r\n"`),
       driven by `http_build_post_head` (`HTTP.Impl.Loop.RequestPost`) and
       exercised byte-exactly by `verified/request_post_test.c` (len 5/0/255/1000000).
-- [~] 4. Smuggling / limit defenses + error responses — **in progress**:
+- [x] 4. Smuggling / limit defenses + error responses — **DONE**:
       verified request-smuggling guard + verified request-line/method validation
       DONE. `http_request_framing_ok` (`HTTP.Impl.Loop.Header`) rejects a request
       whose header block carries a `Content-Length` alongside a
@@ -127,14 +127,16 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       chunked` upload is decoded by the VERIFIED variable-width chunk decoder
       `http_decode_chunks_var`, which rejects a malformed chunk-size line; the
       interop server answers verified `400` for a bad chunk and echoes the
-      decoded body in a verified `200` for a well-formed one. The interop server
-      answers verified `400` (malformed line, smuggling, or bad chunk), `405`
-      (unsupported method), `411` (POST without a length), `413` (body over cap),
-      `431` (header fields too large), `501` (unrecognized method), all via
-      `http_emit_response`. Exercised by `verified/framing_test.c`,
-      `verified/method_test.c`, `verified/limits_test.c` (`make framing-test`,
-      `make method-test`, `make limits-test`) and interop probes (`make
-      test-smuggle`, `make test-method`, `make test-limits`, `make test-errors`,
-      `make test-chunked`).
-      *Remaining:* read timeouts.
+      decoded body in a verified `200` for a well-formed one. A per-connection
+      read timeout (`SO_RCVTIMEO`, slow-loris defense) drops a client that stalls
+      before completing the request head with a verified `408`. The interop
+      server answers verified `400` (malformed line, smuggling, or bad chunk),
+      `405` (unsupported method), `408` (read timeout), `411` (POST without a
+      length), `413` (body over cap), `431` (header fields too large), `501`
+      (unrecognized method), all via `http_emit_response`. Exercised by
+      `verified/framing_test.c`, `verified/method_test.c`,
+      `verified/limits_test.c` (`make framing-test`, `make method-test`, `make
+      limits-test`) and interop probes (`make test-smuggle`, `make test-method`,
+      `make test-limits`, `make test-errors`, `make test-chunked`, `make
+      test-timeout`).
 - [ ] 5. Keep-alive / persistent connections; TLS

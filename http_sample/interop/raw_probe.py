@@ -17,6 +17,7 @@ Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge|lenreq
   toobig   -- a POST whose Content-Length exceeds the body cap, which must get 413.
   chunked  -- a well-formed chunked upload, which must get 200.
   badchunk -- a chunked upload with a non-hex chunk size, which must get 400.
+  timeout  -- a partial request head left open, which must get 408 (read timeout).
 """
 import socket
 import sys
@@ -29,6 +30,26 @@ def send(host, port, payload):
         buf = b""
         while len(buf) < 4096:
             chunk = s.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+    return buf
+
+
+def send_stall(host, port, partial):
+    # Send a PARTIAL request head and deliberately leave the write side open so
+    # the head never completes.  Block reading the response with a socket timeout
+    # comfortably longer than the server's read timeout, so the server's 408
+    # (once its SO_RCVTIMEO fires) is what we observe.
+    with socket.create_connection((host, port), timeout=30) as s:
+        s.sendall(partial)
+        s.settimeout(30)
+        buf = b""
+        while len(buf) < 4096:
+            try:
+                chunk = s.recv(4096)
+            except socket.timeout:
+                break
             if not chunk:
                 break
             buf += chunk
@@ -116,6 +137,18 @@ def main():
             b"\r\n"
             b"zz\r\nhello\r\n0\r\n\r\n"
         )
+    elif mode == "timeout":
+        # A partial request head that is never completed (no CRLF-CRLF) and whose
+        # write side is left OPEN: the server's read timeout (SO_RCVTIMEO) must
+        # fire and answer 408 Request Timeout rather than hanging forever.
+        try:
+            resp = send_stall(host, port, b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n")
+        except OSError as e:
+            sys.stderr.write("probe error: %s\n" % e)
+            print(-1)
+            return 1
+        print(status_code(resp))
+        return 0
     else:
         print(-1)
         return 2

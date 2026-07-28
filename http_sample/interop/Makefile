@@ -56,8 +56,11 @@ PORT_ERR ?= $(shell echo $$(( $(PORT) + 5 )))
 RUN_DIR_CHK := _run_http_chk
 RUN_DIR_CHK_ABS := $(abspath $(RUN_DIR_CHK))
 PORT_CHK ?= $(shell echo $$(( $(PORT) + 6 )))
+RUN_DIR_TMO := _run_http_tmo
+RUN_DIR_TMO_ABS := $(abspath $(RUN_DIR_TMO))
+PORT_TMO ?= $(shell echo $$(( $(PORT) + 7 )))
 
-.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors test-chunked build-progs clean help
+.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout build-progs clean help
 
 all: test
 
@@ -72,7 +75,7 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post test-smuggle test-method test-limits test-errors test-chunked
+test: test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -333,8 +336,46 @@ test-chunked: build-progs
 	    exit 1; \
 	  fi
 
+# ── read timeout  ->  verified 408 on a stalled client ────────────────────────
+# A client that opens a connection and sends only a PARTIAL request head (never
+# the terminating CRLF-CRLF) and leaves its write side open must be dropped with
+# a verified 408 Request Timeout once the server's SO_RCVTIMEO fires, rather than
+# holding the single-threaded accept loop open (slow-loris defense).  The server
+# runs with HTTP_READ_TIMEOUT=1 here so the test is quick.
+test-timeout: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " Read timeout:  stalled partial request -> 408, normal GET -> 200"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v python3 >/dev/null 2>&1 || { echo "  SKIP: 'python3' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_TMO); mkdir -p $(RUN_DIR_TMO)
+	@cp raw_probe.py $(RUN_DIR_TMO)/raw_probe.py
+	@echo "  probing a stalled partial-head client (408) and a normal GET (200) ..."
+	@cd $(RUN_DIR_TMO) && \
+	  HTTP_PARSE_STATUS_FILE=parse.status HTTP_READ_TIMEOUT=1 \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_TMO) & srv=$$!; sleep 0.5; \
+	    tcode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_TMO) timeout 2>err.log); echo $$tcode > timeout.code; \
+	    for i in $$(seq 1 40); do [ -s parse.status ] && break; sleep 0.05; done; \
+	    cp parse.status timeout.status 2>/dev/null; \
+	    gcode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_TMO) clean 2>>err.log); echo $$gcode > clean.code; \
+	    exit 0' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  tcode=$$(cat timeout.code 2>/dev/null); gcode=$$(cat clean.code 2>/dev/null); \
+	  tstat=$$(cat timeout.status 2>/dev/null); \
+	  if [ "$$tcode" = 408 ] && [ "$$gcode" = 200 ] && [ "$$tstat" = "timeout 408" ]; then \
+	    echo "  RESULT: PASS - the server's read timeout answered 408 to a stalled partial-head client, while a normal request still got 200"; \
+	    rm -rf $(RUN_DIR_TMO_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/probe did not terminate: killed after $(TIMEOUT)s (timeout=$$tcode clean=$$gcode status='$$tstat')"; \
+	    else echo "  RESULT: FAIL - timeout=$$tcode (want 408) clean=$$gcode (want 200) status='$$tstat' (want 'timeout 408')"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_TMO_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR) $(RUN_DIR_CHK)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR) $(RUN_DIR_CHK) $(RUN_DIR_TMO)
 
 help:
 	@echo "HTTP interop test (vs curl):"
