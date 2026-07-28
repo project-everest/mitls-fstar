@@ -59,8 +59,11 @@ PORT_CHK ?= $(shell echo $$(( $(PORT) + 6 )))
 RUN_DIR_TMO := _run_http_tmo
 RUN_DIR_TMO_ABS := $(abspath $(RUN_DIR_TMO))
 PORT_TMO ?= $(shell echo $$(( $(PORT) + 7 )))
+RUN_DIR_KA := _run_http_ka
+RUN_DIR_KA_ABS := $(abspath $(RUN_DIR_KA))
+PORT_KA ?= $(shell echo $$(( $(PORT) + 8 )))
 
-.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout build-progs clean help
+.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout test-keepalive build-progs clean help
 
 all: test
 
@@ -75,7 +78,7 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout
+test: test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout test-keepalive
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -374,8 +377,41 @@ test-timeout: build-progs
 	    exit 1; \
 	  fi
 
+# ── keep-alive  ->  persistent connection + verified Connection: close ─────────
+# Two GET requests over a SINGLE TCP connection must BOTH get 200 (the server
+# kept the connection alive between them), and a request carrying the verified
+# `Connection: close` directive must get 200 and then have its connection closed.
+test-keepalive: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " Keep-alive:  2 GETs on one connection -> 200 200, Connection: close -> 200 closed"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v python3 >/dev/null 2>&1 || { echo "  SKIP: 'python3' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_KA); mkdir -p $(RUN_DIR_KA)
+	@cp raw_probe.py $(RUN_DIR_KA)/raw_probe.py
+	@echo "  probing two GETs on one persistent connection, then a Connection: close request ..."
+	@cd $(RUN_DIR_KA) && \
+	  HTTP_PARSE_STATUS_FILE=parse.status \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_KA) & srv=$$!; sleep 0.5; \
+	    kacode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_KA) keepalive 2>err.log); echo "$$kacode" > ka.code; \
+	    cccode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_KA) connclose 2>>err.log); echo "$$cccode" > cc.code; \
+	    exit 0' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  kacode=$$(cat ka.code 2>/dev/null); cccode=$$(cat cc.code 2>/dev/null); \
+	  if [ "$$kacode" = "200 200" ] && [ "$$cccode" = "200 closed" ]; then \
+	    echo "  RESULT: PASS - the server served two requests over one persistent connection (200 200) and honored the VERIFIED Connection: close directive (200, then closed)"; \
+	    rm -rf $(RUN_DIR_KA_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/probe did not terminate: killed after $(TIMEOUT)s (keepalive='$$kacode' connclose='$$cccode')"; \
+	    else echo "  RESULT: FAIL - keepalive='$$kacode' (want '200 200') connclose='$$cccode' (want '200 closed')"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_KA_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR) $(RUN_DIR_CHK) $(RUN_DIR_TMO)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR) $(RUN_DIR_CHK) $(RUN_DIR_TMO) $(RUN_DIR_KA)
 
 help:
 	@echo "HTTP interop test (vs curl):"

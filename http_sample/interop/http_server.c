@@ -200,7 +200,13 @@ int main(int argc, char **argv) {
   uint8_t *decbuf  = malloc(REQ_CAP);        /* decoded chunked-body output */
   if (!reqbuf || !headbuf || !scratch || !decbuf) { free(reqbuf); free(headbuf); free(scratch); free(decbuf); free(body); close(lfd); return 1; }
 
-  /* 2. Accept loop. */
+  /* 2. Accept loop.  Each accepted connection is served by an inner keep-alive
+     REQUEST loop: HTTP/1.1 connections are PERSISTENT by default (RFC 7230 6.3),
+     so after a successful response we loop to serve the next request on the same
+     connection, closing only when the client closes it, asks for it with a
+     verified `Connection: close`, an error occurs, or a read times out.  A single
+     verified Common.TCP channel is created per connection and closed exactly once
+     when the connection ends. */
   for (;;) {
     int fd = accept(lfd, NULL, NULL);
     if (fd < 0) { if (errno == EINTR) continue; perror("accept"); break; }
@@ -211,24 +217,33 @@ int main(int argc, char **argv) {
     { struct timeval tv; tv.tv_sec = read_timeout; tv.tv_usec = 0;
       setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv); }
 
+    /* One verified channel per connection, reused across keep-alive requests and
+       closed exactly once when the inner loop ends. */
+    Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+    int served = 0;                 /* how many requests answered on this conn */
+
+    for (;;) {                      /* keep-alive request loop */
     /* Read the client's request head into reqbuf (socket read is glue). */
     size_t head_end = 0;
     ssize_t rl = read_request_head(fd, reqbuf, REQ_CAP, &head_end);
     if (rl == -2) {
-      /* The client stalled before completing the request head -> verified 408. */
-      http_emit_response((uint16_t)408, (uint32_t)0, headbuf);
-      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
-      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-      Common_TCP_close(pch);
-      fprintf(stderr, "http_server: read timed out on request head, served 408\n");
-      if (status_path) {
-        FILE *sf = fopen(status_path, "w");
-        if (sf) { fprintf(sf, "timeout 408\n"); fclose(sf); }
+      /* Stalled before completing a request head.  On the FIRST request this is a
+         verified 408 Request Timeout; an idle keep-alive timeout between requests
+         just closes the connection (the client has gone away). */
+      if (served == 0) {
+        http_emit_response((uint16_t)408, (uint32_t)0, headbuf);
+        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+        fprintf(stderr, "http_server: read timed out on request head, served 408\n");
+        if (status_path) {
+          FILE *sf = fopen(status_path, "w");
+          if (sf) { fprintf(sf, "timeout 408\n"); fclose(sf); }
+        }
       }
-      continue;
+      break;
     }
-    if (rl < 0) { close(fd); continue; }
+    if (rl < 0) break;
     size_t total  = (size_t)rl;
+    if (total == 0) break;          /* client closed the (keep-alive) connection */
     size_t reqlen = head_end ? head_end : total;
 
     /* Locate the header block (bytes after the request line's first CRLF),
@@ -244,27 +259,23 @@ int main(int argc, char **argv) {
        (no body) and drop the connection. */
     if (reqlen == 0 || !http_request_line_ok(reqbuf, reqlen)) {
       http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
-      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
       Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-      Common_TCP_close(pch);
       fprintf(stderr, "http_server: rejected request (malformed request line), served 400\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
         if (sf) { fprintf(sf, "badreq 400\n"); fclose(sf); }
       }
-      continue;
+      break;
     }
     if (!http_method_known(reqbuf, reqlen)) {
       http_emit_response((uint16_t)501, (uint32_t)0, headbuf);
-      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
       Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-      Common_TCP_close(pch);
       fprintf(stderr, "http_server: rejected request (unsupported method), served 501\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
         if (sf) { fprintf(sf, "notimpl 501\n"); fclose(sf); }
       }
-      continue;
+      break;
     }
 
     /* 3w. Method-not-allowed: the request method is a recognized HTTP method but
@@ -272,15 +283,13 @@ int main(int argc, char **argv) {
        The VERIFIED http_method_allowed reports this; answer a verified 405. */
     if (!http_method_allowed(reqbuf, reqlen)) {
       http_emit_response((uint16_t)405, (uint32_t)0, headbuf);
-      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
       Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-      Common_TCP_close(pch);
       fprintf(stderr, "http_server: rejected request (method not allowed), served 405\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
         if (sf) { fprintf(sf, "notallowed 405\n"); fclose(sf); }
       }
-      continue;
+      break;
     }
 
     /* 3z. Request-smuggling guard (RFC 7230 3.3.3): the VERIFIED framing check
@@ -292,15 +301,13 @@ int main(int argc, char **argv) {
                                               (uint8_t *)"transfer-encoding", (size_t)17);
     if (!framing_ok) {
       http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
-      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
       Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-      Common_TCP_close(pch);
       fprintf(stderr, "http_server: rejected request (smuggling: conflicting/duplicate framing), served 400\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
         if (sf) { fprintf(sf, "smuggling 400\n"); fclose(sf); }
       }
-      continue;
+      break;
     }
 
     /* 3x. Header-block limits (DoS defense): the VERIFIED limit enforcer rejects
@@ -309,16 +316,21 @@ int main(int argc, char **argv) {
     if (!http_header_limits_ok(reqbuf + hblock, reqlen - hblock,
                                (size_t)MAX_HEADERS, (size_t)MAX_LINE)) {
       http_emit_response((uint16_t)431, (uint32_t)0, headbuf);
-      Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
       Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-      Common_TCP_close(pch);
       fprintf(stderr, "http_server: rejected request (header fields too large), served 431\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
         if (sf) { fprintf(sf, "toolarge 431\n"); fclose(sf); }
       }
-      continue;
+      break;
     }
+
+    /* Persistent-connection decision (RFC 7230 6.1): the VERIFIED detector reports
+       whether the client asked to close the connection after this response.
+       Absent a Connection: close, an HTTP/1.1 request stays keep-alive. */
+    bool wants_close = http_connection_close(reqbuf + hblock, reqlen - hblock,
+                                             (uint8_t *)"connection", (size_t)10,
+                                             (uint8_t *)"close", (size_t)5);
 
     /* 3a. POST branch: the VERIFIED method parser detects the method, the
        VERIFIED header decoder recovers Content-Length, and we ECHO the request
@@ -348,64 +360,58 @@ int main(int argc, char **argv) {
                                              (uint8_t *)"transfer-encoding", (size_t)17);
         if (tec == 0) {
           http_emit_response((uint16_t)411, (uint32_t)0, headbuf);
-          Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
           Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-          Common_TCP_close(pch);
           fprintf(stderr, "http_server: rejected POST (no Content-Length), served 411\n");
           if (status_path) {
             FILE *sf = fopen(status_path, "w");
             if (sf) { fprintf(sf, "lenreq 411\n"); fclose(sf); }
           }
-          continue;
+          break;
         }
 
         /* 3a-iii. Chunked upload: slurp the chunked body (the client half-closes
            its write side) and decode it with the VERIFIED variable-width chunk
            decoder.  A well-formed body is echoed back in a verified 200; a
            MALFORMED chunk size (or frame) makes the decoder return ok=false and
-           we answer a verified 400 Bad Request. */
+           we answer a verified 400 Bad Request.  Reading to EOF ends this
+           connection either way, so we always drop it after the response. */
         size_t newtotal = read_to_eof(fd, reqbuf, REQ_CAP, total);
         size_t bodylen  = (newtotal > head_end) ? (newtotal - head_end) : 0;
         size_t off      = 0;
         bool dec_ok = http_decode_chunks_var(reqbuf + head_end, bodylen,
                                              decbuf, (size_t)REQ_CAP, &off);
-        Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
         if (!dec_ok) {
           http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
           Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-          Common_TCP_close(pch);
           fprintf(stderr, "http_server: rejected chunked POST (malformed chunk), served 400\n");
           if (status_path) {
             FILE *sf = fopen(status_path, "w");
             if (sf) { fprintf(sf, "badchunk 400\n"); fclose(sf); }
           }
-          continue;
+          break;
         }
         http_emit_response((uint16_t)200, (uint32_t)off, headbuf);
         Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
         if (off > 0) Common_TCP_write(pch, decbuf, off);
-        Common_TCP_close(pch);
         fprintf(stderr, "http_server: decoded chunked POST, echoed %zu-byte body\n", off);
         if (status_path) {
           FILE *sf = fopen(status_path, "w");
           if (sf) { fprintf(sf, "chunked %zu\n", off); fclose(sf); }
         }
-        continue;
+        break;
       }
 
       /* 3a-ii. Payload Too Large (413): a Content-Length beyond the server cap
          is rejected up front with a verified 413 (before reading the body). */
       if (found && clen_sz > (size_t)MAX_BODY) {
         http_emit_response((uint16_t)413, (uint32_t)0, headbuf);
-        Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
         Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-        Common_TCP_close(pch);
         fprintf(stderr, "http_server: rejected POST (Content-Length %u exceeds cap), served 413\n", clen);
         if (status_path) {
           FILE *sf = fopen(status_path, "w");
           if (sf) { fprintf(sf, "toobig 413\n"); fclose(sf); }
         }
-        continue;
+        break;
       }
 
       /* Gather the request body: some bytes may already trail the head in
@@ -419,10 +425,8 @@ int main(int argc, char **argv) {
 
         /* Verified 200 head (43 bytes, 8-digit Content-Length) + echoed body. */
         http_emit_response((uint16_t)200, (uint32_t)echo_len, headbuf);
-        Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
         Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
         if (echo_len > 0) Common_TCP_write(pch, bodyp, echo_len);
-        Common_TCP_close(pch);
 
         fprintf(stderr, "http_server: parsed POST (Content-Length %u), echoed %zu-byte body\n",
                 clen, echo_len);
@@ -430,20 +434,22 @@ int main(int argc, char **argv) {
           FILE *sf = fopen(status_path, "w");
           if (sf) { fprintf(sf, "post %zu\n", echo_len); fclose(sf); }
         }
-        continue;
+        served++;
+        if (wants_close) break;     /* honor Connection: close */
+        continue;                   /* keep-alive: serve the next request */
       }
       /* Malformed/oversized POST: fall through to the GET-style handler below. */
     }
 
-    /* 3b. GET (and fallback) path: hand the connected fd + request buffer to the
-       VERIFIED exchange driver, which PARSES the request head with
-       http_recv_request_head (recovering the target length into ptlen) and
-       writes the 200 head + body, closing the channel (and thus the fd). */
+    /* 3b. GET (and fallback) path: PARSE the request head with the VERIFIED
+       http_recv_request_head (recovering the target length into ptlen) and write
+       the verified 200 head + fixed body over the per-connection channel WITHOUT
+       closing it, so the connection can stay alive for the next request. */
     size_t ptlen = 0;
-    Common_TCP_channel ch = Common_TCP_channel_of_fd(fd);
-    bool okr = http_server_exchange_length_head(ch, reqbuf, reqlen, &ptlen,
-                                                (uint16_t)200, body, body_len,
-                                                headbuf, scratch);
+    bool okr = http_recv_request_head(reqbuf, reqlen, &ptlen);
+    http_emit_response((uint16_t)200, (uint32_t)body_len, headbuf);
+    Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+    if (body_len > 0) Common_TCP_write(pch, body, body_len);
 
     if (okr)
       fprintf(stderr, "http_server: parsed request (target %zu bytes), served 200 (%zu-byte body)\n",
@@ -461,6 +467,12 @@ int main(int argc, char **argv) {
         fclose(sf);
       }
     }
+    served++;
+    if (wants_close) break;         /* honor Connection: close */
+    continue;                       /* keep-alive: serve the next request */
+    }                               /* end keep-alive request loop */
+
+    Common_TCP_close(pch);          /* close the connection exactly once */
   }
 
   free(reqbuf); free(headbuf); free(scratch); free(decbuf); free(body);

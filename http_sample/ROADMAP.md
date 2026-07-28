@@ -139,4 +139,18 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       limits-test`) and interop probes (`make test-smuggle`, `make test-method`,
       `make test-limits`, `make test-errors`, `make test-chunked`, `make
       test-timeout`).
-- [ ] 5. Keep-alive / persistent connections; TLS
+- [~] 5. Keep-alive / persistent connections; TLS — **in progress**:
+      persistent connections DONE. `http_connection_close`
+      (`HTTP.Impl.Loop.Header`) is a verified detector that finds the first
+      `Connection` header (case-insensitive, via `http_find_header`) and reports
+      whether its field-value carries the `close` connection-option token
+      (case-insensitive substring, via `ci_eq_at`), returning `false` — i.e.
+      keep-alive — when no `Connection` header is present (HTTP/1.1 default, RFC
+      7230 §6.1). The interop server now serves successive requests over a single
+      TCP connection in an inner keep-alive loop, creating ONE verified
+      Common.TCP channel per connection and closing it exactly once — when the
+      client closes it, sends a verified `Connection: close`, an error occurs, or
+      a read times out. Exercised by `verified/connclose_test.c` (`make
+      connclose-test`) and the interop probe `make test-keepalive` (two GETs over
+      one connection → `200 200`; a `Connection: close` GET → `200` then closed).
+      *Remaining:* TLS.

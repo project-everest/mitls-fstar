@@ -456,3 +456,62 @@ fn http_header_limits_ok
   };
   not !bad
 }
+
+(* ── Connection: close detection (RFC 7230 §6.1, persistent connections) ───────
+
+   `http_connection_close` reports whether the request head asks the server to
+   close the connection after the response.  It finds the first `Connection`
+   header (case-insensitive, name `cn`) via the verified `http_find_header` and
+   then scans its field-value for the `close` connection-option token `cl`
+   (case-insensitive substring, via `ci_eq_at`).  It returns `false` when no
+   `Connection` header is present, so an HTTP/1.1 request defaults to a
+   PERSISTENT (keep-alive) connection.  The match is intentionally conservative:
+   a false positive only makes the server close early, which is always allowed.
+   Memory-safe: the value slice `[voff, voff+vlen)` is in bounds by the
+   `http_find_header` postcondition, and every scan step strictly advances. *)
+fn http_connection_close
+  (inp: array U8.t) (n: SZ.t)
+  (cn: array U8.t) (cn_len: SZ.t)
+  (cl: array U8.t) (cl_len: SZ.t)
+  requires
+    pts_to inp 'i ** pts_to cn 'cns ** pts_to cl 'cls **
+    pure (SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\
+          SZ.v cn_len <= Seq.length 'cns /\
+          SZ.v cl_len <= Seq.length 'cls /\ SZ.v cl_len > 0)
+  returns b: bool
+  ensures
+    pts_to inp 'i ** pts_to cn 'cns ** pts_to cl 'cls
+{
+  let mut pfound = false;
+  let mut pvoff  = 0sz;
+  let mut pvlen  = 0sz;
+  http_find_header inp n cn cn_len pfound pvoff pvlen;
+  let found = !pfound;
+  if (not found) {
+    false
+  } else {
+    let voff = !pvoff;
+    let vlen = !pvlen;
+    let vend = SZ.add voff vlen;
+    let mut j   = voff;
+    let mut hit = false;
+    while (SZ.lte cl_len (SZ.sub vend !j) && not !hit)
+    invariant exists* (vj:SZ.t) (vhit:bool).
+      R.pts_to j vj ** R.pts_to hit vhit **
+      pts_to inp 'i ** pts_to cn 'cns ** pts_to cl 'cls **
+      pure (SZ.v n <= Seq.length 'i /\ SZ.v cl_len <= Seq.length 'cls /\
+            SZ.v cl_len > 0 /\
+            SZ.v vend <= SZ.v n /\ SZ.v voff <= SZ.v vj /\ SZ.v vj <= SZ.v vend)
+    decreases %[(if !hit then 0 else 1); Prims.op_Subtraction (SZ.v vend) (SZ.v (!j))]
+    {
+      let vj = !j;
+      let m = ci_eq_at inp n vj cl cl_len;
+      if m {
+        hit := true;
+      } else {
+        j := SZ.add vj 1sz;
+      }
+    };
+    !hit
+  }
+}

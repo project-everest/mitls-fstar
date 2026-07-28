@@ -18,6 +18,8 @@ Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge|lenreq
   chunked  -- a well-formed chunked upload, which must get 200.
   badchunk -- a chunked upload with a non-hex chunk size, which must get 400.
   timeout  -- a partial request head left open, which must get 408 (read timeout).
+  keepalive-- two GETs over one persistent connection, which must both get 200.
+  connclose-- a GET with Connection: close, which must get 200 then be closed.
 """
 import socket
 import sys
@@ -34,6 +36,63 @@ def send(host, port, payload):
                 break
             buf += chunk
     return buf
+
+
+def read_one_message(s):
+    # Read exactly one HTTP response: the head up to CRLF-CRLF, then Content-Length
+    # body bytes, so the socket is left positioned at the start of the next
+    # response (needed to read multiple responses over one keep-alive connection).
+    buf = b""
+    while b"\r\n\r\n" not in buf:
+        chunk = s.recv(4096)
+        if not chunk:
+            return buf
+        buf += chunk
+    head, rest = buf.split(b"\r\n\r\n", 1)
+    clen = 0
+    for line in head.split(b"\r\n"):
+        if line.lower().startswith(b"content-length:"):
+            try:
+                clen = int(line.split(b":", 1)[1].strip())
+            except ValueError:
+                clen = 0
+    body = rest
+    while len(body) < clen:
+        chunk = s.recv(4096)
+        if not chunk:
+            break
+        body += chunk
+    return head + b"\r\n\r\n" + body[:clen]
+
+
+def send_keepalive(host, port, nreq):
+    # Send nreq successive GET requests (no Connection: close, so keep-alive) over
+    # a SINGLE connection, reading each full response before sending the next
+    # (non-pipelined).  Returns the list of status codes observed.
+    codes = []
+    req = b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+    with socket.create_connection((host, port), timeout=10) as s:
+        s.settimeout(10)
+        for _ in range(nreq):
+            s.sendall(req)
+            resp = read_one_message(s)
+            codes.append(status_code(resp))
+    return codes
+
+
+def send_then_check_closed(host, port):
+    # Send a single GET with Connection: close, read the response, then check the
+    # server closed the connection (recv returns b"").  Returns (code, closed?).
+    req = b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+    with socket.create_connection((host, port), timeout=10) as s:
+        s.settimeout(10)
+        s.sendall(req)
+        resp = read_one_message(s)
+        try:
+            extra = s.recv(4096)
+        except socket.timeout:
+            extra = b"?"
+        return status_code(resp), (extra == b"")
 
 
 def send_stall(host, port, partial):
@@ -148,6 +207,28 @@ def main():
             print(-1)
             return 1
         print(status_code(resp))
+        return 0
+    elif mode == "keepalive":
+        # Two GET requests over a SINGLE persistent connection: both must get 200,
+        # proving the server kept the connection alive between requests.
+        try:
+            codes = send_keepalive(host, port, 2)
+        except OSError as e:
+            sys.stderr.write("probe error: %s\n" % e)
+            print(-1)
+            return 1
+        print(" ".join(str(c) for c in codes))
+        return 0
+    elif mode == "connclose":
+        # A GET with Connection: close: must get 200 AND the server must then close
+        # the connection (recv returns EOF).
+        try:
+            code, closed = send_then_check_closed(host, port)
+        except OSError as e:
+            sys.stderr.write("probe error: %s\n" % e)
+            print(-1)
+            return 1
+        print("%d %s" % (code, "closed" if closed else "open"))
         return 0
     else:
         print(-1)
