@@ -36,6 +36,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -46,6 +47,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #define RESP_HEAD_LEN 43       /* fixed size of the verified response head */
 #define REQ_CAP       65536    /* max request-head bytes we will buffer */
 #define MAX_HEADERS   100      /* header-count cap (431 Request Header Fields Too Large) */
@@ -55,6 +59,64 @@
 
 static const char DEFAULT_BODY[] =
   "Served by the verified FStar/Pulse HTTP/1.1 server!\n";
+
+/* ── Transport abstraction: plaintext TCP or TLS (OpenSSL) ─────────────────────
+   The verified HTTP leaves produce and parse the bytes; the transport that
+   carries them is UNVERIFIED glue -- exactly like the Common.TCP channel already
+   is.  A plaintext connection writes through the verified Common.TCP channel and
+   reads with recv(); a TLS connection terminates OpenSSL and does
+   SSL_read/SSL_write.  Both share the same request-handling code, so the verified
+   HTTP server is reachable identically over http:// and https://. */
+typedef struct {
+  int fd;
+  SSL *ssl;                 /* NULL => plaintext */
+  Common_TCP_channel ch;    /* non-NULL => plaintext writes; NULL => TLS */
+} io_t;
+
+/* Read up to n bytes.  Returns >0 bytes read, 0 on clean EOF/close, or -1 on
+   error; a would-block/timeout is reported as -1 with errno == EAGAIN so the
+   request-head reader can surface it as a 408 read timeout for both transports. */
+static ssize_t io_read(io_t *io, uint8_t *buf, size_t n) {
+  if (io->ssl) {
+    int req = (n > (size_t)INT_MAX) ? INT_MAX : (int)n;
+    int r = SSL_read(io->ssl, buf, req);
+    if (r > 0) return r;
+    int e = SSL_get_error(io->ssl, r);
+    if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE) { errno = EAGAIN; return -1; }
+    if (e == SSL_ERROR_ZERO_RETURN) return 0;               /* TLS close_notify */
+    if (e == SSL_ERROR_SYSCALL && (errno == EAGAIN || errno == EWOULDBLOCK)) return -1;
+    return 0;                                               /* other -> treat as EOF */
+  }
+  return recv(io->fd, buf, n, 0);
+}
+
+/* Write all n bytes (best effort).  Plaintext goes through the verified Common.TCP
+   channel; TLS through SSL_write. */
+static void io_write(io_t *io, uint8_t *buf, size_t n) {
+  if (io->ssl) {
+    size_t off = 0;
+    while (off < n) {
+      size_t rem = n - off;
+      int req = (rem > (size_t)INT_MAX) ? INT_MAX : (int)rem;
+      int w = SSL_write(io->ssl, buf + off, req);
+      if (w <= 0) break;
+      off += (size_t)w;
+    }
+    return;
+  }
+  Common_TCP_write(io->ch, buf, n);
+}
+
+/* Close the connection exactly once. */
+static void io_close(io_t *io) {
+  if (io->ssl) {
+    SSL_shutdown(io->ssl);
+    SSL_free(io->ssl);
+    close(io->fd);
+    return;
+  }
+  Common_TCP_close(io->ch);   /* closes the underlying fd */
+}
 
 /* Read a whole file into a freshly malloc'd buffer; sets *out_len. */
 static uint8_t *read_file(const char *path, size_t *out_len) {
@@ -81,13 +143,13 @@ static uint8_t *read_file(const char *path, size_t *out_len) {
    same recv() often delivers leading body bytes.  Returns -1 on a hard error, or
    -2 if a read timed out (SO_RCVTIMEO fired: recv gave EAGAIN/EWOULDBLOCK)
    before the head was complete -- the caller answers 408 Request Timeout. */
-static ssize_t read_request_head(int fd, uint8_t *out, size_t cap, size_t *head_end) {
+static ssize_t read_request_head(io_t *io, uint8_t *out, size_t cap, size_t *head_end) {
   size_t total = 0;
   int match = 0;                       /* how much of "\r\n\r\n" matched so far */
   static const uint8_t term[4] = { '\r', '\n', '\r', '\n' };
   *head_end = 0;
   while (total < cap) {
-    ssize_t r = recv(fd, out + total, cap - total, 0);
+    ssize_t r = io_read(io, out + total, cap - total);
     if (r < 0) {
       if (errno == EINTR) continue;
       if (errno == EAGAIN || errno == EWOULDBLOCK) return -2;  /* read timeout */
@@ -107,10 +169,10 @@ static ssize_t read_request_head(int fd, uint8_t *out, size_t cap, size_t *head_
 
 /* Read exactly `want` bytes from `fd` into `out` (blocking).  Returns the
    number of bytes read (== want on success, less on early EOF/error). */
-static size_t read_exact(int fd, uint8_t *out, size_t want) {
+static size_t read_exact(io_t *io, uint8_t *out, size_t want) {
   size_t got = 0;
   while (got < want) {
-    ssize_t r = recv(fd, out + got, want - got, 0);
+    ssize_t r = io_read(io, out + got, want - got);
     if (r < 0) { if (errno == EINTR) continue; break; }
     if (r == 0) break;
     got += (size_t)r;
@@ -122,10 +184,10 @@ static size_t read_exact(int fd, uint8_t *out, size_t want) {
    error, or the buffer fills.  Returns the total number of valid bytes in `out`
    (i.e. off + bytes read).  Used to slurp a chunked request body whose length is
    not known in advance; the client is expected to shutdown its write side. */
-static size_t read_to_eof(int fd, uint8_t *out, size_t cap, size_t off) {
+static size_t read_to_eof(io_t *io, uint8_t *out, size_t cap, size_t off) {
   size_t total = off;
   while (total < cap) {
-    ssize_t r = recv(fd, out + total, cap - total, 0);
+    ssize_t r = io_read(io, out + total, cap - total);
     if (r < 0) { if (errno == EINTR) continue; break; }
     if (r == 0) break;
     total += (size_t)r;
@@ -156,6 +218,30 @@ int main(int argc, char **argv) {
   long read_timeout = READ_TIMEOUT_SECS;
   { const char *t = getenv("HTTP_READ_TIMEOUT");
     if (t && *t) { long v = atol(t); if (v > 0) read_timeout = v; } }
+
+  /* Optional TLS termination (env HTTP_TLS_CERT + HTTP_TLS_KEY): when both point
+     at a PEM certificate and private key, the server speaks HTTPS -- the SAME
+     verified HTTP leaves run over a TLS-encrypted transport instead of plaintext
+     TCP.  When either is unset the server stays plaintext HTTP. */
+  SSL_CTX *tls_ctx = NULL;
+  const char *tls_cert = getenv("HTTP_TLS_CERT");
+  const char *tls_key  = getenv("HTTP_TLS_KEY");
+  if (tls_cert && *tls_cert && tls_key && *tls_key) {
+    SSL_load_error_strings();
+    OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
+    tls_ctx = SSL_CTX_new(TLS_server_method());
+    if (!tls_ctx) { fprintf(stderr, "http_server: SSL_CTX_new failed\n"); return 1; }
+    SSL_CTX_set_min_proto_version(tls_ctx, TLS1_2_VERSION);
+    if (SSL_CTX_use_certificate_file(tls_ctx, tls_cert, SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(tls_ctx, tls_key, SSL_FILETYPE_PEM) <= 0 ||
+        !SSL_CTX_check_private_key(tls_ctx)) {
+      fprintf(stderr, "http_server: failed to load TLS cert/key (%s, %s)\n", tls_cert, tls_key);
+      ERR_print_errors_fp(stderr);
+      SSL_CTX_free(tls_ctx);
+      return 1;
+    }
+    fprintf(stderr, "http_server: TLS enabled (cert %s)\n", tls_cert);
+  }
 
   /* Resolve the response body: an optional file, else the built-in string. */
   uint8_t *body = NULL;
@@ -188,8 +274,8 @@ int main(int argc, char **argv) {
   if (bind(lfd, (struct sockaddr *)&addr, sizeof addr) != 0) { perror("bind"); free(body); return 1; }
   if (listen(lfd, 16) != 0) { perror("listen"); free(body); return 1; }
 
-  fprintf(stderr, "http_server: listening on 127.0.0.1:%u, serving %zu-byte body (verified response)\n",
-          port, body_len);
+  fprintf(stderr, "http_server: listening on 127.0.0.1:%u (%s), serving %zu-byte body (verified response)\n",
+          port, tls_ctx ? "https/TLS" : "http", body_len);
 
   /* Staging buffers for the verified exchange: the request head buffer, the
      recovered target-length out-param, the 43-byte response head, and the body
@@ -217,22 +303,37 @@ int main(int argc, char **argv) {
     { struct timeval tv; tv.tv_sec = read_timeout; tv.tv_usec = 0;
       setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv); }
 
-    /* One verified channel per connection, reused across keep-alive requests and
-       closed exactly once when the inner loop ends. */
-    Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+    /* One transport per connection (plaintext Common.TCP channel, or a TLS
+       session when a certificate was configured), reused across keep-alive
+       requests and closed exactly once when the inner loop ends. */
+    io_t io; io.fd = fd; io.ssl = NULL; io.ch = NULL;
+    if (tls_ctx) {
+      SSL *ssl = SSL_new(tls_ctx);
+      if (!ssl) { close(fd); continue; }
+      SSL_set_fd(ssl, fd);
+      if (SSL_accept(ssl) <= 0) {
+        fprintf(stderr, "http_server: TLS handshake failed\n");
+        SSL_free(ssl);
+        close(fd);
+        continue;
+      }
+      io.ssl = ssl;
+    } else {
+      io.ch = Common_TCP_channel_of_fd(fd);
+    }
     int served = 0;                 /* how many requests answered on this conn */
 
     for (;;) {                      /* keep-alive request loop */
     /* Read the client's request head into reqbuf (socket read is glue). */
     size_t head_end = 0;
-    ssize_t rl = read_request_head(fd, reqbuf, REQ_CAP, &head_end);
+    ssize_t rl = read_request_head(&io, reqbuf, REQ_CAP, &head_end);
     if (rl == -2) {
       /* Stalled before completing a request head.  On the FIRST request this is a
          verified 408 Request Timeout; an idle keep-alive timeout between requests
          just closes the connection (the client has gone away). */
       if (served == 0) {
         http_emit_response((uint16_t)408, (uint32_t)0, headbuf);
-        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+        io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
         fprintf(stderr, "http_server: read timed out on request head, served 408\n");
         if (status_path) {
           FILE *sf = fopen(status_path, "w");
@@ -259,7 +360,7 @@ int main(int argc, char **argv) {
        (no body) and drop the connection. */
     if (reqlen == 0 || !http_request_line_ok(reqbuf, reqlen)) {
       http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
-      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
       fprintf(stderr, "http_server: rejected request (malformed request line), served 400\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
@@ -269,7 +370,7 @@ int main(int argc, char **argv) {
     }
     if (!http_method_known(reqbuf, reqlen)) {
       http_emit_response((uint16_t)501, (uint32_t)0, headbuf);
-      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
       fprintf(stderr, "http_server: rejected request (unsupported method), served 501\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
@@ -283,7 +384,7 @@ int main(int argc, char **argv) {
        The VERIFIED http_method_allowed reports this; answer a verified 405. */
     if (!http_method_allowed(reqbuf, reqlen)) {
       http_emit_response((uint16_t)405, (uint32_t)0, headbuf);
-      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
       fprintf(stderr, "http_server: rejected request (method not allowed), served 405\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
@@ -301,7 +402,7 @@ int main(int argc, char **argv) {
                                               (uint8_t *)"transfer-encoding", (size_t)17);
     if (!framing_ok) {
       http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
-      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
       fprintf(stderr, "http_server: rejected request (smuggling: conflicting/duplicate framing), served 400\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
@@ -316,7 +417,7 @@ int main(int argc, char **argv) {
     if (!http_header_limits_ok(reqbuf + hblock, reqlen - hblock,
                                (size_t)MAX_HEADERS, (size_t)MAX_LINE)) {
       http_emit_response((uint16_t)431, (uint32_t)0, headbuf);
-      Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+      io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
       fprintf(stderr, "http_server: rejected request (header fields too large), served 431\n");
       if (status_path) {
         FILE *sf = fopen(status_path, "w");
@@ -360,7 +461,7 @@ int main(int argc, char **argv) {
                                              (uint8_t *)"transfer-encoding", (size_t)17);
         if (tec == 0) {
           http_emit_response((uint16_t)411, (uint32_t)0, headbuf);
-          Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+          io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
           fprintf(stderr, "http_server: rejected POST (no Content-Length), served 411\n");
           if (status_path) {
             FILE *sf = fopen(status_path, "w");
@@ -375,14 +476,14 @@ int main(int argc, char **argv) {
            MALFORMED chunk size (or frame) makes the decoder return ok=false and
            we answer a verified 400 Bad Request.  Reading to EOF ends this
            connection either way, so we always drop it after the response. */
-        size_t newtotal = read_to_eof(fd, reqbuf, REQ_CAP, total);
+        size_t newtotal = read_to_eof(&io, reqbuf, REQ_CAP, total);
         size_t bodylen  = (newtotal > head_end) ? (newtotal - head_end) : 0;
         size_t off      = 0;
         bool dec_ok = http_decode_chunks_var(reqbuf + head_end, bodylen,
                                              decbuf, (size_t)REQ_CAP, &off);
         if (!dec_ok) {
           http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
-          Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+          io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
           fprintf(stderr, "http_server: rejected chunked POST (malformed chunk), served 400\n");
           if (status_path) {
             FILE *sf = fopen(status_path, "w");
@@ -391,8 +492,8 @@ int main(int argc, char **argv) {
           break;
         }
         http_emit_response((uint16_t)200, (uint32_t)off, headbuf);
-        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-        if (off > 0) Common_TCP_write(pch, decbuf, off);
+        io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
+        if (off > 0) io_write(&io, decbuf, off);
         fprintf(stderr, "http_server: decoded chunked POST, echoed %zu-byte body\n", off);
         if (status_path) {
           FILE *sf = fopen(status_path, "w");
@@ -405,7 +506,7 @@ int main(int argc, char **argv) {
          is rejected up front with a verified 413 (before reading the body). */
       if (found && clen_sz > (size_t)MAX_BODY) {
         http_emit_response((uint16_t)413, (uint32_t)0, headbuf);
-        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+        io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
         fprintf(stderr, "http_server: rejected POST (Content-Length %u exceeds cap), served 413\n", clen);
         if (status_path) {
           FILE *sf = fopen(status_path, "w");
@@ -420,13 +521,13 @@ int main(int argc, char **argv) {
       if (found && clen_sz < 100000000u && head_end + clen_sz <= REQ_CAP) {
         uint8_t *bodyp = reqbuf + head_end;
         if (have < clen_sz)
-          have += read_exact(fd, bodyp + have, clen_sz - have);
+          have += read_exact(&io, bodyp + have, clen_sz - have);
         size_t echo_len = (have < clen_sz) ? have : clen_sz;
 
         /* Verified 200 head (43 bytes, 8-digit Content-Length) + echoed body. */
         http_emit_response((uint16_t)200, (uint32_t)echo_len, headbuf);
-        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-        if (echo_len > 0) Common_TCP_write(pch, bodyp, echo_len);
+        io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
+        if (echo_len > 0) io_write(&io, bodyp, echo_len);
 
         fprintf(stderr, "http_server: parsed POST (Content-Length %u), echoed %zu-byte body\n",
                 clen, echo_len);
@@ -448,8 +549,8 @@ int main(int argc, char **argv) {
     size_t ptlen = 0;
     bool okr = http_recv_request_head(reqbuf, reqlen, &ptlen);
     http_emit_response((uint16_t)200, (uint32_t)body_len, headbuf);
-    Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
-    if (body_len > 0) Common_TCP_write(pch, body, body_len);
+    io_write(&io, headbuf, (size_t)RESP_HEAD_LEN);
+    if (body_len > 0) io_write(&io, body, body_len);
 
     if (okr)
       fprintf(stderr, "http_server: parsed request (target %zu bytes), served 200 (%zu-byte body)\n",
@@ -472,10 +573,11 @@ int main(int argc, char **argv) {
     continue;                       /* keep-alive: serve the next request */
     }                               /* end keep-alive request loop */
 
-    Common_TCP_close(pch);          /* close the connection exactly once */
+    io_close(&io);          /* close the connection exactly once */
   }
 
   free(reqbuf); free(headbuf); free(scratch); free(decbuf); free(body);
+  if (tls_ctx) SSL_CTX_free(tls_ctx);
   close(lfd);
   return 0;
 }

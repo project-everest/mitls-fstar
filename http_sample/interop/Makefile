@@ -62,8 +62,11 @@ PORT_TMO ?= $(shell echo $$(( $(PORT) + 7 )))
 RUN_DIR_KA := _run_http_ka
 RUN_DIR_KA_ABS := $(abspath $(RUN_DIR_KA))
 PORT_KA ?= $(shell echo $$(( $(PORT) + 8 )))
+RUN_DIR_TLS := _run_http_tls
+RUN_DIR_TLS_ABS := $(abspath $(RUN_DIR_TLS))
+PORT_TLS ?= $(shell echo $$(( $(PORT) + 9 )))
 
-.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout test-keepalive build-progs clean help
+.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout test-keepalive test-tls build-progs clean help
 
 all: test
 
@@ -74,11 +77,12 @@ build-progs:
 	$(CC) $(CFLAGS_INTEROP) -o $(EXTRACT_DIR)/http_server \
 	  http_server.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c \
+	  -lssl -lcrypto
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout test-keepalive
+test: test-get test-post test-smuggle test-method test-limits test-errors test-chunked test-timeout test-keepalive test-tls
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -410,8 +414,49 @@ test-keepalive: build-progs
 	    exit 1; \
 	  fi
 
+# ── TLS termination  ->  verified HTTP over HTTPS ─────────────────────────────
+# The verified HTTP leaves run UNCHANGED over a TLS-encrypted transport: with a
+# certificate configured, the server speaks HTTPS.  A self-signed cert is minted
+# for the test; curl -k does a GET (200 + fixed body) and a POST (200 + echoed
+# body) over TLS, and the verified parser status is asserted from parse.status.
+test-tls: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " TLS:  verified HTTP served over HTTPS -> GET 200 + body, POST 200 + echo"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v curl >/dev/null 2>&1 || { echo "  SKIP: 'curl' not found on PATH"; exit 3; }
+	@command -v openssl >/dev/null 2>&1 || { echo "  SKIP: 'openssl' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_TLS); mkdir -p $(RUN_DIR_TLS)
+	@openssl req -x509 -newkey rsa:2048 -keyout $(RUN_DIR_TLS)/key.pem \
+	  -out $(RUN_DIR_TLS)/cert.pem -days 1 -nodes -subj "/CN=127.0.0.1" >/dev/null 2>&1 \
+	  || { echo "  RESULT: FAIL - could not generate a self-signed certificate"; exit 1; }
+	@echo "  minted a self-signed cert; probing GET and POST over HTTPS with curl -k ..."
+	@cd $(RUN_DIR_TLS) && \
+	  HTTP_PARSE_STATUS_FILE=parse.status HTTP_TLS_CERT=cert.pem HTTP_TLS_KEY=key.pem \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_TLS) & srv=$$!; sleep 0.7; \
+	    gcode=$$(curl -sk https://127.0.0.1:$(PORT_TLS)/ -o get.body -w "%{http_code}"); echo $$gcode > get.code; \
+	    printf "hello tls" > post.in; \
+	    pcode=$$(curl -sk -X POST --data-binary @post.in https://127.0.0.1:$(PORT_TLS)/submit -o post.body -w "%{http_code}"); echo $$pcode > post.code; \
+	    cp parse.status parse.saved 2>/dev/null; \
+	    exit 0' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  gcode=$$(cat get.code 2>/dev/null); pcode=$$(cat post.code 2>/dev/null); \
+	  pstat=$$(cat parse.saved 2>/dev/null); \
+	  postbody=$$(cat post.body 2>/dev/null); \
+	  if [ "$$gcode" = 200 ] && [ "$$pcode" = 200 ] && [ "$$postbody" = "hello tls" ] && [ "$$pstat" = "post 9" ]; then \
+	    echo "  RESULT: PASS - the VERIFIED HTTP server answered a GET (200) and echoed a POST (200, body 'hello tls') over a TLS-encrypted connection (parse.status='post 9')"; \
+	    rm -rf $(RUN_DIR_TLS_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/curl did not terminate: killed after $(TIMEOUT)s (get=$$gcode post=$$pcode)"; \
+	    else echo "  RESULT: FAIL - get=$$gcode (want 200) post=$$pcode (want 200) postbody='$$postbody' (want 'hello tls') status='$$pstat' (want 'post 9')"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_TLS_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR) $(RUN_DIR_CHK) $(RUN_DIR_TMO) $(RUN_DIR_KA)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR) $(RUN_DIR_CHK) $(RUN_DIR_TMO) $(RUN_DIR_KA) $(RUN_DIR_TLS)
 
 help:
 	@echo "HTTP interop test (vs curl):"

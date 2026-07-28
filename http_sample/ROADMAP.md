@@ -139,7 +139,7 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       limits-test`) and interop probes (`make test-smuggle`, `make test-method`,
       `make test-limits`, `make test-errors`, `make test-chunked`, `make
       test-timeout`).
-- [~] 5. Keep-alive / persistent connections; TLS — **in progress**:
+- [x] 5. Keep-alive / persistent connections; TLS — **DONE**:
       persistent connections DONE. `http_connection_close`
       (`HTTP.Impl.Loop.Header`) is a verified detector that finds the first
       `Connection` header (case-insensitive, via `http_find_header`) and reports
@@ -147,10 +147,17 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       (case-insensitive substring, via `ci_eq_at`), returning `false` — i.e.
       keep-alive — when no `Connection` header is present (HTTP/1.1 default, RFC
       7230 §6.1). The interop server now serves successive requests over a single
-      TCP connection in an inner keep-alive loop, creating ONE verified
-      Common.TCP channel per connection and closing it exactly once — when the
-      client closes it, sends a verified `Connection: close`, an error occurs, or
-      a read times out. Exercised by `verified/connclose_test.c` (`make
-      connclose-test`) and the interop probe `make test-keepalive` (two GETs over
-      one connection → `200 200`; a `Connection: close` GET → `200` then closed).
-      *Remaining:* TLS.
+      TCP connection in an inner keep-alive loop, creating ONE transport per
+      connection and closing it exactly once — when the client closes it, sends a
+      verified `Connection: close`, an error occurs, or a read times out.
+      Exercised by `verified/connclose_test.c` (`make connclose-test`) and the
+      interop probe `make test-keepalive` (two GETs over one connection →
+      `200 200`; a `Connection: close` GET → `200` then closed).
+      TLS DONE: the interop server carries the SAME verified HTTP leaves over a
+      pluggable transport (`io_t`) that is either a plaintext Common.TCP channel
+      or an OpenSSL TLS session — the transport is unverified glue, exactly like
+      the Common.TCP channel. Setting `HTTP_TLS_CERT` + `HTTP_TLS_KEY` makes the
+      server terminate TLS (TLS 1.2+), so the verified server is reachable
+      identically over `http://` and `https://`. Exercised by `make test-tls`
+      (self-signed cert; `curl -k` GET → `200` + fixed body and POST → `200` +
+      echoed body over HTTPS, with the verified parser status asserted).
