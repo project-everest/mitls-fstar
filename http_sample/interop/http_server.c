@@ -111,6 +111,21 @@ static size_t read_exact(int fd, uint8_t *out, size_t want) {
   return got;
 }
 
+/* Read from `fd` into `out+off` (capacity `cap`) until EOF (client half-close),
+   error, or the buffer fills.  Returns the total number of valid bytes in `out`
+   (i.e. off + bytes read).  Used to slurp a chunked request body whose length is
+   not known in advance; the client is expected to shutdown its write side. */
+static size_t read_to_eof(int fd, uint8_t *out, size_t cap, size_t off) {
+  size_t total = off;
+  while (total < cap) {
+    ssize_t r = recv(fd, out + total, cap - total, 0);
+    if (r < 0) { if (errno == EINTR) continue; break; }
+    if (r == 0) break;
+    total += (size_t)r;
+  }
+  return total;
+}
+
 int main(int argc, char **argv) {
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "usage: %s <bind_port> [body_file]\n", argv[0]);
@@ -166,7 +181,8 @@ int main(int argc, char **argv) {
   uint8_t *reqbuf  = malloc(REQ_CAP);
   uint8_t *headbuf = malloc(RESP_HEAD_LEN);
   uint8_t *scratch = malloc(body_len ? body_len : 1);
-  if (!reqbuf || !headbuf || !scratch) { free(reqbuf); free(headbuf); free(scratch); free(body); close(lfd); return 1; }
+  uint8_t *decbuf  = malloc(REQ_CAP);        /* decoded chunked-body output */
+  if (!reqbuf || !headbuf || !scratch || !decbuf) { free(reqbuf); free(headbuf); free(scratch); free(decbuf); free(body); close(lfd); return 1; }
 
   /* 2. Accept loop. */
   for (;;) {
@@ -289,7 +305,9 @@ int main(int argc, char **argv) {
 
       /* 3a-i. Length Required (411): a POST with neither Content-Length nor
          Transfer-Encoding has no defined body length; reject with a verified
-         411 (the VERIFIED header counter confirms no Transfer-Encoding). */
+         411 (the VERIFIED header counter confirms no Transfer-Encoding).  When a
+         Transfer-Encoding IS present we decode the chunked body with the
+         VERIFIED chunk decoder (3a-iii). */
       if (!found) {
         size_t tec = http_count_header_named(reqbuf + block, reqlen - block,
                                              (uint8_t *)"transfer-encoding", (size_t)17);
@@ -305,6 +323,39 @@ int main(int argc, char **argv) {
           }
           continue;
         }
+
+        /* 3a-iii. Chunked upload: slurp the chunked body (the client half-closes
+           its write side) and decode it with the VERIFIED variable-width chunk
+           decoder.  A well-formed body is echoed back in a verified 200; a
+           MALFORMED chunk size (or frame) makes the decoder return ok=false and
+           we answer a verified 400 Bad Request. */
+        size_t newtotal = read_to_eof(fd, reqbuf, REQ_CAP, total);
+        size_t bodylen  = (newtotal > head_end) ? (newtotal - head_end) : 0;
+        size_t off      = 0;
+        bool dec_ok = http_decode_chunks_var(reqbuf + head_end, bodylen,
+                                             decbuf, (size_t)REQ_CAP, &off);
+        Common_TCP_channel pch = Common_TCP_channel_of_fd(fd);
+        if (!dec_ok) {
+          http_emit_response((uint16_t)400, (uint32_t)0, headbuf);
+          Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+          Common_TCP_close(pch);
+          fprintf(stderr, "http_server: rejected chunked POST (malformed chunk), served 400\n");
+          if (status_path) {
+            FILE *sf = fopen(status_path, "w");
+            if (sf) { fprintf(sf, "badchunk 400\n"); fclose(sf); }
+          }
+          continue;
+        }
+        http_emit_response((uint16_t)200, (uint32_t)off, headbuf);
+        Common_TCP_write(pch, headbuf, (size_t)RESP_HEAD_LEN);
+        if (off > 0) Common_TCP_write(pch, decbuf, off);
+        Common_TCP_close(pch);
+        fprintf(stderr, "http_server: decoded chunked POST, echoed %zu-byte body\n", off);
+        if (status_path) {
+          FILE *sf = fopen(status_path, "w");
+          if (sf) { fprintf(sf, "chunked %zu\n", off); fclose(sf); }
+        }
+        continue;
       }
 
       /* 3a-ii. Payload Too Large (413): a Content-Length beyond the server cap
@@ -377,7 +428,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  free(reqbuf); free(headbuf); free(scratch); free(body);
+  free(reqbuf); free(headbuf); free(scratch); free(decbuf); free(body);
   close(lfd);
   return 0;
 }

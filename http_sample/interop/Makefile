@@ -53,8 +53,11 @@ PORT_LIM ?= $(shell echo $$(( $(PORT) + 4 )))
 RUN_DIR_ERR := _run_http_err
 RUN_DIR_ERR_ABS := $(abspath $(RUN_DIR_ERR))
 PORT_ERR ?= $(shell echo $$(( $(PORT) + 5 )))
+RUN_DIR_CHK := _run_http_chk
+RUN_DIR_CHK_ABS := $(abspath $(RUN_DIR_CHK))
+PORT_CHK ?= $(shell echo $$(( $(PORT) + 6 )))
 
-.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors build-progs clean help
+.PHONY: all test test-get test-post test-smuggle test-method test-limits test-errors test-chunked build-progs clean help
 
 all: test
 
@@ -69,7 +72,7 @@ build-progs:
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 
 # ── curl <-> our verified-response server ─────────────────────────────────────
-test: test-get test-post test-smuggle test-method test-limits test-errors
+test: test-get test-post test-smuggle test-method test-limits test-errors test-chunked
 
 test-get: build-progs
 	@echo "═══════════════════════════════════════════════════════════════════"
@@ -293,8 +296,45 @@ test-errors: build-progs
 	    exit 1; \
 	  fi
 
+# ── chunked upload  ->  verified decode (200) + malformed-chunk rejection (400) ─
+# A POST with Transfer-Encoding: chunked is decoded by the VERIFIED
+# http_decode_chunks_var; a well-formed body is echoed back (200) and a body with
+# a non-hex chunk size is rejected (400).  Both probes half-close so the server
+# can slurp the chunked body to EOF.
+test-chunked: build-progs
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " Chunked upload:  well-formed -> 200 (decoded), bad chunk size -> 400"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@command -v python3 >/dev/null 2>&1 || { echo "  SKIP: 'python3' not found on PATH"; exit 3; }
+	@rm -rf $(RUN_DIR_CHK); mkdir -p $(RUN_DIR_CHK)
+	@cp raw_probe.py $(RUN_DIR_CHK)/raw_probe.py
+	@echo "  probing a well-formed chunked upload (200, 11-byte decode) and a malformed one (400) ..."
+	@cd $(RUN_DIR_CHK) && \
+	  HTTP_PARSE_STATUS_FILE=parse.status \
+	  timeout -k 3 $(TIMEOUT) bash -c 'srv=""; cleanup(){ [ -n "$$srv" ] && kill "$$srv" 2>/dev/null; }; trap cleanup EXIT INT TERM; \
+	    $(SRV_OUR) $(PORT_CHK) & srv=$$!; sleep 0.5; \
+	    ccode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_CHK) chunked 2>err.log); echo $$ccode > chunked.code; \
+	    for i in $$(seq 1 40); do [ -s parse.status ] && break; sleep 0.05; done; \
+	    cp parse.status chunked.status 2>/dev/null; \
+	    bcode=$$(python3 raw_probe.py 127.0.0.1 $(PORT_CHK) badchunk 2>>err.log); echo $$bcode > badchunk.code; \
+	    exit 0' \
+	    > run.log 2>&1; \
+	  st=$$?; \
+	  ccode=$$(cat chunked.code 2>/dev/null); bcode=$$(cat badchunk.code 2>/dev/null); \
+	  cstat=$$(cat chunked.status 2>/dev/null); \
+	  if [ "$$ccode" = 200 ] && [ "$$bcode" = 400 ] && [ "$$cstat" = "chunked 11" ]; then \
+	    echo "  RESULT: PASS - the VERIFIED chunk decoder accepted a well-formed chunked upload (200, decoded 11 bytes) and rejected a malformed chunk size with 400"; \
+	    rm -rf $(RUN_DIR_CHK_ABS); \
+	  else \
+	    if [ $$st -eq 124 ]; then echo "  RESULT: FAIL - server/probe did not terminate: killed after $(TIMEOUT)s (chunked=$$ccode badchunk=$$bcode status='$$cstat')"; \
+	    else echo "  RESULT: FAIL - chunked=$$ccode (want 200) badchunk=$$bcode (want 400) status='$$cstat' (want 'chunked 11')"; fi; \
+	    echo "  --- run.log (tail) ---"; tail -20 run.log 2>/dev/null; \
+	    echo "  (run dir kept at $(RUN_DIR_CHK_ABS) for inspection)"; \
+	    exit 1; \
+	  fi
+
 clean:
-	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR)
+	rm -rf $(RUN_DIR) $(RUN_DIR)_post $(RUN_DIR_POST) $(RUN_DIR_SMUG) $(RUN_DIR_METH) $(RUN_DIR_LIM) $(RUN_DIR_ERR) $(RUN_DIR_CHK)
 
 help:
 	@echo "HTTP interop test (vs curl):"

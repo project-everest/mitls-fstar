@@ -5,7 +5,7 @@ curl cannot craft a request that carries BOTH Content-Length and
 Transfer-Encoding, so this sends a raw request over a socket and prints the
 numeric status code from the response status line ("HTTP/1.1 <code> ...").
 
-Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge|lenreq|toobig>
+Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge|lenreq|toobig|chunked|badchunk>
 
   smuggle  -- a CL.TE vector (both Content-Length and Transfer-Encoding present),
               which the server's verified framing guard must reject with 400.
@@ -15,6 +15,8 @@ Usage:  raw_probe.py <host> <port> <smuggle|clean|badreq|notimpl|toolarge|lenreq
   toolarge -- a request with an over-long header line, which must get 431.
   lenreq   -- a POST with no Content-Length/Transfer-Encoding, which must get 411.
   toobig   -- a POST whose Content-Length exceeds the body cap, which must get 413.
+  chunked  -- a well-formed chunked upload, which must get 200.
+  badchunk -- a chunked upload with a non-hex chunk size, which must get 400.
 """
 import socket
 import sys
@@ -95,6 +97,24 @@ def main():
             b"Host: 127.0.0.1\r\n"
             b"Content-Length: 2000000\r\n"
             b"\r\n"
+        )
+    elif mode == "chunked":
+        # A well-formed chunked upload -> 200, body decoded to "hello world".
+        payload = (
+            b"POST /submit HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"Transfer-Encoding: chunked\r\n"
+            b"\r\n"
+            b"6\r\nhello \r\n5\r\nworld\r\n0\r\n\r\n"
+        )
+    elif mode == "badchunk":
+        # A chunked upload whose chunk-size line is not hex -> 400.
+        payload = (
+            b"POST /submit HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"Transfer-Encoding: chunked\r\n"
+            b"\r\n"
+            b"zz\r\nhello\r\n0\r\n\r\n"
         )
     else:
         print(-1)
