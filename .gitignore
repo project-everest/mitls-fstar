@@ -27,6 +27,8 @@ test/openssl_echo_server
 test/openssl_http_server
 test/openssl_echo_server.log
 test/openssl_echo_server.port
+test/client_engine_echo_server.log
+test/client_engine_echo_server.port
 test/chromium_http_server.log
 test/chromium_http_server.port
 test/openssl-echo.*
