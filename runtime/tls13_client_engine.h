@@ -69,7 +69,8 @@ typedef struct tls13_client_engine_certificate_verify_request_s {
 /*
  * The engine owns no socket. Each operation performs at most one verified TLS
  * step. The caller drains network output, retains unconsumed network input, and
- * polls again to discover the next action.
+ * polls again to discover the next action. Network input may be fed after
+ * NEED_NETWORK_INPUT, while READY, or while CLOSING.
  */
 int tls13_client_engine_new(
     tls13_client_engine **out,

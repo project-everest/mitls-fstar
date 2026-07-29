@@ -39,6 +39,12 @@ bool tls13_openssl_peer_verify_signature(
     const uint8_t *signature,
     size_t signature_len);
 
+bool tls13_openssl_peer_copy_public_key_der(
+    const tls13_peer_identity *peer,
+    uint8_t *out,
+    size_t out_capacity,
+    size_t *out_len);
+
 tls13_server_credentials *tls13_openssl_server_credentials_new(
     const uint8_t *certificate_chain,
     size_t certificate_chain_len,

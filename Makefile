@@ -963,10 +963,11 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
-  test-openssl-sclient test-hacl-stubs test-key-schedule-bindings check-c-stubs
+  test-client-engine-openssl-echo test-openssl-sclient test-hacl-stubs \
+  test-key-schedule-bindings check-c-stubs
 
 test: verify check-c-stubs test-hacl-stubs test-key-schedule-bindings \
-  test-openssl-echo test-openssl-sclient
+  test-openssl-echo test-client-engine-openssl-echo test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
@@ -1044,6 +1045,28 @@ test/test_extracted_client_openssl_echo: \
 
 test-extracted-client-openssl-echo: test-openssl-echo
 
+test/test_extracted_client_engine_openssl_echo: \
+  test/unit/test_extracted_client_engine_openssl_echo.c \
+  $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_client_engine.c runtime/tls13_client_engine.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_client_engine.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_extracted_client_engine_openssl_echo.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
 test/openssl_echo_server: test/openssl_echo_server.c
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
@@ -1070,6 +1093,29 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 	  fi; \
 	  port=$$(cat test/openssl_echo_server.port); \
 	  ./test/test_extracted_client_openssl_echo 127.0.0.1 $$port test/certs/ca.pem; \
+	  wait $$server_pid
+
+test-client-engine-openssl-echo: test/openssl_echo_server \
+  test/test_extracted_client_engine_openssl_echo \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
+	@rm -f test/client_engine_echo_server.port test/client_engine_echo_server.log
+	@set -e; \
+	  ./test/openssl_echo_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    test/client_engine_echo_server.port > test/client_engine_echo_server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f test/client_engine_echo_server.port' EXIT; \
+	  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do \
+	    test -s test/client_engine_echo_server.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  if ! test -s test/client_engine_echo_server.port; then \
+	    echo "OpenSSL echo server did not start"; \
+	    cat test/client_engine_echo_server.log; \
+	    exit 1; \
+	  fi; \
+	  port=$$(cat test/client_engine_echo_server.port); \
+	  ./test/test_extracted_client_engine_openssl_echo \
+	    127.0.0.1 $$port test/certs/ca.pem; \
 	  wait $$server_pid
 
 # ── Extracted Server / OpenSSL Client Test ─────────────────────────
@@ -1123,17 +1169,21 @@ check-deps:
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR) .depend \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
+	  test/test_extracted_client_engine_openssl_echo \
 	  test/test_extracted_server_openssl_client \
 	  test/test_key_schedule_bindings \
 	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
 	  test/openssl_echo_server.log \
+	  test/client_engine_echo_server.port \
+	  test/client_engine_echo_server.log \
 	  $(TEST_CERT_STAMP)
 	find src test -name '*.checked' -delete
 
 .PHONY: all verify test extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
-  test-client test-openssl-echo test-openssl-sclient \
+  test-client test-openssl-echo test-client-engine-openssl-echo \
+  test-openssl-sclient \
   check-c-stubs check-toolchain check-deps benchmark benchmark-build \
   benchmark-profile-build profile clean

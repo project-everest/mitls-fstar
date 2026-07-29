@@ -50,6 +50,27 @@ static X509 *read_single_cert_der(const uint8_t *der, size_t der_len) {
   return cert;
 }
 
+bool tls13_openssl_peer_copy_public_key_der(
+    const tls13_peer_identity *peer,
+    uint8_t *out,
+    size_t out_capacity,
+    size_t *out_len) {
+  if (peer == NULL || peer->leaf_public_key == NULL || out == NULL ||
+      out_len == NULL) {
+    return false;
+  }
+  int encoded_len = i2d_PUBKEY(peer->leaf_public_key, NULL);
+  if (encoded_len <= 0 || (size_t)encoded_len > out_capacity) {
+    return false;
+  }
+  unsigned char *cursor = out;
+  if (i2d_PUBKEY(peer->leaf_public_key, &cursor) != encoded_len) {
+    return false;
+  }
+  *out_len = (size_t)encoded_len;
+  return true;
+}
+
 static EVP_PKEY *read_private_key_pem_or_der(const uint8_t *bytes, size_t len) {
   if (bytes == NULL || len == 0u || len > INT_MAX) {
     return NULL;

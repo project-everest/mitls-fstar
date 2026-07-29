@@ -180,7 +180,9 @@ int tls13_client_engine_feed_network(
           application_out_capacity)) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_ARGUMENT;
   }
-  if (engine->last_action != TLS13_CLIENT_ENGINE_NEED_NETWORK_INPUT) {
+  if (engine->last_action != TLS13_CLIENT_ENGINE_NEED_NETWORK_INPUT &&
+      engine->last_action != TLS13_CLIENT_ENGINE_READY &&
+      engine->last_action != TLS13_CLIENT_ENGINE_CLOSING) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
   store_result(
