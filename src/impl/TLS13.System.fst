@@ -2762,7 +2762,57 @@ let lemma_pw_establish (s:tls_system_state)
         FStar.List.Tot.length s.server.CS.cs_event_log == 14)
       (ensures
         P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server)
-  = admit ()
+  =
+  (* ── unfold the System predicates on `s` to the System-free, cs-level facts
+       the (Option-C re-based) bridges require on `s.client` / `s.server` ── *)
+  assert (WStep.client_reachable (CS.initial s.client.CS.cs_model.CS.model_config) s.client);
+  assert (WStep.server_reachable (CS.initial s.server.CS.cs_model.CS.model_config) s.server);
+  (* byte pairing at TlsQuiet collapses to the two raw-log equalities *)
+  assert (Seq.equal s.client.CS.cs_wire_log.CL.raw_sent
+                   s.server.CS.cs_wire_log.CL.raw_received);
+  assert (Seq.equal s.server.CS.cs_wire_log.CL.raw_sent
+                   s.client.CS.cs_wire_log.CL.raw_received);
+  assert (TLS13.ConnectionState.ProtectedWireServerFlightInversion.server_flight_bridge_inputs
+           s.client s.server);
+  assert (TLS13.ConnectionState.ProtectedWireClientFinishedInversion.client_finished_bridge_inputs
+           s.client s.server);
+  (* ── the two field-pinned bridge conclusions (4 server pairs + client CF) ── *)
+  TLS13.ConnectionState.ProtectedWireServerFlightInversion.lemma_server_flight_pairs_from_replays_and_pairing
+    s.client s.server;
+  TLS13.ConnectionState.ProtectedWireClientFinishedInversion.lemma_client_finished_pair_from_replays_and_pairing
+    s.client s.server;
+  let client_hs = s.client.CS.cs_model.CS.model_handshake in
+  let server_hs = s.server.CS.cs_model.CS.model_handshake in
+  (* both conclusions are `False` in their None arms, so all ten fields are Some *)
+  assert (Some? client_hs.CS.hs_encrypted_extensions /\ Some? server_hs.CS.hs_encrypted_extensions /\
+         Some? client_hs.CS.hs_certificate           /\ Some? server_hs.CS.hs_certificate /\
+         Some? client_hs.CS.hs_certificate_verify    /\ Some? server_hs.CS.hs_certificate_verify /\
+         Some? client_hs.CS.hs_server_finished       /\ Some? server_hs.CS.hs_server_finished /\
+         Some? client_hs.CS.hs_client_finished       /\ Some? server_hs.CS.hs_client_finished);
+  (* ── bind the ten front-door messages to the ACTUAL model fields ──
+       server-flight pairs project sent=SERVER field / received=CLIENT field;
+       the client Finished reverses (sent=CLIENT field / received=SERVER field). *)
+  let sent_msg0     = M.EncryptedExtensions (Some?.v server_hs.CS.hs_encrypted_extensions) in
+  let received_msg0 = M.EncryptedExtensions (Some?.v client_hs.CS.hs_encrypted_extensions) in
+  let sent_msg1     = M.Certificate (Some?.v server_hs.CS.hs_certificate) in
+  let received_msg1 = M.Certificate (Some?.v client_hs.CS.hs_certificate) in
+  let sent_msg2     = M.CertificateVerify (Some?.v server_hs.CS.hs_certificate_verify) in
+  let received_msg2 = M.CertificateVerify (Some?.v client_hs.CS.hs_certificate_verify) in
+  let sent_msg3     = M.Finished (Some?.v server_hs.CS.hs_server_finished) in
+  let received_msg3 = M.Finished (Some?.v client_hs.CS.hs_server_finished) in
+  let sent_msg4     = M.Finished (Some?.v client_hs.CS.hs_client_finished) in
+  let received_msg4 = M.Finished (Some?.v server_hs.CS.hs_client_finished) in
+  (* ── the front door: from the two staged pair-output blocks to the flagship
+       witness bundle (its `ensures` is definitionally
+       `P.paired_protected_handshake_event_projection_pair_witnesses`) ── *)
+  TLS13.ConnectionState.ProtectedWireProjection.lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_pair_outputs
+    s.client s.server
+    sent_msg0 received_msg0
+    sent_msg1 received_msg1
+    sent_msg2 received_msg2
+    sent_msg3 received_msg3
+    sent_msg4 received_msg4;
+  assert (P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server)
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
