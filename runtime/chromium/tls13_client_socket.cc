@@ -1,4 +1,4 @@
-#include "chromium/tls13_client_socket.h"
+#include "tls13_client_socket.h"
 
 #include "tls13_client_engine.h"
 
@@ -181,6 +181,15 @@ class Tls13ClientSocket::Impl {
 
   bool IsConnected() const {
     return state_ == State::kConnected;
+  }
+
+  bool IsIdle() const {
+    return state_ == State::kConnected && !HasPlaintext() &&
+        network_input_.empty() && !HasNetworkOutput() &&
+        !transport_read_pending_ && !transport_write_pending_ &&
+        !auth_pending_ && !connect_request_.active &&
+        !read_request_.active && !write_request_.active &&
+        !shutdown_request_.active;
   }
 
   const CertificateChain& peer_certificate_chain() const {
@@ -894,6 +903,10 @@ void Tls13ClientSocket::Disconnect() {
 
 bool Tls13ClientSocket::IsConnected() const {
   return impl_->IsConnected();
+}
+
+bool Tls13ClientSocket::IsIdle() const {
+  return impl_->IsIdle();
 }
 
 const CertificateChain& Tls13ClientSocket::peer_certificate_chain() const {

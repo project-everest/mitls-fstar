@@ -701,8 +701,10 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 
 HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
+  $(HACL_DIR)/Hacl_Hash_MD5.c \
   $(HACL_DIR)/Hacl_Hash_SHA1.c \
   $(HACL_DIR)/Hacl_Hash_SHA2.c \
+  $(HACL_DIR)/Hacl_Hash_SHA3.c \
   $(HACL_DIR)/Hacl_Hash_Blake2b.c \
   $(HACL_DIR)/Hacl_Hash_Blake2s.c \
   $(HACL_DIR)/Hacl_HMAC.c \
@@ -826,17 +828,23 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
 
 LDFLAGS_COMMON = -Wl,--gc-sections
 
-CHROMIUM_DEMO_OBJ_DIR = $(EXTRACT_DIR)/chromium_demo_obj
-CHROMIUM_DEMO_C_SOURCES = \
+TLS13_PROVIDER_DIR = $(EXTRACT_DIR)/tls13_provider
+TLS13_PROVIDER_OBJ_DIR = $(TLS13_PROVIDER_DIR)/obj
+TLS13_PROVIDER_ARCHIVE = $(TLS13_PROVIDER_DIR)/libmitls_tls13_client_engine.a
+TLS13_PROVIDER_C_SOURCES = \
   c_stubs/tls13_crypto_external.c \
   runtime/common_memmove.c \
   runtime/tls13_client_engine.c \
-  c_stubs/common_tcp_karamel.c \
-  c_stubs/common_tcp_stubs.c \
-  c_stubs/tls13_openssl_karamel.c \
-  c_stubs/tls13_openssl_stubs.c \
   $(HACL_WRAPPER_SOURCES) \
   $(KRML_HOME)/krmllib/c/fstar_uint32.c
+TLS13_PROVIDER_OBJ_STAMP = $(TLS13_PROVIDER_OBJ_DIR)/.built
+
+CHROMIUM_SRC ?= $(abspath ../chromium/src)
+DEPOT_TOOLS ?= $(abspath ../depot_tools)
+CHROMIUM_OUT ?= out/mitls
+
+CHROMIUM_DEMO_OBJ_DIR = $(EXTRACT_DIR)/chromium_demo_obj
+CHROMIUM_DEMO_C_SOURCES = c_stubs/tls13_openssl_stubs.c
 CHROMIUM_DEMO_OBJ_STAMP = $(CHROMIUM_DEMO_OBJ_DIR)/.built
 
 $(HACL_SIMD256_TEST_OBJ_DIR) \
@@ -975,7 +983,9 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # ──────────────────────────────────────────────────────────────────────────────
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
-.PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
+.PHONY: tls13-client-provider chromium-install-provider chromium-configure \
+  chromium-net chromium-browser test-chromium-browser \
+  test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
   test-openssl-sclient test-hacl-stubs test-key-schedule-bindings check-c-stubs
 
@@ -1133,9 +1143,87 @@ test-client-engine-openssl-echo: test/openssl_echo_server \
 	  wait $$server_pid
 
 # ── Chromium-style Async HTTPS Demo ────────────────────────────────
-$(CHROMIUM_DEMO_OBJ_STAMP): $(CHROMIUM_DEMO_C_SOURCES) \
+$(TLS13_PROVIDER_OBJ_STAMP): $(TLS13_PROVIDER_C_SOURCES) \
   runtime/tls13_client_engine.h $(ECHO_STUB_HEADERS) \
   $(TLS13_BUNDLE_STAMP) $(HACL_ACCEL_CONFIG_DEP) Makefile | check-deps
+	@rm -rf $(TLS13_PROVIDER_OBJ_DIR)
+	@mkdir -p $(TLS13_PROVIDER_OBJ_DIR)
+	@set -e; for src in $(TLS13_PROVIDER_C_SOURCES); do \
+	  obj="$(TLS13_PROVIDER_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+$(TLS13_PROVIDER_ARCHIVE): $(TLS13_BUNDLE_OBJS_STAMP) \
+  $(TLS13_PROVIDER_OBJ_STAMP) $(HACL_TEST_OBJECTS)
+	@mkdir -p $(TLS13_PROVIDER_DIR)
+	rm -f $@
+	$(AR) rcs $@ \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(TLS13_PROVIDER_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS)
+
+tls13-client-provider: $(TLS13_PROVIDER_ARCHIVE)
+	@echo "TLS 1.3 client provider: $(TLS13_PROVIDER_ARCHIVE)"
+
+chromium-install-provider: $(TLS13_PROVIDER_ARCHIVE)
+	python3 runtime/chromium/install_chromium_overlay.py \
+	  --chromium-src "$(CHROMIUM_SRC)"
+
+chromium-configure: chromium-install-provider
+	cd "$(CHROMIUM_SRC)" && \
+	  PATH="$(DEPOT_TOOLS):$$PATH" gn gen "$(CHROMIUM_OUT)" \
+	    --args='is_debug=false is_component_build=false symbol_level=0 blink_symbol_level=0 v8_symbol_level=0 use_remoteexec=false'
+
+chromium-net: chromium-configure
+	cd "$(CHROMIUM_SRC)" && \
+	  PATH="$(DEPOT_TOOLS):$$PATH" autoninja -C "$(CHROMIUM_OUT)" net
+
+chromium-browser: chromium-configure
+	cd "$(CHROMIUM_SRC)" && \
+	  PATH="$(DEPOT_TOOLS):$$PATH" autoninja -C "$(CHROMIUM_OUT)" chrome
+
+test-chromium-browser: chromium-browser test/openssl_http_server \
+  test/certs/chain.pem test/certs/leaf.key
+	@rm -f $(EXTRACT_DIR)/chromium_browser.port \
+	  $(EXTRACT_DIR)/chromium_browser.server.log \
+	  $(EXTRACT_DIR)/chromium_browser.log \
+	  $(EXTRACT_DIR)/chromium_browser.dom
+	@rm -rf $(EXTRACT_DIR)/chromium_browser_profile
+	@set -e; \
+	  ./test/openssl_http_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    $(EXTRACT_DIR)/chromium_browser.port \
+	    > $(EXTRACT_DIR)/chromium_browser.server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f $(EXTRACT_DIR)/chromium_browser.port' EXIT; \
+	  for _i in $$(seq 1 100); do \
+	    test -s $(EXTRACT_DIR)/chromium_browser.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  test -s $(EXTRACT_DIR)/chromium_browser.port; \
+	  port=$$(cat $(EXTRACT_DIR)/chromium_browser.port); \
+	  timeout 60 "$(CHROMIUM_SRC)/$(CHROMIUM_OUT)/chrome" \
+	    --headless --no-sandbox --disable-gpu --disable-quic \
+	    --disable-background-networking \
+	    --disable-component-update --disable-sync \
+	    --disable-field-trial-config \
+	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
+	    --enable-logging=stderr --log-level=0 --no-first-run \
+	    --no-proxy-server --ignore-certificate-errors \
+	    --use-verified-mitls \
+	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_browser_profile)" \
+	    --dump-dom "https://localhost:$$port/" \
+	    > $(EXTRACT_DIR)/chromium_browser.dom \
+	    2> $(EXTRACT_DIR)/chromium_browser.log; \
+	  wait $$server_pid; \
+	  grep -q "verified chromium demo" $(EXTRACT_DIR)/chromium_browser.dom; \
+	  grep -q "Verified miTLS provider selected for localhost:" \
+	    $(EXTRACT_DIR)/chromium_browser.log; \
+	  echo "Chromium verified-miTLS HTTPS smoke test passed"
+
+$(CHROMIUM_DEMO_OBJ_STAMP): $(CHROMIUM_DEMO_C_SOURCES) \
+  c_stubs/tls13_openssl_stubs.h Makefile | check-deps
 	@rm -rf $(CHROMIUM_DEMO_OBJ_DIR)
 	@mkdir -p $(CHROMIUM_DEMO_OBJ_DIR)
 	@set -e; for src in $(CHROMIUM_DEMO_C_SOURCES); do \
@@ -1150,15 +1238,13 @@ test/test_chromium_client_socket_demo: \
   runtime/chromium/tls13_client_socket.cc \
   runtime/chromium/tls13_client_socket.h \
   runtime/tls13_client_engine.h \
-  $(TLS13_BUNDLE_OBJS_STAMP) $(CHROMIUM_DEMO_OBJ_STAMP) \
-  $(HACL_TEST_OBJECTS) | check-deps
+  $(TLS13_PROVIDER_ARCHIVE) $(CHROMIUM_DEMO_OBJ_STAMP) | check-deps
 	$(CXX) -std=c++17 $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  runtime/chromium/tls13_client_socket.cc \
 	  test/unit/test_chromium_client_socket_demo.cc \
-	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(CHROMIUM_DEMO_OBJ_DIR)/*.o \
-	  $(HACL_TEST_OBJECTS) \
+	  $(TLS13_PROVIDER_ARCHIVE) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test/openssl_http_server: test/openssl_http_server.c
@@ -1258,5 +1344,7 @@ clean:
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-client-engine-openssl-echo \
   test-chromium-client-demo test-openssl-sclient \
+  tls13-client-provider chromium-install-provider chromium-configure \
+  chromium-net chromium-browser test-chromium-browser \
   check-c-stubs check-toolchain check-deps benchmark benchmark-build \
   benchmark-profile-build profile clean

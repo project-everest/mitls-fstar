@@ -96,6 +96,7 @@ class Tls13ClientSocket {
 
   void Disconnect();
   bool IsConnected() const;
+  bool IsIdle() const;
   const CertificateChain& peer_certificate_chain() const;
   uint16_t peer_signature_scheme() const;
 

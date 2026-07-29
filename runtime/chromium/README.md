@@ -40,45 +40,56 @@ The demo uses the supported verified profile: TLS 1.3, X25519,
 `TLS_CHACHA20_POLY1305_SHA256`, RSA-PSS-RSAE-SHA256 server authentication, and
 HTTP/1.1. It does not claim browser TLS feature parity.
 
-## Chromium `net::` wrapper
+## Chromium browser build
 
-As of Chromium main in July 2026, `SSLConnectJob::DoSSLConnect()` constructs the
-TLS socket through the virtual
-`ClientSocketFactory::CreateSSLClientSocket()` method. A demo integration does
-not need to modify `SSLClientContext::CreateSSLClientSocket()`.
+The checked integration is pinned to Chromium revision
+`5e4202e0d22c4abf7400880edfd8553d063159df`. Given a shallow checkout at
+`../chromium/src` and `depot_tools` at `../depot_tools`, run:
 
-Add a `VerifiedTlsClientSocket : public net::SSLClientSocket` and a delegating
-`ClientSocketFactory`:
+```sh
+make -j$(nproc) chromium-net
+make -j$(nproc) chromium-browser
+make -j$(nproc) test-chromium-browser
+```
 
-1. `VerifiedTlsClientSocket` owns `Tls13ClientSocket`.
-2. Its transport bridge forwards `Read`, `Write`, `Disconnect`, addresses,
-   socket tags, byte counts, and `NetLog()` to the already-connected
-   `net::StreamSocket`. It retains `IOBuffer` references until callbacks run.
-3. Its authentication bridge converts the copied DER entries with
-   `X509Certificate::CreateFromDERCertChain()`, then calls
-   `SSLClientContext::cert_verifier()->Verify()`. It retains the
-   `CertVerifier::Request`, `CertVerifyResult`, and verified certificate.
-4. After successful chain verification, the bridge extracts the leaf
-   SubjectPublicKeyInfo DER and returns it from
-   `authenticated_public_key_der()`. CertificateVerify is checked with
-   BoringSSL using the engine-provided scheme, input, and signature.
-5. `Connect`, `Read`, `Write`, and `Disconnect` delegate to the portable
-   adapter, translating `kIoPending` to `net::ERR_IO_PENDING` and other results
-   to `net::Error`.
-6. `GetSSLInfo()` returns the verified and unverified certificate chains,
-   `cert_status`, public-key hashes, TLS 1.3, ciphersuite `0x1303`, X25519 group
-   `29`, the captured peer signature scheme, and `HANDSHAKE_FULL`.
-7. `GetNegotiatedProtocol()` returns `kProtoUnknown` for the current profile:
-   no ALPN extension is sent, so Chromium falls back to HTTP/1.1. HTTP/2 must
-   remain disabled until verified ALPN support is added.
-8. `GetECHRetryConfigs()` and `GetServerTrustAnchorIDs()` return empty vectors;
-   `ExportKeyingMaterial()` returns `ERR_NOT_IMPLEMENTED`; early data, ECH,
-   client authentication, session resumption, and ALPS remain disabled.
-9. Override `ClientSocketFactory::CreateSSLClientSocket()` to return the
-   verified socket for the demo profile and delegate all other factory methods
-   to `ClientSocketFactory::GetDefaultFactory()`.
-10. Install that factory in
-    `HttpNetworkSessionContext::client_socket_factory`.
+Override `CHROMIUM_SRC`, `DEPOT_TOOLS`, or `CHROMIUM_OUT` when using other
+locations. `chromium-install-provider` builds the static verified provider,
+copies it and the portable adapter into `third_party/mitls`, and installs the
+repository-owned overlay in `runtime/chromium/chromium_src`.
+
+The overlay adds `VerifiedMiTlsClientSocket : net::SSLClientSocket` and selects
+it from Chromium's default `ClientSocketFactory` only when
+`--use-verified-mitls` is present. Selection is fail-closed: a provider failure
+is returned to Chromium and never falls back to `SSLClientSocketImpl`. The
+installer also forwards the opt-in switch to Chromium utility processes, where
+the out-of-process Network Service creates client sockets.
+
+The wrapper:
+
+1. owns `Tls13ClientSocket` and retains Chromium `IOBuffer` references until
+   asynchronous operations complete;
+2. forwards transport operations, addresses, socket tags, and `NetLog()` to the
+   already-connected `net::StreamSocket`;
+3. converts the exact copied DER chain with
+   `X509Certificate::CreateFromDERCertChain()` and invokes Chromium's
+   `CertVerifier`;
+4. extracts the authenticated leaf SubjectPublicKeyInfo and checks the exact
+   engine-provided CertificateVerify input and signature with Chromium's
+   BoringSSL RSA-PSS verifier;
+5. populates `SSLInfo` with both certificate chains, certificate status,
+   public-key hashes, TLS 1.3, ciphersuite `0x1303`, X25519 group `29`, the peer
+   signature scheme, and `HANDSHAKE_FULL`; and
+6. reports no ALPN, ECH retry config, Trust Anchor IDs, early data, resumption,
+   client authentication, ALPS, or exporter support.
+
+`test-chromium-browser` launches the actual `chrome` binary in headless mode
+against the controlled OpenSSL HTTP/1.1 endpoint. It requires both the returned
+page body and the factory's provider-selection diagnostic, so a BoringSSL
+fallback cannot satisfy the smoke test. The smoke disables Chromium's
+non-official-build field-trial configuration and TLS experiments outside this
+provider's profile. It uses Chromium's explicit certificate-error override for
+the local test CA; the bridge still invokes `CertVerifier` and verifies the
+server's CertificateVerify signature.
 
 The relevant Chromium source surfaces are:
 
@@ -87,6 +98,7 @@ The relevant Chromium source surfaces are:
 - `net/socket/ssl_client_socket.h`
 - `net/socket/stream_socket.h`
 - `net/socket/socket.h`
+- `content/browser/service_host/utility_process_host.cc`
 - `net/cert/cert_verifier.h`
 - `net/cert/cert_verify_result.h`
 - `net/ssl/ssl_info.h`
