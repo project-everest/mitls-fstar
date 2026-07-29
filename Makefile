@@ -106,6 +106,7 @@ EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 ROOT_FILES = \
   src/impl/TLS13.System.Temporal.fst \
+  src/impl/TLS13.Impl.Client.Engine.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
   src/impl/TLS13.Impl.Server.Driver.fst
 
@@ -453,6 +454,7 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Client \
+  TLS13.Impl.Client.Engine \
   TLS13.Impl.Client.Driver.State \
   TLS13.Impl.Client.Driver.BufferedNetwork \
   TLS13.Impl.Client.Driver.New \

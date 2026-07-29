@@ -1073,3 +1073,13 @@ fn process_local_event
     app_out_bytes;
   resp
 }
+
+fn free_client
+  (c:client)
+  requires connection_exactly c 'st0
+  ensures connection_released c 'st0
+{
+  rewrite (connection_exactly c 'st0) as (CR.connection_exactly c 'st0);
+  CR.free_connection c;
+  rewrite (CR.connection_released c 'st0) as (connection_released c 'st0)
+}

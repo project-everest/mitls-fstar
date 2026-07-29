@@ -24,6 +24,9 @@ type client = CR.connection_state
 let connection_exactly (c:client) (st:CS.connection_state) : slprop =
   CR.connection_exactly c st
 
+let connection_released (c:client) (st:CS.connection_state) : slprop =
+  CR.connection_released c st
+
 noextract
 let next_local_action_internal_input_ready
   (st:CS.connection_state)
@@ -466,3 +469,8 @@ fn process_local_event
                 (resp.CT.status == CT.StepOk \/
                  resp.CT.status == CT.IllegalTransition \/
                  resp.CT.status == CT.ConnectionFailed))
+
+fn free_client
+  (c:client)
+  requires connection_exactly c 'st0
+  ensures connection_released c 'st0

@@ -480,6 +480,9 @@ fn copy_certificate_chain
   unfold (IM.is_valid_certificate_msg lcert (Ghost.reveal cert));
   with source_chain source_offsets source_lens. _;
 
+  V.pts_to_len lcert.IM.certificate_msg_chain_bytes;
+  V.pts_to_len lcert.IM.certificate_msg_cert_offsets;
+  V.pts_to_len lcert.IM.certificate_msg_cert_lens;
   assert (pure (B.length source_chain == IM.max_certificate_chain_bytes));
   assert (pure (Seq.length source_offsets == IM.max_certificate_chain_entries));
   assert (pure (Seq.length source_lens == IM.max_certificate_chain_entries));
