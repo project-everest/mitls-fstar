@@ -111,6 +111,49 @@ fn copy_certificate_leaf_der
                   Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) leaf
                 | None -> False))
 
+fn copy_certificate_chain
+  (c:connection_state)
+  (chain_out:array U8.t)
+  (chain_out_len:SZ.t)
+  (offsets_out:array SZ.t)
+  (offsets_out_len:SZ.t)
+  (lens_out:array SZ.t)
+  (lens_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to chain_out 'old_chain_out **
+           ArrPts.pts_to offsets_out 'old_offsets_out **
+           ArrPts.pts_to lens_out 'old_lens_out **
+           pure (B.length 'old_chain_out == SZ.v chain_out_len /\
+                Seq.length 'old_offsets_out == SZ.v offsets_out_len /\
+                Seq.length 'old_lens_out == SZ.v lens_out_len /\
+                SZ.v chain_out_len == IM.max_certificate_chain_bytes /\
+                SZ.v offsets_out_len == IM.max_certificate_chain_entries /\
+                SZ.v lens_out_len == IM.max_certificate_chain_entries /\
+                Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate)
+  returns snapshot:certificate_chain_snapshot
+  ensures exists* chain_bytes offsets lens.
+          connection_exactly c st0 **
+          ArrPts.pts_to chain_out chain_bytes **
+          ArrPts.pts_to offsets_out offsets **
+          ArrPts.pts_to lens_out lens **
+          pure (B.length chain_bytes == SZ.v chain_out_len /\
+                Seq.length offsets == SZ.v offsets_out_len /\
+                Seq.length lens == SZ.v lens_out_len /\
+                SZ.v snapshot.certificate_chain_bytes_len <= B.length chain_bytes /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length offsets /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length lens /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+                | Some cert ->
+                  IM.certificate_chain_matches
+                    chain_bytes
+                    (SZ.v snapshot.certificate_chain_bytes_len)
+                    offsets
+                    lens
+                    (SZ.v snapshot.certificate_chain_cert_count)
+                    (Sem.certificate_entries cert)
+                | None -> False))
+
 fn copy_certificate_verify_input
   (c:connection_state)
   (out:array U8.t)

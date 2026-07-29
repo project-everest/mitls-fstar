@@ -402,6 +402,156 @@ fn copy_certificate_leaf_der
   fold (connection_exactly c st0);
   copied_len
 }
+
+fn copy_certificate_chain
+  (c:connection_state)
+  (chain_out:array U8.t)
+  (chain_out_len:SZ.t)
+  (offsets_out:array SZ.t)
+  (offsets_out_len:SZ.t)
+  (lens_out:array SZ.t)
+  (lens_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to chain_out 'old_chain_out **
+           ArrPts.pts_to offsets_out 'old_offsets_out **
+           ArrPts.pts_to lens_out 'old_lens_out **
+           pure (B.length 'old_chain_out == SZ.v chain_out_len /\
+                 Seq.length 'old_offsets_out == SZ.v offsets_out_len /\
+                 Seq.length 'old_lens_out == SZ.v lens_out_len /\
+                 SZ.v chain_out_len == IM.max_certificate_chain_bytes /\
+                 SZ.v offsets_out_len == IM.max_certificate_chain_entries /\
+                 SZ.v lens_out_len == IM.max_certificate_chain_entries /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate)
+  returns snapshot:certificate_chain_snapshot
+  ensures exists* chain_bytes offsets lens.
+          connection_exactly c st0 **
+          ArrPts.pts_to chain_out chain_bytes **
+          ArrPts.pts_to offsets_out offsets **
+          ArrPts.pts_to lens_out lens **
+          pure (B.length chain_bytes == SZ.v chain_out_len /\
+                Seq.length offsets == SZ.v offsets_out_len /\
+                Seq.length lens == SZ.v lens_out_len /\
+                SZ.v snapshot.certificate_chain_bytes_len <= B.length chain_bytes /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length offsets /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length lens /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+                 | Some cert ->
+                   IM.certificate_chain_matches
+                     chain_bytes
+                     (SZ.v snapshot.certificate_chain_bytes_len)
+                     offsets
+                     lens
+                     (SZ.v snapshot.certificate_chain_cert_count)
+                     (Sem.certificate_entries cert)
+                 | None -> False))
+{
+  let cert =
+    Ghost.hide
+      (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  assert (pure (
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+      Some (Ghost.reveal cert)));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+
+  with stored. assert (Box.pts_to c.handshake.messages.certificate stored);
+  let stored_cert_opt = !c.handshake.messages.certificate;
+  assert (pure (stored_cert_opt == stored));
+  assert (pure (Some? stored_cert_opt));
+  let lcert = Some?.v stored_cert_opt;
+  assert (pure (stored_cert_opt == Some lcert));
+  assert (pure (stored == Some lcert));
+
+  rewrite
+    (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+     | None, None -> pure True
+     | Some old_l, Some old_m -> IM.is_valid_certificate_msg old_l old_m
+     | _, _ -> pure False)
+    as (IM.is_valid_certificate_msg lcert (Ghost.reveal cert));
+  unfold (IM.is_valid_certificate_msg lcert (Ghost.reveal cert));
+  with source_chain source_offsets source_lens. _;
+
+  assert (pure (B.length source_chain == IM.max_certificate_chain_bytes));
+  assert (pure (Seq.length source_offsets == IM.max_certificate_chain_entries));
+  assert (pure (Seq.length source_lens == IM.max_certificate_chain_entries));
+  assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len <=
+    B.length source_chain));
+  assert (pure (SZ.v lcert.IM.certificate_msg_cert_count <=
+    Seq.length source_offsets));
+  assert (pure (SZ.v lcert.IM.certificate_msg_cert_count <=
+    Seq.length source_lens));
+
+  ArrPts.pts_to_len chain_out;
+  ArrPts.pts_to_len offsets_out;
+  ArrPts.pts_to_len lens_out;
+
+  V.to_array_pts_to lcert.IM.certificate_msg_chain_bytes;
+  Arr.memcpy_l
+    IM.max_certificate_chain_bytes_sz
+    (V.vec_to_array lcert.IM.certificate_msg_chain_bytes)
+    chain_out;
+  V.to_vec_pts_to lcert.IM.certificate_msg_chain_bytes;
+
+  V.to_array_pts_to lcert.IM.certificate_msg_cert_offsets;
+  Arr.memcpy_l
+    8sz
+    (V.vec_to_array lcert.IM.certificate_msg_cert_offsets)
+    offsets_out;
+  V.to_vec_pts_to lcert.IM.certificate_msg_cert_offsets;
+
+  V.to_array_pts_to lcert.IM.certificate_msg_cert_lens;
+  Arr.memcpy_l
+    8sz
+    (V.vec_to_array lcert.IM.certificate_msg_cert_lens)
+    lens_out;
+  V.to_vec_pts_to lcert.IM.certificate_msg_cert_lens;
+
+  with chain_bytes offsets lens.
+    assert (ArrPts.pts_to chain_out chain_bytes **
+            ArrPts.pts_to offsets_out offsets **
+            ArrPts.pts_to lens_out lens);
+  assert (pure (Seq.equal chain_bytes source_chain));
+  assert (pure (Seq.equal offsets source_offsets));
+  assert (pure (Seq.equal lens source_lens));
+  Seq.lemma_eq_elim chain_bytes source_chain;
+  Seq.lemma_eq_elim offsets source_offsets;
+  Seq.lemma_eq_elim lens source_lens;
+
+  let snapshot = {
+    certificate_chain_bytes_len =
+      lcert.IM.certificate_msg_chain_bytes_len;
+    certificate_chain_cert_count =
+      lcert.IM.certificate_msg_cert_count;
+  };
+
+  fold (IM.is_valid_certificate_msg lcert (Ghost.reveal cert));
+  rewrite (IM.is_valid_certificate_msg lcert (Ghost.reveal cert))
+    as
+      (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+       | None, None -> pure True
+       | Some old_l, Some old_m -> IM.is_valid_certificate_msg old_l old_m
+       | _, _ -> pure False);
+  fold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  snapshot
+}
+
 fn copy_certificate_verify_input
   (c:connection_state)
   (out:array U8.t)
