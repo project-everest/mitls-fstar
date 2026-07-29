@@ -162,6 +162,23 @@ The reusable concrete runtime API is:
 - `runtime/tls13_server_driver.h`
 - `runtime/tls13_server_driver.c`
 
+The separate browser integration path is:
+
+- `src/impl/TLS13.Impl.Client.Engine.fsti`
+- `src/impl/TLS13.Impl.Client.Engine.fst`
+- `runtime/tls13_client_engine.h`
+- `runtime/tls13_client_engine.c`
+- `runtime/chromium/tls13_client_socket.h`
+- `runtime/chromium/tls13_client_socket.cc`
+
+The verified engine is transport-neutral and performs one internal or supplied
+network/local step at a time. It exposes certificate-chain and
+CertificateVerify pauses rather than owning browser authentication policy. The
+portable Chromium adapter owns residual ciphertext, partial transport writes,
+queued plaintext, and asynchronous operation callbacks; all TLS transitions
+remain in the extracted engine. `make test-chromium-client-demo` exercises this
+path over a real TLS 1.3 HTTP/1.1 exchange.
+
 These C drivers are thin ABI wrappers around the extracted endpoint/canonical
 runtime path:
 
@@ -192,6 +209,7 @@ The active TCB surface is intentionally explicit.
 | TCP bridge | `common/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_karamel.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. `Common_TCP.krml` is included in the bundle so KaRaMeL typechecks the exact TCP ABI; the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
 | Extracted runtime infrastructure | F*, Pulse, KaRaMeL, generated C, C compiler/runtime | Trusted extraction/runtime substrate and C platform behavior. |
 | Concrete C ABI wrapper | `runtime/tls13_client_driver.c` | Trusted allocation of the small wrapper object, status-to-error translation, and lifetime tracking around the extracted Pulse workflow. |
+| Browser adapter | `runtime/tls13_client_engine.c`, `runtime/chromium/tls13_client_socket.cc`, future Chromium `net::` bridge | Trusted capacity/state checks, async scheduling, partial-I/O buffering, callback translation, and realization of the explicit browser certificate and CertificateVerify authentication boundaries. |
 
 ## What is implemented in C
 

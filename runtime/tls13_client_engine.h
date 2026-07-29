@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct tls13_client_engine_s tls13_client_engine;
 
 #define TLS13_CLIENT_ENGINE_MAX_SERVER_NAME_LEN ((size_t)255u)
@@ -165,5 +169,9 @@ int tls13_client_engine_send_close_notify(
     tls13_client_engine_result *result);
 
 void tls13_client_engine_free(tls13_client_engine *engine);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

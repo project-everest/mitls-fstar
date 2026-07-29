@@ -8,6 +8,7 @@
 struct tls13_client_engine_s {
   TLS13_Impl_Client_Engine_client_engine verified_engine;
   tls13_client_engine_action last_action;
+  bool application_ready;
 };
 
 static bool capacities_match(void) {
@@ -95,6 +96,13 @@ static void store_result(
   result->network_out_len = verified_result.engine_step_network_out_len;
   result->application_out_len = verified_result.engine_step_app_out_len;
   engine->last_action = result->action;
+  if (result->action == TLS13_CLIENT_ENGINE_READY) {
+    engine->application_ready = true;
+  } else if (result->action == TLS13_CLIENT_ENGINE_CLOSING ||
+             result->action == TLS13_CLIENT_ENGINE_CLOSED ||
+             result->action == TLS13_CLIENT_ENGINE_FAILED) {
+    engine->application_ready = false;
+  }
 }
 
 int tls13_client_engine_new(
@@ -130,6 +138,7 @@ int tls13_client_engine_new(
       trust_context_len,
       validation_time_seconds);
   engine->last_action = TLS13_CLIENT_ENGINE_PROGRESS;
+  engine->application_ready = false;
   *out = engine;
   return TLS13_CLIENT_ENGINE_SUCCESS;
 }
@@ -361,7 +370,7 @@ int tls13_client_engine_send_application_data(
           application_out_capacity)) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_ARGUMENT;
   }
-  if (engine->last_action != TLS13_CLIENT_ENGINE_READY) {
+  if (!engine->application_ready) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
   store_result(
@@ -393,7 +402,7 @@ int tls13_client_engine_send_close_notify(
           application_out_capacity)) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_ARGUMENT;
   }
-  if (engine->last_action != TLS13_CLIENT_ENGINE_READY) {
+  if (!engine->application_ready) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
   store_result(

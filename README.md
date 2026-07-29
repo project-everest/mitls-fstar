@@ -58,6 +58,7 @@ make parsers         # QuackyDucky: regenerate, verify, and extract the TLS wire
 make verify          # verify all F*/Pulse modules
 make extract-tls13-bundle  # extract the unified client/server driver bundle
 make test            # verify, check echo stubs, and run OpenSSL echo interop
+make test-chromium-client-demo  # async HTTPS/1.1 Chromium adapter demo
 ```
 
 The QuackyDucky pipeline can also be driven stage by stage with
@@ -65,6 +66,11 @@ The QuackyDucky pipeline can also be driven stage by stage with
 
 `make test-openssl-echo` runs the controlled local OpenSSL TLS 1.3 echo interop
 scenario. The main test sources live in `test/` and `test/unit/`.
+
+The transport-neutral verified browser path is documented in
+`runtime/chromium/README.md`. Its demo drives an asynchronous
+Chromium-style socket over the verified engine without giving the engine socket
+or browser trust-policy ownership.
 
 For the methodology reference:
 

@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct tls13_peer_identity_s tls13_peer_identity;
 typedef struct tls13_server_credentials_s tls13_server_credentials;
 typedef struct tls13_trust_store_s tls13_trust_store;
@@ -70,5 +74,9 @@ void tls13_openssl_peer_identity_free(tls13_peer_identity *peer);
 void tls13_openssl_trust_store_free(tls13_trust_store *trust_store);
 
 void tls13_openssl_server_credentials_free(tls13_server_credentials *creds);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
