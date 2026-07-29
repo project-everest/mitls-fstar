@@ -355,28 +355,6 @@ let byte_pairing (s:tls_system_state) : prop =
   | TlsInFlight CS.ClientEndpoint raw _snap _sent ->
     Seq.equal ss (B.append cr raw) /\ Seq.equal cs sr
 
-(** ─────────────────────────────────────────────────────────────────────────
-    STAGE 1 — the forward LENGTH invariant.
-
-    With the strict-progress guard forbidding the two model no-op self-loops
-    (redundant idempotent installs, stray ChangeCipherSpec), the per-endpoint
-    event-log length is pinned to the structural progress COUNT throughout the
-    pre-application-data region.  (In the application-data / close tail the count
-    is not tracked — app-data records lengthen the log freely.)  The two shape
-    conjuncts `client_micro_shape`/`server_micro_shape` supply the region-entry
-    freshness facts the progress-bound lemmas need.
-    ───────────────────────────────────────────────────────────────────────── **)
-
-let client_len_ok (s:tls_system_state) : prop =
-  PC.pre_appdata_control (ctrl s.client) ==>
-    FStar.List.Tot.length s.client.CS.cs_event_log ==
-    PC.client_progress s.client.CS.cs_model
-
-let server_len_ok (s:tls_system_state) : prop =
-  PC.pre_appdata_control (ctrl s.server) ==>
-    FStar.List.Tot.length s.server.CS.cs_event_log ==
-    PC.server_progress s.server.CS.cs_model
-
 (** STAGE 2A — key-schedule prefix on each endpoint: an application traffic
     secret implies the master secret, and the master secret implies the shared
     secret.  Used to pin the client's late-obligation rank at send-CF. **)
@@ -426,19 +404,6 @@ let protected_witnesses_ok (s:tls_system_state) : prop =
   (client_ready s /\ server_ready s) ==>
     P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server
 
-(** STAGE 1B — application-data tail length bound for the client.  Once the client
-    reaches the application-data control, its event-log length is pinned between a
-    fixed floor (16, the handshake events already logged at entry) and a ceiling
-    that grows only with the number of ApplicationData wire records the client has
-    actually sent or received.  This is the application-data analogue of
-    `client_len_ok` (which governs the pre-application-data region). **)
-let client_appdata_len_ok (s:tls_system_state) : prop =
-  client_ready s ==>
-    ( 14 <= FStar.List.Tot.length s.client.CS.cs_event_log /\
-      FStar.List.Tot.length s.client.CS.cs_event_log
-        <= 9 + WStep.raw_appdata_count s.client.CS.cs_wire_log.CL.raw_sent
-              + WStep.raw_appdata_count s.client.CS.cs_wire_log.CL.raw_received )
-
 (** Client control at application data (weaker than `client_ready`). **)
 let client_at_appdata (s:tls_system_state) : prop =
   ctrl s.client == CS.ControlApplicationData
@@ -476,17 +441,12 @@ let tls_system_inv (s:tls_system_state) : prop =
   byte_pairing s /\
   channel_consistent s /\
   tls_no_rekeying s /\
-  client_len_ok s /\
-  client_appdata_len_ok s /\
-  server_len_ok s /\
   client_ksp s /\
   server_ksp s /\
   client_e2e s /\
   server_e2e s /\
   client_clean s /\
-  protected_witnesses_ok s /\
-  PC.client_micro_shape s.client.CS.cs_model /\
-  PC.server_micro_shape s.server.CS.cs_model
+  protected_witnesses_ok s
 
 (** ─────────────────────────────────────────────────────────────────────────
     The six transition shapes.  Each advances exactly one endpoint by exactly one
@@ -497,75 +457,12 @@ let tls_system_inv (s:tls_system_state) : prop =
     restrict rekeying: a raw canonical step is taken VERBATIM (the no-rekeying
     discipline is folded into the flagship theorem's antecedent and re-established
     on reachable states via the combined invariant below, not pinned per-step).
+    The six families are the LITERAL canonical product: channel precondition +
+    VERBATIM `EC.client_step` / `ES.server_step` + wire-output shape + log/channel
+    update.  There are NO additional TLS-specific side conditions (the former
+    strict-progress `*_advances` guards have been removed; the progress-counting
+    apparatus they supported is gone).
     ───────────────────────────────────────────────────────────────────────── **)
-
-(** TODO (strict-progress / pure-canonical `tls_sys_step`).  The four
-    `*_advances` and two `*_local_advances` side conditions below are the LAST
-    residue keeping `tls_sys_step` from being the LITERAL canonical product
-    (`client_step`/`server_step` + channel plumbing only).  We investigated
-    folding them into the flagship theorem's antecedent (the way the no-rekeying
-    guard was folded) and found it UNSOUND without new machinery: both guards
-    encode a strict-progress lower bound ("each pre-application-data step raises
-    progress by exactly one") that the codebase only ever POSTULATES via these
-    guards — `TLS13.System.ProgressCount` proves only the `<= +1` UPPER bound.
-    Two distinct stutters block the fold:
-      * the send/deliver `*_advances` guards also exclude a stray
-        `TlsChangeCipherSpec` at `ControlHandshaking`, whose no-progress step
-        combines with the `ControlFailed` progress-collapse to break backward
-        monotonicity of any progress-based state predicate; and
-      * the local `*_local_advances` guards additionally exclude a redundant
-        idempotent key re-install, whose "stutter" status is STATE-dependent (it
-        depends on whether the target cache slot was already `Some`) and hence is
-        NOT a log-syntactic predicate — so no clean fold exists.
-    These guards exclude ONLY degenerate stutters that an honest implementation
-    never performs, so keeping them here does not affect the honest run
-    (non-vacuity) nor the Pulse-refinement/reachability argument.  Future work to
-    make `tls_sys_step` the pure canonical product is EITHER (a) prove the
-    intrinsic strict-progress theorem (a rank lower-bound over all `step_model`
-    transitions, comparable in size to the existing rank/inversion stack), OR
-    (b) move these guards into the OFFICIAL transition functions
-    (`client_step`/`server_step`) so `tls_sys_step` inherits them for free.
-
-    The strict-progress SIDE CONDITION (STAGE 1).  A pre-application-data
-    transition must strictly raise the acting endpoint's progress count; once the
-    endpoint has left the pre-application-data region (application data / close)
-    the condition is vacuously satisfied.  This forbids exactly the two model
-    no-op self-loops (a redundant idempotent key re-install and a stray
-    ChangeCipherSpec record), both of which keep the control state — hence the
-    progress count — fixed inside the handshake.  The canonical step relations
-    `client_step`/`server_step` are still invoked VERBATIM; this is only an extra
-    conjunct restricting which of their steps the SYSTEM takes.  Every honest
-    canonical handshake event advances progress by exactly one, so the honest run
-    to a ready state is untouched (non-vacuous). **)
-let client_advances (before after:CS.connection_state) : prop =
-  PC.client_progress after.CS.cs_model > PC.client_progress before.CS.cs_model \/
-  ~(PC.pre_appdata_control after.CS.cs_model.CS.model_control)
-
-let server_advances (before after:CS.connection_state) : prop =
-  PC.server_progress after.CS.cs_model > PC.server_progress before.CS.cs_model \/
-  ~(PC.pre_appdata_control after.CS.cs_model.CS.model_control)
-
-(** The STRICTER side condition for the two internal, no-wire-output LOCAL
-    transitions.  A local step must EITHER strictly raise the acting endpoint's
-    progress count OR change its control state.  Unlike the send/deliver guards,
-    this rules out ALSO the internal application-data self-loop
-    (`LocalDeliverApplicationData` at `ControlApplicationData`: control unchanged
-    AND progress not increasing).  Every honest handshake LOCAL event either
-    advances progress (pre-application-data handshake locals) or changes control,
-    so the honest run to a ready+quiescent state is untouched — NON-VACUITY: the
-    honest run performs only progress-increasing handshake locals and
-    control-changing steps and never an internal app-read before it is ready.
-    TODO: see the strict-progress note above `client_advances` — these two guards
-    are not soundly foldable into a state predicate (the redundant-install stutter
-    is state-dependent, not log-syntactic); revisit via the strict-progress
-    theorem or by moving them into the official `client_step`/`server_step`. **)
-let client_local_advances (before after:CS.connection_state) : prop =
-  PC.client_progress after.CS.cs_model > PC.client_progress before.CS.cs_model \/
-  ~(after.CS.cs_model.CS.model_control == before.CS.cs_model.CS.model_control)
-
-let server_local_advances (before after:CS.connection_state) : prop =
-  PC.server_progress after.CS.cs_model > PC.server_progress before.CS.cs_model \/
-  ~(after.CS.cs_model.CS.model_control == before.CS.cs_model.CS.model_control)
 
 let tls_step_client_send (a b:tls_system_state) : prop =
   TlsQuiet? a.channel /\
@@ -574,7 +471,6 @@ let tls_step_client_send (a b:tls_system_state) : prop =
           (sent:M.tls_message).
      EC.client_step a.client (SM.LocalEvent local) c' out /\
      out.SM.so_wire_outputs == [w] /\
-     client_advances a.client c' /\
      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
      b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent })
 
@@ -585,7 +481,6 @@ let tls_step_server_send (a b:tls_system_state) : prop =
           (sent:M.tls_message).
      ES.server_step a.server (SM.LocalEvent local) s' out /\
      out.SM.so_wire_outputs == [w] /\
-     server_advances a.server s' /\
      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
      b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent })
 
@@ -596,7 +491,6 @@ let tls_step_deliver_to_server (a b:tls_system_state) : prop =
      a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
      Seq.equal (CW.wire_serialize wire) raw /\
      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
-     server_advances a.server s' /\
      b == { a with server = s'; channel = TlsQuiet })
 
 let tls_step_deliver_to_client (a b:tls_system_state) : prop =
@@ -606,7 +500,6 @@ let tls_step_deliver_to_client (a b:tls_system_state) : prop =
      a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
      Seq.equal (CW.wire_serialize wire) raw /\
      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
-     client_advances a.client c' /\
      b == { a with client = c'; channel = TlsQuiet })
 
 let tls_step_client_local (a b:tls_system_state) : prop =
@@ -615,7 +508,6 @@ let tls_step_client_local (a b:tls_system_state) : prop =
           (out:SM.step_output CW.wire_message EAPI.local_output).
      EC.client_step a.client (SM.LocalEvent local) c' out /\
      out.SM.so_wire_outputs == [] /\
-     client_local_advances a.client c' /\
      b == { a with client = c' })
 
 let tls_step_server_local (a b:tls_system_state) : prop =
@@ -624,7 +516,6 @@ let tls_step_server_local (a b:tls_system_state) : prop =
           (out:SM.step_output CW.wire_message EAPI.local_output).
      ES.server_step a.server (SM.LocalEvent local) s' out /\
      out.SM.so_wire_outputs == [] /\
-     server_local_advances a.server s' /\
      b == { a with server = s' })
 
 (** The TLS system as an instance of the generic single-slot directed-channel
@@ -768,91 +659,6 @@ let lemma_server_step_shape
     with _pf.
       (WStep.lemma_step_model_preserves_hellos st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
        CSL.lemma_step_model_preserves_config st0.CS.cs_model d.CS.delta_event st1.CS.cs_model)
-#pop-options
-
-(** ─────────────────────────────────────────────────────────────────────────
-    STAGE 1 — per-step length + micro-shape preservation.
-
-    A client step advancing progress (the strict-progress guard) by at most one
-    (the progress-bound lemma) keeps the event-log length pinned to the progress
-    count throughout the pre-application-data region, and preserves the
-    region-entry shape fact.  The server analogue is symmetric.
-    ───────────────────────────────────────────────────────────────────────── **)
-
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 200"
-let lemma_client_step_len_micro
-  (a c':CS.connection_state)
-  (e:SM.event CW.wire_message CTy.client_local_event)
-  (out:SM.step_output CW.wire_message EAPI.local_output)
-  : Lemma
-      (requires
-        EC.client_step a e c' out /\
-        a.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        client_advances a c' /\
-        (PC.pre_appdata_control a.CS.cs_model.CS.model_control ==>
-           FStar.List.Tot.length a.CS.cs_event_log == PC.client_progress a.CS.cs_model) /\
-        PC.client_micro_shape a.CS.cs_model)
-      (ensures
-        (PC.pre_appdata_control c'.CS.cs_model.CS.model_control ==>
-           FStar.List.Tot.length c'.CS.cs_event_log == PC.client_progress c'.CS.cs_model) /\
-        PC.client_micro_shape c'.CS.cs_model)
-  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a d c');
-    eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a d c'
-    returns
-      (PC.pre_appdata_control c'.CS.cs_model.CS.model_control ==>
-         FStar.List.Tot.length c'.CS.cs_event_log == PC.client_progress c'.CS.cs_model) /\
-      PC.client_micro_shape c'.CS.cs_model
-    with _pf.
-      (PC.lemma_delta_length a c' d;
-       PC.lemma_client_micro_shape_step a.CS.cs_model d.CS.delta_event c'.CS.cs_model;
-       if PC.pre_appdata_control c'.CS.cs_model.CS.model_control then begin
-         (if not (PC.pre_appdata_control a.CS.cs_model.CS.model_control)
-          then PC.lemma_step_post_appdata_stable a.CS.cs_model d.CS.delta_event c'.CS.cs_model);
-         assert (PC.pre_appdata_control a.CS.cs_model.CS.model_control);
-         PC.lemma_client_progress_step_bound a.CS.cs_model d.CS.delta_event c'.CS.cs_model;
-         assert (PC.client_progress c'.CS.cs_model > PC.client_progress a.CS.cs_model);
-         assert (FStar.List.Tot.length c'.CS.cs_event_log
-                   == FStar.List.Tot.length a.CS.cs_event_log + 1);
-         assert (FStar.List.Tot.length c'.CS.cs_event_log == PC.client_progress c'.CS.cs_model)
-       end)
-#pop-options
-
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 80 --split_queries always"
-let lemma_server_step_len_micro
-  (a s':CS.connection_state)
-  (e:SM.event CW.wire_message CTy.server_local_event)
-  (out:SM.step_output CW.wire_message EAPI.local_output)
-  : Lemma
-      (requires
-        ES.server_step a e s' out /\
-        a.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-        server_advances a s' /\
-        (PC.pre_appdata_control a.CS.cs_model.CS.model_control ==>
-           FStar.List.Tot.length a.CS.cs_event_log == PC.server_progress a.CS.cs_model) /\
-        PC.server_micro_shape a.CS.cs_model)
-      (ensures
-        (PC.pre_appdata_control s'.CS.cs_model.CS.model_control ==>
-           FStar.List.Tot.length s'.CS.cs_event_log == PC.server_progress s'.CS.cs_model) /\
-        PC.server_micro_shape s'.CS.cs_model)
-  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a d s');
-    eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a d s'
-    returns
-      (PC.pre_appdata_control s'.CS.cs_model.CS.model_control ==>
-         FStar.List.Tot.length s'.CS.cs_event_log == PC.server_progress s'.CS.cs_model) /\
-      PC.server_micro_shape s'.CS.cs_model
-    with _pf.
-      (PC.lemma_delta_length a s' d;
-       PC.lemma_server_micro_shape_step a.CS.cs_model d.CS.delta_event s'.CS.cs_model;
-       if PC.pre_appdata_control s'.CS.cs_model.CS.model_control then begin
-         (if not (PC.pre_appdata_control a.CS.cs_model.CS.model_control)
-          then PC.lemma_step_post_appdata_stable a.CS.cs_model d.CS.delta_event s'.CS.cs_model);
-         assert (PC.pre_appdata_control a.CS.cs_model.CS.model_control);
-         PC.lemma_server_progress_step_bound a.CS.cs_model d.CS.delta_event s'.CS.cs_model;
-         assert (PC.server_progress s'.CS.cs_model > PC.server_progress a.CS.cs_model);
-         assert (FStar.List.Tot.length s'.CS.cs_event_log
-                   == FStar.List.Tot.length a.CS.cs_event_log + 1);
-         assert (FStar.List.Tot.length s'.CS.cs_event_log == PC.server_progress s'.CS.cs_model)
-       end)
 #pop-options
 
 (** STAGE 2A — `model_ksp` preservation for a client / server step. **)
@@ -1992,320 +1798,6 @@ let lemma_client_appdata_installed_backward
     | CS.ConnLocalEvent _ -> ()
 #pop-options
 
-(** PHASE 1 — the internal LOCAL guard implies the send/deliver guard.
-
-    The two internal-local transitions are guarded by the STRICTER
-    `client_local_advances`/`server_local_advances` (progress↑ ∨ control-changed)
-    rather than `client_advances`/`server_advances` (progress↑ ∨ ¬pre-appdata).
-    For a genuinely local step (empty wire output), the two guards coincide on the
-    outcome we need for the forward LENGTH invariant: whenever the acting endpoint
-    stays pre-application-data, a control change forces a strict progress increase
-    (`PC.lemma_{client,server}_control_change_progress`), so `local_advances`
-    re-establishes `advances`.  This lets every downstream preservation helper
-    (which was proved against the `advances` guard) apply unchanged. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
-let lemma_client_local_advances_to_advances
-  (a c':CS.connection_state)
-  (local:CTy.client_local_event)
-  (out:SM.step_output CW.wire_message EAPI.local_output)
-  : Lemma
-      (requires
-        EC.client_step a (SM.LocalEvent local) c' out /\
-        out.SM.so_wire_outputs == [] /\
-        a.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        PC.client_micro_shape a.CS.cs_model /\
-        client_local_advances a c')
-      (ensures client_advances a c')
-  = if PC.client_progress c'.CS.cs_model > PC.client_progress a.CS.cs_model
-    then ()
-    else if not (PC.pre_appdata_control c'.CS.cs_model.CS.model_control)
-    then ()
-    else begin
-      let api = CTy.client_local_event_api local in
-      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-        (CTy.client_api_event_matches a api conn_ev /\
-         EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-         EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
-         CS.legal_connection_delta a
-           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-             CS.delta_raw_received = B.empty } c' /\
-         SMCan.sent_event_nonempty_seal_projection a.CS.cs_model conn_ev raw_sent /\
-         SMCan.received_event_nonempty_decode_projection a.CS.cs_model conn_ev B.empty)
-      returns client_advances a c'
-      with _pf.
-      (
-        // pre_appdata a follows from pre_appdata c' by post-appdata stability.
-        FStar.Classical.move_requires_3
-          PC.lemma_step_post_appdata_stable a.CS.cs_model conn_ev c'.CS.cs_model;
-        PC.lemma_client_control_change_progress a.CS.cs_model conn_ev c'.CS.cs_model
-      )
-    end
-#pop-options
-
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
-let lemma_server_local_advances_to_advances
-  (a s':CS.connection_state)
-  (local:CTy.server_local_event)
-  (out:SM.step_output CW.wire_message EAPI.local_output)
-  : Lemma
-      (requires
-        ES.server_step a (SM.LocalEvent local) s' out /\
-        out.SM.so_wire_outputs == [] /\
-        a.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-        PC.server_micro_shape a.CS.cs_model /\
-        server_local_advances a s')
-      (ensures server_advances a s')
-  = if PC.server_progress s'.CS.cs_model > PC.server_progress a.CS.cs_model
-    then ()
-    else if not (PC.pre_appdata_control s'.CS.cs_model.CS.model_control)
-    then ()
-    else begin
-      let api = CTy.server_local_event_api local in
-      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
-        (CTy.server_api_event_matches api conn_ev /\
-         ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
-         ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
-         CS.legal_connection_delta a
-           { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
-             CS.delta_raw_received = B.empty } s' /\
-         SMCan.sent_event_nonempty_seal_projection a.CS.cs_model conn_ev raw_sent /\
-         SMCan.received_event_nonempty_decode_projection a.CS.cs_model conn_ev B.empty)
-      returns server_advances a s'
-      with _pf.
-      (
-        // raw_sent is empty (out.so_wire_outputs == []), so the raw byte delta is
-        // empty on both sides — this rules out the window Sent/deliver control
-        // changes, leaving exactly the internal local control change.
-        assert (Seq.equal raw_sent (WF.serialize_all CW.tls_record_wire_format []));
-        Seq.lemma_eq_elim raw_sent B.empty;
-        FStar.Classical.move_requires_3
-          PC.lemma_step_post_appdata_stable a.CS.cs_model conn_ev s'.CS.cs_model;
-        PC.lemma_server_control_change_progress a.CS.cs_model conn_ev s'.CS.cs_model
-      )
-    end
-#pop-options
-
-(** STAGE 1B — the application-data tail LENGTH bound is preserved by a client
-    SEND.  A send appends exactly one event (length +1) and one wire record to the
-    client's SENT log.  If the post-state is ready (application data), we split:
-
-    * STAY (pre-state already at application data): the backward key-installation
-      lemma certifies the pre-state was ALSO ready, so `client_appdata_len_ok a`
-      supplies the pre-state bounds; the appended record is ApplicationData
-      (`lemma_client_send_stay_appdata_count_ge1`), raising the SENT count by ≥1,
-      which exactly absorbs the length +1 for the upper bound; the lower bound
-      floor(16) rises to 17.
-    * ENTRY (pre-state pre-application-data, the send of the protected Finished):
-      `PC.lemma_client_send_cf_progress` + `client_len_ok a` pin the pre-length to
-      15, hence post-length 16 (floor met exactly); the reachable post-state has
-      ≥4 received + ≥1 sent ApplicationData records
-      (`lemma_client_postappdata_recv_ge4_sent_ge1`), i.e. count ≥5, so
-      16 ≤ 11 + 5 ≤ 11 + counts. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
-let lemma_client_appdata_len_pres_send
-  (a b:tls_system_state)
-  (local:CTy.client_local_event) (c':CS.connection_state)
-  (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
-  (sent:M.tls_message)
-  : Lemma
-      (requires
-        tls_system_inv a /\
-        EC.client_step a.client (SM.LocalEvent local) c' out /\
-        out.SM.so_wire_outputs == [w] /\
-        SMC.connection_state_no_key_update_trace c' /\
-        b == { a with client = c';
-                      channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent } /\
-        WStep.client_reachable (CS.initial c'.CS.cs_model.CS.model_config) c')
-      (ensures client_appdata_len_ok b)
-  = let cs_a = a.client.CS.cs_wire_log.CL.raw_sent in
-    let cr_a = a.client.CS.cs_wire_log.CL.raw_received in
-    let er = emitted_raw out in
-    introduce client_ready b ==>
-      ( 14 <= FStar.List.Tot.length b.client.CS.cs_event_log /\
-        FStar.List.Tot.length b.client.CS.cs_event_log
-          <= 9 + WStep.raw_appdata_count b.client.CS.cs_wire_log.CL.raw_sent
-                + WStep.raw_appdata_count b.client.CS.cs_wire_log.CL.raw_received )
-    with _ready_b.
-    (
-      // b.client == c' is at application data with app record keys installed.
-      assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.client d c');
-      eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.client d c'
-      returns
-        ( 14 <= FStar.List.Tot.length c'.CS.cs_event_log /\
-          FStar.List.Tot.length c'.CS.cs_event_log
-            <= 9 + WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_sent
-                  + WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_received )
-      with _pf_d.
-      (
-        PC.lemma_delta_length a.client c' d;
-        lemma_no_key_update_last a.client.CS.cs_event_log d.CS.delta_event;
-        CSL.lemma_step_model_preserves_config
-          a.client.CS.cs_model d.CS.delta_event c'.CS.cs_model;
-        if a.client.CS.cs_model.CS.model_control = CS.ControlApplicationData
-        then begin
-          // STAY: the pre-state was also ready.
-          lemma_client_appdata_installed_backward a.client d c';
-          assert (client_ready a);
-          // the appended record is ApplicationData, so the SENT count rises by >=1.
-          WStep.lemma_client_send_stay_appdata_count_ge1 a.client local c' out w;
-          // count split on the SENT log; the RECEIVED log is unchanged.
-          PNTWL.lemma_client_step_wire_log_delta
-            a.client (SM.LocalEvent local) c' out;
-          WStep.lemma_client_reachable_raw_sent_parses
-            a.client.CS.cs_model.CS.model_config a.client;
-          eliminate exists (msgs:list CW.wire_message).
-            WF.parses_as CW.tls_record_wire_format cs_a msgs Seq.empty
-          returns
-            WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_sent
-              == WStep.raw_appdata_count cs_a + WStep.raw_appdata_count er /\
-            WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_received
-              == WStep.raw_appdata_count cr_a
-          with _pf_parse.
-          (
-            WStep.lemma_raw_appdata_count_append cs_a er msgs;
-            Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_sent (B.append cs_a er);
-            // For the received log: event_input_messages (LocalEvent _) == [],
-            // so serialize_all _ [] == Seq.empty, and append cr_a empty == cr_a
-            assert (WFSM.event_input_messages #CW.wire_message #CTy.client_local_event
-                      (SM.LocalEvent local) == []);
-            Seq.lemma_eq_elim
-              (WF.serialize_all CW.tls_record_wire_format
-                (WFSM.event_input_messages #CW.wire_message #CTy.client_local_event
-                  (SM.LocalEvent local)))
-              Seq.empty;
-            Seq.lemma_eq_elim (B.append cr_a Seq.empty) cr_a;
-            Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_received cr_a
-          )
-        end
-        else begin
-          // ENTRY: send of the protected Finished lands at application data.
-          PC.lemma_client_send_cf_progress
-            a.client.CS.cs_model d.CS.delta_event c'.CS.cs_model;
-          WStep.lemma_client_postappdata_recv_ge4_sent_ge1
-            c'.CS.cs_model.CS.model_config c'
-        end
-      )
-    )
-#pop-options
-
-(** STAGE 1B — the application-data tail LENGTH bound is preserved by a DELIVER TO
-    CLIENT (a client RECEIVE).  A receive appends exactly one event (length +1) and
-    one wire record to the client's RECEIVED log (the SENT log is unchanged).  If
-    the post-state is ready (application data), a receive never ENTERS application
-    data (`lemma_client_wire_recv_not_into_appdata`), so the pre-state was already
-    at application data; the backward key-installation lemma then certifies the
-    pre-state was ALSO ready, so `client_appdata_len_ok a` supplies the pre-state
-    bounds.  The received record is ApplicationData
-    (`lemma_client_recv_at_appdata_count1`), raising the RECEIVED count by exactly
-    1, which exactly absorbs the length +1 for the upper bound; the lower floor(16)
-    rises to 17. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
-let lemma_client_appdata_len_pres_deliver
-  (a b:tls_system_state)
-  (wire:CW.wire_message) (c':CS.connection_state)
-  (out:SM.step_output CW.wire_message EAPI.local_output)
-  : Lemma
-      (requires
-        tls_system_inv a /\
-        EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
-        SMC.connection_state_no_key_update_trace c' /\
-        b == { a with client = c'; channel = TlsQuiet } /\
-        WStep.client_reachable (CS.initial c'.CS.cs_model.CS.model_config) c')
-      (ensures client_appdata_len_ok b)
-  = let cs_a = a.client.CS.cs_wire_log.CL.raw_sent in
-    let cr_a = a.client.CS.cs_wire_log.CL.raw_received in
-    introduce client_ready b ==>
-      ( 14 <= FStar.List.Tot.length b.client.CS.cs_event_log /\
-        FStar.List.Tot.length b.client.CS.cs_event_log
-          <= 9 + WStep.raw_appdata_count b.client.CS.cs_wire_log.CL.raw_sent
-                + WStep.raw_appdata_count b.client.CS.cs_wire_log.CL.raw_received )
-    with _ready_b.
-    (
-      // c' is at application data; a receive never ENTERS application data, so the
-      // pre-state was already there.
-      WStep.lemma_client_wire_recv_not_into_appdata a.client wire c' out;
-      assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.client d c');
-      eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.client d c'
-      returns
-        ( 14 <= FStar.List.Tot.length c'.CS.cs_event_log /\
-          FStar.List.Tot.length c'.CS.cs_event_log
-            <= 9 + WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_sent
-                  + WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_received )
-      with _pf_d.
-      (
-        PC.lemma_delta_length a.client c' d;
-        lemma_no_key_update_last a.client.CS.cs_event_log d.CS.delta_event;
-        // backward keys: the pre-state was also ready.
-        lemma_client_appdata_installed_backward a.client d c';
-        assert (client_ready a);
-        // the received record is ApplicationData, so the RECEIVED count rises by 1.
-        WStep.lemma_client_recv_at_appdata_count1 a.client wire c' out;
-        // wire-log deltas: SENT unchanged, RECEIVED extended by (wire_serialize wire).
-        WStep.lemma_client_wire_event_no_output a.client c' wire out;
-        WStep.lemma_serialize_all_single_wire wire;
-        Seq.lemma_eq_elim
-          (WF.serialize_all CW.tls_record_wire_format [wire])
-          (CW.wire_serialize wire);
-        PNTWL.lemma_client_step_wire_log_delta a.client (SM.WireEvent wire) c' out;
-        Seq.append_empty_r cs_a;
-        Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_sent cs_a;
-        Seq.lemma_eq_elim c'.CS.cs_wire_log.CL.raw_received
-          (B.append cr_a (CW.wire_serialize wire));
-        // count split on the RECEIVED log.
-        WStep.lemma_client_reachable_raw_received_parses
-          a.client.CS.cs_model.CS.model_config a.client;
-        eliminate exists (msgs:list CW.wire_message).
-          WF.parses_as CW.tls_record_wire_format cr_a msgs Seq.empty
-        returns
-          WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_received
-            == WStep.raw_appdata_count cr_a
-             + WStep.raw_appdata_count (CW.wire_serialize wire) /\
-          WStep.raw_appdata_count c'.CS.cs_wire_log.CL.raw_sent
-            == WStep.raw_appdata_count cs_a
-        with _pf_parse.
-        (
-          WStep.lemma_raw_appdata_count_append cr_a (CW.wire_serialize wire) msgs
-        )
-      )
-    )
-#pop-options
-
-(** STAGE 1B — the application-data tail LENGTH bound is vacuously preserved by a
-    client LOCAL step (no wire output).  A ready post-state requires application
-    data at `c'`; a LOCAL step cannot produce that.  If the pre-state was already
-    at application data, control is unchanged and (as `client_progress` is flat off
-    the handshake region) progress does not rise, so the internal-local guard
-    `client_local_advances` is violated — contradiction.  If the pre-state was
-    pre-application-data, a no-output LOCAL step never ENTERS application data
-    (`lemma_client_local_noout_not_into_appdata`) — contradiction.  Either way
-    `client_ready b` is impossible, so the bound holds vacuously. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
-let lemma_client_appdata_len_pres_local
-  (a b:tls_system_state)
-  (local:CTy.client_local_event) (c':CS.connection_state)
-  (out:SM.step_output CW.wire_message EAPI.local_output)
-  : Lemma
-      (requires
-        tls_system_inv a /\
-        EC.client_step a.client (SM.LocalEvent local) c' out /\
-        out.SM.so_wire_outputs == [] /\
-        client_local_advances a.client c' /\
-        b == { a with client = c' })
-      (ensures client_appdata_len_ok b)
-  = introduce client_ready b ==>
-      ( 14 <= FStar.List.Tot.length b.client.CS.cs_event_log /\
-        FStar.List.Tot.length b.client.CS.cs_event_log
-          <= 9 + WStep.raw_appdata_count b.client.CS.cs_wire_log.CL.raw_sent
-                + WStep.raw_appdata_count b.client.CS.cs_wire_log.CL.raw_received )
-    with _ready_b.
-    (
-      // client_ready b forces c' to be at application data; derive False.
-      if a.client.CS.cs_model.CS.model_control = CS.ControlApplicationData
-      then ()  // STAY: control unchanged + progress flat contradicts client_local_advances.
-      else WStep.lemma_client_local_noout_not_into_appdata a.client local c' out
-    )
-#pop-options
-
 (** ─────────────────────────────────────────────────────────────────────────
     FACT 4 (protected_witnesses_ok) preservation — Phase 4.
 
@@ -2648,65 +2140,6 @@ let lemma_client_into_appdata_shape
         st0.CS.cs_model conn_ev st1.CS.cs_model
 #pop-options
 
-(** `server_progress == 15` at the verify pre-state (all three application
-    obligations discharged: both app-traffic secrets installed by the verify
-    legality, and the shared secret present by the key-schedule prefix). **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
-let lemma_server_verify_pre_length (m:CS.connection_model)
-  : Lemma
-      (requires
-        m.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived /\
-        CS.application_record_keys_installed_for_role CS.ServerEndpoint m /\
-        PC.model_ksp m)
-      (ensures PC.server_progress m == 13)
-  = ()
-#pop-options
-
-(** `server_progress == 13` at the atomic-verify pre-state `HsServerFinishedSent`
-    (the WIRE recv-Finished honest verify instant).  The server-app WRITE secret is
-    already installed (its local install precedes the atomic delivery, and the
-    both-ready boundary forces it Some), the shared secret and client handshake
-    traffic secret are present, and the client-app READ secret is still `None`
-    (installed only BY the atomic delivery — `CSL.lemma_server_finished_sent_no_client_application_traffic`).
-    Hence the server-hello-window rank is `missing(client_hs)=0 + missing(shared)=0
-    + missing(server_app)=0 + missing(client_app)=1 = 1`, i.e. `14 - 1 = 13`. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
-let lemma_server_finished_sent_pre_length (m:CS.connection_model)
-  : Lemma
-      (requires
-        m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
-        Some? m.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-        Some? m.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
-        Some? m.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
-        m.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None)
-      (ensures PC.server_progress m == 13)
-  = ()
-#pop-options
-
-(** At `HsServerFinishedSent`, the ONLY legal event reaching application data is the
-    atomic recv-Finished (@`legal_handshake_message`).  Its legality forces the
-    client handshake-traffic and master secrets present; and the atomic delivery
-    installs only the CLIENT application-traffic READ secret, leaving the SERVER
-    application-traffic (WRITE) secret unchanged across the step.  Proved by the same
-    event-enumeration as `lemma_server_into_appdata_is_verify`. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
-let lemma_server_finished_sent_into_appdata_client_hs
-  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
-  : Lemma
-      (requires
-        CS.legal_event m ev /\
-        CS.step_model m ev == Some m' /\
-        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-        m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
-        m'.CS.model_control == CS.ControlApplicationData)
-      (ensures
-        Some? m.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-        Some? m.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
-        m'.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
-          == m.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
-  = ()
-#pop-options
-
 (** Backward preservation of SERVER application-record-key installation across a
     single application-data step (mirrors `lemma_client_appdata_installed_backward`). **)
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
@@ -2757,9 +2190,7 @@ let lemma_pw_establish (s:tls_system_state)
         s.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         s.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         client_ready s /\
-        server_ready s /\
-        FStar.List.Tot.length s.client.CS.cs_event_log == 14 /\
-        FStar.List.Tot.length s.server.CS.cs_event_log == 14)
+        server_ready s)
       (ensures
         P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server)
   =
@@ -2978,14 +2409,11 @@ let lemma_pw_pres_server_send
 
 (** deliver TO SERVER — either the server was already at application data (ROUTE A
     transport), or this WIRE recv-Finished is the ATOMIC verify that NEWLY creates
-    the both-ready boundary (ROUTE B ESTABLISHMENT).  At the verify the server enters
-    application data at event-log length 14 (`server_progress` 13 at the pre-state
-    `HsServerFinishedSent`, +1 for the delivery); the client (unchanged, already
-    ready) is at length 14 by the IN-FLIGHT byte-pairing squeeze: the server has
-    RECEIVED 0 application-data records (`lemma_server_finished_sent_recv_eq0`) and
-    the single in-flight client Finished contributes at most one, so the client has
-    SENT ≤ 1 and RECEIVED ≤ 4 (`lemma_server_preappdata_sent_le4`), collapsing
-    `client_appdata_len_ok a`'s upper bound to 14. **)
+    the both-ready boundary (ROUTE B ESTABLISHMENT).  In ROUTE B the client is
+    unchanged (and already ready) and the server has just entered application data,
+    so `lemma_pw_establish` — which is COUNTING-FREE, going through the field-pinned
+    protected-wire inversion bridges — supplies the witnesses directly from the
+    byte-level reachability/pairing facts. **)
 (** At `ControlApplicationData` both stage predicates force all handshake fields
     Some; in particular both hellos.  Factored out at higher ifuel so the big
     stage-predicate match reliably reduces. **)
@@ -3003,58 +2431,6 @@ let lemma_client_appdata_hellos_some (st:CS.connection_state)
           (ensures Some? (hsf st).CS.hs_client_hello /\
                    Some? (hsf st).CS.hs_server_hello)
   = ()
-#pop-options
-
-(** A server whose driver is application-ready has its server-application traffic
-    secret installed (unfolds the `application_record_keys_installed_for_role`
-    read/write material match for `ServerEndpoint`). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 20"
-let lemma_server_ready_installs_server_app (st:CS.connection_state)
-  : Lemma (requires SD.server_driver_application_ready st)
-          (ensures
-            Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
-  = ()
-#pop-options
-
-(** CLIENT length is exactly 14 at the ATOMIC WIRE server-verify instant.  The
-    client is ready, so `client_appdata_len_ok a` bounds its length below by 14
-    and above by `9 + raw_appdata_count(sent) + raw_appdata_count(received)`.  The
-    server (at `HsServerFinishedSent`) has RECEIVED 0 application-data records and
-    SENT ≤ 4; the in-flight byte-pairing (`cs == append server.received raw`,
-    `ss == cr`) with the single in-flight client-Finished record (`count raw ≤ 1`)
-    collapses the upper bound to 14.  Mirror of `lemma_pw_verify_client_len16` for
-    the in-flight (non-quiescent) deliver channel. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
-let lemma_pw_deliver_client_len14
-  (a:tls_system_state) (wire:CW.wire_message)
-  (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
-  : Lemma
-      (requires
-        tls_system_inv a /\
-        client_ready a /\
-        a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
-        Seq.equal (CW.wire_serialize wire) raw /\
-        a.server.CS.cs_model.CS.model_control
-          == CS.ControlHandshaking CS.HsServerFinishedSent)
-      (ensures FStar.List.Tot.length a.client.CS.cs_event_log == 14)
-  = let cfg_s = a.server.CS.cs_model.CS.model_config in
-    let cs = a.client.CS.cs_wire_log.CL.raw_sent in
-    let cr = a.client.CS.cs_wire_log.CL.raw_received in
-    let ss = a.server.CS.cs_wire_log.CL.raw_sent in
-    let sr = a.server.CS.cs_wire_log.CL.raw_received in
-    WStep.lemma_server_preappdata_sent_le4 cfg_s a.server;
-    WStep.lemma_server_finished_sent_recv_eq0 cfg_s a.server;
-    WStep.lemma_server_reachable_raw_received_parses cfg_s a.server;
-    eliminate exists (msgs:list CW.wire_message).
-      WF.parses_as CW.tls_record_wire_format sr msgs Seq.empty
-    returns WStep.raw_appdata_count (B.append sr raw)
-              == WStep.raw_appdata_count sr + WStep.raw_appdata_count raw
-    with _hp. WStep.lemma_raw_appdata_count_append sr raw msgs;
-    WStep.lemma_raw_appdata_count_seq_equal cs (B.append sr raw);
-    WStep.lemma_raw_appdata_count_seq_equal cr ss;
-    WStep.lemma_raw_appdata_count_seq_equal raw (CW.wire_serialize wire);
-    WStep.lemma_list_appdata_count_single_wire wire;
-    WStep.lemma_list_appdata_count_singleton wire
 #pop-options
 
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
@@ -3089,12 +2465,7 @@ let lemma_pw_pres_deliver_to_server
         // client unchanged: readiness / reachability transfer from a.
         assert (client_ready a);
         assert (client_byte_reachable b);
-        // ── client length 14 via the IN-FLIGHT byte-pairing squeeze. ──
-        lemma_pw_deliver_client_len14 a wire raw snap sent;
-        assert (FStar.List.Tot.length a.client.CS.cs_event_log == 14);
-        assert (FStar.List.Tot.length b.client.CS.cs_event_log == 14);
-        // ── server length 14 + pre-state key facts (via the underlying legal delta). ──
-        CSL.lemma_server_finished_sent_no_client_application_traffic a.server;
+        // ── server reachability / config (via the underlying legal delta). ──
         assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s');
         eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s'
         returns
@@ -3104,20 +2475,6 @@ let lemma_pw_pres_deliver_to_server
           CSL.lemma_step_model_preserves_config
             a.server.CS.cs_model d.CS.delta_event s'.CS.cs_model;
           lemma_server_reach_pres a s' (SM.WireEvent wire) out;
-          // pre-state key-schedule facts: client_hs + master Some (delivery legality),
-          // server_app preserved (atomic installs only client_app), shared from ksp.
-          lemma_server_finished_sent_into_appdata_client_hs
-            a.server.CS.cs_model d.CS.delta_event s'.CS.cs_model;
-          lemma_server_ready_installs_server_app s';
-          assert (Some?
-            a.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
-          assert (Some?
-            a.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
-          lemma_server_finished_sent_pre_length a.server.CS.cs_model;
-          PC.lemma_delta_length a.server s' d;
-          assert (FStar.List.Tot.length s'.CS.cs_event_log == 14);
-          assert (FStar.List.Tot.length b.client.CS.cs_event_log == 14 /\
-                  FStar.List.Tot.length b.server.CS.cs_event_log == 14);
           // ── four hellos Some on both sides. ──
           assert (b.server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
           lemma_server_appdata_hellos_some b.server;
@@ -3129,37 +2486,11 @@ let lemma_pw_pres_deliver_to_server
     )
 #pop-options
 
-(** Client event-log length is exactly 16 at the server-verify instant.  The
-    client is ready, so `client_appdata_len_ok a` bounds its length below by 16
-    and above by `11 + raw_appdata_count(sent) + raw_appdata_count(received)`.
-    The pre-appdata server has received ≤ 1 and sent ≤ 4 application-data records
-    (`lemma_server_preappdata_recv_le1` / `_sent_le4`); the quiescent byte-pairing
-    (Seq.equal client-sent/server-received and server-sent/client-received) carries
-    those bounds onto the client, so the upper bound collapses to 16. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
-let lemma_pw_verify_client_len16 (a:tls_system_state)
-  : Lemma
-      (requires
-        tls_system_inv a /\
-        TlsQuiet? a.channel /\
-        client_ready a /\
-        WStep.pre_appdata_ctrl a.server.CS.cs_model.CS.model_control)
-      (ensures FStar.List.Tot.length a.client.CS.cs_event_log == 14)
-  = let cfg_s = a.server.CS.cs_model.CS.model_config in
-    WStep.lemma_server_preappdata_recv_le1 cfg_s a.server;
-    WStep.lemma_server_preappdata_sent_le4 cfg_s a.server;
-    WStep.lemma_raw_appdata_count_seq_equal
-      a.client.CS.cs_wire_log.CL.raw_sent a.server.CS.cs_wire_log.CL.raw_received;
-    WStep.lemma_raw_appdata_count_seq_equal
-      a.server.CS.cs_wire_log.CL.raw_sent a.client.CS.cs_wire_log.CL.raw_received
-#pop-options
-
 (** server LOCAL — either the server was already ready (ROUTE A) or this is the
     verify step that NEWLY creates the both-ready boundary (ROUTE B ESTABLISHMENT).
-    At the verify, the server has just entered application data at event-log length
-    16; the client (unchanged, already ready) is at length 16 by the quiescent
-    byte-pairing; so `tls_application_ready b` holds and `lemma_pw_establish`
-    supplies the witnesses. **)
+    At the verify the server has just entered application data and the client is
+    unchanged (and already ready), so the both-ready boundary holds at `b` and the
+    counting-free `lemma_pw_establish` supplies the witnesses. **)
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 30 --split_queries always"
 let lemma_pw_pres_server_local
   (a b:tls_system_state)
@@ -3188,11 +2519,9 @@ let lemma_pw_pres_server_local
         // ── b-structural facts. ──
         lemma_bp_server_local a local s' out;
         lemma_wire_facts_server_local a b;
-        // ── client length 16 (unchanged; quiescent byte-pairing bounds). ──
+        // client unchanged: readiness transfers from a.
         assert (client_ready a);
-        lemma_pw_verify_client_len16 a;
-        assert (FStar.List.Tot.length a.client.CS.cs_event_log == 14);
-        // ── server length 16 + reachability (via the underlying legal delta). ──
+        // ── server reachability / config (via the underlying legal delta). ──
         assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s');
         eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s'
         returns
@@ -3202,11 +2531,6 @@ let lemma_pw_pres_server_local
           CSL.lemma_step_model_preserves_config
             a.server.CS.cs_model d.CS.delta_event s'.CS.cs_model;
           lemma_server_reach_pres a s' (SM.LocalEvent local) out;
-          lemma_server_verify_pre_length a.server.CS.cs_model;
-          PC.lemma_delta_length a.server s' d;
-          assert (FStar.List.Tot.length s'.CS.cs_event_log == 14);
-          assert (FStar.List.Tot.length b.client.CS.cs_event_log == 14 /\
-                  FStar.List.Tot.length b.server.CS.cs_event_log == 14);
           // ── four hellos Some on both sides (from stage_ok at appdata). ──
           assert (b.server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
           lemma_server_appdata_hellos_some b.server;
@@ -3340,7 +2664,6 @@ let lemma_pres_client_send (a b:tls_system_state)
                      (sent:M.tls_message).
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [w] /\
-      client_advances a.client c' /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) a.client.CS.cs_model sent }
     returns tls_system_inv b
@@ -3350,12 +2673,10 @@ let lemma_pres_client_send (a b:tls_system_state)
        lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
        lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
        lemma_client_reach_pres a c' (SM.LocalEvent local) out;
-       lemma_client_step_len_micro a.client c' (SM.LocalEvent local) out;
        lemma_client_step_ksp a.client c' (SM.LocalEvent local) out;
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
        lemma_bp_client_send a local c' out w sent;
        lemma_wire_facts_client_send a b;
-       lemma_client_appdata_len_pres_send a b local c' out w sent;
        lemma_pw_pres_client_send a b local c' out w sent)
 #pop-options
 
@@ -3368,7 +2689,6 @@ let lemma_pres_server_send (a b:tls_system_state)
                      (sent:M.tls_message).
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [w] /\
-      server_advances a.server s' /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) a.server.CS.cs_model sent }
     returns tls_system_inv b
@@ -3378,7 +2698,6 @@ let lemma_pres_server_send (a b:tls_system_state)
        lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
        lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
        lemma_server_reach_pres a s' (SM.LocalEvent local) out;
-       lemma_server_step_len_micro a.server s' (SM.LocalEvent local) out;
        lemma_server_step_ksp a.server s' (SM.LocalEvent local) out;
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
        lemma_bp_server_send a local s' out w sent;
@@ -3423,7 +2742,6 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
       a.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
-      server_advances a.server s' /\
       b == { a with server = s'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
@@ -3432,7 +2750,6 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        lemma_server_step_pres a.server s' (SM.WireEvent wire) out;
        lemma_server_step_shape a.server s' (SM.WireEvent wire) out;
        lemma_server_reach_pres a s' (SM.WireEvent wire) out;
-       lemma_server_step_len_micro a.server s' (SM.WireEvent wire) out;
        lemma_server_step_ksp a.server s' (SM.WireEvent wire) out;
        lemma_server_step_e2e a.server s' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_server a wire s' out raw snap sent;
@@ -3454,7 +2771,6 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
       a.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
-      client_advances a.client c' /\
       b == { a with client = c'; channel = TlsQuiet }
     returns tls_system_inv b
     with _pf.
@@ -3463,12 +2779,10 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
        lemma_client_step_shape a.client c' (SM.WireEvent wire) out;
        lemma_client_reach_pres a c' (SM.WireEvent wire) out;
-       lemma_client_step_len_micro a.client c' (SM.WireEvent wire) out;
        lemma_client_step_ksp a.client c' (SM.WireEvent wire) out;
        lemma_client_step_e2e a.client c' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_client a wire c' out raw snap sent;
        lemma_wire_facts_deliver_to_client a b;
-       lemma_client_appdata_len_pres_deliver a b wire c' out;
        lemma_pw_pres_deliver_to_client a b wire c' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3484,22 +2798,18 @@ let lemma_pres_client_local (a b:tls_system_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
-      client_local_advances a.client c' /\
       b == { a with client = c' }
     returns tls_system_inv b
     with _pf.
       (assert (SMC.connection_state_no_key_update_trace c');
        lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
-       lemma_client_local_advances_to_advances a.client c' local out;
        lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
        lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
        lemma_client_reach_pres a c' (SM.LocalEvent local) out;
-       lemma_client_step_len_micro a.client c' (SM.LocalEvent local) out;
        lemma_client_step_ksp a.client c' (SM.LocalEvent local) out;
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
        lemma_bp_client_local a local c' out;
        lemma_wire_facts_client_local a b;
-       lemma_client_appdata_len_pres_local a b local c' out;
        lemma_pw_pres_client_local a b local c' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3515,17 +2825,14 @@ let lemma_pres_server_local (a b:tls_system_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
-      server_local_advances a.server s' /\
       b == { a with server = s' }
     returns tls_system_inv b
     with _pf.
       (assert (SMC.connection_state_no_key_update_trace s');
        lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
-       lemma_server_local_advances_to_advances a.server s' local out;
        lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
        lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
        lemma_server_reach_pres a s' (SM.LocalEvent local) out;
-       lemma_server_step_len_micro a.server s' (SM.LocalEvent local) out;
        lemma_server_step_ksp a.server s' (SM.LocalEvent local) out;
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
        lemma_bp_server_local a local s' out;
@@ -3546,7 +2853,6 @@ let lemma_no_ku_backward_client_send (x y:tls_system_state)
                      (sent:M.tls_message).
       EC.client_step x.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [w] /\
-      client_advances x.client c' /\
       c'.CS.cs_event_log == x.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       y == { x with client = c'; channel = TlsInFlight CS.ServerEndpoint (emitted_raw out) x.client.CS.cs_model sent }
     returns tls_no_rekeying x
@@ -3560,7 +2866,6 @@ let lemma_no_ku_backward_server_send (x y:tls_system_state)
                      (sent:M.tls_message).
       ES.server_step x.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [w] /\
-      server_advances x.server s' /\
       s'.CS.cs_event_log == x.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       y == { x with server = s'; channel = TlsInFlight CS.ClientEndpoint (emitted_raw out) x.server.CS.cs_model sent }
     returns tls_no_rekeying x
@@ -3575,7 +2880,6 @@ let lemma_no_ku_backward_deliver_to_client (x y:tls_system_state)
       x.channel == TlsInFlight CS.ClientEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event x.client (SM.WireEvent wire) c' out /\
-      client_advances x.client c' /\
       y == { x with client = c'; channel = TlsQuiet }
     returns tls_no_rekeying x
     with _pf. lemma_client_step_no_ku_backward x.client c' (SM.WireEvent wire) out
@@ -3589,7 +2893,6 @@ let lemma_no_ku_backward_deliver_to_server (x y:tls_system_state)
       x.channel == TlsInFlight CS.ServerEndpoint raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event x.server (SM.WireEvent wire) s' out /\
-      server_advances x.server s' /\
       y == { x with server = s'; channel = TlsQuiet }
     returns tls_no_rekeying x
     with _pf. lemma_server_step_no_ku_backward x.server s' (SM.WireEvent wire) out
@@ -3601,7 +2904,6 @@ let lemma_no_ku_backward_client_local (x y:tls_system_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       EC.client_step x.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
-      client_local_advances x.client c' /\
       y == { x with client = c' }
     returns tls_no_rekeying x
     with _pf. lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
@@ -3613,7 +2915,6 @@ let lemma_no_ku_backward_server_local (x y:tls_system_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       ES.server_step x.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
-      server_local_advances x.server s' /\
       y == { x with server = s' }
     returns tls_no_rekeying x
     with _pf. lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
