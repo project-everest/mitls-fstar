@@ -161,3 +161,56 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       identically over `http://` and `https://`. Exercised by `make test-tls`
       (self-signed cert; `curl -k` GET → `200` + fixed body and POST → `200` +
       echoed body over HTTPS, with the verified parser status asserted).
+- [~] 6. **State-machine refinement** — connect the executable layer to the
+      protocol spec. Until item 5 the sample had two verified layers that never
+      met: the `HTTP.Wire.*` codecs + `HTTP.Impl.*` Pulse loops that the C server
+      actually runs, and `HTTP.Protocol.Length`, a `Common.StateMachine` /
+      `Common.FileTransfer` model verified in isolation. Nothing tied the running
+      bytes to the model.
+
+      Slice 1 DONE — the pure ghost-log refinement core, in the style of
+      `TFTP.Impl.Server.Log` / `YModem.Impl.Server.Log`:
+
+        * `HTTP.Impl.Server.Log` refines the Content-Length **response sender**
+          against `http_server_wfsm`. It defines the ghost log a running server
+          carries (bytes received, bytes written, claimed abstract state), the
+          single-step relation `hs_step_rel` and its RTC closure
+          `hs_state_ahead_preorder` (proved to be a legal monotonic-reference
+          preorder: closed under `CPI.state_ahead` and `histories_ahead`), the
+          reachable-trace invariant `server_trace_ok`, and per-operation advance
+          lemmas (start / send / complete / abort).
+
+        * `HTTP.Impl.Client.Log` does the same for the **body receiver** against
+          `http_client_wfsm`.
+
+      Two structural theorems make the HTTP endpoints simpler than TFTP/YMODEM:
+      the sender is *input-free* (`lemma_server_trace_no_wire_inputs` — every
+      `WireEvent` step is `False`) and the receiver is *output-free*
+      (`lemma_client_trace_no_wire_outputs`). Each therefore discharges one half
+      of `WFSM.valid_byte_trace` outright; the receiver satisfies the other half
+      through the datagram disjunct, since a body segment is not a strong-prefix
+      parser and `HTTP.Wire.Length` carries no stream-laws instance.
+
+      Capstones (all machine-checked, no `admit`/`assume`):
+
+        * `lemma_server_sent_bytes_are_body` — the bytes the server actually
+          wrote to the socket are *exactly* `ft_concat` of the abstract delivered
+          blocks; and `lemma_server_completed_sent_is_file` — on `FT_Completed`
+          they are exactly the file being served (no truncation, padding or
+          duplication).
+        * `lemma_client_received_bytes_are_file` / `lemma_client_completed_len` —
+          the dual for the receiver: the bytes read off the socket are exactly
+          the reassembly, and completion implies at least the declared
+          Content-Length was read.
+        * `lemma_end_to_end_transfer` — the two independently-verified endpoints
+          **compose**: if the sender ran to completion and the receiver consumed
+          exactly the bytes the sender produced, the file the receiver
+          reconstitutes IS the file the sender was serving.
+
+      Remaining: slice 2 — the Pulse `Common.ProtocolImplementation`
+      `protocol_implementation` instances (`HTTP.Impl.Server.CanonicalProtocol` /
+      `HTTP.Impl.Client.CanonicalProtocol`) that allocate a monotonic ghost
+      reference over `hs_state_ahead_preorder` / `hc_state_ahead_preorder` and
+      fold `server_trace_ok` / `client_trace_ok` into the loop invariant, so the
+      *extracted* loops carry the refinement rather than it being proved
+      alongside them.
