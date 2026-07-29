@@ -639,3 +639,193 @@ let lemma_end_to_end_transfer
   (* turn the extensional equalities into propositional ones so they compose *)
   Seq.lemma_eq_elim bytes (HP.http_client_file cst);
   SLog.lemma_server_completed_sent_is_file Seq.empty bytes sst
+
+(* ───────────────────────────────────────────────────────────────────────────
+   Bridge to `Common.ProtocolImplementation.{local,network}_process_correct`
+
+   These are the obligations the Pulse `protocol_implementation` instance in
+   `HTTP.Impl.Client.CanonicalProtocol` has to discharge at each of its exits.
+   ─────────────────────────────────────────────────────────────────────────── *)
+
+unfold
+let hc_result (status:CPI.process_status) (consumed_len produced_len:SZ.t)
+  : CPI.process_result =
+  { CPI.process_status = status;
+    CPI.process_consumed_len = consumed_len;
+    CPI.process_produced_len = produced_len;
+    CPI.process_app_len = 0sz }
+
+let lemma_client_output_written_empty (o:TCP.bytes)
+  : Lemma (CPI.output_written o 0sz Seq.empty)
+=
+  assert (Seq.equal (CPI.output_prefix o 0sz) Seq.empty)
+
+(* The receiver emits nothing, ever: `so_wire_outputs` is always `[]`. *)
+let lemma_client_no_output (o:TCP.bytes)
+  : Lemma
+      (CPI.output_written o 0sz
+        (WF.serialize_all http_wire_format ([] <: list http_message)))
+=
+  assert (WF.serialize_all http_wire_format ([] <: list http_message) == Seq.empty);
+  lemma_client_output_written_empty o
+
+(* A `Msg_body` datagram is consumed in its entirety, with no residual: this is
+   the DATAGRAM discipline of `http_wire_format` (`http_parse` on a `body_ok`
+   buffer yields `Msg_body` plus an empty remainder). *)
+let lemma_body_consumed_by_parse (input:TCP.bytes) (input_len:SZ.t) (p:body_payload)
+  : Lemma
+      (requires
+        SZ.v input_len <= Seq.length input /\
+        Seq.equal (CPI.input_bytes input input_len) (p <: TCP.bytes))
+      (ensures
+        CPI.consumed_by_parse http_wire_format
+          (CPI.input_bytes input input_len) (Msg_body p)
+          (CPI.input_bytes input input_len) Seq.empty)
+=
+  let avail = CPI.input_bytes input input_len in
+  Seq.lemma_eq_elim avail (p <: TCP.bytes);
+  lemma_parse_body_exact p;
+  Seq.append_empty_r avail
+
+#push-options "--z3rlimit 120 --fuel 4 --ifuel 4"
+(* THE network handler of the body receiver: a `Msg_body` segment really was
+   consumed, so the endpoint advances by exactly one spec step.  Stated in the
+   generic shape of `TFTP.Impl.Server.Log.lemma_network_stepok`: the caller
+   supplies the spec step it just took. *)
+let lemma_client_network_stepok
+  (input:TCP.bytes) (input_len:SZ.t)
+  (old_out out_bytes:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:HP.http_client_state)
+  (p:body_payload)
+  (st1:HP.http_client_state)
+  (wire_outputs:list http_message)
+  (produced:TCP.bytes)
+  : Lemma
+      (requires
+        CPI.buffers_wf input input_len old_out out_len /\
+        Seq.length out_bytes == Seq.length old_out /\
+        SZ.v input_len == Seq.length input /\
+        input == (p <: TCP.bytes) /\
+        HP.http_client_step st0 (SM.WireEvent (Msg_body p)) st1
+          ({ SM.so_wire_outputs = wire_outputs; SM.so_local_outputs = [] }) /\
+        Seq.equal produced (WF.serialize_all http_wire_format wire_outputs) /\
+        CPI.output_written out_bytes 0sz produced)
+      (ensures
+        CPI.network_process_correct HP.http_client_wfsm
+          input input_len old_out out_bytes out_len
+          received0 sent0 st0
+          (hc_result CPI.StepOk input_len 0sz)
+          (Seq.append received0 input) (Seq.append sent0 produced) st1
+          input wire_outputs [])
+=
+  Seq.lemma_eq_elim (CPI.input_bytes input input_len) input;
+  lemma_parse_body_exact p;
+  Seq.append_empty_r input;
+  assert (CPI.step_output wire_outputs ([] <: list unit) ==
+          ({ SM.so_wire_outputs = wire_outputs; SM.so_local_outputs = ([] <: list unit) }));
+  assert (CPI.consumed_by_parse
+            HP.http_client_wfsm.WFSM.wfsm_wire_format
+            (CPI.input_bytes input input_len) (Msg_body p) input Seq.empty);
+  assert (HP.http_client_wfsm.WFSM.wfsm_state_machine.SM.sm_step
+            st0 (SM.WireEvent (Msg_body p)) st1 (CPI.step_output wire_outputs []));
+  let result = hc_result CPI.StepOk input_len 0sz in
+  assert_norm (result.CPI.process_status == CPI.StepOk);
+  assert_norm (result.CPI.process_consumed_len == input_len);
+  assert_norm (result.CPI.process_produced_len == 0sz);
+  introduce exists (msg':http_message) (residual:TCP.bytes) (produced':TCP.bytes).
+    CPI.consumed_by_parse
+      HP.http_client_wfsm.WFSM.wfsm_wire_format
+      (CPI.input_bytes input input_len) msg' input residual /\
+    SZ.v result.CPI.process_consumed_len == Seq.length input /\
+    HP.http_client_wfsm.WFSM.wfsm_state_machine.SM.sm_step
+      st0 (SM.WireEvent msg') st1 (CPI.step_output wire_outputs []) /\
+    Seq.equal produced' (WF.serialize_all HP.http_client_wfsm.WFSM.wfsm_wire_format wire_outputs) /\
+    CPI.output_written out_bytes result.CPI.process_produced_len produced' /\
+    Seq.equal (Seq.append received0 input) (Seq.append received0 input) /\
+    Seq.equal (Seq.append sent0 produced) (Seq.append sent0 produced')
+  with (Msg_body p) Seq.empty produced
+  and ();
+  match result.CPI.process_status with
+  | CPI.StepOk ->
+    assert (CPI.network_process_correct HP.http_client_wfsm
+              input input_len old_out out_bytes out_len
+              received0 sent0 st0
+              result
+              (Seq.append received0 input) (Seq.append sent0 produced) st1
+              input wire_outputs [])
+    by (
+      FStar.Tactics.norm
+        [delta_only [`%CPI.network_process_correct]; iota; zeta; primops];
+      FStar.Tactics.smt ())
+  | _ -> assert False
+
+#pop-options
+
+(* No wire input is acceptable: a sound no-progress `IllegalTransition` no-op. *)
+let lemma_client_network_noop
+  (input:TCP.bytes) (input_len:SZ.t)
+  (old_out:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:HP.http_client_state)
+  : Lemma
+      (requires CPI.buffers_wf input input_len old_out out_len)
+      (ensures
+        CPI.network_process_correct HP.http_client_wfsm input input_len
+          old_out old_out out_len
+          received0 sent0 st0
+          (hc_result CPI.IllegalTransition 0sz 0sz)
+          received0 sent0 st0
+          Seq.empty [] [])
+=
+  lemma_client_output_written_empty old_out;
+  assert (WF.serialize_all http_wire_format ([] <: list http_message) == Seq.empty);
+  assert (Seq.equal (Seq.append received0 (Seq.empty <: TCP.bytes)) received0);
+  assert (Seq.equal (Seq.append sent0 (Seq.empty <: TCP.bytes)) sent0);
+  assert (CPI.network_error_refines_state_machine HP.http_client_wfsm
+            (CPI.input_bytes input input_len) st0 st0 Seq.empty [] [])
+
+(* A local event that really fired.  The receiver's only local event is
+   `Client_start`, which emits nothing. *)
+let lemma_client_local_stepok
+  (ev:HP.http_client_local)
+  (old_out out_bytes:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0 st1:HP.http_client_state)
+  (wire_outputs:list http_message)
+  (produced:TCP.bytes)
+  : Lemma
+      (requires
+        SZ.v out_len == Seq.length old_out /\
+        Seq.length out_bytes == Seq.length old_out /\
+        HP.http_client_step st0 (SM.LocalEvent ev) st1
+          ({ SM.so_wire_outputs = wire_outputs; SM.so_local_outputs = [] }) /\
+        Seq.equal produced (WF.serialize_all http_wire_format wire_outputs) /\
+        CPI.output_written out_bytes 0sz produced)
+      (ensures
+        CPI.local_process_correct HP.http_client_wfsm ev old_out out_bytes out_len
+          received0 sent0 st0
+          (hc_result CPI.StepOk 0sz 0sz)
+          received0 (Seq.append sent0 produced) st1 wire_outputs [])
+=
+  assert (CPI.step_output wire_outputs ([] <: list unit) ==
+          ({ SM.so_wire_outputs = wire_outputs; SM.so_local_outputs = ([] <: list unit) }))
+
+(* A local event that is not enabled: a sound `IllegalTransition` no-op. *)
+let lemma_client_local_illegal
+  (ev:HP.http_client_local)
+  (old_out out_bytes:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:HP.http_client_state)
+  : Lemma
+      (requires
+        SZ.v out_len == Seq.length old_out /\
+        Seq.equal out_bytes old_out /\
+        Seq.length out_bytes == Seq.length old_out)
+      (ensures
+        CPI.local_process_correct HP.http_client_wfsm ev old_out out_bytes out_len
+          received0 sent0 st0
+          (hc_result CPI.IllegalTransition 0sz 0sz)
+          received0 sent0 st0
+          [] [])
+=
+  assert (WF.serialize_all http_wire_format ([] <: list http_message) == Seq.empty);
+  lemma_client_output_written_empty out_bytes;
+  Seq.append_empty_r sent0;
+  assert (CPI.local_error_refines_state_machine HP.http_client_wfsm st0 st0 [] [])

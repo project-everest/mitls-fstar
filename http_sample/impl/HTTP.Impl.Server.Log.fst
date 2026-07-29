@@ -865,3 +865,94 @@ let lemma_server_sent_is_reassembly
 =
   lemma_server_sent_bytes_are_body received sent st;
   HP.lemma_http_server_reconstitution st
+
+(* ───────────────────────────────────────────────────────────────────────────
+   Bridge to `Common.ProtocolImplementation.{local,network}_process_correct`
+
+   These are the obligations the Pulse `protocol_implementation` instance in
+   `HTTP.Impl.Server.CanonicalProtocol` has to discharge at each of its exits.
+   ─────────────────────────────────────────────────────────────────────────── *)
+
+unfold
+let hs_result (status:CPI.process_status) (consumed_len produced_len:SZ.t)
+  : CPI.process_result =
+  { CPI.process_status = status;
+    CPI.process_consumed_len = consumed_len;
+    CPI.process_produced_len = produced_len;
+    CPI.process_app_len = 0sz }
+
+(* A local event that really fired: `StepOk`, appending the produced bytes. *)
+let lemma_local_stepok
+  (ev:HP.http_server_local)
+  (old_out out_bytes:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:HP.http_server_state)
+  (produced_len:SZ.t)
+  (st1:HP.http_server_state)
+  (wire_outputs:list http_message)
+  (produced:TCP.bytes)
+  : Lemma
+      (requires
+        SZ.v out_len == Seq.length old_out /\
+        Seq.length out_bytes == Seq.length old_out /\
+        HP.http_server_step st0 (SM.LocalEvent ev) st1
+          ({ SM.so_wire_outputs = wire_outputs; SM.so_local_outputs = [] }) /\
+        Seq.equal produced (WF.serialize_all http_wire_format wire_outputs) /\
+        CPI.output_written out_bytes produced_len produced)
+      (ensures
+        CPI.local_process_correct HP.http_server_wfsm ev old_out out_bytes out_len
+          received0 sent0 st0
+          (hs_result CPI.StepOk 0sz produced_len)
+          received0
+          (Seq.append sent0 produced)
+          st1 wire_outputs [])
+=
+  assert (CPI.step_output wire_outputs ([] <: list unit) ==
+          ({ SM.so_wire_outputs = wire_outputs; SM.so_local_outputs = ([] <: list unit) }))
+
+(* A local event that is not enabled: a sound `IllegalTransition` no-op. *)
+let lemma_local_illegal
+  (ev:HP.http_server_local)
+  (old_out out_bytes:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:HP.http_server_state)
+  : Lemma
+      (requires
+        SZ.v out_len == Seq.length old_out /\
+        Seq.equal out_bytes old_out /\
+        Seq.length out_bytes == Seq.length old_out)
+      (ensures
+        CPI.local_process_correct HP.http_server_wfsm ev old_out out_bytes out_len
+          received0 sent0 st0
+          (hs_result CPI.IllegalTransition 0sz 0sz)
+          received0 sent0 st0
+          [] [])
+=
+  assert (WF.serialize_all http_wire_format ([] <: list http_message) == Seq.empty);
+  lemma_output_written_empty out_bytes;
+  Seq.append_empty_r sent0;
+  assert (CPI.local_error_refines_state_machine HP.http_server_wfsm st0 st0 [] [])
+
+(* THE network handler of the response sender.  `http_server_step` maps every
+   `SM.WireEvent` to `False`, so no wire input can ever advance this endpoint:
+   the only sound answer is the no-progress `IllegalTransition` no-op, and it is
+   sound *unconditionally* — whatever bytes arrive.  This is the refinement-level
+   statement of `lemma_server_trace_no_wire_inputs`. *)
+let lemma_network_noop
+  (input:TCP.bytes) (input_len:SZ.t)
+  (old_out:TCP.bytes) (out_len:SZ.t)
+  (received0 sent0:TCP.bytes) (st0:HP.http_server_state)
+  : Lemma
+      (requires CPI.buffers_wf input input_len old_out out_len)
+      (ensures
+        CPI.network_process_correct HP.http_server_wfsm input input_len
+          old_out old_out out_len
+          received0 sent0 st0
+          (hs_result CPI.IllegalTransition 0sz 0sz)
+          received0 sent0 st0
+          Seq.empty [] [])
+=
+  lemma_output_written_empty old_out;
+  assert (WF.serialize_all http_wire_format ([] <: list http_message) == Seq.empty);
+  assert (Seq.equal (Seq.append received0 (Seq.empty <: TCP.bytes)) received0);
+  assert (Seq.equal (Seq.append sent0 (Seq.empty <: TCP.bytes)) sent0);
+  assert (CPI.network_error_refines_state_machine HP.http_server_wfsm
+            (CPI.input_bytes input input_len) st0 st0 Seq.empty [] [])

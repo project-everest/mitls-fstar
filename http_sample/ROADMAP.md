@@ -161,7 +161,7 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       identically over `http://` and `https://`. Exercised by `make test-tls`
       (self-signed cert; `curl -k` GET → `200` + fixed body and POST → `200` +
       echoed body over HTTPS, with the verified parser status asserted).
-- [~] 6. **State-machine refinement** — connect the executable layer to the
+- [x] 6. **State-machine refinement** — connect the executable layer to the
       protocol spec. Until item 5 the sample had two verified layers that never
       met: the `HTTP.Wire.*` codecs + `HTTP.Impl.*` Pulse loops that the C server
       actually runs, and `HTTP.Protocol.Length`, a `Common.StateMachine` /
@@ -207,10 +207,42 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
           exactly the bytes the sender produced, the file the receiver
           reconstitutes IS the file the sender was serving.
 
-      Remaining: slice 2 — the Pulse `Common.ProtocolImplementation`
-      `protocol_implementation` instances (`HTTP.Impl.Server.CanonicalProtocol` /
-      `HTTP.Impl.Client.CanonicalProtocol`) that allocate a monotonic ghost
-      reference over `hs_state_ahead_preorder` / `hc_state_ahead_preorder` and
-      fold `server_trace_ok` / `client_trace_ok` into the loop invariant, so the
-      *extracted* loops carry the refinement rather than it being proved
-      alongside them.
+      **Slice 2 (done)** — the Pulse `Common.ProtocolImplementation`
+      `protocol_implementation` instances:
+
+        * `HTTP.Impl.Server.CanonicalProtocol.http_server_protocol_implementation`
+        * `HTTP.Impl.Client.CanonicalProtocol.http_client_protocol_implementation`
+
+      Each allocates a monotonic ghost reference over
+      `hs_state_ahead_preorder` / `hc_state_ahead_preorder`, folds
+      `server_trace_ok` / `client_trace_ok` into `pi_invariant`, and discharges
+      all five obligations of the class (`pi_invariant_valid`,
+      `pi_take_snapshot`, `pi_recall_snapshot`, `pi_process_network`,
+      `pi_process_local`) with no `admit`/`assume`.
+
+      Notable, and stronger than the TFTP/YMODEM analogues:
+
+        * The **sender's** `pi_process_network` is a *total, unconditional*
+          `IllegalTransition` no-op. That is not a shortcut: `http_server_step`
+          maps every `SM.WireEvent` to `False`, so the response sender provably
+          cannot be advanced by any wire input, and the no-progress disjunct of
+          `network_error_refines_state_machine` is the only sound answer for any
+          bytes whatsoever (`Log.lemma_network_noop`).
+        * The **receiver's** `pi_process_network` consumes exactly one
+          `Msg_body` datagram, with `consumed_by_parse` supplied by
+          `lemma_parse_body_exact`: a `body_ok` buffer parses to `Msg_body` of
+          itself with an *empty* residual, so the entire input is consumed. The
+          `body_ok` test (a body may not start with `'G'` or `'H'`) is performed
+          at run time, which is precisely what keeps a body segment unambiguous
+          against a request line or a status line on the wire.
+        * Because `hss_pending` / `hcs_received` are ghost, the concrete state
+          each handle carries is minimal but sufficient: the server's local frame
+          threads a `hslf_more` bit ("segments remain") and the client's handle
+          keeps a single *remaining-bytes* counter, each tied to the abstract
+          state by the invariant. That is what lets the concrete status flag stay
+          in lock-step with `ft_status` across every transition.
+
+      Both modules are verified but deliberately **not** extracted: a
+      `protocol_implementation` dictionary is not Low-star, and
+      `extract_loops.sh` drives an explicit module list, so the generated C is
+      unchanged.
