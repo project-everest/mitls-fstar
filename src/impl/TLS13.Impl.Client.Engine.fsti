@@ -60,6 +60,12 @@ type engine_step_result = {
   engine_step_app_out_len: SZ.t;
 }
 
+type certificate_verify_request = {
+  certificate_verify_input_len: SZ.t;
+  certificate_verify_signature_scheme: FStar.UInt16.t;
+  certificate_verify_signature_len: SZ.t;
+}
+
 val engine_live :
   e:client_engine ->
   st:CS.connection_state ->
@@ -339,14 +345,16 @@ fn copy_certificate_verify_request
                  input_out_len == engine_certificate_verify_input_capacity /\
                  signature_out_len == engine_signature_capacity /\
                  engine_waiting_for_certificate_signature 'st0)
-  returns snapshot:CR.certificate_verify_signature_snapshot
+  returns request:certificate_verify_request
   ensures exists* input_bytes signature_bytes.
           engine_live e 'st0 **
           pts_to input_out input_bytes **
           pts_to signature_out signature_bytes **
           pure (B.length input_bytes == SZ.v input_out_len /\
                 B.length signature_bytes == SZ.v signature_out_len /\
-                SZ.v snapshot.CR.cv_signature_len <=
+                SZ.v request.certificate_verify_input_len <=
+                  B.length input_bytes /\
+                SZ.v request.certificate_verify_signature_len <=
                   B.length signature_bytes /\
                 (match
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input,
@@ -358,15 +366,17 @@ fn copy_certificate_verify_request
                      (Seq.slice input_bytes 0 (B.length input))
                      input /\
                    L.signature_scheme_matches
-                     snapshot.CR.cv_signature_scheme
+                     request.certificate_verify_signature_scheme
                      (Sem.certificateVerify_scheme cv) /\
-                   SZ.v snapshot.CR.cv_signature_len ==
+                   SZ.v request.certificate_verify_input_len ==
+                     B.length input /\
+                   SZ.v request.certificate_verify_signature_len ==
                      B.length (Sem.certificateVerify_signature_bytes cv) /\
                    Seq.equal
                      (Seq.slice
                        signature_bytes
                        0
-                       (SZ.v snapshot.CR.cv_signature_len))
+                       (SZ.v request.certificate_verify_signature_len))
                      (Sem.certificateVerify_signature_bytes cv)
                  | _, _ -> False))
 
