@@ -492,33 +492,18 @@ let tls_emit (c c':CS.connection_state)
 let tls_carries (p:tls_payload) (w:CW.wire_message) : prop =
   Seq.equal (CW.wire_serialize w) p.pl_raw
 
-(** A placeholder anchor for the two endpoint state machines.  `sm_initial_state`
-    plays NO role in any of the seven derived move families (they use only
-    `sm_step`), and the TLS system's own initial state is `initial_tls_system
-    cfg_c cfg_s` above, parameterized by the real configs; the per-endpoint
-    reachability conjuncts of `tls_system_inv` likewise anchor at each endpoint's
-    OWN `CS.initial cfg`.  So the anchor here is immaterial. **)
-let tls_anchor_config : CS.connection_config = {
-  CS.config_role = CS.ClientEndpoint;
-  CS.config_server_name = B.empty;
-  CS.config_trust_store = { X.anchors = B.empty };
-  CS.config_validation_time = { X.seconds_since_epoch = 0 };
-  CS.config_cipher_suites = [];
-  CS.config_signature_schemes = [];
-  CS.config_server = None;
-}
-
-let tls_anchor_state : CS.connection_state = CS.initial tls_anchor_config
-
 (** The TLS system as an instance of the generic MACHINE product
     (`Common.MachineProduct`), which itself feeds `Common.SystemProduct`'s
     single-slot directed-channel discipline.
 
     Nothing about message delivery is written here any more.  We supply only the
-    two endpoint state machines — `WStep.client_sm` / `WStep.server_sm`, the
-    unrefined wrappers around the OFFICIAL canonical `EC.client_step` /
-    `ES.server_step`, both over the SAME wire type `CW.wire_message` — plus the
-    tiny channel interface (`tls_emit` / `tls_carries`).  TLS has no fused
+    two endpoints' step relations — the OFFICIAL canonical `EC.client_step` and
+    `ES.server_step` VERBATIM, both over the SAME wire type `CW.wire_message` —
+    plus the tiny channel interface (`tls_emit` / `tls_carries`).  No initial
+    state is needed: where a run starts is `initial_tls_system cfg_c cfg_s`
+    above, parameterized by the real configs, and the per-endpoint reachability
+    conjuncts of `tls_system_inv` anchor at each endpoint's own `CS.initial cfg`.
+    TLS has no fused
     receive-and-respond, so `MP.full_duplex_moves` enables exactly the six
     families this system has always had and leaves `server_serve` disabled.
 
@@ -528,8 +513,8 @@ let tls_machine_iface
   : MP.machine_iface
       CS.connection_state CS.connection_state tls_payload
       CW.wire_message CTy.client_local_event CTy.server_local_event EAPI.local_output = {
-  csm     = WStep.client_sm tls_anchor_state;
-  ssm     = WStep.server_sm tls_anchor_state;
+  cstep   = EC.client_step #CTy.client_local_event;
+  sstep   = ES.server_step #CTy.server_local_event;
   emit_c  = tls_emit;
   emit_s  = tls_emit;
   carries = tls_carries;
@@ -723,12 +708,7 @@ let lemma_deliver_to_server_intro
         b == { a with server = s'; channel = MP.Quiet })
       (ensures tls_step_deliver_to_server a b)
   = let pl : tls_payload = { pl_raw = raw; pl_snap = snap; pl_sent = sent } in
-    // Bridge the interface's higher-order fields to their concrete definitions;
-    // without these the SMT solver will not build the family's existential.
-    assert (a.channel == MP.ToServer pl);
-    assert (tls_machine_iface.MP.carries pl wire);
-    assert (tls_machine_iface.MP.ssm.SM.sm_step a.server (SM.WireEvent wire) s' out);
-    assert (b == ({ a with server = s'; channel = MP.Quiet } <: tls_system_state))
+    MP.lemma_mp_deliver_to_server_intro tls_machine_iface a b pl wire s' out
 #pop-options
 
 (** The converse direction for a server-internal step. **)
@@ -742,8 +722,7 @@ let lemma_server_local_intro
         out.SM.so_wire_outputs == [] /\
         b == { a with server = s' })
       (ensures tls_step_server_local a b)
-  = assert (tls_machine_iface.MP.ssm.SM.sm_step a.server (SM.LocalEvent local) s' out);
-    assert (b == ({ a with server = s' } <: tls_system_state))
+  = MP.lemma_mp_server_local_intro tls_machine_iface a b local s' out
 #pop-options
 
 (** Reflexive step used by the temporal layer. **)

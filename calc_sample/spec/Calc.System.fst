@@ -136,18 +136,18 @@ let calc_machine_iface
   : MP.machine_iface
       client_state_abs calc_log calc_payload
       CalcP.calc_frame calc_client_local_event CalcP.calc_frame_local_event unit = {
-  csm     = calc_client_state_machine;
-  ssm     = CalcP.calc_frame_state_machine;
+  cstep   = calc_client_step;
+  sstep   = CalcP.calc_frame_step;
   emit_c  = (fun _a _a' out p -> out.SM.so_wire_outputs == [p]);
   emit_s  = (fun _a _a' out p -> out.SM.so_wire_outputs == [p]);
   carries = (fun p w -> p == w);
   moves   = MP.request_response_moves;
 }
 
-(** Initial state: fresh client, fresh server, empty channel.  This is exactly
-    the generic initial system, because the two machines' initial states are
-    `initial_client` and `initial_log`. **)
-let initial_system : system_state = MP.initial_sys calc_machine_iface
+(** Initial state: fresh client, fresh server, empty channel — the generic
+    initial system at the two endpoints' own initial states. **)
+let initial_system : system_state =
+  MP.initial_sys initial_client initial_log
 
 let sys_step : R.binrel system_state =
   fun s s' -> MP.machine_step calc_machine_iface s s'
