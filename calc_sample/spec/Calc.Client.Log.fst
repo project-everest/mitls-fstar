@@ -21,6 +21,7 @@ module Calc.Client.Log
 module L = FStar.List.Tot
 module Seq = FStar.Seq
 module R = FStar.ReflexiveTransitiveClosure
+module SM = Common.StateMachine
 module CalcP = Calc.Protocol
 
 open FStar.Preorder
@@ -221,3 +222,48 @@ val lemma_client_issue_single_step
   : Lemma
       (client_single_step st (client_issue b st))
 let lemma_client_issue_single_step b st = ()
+
+(** ─────────────────────────────────────────────────────────────────────────
+    The client as a `Common.StateMachine.state_machine`
+
+    The server already is one (`Calc.Protocol.calc_frame_state_machine`, over
+    `calc_log`).  Giving the client one too — over the SAME wire type
+    `CalcP.calc_frame` — means both endpoints speak a single wire language, and
+    lets the combined system be obtained as an instance of the generic
+    `Common.MachineProduct` construction instead of hand-writing the move
+    families a second time.
+
+    The two step relations are exactly the two relations already defined above:
+    a LOCAL `ClientIssue b` event issues request frame `b` (and emits it on the
+    wire), and a WIRE event on a response frame `rb` completes the round trip
+    (and emits nothing).
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** The client's local (application-driven) events: issue a request frame. **)
+type calc_client_local_event =
+  | ClientIssue : client_frame -> calc_client_local_event
+
+(** The client's step relation. **)
+let calc_client_step
+  (st0:client_state_abs)
+  (ev:SM.event CalcP.calc_frame calc_client_local_event)
+  (st1:client_state_abs)
+  (out:SM.step_output CalcP.calc_frame unit)
+  : GTot prop =
+  match ev with
+  | SM.LocalEvent (ClientIssue b) ->
+    client_issue_step_ok st0 st1 b /\
+    out.SM.so_wire_outputs == [b] /\
+    out.SM.so_local_outputs == []
+  | SM.WireEvent rb ->
+    client_recv_step_ok st0 st1 rb /\
+    out.SM.so_wire_outputs == [] /\
+    out.SM.so_local_outputs == []
+
+noextract
+let calc_client_state_machine
+  : SM.state_machine client_state_abs CalcP.calc_frame calc_client_local_event unit =
+  {
+    SM.sm_initial_state = initial_client;
+    SM.sm_step = calc_client_step;
+  }
