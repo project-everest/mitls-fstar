@@ -134,7 +134,7 @@ fn serialize_client_hello_from_start
                 V.length l.L.client_hello_key_share == 32 /\
                 V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
                 V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
-                V.length client_hello_bytes == 512 /\
+                V.length client_hello_bytes == 8192 /\
                 B.length random == 32 /\
                 B.length server_name == L.max_server_name_len /\
                 B.length key_share == 32 /\
@@ -146,7 +146,7 @@ fn serialize_client_hello_from_start
                 B.length old_l_key_share == 32 /\
                 Seq.length old_l_cipher_suites == L.max_cipher_suites /\
                 Seq.length old_l_signature_schemes == L.max_signature_schemes /\
-                B.length old_client_hello_bytes == 512 /\
+                B.length old_client_hello_bytes == 8192 /\
                 B.length old_network_out == SZ.v network_out_len /\
                 517 <= SZ.v network_out_len /\
                 SZ.v server_name_len <= B.length server_name /\
@@ -220,13 +220,13 @@ fn serialize_client_hello_from_start
                V.length l.L.client_hello_key_share == 32 /\
                V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
                V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
-               V.length client_hello_bytes == 512 /\
+               V.length client_hello_bytes == 8192 /\
                B.length random == 32 /\
                B.length server_name == L.max_server_name_len /\
                B.length key_share == 32 /\
                Seq.length cipher_suites == L.max_cipher_suites /\
                Seq.length signature_schemes == L.max_signature_schemes /\
-               B.length handshake_bytes == 512 /\
+               B.length handshake_bytes == 8192 /\
                B.length network_out_bytes == SZ.v network_out_len /\
                SZ.v server_name_len <= B.length server_name /\
                SZ.v cipher_suites_len <= Seq.length cipher_suites /\

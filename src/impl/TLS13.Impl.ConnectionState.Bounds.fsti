@@ -11,7 +11,7 @@ let max_cipher_suites : nat = 64
 noextract
 let max_signature_schemes : nat = 32
 noextract
-let max_client_hello_len : nat = 512
+let max_client_hello_len : nat = 8192
 noextract
 let max_server_hello_len : nat = 4096
 noextract
@@ -37,7 +37,7 @@ inline_for_extraction let max_hostname_len_sz : SZ.t = 255sz
 inline_for_extraction let max_public_key_len_sz : SZ.t = 4096sz
 inline_for_extraction let max_cipher_suites_sz : SZ.t = 64sz
 inline_for_extraction let max_signature_schemes_sz : SZ.t = 32sz
-inline_for_extraction let max_client_hello_len_sz : SZ.t = 512sz
+inline_for_extraction let max_client_hello_len_sz : SZ.t = 8192sz
 inline_for_extraction let max_server_hello_len_sz : SZ.t = 4096sz
 inline_for_extraction let max_handshake_flight_len_sz : SZ.t = 32768sz
 inline_for_extraction let max_transcript_len_sz : SZ.t = 65535sz

@@ -327,7 +327,8 @@ exact list.  What a ClientHello must satisfy today:
 | --- | --- |
 | `cipher_suites` **contains** `TLS_CHACHA20_POLY1305_SHA256` (<= 64 entries) | yes |
 | `signature_algorithms` **contains** `rsa_pss_rsae_sha256` (<= 32 entries) | yes |
-| `key_share` offers X25519 | yes (browsers also offer X25519MLKEM768, tolerated) |
+| `key_share` offers X25519 | yes (browsers/new curl also offer X25519MLKEM768, tolerated) |
+| ClientHello <= 8192 bytes | yes (~1800 bytes with a post-quantum key share) |
 | ~~a `server_name` (SNI) extension is present~~ | **CLOSED** -- SNI is now optional |
 
 `supported_groups` is tolerant, TLS 1.2 legacy suites in the list are tolerated,
@@ -426,6 +427,32 @@ The spec never required SNI: `sni_policy_accepts None _ = True`
 (`TLS13.Spec.StateMachine`), and the runtime server config sets
 `server_sni_policy = None`.  A server that *does* set an SNI policy still gets
 the RFC 6066 matching behaviour, unchanged.
+
+### ClientHello size (was a 512-byte cliff edge)
+
+`max_client_hello_len` used to be **512 bytes**, which is exactly the size
+OpenSSL pads a small ClientHello to.  Older clients therefore landed precisely on
+the limit and worked, while anything a few bytes larger was rejected -- with no
+alert, just a dropped connection, surfacing as
+`error:0A000126:SSL routines::unexpected eof while reading` on the client and
+`verified TLS handshake failed: (no driver)` in the server log.
+
+The trigger in practice is the **post-quantum `X25519MLKEM768` key share**, which
+OpenSSL 3.5+ / recent curl and current browsers offer by default; it adds ~1200
+bytes, giving a ~1800-byte ClientHello.  `curl --curves X25519` was a reliable
+workaround because it drops that share.
+
+The bound is now **8192**, verified end to end: a synthetic 1732-byte
+ClientHello carrying an `X25519MLKEM768` share *ahead of* the X25519 share is
+accepted (the parser skips key-share entries for groups it does not implement).
+Cost is one ~8 KB per-connection buffer
+(`TLS13.Impl.ConnectionState.Repr.fst`, `alloc_empty_sized_bytes`).
+
+**Still open:** an over-size or otherwise unacceptable ClientHello is answered by
+closing the connection rather than by a `decode_error` / `handshake_failure`
+alert.  That is fail-closed and safe, but it makes misconfiguration hard to
+diagnose.  Emitting an alert requires producing a record from a state where no
+connection has been established yet, so it is a non-trivial proof change.
 
 ### Status
 
