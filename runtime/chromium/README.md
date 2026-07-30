@@ -113,9 +113,13 @@ cd mitls-chromium-demo-linux-x86_64
 
 The headless invocation is a self-test that requires both the expected HTTPS
 DOM and the verified-provider selection diagnostic. The visible invocation
-opens the same page in a browser window. The bundle records source revisions,
-SHA-256 checksums, and build-host dynamic dependencies and checks destination
-dependencies before launch.
+opens the same page in a browser window. Both modes force software rendering
+and prevent non-localhost DNS resolution so host GPU drivers and unrelated
+browser services cannot affect the controlled demo. Failed runs retain the
+browser log, server log, and Chromium NetLog in the printed temporary
+directory. The bundle records source revisions, SHA-256 checksums, and
+build-host dynamic dependencies and checks destination dependencies before
+launch.
 
 The browser provider is statically linked into `chrome`; no miTLS shared
 library is required. The archive still relies on compatible Linux system

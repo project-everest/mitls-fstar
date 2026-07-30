@@ -579,7 +579,12 @@ void VerifiedMiTlsClientSocket::OnConnectComplete(int result) {
   if (!connect_callback_) {
     return;
   }
-  std::move(connect_callback_).Run(MapCoreResult(result));
+  int mapped = MapCoreResult(result);
+  if (mapped != OK) {
+    LOG(ERROR) << "Verified miTLS asynchronous connect failed: " << mapped
+               << " (core result " << result << ")";
+  }
+  std::move(connect_callback_).Run(mapped);
 }
 
 void VerifiedMiTlsClientSocket::OnReadComplete(int result) {

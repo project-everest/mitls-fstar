@@ -20,6 +20,9 @@ The scripts start the bundled server on an automatically selected localhost
 port and launch this bundle's Chromium binary with `--use-verified-mitls`.
 Success requires the page to contain `verified chromium demo` and Chromium's
 diagnostics to report that the verified miTLS provider was selected.
+The controlled launcher forces software rendering and prevents DNS resolution
+for non-localhost names, avoiding destination-specific GPU drivers and unrelated
+browser background connections.
 
 This is a narrow demonstration profile: TLS 1.3, X25519,
 TLS_CHACHA20_POLY1305_SHA256, RSA-PSS-RSAE-SHA256, and HTTP/1.1 without ALPN.
@@ -32,6 +35,11 @@ in `SYSTEM_LIBRARIES.txt`. A visible run also requires a graphical Linux
 desktop. The demo uses `--no-sandbox` because an archive cannot install
 Chromium's setuid sandbox with the required root ownership. Run it only against
 the bundled localhost server in a controlled environment.
+
+If a run fails, `run-demo.sh` retains its temporary directory and prints its
+location. That directory contains `chromium.log`, `server.log`, and
+`netlog.json` for diagnosis. Set `MITLS_DEMO_KEEP_ARTIFACTS=1` to retain these
+files after a successful run as well.
 
 `server/leaf.key` is a public, test-only private key. Never reuse it outside
 this demonstration.
