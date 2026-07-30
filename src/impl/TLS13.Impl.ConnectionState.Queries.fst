@@ -839,7 +839,7 @@ fn can_send_client_hello_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes.
     assert (pure True);
   unfold (sized_bytes_exactly
@@ -1560,7 +1560,7 @@ fn can_select_supported_server_parameters_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes. _;
   unfold (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
@@ -1842,7 +1842,7 @@ fn can_schedule_select_server_parameters_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes. _;
 
   let tag = !c.control.control_tag;
@@ -1935,7 +1935,7 @@ fn can_schedule_derive_shared_secret_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes. _;
   unfold (key_schedule_exactly
     c.handshake.keys
@@ -2067,7 +2067,7 @@ fn can_send_server_hello_runtime
                CS.server_selection_key_share_consistent selection /\
                Some? selection.CS.server_key_share_private
              | None -> False) /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
               max_transcript_len)
 {
   unfold (connection_exactly c st0);
@@ -2110,7 +2110,7 @@ fn can_send_server_hello_runtime
   let shared_secret_present = !c.handshake.keys.shared_secret.present;
   let current_transcript_len = !c.handshake.transcript.len;
   let no_server_hello = None? server_hello;
-  let max_start = SZ.sub max_transcript_len_sz 90sz;
+  let max_start = SZ.sub max_transcript_len_sz 122sz;
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
   let ok =
@@ -2152,7 +2152,7 @@ fn can_send_server_hello_runtime
   assert (pure (current_transcript_len == transcript_len));
   assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
   assert (pure (ok ==>
-    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
       max_transcript_len));
   if ok {
     CSL.lemma_connection_state_consistent_server_pre_server_hello_shape st0;
@@ -6021,4 +6021,52 @@ fn can_receive_close_notify
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
   ok
+}
+
+fn read_client_hello_session_id
+  (c:connection_state)
+  (out:array U8.t)
+  (#st0:erased CS.connection_state)
+  (#pout:erased (Seq.seq U8.t))
+  requires connection_exactly c st0 **
+           pts_to out pout **
+           pure (B.length pout == 32)
+  ensures exists* (o:Seq.seq U8.t).
+            connection_exactly c st0 **
+            pts_to out o **
+            pure (B.length o == 32 /\
+                  Seq.equal o (stored_client_hello_session_id st0))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+       ch_cipher_suites ch_signature_schemes.
+    assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_session_id ch_session_id);
+
+  Arr.pts_to_len out;
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_session_id;
+  Arr.pts_to_len (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_session_id);
+  Arr.memcpy
+    32sz
+    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_session_id)
+    out;
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_session_id;
+
+  assert (pure (Seq.equal (Ghost.reveal ch_session_id)
+                          (stored_client_hello_session_id (Ghost.reveal st0))));
+
+  fold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
 }

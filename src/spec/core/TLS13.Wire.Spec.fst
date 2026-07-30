@@ -844,8 +844,8 @@ let lemma_parse_plaintext_serialize_plaintext (pt:M.plaintext)
        handshake codec. --- *)
 let parse_supported_server_hello_impl (input:B.bytes)
   : GTot (option supported_server_hello) =
-  if SHC.server_hello_ok_52 input then
-    match take_range input 6 32, take_range input 52 32 with
+  if SHC.server_hello_ok_84 input then
+    match take_range input 6 32, take_range input 84 32 with
     | Some random, Some key_share ->
       Some {
         random = random;
@@ -853,8 +853,8 @@ let parse_supported_server_hello_impl (input:B.bytes)
         cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
       }
     | _, _ -> None
-  else if SHC.server_hello_ok_58 input then
-    match take_range input 6 32, take_range input 58 32 with
+  else if SHC.server_hello_ok_90 input then
+    match take_range input 6 32, take_range input 90 32 with
     | Some random, Some key_share ->
       Some {
         random = random;
@@ -882,25 +882,25 @@ let lemma_parse_supported_server_hello_fields (input:B.bytes)
         | Some sh ->
           sh.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
           Seq.equal sh.random (Seq.slice input 6 38) /\
-          ((SHC.server_hello_ok_52 input /\
-            Seq.equal sh.key_share (Seq.slice input 52 84)) \/
-           (SHC.server_hello_ok_58 input /\
-            Seq.equal sh.key_share (Seq.slice input 58 90)))
+          ((SHC.server_hello_ok_84 input /\
+            Seq.equal sh.key_share (Seq.slice input 84 116)) \/
+           (SHC.server_hello_ok_90 input /\
+            Seq.equal sh.key_share (Seq.slice input 90 122)))
         | None -> False))
 =
-  if SHC.server_hello_ok_52 input then
+  if SHC.server_hello_ok_84 input then
     begin
       Seq.lemma_len_slice input 6 38;
       Seq.lemma_eq_intro (Seq.slice input 6 38) (Seq.slice input 6 38);
-      Seq.lemma_len_slice input 52 84;
-      Seq.lemma_eq_intro (Seq.slice input 52 84) (Seq.slice input 52 84)
+      Seq.lemma_len_slice input 84 116;
+      Seq.lemma_eq_intro (Seq.slice input 84 116) (Seq.slice input 84 116)
     end
   else
     begin
       Seq.lemma_len_slice input 6 38;
       Seq.lemma_eq_intro (Seq.slice input 6 38) (Seq.slice input 6 38);
-      Seq.lemma_len_slice input 58 90;
-      Seq.lemma_eq_intro (Seq.slice input 58 90) (Seq.slice input 58 90)
+      Seq.lemma_len_slice input 90 122;
+      Seq.lemma_eq_intro (Seq.slice input 90 122) (Seq.slice input 90 122)
     end
 
 let parse_sealed_record (input:B.bytes) : GTot (option M.sealed_record) =

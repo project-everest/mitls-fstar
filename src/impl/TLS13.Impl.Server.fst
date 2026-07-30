@@ -739,7 +739,7 @@ fn process_send_server_hello_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 95 /\
+                 SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
                  (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
@@ -748,6 +748,7 @@ fn process_send_server_hello_serialized
                    SS.mk_server_hello_witness
                      (Ghost.reveal server_random_bytes)
                      (Ghost.reveal server_key_share_bytes)
+                     (CM.stored_client_hello_session_id 'st0)
                      (T.TLS_CHACHA20_POLY1305_SHA256) /\
                  CM.can_send_server_hello
                    'st0
@@ -815,14 +816,14 @@ fn process_send_server_hello_from_arrays
                  B.length 'server_key_share_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 95 /\
+                 SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -839,7 +840,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -894,7 +895,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'server_private_key_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 95 /\
+                 SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
@@ -902,7 +903,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                  (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                       (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -920,7 +921,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
                  (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                        (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                        (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -2506,13 +2507,14 @@ fn process_local_event
                  // to True (no GSH.serverHello witness builder in Model yet).  The
                  // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
                  // for a symbolic random.  Both threaded as explicit caller obligation.
-                 (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 95 ==>
+                 (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 127 ==>
                   (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
                    let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                    (Seq.length server_random_bytes == 32 ==>
                     (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                    (let sh = SS.mk_server_hello_witness server_random_bytes
                       (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+                      (CM.stored_client_hello_session_id 'st0)
                       T.TLS_CHACHA20_POLY1305_SHA256 in
                     CM.can_send_server_hello 'st0 sh
                       (CS.serialized_cleartext_tls_message
@@ -2697,7 +2699,7 @@ fn process_local_event
     }
     ST.LocalSendServerHello -> {
       assert (pure (B.length (Ghost.reveal 'payload_bytes) == 64));
-      if (network_out_len = 95sz) {
+      if (network_out_len = 127sz) {
         let mut server_random = [| 0uy; 32sz |];
         let mut server_private_key = [| 0uy; 32sz |];
         SMat.copy_server_random_and_private_from_payload
@@ -2925,13 +2927,14 @@ fn process_local_event_with_credentials
                // to True (no GSH.serverHello witness builder in Model yet).  The
                // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
                // for a symbolic random.  Both threaded as explicit caller obligation.
-               (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 95 ==>
+               (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 127 ==>
                 (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
                  let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                  (Seq.length server_random_bytes == 32 ==>
                   (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                  (let sh = SS.mk_server_hello_witness server_random_bytes
                     (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+                    (CM.stored_client_hello_session_id 'st0)
                     T.TLS_CHACHA20_POLY1305_SHA256 in
                   CM.can_send_server_hello 'st0 sh
                     (CS.serialized_cleartext_tls_message

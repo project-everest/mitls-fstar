@@ -89,7 +89,7 @@ fn serialize_client_hello_from_start
   requires exists* random server_name server_name_len key_share
                   cipher_suites cipher_suites_len
                   signature_schemes signature_schemes_len
-                  old_present old_l_random old_l_server_name old_l_key_share
+                  old_present old_l_random old_l_session_id old_l_server_name old_l_key_share
                   old_l_cipher_suites old_l_signature_schemes
                   old_client_hello_bytes_len old_client_hello_bytes old_network_out.
           V.pts_to start_random random **
@@ -102,6 +102,7 @@ fn serialize_client_hello_from_start
           Box.pts_to start_signature_schemes_len signature_schemes_len **
           Box.pts_to client_hello_present old_present **
           V.pts_to l.L.client_hello_random old_l_random **
+          V.pts_to l.L.client_hello_session_id old_l_session_id **
           V.pts_to l.L.client_hello_server_name old_l_server_name **
           V.pts_to l.L.client_hello_key_share old_l_key_share **
           V.pts_to l.L.client_hello_cipher_suites old_l_cipher_suites **
@@ -116,6 +117,7 @@ fn serialize_client_hello_from_start
                 V.is_full_vec start_cipher_suites /\
                 V.is_full_vec start_signature_schemes /\
                 V.is_full_vec l.L.client_hello_random /\
+                V.is_full_vec l.L.client_hello_session_id /\
                 V.is_full_vec l.L.client_hello_server_name /\
                 V.is_full_vec l.L.client_hello_key_share /\
                 V.is_full_vec l.L.client_hello_cipher_suites /\
@@ -127,6 +129,7 @@ fn serialize_client_hello_from_start
                 V.length start_cipher_suites == L.max_cipher_suites /\
                 V.length start_signature_schemes == L.max_signature_schemes /\
                 V.length l.L.client_hello_random == 32 /\
+                V.length l.L.client_hello_session_id == 32 /\
                 V.length l.L.client_hello_server_name == L.max_server_name_len /\
                 V.length l.L.client_hello_key_share == 32 /\
                 V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
@@ -138,6 +141,7 @@ fn serialize_client_hello_from_start
                 Seq.length cipher_suites == L.max_cipher_suites /\
                 Seq.length signature_schemes == L.max_signature_schemes /\
                 B.length old_l_random == 32 /\
+                B.length old_l_session_id == 32 /\
                 B.length old_l_server_name == L.max_server_name_len /\
                 B.length old_l_key_share == 32 /\
                 Seq.length old_l_cipher_suites == L.max_cipher_suites /\
@@ -169,7 +173,7 @@ fn serialize_client_hello_from_start
                 FStar.List.Tot.length (Ghost.reveal sa) <= 16 /\
                 Ghost.reveal ch ==
                   SerH.poc_canonical_ch (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks)
-                    (Ghost.reveal cs) (Ghost.reveal sa))
+                    (Ghost.reveal rnd) (Ghost.reveal cs) (Ghost.reveal sa))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* random server_name server_name_len key_share
                  cipher_suites cipher_suites_len
@@ -185,6 +189,7 @@ fn serialize_client_hello_from_start
           Box.pts_to start_signature_schemes_len signature_schemes_len **
           Box.pts_to client_hello_present true **
           V.pts_to l.L.client_hello_random random **
+          V.pts_to l.L.client_hello_session_id random **
           V.pts_to l.L.client_hello_server_name server_name **
           V.pts_to l.L.client_hello_key_share key_share **
           V.pts_to l.L.client_hello_cipher_suites cipher_suites **
@@ -198,6 +203,7 @@ fn serialize_client_hello_from_start
                V.is_full_vec start_cipher_suites /\
                V.is_full_vec start_signature_schemes /\
                V.is_full_vec l.L.client_hello_random /\
+               V.is_full_vec l.L.client_hello_session_id /\
                V.is_full_vec l.L.client_hello_server_name /\
                V.is_full_vec l.L.client_hello_key_share /\
                V.is_full_vec l.L.client_hello_cipher_suites /\
@@ -209,6 +215,7 @@ fn serialize_client_hello_from_start
                V.length start_cipher_suites == L.max_cipher_suites /\
                V.length start_signature_schemes == L.max_signature_schemes /\
                V.length l.L.client_hello_random == 32 /\
+               V.length l.L.client_hello_session_id == 32 /\
                V.length l.L.client_hello_server_name == L.max_server_name_len /\
                V.length l.L.client_hello_key_share == 32 /\
                V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
@@ -514,6 +521,7 @@ fn serialize_server_hello_from_selection
   (#sh: erased GSH.serverHello)
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
+  (#sid: erased B.bytes)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: array U8.t)
@@ -522,19 +530,20 @@ fn serialize_server_hello_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 90 /\
+                SZ.v out_len == 122 /\
                 Seq.length (Ghost.reveal rnd) == 32 /\
                 (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                 Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal sid) == 32 /\
                 Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                 Ghost.reveal sh ==
-                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal cs))
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 90 /\
-                SZ.v written == 90 /\
+          pure (B.length out_bytes == 122 /\
+                SZ.v written == 122 /\
                 Seq.equal out_bytes
                  (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 
@@ -542,6 +551,7 @@ fn serialize_server_hello_record_from_selection
   (#sh: erased GSH.serverHello)
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
+  (#sid: erased B.bytes)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: array U8.t)
@@ -550,19 +560,20 @@ fn serialize_server_hello_record_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 95 /\
+                SZ.v out_len == 127 /\
                 Seq.length (Ghost.reveal rnd) == 32 /\
                 (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                 Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal sid) == 32 /\
                 Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                 Ghost.reveal sh ==
-                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal cs))
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 95 /\
-                SZ.v written == 95 /\
+          pure (B.length out_bytes == 127 /\
+                SZ.v written == 127 /\
                 Seq.equal out_bytes
                  (WS.serialize_record
                    T.Handshake
@@ -574,7 +585,7 @@ fn serialize_server_hello_record_from_selection
                  Some
                    (T.Handshake,
                     WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
-                    95) /\
+                    127) /\
                 CS.raw_records_exactly out_bytes T.Handshake 1)
 
 fn serialize_empty_encrypted_extensions

@@ -546,7 +546,7 @@ let lemma_select_derive_success_server_hello_ready
        Some? st2.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
        st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
        Some? st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
-       B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+       B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
          Bounds.max_transcript_len /\
        (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
@@ -568,6 +568,7 @@ let lemma_select_derive_success_server_hello_ready
   let sh = SS.mk_server_hello_witness
              server_random
              (CryptoSpec.x25519_public_from_private server_private_key)
+             (CM.stored_client_hello_session_id st0)
              T.TLS_CHACHA20_POLY1305_SHA256 in
   assert (exists st1 shared.
     server_driver_selection_from_payload_correct st0 st1 payload /\
@@ -661,7 +662,7 @@ let lemma_select_derive_success_server_hello_ready
   CM.lemma_server_hello_of_selection_matches selection;
   CM.lemma_server_hello_of_selection_bytesize selection;
   assert (CS.server_hello_matches_selection selection sh_sel);
-  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 90);
+  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 122);
   assert (CS.legal_event
     st2.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -706,7 +707,7 @@ let lemma_assemble_can_send_server_hello
        Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
        (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection).CS.server_selected_cipher_suite ==
          T.TLS_CHACHA20_POLY1305_SHA256 /\
-       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
          Bounds.max_transcript_len /\
        ST.server_local_event_input_ready st ST.LocalSendServerHello payload /\
        (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
@@ -715,12 +716,14 @@ let lemma_assemble_can_send_server_hello
        (let sh = SS.mk_server_hello_witness
                   (CL.raw_slice payload 0 32)
                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                  (CM.stored_client_hello_session_id st)
                   T.TLS_CHACHA20_POLY1305_SHA256 in
-        B.length (W.serialize_handshake (M.ServerHello sh)) == 90))
+        B.length (W.serialize_handshake (M.ServerHello sh)) == 122))
       (ensures
        (let sh = SS.mk_server_hello_witness
                   (CL.raw_slice payload 0 32)
                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                  (CM.stored_client_hello_session_id st)
                   T.TLS_CHACHA20_POLY1305_SHA256 in
         CM.can_send_server_hello st sh
           (CS.serialized_cleartext_tls_message
@@ -732,6 +735,7 @@ let lemma_assemble_can_send_server_hello
   Seq.lemma_len_slice payload 32 64;
   let key_share = CryptoSpec.x25519_public_from_private server_private_key in
   let sh = SS.mk_server_hello_witness server_random key_share
+             (CM.stored_client_hello_session_id st)
              T.TLS_CHACHA20_POLY1305_SHA256 in
   let selection = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
   assert (Seq.equal selection.CS.server_random server_random);
@@ -2047,6 +2051,7 @@ fn send_server_hello_from_payload_once
                             (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                             (CryptoSpec.x25519_public_from_private
                               (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                            (CM.stored_client_hello_session_id 'st0)
                             T.TLS_CHACHA20_POLY1305_SHA256 in
                   CM.can_send_server_hello 'st0 sh
                     (CS.serialized_cleartext_tls_message
@@ -2106,7 +2111,7 @@ fn send_server_hello_from_payload_once
    assert (pts_to server_random server_random_bytes);
  with server_private_key_bytes.
    assert (pts_to server_private_key server_private_key_bytes);
- let mut server_hello_out = [| 0uy; 95sz |];
+ let mut server_hello_out = [| 0uy; 127sz |];
  with server_hello_out_bytes.
    assert (pts_to server_hello_out server_hello_out_bytes);
  unfold (server_driver_buffers d buffered buffered_len);
@@ -2123,7 +2128,7 @@ fn send_server_hello_from_payload_once
  V.to_array_pts_to d.server_driver_app_out;
  assert (pure (B.length server_random_bytes == 32));
  assert (pure (B.length server_private_key_bytes == 32));
- assert (pure (B.length server_hello_out_bytes == 95));
+ assert (pure (B.length server_hello_out_bytes == 127));
  assert (pure (Seq.equal
    server_random_bytes
    (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)));
@@ -2139,6 +2144,7 @@ fn send_server_hello_from_payload_once
  assert (pure (let sh = SS.mk_server_hello_witness
      server_random_bytes
      (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+     (CM.stored_client_hello_session_id 'st0)
      T.TLS_CHACHA20_POLY1305_SHA256 in
    CM.can_send_server_hello
      'st0
@@ -2152,7 +2158,7 @@ fn send_server_hello_from_payload_once
      server_random
      server_private_key
      server_hello_out
-     95sz
+     127sz
      (V.vec_to_array d.server_driver_app_out)
      driver_app_out_capacity;
  with st1 network_out_bytes app_out_bytes.
@@ -2162,7 +2168,7 @@ fn send_server_hello_from_payload_once
      pts_to server_private_key server_private_key_bytes **
      pts_to server_hello_out network_out_bytes **
      pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
- assert (pure (B.length network_out_bytes == 95));
+ assert (pure (B.length network_out_bytes == 127));
  assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
  assert (pure (Seq.equal
    network_out_bytes
@@ -2172,6 +2178,7 @@ fn send_server_hello_from_payload_once
          (SS.mk_server_hello_witness
            server_random_bytes
            (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+           (CM.stored_client_hello_session_id 'st0)
            T.TLS_CHACHA20_POLY1305_SHA256))))));
  Seq.lemma_eq_elim
    network_out_bytes
@@ -2181,6 +2188,7 @@ fn send_server_hello_from_payload_once
          (SS.mk_server_hello_witness
            server_random_bytes
            (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+           (CM.stored_client_hello_session_id 'st0)
            T.TLS_CHACHA20_POLY1305_SHA256))));
  assert (pure (server_driver_send_server_hello_from_payload_success_correct
    'st0
@@ -2465,8 +2473,9 @@ fn select_derive_send_server_hello_from_payload_once
                            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                            (CryptoSpec.x25519_public_from_private
                              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                           (CM.stored_client_hello_session_id 'st0)
                            T.TLS_CHACHA20_POLY1305_SHA256 in
-                 B.length (W.serialize_handshake (M.ServerHello sh)) == 90))
+                 B.length (W.serialize_handshake (M.ServerHello sh)) == 122))
  returns result:server_driver_select_derive_server_hello_result
  ensures (match result with
           | ServerDriverSelectDeriveServerHelloOk ->
@@ -2570,7 +2579,7 @@ fn select_derive_send_server_hello_from_payload_once
      assert (pure (Some?
        st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
      assert (pure (
-       B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+       B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
          Bounds.max_transcript_len));
      lemma_select_derive_success_server_hello_ready
        'st0
@@ -2590,13 +2599,15 @@ fn select_derive_send_server_hello_from_payload_once
                      (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                      (CryptoSpec.x25519_public_from_private
                        (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                     (CM.stored_client_hello_session_id st2)
                      T.TLS_CHACHA20_POLY1305_SHA256 in
-       B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
+       B.length (W.serialize_handshake (M.ServerHello sh)) == 122));
      lemma_assemble_can_send_server_hello st2 (Ghost.reveal 'payload_bytes);
      assert (pure (let sh = SS.mk_server_hello_witness
                      (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                      (CryptoSpec.x25519_public_from_private
                        (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                     (CM.stored_client_hello_session_id st2)
                      T.TLS_CHACHA20_POLY1305_SHA256 in
        CM.can_send_server_hello st2 sh
          (CS.serialized_cleartext_tls_message
@@ -3787,11 +3798,12 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                         ServerDriverAcceptServerHelloMaterialFailed
                       } else {
                         // [differs] establishes the cst-guard for material_bytes; the
-                        // ==90 serialized-length follows from the existing lemma.
+                        // ==122 serialized-length follows from the existing lemma.
                         SS.lemma_mk_server_hello_witness_bytesize
                           (CL.raw_slice material_bytes 0 32)
                           (CryptoSpec.x25519_public_from_private
                             (CL.raw_slice material_bytes 32 64))
+                          (CM.stored_client_hello_session_id 'st0)
                           T.TLS_CHACHA20_POLY1305_SHA256;
                         assert (pure (
                           (Seq.length (CL.raw_slice material_bytes 0 32) == 32 ==>
@@ -3801,8 +3813,9 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                                      (CL.raw_slice material_bytes 0 32)
                                      (CryptoSpec.x25519_public_from_private
                                        (CL.raw_slice material_bytes 32 64))
+                                     (CM.stored_client_hello_session_id 'st0)
                                      T.TLS_CHACHA20_POLY1305_SHA256 in
-                           B.length (W.serialize_handshake (M.ServerHello sh)) == 90)));
+                           B.length (W.serialize_handshake (M.ServerHello sh)) == 122)));
                         let server_hello_result =
                           select_derive_send_server_hello_from_payload_once
                             d

@@ -264,7 +264,12 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
     GCH.clientHello_extensions_list_bytesize_cons sn_ext [sg_ext; sa_ext; ks_ext; sv_ext];
     let exts : GCH.clientHello_extensions = [sn_ext; sg_ext; sa_ext; ks_ext; sv_ext] in
     let comp : GCH.clientHello_legacy_compression_methods = Seq.create 1 0uy in
-    let sid : GCH.clientHello_legacy_session_id = B.empty in
+    (* RFC 8446 D.4 middlebox compatibility: send a non-empty, 32-byte
+       legacy_session_id.  Any 32-byte value is legal (RFC 8446 4.1.2), and both
+       fields travel in the same cleartext message, so we reuse the client
+       random rather than carrying a second 32-byte secret through the whole
+       handshake_start plumbing. *)
+    let sid : GCH.clientHello_legacy_session_id = r32 in
     { GCH.legacy_version = GPV.TLS_1p2;
       GCH.random = r32;
       GCH.legacy_session_id = sid;
@@ -304,6 +309,26 @@ let sho_random (sel:CS.server_handshake_selection)
           assert_norm (Seq.index GSHB.serverHello_body_cst 0 == 0xcfuy);
           Seq.create 32 0uy)
 
+(* The 32-byte legacy_session_id of the ClientHello currently stored in the
+   connection state -- i.e. exactly what the ServerHello must echo back for
+   RFC 8446 D.4 middlebox compatibility.  Ghost-only: the runtime value is
+   read out of the stored ClientHello mirror.  Defined for every state (the
+   all-zero default is never observable, because the ServerHello send path
+   runs only in HsClientHelloReceived). *)
+noextract
+let stored_client_hello_session_id (st:CS.connection_state)
+  : (b:Seq.seq U8.t { Seq.length b == 32 })
+  = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch -> Sem.clientHello_session_id_32 ch
+    | None -> Seq.create 32 0uy
+
+(* clamp: the echoed legacy_session_id is fixed at 32 bytes (identity under
+   valid_selection; see the middlebox-compatibility note above). *)
+noextract
+let sho_session_id (sel:CS.server_handshake_selection)
+  : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b == 32 })
+  = Sem.clientHello_session_id_32 sel.CS.server_selected_client_hello
+
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
 let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHello
@@ -324,7 +349,7 @@ let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHe
     GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     let exts : GSHBody.serverHelloBody_extensions = [ks_ext; sv_ext] in
-    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = B.empty in
+    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = sho_session_id sel in
     let body : GSHBody.serverHelloBody = {
       GSHBody.legacy_session_id_echo = sid;
       GSHBody.cipher_suite = cs;
@@ -506,7 +531,7 @@ val lemma_client_hello_of_start_matches
 
 // Server mirror of the client bound (see lemma_client_hello_of_start_matches's
 // record-size reasoning): the canonical server_hello_of_selection serializes to
-// exactly 90 bytes (legacy_version TLS_1p2 + 32-byte random + empty session-id +
+// exactly 122 bytes (legacy_version TLS_1p2 + 32-byte random + 32-byte session-id echo +
 // CHACHA cipher suite + null compression + [X25519 key_share; supported_versions]).
 // Reveals serialize_handshake to the generated serializer and computes the
 // bytesize; used to discharge the transcript-length obligation inside
@@ -516,14 +541,14 @@ val lemma_server_hello_of_selection_bytesize
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
-              (M.ServerHello (server_hello_of_selection sel))) == 90)
+              (M.ServerHello (server_hello_of_selection sel))) == 122)
 
 // Server mirror: under valid_selection, the canonical server_hello_of_selection
 // satisfies the spec's server_hello_matches_selection: every
 // TLS13.Wire.Semantics accessor returns the corresponding `selection` field (the
 // clamp in server_hello_of_selection is an identity under valid_selection).
 // The <= 16640 conjunct in server_hello_matches_selection is discharged from the
-// exact 90-byte bytesize above (lemma_server_hello_of_selection_bytesize).
+// exact 122-byte bytesize above (lemma_server_hello_of_selection_bytesize).
 val lemma_server_hello_of_selection_matches
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)

@@ -407,7 +407,7 @@ fn can_send_server_hello_runtime
                CS.server_selection_key_share_consistent selection /\
                Some? selection.CS.server_key_share_private
              | None -> False) /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
               max_transcript_len)
 
 fn can_receive_client_finished
@@ -999,3 +999,21 @@ fn can_receive_close_notify
              st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+
+/// Read the (clamped, 32-byte) legacy_session_id of the stored ClientHello
+/// into [out].  Total: when no ClientHello is stored the mirror still holds
+/// its all-zero initial content, which is what
+/// [Model.stored_client_hello_session_id] reports for such a state.
+fn read_client_hello_session_id
+  (c:connection_state)
+  (out:array U8.t)
+  (#st0:erased CS.connection_state)
+  (#pout:erased (Seq.seq U8.t))
+  requires connection_exactly c st0 **
+           pts_to out pout **
+           pure (B.length pout == 32)
+  ensures exists* (o:Seq.seq U8.t).
+            connection_exactly c st0 **
+            pts_to out o **
+            pure (B.length o == 32 /\
+                  Seq.equal o (stored_client_hello_session_id st0))

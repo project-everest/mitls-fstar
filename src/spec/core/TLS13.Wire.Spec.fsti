@@ -573,10 +573,10 @@ val lemma_parse_supported_server_hello_fields:
       | Some sh ->
         sh.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
         Seq.equal sh.random (Seq.slice input 6 38) /\
-        ((SHC.server_hello_ok_52 input /\
-          Seq.equal sh.key_share (Seq.slice input 52 84)) \/
-         (SHC.server_hello_ok_58 input /\
-          Seq.equal sh.key_share (Seq.slice input 58 90)))
+        ((SHC.server_hello_ok_84 input /\
+          Seq.equal sh.key_share (Seq.slice input 84 116)) \/
+         (SHC.server_hello_ok_90 input /\
+          Seq.equal sh.key_share (Seq.slice input 90 122)))
       | None -> False))
 
 val parse_sealed_record:
