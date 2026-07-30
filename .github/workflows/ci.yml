@@ -101,8 +101,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The heaviest modules are built first, one bottleneck at a time, so the
+          # subsequent full parallel build does not run several memory-hungry
+          # fstar.exe processes at once and OOM the runner.  Keep this list in
+          # sync with the largest _cache/*.fst.checked files; a target naming a
+          # module that no longer exists fails with "Error 5: No file provided".
           - name: tls-root (make test)
-            cmd: make -j"$(nproc)" _cache/TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.fst.checked && make -j"$(nproc)" test
+            cmd: make -j"$(nproc)" _cache/TLS13.ConnectionState.ProtectedWireHead.fst.checked && make -j"$(nproc)" _cache/TLS13.ConnectionState.ProtectedWireServerFlightInversion.fst.checked && make -j"$(nproc)" _cache/TLS13.ConnectionState.ProtectedWireClientFinishedInversion.fst.checked && make -j"$(nproc)" test
             cache_generated: true
           - name: calc (test-c)
             cmd: make -j"$(nproc)" -C calc_sample test-c

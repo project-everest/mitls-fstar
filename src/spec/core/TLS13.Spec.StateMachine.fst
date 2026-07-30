@@ -736,25 +736,76 @@ let step_handshake_message
         msg)
       HsCertificateVerifyReceived)
   | CL.Received, M.Finished fin, ControlHandshaking HsCertificateVerifyVerified ->
-    Some (with_handshake_stage
-      { model with
-          model_record =
-            { model.model_record with
-                record_read = R.next_seq model.model_record.record_read;
-            };
-      }
-      { hs with hs_server_finished = Some fin }
-      HsServerFinishedReceived)
+    // Fix 1 (atomic): the client processes the server Finished in a single step -
+    // append it to the transcript, mark it verified, and install the server's
+    // application read keys (record read epoch -> Application) so that no window
+    // exists in which the server can send an application-keys record the client
+    // cannot decrypt. The application traffic secret is derived from the transcript
+    // THROUGH the server Finished, so the append happens before the derivation.
+    let hs_v =
+      append_handshake_to_transcript
+        { hs with
+            hs_server_finished = Some fin;
+            hs_server_finished_verified = true;
+        }
+        (M.Finished fin) in
+    (match hs_v.hs_keys.ks_master_secret with
+     | Some master ->
+       let secret = K.server_application_traffic_secret master (Tr.hash hs_v.hs_transcript) in
+       let material = traffic_key_material_for_secret secret in
+       Some (with_handshake_stage
+         { model with
+             model_record =
+               { model.model_record with
+                   record_read =
+                     R.install_keys
+                       model.model_record.record_read
+                       R.Application
+                       material.traffic_key
+                       material.traffic_iv;
+               };
+         }
+         { hs_v with
+             hs_keys =
+               { hs_v.hs_keys with ks_server_application_traffic = Some material };
+         }
+         HsServerFinishedVerified)
+     | None -> None)
   | CL.Received, M.Finished fin, ControlHandshaking HsServerFinishedSent ->
-    Some (with_handshake_stage
-      { model with
-          model_record =
-            { model.model_record with
-                record_read = R.next_seq model.model_record.record_read;
-            };
-      }
-      { hs with hs_client_finished = Some fin }
-      HsClientFinishedReceived)
+    // Fix 1 (atomic, mirror): the server processes the client Finished in a single
+    // step - install the client's application read keys (record read epoch ->
+    // Application) and advance to ControlApplicationData, closing the mirror window
+    // in which the client could send an application-keys record the server cannot
+    // decrypt. The application traffic secret is derived from the transcript THROUGH
+    // the server Finished (already present), so it is computed BEFORE appending the
+    // client Finished to the transcript.
+    (match hs.hs_keys.ks_master_secret with
+     | Some master ->
+       let secret = K.client_application_traffic_secret master (Tr.hash hs.hs_transcript) in
+       let material = traffic_key_material_for_secret secret in
+       let hs_v =
+         append_handshake_to_transcript
+           { hs with hs_client_finished = Some fin }
+           (M.Finished fin) in
+       Some {
+         model with
+           model_control = ControlApplicationData;
+           model_record =
+             { model.model_record with
+                 record_read =
+                   R.install_keys
+                     model.model_record.record_read
+                     R.Application
+                     material.traffic_key
+                     material.traffic_iv;
+             };
+           model_handshake =
+             { hs_v with
+                 hs_keys =
+                   { hs_v.hs_keys with ks_client_application_traffic = Some material };
+             };
+       }
+     | None -> None)
   | CL.Sent, M.Finished fin, ControlHandshaking HsServerFinishedVerified ->
     Some {
       model with
@@ -907,6 +958,13 @@ let step_tls_message
            };
        }
      | CL.Sent -> None)
+  | M.TlsAlert alert, ControlFailed _ ->
+    // A failed connection is dead: it sends nothing further (a `Sent` alert from
+    // `ControlFailed` is illegal / not a real transition).  Receiving an alert on
+    // an already-failed connection is passive and stays failed (idempotent).
+    (match dir with
+     | CL.Sent -> None
+     | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsAlert alert, _ ->
     Some (fail_model model (T.AlertError alert))
   | M.TlsChangeCipherSpec, ControlHandshaking _ ->
@@ -1202,6 +1260,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate_verify == None /\
+    W.certificateVerify_representable cv /\
     (match hs.hs_certificate, hs.hs_server_selection with
      | Some _, Some selection ->
        server_certificate_verify_signature_valid selection hs cv /\
@@ -1273,6 +1332,7 @@ let legal_handshake_message
     hs.hs_encrypted_extensions <> None /\
     hs.hs_certificate == None /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
+    W.certificate_representable cert /\
     (match model.model_config.config_server with
      | Some cfg -> certificate_msg_matches_server_config cfg cert
      | None -> False)
@@ -1281,6 +1341,7 @@ let legal_handshake_message
     hs.hs_certificate <> None /\
     hs.hs_certificate_verify_verified == false /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
+    W.certificateVerify_representable cv /\
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv
      | None -> False)
@@ -1302,10 +1363,12 @@ let legal_handshake_message
     Some? hs.hs_validated_peer
   | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
     model.model_config.config_role == ClientEndpoint /\
-    Some? hs.hs_keys.ks_server_handshake_traffic
+    Some? hs.hs_keys.ks_server_handshake_traffic /\
+    Some? hs.hs_keys.ks_master_secret
   | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
     model.model_config.config_role == ServerEndpoint /\
-    Some? hs.hs_keys.ks_client_handshake_traffic
+    Some? hs.hs_keys.ks_client_handshake_traffic /\
+    Some? hs.hs_keys.ks_master_secret
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\

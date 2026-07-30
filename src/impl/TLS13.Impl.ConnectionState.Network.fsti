@@ -405,6 +405,10 @@ fn mark_received_server_finished
                   st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished == None /\
                   Some?
                     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+                  Some?
+                    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+                  B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                    max_transcript_len /\
                   U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                   CS.event_raw_delta_legal
                     st0.CS.cs_model

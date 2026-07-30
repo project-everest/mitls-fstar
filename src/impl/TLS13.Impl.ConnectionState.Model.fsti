@@ -1140,17 +1140,45 @@ let received_client_finished_state
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   let msg = M.Finished fin in
+  // Fix 1 (atomic Finished delivery, server mirror): on delivery of the client
+  // Finished the server derives the client-application traffic secret from the
+  // CURRENT transcript (already through the server Finished), installs the
+  // client-application READ keys, populates the client-application traffic slot,
+  // appends the client Finished to the transcript, and advances directly to
+  // ControlApplicationData.  This mirrors the step_handshake_message transition.
+  let new_model =
+    match hs0.CS.hs_keys.CS.ks_master_secret with
+    | Some master ->
+      let secret =
+        K.client_application_traffic_secret master (Tr.hash hs0.CS.hs_transcript) in
+      let material = CS.traffic_key_material_for_secret secret in
+      let hs_v =
+        CS.append_handshake_to_transcript
+          { hs0 with CS.hs_client_finished = Some fin }
+          msg in
+      {
+        model0 with
+          CS.model_control = CS.ControlApplicationData;
+          CS.model_record =
+            { model0.CS.model_record with
+                CS.record_read =
+                  R.install_keys
+                    model0.CS.model_record.CS.record_read
+                    R.Application
+                    material.CS.traffic_key
+                    material.CS.traffic_iv;
+            };
+          CS.model_handshake =
+            { hs_v with
+                CS.hs_keys =
+                  { hs_v.CS.hs_keys with
+                      CS.ks_client_application_traffic = Some material };
+            };
+      }
+    | None -> model0
+  in
   {
-    CS.cs_model =
-      CS.with_handshake_stage
-        { model0 with
-            CS.model_record =
-              { model0.CS.model_record with
-                  CS.record_read = R.next_seq model0.CS.model_record.CS.record_read;
-              };
-        }
-        { hs0 with CS.hs_client_finished = Some fin }
-        CS.HsClientFinishedReceived;
+    CS.cs_model = new_model;
     CS.cs_wire_log = {
       CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
       CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
@@ -1174,6 +1202,10 @@ let can_receive_client_finished
   st.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
   Some?
     st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+  Some?
+    st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+    max_transcript_len /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
   CS.legal_event
     st.CS.cs_model
@@ -1414,23 +1446,51 @@ let received_server_finished_state
   (st:CS.connection_state)
   (fin:GFin.finished)
   (raw_received:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   let msg = M.Finished fin in
-  let model1 = {
-    model0 with
-      CS.model_record = {
-        model0.CS.model_record with
-          CS.record_read = R.next_seq model0.CS.model_record.CS.record_read;
-      };
-  } in
-  {
-    CS.cs_model =
+  // Fix 1 (atomic Finished delivery): on delivery of the server Finished the
+  // client appends it to the transcript, marks it verified, derives the
+  // server-application traffic secret from the transcript THROUGH the server
+  // Finished, installs the server-application READ keys, populates the
+  // server-application traffic slot, and advances to HsServerFinishedVerified.
+  // This mirrors the step_handshake_message transition.
+  let hs_v =
+    CS.append_handshake_to_transcript
+      { hs0 with
+          CS.hs_server_finished = Some fin;
+          CS.hs_server_finished_verified = true;
+      }
+      msg in
+  let new_model =
+    match hs_v.CS.hs_keys.CS.ks_master_secret with
+    | Some master ->
+      let secret =
+        K.server_application_traffic_secret master (Tr.hash hs_v.CS.hs_transcript) in
+      let material = CS.traffic_key_material_for_secret secret in
       CS.with_handshake_stage
-        model1
-        { hs0 with CS.hs_server_finished = Some fin }
-        CS.HsServerFinishedReceived;
+        { model0 with
+            CS.model_record =
+              { model0.CS.model_record with
+                  CS.record_read =
+                    R.install_keys
+                      model0.CS.model_record.CS.record_read
+                      R.Application
+                      material.CS.traffic_key
+                      material.CS.traffic_iv;
+              };
+        }
+        { hs_v with
+            CS.hs_keys =
+              { hs_v.CS.hs_keys with
+                  CS.ks_server_application_traffic = Some material };
+        }
+        CS.HsServerFinishedVerified
+    | None -> model0
+  in
+  {
+    CS.cs_model = new_model;
     CS.cs_wire_log = {
       CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
       CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
@@ -2904,6 +2964,8 @@ val lemma_received_server_finished_state_evolves
                   CS.ClientEndpoint /\
       Some?
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
       CS.event_raw_delta_legal
         st.CS.cs_model
                   (CS.ConnNetworkEvent {
