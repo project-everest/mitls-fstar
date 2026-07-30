@@ -682,7 +682,7 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
 	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
 	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*,TLS13.Wire.Semantics' \
 	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \

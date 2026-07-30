@@ -57,8 +57,8 @@ int main(int argc, char **argv) {
   SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
   if (!ctx) { ERR_print_errors_fp(stderr); return 1; }
 
-  /* The verified server does not implement middlebox-compatibility mode. */
-  SSL_CTX_clear_options(ctx, SSL_OP_ENABLE_MIDDLEBOX_COMPAT);
+  /* Middlebox-compatibility mode stays ENABLED: the verified server echoes
+     the ClientHello legacy_session_id (RFC 8446 D.4). */
 
   if (SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION) != 1 ||
       SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) != 1 ||

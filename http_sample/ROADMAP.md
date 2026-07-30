@@ -323,22 +323,44 @@ with `openssl s_client` shows the ClientHello must satisfy **all** of:
 
 | Requirement | Browsers / curl |
 | --- | --- |
-| `cipher_suites` == exactly `TLS_CHACHA20_POLY1305_SHA256` | offer 3+ suites |
+| `cipher_suites` == exactly `TLS_CHACHA20_POLY1305_SHA256` | offer 3+ suites (plus the renegotiation SCSV) |
 | `signature_algorithms` == exactly `rsa_pss_rsae_sha256` | offer ~10 |
 | TLS 1.3-only ClientHello (no TLS 1.2 legacy suites) | offer TLS 1.2 |
-| middlebox-compatibility mode **off** (empty `legacy_session_id`, no dummy CCS) | always on, not switchable |
+| ~~middlebox-compatibility mode **off**~~ | **CLOSED** -- see below |
 
 `supported_groups` is tolerant -- a default multi-group list works as long as the
 X25519 key share is offered.
 
-**Consequence: browsers and curl cannot connect to the verified backend today.**
-That is why OpenSSL remains the default backend and why the demo browser story
-still uses it.  `interop/vtls_client.c` is a small OpenSSL probe that clears
-`SSL_OP_ENABLE_MIDDLEBOX_COMPAT` and pins the profile; it is what
-`make test-http-sample-vtls` drives.
+### Gap A (middlebox compatibility) is CLOSED
 
-Closing the gap for browsers would need, in rough order of effort: middlebox
-compatibility mode (echo the client's `legacy_session_id`, tolerate/emit the
-dummy `ChangeCipherSpec`), cipher-suite and signature-algorithm *selection* from
-an offered list rather than exact match, and tolerating TLS 1.2 legacy suites in
-the ClientHello.  AES-GCM suites and HelloRetryRequest would follow.
+The verified server now echoes the ClientHello `legacy_session_id` in its
+ServerHello (RFC 8446 D.4), proved end to end in F*/Pulse: the parser stores the
+offered session id in the connection state, and the ServerHello serializer emits
+it.  Receiving the client's dummy `ChangeCipherSpec` was already modelled as a
+no-op, and RFC 8446 only *SHOULD*s the server-sent CCS, so nothing else was
+needed.  `make test-openssl-sclient` and `make test-http-sample-vtls` now run
+with middlebox-compatibility mode **enabled**, as every real client does.
+
+Implementation note: the session id is fixed at exactly **32 bytes** (what every
+middlebox-compat client sends), which keeps the whole ClientHello/ServerHello
+wire image a constant size.  A ClientHello carrying a different session-id length
+still parses, but is normalised to all-zeros, so such a client (e.g.
+`openssl s_client -no_middlebox`) will reject the ServerHello.  Wire sizes grew
+accordingly: ServerHello handshake message 90 -> 122 bytes, ServerHello record
+95 -> 127 bytes.
+
+**Consequence: browsers and curl still cannot connect to the verified backend,**
+but now for two reasons only -- the exact-match `cipher_suites` and
+`signature_algorithms` requirements (gaps B and C).  Notably even
+`openssl s_client -ciphersuites TLS_CHACHA20_POLY1305_SHA256` fails, because
+OpenSSL appends `TLS_EMPTY_RENEGOTIATION_INFO_SCSV` to the list.  OpenSSL
+therefore remains the default backend for the browser demo.
+`interop/vtls_client.c` is a small OpenSSL probe that pins the profile; it is
+what `make test-http-sample-vtls` drives.
+
+Closing gaps B and C means replacing the literal list equality in
+`supported_client_hello_fields_profile`
+(`src/spec/properties/TLS13.Spec.WireFormatLemmas.fsti`) with `List.mem`-style
+*selection* from the offered list -- which also subsumes tolerating TLS 1.2
+legacy suites, since those are just extra list entries.  AES-GCM suites and
+HelloRetryRequest would follow.
