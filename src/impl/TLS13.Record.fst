@@ -357,6 +357,24 @@ fn advance_seq (st: record_state)
   fold (is_record_state st (R.next_seq 's));
 }
 
+fn restore_previous_seq (st: record_state)
+  requires is_record_state st (R.next_seq 's)
+  ensures is_record_state st 's
+{
+  unfold (is_record_state st (R.next_seq 's));
+  let seq = !st.seq;
+  assert (pure (U64.v seq == 's.R.seq + 1));
+  let previous_seq = U64.sub seq 1UL;
+  st.seq := previous_seq;
+  with key_s. assert (V.pts_to st.key key_s);
+  with iv_s. assert (V.pts_to st.iv iv_s);
+  with installed_s. assert (Box.pts_to st.installed installed_s);
+  assert (pure (state_matches installed_s seq key_s iv_s (R.next_seq 's)));
+  assert (pure (U64.v previous_seq == 's.R.seq));
+  assert (pure (state_matches installed_s previous_seq key_s iv_s 's));
+  fold (is_record_state st 's);
+}
+
 fn install_keys
   (st: record_state)
   (#epoch: R.epoch)
