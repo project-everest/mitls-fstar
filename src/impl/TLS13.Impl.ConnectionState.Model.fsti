@@ -116,6 +116,7 @@ val lemma_signature_schemes_match_first_rsa_offer
                 U16.v (Seq.index wire 0) == 0x0804)
       (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
 
+
 noextract
 let client_hello_server_name_len_for (m:GCH.clientHello) : SZ.t =
   match Sem.clientHello_server_name m with
@@ -149,6 +150,58 @@ val lemma_cipher_suites_match_first_chacha_offer
                 0 < len /\
                 len <= Seq.length wire /\
                 U16.v (Seq.index wire 0) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+
+/// Generalisation of [lemma_signature_schemes_match_first_rsa_offer] from the head
+/// of the offered list to an arbitrary position.  Real clients (curl, browsers)
+/// send rsa_pss_rsae_sha256 somewhere in the middle of a ~14-entry list, so the
+/// server has to be able to *select* it rather than require it first.
+val lemma_signature_schemes_match_index_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x0804)
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+/// Generalisation of [lemma_cipher_suites_match_first_chacha_offer] from the head
+/// of the offered list to an arbitrary position; see the signature-scheme analog.
+val lemma_cipher_suites_match_index_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+
+/// Existential forms, which is what a runtime linear scan can produce: the scan
+/// reports "some entry below [len] equals the target" without carrying the index.
+val lemma_signature_schemes_match_exists_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+val lemma_cipher_suites_match_exists_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x1303))
       (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
 
 noextract

@@ -2324,8 +2324,9 @@ let lemma_client_hello_of_start_eq_poc
    start's server_name / cipher_suites / signature_schemes are non-empty -- but the
    generated wire ClientHello refinements (and client_hello_matches_start) require
    it.  This helper reads the three runtime start lengths and reports whether they
-   are all >= 1.  The runtime predicates already pin each length <= its cap
-   (255/16/16), so `ok` establishes the full Model.valid_start.  It preserves
+   are all >= 1, and that the two list lengths are <= 16 (the storage caps are now
+   larger than that, to fit a browser's offered lists), so `ok` establishes the
+   full Model.valid_start.  It preserves
    connection_exactly c st0 (symmetric unfold/refold). *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 60"
 fn client_hello_start_nonempty_runtime
@@ -2395,7 +2396,15 @@ fn client_hello_start_nonempty_runtime
     lemma_sizet_lte_plain 1sz csl;
     let sa_ok = sizet_lte_plain 1sz sal;
     lemma_sizet_lte_plain 1sz sal;
-    let nonempty = sn_ok && cs_ok && sa_ok;
+    // The storage caps (64 cipher suites / 32 signature schemes) are sized for the
+    // lists a *browser* offers us, but the ClientHello we ourselves emit is bounded
+    // by valid_start at 16/16, so the upper bounds have to be checked explicitly
+    // rather than read off the cap.
+    let cs_hi = sizet_lte_plain csl 16sz;
+    lemma_sizet_lte_plain csl 16sz;
+    let sa_hi = sizet_lte_plain sal 16sz;
+    lemma_sizet_lte_plain sal 16sz;
+    let nonempty = sn_ok && cs_ok && sa_ok && cs_hi && sa_hi;
     Model.lemma_cipher_suites_match_length cs_items (SZ.v cs_len)
       start_spec.CS.start_cipher_suites;
     Model.lemma_signature_schemes_match_length sa_items (SZ.v sa_len)

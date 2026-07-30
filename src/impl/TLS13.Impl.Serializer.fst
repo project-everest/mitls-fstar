@@ -2032,8 +2032,8 @@ fn serialize_client_hello_from_start
   copy_vec_to_vec_u8 start_random l.L.client_hello_session_id 32sz;
   copy_vec_to_vec_u8 start_server_name l.L.client_hello_server_name 255sz;
   copy_vec_to_vec_u8 start_key_share l.L.client_hello_key_share 32sz;
-  copy_vec_to_vec_u16 start_cipher_suites l.L.client_hello_cipher_suites 16sz;
-  copy_vec_to_vec_u16 start_signature_schemes l.L.client_hello_signature_schemes 16sz;
+  copy_vec_to_vec_u16 start_cipher_suites l.L.client_hello_cipher_suites 64sz;
+  copy_vec_to_vec_u16 start_signature_schemes l.L.client_hello_signature_schemes 32sz;
 
   (* build canonical-pinned structure sharing l's vecs (only scalars differ) *)
   let l_poc : L.client_hello = {
@@ -2135,8 +2135,8 @@ fn serialize_client_hello_from_start
   copy_vec_to_vec_u8 start_random l.L.client_hello_session_id 32sz;
   copy_vec_to_vec_u8 start_server_name l.L.client_hello_server_name 255sz;
   copy_vec_to_vec_u8 start_key_share l.L.client_hello_key_share 32sz;
-  copy_vec_to_vec_u16 start_cipher_suites l.L.client_hello_cipher_suites 16sz;
-  copy_vec_to_vec_u16 start_signature_schemes l.L.client_hello_signature_schemes 16sz;
+  copy_vec_to_vec_u16 start_cipher_suites l.L.client_hello_cipher_suites 64sz;
+  copy_vec_to_vec_u16 start_signature_schemes l.L.client_hello_signature_schemes 32sz;
 
   client_hello_bytes_len := handshake_len;
   client_hello_present := true;

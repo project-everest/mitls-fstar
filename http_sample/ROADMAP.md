@@ -318,18 +318,23 @@ Implementation notes:
 
 ### Client profile the verified server accepts (measured)
 
-The verified server implements the repository's first profile only.  Probing it
-with `openssl s_client` shows the ClientHello must satisfy **all** of:
+The verified server implements the repository's first cryptographic profile only
+(TLS 1.3, `TLS_CHACHA20_POLY1305_SHA256`, X25519, `rsa_pss_rsae_sha256`), but it
+now *selects* those from whatever the client offers rather than demanding an
+exact list.  What a ClientHello must satisfy today:
 
 | Requirement | Browsers / curl |
 | --- | --- |
-| `cipher_suites` == exactly `TLS_CHACHA20_POLY1305_SHA256` | offer 3+ suites (plus the renegotiation SCSV) |
-| `signature_algorithms` == exactly `rsa_pss_rsae_sha256` | offer ~10 |
-| TLS 1.3-only ClientHello (no TLS 1.2 legacy suites) | offer TLS 1.2 |
-| ~~middlebox-compatibility mode **off**~~ | **CLOSED** -- see below |
+| `cipher_suites` **contains** `TLS_CHACHA20_POLY1305_SHA256` (<= 64 entries) | yes |
+| `signature_algorithms` **contains** `rsa_pss_rsae_sha256` (<= 32 entries) | yes |
+| `key_share` offers X25519 | yes (browsers also offer X25519MLKEM768, tolerated) |
+| a `server_name` (SNI) extension is present | yes for hostnames, **no for IP literals** -- see Gap D |
 
-`supported_groups` is tolerant -- a default multi-group list works as long as the
-X25519 key share is offered.
+`supported_groups` is tolerant, TLS 1.2 legacy suites in the list are tolerated,
+GREASE values and unknown extensions parse as `Unknown_*`, and
+middlebox-compatibility mode is required (Gap A).  Measured: a completely
+unpinned `curl` and a completely unpinned `openssl s_client` both handshake and
+get `HTTP/1.1 200`.
 
 ### Gap A (middlebox compatibility) is CLOSED
 
@@ -349,18 +354,78 @@ still parses, but is normalised to all-zeros, so such a client (e.g.
 accordingly: ServerHello handshake message 90 -> 122 bytes, ServerHello record
 95 -> 127 bytes.
 
-**Consequence: browsers and curl still cannot connect to the verified backend,**
-but now for two reasons only -- the exact-match `cipher_suites` and
-`signature_algorithms` requirements (gaps B and C).  Notably even
-`openssl s_client -ciphersuites TLS_CHACHA20_POLY1305_SHA256` fails, because
-OpenSSL appends `TLS_EMPTY_RENEGOTIATION_INFO_SCSV` to the list.  OpenSSL
-therefore remains the default backend for the browser demo.
-`interop/vtls_client.c` is a small OpenSSL probe that pins the profile; it is
-what `make test-http-sample-vtls` drives.
+**Known conformance gap.**  RFC 8446 4.1.3 requires the echo to be *the contents
+of* `ClientHello.legacy_session_id`, and a client receiving a mismatch MUST abort
+with `illegal_parameter`.  Emitting 32 zero bytes for a client that offered a
+zero-length session id therefore violates that MUST.  RFC 8446 4.1.2 only permits
+two shapes -- 32 bytes (compatibility mode) or zero-length -- and every mainstream
+client uses the 32-byte form, so the affected population is clients that
+deliberately disable compatibility mode.  The failure is fail-closed (the client
+aborts; there is no downgrade or silent acceptance), and it replaces the previous,
+larger non-conformance in the opposite direction (an always-empty echo, which
+broke every browser).  Closing it means either storing the true session-id length
+and emitting a variable-length echo (making the ServerHello wire image
+variable-size, 90..122 bytes) or refusing the handshake with an alert when the
+offered session id is not exactly 32 bytes.
 
-Closing gaps B and C means replacing the literal list equality in
+### Gaps B and C (cipher-suite / signature-algorithm selection) are CLOSED
+
+The original diagnosis -- that the literal list equality in
 `supported_client_hello_fields_profile`
-(`src/spec/properties/TLS13.Spec.WireFormatLemmas.fsti`) with `List.mem`-style
-*selection* from the offered list -- which also subsumes tolerating TLS 1.2
-legacy suites, since those are just extra list entries.  AES-GCM suites and
-HelloRetryRequest would follow.
+(`src/spec/properties/TLS13.Spec.WireFormatLemmas.fsti`) was the runtime gate --
+was **wrong**.  That predicate is only used in the paired client+server
+reasoning (`TLS13.System*`, `TLS13.Impl.Driver.Pairing`); it is not on the server
+accept path, and it was not touched.  Likewise, OpenSSL's
+`TLS_EMPTY_RENEGOTIATION_INFO_SCSV` was never a problem -- unknown suites simply
+parse as `Unknown_cipherSuite`.
+
+The real gate was `can_select_supported_server_parameters_runtime`
+(`src/impl/TLS13.Impl.ConnectionState.Queries.fst`), which read only
+`cipher_suites[0]` and `signature_algorithms[0]` and required them to be exactly
+chacha20-poly1305 / `rsa_pss_rsae_sha256` -- a *head-of-list* test.  This is now
+a bounded Pulse linear scan (`scan_u16_for`) over the whole offered list, with
+the supporting offer lemmas in `TLS13.Impl.ConnectionState.Model` generalised
+from "index 0" to "some index `i`" (by induction on `i`) and then existentially
+packaged.  No spec change, no wire-format change.
+
+The storage caps were also raised, since real clients offer long lists (default
+curl sends 31 cipher suites, Chrome pads with GREASE):
+`max_cipher_suites` 16 -> **64** and `max_signature_schemes` 16 -> **32**
+(`TLS13.Impl.ConnectionState.Bounds.fsti`, mirrored in `TLS13.Impl.Messages`
+and `TLS13.Messages`).  The *outgoing* ClientHello we ourselves emit is still
+bounded at 16/16 by `Model.valid_start`; that bound is now checked explicitly at
+runtime in `client_hello_start_nonempty_runtime` instead of being read off the
+cap.
+
+### Gap D (SNI is mandatory) -- OPEN
+
+`TLS13.Impl.Server.Network.process_client_hello` requires
+`client_hello_has_server_name == true`.  The *parser* is already tolerant (the
+`server_name` extension is optional there); only the server accept path insists.
+
+Consequence: `curl https://127.0.0.1:PORT/` fails, because curl does not send SNI
+for IP literals, while
+`curl --resolve localhost:PORT:127.0.0.1 https://localhost:PORT/` succeeds.
+Browsers always send SNI for hostnames, so this does not block the browser demo,
+but it does block bare-IP access.  Fixing it means making the server tolerate an
+absent `server_name` on the accept path (the certificate is fixed anyway).
+
+### Status
+
+A completely unpinned `curl` and a completely unpinned `openssl s_client` now
+handshake with the verified backend and get `HTTP/1.1 200`:
+
+```sh
+make http-sample-vtls-server
+HTTP_TLS_BACKEND=verified HTTP_TLS_CERT=test/certs/leaf.der \
+  HTTP_TLS_KEY=test/certs/leaf.key \
+  http_sample/_extract/http_server_vtls 18443 index.html &
+curl --cacert test/certs/ca.pem --resolve localhost:18443:127.0.0.1 \
+  https://localhost:18443/
+```
+
+OpenSSL nevertheless remains the *default* backend (`HTTP_TLS_BACKEND=openssl`),
+since the verified path still lacks HelloRetryRequest, resumption, client auth,
+KeyUpdate and ALPN, and a real browser has not yet been tested.
+`interop/vtls_client.c` is a small OpenSSL probe used by
+`make test-http-sample-vtls`.

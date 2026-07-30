@@ -1209,7 +1209,7 @@ fn build_ch_cipher_suites
                     L.cipher_suites_match bytes (SZ.v (Mktuple3?._2 res))
                       (RV.reveal_synth_cipher_suites (Ghost.reveal cm)))))
 {
-  let dst = V.alloc 0x1303us 16sz;
+  let dst = V.alloc 0x1303us 64sz;
   match v0 {
     None -> {
       unfold (PPVCL.vmatch_vclist
@@ -1236,7 +1236,7 @@ fn build_ch_cipher_suites
                         (PPB.vmatch_conv GCS.cipherSuite_vmatch GCS.cipherSuite_conv));
       V.pts_to_len (snd nv);
       let count = fst nv;
-      let ok = count `SZ.lte` 16sz;
+      let ok = count `SZ.lte` 64sz;
       if ok {
         let mut i = 0sz;
         let proc_ref = GR.alloc (Nil #T.cipher_suite);
@@ -1259,7 +1259,7 @@ fn build_ch_cipher_suites
             SZ.v count == FStar.List.Tot.length (Ghost.reveal cm) /\
             Seq.length s == FStar.List.Tot.length (Ghost.reveal cm) /\
             V.is_full_vec (snd nv) /\
-            V.is_full_vec dst /\ V.length dst == 16 /\ Seq.length bytes == 16 /\
+            V.is_full_vec dst /\ V.length dst == 64 /\ Seq.length bytes == 64 /\
             FStar.List.Tot.length (Ghost.reveal processed) == SZ.v iv /\
             L.cipher_suites_match bytes (SZ.v iv) (Ghost.reveal processed) /\
             FStar.List.Tot.append (Ghost.reveal processed)
@@ -1429,7 +1429,7 @@ fn copy_ch_signature_schemes_into
                                          GSS.signatureScheme_conv));
       V.pts_to_len (snd nv);
       let count = fst nv;
-      let ok = count `SZ.lte` 16sz;
+      let ok = count `SZ.lte` 32sz;
       if ok {
         let mut i = 0sz;
         let proc_ref = GR.alloc (Nil #T.signature_scheme);
@@ -1452,7 +1452,7 @@ fn copy_ch_signature_schemes_into
             SZ.v count == FStar.List.Tot.length (Ghost.reveal cm) /\
             Seq.length s == FStar.List.Tot.length (Ghost.reveal cm) /\
             V.is_full_vec (snd nv) /\
-            V.is_full_vec dst /\ V.length dst == 16 /\ Seq.length bytes == 16 /\
+            V.is_full_vec dst /\ V.length dst == 32 /\ Seq.length bytes == 32 /\
             FStar.List.Tot.length (Ghost.reveal processed) == SZ.v iv /\
             L.signature_schemes_match bytes (SZ.v iv) (Ghost.reveal processed) /\
             FStar.List.Tot.append (Ghost.reveal processed)
@@ -4221,6 +4221,7 @@ fn scan_ch_key_share
   }
 }
 
+#push-options "--z3rlimit 800 --fuel 2 --ifuel 2"
 fn scan_ch_extensions
   (ext_lo: GCH.clientHello_extensions_lowtype)
   (#cext: Ghost.erased GCH.clientHello_extensions_mid)
@@ -4271,7 +4272,7 @@ fn scan_ch_extensions
 {
   let sn_vec = V.alloc 0uy 255sz;
   let key_vec = V.alloc 0uy 32sz;
-  let sig_vec = V.alloc 0us 16sz;
+  let sig_vec = V.alloc 0us 32sz;
   match ext_lo {
     None -> {
       unfold (PPVCL.vmatch_vclist
@@ -4353,13 +4354,13 @@ fn scan_ch_extensions
           V.is_full_vec (snd nv) /\
           V.is_full_vec sn_vec /\ V.length sn_vec == 255 /\ B.length sn_bytes == 255 /\
           V.is_full_vec key_vec /\ V.length key_vec == 32 /\ B.length kbytes == 32 /\
-          V.is_full_vec sig_vec /\ V.length sig_vec == 16 /\ Seq.length sig_bytes == 16 /\
+          V.is_full_vec sig_vec /\ V.length sig_vec == 32 /\ Seq.length sig_bytes == 32 /\
           (hsn <==> Some? sn_acc) /\
           (hk <==> Some? key_acc) /\
           (stl <==> (match sn_acc with
                      | Some name -> B.length (Ghost.reveal name) > 255
                      | None -> False)) /\
-          (sigtl <==> FStar.List.Tot.length (Ghost.reveal sig_acc) > 16) /\
+          (sigtl <==> FStar.List.Tot.length (Ghost.reveal sig_acc) > 32) /\
           ((not fl /\ Some? sn_acc /\ not stl) ==>
             L.byte_prefix_matches sn_bytes sl (Ghost.reveal (Some?.v sn_acc))) /\
           ((not fl /\ not hsn) ==> SZ.v sl == 0) /\
@@ -4730,6 +4731,7 @@ fn scan_ch_extensions
     }
   }
 }
+#pop-options
 
 (* --- Certificate: eliminate / re-introduce the packed vmatch --------------- *)
 

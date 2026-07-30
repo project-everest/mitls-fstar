@@ -42,10 +42,10 @@ noextract
 let max_alpn_len : nat = 255
 
 noextract
-let max_cipher_suites : nat = 16
+let max_cipher_suites : nat = 64
 
 noextract
-let max_signature_schemes : nat = 16
+let max_signature_schemes : nat = 32
 
 noextract
 let max_certificate_chain_bytes : nat = 32768

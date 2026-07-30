@@ -172,6 +172,92 @@ let lemma_cipher_suites_match_first_chacha_offer
     lemma_cipher_suites_match_length wire len suites;
     assert False
 
+let rec lemma_signature_schemes_match_index_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x0804)
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+      (decreases i)
+=
+  if i = 0
+  then lemma_signature_schemes_match_first_rsa_offer wire len schemes
+  else
+    match schemes with
+    | scheme :: rest ->
+      let wire' = Seq.slice wire 1 (Seq.length wire) in
+      assert (Seq.index wire' (i - 1) == Seq.index wire i);
+      lemma_signature_schemes_match_index_rsa_offer wire' (len - 1) rest (i - 1)
+    | [] ->
+      lemma_signature_schemes_match_length wire len schemes;
+      assert False
+
+let rec lemma_cipher_suites_match_index_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+      (decreases i)
+=
+  if i = 0
+  then lemma_cipher_suites_match_first_chacha_offer wire len suites
+  else
+    match suites with
+    | suite :: rest ->
+      let wire' = Seq.slice wire 1 (Seq.length wire) in
+      assert (Seq.index wire' (i - 1) == Seq.index wire i);
+      lemma_cipher_suites_match_index_chacha_offer wire' (len - 1) rest (i - 1)
+    | [] ->
+      lemma_cipher_suites_match_length wire len suites;
+      assert False
+
+let lemma_signature_schemes_match_exists_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+=
+  let aux (i:nat)
+    : Lemma
+        (requires i < len /\ U16.v (Seq.index wire i) == 0x0804)
+        (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+    = lemma_signature_schemes_match_index_rsa_offer wire len schemes i
+  in
+  FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
+
+let lemma_cipher_suites_match_exists_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x1303))
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+=
+  let aux (i:nat)
+    : Lemma
+        (requires i < len /\ U16.v (Seq.index wire i) == 0x1303)
+        (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+    = lemma_cipher_suites_match_index_chacha_offer wire len suites i
+  in
+  FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
+
 // Phase 5: client_hello_of_start is now a faithful, total transparent `let` in
 // TLS13.Impl.ConnectionState.Model.fsti (it builds the canonical 5-extension
 // ClientHello, clamping invalid/unbounded start fields).  Nothing to define here.
