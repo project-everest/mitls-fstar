@@ -263,8 +263,18 @@ include .depend
 endif
 
 # ── Generic Verification Rules ────────────────────────────────────
+# F* validates an existing .checked file by CONTENT HASH and, when it is still
+# valid, re-verifies the module but deliberately does NOT rewrite the file.  Make
+# reasons about TIMESTAMPS.  So if a .checked ever ends up older than one of its
+# prerequisite .checked files — which happens routinely under -jN, or whenever a
+# single .checked is deleted and regenerated — Make asks for the target, F*
+# declines to rewrite it, the mtime does not move, and the module is re-verified
+# on every single `make` forever.  Stamping the target after a successful run
+# breaks that loop.  `-c` so that a genuine failure to produce the file is not
+# papered over with an empty one.
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 	$(FSTAR) $<
+	@touch -c $@
 
 $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
