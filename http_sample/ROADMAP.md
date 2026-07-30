@@ -263,7 +263,7 @@ hand every wire byte to the extracted Pulse code.
   honours `Connection: close`, enforces the verified smuggling / size / method
   guards, echoes `POST` bodies (Content-Length *and* chunked), and serves TLS
   when `HTTP_TLS_CERT` / `HTTP_TLS_KEY` are set. Note for demos: it binds
-  **loopback only**, serves **one fixed file for every path**, and sends no
+  **0.0.0.0**, serves **one fixed file for every path**, and sends no
   `Content-Type` (browsers MIME-sniff).
 
 * **Client — `verified/vcurl.c`.** A "mini curl" over the verified GET client.
@@ -282,3 +282,63 @@ hand every wire byte to the extracted Pulse code.
   `verified/get_live_test.c` (`make get-live-test`) remains the CI-guarded
   pass/fail smoke test of the same path against `example.com`; it prints a
   one-line verdict and SKIPs cleanly without network egress.
+
+
+## Verified TLS termination (HTTPS with no OpenSSL on the server path)
+
+`http_server` has a third transport backend that terminates TLS with the
+repository's **verified** TLS 1.3 server (`src/impl/TLS13.Impl.Server.*`, driven
+through `runtime/tls13_server_driver.h`) instead of OpenSSL.  With it, the whole
+server path -- record layer *and* HTTP/1.1 codec -- is extracted Pulse code.
+
+    make http-sample-vtls-server     # builds http_sample/_extract/http_server_vtls
+    make test-http-sample-vtls       # end-to-end: verified HTTP over verified TLS
+
+    HTTP_TLS_BACKEND=verified \
+    HTTP_TLS_CERT=test/certs/leaf.der \
+    HTTP_TLS_KEY=test/certs/leaf.key \
+      http_sample/_extract/http_server_vtls 18443 index.html
+
+Implementation notes:
+
+* The backend is compiled in only under `-DHTTP_VERIFIED_TLS`, so the ordinary
+  `make -C interop build-progs` binary is unchanged and does not depend on the
+  TLS13 bundle.  `HTTP_TLS_BACKEND` selects `openssl` (default) or `verified`.
+* The `io_t` transport seam in `http_server.c` already isolated reads/writes, so
+  only `io_read` / `io_write` / `io_close` and the accept path changed.  The
+  verified driver returns one record's plaintext at a time, so `io_read` parks
+  the remainder and hands the HTTP readers a byte stream.
+* The verified driver owns its own listener (`tls13_server_config_new` binds and
+  listens), so the plaintext `socket`/`bind`/`listen` path is skipped.
+* `HTTP_TLS_CERT` must be the leaf certificate in **DER** form for this backend
+  (the verified X.509 path consumes DER); `HTTP_TLS_KEY` stays a PEM key.
+* The HTTP translation units are compiled separately from the TLS13 bundle: they
+  are extracted against the *variadic* `Common.TCP` stub declarations, which
+  clash with the bundle's strict `Common_TCP.h`.
+
+### Client profile the verified server accepts (measured)
+
+The verified server implements the repository's first profile only.  Probing it
+with `openssl s_client` shows the ClientHello must satisfy **all** of:
+
+| Requirement | Browsers / curl |
+| --- | --- |
+| `cipher_suites` == exactly `TLS_CHACHA20_POLY1305_SHA256` | offer 3+ suites |
+| `signature_algorithms` == exactly `rsa_pss_rsae_sha256` | offer ~10 |
+| TLS 1.3-only ClientHello (no TLS 1.2 legacy suites) | offer TLS 1.2 |
+| middlebox-compatibility mode **off** (empty `legacy_session_id`, no dummy CCS) | always on, not switchable |
+
+`supported_groups` is tolerant -- a default multi-group list works as long as the
+X25519 key share is offered.
+
+**Consequence: browsers and curl cannot connect to the verified backend today.**
+That is why OpenSSL remains the default backend and why the demo browser story
+still uses it.  `interop/vtls_client.c` is a small OpenSSL probe that clears
+`SSL_OP_ENABLE_MIDDLEBOX_COMPAT` and pins the profile; it is what
+`make test-http-sample-vtls` drives.
+
+Closing the gap for browsers would need, in rough order of effort: middlebox
+compatibility mode (echo the client's `legacy_session_id`, tolerate/emit the
+dummy `ChangeCipherSpec`), cipher-suite and signature-algorithm *selection* from
+an offered list rather than exact match, and tolerating TLS 1.2 legacy suites in
+the ClientHello.  AES-GCM suites and HelloRetryRequest would follow.
