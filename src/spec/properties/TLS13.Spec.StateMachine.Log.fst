@@ -128,6 +128,10 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
        W.serialize_handshake (M.CertificateVerify cv)
      | CL.Sent, M.TlsHandshake (M.Finished fin) ->
        W.serialize_handshake (M.Finished fin)
+     | CL.Received, M.TlsHandshake (M.Finished fin) ->
+      // Fix 1 (atomic delivery): receiving the peer Finished appends it to the
+      // transcript as part of the single delivery step.
+      W.serialize_handshake (M.Finished fin)
      | _, _ -> B.empty)
   | ConnLocalEvent local ->
     (match local with
@@ -284,11 +288,15 @@ let projected_record_layer_step_for_role
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Received, M.TlsHandshake (M.Certificate _)
      | CL.Received, M.TlsHandshake (M.CertificateVerify _)
-     | CL.Received, M.TlsHandshake (M.Finished _)
      | CL.Received, M.TlsApplicationData _
      | CL.Received, M.TlsIgnoredPostHandshake _
      | CL.Received, M.TlsAlert T.Close_notify ->
        { record with projected_read = projected_next_seq record.projected_read }
+     | CL.Received, M.TlsHandshake (M.Finished _) ->
+       // Fix 1 (atomic delivery): receiving the peer Finished installs the peer's
+       // application READ keys (record read epoch -> Application, seq reset to 0),
+       // mirroring the real record-layer transition in step_handshake_message.
+       { record with projected_read = projected_install_keys R.Application }
      | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Sent, M.TlsHandshake (M.Certificate _)
      | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->

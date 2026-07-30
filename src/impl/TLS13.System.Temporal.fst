@@ -33,6 +33,7 @@ module SMKM = TLS13.Spec.StateMachine.KeyMaterial
 module CD  = TLS13.Impl.Client.Driver
 module SD  = TLS13.Impl.Server.Driver
 module WFL = TLS13.Spec.WireFormatLemmas
+module MP  = Common.MachineProduct
 
 open TLS13.System
 
@@ -136,7 +137,8 @@ let lemma_x_delivery_completes p i =
   let a = p i in
   let b = p (i + 1) in
   assert (tls_sys_step a b);        // from is_run at index i
-  assert (TlsInFlight? a.channel);  // a is in flight
-  // sends and local steps require TlsQuiet? a.channel, so only a deliver step
-  // is enabled, and every deliver step sets the channel to TlsQuiet.
+  assert (MP.ToServer? a.channel \/ MP.ToClient? a.channel);  // a is in flight
+  // the product's channel discipline gates sends and local steps on
+  // `MP.Quiet? a.channel`, so only a deliver step is enabled from an in-flight
+  // state, and every deliver step returns the channel to `MP.Quiet`.
   assert (T.shift p i 1 == b)

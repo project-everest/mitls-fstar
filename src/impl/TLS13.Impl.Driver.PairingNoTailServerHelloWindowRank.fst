@@ -17,7 +17,7 @@ module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module T = TLS13.Types
 
-let lemma_server_hello_window_rank_fresh_is_eleven
+let lemma_server_hello_window_rank_fresh_is_nine
   (model:CS.connection_model)
   : Lemma
       (requires
@@ -31,7 +31,7 @@ let lemma_server_hello_window_rank_fresh_is_eleven
         model.CS.model_handshake.CS.hs_certificate == None /\
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false)
-      (ensures server_hello_window_rank model == 11)
+      (ensures server_hello_window_rank model == 9)
 = ()
 
 let lemma_server_hello_window_rank_application_data_installed_zero
@@ -112,7 +112,7 @@ let lemma_server_hello_window_after_server_cleartext_prefix_fresh
         model5.CS.model_handshake.CS.hs_certificate == None /\
         model5.CS.model_handshake.CS.hs_certificate_verify == None /\
         model5.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
-        server_hello_window_rank model5 == 11)
+        server_hello_window_rank model5 == 9)
 =
   assert (model0.CS.model_control == CS.ControlNew);
   assert (model0.CS.model_handshake == CS.empty_handshake_state);
@@ -255,7 +255,7 @@ let lemma_server_hello_window_after_server_cleartext_prefix_fresh
   assert (model5.CS.model_handshake.CS.hs_certificate == None);
   assert (model5.CS.model_handshake.CS.hs_certificate_verify == None);
   assert (model5.CS.model_handshake.CS.hs_certificate_verify_verified == false);
-  lemma_server_hello_window_rank_fresh_is_eleven model5
+  lemma_server_hello_window_rank_fresh_is_nine model5
 
 let lemma_server_hello_window_role_install_step
   (model:CS.connection_model)

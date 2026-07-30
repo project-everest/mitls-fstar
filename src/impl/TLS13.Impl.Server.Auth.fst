@@ -338,6 +338,14 @@ fn process_sign_certificate_verify
         (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))));
       fold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
 
+      // The signature is bounded by [signature_max_len] (4096), so the signed
+      // CertificateVerify is [certificateVerify_representable], as the
+      // strengthened [legal_local_event LocalSignCertificateVerify] arm now
+      // requires.
+      W.lemma_certificateVerify_representable (Ghost.reveal cv);
+      assert (pure (B.length (Sem.certificateVerify_signature_bytes (Ghost.reveal cv))
+        <= M.signature_max_len));
+      assert (pure (W.certificateVerify_representable (Ghost.reveal cv)));
       assert (pure (CS.legal_event
         'st0.CS.cs_model
         (CS.ConnLocalEvent (CS.LocalSignCertificateVerify (Ghost.reveal cv)))));

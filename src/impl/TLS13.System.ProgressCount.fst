@@ -9,7 +9,7 @@ module TLS13.System.ProgressCount
   during the handshake, making the per-endpoint event-log LENGTH a deterministic
   function of the endpoint micro-state.  The counts here are that function.
 
-  Both counts are `16 - rank` on the rank-covered handshake stages, reusing the
+  Both counts are `14 - rank` on the rank-covered handshake stages, reusing the
   already-verified obligation-rank measures:
     * client: `PNI.client_application_progress_rank` (covers HsStarted through
       ControlApplicationData);
@@ -59,7 +59,7 @@ let keys_all_none (keys:CS.key_schedule_state) : prop =
 let client_progress (m:CS.connection_model) : int =
   match m.CS.model_control with
   | CS.ControlNew -> 0
-  | CS.ControlHandshaking _ -> 16 - PNI.client_application_progress_rank m
+  | CS.ControlHandshaking _ -> 14 - PNI.client_application_progress_rank m
   | _ -> 0
 
 (** The one client region-entry shape fact: at ControlNew the key schedule is
@@ -87,11 +87,11 @@ let lemma_client_progress_step_bound
   = match m.CS.model_control with
     | CS.ControlNew ->
       // Only LocalStartHandshake is legal for a client at ControlNew; it moves
-      // to HsStarted keeping the (empty) key schedule, so rank m' == 15.
+      // to HsStarted keeping the (empty) key schedule, so rank m' == 13.
       assert (keys_all_none m.CS.model_handshake.CS.hs_keys);
       ()
     | CS.ControlHandshaking _ ->
-      // Uniform: client_progress = 16 - rank on both sides; the rank step lemma
+      // Uniform: client_progress = 14 - rank on both sides; the rank step lemma
       // gives rank m <= rank m' + 1 (m' is not Failed, being pre-appdata).
       PNI.lemma_client_application_progress_rank_step m ev m'
 #pop-options
@@ -101,8 +101,8 @@ let lemma_client_progress_step_bound
 
     Prefix (ControlNew .. HsClientHelloReceived) is an additive milestone count;
     the window stages (HsServerHelloSent onward) reuse `SWR.server_hello_window_rank`
-    as `16 - rank`.  The prefix->window boundary (Sent ServerHello) lands on a
-    FRESH HsServerHelloSent whose window rank is exactly 11, giving 16-11 = 5,
+    as `14 - rank`.  The prefix->window boundary (Sent ServerHello) lands on a
+    FRESH HsServerHelloSent whose window rank is exactly 9, giving 14-9 = 5,
     one more than the prefix value 4 at a fully-selected HsClientHelloReceived.
     ───────────────────────────────────────────────────────────────────────── **)
 
@@ -118,7 +118,7 @@ let server_progress (m:CS.connection_model) : int =
   | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
   | CS.ControlHandshaking CS.HsServerFinishedSent
   | CS.ControlHandshaking CS.HsClientFinishedReceived ->
-    16 - SWR.server_hello_window_rank m
+    14 - SWR.server_hello_window_rank m
   | _ -> 0
 
 (** Server region-entry shape facts:
@@ -172,10 +172,10 @@ let lemma_server_progress_step_bound
     | CS.ControlHandshaking CS.HsAwaitingClientHello -> ()
     | CS.ControlHandshaking CS.HsClientHelloReceived ->
       // Select / Derive stay in-stage (+1 in the additive count); Sent ServerHello
-      // crosses to a FRESH HsServerHelloSent whose window rank is exactly 11.
+      // crosses to a FRESH HsServerHelloSent whose window rank is exactly 9.
       (match m'.CS.model_control with
        | CS.ControlHandshaking CS.HsServerHelloSent ->
-         SWR.lemma_server_hello_window_rank_fresh_is_eleven m'
+         SWR.lemma_server_hello_window_rank_fresh_is_nine m'
        | _ -> ())
     | CS.ControlHandshaking CS.HsServerHelloSent
     | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
@@ -245,7 +245,7 @@ let lemma_delta_length (st0 st1:CS.connection_state) (d:CS.connection_delta)
 
     A tiny write-once/monotone key-schedule fact used to pin the client's
     late-obligation rank at the send-Client-Finished boundary (so the boundary
-    length is exactly 16 without an external pin).  It says: an application
+    length is exactly 14 without an external pin).  It says: an application
     traffic secret is present only if the master secret is (FACT 2), and the
     master secret is present only if the shared secret is (FACT 1 — both are set
     atomically by `derive_shared_secret_model`).
@@ -323,7 +323,7 @@ let lemma_ksp_step
     Its legality supplies the client-handshake and both application traffic
     secrets; `model_ksp` then supplies the shared secret, so the client's
     late-obligation rank is 0 and `client_progress` at the pre-state is exactly
-    15 — hence the post-state event-log length is exactly 16.
+    13 — hence the post-state event-log length is exactly 14.
     ───────────────────────────────────────────────────────────────────────── **)
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_client_send_cf_progress
@@ -336,7 +336,7 @@ let lemma_client_send_cf_progress
         ~(m.CS.model_control == CS.ControlApplicationData) /\
         m'.CS.model_control == CS.ControlApplicationData /\
         model_ksp m)
-      (ensures pre_appdata_control m.CS.model_control /\ client_progress m == 15)
+      (ensures pre_appdata_control m.CS.model_control /\ client_progress m == 13)
   = ()
 #pop-options
 

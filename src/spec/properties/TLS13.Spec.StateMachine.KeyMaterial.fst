@@ -50,16 +50,25 @@ let record_keys_match_key_schedule_for_role
        (traffic_label_for_endpoint_direction role dir))
       st
   | R.Application ->
-    (match dir, control with
-     | TrafficWrite, ControlHandshaking _ ->
+    (match role, dir, control with
+     | ClientEndpoint, TrafficWrite, ControlHandshaking _ ->
+       // The honest client populates its application WRITE traffic slot at
+       // HsServerFinishedVerified but only installs the application WRITE record
+       // keys (record_write.epoch -> Application) at the moment it SENDS its
+       // Finished and lands at ControlApplicationData.  During that window the
+       // record write direction is still at the Handshake epoch, so this clause
+       // is only ever consulted with record_write.epoch == Application once the
+       // control state has advanced past ControlHandshaking; the vacuity here is
+       // therefore never actually exercised for the client and simply avoids an
+       // obligation that has no honest witness during ControlHandshaking.
        True
-     | _, _ ->
+     | _, _, _ ->
        traffic_material_option_matches_record_direction
-        (traffic_material_for_label
-          keys
-          TrafficApplication
-          (traffic_label_for_endpoint_direction role dir))
-        st)
+         (traffic_material_for_label
+           keys
+           TrafficApplication
+           (traffic_label_for_endpoint_direction role dir))
+         st)
 let record_read_keys_match_key_schedule
   (keys:key_schedule_state)
   (st:R.direction_state)
