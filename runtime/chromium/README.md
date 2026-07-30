@@ -91,6 +91,40 @@ provider's profile. It uses Chromium's explicit certificate-error override for
 the local test CA; the bridge still invokes `CertVerifier` and verifies the
 server's CertificateVerify signature.
 
+## Transferable Linux bundle
+
+Build and test the Linux x86_64 demonstration archive:
+
+```sh
+make -j$(nproc) chromium-demo-bundle
+make -j$(nproc) test-chromium-demo-bundle
+```
+
+The archive is written to
+`_extract/mitls-chromium-demo-linux-x86_64.tar.gz`. Transfer it to a compatible
+Linux x86_64 machine, then run:
+
+```sh
+tar xzf mitls-chromium-demo-linux-x86_64.tar.gz
+cd mitls-chromium-demo-linux-x86_64
+./run-demo.sh --headless
+./run-demo.sh
+```
+
+The headless invocation is a self-test that requires both the expected HTTPS
+DOM and the verified-provider selection diagnostic. The visible invocation
+opens the same page in a browser window. The bundle records source revisions,
+SHA-256 checksums, and build-host dynamic dependencies and checks destination
+dependencies before launch.
+
+The browser provider is statically linked into `chrome`; no miTLS shared
+library is required. The archive still relies on compatible Linux system
+libraries, including glibc and the libraries reported by `check-deps.sh`. It
+uses `--no-sandbox`, because a transferable archive cannot install Chromium's
+setuid sandbox with root ownership. This bundle is therefore only for the
+controlled localhost demonstration. The included certificate private key is
+public test material and must not be reused.
+
 The relevant Chromium source surfaces are:
 
 - `net/socket/ssl_connect_job.cc`

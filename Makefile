@@ -842,6 +842,8 @@ TLS13_PROVIDER_OBJ_STAMP = $(TLS13_PROVIDER_OBJ_DIR)/.built
 CHROMIUM_SRC ?= $(abspath ../chromium/src)
 DEPOT_TOOLS ?= $(abspath ../depot_tools)
 CHROMIUM_OUT ?= out/mitls
+CHROMIUM_OUT_ABS = $(if $(filter /%,$(CHROMIUM_OUT)),$(CHROMIUM_OUT),$(CHROMIUM_SRC)/$(CHROMIUM_OUT))
+CHROMIUM_DEMO_BUNDLE = $(EXTRACT_DIR)/mitls-chromium-demo-linux-x86_64.tar.gz
 
 CHROMIUM_DEMO_OBJ_DIR = $(EXTRACT_DIR)/chromium_demo_obj
 CHROMIUM_DEMO_C_SOURCES = c_stubs/tls13_openssl_stubs.c
@@ -984,7 +986,8 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: tls13-client-provider chromium-install-provider chromium-configure \
-  chromium-net chromium-browser test-chromium-browser \
+  chromium-net chromium-browser test-chromium-browser chromium-demo-bundle \
+  test-chromium-demo-bundle \
   test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
   test-openssl-sclient test-hacl-stubs test-key-schedule-bindings check-c-stubs
@@ -1222,6 +1225,33 @@ test-chromium-browser: chromium-browser test/openssl_http_server \
 	    $(EXTRACT_DIR)/chromium_browser.log; \
 	  echo "Chromium verified-miTLS HTTPS smoke test passed"
 
+$(CHROMIUM_DEMO_BUNDLE): chromium-browser test/openssl_http_server \
+  test/certs/chain.pem test/certs/leaf.key \
+  runtime/chromium/package_demo_bundle.py \
+  $(wildcard runtime/chromium/bundle/*)
+	python3 runtime/chromium/package_demo_bundle.py \
+	  --repository "$(CURDIR)" \
+	  --chromium-source "$(CHROMIUM_SRC)" \
+	  --chromium-out "$(CHROMIUM_OUT_ABS)" \
+	  --server test/openssl_http_server \
+	  --certificate test/certs/chain.pem \
+	  --private-key test/certs/leaf.key \
+	  --bundle-sources runtime/chromium/bundle \
+	  --output "$@"
+
+chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
+	@echo "Chromium demo bundle: $(CHROMIUM_DEMO_BUNDLE)"
+
+test-chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
+	@set -e; \
+	  test_dir=$$(mktemp -d "$(abspath $(EXTRACT_DIR))/chromium_bundle_test.XXXXXX"); \
+	  trap 'rm -rf "'"$$test_dir"'"' EXIT; \
+	  tar xzf "$(CHROMIUM_DEMO_BUNDLE)" -C "$$test_dir"; \
+	  cd "$$test_dir/mitls-chromium-demo-linux-x86_64"; \
+	  sha256sum --check SHA256SUMS; \
+	  timeout 90 \
+	    ./run-demo.sh --headless
+
 $(CHROMIUM_DEMO_OBJ_STAMP): $(CHROMIUM_DEMO_C_SOURCES) \
   c_stubs/tls13_openssl_stubs.h Makefile | check-deps
 	@rm -rf $(CHROMIUM_DEMO_OBJ_DIR)
@@ -1345,6 +1375,7 @@ clean:
   test-client test-openssl-echo test-client-engine-openssl-echo \
   test-chromium-client-demo test-openssl-sclient \
   tls13-client-provider chromium-install-provider chromium-configure \
-  chromium-net chromium-browser test-chromium-browser \
+  chromium-net chromium-browser test-chromium-browser chromium-demo-bundle \
+  test-chromium-demo-bundle \
   check-c-stubs check-toolchain check-deps benchmark benchmark-build \
   benchmark-profile-build profile clean

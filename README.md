@@ -61,6 +61,8 @@ make test            # verify, check echo stubs, and run OpenSSL echo interop
 make test-chromium-client-demo  # async HTTPS/1.1 Chromium adapter demo
 make chromium-browser            # build Chromium with the verified provider
 make test-chromium-browser       # actual browser HTTPS smoke test
+make chromium-demo-bundle        # transferable Linux x86_64 browser/server demo
+make test-chromium-demo-bundle   # test the freshly extracted demo archive
 ```
 
 The QuackyDucky pipeline can also be driven stage by stage with
@@ -70,9 +72,10 @@ The QuackyDucky pipeline can also be driven stage by stage with
 scenario. The main test sources live in `test/` and `test/unit/`.
 
 The verified browser path is documented in `runtime/chromium/README.md`. It
-includes both the portable asynchronous adapter demo and a pinned Chromium
-overlay with a concrete `net::SSLClientSocket`; neither gives the verified
-engine socket or browser trust-policy ownership.
+includes the portable asynchronous adapter demo, a pinned Chromium overlay with
+a concrete `net::SSLClientSocket`, and a transferable Linux x86_64
+browser/server demo bundle; none gives the verified engine socket or browser
+trust-policy ownership.
 
 For the methodology reference:
 
