@@ -1633,13 +1633,11 @@ fn can_select_supported_server_parameters_runtime
   let stage = !c.control.handshake_stage_tag;
   let has_selection = !c.handshake.server_selection_present;
   let has_client_hello = !c.handshake.messages.client_hello_present;
-  let has_server_name = !c.handshake.messages.client_hello_has_server_name;
   let cipher_suites_len = !c.handshake.messages.client_hello_cipher_suites_len;
   let signature_schemes_len = !c.handshake.messages.client_hello_signature_schemes_len;
 
   assert (pure (has_selection == selection_present));
   assert (pure (has_client_hello == ch_present));
-  assert (pure (has_server_name == ch_has_server_name));
   assert (pure (cipher_suites_len == ch_cipher_suites_len));
   assert (pure (signature_schemes_len == ch_signature_schemes_len));
 
@@ -1694,7 +1692,6 @@ fn can_select_supported_server_parameters_runtime
     selection_absent &&
     shared_secret_absent &&
     has_client_hello &&
-    has_server_name &&
     cipher_nonempty &&
     cipher_supported &&
     signature_nonempty &&

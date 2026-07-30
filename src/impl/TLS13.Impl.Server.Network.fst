@@ -48,26 +48,35 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 
+(* The server_name extension is optional (RFC 6066), and absent whenever a client
+   connects to a bare IP literal, so this is stated for both cases: [present]
+   always reflects whether the message carried an SNI, and the stored length is
+   only meaningful when it did. *)
 let lemma_client_hello_sni_len_for
+  (present:bool)
   (storage:B.bytes)
   (len:SZ.t)
   (ch:GCH.clientHello)
   : Lemma
-      (requires IM.optional_byte_prefix_matches true storage len (Sem.clientHello_server_name ch) /\
+      (requires IM.optional_byte_prefix_matches present storage len (Sem.clientHello_server_name ch) /\
                 B.length storage < 65536)
-      (ensures CM.client_hello_server_name_len_for ch == len)
+      (ensures present == CM.client_hello_has_sni ch /\
+               (present ==> CM.client_hello_server_name_len_for ch == len))
 =
-  match Sem.clientHello_server_name ch with
-  | Some sn ->
-    assert (IM.byte_prefix_matches storage len sn);
-    assert (Seq.equal sn (Seq.slice storage 0 (SZ.v len)));
-    Seq.lemma_len_slice storage 0 (SZ.v len);
-    assert (B.length sn == SZ.v len);
-    assert (B.length sn < 65536);
-    CM.lemma_bounded_u16_sizet_of_sizet (B.length sn) len;
-    assert (CM.client_hello_server_name_len_for ch == len)
-  | None ->
-    assert False
+  if present then
+    match Sem.clientHello_server_name ch with
+    | Some sn ->
+      assert (IM.byte_prefix_matches storage len sn);
+      assert (Seq.equal sn (Seq.slice storage 0 (SZ.v len)));
+      Seq.lemma_len_slice storage 0 (SZ.v len);
+      assert (B.length sn == SZ.v len);
+      assert (B.length sn < 65536);
+      CM.lemma_bounded_u16_sizet_of_sizet (B.length sn) len;
+      assert (CM.client_hello_server_name_len_for ch == len)
+    | None ->
+      assert False
+  else
+    assert (Sem.clientHello_server_name ch == None)
 
 inline_for_extraction
 fn process_client_hello
@@ -101,9 +110,10 @@ fn process_client_hello
                Seq.equal
                  (Ghost.reveal 'fragment_bytes)
                  (W.serialize_handshake (M.ClientHello ch)) /\
-               lch.IM.client_hello_has_server_name == true /\
-               CM.client_hello_server_name_len_for ch ==
-                 lch.IM.client_hello_server_name_len /\
+               lch.IM.client_hello_has_server_name == CM.client_hello_has_sni ch /\
+               (lch.IM.client_hello_has_server_name ==>
+                  CM.client_hello_server_name_len_for ch ==
+                    lch.IM.client_hello_server_name_len) /\
                CM.client_hello_cipher_suites_len_for ch ==
                  lch.IM.client_hello_cipher_suites_len /\
                CM.client_hello_signature_schemes_len_for ch ==
@@ -1516,17 +1526,15 @@ fn process_network_bytes
                 lch.IM.client_hello_signature_schemes_len;
               assert (pure (CM.client_hello_signature_schemes_len_for ch ==
                 lch.IM.client_hello_signature_schemes_len));
-              let has_sni = lch.IM.client_hello_has_server_name;
-              if has_sni {
-                assert (pure (lch.IM.client_hello_has_server_name == true));
                 assert (pure (IM.optional_byte_prefix_matches
-                    true
+                    lch.IM.client_hello_has_server_name
                     server_name
                     lch.IM.client_hello_server_name_len
                     (Sem.clientHello_server_name ch)));
                 assert (pure (B.length server_name == IM.max_server_name_len));
                 assert (pure (B.length server_name < 65536));
                 lemma_client_hello_sni_len_for
+                    lch.IM.client_hello_has_server_name
                     server_name
                     lch.IM.client_hello_server_name_len
                     ch;
@@ -1710,33 +1718,6 @@ fn process_network_bytes
                     buffer_resp.ST.consumed_len == 0sz));
                   buffer_resp
                 }
-              } else {
-                fold (IM.is_valid_client_hello lch ch);
-                IM.free_client_hello lch;
-                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
-                V.free decoded_buffer.IM.decoded_buffer_fragment;
-                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
-                V.free decoded_buffer.IM.decoded_buffer_raw_record;
-                let resp = {
-                  ST.network_out_len = 0sz;
-                  ST.app_out_len = 0sz;
-                  ST.status = ST.IllegalTransition;
-                };
-                let buffer_resp = {
-                  ST.response = resp;
-                  ST.consumed_len = 0sz;
-                };
-                assert (pure (ST.server_network_bytes_end_to_end_correct
-                  'st0
-                  'st0
-                  buffer_resp
-                  (Ghost.reveal 'raw_bytes)
-                  'old_network_out
-                  'old_app_out));
-                assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-                  buffer_resp.ST.consumed_len == 0sz));
-                buffer_resp
-              }
             }
             IM.LServerHello lsh -> {
               IM.free_handshake_msg (IM.LServerHello lsh);

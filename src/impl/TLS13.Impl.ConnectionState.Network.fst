@@ -583,9 +583,10 @@ fn mark_received_client_hello
                  Seq.equal
                    (Ghost.reveal 'fragment_bytes)
                    (W.serialize_handshake (M.ClientHello ch)) /\
-                 lch.IM.client_hello_has_server_name == true /\
-                 client_hello_server_name_len_for ch ==
-                   lch.IM.client_hello_server_name_len /\
+                 lch.IM.client_hello_has_server_name == client_hello_has_sni ch /\
+                 (lch.IM.client_hello_has_server_name ==>
+                    client_hello_server_name_len_for ch ==
+                      lch.IM.client_hello_server_name_len) /\
                  client_hello_cipher_suites_len_for ch ==
                    lch.IM.client_hello_cipher_suites_len /\
                  client_hello_signature_schemes_len_for ch ==
@@ -734,8 +735,16 @@ fn mark_received_client_hello
   c.handshake.messages.client_hello_present := true;
   c.handshake.messages.client_hello_has_server_name :=
     lch.IM.client_hello_has_server_name;
-  c.handshake.messages.client_hello_server_name_len :=
-    lch.IM.client_hello_server_name_len;
+  // When the ClientHello carried no server_name extension the parser's length
+  // field is meaningless, so normalise it to 0 to match
+  // client_hello_server_name_len_for, which is 0 for a None server name.
+  let stored_server_name_len =
+    if lch.IM.client_hello_has_server_name {
+      lch.IM.client_hello_server_name_len
+    } else {
+      0sz
+    };
+  c.handshake.messages.client_hello_server_name_len := stored_server_name_len;
   c.handshake.messages.client_hello_cipher_suites_len :=
     lch.IM.client_hello_cipher_suites_len;
   c.handshake.messages.client_hello_signature_schemes_len :=
@@ -749,7 +758,7 @@ fn mark_received_client_hello
 
   assert (pure (Seq.equal stored_random (Sem.clientHello_random (Ghost.reveal ch))));
   assert (pure (IM.optional_byte_prefix_matches
-    true
+    (client_hello_has_sni (Ghost.reveal ch))
     stored_server_name
     (client_hello_server_name_len_for (Ghost.reveal ch))
     (Sem.clientHello_server_name (Ghost.reveal ch))));

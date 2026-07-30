@@ -123,6 +123,14 @@ let client_hello_server_name_len_for (m:GCH.clientHello) : SZ.t =
   | Some sn -> bounded_u16_sizet (B.length sn)
   | None -> 0sz
 
+(* Whether the ClientHello actually carried a server_name (SNI) extension.  The
+   extension is optional in RFC 6066 and absent whenever a client connects to a
+   bare IP literal, so this is genuinely a property of the message rather than a
+   precondition the server may impose. *)
+noextract
+let client_hello_has_sni (m:GCH.clientHello) : bool =
+  Some? (Sem.clientHello_server_name m)
+
 noextract
 let client_hello_cipher_suites_len_for (m:GCH.clientHello) : SZ.t =
   bounded_u16_sizet (length (Sem.clientHello_cipher_suites m))

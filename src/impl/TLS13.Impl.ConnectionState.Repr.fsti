@@ -859,7 +859,7 @@ let client_hello_slot_exactly
               Seq.equal random (Sem.clientHello_random m) /\
               Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
               IM.optional_byte_prefix_matches
-                true
+                (client_hello_has_sni m)
                 server_name
                 (client_hello_server_name_len_for m)
                 (Sem.clientHello_server_name m) /\
@@ -900,7 +900,7 @@ let client_hello_metadata_exactly
     Box.pts_to signature_schemes_len_box signature_schemes_len **
     pure (match spec with
       | Some m ->
-        has_server_name == true /\
+        has_server_name == client_hello_has_sni m /\
         server_name_len == client_hello_server_name_len_for m /\
         cipher_suites_len == client_hello_cipher_suites_len_for m /\
         signature_schemes_len == client_hello_signature_schemes_len_for m

@@ -328,7 +328,7 @@ exact list.  What a ClientHello must satisfy today:
 | `cipher_suites` **contains** `TLS_CHACHA20_POLY1305_SHA256` (<= 64 entries) | yes |
 | `signature_algorithms` **contains** `rsa_pss_rsae_sha256` (<= 32 entries) | yes |
 | `key_share` offers X25519 | yes (browsers also offer X25519MLKEM768, tolerated) |
-| a `server_name` (SNI) extension is present | yes for hostnames, **no for IP literals** -- see Gap D |
+| ~~a `server_name` (SNI) extension is present~~ | **CLOSED** -- SNI is now optional |
 
 `supported_groups` is tolerant, TLS 1.2 legacy suites in the list are tolerated,
 GREASE values and unknown extensions parse as `Unknown_*`, and
@@ -397,35 +397,57 @@ bounded at 16/16 by `Model.valid_start`; that bound is now checked explicitly at
 runtime in `client_hello_start_nonempty_runtime` instead of being read off the
 cap.
 
-### Gap D (SNI is mandatory) -- OPEN
+### Gap D (SNI was mandatory) is CLOSED
 
-`TLS13.Impl.Server.Network.process_client_hello` requires
-`client_hello_has_server_name == true`.  The *parser* is already tolerant (the
-`server_name` extension is optional there); only the server accept path insists.
+`TLS13.Impl.Server.Network` used to reject any ClientHello without a
+`server_name` extension, so `curl https://127.0.0.1:PORT/` failed (curl does not
+send SNI for IP literals) while `curl --resolve localhost:...` succeeded.
 
-Consequence: `curl https://127.0.0.1:PORT/` fails, because curl does not send SNI
-for IP literals, while
-`curl --resolve localhost:PORT:127.0.0.1 https://localhost:PORT/` succeeds.
-Browsers always send SNI for hostnames, so this does not block the browser demo,
-but it does block bare-IP access.  Fixing it means making the server tolerate an
-absent `server_name` on the accept path (the certificate is fixed anyway).
+The root cause was not a policy decision but an *overloaded invariant*: in
+`client_hello_metadata_exactly` (`TLS13.Impl.ConnectionState.Repr.fsti`) the
+`has_server_name` flag doubled as the "a ClientHello is stored" marker
+(`Some m ==> has_server_name == true`), even though presence is already tracked
+separately by `client_hello_present`.  The accept path therefore had to demand
+`has_server_name == true` just to be able to store the message.
+
+The invariant is now faithful -- `has_server_name == client_hello_has_sni m` --
+so the flag records what the client actually sent.  Consequently:
+
+* the accept-path preconditions ask for
+  `lch.client_hello_has_server_name == client_hello_has_sni ch` instead of
+  `== true`, and the stored server-name length is only pinned when SNI is present;
+* `TLS13.Impl.ConnectionState.Network` normalises the stored length to 0 when SNI
+  is absent, keeping the invariant tight rather than merely weakening it;
+* `can_select_supported_server_parameters_runtime` no longer includes
+  `has_server_name` in its accept gate (`client_hello_present` already covers it);
+* the SNI-less rejection branch in `TLS13.Impl.Server.Network` is gone.
+
+The spec never required SNI: `sni_policy_accepts None _ = True`
+(`TLS13.Spec.StateMachine`), and the runtime server config sets
+`server_sni_policy = None`.  A server that *does* set an SNI policy still gets
+the RFC 6066 matching behaviour, unchanged.
 
 ### Status
 
 A completely unpinned `curl` and a completely unpinned `openssl s_client` now
-handshake with the verified backend and get `HTTP/1.1 200`:
+handshake with the verified backend and get `HTTP/1.1 200`, with or without SNI:
 
 ```sh
 make http-sample-vtls-server
 HTTP_TLS_BACKEND=verified HTTP_TLS_CERT=test/certs/leaf.der \
   HTTP_TLS_KEY=test/certs/leaf.key \
   http_sample/_extract/http_server_vtls 18443 index.html &
+
+# hostname (sends SNI), trusting the test CA
 curl --cacert test/certs/ca.pem --resolve localhost:18443:127.0.0.1 \
   https://localhost:18443/
+# bare IP literal (no SNI)
+curl -k https://127.0.0.1:18443/
 ```
 
 OpenSSL nevertheless remains the *default* backend (`HTTP_TLS_BACKEND=openssl`),
 since the verified path still lacks HelloRetryRequest, resumption, client auth,
-KeyUpdate and ALPN, and a real browser has not yet been tested.
+KeyUpdate and ALPN, only offers chacha20-poly1305 + `rsa_pss_rsae_sha256` +
+X25519, and a real browser has not yet been tested.
 `interop/vtls_client.c` is a small OpenSSL probe used by
 `make test-http-sample-vtls`.

@@ -3230,9 +3230,10 @@ fn process_client_hello
                  Seq.equal
                   (Ghost.reveal 'fragment_bytes)
                   (TLS13.Wire.Spec.serialize_handshake (M.ClientHello ch)) /\
-                 lch.IM.client_hello_has_server_name == true /\
-                 CM.client_hello_server_name_len_for ch ==
-                  lch.IM.client_hello_server_name_len /\
+                 lch.IM.client_hello_has_server_name == CM.client_hello_has_sni ch /\
+                 (lch.IM.client_hello_has_server_name ==>
+                    CM.client_hello_server_name_len_for ch ==
+                      lch.IM.client_hello_server_name_len) /\
                  CM.client_hello_cipher_suites_len_for ch ==
                   lch.IM.client_hello_cipher_suites_len /\
                  CM.client_hello_signature_schemes_len_for ch ==
