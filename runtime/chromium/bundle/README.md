@@ -23,6 +23,8 @@ diagnostics to report that the verified miTLS provider was selected.
 The controlled launcher forces software rendering and prevents DNS resolution
 for non-localhost names, avoiding destination-specific GPU drivers and unrelated
 browser background connections.
+The HTTPS server tolerates Chromium's speculative TLS preconnections and keeps
+listening until the navigation sends the real HTTP request.
 
 This is a narrow demonstration profile: TLS 1.3, X25519,
 TLS_CHACHA20_POLY1305_SHA256, RSA-PSS-RSAE-SHA256, and HTTP/1.1 without ALPN.

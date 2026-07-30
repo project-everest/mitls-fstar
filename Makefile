@@ -990,11 +990,12 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
   test-chromium-demo-bundle \
   test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
-  test-openssl-sclient test-hacl-stubs test-key-schedule-bindings check-c-stubs
+  test-openssl-http-preconnect test-openssl-sclient test-hacl-stubs \
+  test-key-schedule-bindings check-c-stubs
 
 test: verify check-c-stubs test-hacl-stubs test-key-schedule-bindings \
   test-openssl-echo test-client-engine-openssl-echo \
-  test-chromium-client-demo test-openssl-sclient
+  test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
@@ -1281,6 +1282,40 @@ test/openssl_http_server: test/openssl_http_server.c
 	$(CC) -Wall -Wextra test/openssl_http_server.c \
 	  -lssl -lcrypto -o $@
 
+test-openssl-http-preconnect: test/openssl_http_server \
+  test/certs/chain.pem test/certs/leaf.key | $(EXTRACT_DIR)
+	@rm -f $(EXTRACT_DIR)/http_preconnect.port \
+	  $(EXTRACT_DIR)/http_preconnect.server.log \
+	  $(EXTRACT_DIR)/http_preconnect.response
+	@set -e; \
+	  ./test/openssl_http_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    $(EXTRACT_DIR)/http_preconnect.port \
+	    > $(EXTRACT_DIR)/http_preconnect.server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f $(EXTRACT_DIR)/http_preconnect.port' EXIT; \
+	  for _i in $$(seq 1 100); do \
+	    test -s $(EXTRACT_DIR)/http_preconnect.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  test -s $(EXTRACT_DIR)/http_preconnect.port; \
+	  port=$$(cat $(EXTRACT_DIR)/http_preconnect.port); \
+	  timeout 5 openssl s_client -quiet -connect 127.0.0.1:$$port \
+	    -tls1_3 -groups X25519 \
+	    -ciphersuites TLS_CHACHA20_POLY1305_SHA256 \
+	    -no_ign_eof \
+	    </dev/null >/dev/null 2>&1 || true; \
+	  printf 'GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' | \
+	    timeout 5 openssl s_client -quiet -connect 127.0.0.1:$$port \
+	      -tls1_3 -groups X25519 \
+	      -ciphersuites TLS_CHACHA20_POLY1305_SHA256 \
+	      > $(EXTRACT_DIR)/http_preconnect.response 2>/dev/null; \
+	  wait $$server_pid; \
+	  grep -q "verified chromium demo" \
+	    $(EXTRACT_DIR)/http_preconnect.response; \
+	  grep -q "Ignoring TLS connection closed before an HTTP request" \
+	    $(EXTRACT_DIR)/http_preconnect.server.log; \
+	  echo "OpenSSL HTTP server speculative-preconnect test passed"
+
 test-chromium-client-demo: test/openssl_http_server \
   test/test_chromium_client_socket_demo \
   test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key
@@ -1373,7 +1408,7 @@ clean:
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-client-engine-openssl-echo \
-  test-chromium-client-demo test-openssl-sclient \
+  test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient \
   tls13-client-provider chromium-install-provider chromium-configure \
   chromium-net chromium-browser test-chromium-browser chromium-demo-bundle \
   test-chromium-demo-bundle \
