@@ -16,7 +16,7 @@
  *     Common.TCP channel, and closes it.
  *
  * This program is the thin, UNVERIFIED glue around that driver:
- *   1. bind a TCP socket to loopback:<port> and listen;
+ *   1. bind a TCP socket to 0.0.0.0:<port> and listen;
  *   2. for each accepted connection, READ the client's request head into a buffer
  *      up to the CRLF-CRLF terminator (the socket read is glue -- the request
  *      length is not known ahead of time -- but the buffered bytes are then
@@ -261,7 +261,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  /* 1. Bind loopback:<port> and listen. */
+  /* 1. Bind 0.0.0.0:<port> and listen (reachable from other hosts, so the
+     verified server can be opened from a browser on another machine). */
   int lfd = socket(AF_INET, SOCK_STREAM, 0);
   if (lfd < 0) { perror("socket"); free(body); return 1; }
   int one = 1;
@@ -269,12 +270,12 @@ int main(int argc, char **argv) {
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
   addr.sin_port = htons(port);
   if (bind(lfd, (struct sockaddr *)&addr, sizeof addr) != 0) { perror("bind"); free(body); return 1; }
   if (listen(lfd, 16) != 0) { perror("listen"); free(body); return 1; }
 
-  fprintf(stderr, "http_server: listening on 127.0.0.1:%u (%s), serving %zu-byte body (verified response)\n",
+  fprintf(stderr, "http_server: listening on 0.0.0.0:%u (%s), serving %zu-byte body (verified response)\n",
           port, tls_ctx ? "https/TLS" : "http", body_len);
 
   /* Staging buffers for the verified exchange: the request head buffer, the
