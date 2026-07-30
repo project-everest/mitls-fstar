@@ -88,6 +88,38 @@ fn get_key_schedule_snapshot
   ensures connection_exactly c st0 **
           pure (key_schedule_snapshot_matches snapshot st0)
 
+fn copy_pending_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:option pending_protected_handshake_snapshot
+  ensures connection_exactly c st0 **
+          (match snapshot with
+           | None ->
+             pure (
+               st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+                 B.length
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes)
+           | Some pending ->
+             exists* fragment.
+               V.pts_to pending.pending_protected_fragment fragment **
+               pure (
+                 V.is_full_vec pending.pending_protected_fragment /\
+                 V.length pending.pending_protected_fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 B.length fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 Seq.equal
+                   fragment
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_fragment_len ==
+                   B.length
+                     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_parsed ==
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed /\
+                 SZ.v pending.pending_protected_parsed <
+                   SZ.v pending.pending_protected_fragment_len))
+
 fn copy_certificate_leaf_der
   (c:connection_state)
   (out:array U8.t)

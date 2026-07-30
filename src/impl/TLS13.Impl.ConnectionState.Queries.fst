@@ -137,6 +137,122 @@ fn get_control_snapshot
   fold (connection_exactly c st0);
   snapshot
 }
+
+fn copy_pending_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:option pending_protected_handshake_snapshot
+  ensures connection_exactly c st0 **
+          (match snapshot with
+           | None ->
+             pure (
+               st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+                 B.length
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes)
+           | Some pending ->
+             exists* fragment.
+               V.pts_to pending.pending_protected_fragment fragment **
+               pure (
+                 V.is_full_vec pending.pending_protected_fragment /\
+                 V.length pending.pending_protected_fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 B.length fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 Seq.equal
+                   fragment
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_fragment_len ==
+                   B.length
+                     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_parsed ==
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed /\
+                 SZ.v pending.pending_protected_parsed <
+                   SZ.v pending.pending_protected_fragment_len))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  with parsed. _;
+  unfold (sized_bytes_exactly
+    c.handshake.buffers.encrypted_server_handshake_bytes
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes);
+  with storage stored_len. _;
+
+  let fragment_len =
+    !c.handshake.buffers.encrypted_server_handshake_bytes.len;
+  let parsed_len =
+    !c.handshake.buffers.encrypted_server_handshake_parsed;
+  assert (pure (fragment_len == stored_len));
+  assert (pure (parsed_len == parsed));
+
+  if SZ.lt parsed_len fragment_len {
+    let fragment = V.alloc 0uy fragment_len;
+    V.to_array_pts_to
+      c.handshake.buffers.encrypted_server_handshake_bytes.bytes;
+    V.to_array_pts_to fragment;
+    Arr.memcpy_l
+      fragment_len
+      (V.vec_to_array
+        c.handshake.buffers.encrypted_server_handshake_bytes.bytes)
+      (V.vec_to_array fragment);
+    V.to_vec_pts_to fragment;
+    V.to_vec_pts_to
+      c.handshake.buffers.encrypted_server_handshake_bytes.bytes;
+    with fragment_bytes. assert (V.pts_to fragment fragment_bytes);
+    assert (pure (B.length fragment_bytes == SZ.v fragment_len));
+    Seq.lemma_eq_intro
+      fragment_bytes
+      (Seq.slice fragment_bytes 0 (SZ.v fragment_len));
+    assert (pure (Seq.equal
+      fragment_bytes
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes));
+    let pending = {
+      pending_protected_fragment = fragment;
+      pending_protected_fragment_len = fragment_len;
+      pending_protected_parsed = parsed_len;
+    };
+    rewrite (V.pts_to fragment fragment_bytes) as
+      (V.pts_to pending.pending_protected_fragment fragment_bytes);
+    fold (sized_bytes_exactly
+      c.handshake.buffers.encrypted_server_handshake_bytes
+      max_handshake_flight_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes);
+    fold (handshake_buffers_exactly
+      c.handshake.buffers
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+    fold (handshake_exactly
+      c.handshake
+      st0.CS.cs_model.CS.model_handshake);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    Some pending
+  } else {
+    assert (pure (
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+        B.length
+          st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes));
+    fold (sized_bytes_exactly
+      c.handshake.buffers.encrypted_server_handshake_bytes
+      max_handshake_flight_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes);
+    fold (handshake_buffers_exactly
+      c.handshake.buffers
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+    fold (handshake_exactly
+      c.handshake
+      st0.CS.cs_model.CS.model_handshake);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    None #pending_protected_handshake_snapshot
+  }
+}
+
 fn get_key_schedule_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)

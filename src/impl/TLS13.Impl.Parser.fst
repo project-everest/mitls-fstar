@@ -6062,14 +6062,26 @@ fn parse_handshake_prefix
           (match r with
            | None -> emp
            | Some parsed ->
-             exists* msg.
+             exists* msg prefix_bytes.
+               V.pts_to parsed.L.parsed_handshake_fragment prefix_bytes **
                L.is_valid_tls_message
                  parsed.L.parsed_handshake_message
                  (M.TlsHandshake msg) **
                pure (
+                 V.is_full_vec parsed.L.parsed_handshake_fragment /\
+                 V.length parsed.L.parsed_handshake_fragment ==
+                   SZ.v parsed.L.parsed_handshake_consumed /\
+                 B.length prefix_bytes ==
+                   SZ.v parsed.L.parsed_handshake_consumed /\
                  0 < SZ.v parsed.L.parsed_handshake_consumed /\
                  SZ.v parsed.L.parsed_handshake_consumed <=
                    B.length (Ghost.reveal 'input_bytes) /\
+                 Seq.equal
+                   prefix_bytes
+                   (Seq.slice
+                     (Ghost.reveal 'input_bytes)
+                     0
+                     (SZ.v parsed.L.parsed_handshake_consumed)) /\
                  WS.parse_handshake (Ghost.reveal 'input_bytes) ==
                    Some
                      (msg,
@@ -6120,6 +6132,7 @@ fn parse_handshake_prefix
             let result = {
               L.parsed_handshake_message = L.LTlsHandshake lhs;
               L.parsed_handshake_consumed = consumed;
+              L.parsed_handshake_fragment = prefix;
             };
             rewrite
               (L.is_valid_tls_message
@@ -6129,7 +6142,8 @@ fn parse_handshake_prefix
               (L.is_valid_tls_message
                 result.L.parsed_handshake_message
                 (M.TlsHandshake msg));
-            V.free prefix;
+            rewrite (V.pts_to prefix prefix_bytes) as
+              (V.pts_to result.L.parsed_handshake_fragment prefix_bytes);
             Some result
           }
           l_other -> {
@@ -6646,6 +6660,7 @@ fn decode_network_record
    the prefix) are discharged by the caller and threaded through. *)
 fn build_decoded_buffer_ok
   (content_type: U8.t)
+  (protected: bool)
   (raw_record_vec: V.vec U8.t)
   (consumed_len: SZ.t)
   (fragment_vec: V.vec U8.t)
@@ -6689,7 +6704,19 @@ fn build_decoded_buffer_ok
       B.length (Ghost.reveal fragment_bytes) == SZ.v fragment_len /\
       CT.network_input_wf
         (Ghost.reveal st0) content_type
-        (Ghost.reveal fragment_bytes) (Ghost.reveal raw_record_bytes))
+        (Ghost.reveal fragment_bytes) (Ghost.reveal raw_record_bytes) /\
+      (protected ==>
+        CT.protected_decoder_fragment_relation
+          (Ghost.reveal st0)
+          content_type
+          (Ghost.reveal fragment_bytes)
+          (Ghost.reveal raw_record_bytes) /\
+        (exists outer_fragment.
+          WS.parse_record (Ghost.reveal raw_record_bytes) ==
+            Some
+              (T.Application_data,
+               outer_fragment,
+               B.length (Ghost.reveal raw_record_bytes)))))
   returns r: L.decoded_network_buffer_result
   ensures
     (match r with
@@ -6756,7 +6783,19 @@ fn build_decoded_buffer_ok
             (Ghost.reveal st0)
             decoded.L.decoded_buffer_content_type
             fragment_bytes2
-            raw_record_bytes2))
+            raw_record_bytes2 /\
+          (decoded.L.decoded_buffer_protected ==>
+            CT.protected_decoder_fragment_relation
+              (Ghost.reveal st0)
+              decoded.L.decoded_buffer_content_type
+              fragment_bytes2
+              raw_record_bytes2 /\
+            (exists outer_fragment.
+              WS.parse_record raw_record_bytes2 ==
+                Some
+                  (T.Application_data,
+                   outer_fragment,
+                   B.length raw_record_bytes2)))))
 {
   CT.lemma_raw_record_parse_success_nonempty
     (Ghost.reveal raw_record_bytes);
@@ -6768,7 +6807,8 @@ fn build_decoded_buffer_ok
       L.decoded_buffer_content_type = content_type;
       L.decoded_buffer_fragment = fragment_vec;
       L.decoded_buffer_fragment_len = fragment_len;
-      L.decoded_buffer_parsed = parsed }
+      L.decoded_buffer_parsed = parsed;
+      L.decoded_buffer_protected = protected }
 }
 
 fn decode_network_buffer
@@ -6845,7 +6885,19 @@ fn decode_network_buffer
                   'st0
                   decoded.L.decoded_buffer_content_type
                   fragment_bytes
-                  raw_record_bytes))
+                  raw_record_bytes /\
+                (decoded.L.decoded_buffer_protected ==>
+                  CT.protected_decoder_fragment_relation
+                    'st0
+                    decoded.L.decoded_buffer_content_type
+                    fragment_bytes
+                    raw_record_bytes /\
+                  (exists outer_fragment.
+                    WS.parse_record raw_record_bytes ==
+                      Some
+                        (T.Application_data,
+                         outer_fragment,
+                         B.length raw_record_bytes)))))
 {
   Arr.pts_to_len raw;
   if (SZ.lt raw_len 5sz) {
@@ -6908,7 +6960,7 @@ fn decode_network_buffer
                 None -> {
                   DW.lemma_mk_protected_network_input_wf_none
                     (reveal 'st0) df.df_ct payload_bytes (Ghost.reveal raw_record_bytes);
-                  build_decoded_buffer_ok df.df_ct raw_record_vec consumed_len
+                  build_decoded_buffer_ok df.df_ct true raw_record_vec consumed_len
                     df.df_payload df.df_len None 'st0 'raw_bytes
                 }
                 Some l -> {
@@ -6917,7 +6969,7 @@ fn decode_network_buffer
                     DW.lemma_mk_protected_network_input_wf
                       (reveal 'st0) df.df_ct payload_bytes (Ghost.reveal raw_record_bytes)
                       (Seq.slice (Ghost.reveal raw_record_bytes) 5 (5 + SZ.v flen)) l m;
-                    build_decoded_buffer_ok df.df_ct raw_record_vec consumed_len
+                    build_decoded_buffer_ok df.df_ct true raw_record_vec consumed_len
                       df.df_payload df.df_len (Some l) 'st0 'raw_bytes
                   } else {
                     L.free_tls_message l;
@@ -6943,7 +6995,7 @@ fn decode_network_buffer
             None -> {
               DW.lemma_mk_cleartext_network_input_wf_none
                 (reveal 'st0) b0 outer_ct fragment_bytes (Ghost.reveal raw_record_bytes);
-              build_decoded_buffer_ok b0 raw_record_vec consumed_len
+              build_decoded_buffer_ok b0 false raw_record_vec consumed_len
                 fragment_vec flen None 'st0 'raw_bytes
             }
             Some l -> {
@@ -6957,7 +7009,7 @@ fn decode_network_buffer
                     (Ghost.reveal raw_record_bytes) outer_ct fragment_bytes m));
                   DW.lemma_mk_cleartext_network_input_wf_consistent
                     (reveal 'st0) b0 outer_ct fragment_bytes (Ghost.reveal raw_record_bytes) l m;
-                  build_decoded_buffer_ok b0 raw_record_vec consumed_len
+                  build_decoded_buffer_ok b0 false raw_record_vec consumed_len
                     fragment_vec flen (Some l) 'st0 'raw_bytes
                 } else {
                   if (DW.l_is_client_hello l) {
@@ -6968,7 +7020,7 @@ fn decode_network_buffer
                       (Ghost.reveal raw_record_bytes) outer_ct fragment_bytes m));
                     DW.lemma_mk_cleartext_network_input_wf_consistent
                       (reveal 'st0) b0 outer_ct fragment_bytes (Ghost.reveal raw_record_bytes) l m;
-                    build_decoded_buffer_ok b0 raw_record_vec consumed_len
+                    build_decoded_buffer_ok b0 false raw_record_vec consumed_len
                       fragment_vec flen (Some l) 'st0 'raw_bytes
                   } else {
                     L.free_tls_message l;

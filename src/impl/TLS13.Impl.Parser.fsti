@@ -66,14 +66,26 @@ fn parse_handshake_prefix
           (match r with
            | None -> emp
            | Some parsed ->
-            exists* msg.
+            exists* msg prefix_bytes.
+              V.pts_to parsed.L.parsed_handshake_fragment prefix_bytes **
               L.is_valid_tls_message
                 parsed.L.parsed_handshake_message
                 (M.TlsHandshake msg) **
               pure (
+                V.is_full_vec parsed.L.parsed_handshake_fragment /\
+                V.length parsed.L.parsed_handshake_fragment ==
+                  SZ.v parsed.L.parsed_handshake_consumed /\
+                B.length prefix_bytes ==
+                  SZ.v parsed.L.parsed_handshake_consumed /\
                 0 < SZ.v parsed.L.parsed_handshake_consumed /\
                 SZ.v parsed.L.parsed_handshake_consumed <=
                   B.length (Ghost.reveal 'input_bytes) /\
+                Seq.equal
+                  prefix_bytes
+                  (Seq.slice
+                    (Ghost.reveal 'input_bytes)
+                    0
+                    (SZ.v parsed.L.parsed_handshake_consumed)) /\
                 WS.parse_handshake (Ghost.reveal 'input_bytes) ==
                   Some
                     (msg,
@@ -232,4 +244,16 @@ fn decode_network_buffer
                   'st0
                   decoded.L.decoded_buffer_content_type
                   fragment_bytes
-                  raw_record_bytes))
+                  raw_record_bytes /\
+                (decoded.L.decoded_buffer_protected ==>
+                  CT.protected_decoder_fragment_relation
+                    'st0
+                    decoded.L.decoded_buffer_content_type
+                    fragment_bytes
+                    raw_record_bytes /\
+                  (exists outer_fragment.
+                    WS.parse_record raw_record_bytes ==
+                      Some
+                        (T.Application_data,
+                         outer_fragment,
+                         B.length raw_record_bytes)))))

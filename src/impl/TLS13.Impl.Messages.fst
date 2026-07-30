@@ -222,6 +222,7 @@ noeq
 type parsed_handshake_prefix = {
   parsed_handshake_message: tls_message;
   parsed_handshake_consumed: SZ.t;
+  parsed_handshake_fragment: V.vec U8.t;
 }
 
 noeq
@@ -233,6 +234,7 @@ type decoded_network_buffer = {
   decoded_buffer_fragment: V.vec U8.t;
   decoded_buffer_fragment_len: SZ.t;
   decoded_buffer_parsed: option tls_message;
+  decoded_buffer_protected: bool;
 }
 
 noeq
