@@ -50,6 +50,18 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+/* Optional VERIFIED TLS 1.3 termination.  When this program is compiled with
+   -DHTTP_VERIFIED_TLS and linked against the extracted TLS13 bundle, setting
+   HTTP_TLS_BACKEND=verified makes the HTTPS transport itself verified Pulse
+   code (src/impl/TLS13.Impl.Server.*) instead of OpenSSL -- so the whole stack,
+   record layer AND HTTP leaves, is extracted from F*.  The OpenSSL backend is
+   kept as the default because the verified server implements exactly one
+   profile (TLS 1.3 / X25519 / TLS_CHACHA20_POLY1305_SHA256 / rsa_pss_rsae_sha256,
+   no HelloRetryRequest), which not every client offers. */
+#ifdef HTTP_VERIFIED_TLS
+#include "tls13_server_driver.h"
+#endif
+
 #define RESP_HEAD_LEN 43       /* fixed size of the verified response head */
 #define REQ_CAP       65536    /* max request-head bytes we will buffer */
 #define MAX_HEADERS   100      /* header-count cap (431 Request Header Fields Too Large) */
@@ -69,14 +81,41 @@ static const char DEFAULT_BODY[] =
    HTTP server is reachable identically over http:// and https://. */
 typedef struct {
   int fd;
-  SSL *ssl;                 /* NULL => plaintext */
-  Common_TCP_channel ch;    /* non-NULL => plaintext writes; NULL => TLS */
+  SSL *ssl;                 /* NULL => not OpenSSL-TLS */
+  Common_TCP_channel ch;    /* non-NULL => plaintext writes */
+#ifdef HTTP_VERIFIED_TLS
+  tls13_server_driver *drv; /* non-NULL => verified TLS 1.3 transport */
+  /* The verified driver hands back one whole TLS record's plaintext at a time,
+     but the HTTP readers ask for arbitrary byte counts, so undelivered bytes
+     are parked here until the next io_read. */
+  uint8_t *vbuf;
+  size_t vbuf_len;          /* bytes currently held */
+  size_t vbuf_off;          /* bytes already delivered from vbuf */
+#endif
 } io_t;
 
 /* Read up to n bytes.  Returns >0 bytes read, 0 on clean EOF/close, or -1 on
    error; a would-block/timeout is reported as -1 with errno == EAGAIN so the
    request-head reader can surface it as a 408 read timeout for both transports. */
 static ssize_t io_read(io_t *io, uint8_t *buf, size_t n) {
+#ifdef HTTP_VERIFIED_TLS
+  if (io->drv) {
+    if (io->vbuf_off == io->vbuf_len) {          /* parked bytes exhausted */
+      size_t got = 0;
+      io->vbuf_off = io->vbuf_len = 0;
+      if (tls13_server_driver_receive_application_data(
+              io->drv, io->vbuf, TLS13_SERVER_DRIVER_RECEIVE_BUFFER_SIZE, &got) != 0)
+        return 0;                                /* close_notify or error -> EOF */
+      if (got == 0) return 0;
+      io->vbuf_len = got;
+    }
+    size_t avail = io->vbuf_len - io->vbuf_off;
+    size_t take = n < avail ? n : avail;
+    memcpy(buf, io->vbuf + io->vbuf_off, take);
+    io->vbuf_off += take;
+    return (ssize_t)take;
+  }
+#endif
   if (io->ssl) {
     int req = (n > (size_t)INT_MAX) ? INT_MAX : (int)n;
     int r = SSL_read(io->ssl, buf, req);
@@ -93,6 +132,12 @@ static ssize_t io_read(io_t *io, uint8_t *buf, size_t n) {
 /* Write all n bytes (best effort).  Plaintext goes through the verified Common.TCP
    channel; TLS through SSL_write. */
 static void io_write(io_t *io, uint8_t *buf, size_t n) {
+#ifdef HTTP_VERIFIED_TLS
+  if (io->drv) {
+    (void)tls13_server_driver_send_application_data(io->drv, buf, n);
+    return;
+  }
+#endif
   if (io->ssl) {
     size_t off = 0;
     while (off < n) {
@@ -109,6 +154,16 @@ static void io_write(io_t *io, uint8_t *buf, size_t n) {
 
 /* Close the connection exactly once. */
 static void io_close(io_t *io) {
+#ifdef HTTP_VERIFIED_TLS
+  if (io->drv) {
+    tls13_server_driver_close(io->drv, false);
+    tls13_server_driver_free(io->drv);
+    io->drv = NULL;
+    free(io->vbuf);
+    io->vbuf = NULL;
+    return;
+  }
+#endif
   if (io->ssl) {
     SSL_shutdown(io->ssl);
     SSL_free(io->ssl);
@@ -226,7 +281,18 @@ int main(int argc, char **argv) {
   SSL_CTX *tls_ctx = NULL;
   const char *tls_cert = getenv("HTTP_TLS_CERT");
   const char *tls_key  = getenv("HTTP_TLS_KEY");
-  if (tls_cert && *tls_cert && tls_key && *tls_key) {
+  const char *tls_backend = getenv("HTTP_TLS_BACKEND");
+  int want_verified_tls = (tls_backend && strcmp(tls_backend, "verified") == 0);
+#ifdef HTTP_VERIFIED_TLS
+  tls13_server_config *vtls_cfg = NULL;
+#else
+  if (want_verified_tls) {
+    fprintf(stderr, "http_server: HTTP_TLS_BACKEND=verified requested but this binary "
+                    "was built without -DHTTP_VERIFIED_TLS\n");
+    return 1;
+  }
+#endif
+  if (tls_cert && *tls_cert && tls_key && *tls_key && !want_verified_tls) {
     SSL_load_error_strings();
     OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
     tls_ctx = SSL_CTX_new(TLS_server_method());
@@ -242,6 +308,36 @@ int main(int argc, char **argv) {
     }
     fprintf(stderr, "http_server: TLS enabled (cert %s)\n", tls_cert);
   }
+
+#ifdef HTTP_VERIFIED_TLS
+  /* Verified TLS 1.3 backend: the driver owns its own listening socket, so it
+     is configured here and the plaintext bind/listen below is skipped.
+     NOTE: unlike the OpenSSL backend, HTTP_TLS_CERT must be the leaf certificate
+     in DER form (the verified X.509 path consumes DER, not PEM); HTTP_TLS_KEY is
+     still a PEM private key. */
+  if (want_verified_tls) {
+    if (!(tls_cert && *tls_cert && tls_key && *tls_key)) {
+      fprintf(stderr, "http_server: HTTP_TLS_BACKEND=verified needs HTTP_TLS_CERT and HTTP_TLS_KEY\n");
+      return 1;
+    }
+    size_t chain_len = 0, key_len = 0;
+    uint8_t *chain = read_file(tls_cert, &chain_len);
+    uint8_t *keypem = read_file(tls_key, &key_len);
+    if (!chain || !keypem) {
+      fprintf(stderr, "http_server: cannot read TLS cert/key (%s, %s)\n", tls_cert, tls_key);
+      free(chain); free(keypem);
+      return 1;
+    }
+    if (tls13_server_config_new(&vtls_cfg, "0.0.0.0", port,
+                                chain, chain_len, keypem, key_len) != 0) {
+      fprintf(stderr, "http_server: verified TLS config/listen failed on port %u\n", port);
+      free(chain); free(keypem);
+      return 1;
+    }
+    free(chain); free(keypem);   /* the config copies what it needs */
+    fprintf(stderr, "http_server: VERIFIED TLS 1.3 enabled (cert %s)\n", tls_cert);
+  }
+#endif
 
   /* Resolve the response body: an optional file, else the built-in string. */
   uint8_t *body = NULL;
@@ -262,21 +358,27 @@ int main(int argc, char **argv) {
   }
 
   /* 1. Bind 0.0.0.0:<port> and listen (reachable from other hosts, so the
-     verified server can be opened from a browser on another machine). */
-  int lfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (lfd < 0) { perror("socket"); free(body); return 1; }
-  int one = 1;
-  setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
-  struct sockaddr_in addr;
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  addr.sin_port = htons(port);
-  if (bind(lfd, (struct sockaddr *)&addr, sizeof addr) != 0) { perror("bind"); free(body); return 1; }
-  if (listen(lfd, 16) != 0) { perror("listen"); free(body); return 1; }
+     verified server can be opened from a browser on another machine).  The
+     verified TLS backend owns its own listener, so this is skipped there. */
+  int lfd = -1;
+  if (!want_verified_tls) {
+    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (lfd < 0) { perror("socket"); free(body); return 1; }
+    int one = 1;
+    setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(port);
+    if (bind(lfd, (struct sockaddr *)&addr, sizeof addr) != 0) { perror("bind"); free(body); return 1; }
+    if (listen(lfd, 16) != 0) { perror("listen"); free(body); return 1; }
+  }
 
   fprintf(stderr, "http_server: listening on 0.0.0.0:%u (%s), serving %zu-byte body (verified response)\n",
-          port, tls_ctx ? "https/TLS" : "http", body_len);
+          port,
+          want_verified_tls ? "https/VERIFIED TLS 1.3" : (tls_ctx ? "https/TLS" : "http"),
+          body_len);
 
   /* Staging buffers for the verified exchange: the request head buffer, the
      recovered target-length out-param, the 43-byte response head, and the body
@@ -295,6 +397,27 @@ int main(int argc, char **argv) {
      verified Common.TCP channel is created per connection and closed exactly once
      when the connection ends. */
   for (;;) {
+    io_t io;
+    memset(&io, 0, sizeof io);
+    io.fd = -1;
+
+#ifdef HTTP_VERIFIED_TLS
+    if (want_verified_tls) {
+      /* The verified driver accepts the TCP connection AND runs the whole
+         TLS 1.3 handshake in extracted Pulse code. */
+      tls13_server_driver *drv = NULL;
+      if (tls13_server_driver_accept_with_config(&drv, vtls_cfg) != 0) {
+        fprintf(stderr, "http_server: verified TLS handshake failed: %s\n",
+                drv ? tls13_server_driver_last_error(drv) : "(no driver)");
+        if (drv) tls13_server_driver_free(drv);
+        continue;
+      }
+      io.vbuf = malloc(TLS13_SERVER_DRIVER_RECEIVE_BUFFER_SIZE);
+      if (!io.vbuf) { tls13_server_driver_free(drv); continue; }
+      io.drv = drv;
+    } else
+#endif
+    {
     int fd = accept(lfd, NULL, NULL);
     if (fd < 0) { if (errno == EINTR) continue; perror("accept"); break; }
 
@@ -307,7 +430,7 @@ int main(int argc, char **argv) {
     /* One transport per connection (plaintext Common.TCP channel, or a TLS
        session when a certificate was configured), reused across keep-alive
        requests and closed exactly once when the inner loop ends. */
-    io_t io; io.fd = fd; io.ssl = NULL; io.ch = NULL;
+    io.fd = fd;
     if (tls_ctx) {
       SSL *ssl = SSL_new(tls_ctx);
       if (!ssl) { close(fd); continue; }
@@ -321,6 +444,7 @@ int main(int argc, char **argv) {
       io.ssl = ssl;
     } else {
       io.ch = Common_TCP_channel_of_fd(fd);
+    }
     }
     int served = 0;                 /* how many requests answered on this conn */
 
@@ -579,6 +703,9 @@ int main(int argc, char **argv) {
 
   free(reqbuf); free(headbuf); free(scratch); free(decbuf); free(body);
   if (tls_ctx) SSL_CTX_free(tls_ctx);
-  close(lfd);
+#ifdef HTTP_VERIFIED_TLS
+  if (vtls_cfg) tls13_server_config_free(vtls_cfg);
+#endif
+  if (lfd >= 0) close(lfd);
   return 0;
 }
