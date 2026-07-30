@@ -246,3 +246,39 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       `protocol_implementation` dictionary is not Low-star, and
       `extract_loops.sh` drives an explicit module list, so the generated C is
       unchanged.
+
+## Demo drivers
+
+Two programs make the verified stack directly demonstrable. Neither contains any
+HTTP logic of its own: they do argument parsing, socket setup and printing, and
+hand every wire byte to the extracted Pulse code.
+
+* **Server — `interop/http_server.c`.** An origin server whose request parse and
+  response emission both run through verified extracted code.
+
+      make -C interop build-progs
+      cd /tmp/demo && .../_extract/http_server 18080 index.html
+
+  Then open `http://127.0.0.1:18080/` in a browser. It speaks keep-alive,
+  honours `Connection: close`, enforces the verified smuggling / size / method
+  guards, echoes `POST` bodies (Content-Length *and* chunked), and serves TLS
+  when `HTTP_TLS_CERT` / `HTTP_TLS_KEY` are set. Note for demos: it binds
+  **loopback only**, serves **one fixed file for every path**, and sends no
+  `Content-Type` (browsers MIME-sniff).
+
+* **Client — `verified/vcurl.c`.** A "mini curl" over the verified GET client.
+
+      make vcurl
+      _extract/vcurl http://example.com/     # body to stdout
+      _extract/vcurl -i http://127.0.0.1:18080/   # head + body
+      _extract/vcurl -H http://example.com/       # head only
+      make vcurl-demo VCURL_URL=http://example.com/
+
+  `http_get` emits the request head, reads to EOF, parses the status line and
+  recovers the body framing; `http_get_body_chunked_var` reassembles chunked
+  bodies with minimal-width hex sizes. https is out of scope on this side — use
+  the server's TLS mode to demo that direction.
+
+  `verified/get_live_test.c` (`make get-live-test`) remains the CI-guarded
+  pass/fail smoke test of the same path against `example.com`; it prints a
+  one-line verdict and SKIPs cleanly without network egress.
