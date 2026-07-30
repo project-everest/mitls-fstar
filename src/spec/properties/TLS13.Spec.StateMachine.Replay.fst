@@ -60,6 +60,13 @@ let event_protected_single_raw_parse_success
          W.parse_record_wire raw_received ==
             Some (T.Application_data, fragment, B.length raw_received)
     else True
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+     exists fragment.
+       W.parse_record_wire raw_received ==
+         Some (T.Application_data, fragment, B.length raw_received)
+    else True
   | ConnLocalEvent _ -> True
 let event_protected_raw_parse_prefix_success
   (ev:conn_event)
@@ -84,6 +91,15 @@ let event_protected_raw_parse_prefix_success
             Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received))
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      exists fragment. exists (consumed:nat).
+       W.parse_record_wire raw_received ==
+         Some (T.Application_data, fragment, consumed) /\
+       consumed > 0 /\
+       consumed <= B.length raw_received
+    else True
   | ConnLocalEvent _ -> True
 let event_protected_raw_decompose_prefix_success
   (ev:conn_event)
@@ -116,6 +132,19 @@ let event_protected_raw_decompose_prefix_success
             (Seq.slice raw_received consumed (B.length raw_received))
             T.Application_data
             (protected_record_count msg.CL.message_direction msg.CL.message_value - 1)))
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      exists fragment. exists (consumed:nat).
+        W.parse_record_wire raw_received ==
+          Some (T.Application_data, fragment, consumed) /\
+        consumed > 0 /\
+        consumed <= B.length raw_received /\
+        raw_records_exactly
+          (Seq.slice raw_received consumed (B.length raw_received))
+          T.Application_data
+          0
+    else True
   | ConnLocalEvent _ -> True
 let event_protected_raw_segmented_success
   (ev:conn_event)
@@ -138,6 +167,11 @@ let event_protected_raw_segmented_success
           raw_received
           T.Application_data
           (protected_record_count msg.CL.message_direction msg.CL.message_value))
+  | ConnProtectedHandshake step ->
+    raw_records_segmented
+      raw_received
+      T.Application_data
+      (if step.protected_handshake_head then 1 else 0)
   | ConnLocalEvent _ -> True
 let rec conn_events_raw_replay
   (model:connection_model)

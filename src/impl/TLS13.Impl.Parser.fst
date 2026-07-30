@@ -6051,6 +6051,100 @@ fn parse_tls_message
   }
 }
 
+fn parse_handshake_prefix
+  (input: array U8.t)
+  (input_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 SZ.v input_len <= L.max_record_fragment_len)
+  returns r: option L.parsed_handshake_prefix
+  ensures pts_to input 'input_bytes **
+          (match r with
+           | None -> emp
+           | Some parsed ->
+             exists* msg.
+               L.is_valid_tls_message
+                 parsed.L.parsed_handshake_message
+                 (M.TlsHandshake msg) **
+               pure (
+                 0 < SZ.v parsed.L.parsed_handshake_consumed /\
+                 SZ.v parsed.L.parsed_handshake_consumed <=
+                   B.length (Ghost.reveal 'input_bytes) /\
+                 WS.parse_handshake (Ghost.reveal 'input_bytes) ==
+                   Some
+                     (msg,
+                      SZ.v parsed.L.parsed_handshake_consumed)))
+{
+  Arr.pts_to_len input;
+  let s = S.from_array input input_len;
+  let mut poffset = 0sz;
+  let valid = LPS.validate GHS.handshake_validator s poffset;
+  let consumed = !poffset;
+  S.to_array s;
+  if (valid && SZ.lt 0sz consumed && SZ.lte consumed input_len) {
+    let prefix = alloc_copy_slice input input_len 0sz consumed;
+    with prefix_bytes. assert (V.pts_to prefix prefix_bytes);
+    V.to_array_pts_to prefix;
+    let parsed =
+      parse_tls_message 0x16uy (V.vec_to_array prefix) consumed;
+    V.to_vec_pts_to prefix;
+    match parsed {
+      None -> {
+        V.free prefix;
+        None #L.parsed_handshake_prefix
+      }
+      Some l -> {
+        with parsed_model. assert (L.is_valid_tls_message l parsed_model);
+        match l {
+          L.LTlsHandshake lhs -> {
+            unfold
+              (L.is_valid_tls_message
+                (L.LTlsHandshake lhs)
+                parsed_model);
+            with msg. assert (
+              L.is_valid_handshake_msg lhs msg **
+              pure (parsed_model == M.TlsHandshake msg));
+            assert (pure (
+              WS.parse_tls_message T.Handshake prefix_bytes ==
+                Some (M.TlsHandshake msg)));
+            WS.lemma_parse_tls_message_handshake_some prefix_bytes msg;
+            WS.lemma_parse_handshake_strong_prefix
+              prefix_bytes
+              (Ghost.reveal 'input_bytes)
+              msg
+              (SZ.v consumed);
+            fold
+              (L.is_valid_tls_message
+                (L.LTlsHandshake lhs)
+                (M.TlsHandshake msg));
+            let result = {
+              L.parsed_handshake_message = L.LTlsHandshake lhs;
+              L.parsed_handshake_consumed = consumed;
+            };
+            rewrite
+              (L.is_valid_tls_message
+                (L.LTlsHandshake lhs)
+                (M.TlsHandshake msg))
+              as
+              (L.is_valid_tls_message
+                result.L.parsed_handshake_message
+                (M.TlsHandshake msg));
+            V.free prefix;
+            Some result
+          }
+          l_other -> {
+            L.free_tls_message l_other;
+            V.free prefix;
+            None #L.parsed_handshake_prefix
+          }
+        }
+      }
+    }
+  } else {
+    None #L.parsed_handshake_prefix
+  }
+}
+
 (* ----------------------------------------------------------------------- *)
 (* decode_network_record / decode_network_buffer                           *)
 (* ----------------------------------------------------------------------- *)

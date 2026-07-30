@@ -401,6 +401,19 @@ val parse_handshake_msg:
   input:B.bytes ->
   GTot (option (M.handshake_msg & nat))
 
+val lemma_parse_handshake_strong_prefix:
+  prefix:B.bytes ->
+  input:B.bytes ->
+  msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake prefix == Some (msg, consumed) /\
+      consumed == B.length prefix /\
+      B.length prefix <= B.length input /\
+      Seq.equal prefix (Seq.slice input 0 (B.length prefix)))
+    (ensures parse_handshake input == Some (msg, consumed))
+
 val serialize_handshake:
   msg:M.handshake_msg ->
   GTot B.bytes
@@ -591,6 +604,17 @@ val parse_tls_message:
   content_type:T.content_type ->
   fragment:B.bytes ->
   GTot (option M.tls_message)
+
+val lemma_parse_tls_message_handshake_some:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  Lemma
+    (requires
+      parse_tls_message T.Handshake fragment ==
+        Some (M.TlsHandshake msg))
+    (ensures
+      parse_handshake fragment ==
+        Some (msg, B.length fragment))
 
 (* The generated [Invalid] content type (wire byte 0) never carries a TLS
    message: the spec parser rejects it.  Exposed so consumers can discharge the

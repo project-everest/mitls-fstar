@@ -625,6 +625,8 @@ let sent_protected_event_write_key_schedule_projection
        CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false
     then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection st0.CS.cs_model
     else True
+  | CS.ConnProtectedHandshake _ ->
+    True
   | CS.ConnLocalEvent _ ->
     True
 
@@ -4354,6 +4356,9 @@ let lemma_legal_handled_local_response_received_decode_projection
     | CS.ConnLocalEvent _ ->
       assert (Seq.equal raw_received B.empty);
       Seq.lemma_eq_elim raw_received B.empty
+    | CS.ConnProtectedHandshake _ ->
+      assert (local_event_kind_matches st0 kind payload ev);
+      assert False
     | CS.ConnNetworkEvent msg ->
       (match msg.CL.message_direction with
        | CL.Sent ->
@@ -4451,6 +4456,8 @@ let lemma_legal_handled_local_response_app_data_supported_projection
            assert (B.length payload <= SM.max_application_data_fragment_len);
            assert (CS.protected_record_count CL.Sent (M.TlsApplicationData payload) == 1)
          | _ -> assert False)
+      | CS.ConnProtectedHandshake _ ->
+        assert False
       | CS.ConnLocalEvent _ ->
         assert False
     )
@@ -6684,6 +6691,7 @@ let lemma_local_send_application_data_stepok_preserves_not_failed
        lemma_step_tls_app_data_control
          st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction bytes
      | _ -> assert False)
+  | CS.ConnProtectedHandshake _ -> assert False
   | CS.ConnLocalEvent _ -> assert False
 
 #pop-options
@@ -6740,6 +6748,7 @@ let lemma_network_bytes_app_out_positive_not_failed
        lemma_step_tls_app_data_control
          st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction bytes
      | _, _ -> assert False)
+  | CS.ConnProtectedHandshake _ -> assert False
   | CS.ConnLocalEvent local ->
     (match local with
      | CS.LocalDeliverApplicationData bytes ->

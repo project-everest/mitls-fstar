@@ -561,6 +561,12 @@ let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
 let parse_handshake_msg (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
   parse_handshake input
 
+let lemma_parse_handshake_strong_prefix prefix input msg consumed =
+  match LP.parse GHS.handshake_parser prefix with
+  | Some (h, parsed) ->
+    LP.parse_strong_prefix GHS.handshake_parser prefix input
+  | None -> ()
+
 // Serialize a high handshake message by re-wrapping it into the generated
 // [handshake] record and applying the QuackyDucky serializer (the single source
 // of truth for the wire format).  This is the exact inverse of the structural
@@ -938,6 +944,8 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
        then Some M.TlsChangeCipherSpec
        else None
      | None -> None)
+
+let lemma_parse_tls_message_handshake_some fragment msg = ()
 
 let lemma_parse_tls_message_invalid_none fragment = ()
 

@@ -287,8 +287,17 @@ type local_event =
   | LocalVerifyClientFinished of GFin.finished
   | LocalDeliverApplicationData of B.bytes
   | LocalFail of T.tls_error
+noextract
+type protected_handshake_step = {
+  protected_handshake_message: M.handshake_msg;
+  protected_handshake_fragment: B.bytes;
+  protected_handshake_offset: nat;
+  protected_handshake_consumed: nat;
+  protected_handshake_head: bool;
+}
 type conn_event =
   | ConnNetworkEvent of directed_message M.tls_message
+  | ConnProtectedHandshake of protected_handshake_step
   | ConnLocalEvent of local_event
 type connection_state = {
   cs_model: connection_model;
@@ -971,10 +980,73 @@ let step_tls_message
     Some model
   | _, _ ->
     None
+let protected_handshake_message_supported (msg:M.handshake_msg) : bool =
+  match msg with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ -> true
+  | _ -> false
+let set_pending_protected_handshake
+  (model:connection_model)
+  (fragment:B.bytes)
+  (parsed:nat)
+  : connection_model =
+  let hs = model.model_handshake in
+  let buffers =
+    if parsed < B.length fragment
+    then
+      { hs.hs_buffers with
+          hb_encrypted_server_handshake_bytes = fragment;
+          hb_encrypted_server_handshake_parsed = parsed;
+      }
+    else
+      { hs.hs_buffers with
+          hb_encrypted_server_handshake_bytes = B.empty;
+          hb_encrypted_server_handshake_parsed = 0;
+      } in
+  { model with model_handshake = { hs with hs_buffers = buffers } }
+let step_protected_handshake
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot (option connection_model) =
+  if protected_handshake_message_supported step.protected_handshake_message
+  then
+    match
+      step_handshake_message
+        model
+        CL.Received
+        step.protected_handshake_message
+    with
+    | None -> None
+    | Some stepped ->
+      let consumed_to =
+        step.protected_handshake_offset + step.protected_handshake_consumed in
+      let record_adjusted =
+        if step.protected_handshake_head
+        then stepped
+        else
+          match step.protected_handshake_message with
+          | M.Finished _ -> stepped
+          | _ ->
+            { stepped with
+                model_record =
+                  { stepped.model_record with
+                      record_read = model.model_record.record_read;
+                  };
+            } in
+      Some
+        (set_pending_protected_handshake
+          record_adjusted
+          step.protected_handshake_fragment
+          consumed_to)
+  else None
 let step_model (model:connection_model) (ev:conn_event) : GTot (option connection_model) =
   match ev with
   | ConnNetworkEvent msg ->
     step_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnProtectedHandshake step ->
+    step_protected_handshake model step
   | ConnLocalEvent local ->
     step_local_event model local
 let rec cipher_suite_offered (suites:list T.cipher_suite) (suite:T.cipher_suite)
@@ -1416,10 +1488,42 @@ let legal_tls_message
     True
   | _, _ ->
     False
+let protected_handshake_buffer_empty (model:connection_model) : prop =
+  Seq.equal
+    model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes
+    B.empty /\
+  model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed == 0
+let legal_protected_handshake_step
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot prop =
+  let fragment = step.protected_handshake_fragment in
+  let offset = step.protected_handshake_offset in
+  let consumed = step.protected_handshake_consumed in
+  offset < B.length fragment /\
+  0 < consumed /\
+  offset + consumed <= B.length fragment /\
+  protected_handshake_message_supported step.protected_handshake_message /\
+  W.parse_handshake (Seq.slice fragment offset (B.length fragment)) ==
+    Some (step.protected_handshake_message, consumed) /\
+  legal_handshake_message model CL.Received step.protected_handshake_message /\
+  (if step.protected_handshake_head
+   then
+     offset == 0 /\
+     consumed < B.length fragment /\
+     protected_handshake_buffer_empty model
+   else
+     Seq.equal
+       fragment
+       model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes /\
+     offset ==
+       model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed)
 let legal_event (model:connection_model) (ev:conn_event) : GTot prop =
   match ev with
   | ConnNetworkEvent msg ->
     legal_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnProtectedHandshake step ->
+    legal_protected_handshake_step model step
   | ConnLocalEvent local ->
     legal_local_event model local
 let rec all_records_outer_type
@@ -1498,6 +1602,11 @@ let event_raw_delta_legal
   | ConnLocalEvent _ ->
     Seq.equal raw_sent B.empty /\
     Seq.equal raw_received B.empty
+  | ConnProtectedHandshake step ->
+    Seq.equal raw_sent B.empty /\
+    (if step.protected_handshake_head
+     then raw_records_exactly raw_received T.Application_data 1
+     else Seq.equal raw_received B.empty)
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction with
      | CL.Sent ->

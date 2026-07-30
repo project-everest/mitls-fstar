@@ -54,6 +54,30 @@ fn parse_tls_message
              pure (forall (ct:T.content_type).
                L.content_type_matches content_type ct ==>
                WS.parse_tls_message ct 'input_bytes == None))
+
+fn parse_handshake_prefix
+  (input: array U8.t)
+  (input_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                SZ.v input_len <= L.max_record_fragment_len)
+  returns r: option L.parsed_handshake_prefix
+  ensures pts_to input 'input_bytes **
+          (match r with
+           | None -> emp
+           | Some parsed ->
+            exists* msg.
+              L.is_valid_tls_message
+                parsed.L.parsed_handshake_message
+                (M.TlsHandshake msg) **
+              pure (
+                0 < SZ.v parsed.L.parsed_handshake_consumed /\
+                SZ.v parsed.L.parsed_handshake_consumed <=
+                  B.length (Ghost.reveal 'input_bytes) /\
+                WS.parse_handshake (Ghost.reveal 'input_bytes) ==
+                  Some
+                    (msg,
+                     SZ.v parsed.L.parsed_handshake_consumed)))
 (**
   Extraction-facing record decoder used by the public client driver API.
   On success it returns an owned exact-length fragment vector plus the same

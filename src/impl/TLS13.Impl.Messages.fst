@@ -219,6 +219,12 @@ type decoded_network_record_result =
   | NetworkRecordOk of decoded_network_record
 
 noeq
+type parsed_handshake_prefix = {
+  parsed_handshake_message: tls_message;
+  parsed_handshake_consumed: SZ.t;
+}
+
+noeq
 type decoded_network_buffer = {
   decoded_buffer_raw_record: V.vec U8.t;
   decoded_buffer_raw_record_len: SZ.t;
