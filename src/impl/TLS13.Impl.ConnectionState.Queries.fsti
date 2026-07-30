@@ -115,10 +115,21 @@ fn copy_pending_protected_handshake
                  SZ.v pending.pending_protected_fragment_len ==
                    B.length
                      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_fragment_len <=
+                   max_handshake_flight_len /\
                  SZ.v pending.pending_protected_parsed ==
                    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed /\
                  SZ.v pending.pending_protected_parsed <
                    SZ.v pending.pending_protected_fragment_len))
+
+fn protected_handshake_buffer_empty_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns empty:bool
+  ensures connection_exactly c st0 **
+          pure (empty ==>
+            CS.protected_handshake_buffer_empty st0.CS.cs_model)
 
 fn copy_certificate_leaf_der
   (c:connection_state)

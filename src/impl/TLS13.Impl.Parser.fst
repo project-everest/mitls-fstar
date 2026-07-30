@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CR = TLS13.Impl.ConnectionState.Repr
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
@@ -6152,6 +6153,110 @@ fn parse_handshake_prefix
             None #L.parsed_handshake_prefix
           }
         }
+      }
+    }
+  } else {
+    None #L.parsed_handshake_prefix
+  }
+}
+
+fn parse_handshake_prefix_at
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (offset: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 SZ.v offset < SZ.v input_len /\
+                 SZ.v input_len <= Bounds.max_handshake_flight_len)
+  returns r: option L.parsed_handshake_prefix
+  ensures pts_to input 'input_bytes **
+          (match r with
+           | None -> emp
+           | Some parsed ->
+             exists* msg prefix_bytes.
+               V.pts_to parsed.L.parsed_handshake_fragment prefix_bytes **
+               L.is_valid_tls_message
+                 parsed.L.parsed_handshake_message
+                 (M.TlsHandshake msg) **
+               pure (
+                 V.is_full_vec parsed.L.parsed_handshake_fragment /\
+                 V.length parsed.L.parsed_handshake_fragment ==
+                   SZ.v parsed.L.parsed_handshake_consumed /\
+                 B.length prefix_bytes ==
+                   SZ.v parsed.L.parsed_handshake_consumed /\
+                 0 < SZ.v parsed.L.parsed_handshake_consumed /\
+                 SZ.v offset + SZ.v parsed.L.parsed_handshake_consumed <=
+                   B.length (Ghost.reveal 'input_bytes) /\
+                 Seq.equal
+                   prefix_bytes
+                   (Seq.slice
+                     (Ghost.reveal 'input_bytes)
+                     (SZ.v offset)
+                     (SZ.v offset +
+                       SZ.v parsed.L.parsed_handshake_consumed)) /\
+                 WS.parse_handshake
+                   (Seq.slice
+                     (Ghost.reveal 'input_bytes)
+                     (SZ.v offset)
+                     (B.length (Ghost.reveal 'input_bytes))) ==
+                   Some
+                     (msg,
+                      SZ.v parsed.L.parsed_handshake_consumed)))
+{
+  let suffix_len = input_len `SZ.sub` offset;
+  if SZ.lte suffix_len 16640sz {
+    assert (pure (SZ.v offset + SZ.v suffix_len == SZ.v input_len));
+    let suffix =
+      alloc_copy_slice input input_len offset suffix_len;
+    with suffix_bytes. assert (V.pts_to suffix suffix_bytes);
+    V.to_array_pts_to suffix;
+    let parsed =
+      parse_handshake_prefix
+        (V.vec_to_array suffix)
+        suffix_len;
+    V.to_vec_pts_to suffix;
+    match parsed {
+      None -> {
+        V.free suffix;
+        None #L.parsed_handshake_prefix
+      }
+      Some result -> {
+        with msg prefix_bytes.
+          assert (
+            V.pts_to result.L.parsed_handshake_fragment prefix_bytes **
+            L.is_valid_tls_message
+              result.L.parsed_handshake_message
+              (M.TlsHandshake msg));
+        Seq.lemma_eq_elim
+          suffix_bytes
+          (Seq.slice
+            (Ghost.reveal 'input_bytes)
+            (SZ.v offset)
+            (SZ.v input_len));
+        Seq.slice_slice
+          (Ghost.reveal 'input_bytes)
+          (SZ.v offset)
+          (SZ.v input_len)
+          0
+          (SZ.v result.L.parsed_handshake_consumed);
+        assert (pure (Seq.equal
+          prefix_bytes
+          (Seq.slice
+            (Ghost.reveal 'input_bytes)
+            (SZ.v offset)
+            (SZ.v offset +
+              SZ.v result.L.parsed_handshake_consumed))));
+        assert (pure (
+          WS.parse_handshake
+            (Seq.slice
+              (Ghost.reveal 'input_bytes)
+              (SZ.v offset)
+              (B.length (Ghost.reveal 'input_bytes))) ==
+            Some
+              (msg,
+               SZ.v result.L.parsed_handshake_consumed)));
+        V.free suffix;
+        Some result
       }
     }
   } else {

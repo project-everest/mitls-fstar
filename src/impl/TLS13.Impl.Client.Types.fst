@@ -5,6 +5,7 @@ module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
+module CM = TLS13.Impl.ConnectionState.Model
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
@@ -1442,6 +1443,153 @@ let protected_decoder_fragment_relation
        WS.parse_plaintext opened == Some plaintext /\
        decoder_fragment_matches_plaintext content_type fragment plaintext))
 
+let lemma_protected_head_decoder_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        protected_decoder_fragment_relation
+          st0 content_type fragment raw_received /\
+        (exists outer_fragment.
+          WS.parse_record raw_received ==
+            Some
+              (T.Application_data,
+               outer_fragment,
+               B.length raw_received)) /\
+        L.content_type_matches content_type T.Handshake /\
+        Seq.equal step.protected_handshake_fragment fragment /\
+        step.protected_handshake_offset == 0 /\
+        step.protected_handshake_head /\
+        WS.parse_handshake fragment ==
+          Some
+            (step.protected_handshake_message,
+             step.protected_handshake_consumed))
+      (ensures
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          raw_received)
+=
+  assert (exists outer_fragment.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
+    (exists opened.
+      protected_record_opened st0 raw_received outer_fragment opened /\
+      (exists plaintext.
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext)));
+  let outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun outer_fragment ->
+        WS.parse_record_wire raw_received ==
+          Some (T.Application_data, outer_fragment, B.length raw_received) /\
+        (exists opened.
+          protected_record_opened st0 raw_received outer_fragment opened /\
+          (exists plaintext.
+            WS.parse_plaintext opened == Some plaintext /\
+            decoder_fragment_matches_plaintext content_type fragment plaintext))) in
+  let parsed_outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun parsed_outer_fragment ->
+        WS.parse_record raw_received ==
+          Some
+            (T.Application_data,
+             parsed_outer_fragment,
+             B.length raw_received)) in
+  CSL.lemma_parse_record_full_raw_records_exactly
+    raw_received
+    T.Application_data
+    parsed_outer_fragment;
+  assert (exists opened.
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    (exists plaintext.
+      WS.parse_plaintext opened == Some plaintext /\
+      decoder_fragment_matches_plaintext content_type fragment plaintext));
+  let opened =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun opened ->
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        (exists plaintext.
+          WS.parse_plaintext opened == Some plaintext /\
+          decoder_fragment_matches_plaintext content_type fragment plaintext)) in
+  let plaintext =
+    ID.indefinite_description_ghost
+      M.plaintext
+      (fun plaintext ->
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext) in
+  assert (L.content_type_matches content_type plaintext.M.content_type);
+  assert (plaintext.M.content_type == T.Handshake);
+  assert (Seq.equal fragment plaintext.M.fragment);
+  Seq.lemma_eq_elim fragment plaintext.M.fragment;
+  Seq.lemma_eq_elim step.protected_handshake_fragment fragment;
+  assert (Seq.slice
+    step.protected_handshake_fragment
+    0
+    (B.length step.protected_handshake_fragment) ==
+      step.protected_handshake_fragment);
+  assert (TLS13.Spec.StateMachine.Canonical.received_record_opened
+    st0.CS.cs_model
+    raw_received
+    outer_fragment
+    opened);
+  assert (Seq.equal plaintext.M.fragment step.protected_handshake_fragment);
+  assert (WS.parse_handshake
+    (Seq.slice
+      step.protected_handshake_fragment
+      step.protected_handshake_offset
+      (B.length step.protected_handshake_fragment)) ==
+    Some
+      (step.protected_handshake_message,
+       step.protected_handshake_consumed));
+  assert (exists outer_fragment' opened' plaintext'.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment', B.length raw_received) /\
+    TLS13.Spec.StateMachine.Canonical.received_record_opened
+      st0.CS.cs_model
+      raw_received
+      outer_fragment'
+      opened' /\
+    WS.parse_plaintext opened' == Some plaintext' /\
+    plaintext'.M.content_type == T.Handshake /\
+    Seq.equal plaintext'.M.fragment step.protected_handshake_fragment /\
+    step.protected_handshake_offset <=
+      B.length step.protected_handshake_fragment /\
+    WS.parse_handshake
+      (Seq.slice
+        step.protected_handshake_fragment
+        step.protected_handshake_offset
+        (B.length step.protected_handshake_fragment)) ==
+      Some
+        (step.protected_handshake_message,
+         step.protected_handshake_consumed));
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_protected_handshake_head_decode
+      st0.CS.cs_model
+      step
+      raw_received);
+  assert (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received);
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      (CS.ConnProtectedHandshake step)
+      raw_received)
+
 let protected_record_decodes_to_message
   (st0:CS.connection_state)
   (raw_received:B.bytes)
@@ -2460,6 +2608,117 @@ let response_stuttered
   Seq.equal network_out old_network_out /\
   Seq.equal app_out old_app_out
 
+let protected_handshake_step_correct
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == StepOk /\
+  resp.network_out_len == 0sz /\
+  resp.app_out_len == 0sz /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out /\
+  TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    raw_received
+
+let lemma_legal_protected_handshake_step_some
+  (model:CS.connection_model)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_event model (CS.ConnProtectedHandshake step))
+      (ensures Some? (CS.step_protected_handshake model step))
+=
+  match step.CS.protected_handshake_message with
+  | M.EncryptedExtensions _ -> ()
+  | M.Certificate _ -> ()
+  | M.CertificateVerify _ -> ()
+  | M.Finished _ -> ()
+  | _ -> assert False
+
+let lemma_protected_handshake_step_correct_intro
+  (st0:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        resp.status == StepOk /\
+        resp.network_out_len == 0sz /\
+        resp.app_out_len == 0sz /\
+        CS.legal_event
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step) /\
+        Some? (CS.step_protected_handshake st0.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          raw_received /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0)
+      (ensures
+        protected_handshake_step_correct
+          st0
+          (CM.protected_handshake_state st0 step raw_received)
+          resp
+          step
+          raw_received
+          network_out
+          app_out)
+=
+  Seq.lemma_len_slice network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice network_out 0 0);
+  Seq.lemma_len_slice app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice app_out 0 0);
+  CM.lemma_protected_handshake_state_evolves st0 step raw_received
+
+let lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        protected_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  assert (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    B.empty);
+  lemma_legal_response_for_event_client_state_correct
+    st0
+    st1
+    resp
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out;
+  lemma_client_state_correct_raw_to_message_replay st1
+
 let network_event_step_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3122,6 +3381,87 @@ let network_bytes_end_to_end_correct
    TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st1) /\
   (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st0 ==>
    TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1)
+
+let coalesced_network_bytes_end_to_end_correct
+  (st0 st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out network_out:B.bytes)
+  (old_app_out app_out:B.bytes)
+  : prop =
+  network_bytes_end_to_end_correct
+    st0
+    st1
+    buffer_resp
+    network_input
+    old_network_out
+    network_out
+    old_app_out
+    app_out \/
+  (exists step.
+    0 < SZ.v buffer_resp.consumed_len /\
+    SZ.v buffer_resp.consumed_len <= B.length network_input /\
+    protected_handshake_step_correct
+      st0
+      st1
+      buffer_resp.response
+      step
+      (network_consumed_prefix network_input buffer_resp.consumed_len)
+      network_out
+      app_out /\
+    Seq.equal network_out old_network_out /\
+    Seq.equal app_out old_app_out)
+
+let lemma_coalesced_network_bytes_end_to_end_correct_preserves_invariant
+  (st0 st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out network_out:B.bytes)
+  (old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        coalesced_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  if network_bytes_end_to_end_correct
+      st0
+      st1
+      buffer_resp
+      network_input
+      old_network_out
+      network_out
+      old_app_out
+      app_out
+  then ()
+  else (
+    let step =
+      ID.indefinite_description_ghost
+        CS.protected_handshake_step
+        (fun step ->
+          0 < SZ.v buffer_resp.consumed_len /\
+          SZ.v buffer_resp.consumed_len <= B.length network_input /\
+          protected_handshake_step_correct
+            st0
+            st1
+            buffer_resp.response
+            step
+            (network_consumed_prefix network_input buffer_resp.consumed_len)
+            network_out
+            app_out /\
+          Seq.equal network_out old_network_out /\
+          Seq.equal app_out old_app_out) in
+    lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+      st0
+      st1
+      buffer_resp.response
+      step
+      (network_consumed_prefix network_input buffer_resp.consumed_len)
+      network_out
+      app_out
+  )
 
 let lemma_network_bytes_end_to_end_correct_preserves_config
   (st0:CS.connection_state)
