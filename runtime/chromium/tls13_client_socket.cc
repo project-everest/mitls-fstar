@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -267,12 +268,38 @@ class Tls13ClientSocket::Impl {
   }
 
   bool CaptureEngineResult(
+      const char* operation,
       int error,
       const tls13_client_engine_result& result) {
-    if (error != TLS13_CLIENT_ENGINE_SUCCESS ||
-        result.network_out_len > network_out_buffer_.size() ||
-        result.application_out_len > application_out_buffer_.size()) {
+    if (error != TLS13_CLIENT_ENGINE_SUCCESS) {
+      fprintf(
+          stderr,
+          "Verified miTLS engine call failed: operation=%s error=%d\n",
+          operation,
+          error);
       return false;
+    }
+    if (result.network_out_len > network_out_buffer_.size() ||
+        result.application_out_len > application_out_buffer_.size()) {
+      fprintf(
+          stderr,
+          "Verified miTLS engine returned invalid lengths: "
+          "operation=%s network=%zu application=%zu\n",
+          operation,
+          result.network_out_len,
+          result.application_out_len);
+      return false;
+    }
+    if (result.action == TLS13_CLIENT_ENGINE_FAILED) {
+      fprintf(
+          stderr,
+          "Verified miTLS engine rejected input: operation=%s "
+          "previous_action=%d status=%d consumed=%zu buffered=%zu\n",
+          operation,
+          have_engine_result_ ? static_cast<int>(engine_result_.action) : -1,
+          static_cast<int>(result.status),
+          result.consumed_len,
+          network_input_.size());
     }
     if (result.network_out_len != 0u) {
       if (network_output_offset_ != network_output_.size()) {
@@ -306,7 +333,7 @@ class Tls13ClientSocket::Impl {
         application_out_buffer_.data(),
         application_out_buffer_.size(),
         &result);
-    return CaptureEngineResult(error, result);
+    return CaptureEngineResult("poll", error, result);
   }
 
   bool FeedNetwork() {
@@ -327,7 +354,7 @@ class Tls13ClientSocket::Impl {
     network_input_.erase(
         network_input_.begin(),
         network_input_.begin() + result.consumed_len);
-    return CaptureEngineResult(error, result);
+    return CaptureEngineResult("feed_network", error, result);
   }
 
   bool CompleteCertificateVerification() {
@@ -347,7 +374,8 @@ class Tls13ClientSocket::Impl {
         application_out_buffer_.data(),
         application_out_buffer_.size(),
         &result);
-    return CaptureEngineResult(error, result);
+    return CaptureEngineResult(
+        "complete_certificate_verification", error, result);
   }
 
   bool CompleteCertificateSignatureVerification() {
@@ -360,7 +388,8 @@ class Tls13ClientSocket::Impl {
             application_out_buffer_.data(),
             application_out_buffer_.size(),
             &result);
-    return CaptureEngineResult(error, result);
+    return CaptureEngineResult(
+        "complete_certificate_signature_verification", error, result);
   }
 
   bool SubmitApplicationWrite() {
@@ -374,7 +403,7 @@ class Tls13ClientSocket::Impl {
         application_out_buffer_.data(),
         application_out_buffer_.size(),
         &result);
-    if (!CaptureEngineResult(error, result)) {
+    if (!CaptureEngineResult("send_application_data", error, result)) {
       return false;
     }
     write_submitted_ = true;
@@ -390,7 +419,7 @@ class Tls13ClientSocket::Impl {
         application_out_buffer_.data(),
         application_out_buffer_.size(),
         &result);
-    if (!CaptureEngineResult(error, result)) {
+    if (!CaptureEngineResult("send_close_notify", error, result)) {
       return false;
     }
     state_ = State::kClosing;
