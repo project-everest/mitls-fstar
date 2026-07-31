@@ -289,84 +289,131 @@ let lemma_recv_rseq_delta (m m':CS.connection_model) (msg:M.tls_message)
     | _ -> ()
 #pop-options
 
+(** The RECEIVER-side gate for the record-seq pairing.  TRUE on the "pre-closing"
+    controls `{ControlNew, ControlHandshaking _, ControlApplicationData}`, FALSE on
+    the "closing region" `{ControlClosing, ControlClosed, ControlFailed _}`.  This
+    is the correct gate (see the long note below): it is TRUE through the whole
+    handshake — so establishment at the `ControlHandshaking -> ControlApplicationData`
+    seam still has the equality to read off — yet FALSE at exactly the closing
+    controls where the mutual-close counter race desyncs the record seqs. **)
+let not_closing (c:CS.connection_control_state) : bool =
+  not (CS.ControlClosing? c || CS.ControlClosed? c || CS.ControlFailed? c)
+
 (** ─────────────────────────────────────────────────────────────────────────
-    GATED record-seq pairing.  (History: this arm USED to be a flat equality
-    `app_wseq client == app_rseq server`, which is FALSE at a reachable state.
-    DO NOT re-strengthen it to a flat equality.)
+    GATED record-seq pairing.  The pairing is an EQUALITY between the sender's
+    application write seq and the receiver's application read seq, GATED on the
+    RECEIVER being OUTSIDE the closing region (`not_closing`).  There is NO global
+    inequality: once a connection begins to close, no `app_wseq`/`app_rseq`
+    inequality is true in EITHER direction (see the root cause below).
 
-    THE FALSIFYING SCENARIO (record-count divergence at a failed receiver):
-      1. Both endpoints reach `ControlApplicationData`; the server holds app read
-         keys, so `Application?(rd server).epoch` and `app_rseq server == S`.
-      2. The server takes `LocalFail` (legal from ANY control,
-         `StateMachine.fst:1296`); `fail_model` (`StateMachine.fst:303`) touches
-         ONLY `model_control`/`model_failure`, so `record_read` — hence the
-         `Application` read epoch and `app_rseq server == S` — is PRESERVED.  The
-         server is now `ControlFailed`, which is ABSORBING (every arm of
-         `step_local_event`/`step_handshake_message`/`step_tls_message` at
-         `ControlFailed` is either `None` or `fail_model`, never leaving it).
-      3. The client (still `ControlApplicationData`) sends `Close_notify`:
-         `record_write = R.next_seq …` (`StateMachine.fst:929`), so its write seq
-         advances to `S+1`, i.e. `app_wseq client == S+1`.
-      4. The `Close_notify` is delivered to the FAILED server: it hits
-         `| M.TlsAlert alert, ControlFailed _ -> Received -> fail_model …`
-         (`StateMachine.fst:961`), which again preserves `record_read`, so
-         `app_rseq server` stays `S`.  The channel returns to `Quiet` with
-         `app_wseq client == S+1` but `app_rseq server == S`.
+    WHY ONLY GATED, AND WHY THE GATE IS `not_closing` (receiver NOT in the closing
+    region `{ControlClosing, ControlClosed, ControlFailed}`).
 
-    The client legitimately counted a record (its own `Close_notify`) that the
-    failed server will NEVER count.  The two record counters diverge PERMANENTLY.
-    A flat `Quiet`-arm equality is therefore irreparably false.  This divergence
-    is INVISIBLE to the end-to-end goal, which is a byte-stream PREFIX property:
-    `Close_notify` carries zero application bytes (`app_bytes_delta`,
-    `System.fst:397`), so `app_pairing` itself is untouched.
+    `app_wseq`/`app_rseq` project `record_write.seq`/`record_read.seq` at the
+    `Application` epoch.  These counters DESYNC across a close, because a
+    `fail_model` alert SEND emits a wire record WITHOUT advancing
+    `record_write.seq`, while the RECEIVER that processes that alert still advances
+    `record_read.seq`.  Concretely (`M` = model step):
 
-    THE GATE.  Divergence can only BEGIN by delivering a `Close_notify`
-    (`m_wadv == 1`) to a receiver that will not count it, and the ONLY receiver
-    that fails to count a `Close_notify` is one at `ControlFailed`/`ControlClosed`
-    — and BOTH of those transitions leave the receiver at `ControlFailed`
-    (`ControlClosed` + `Close_notify` hits the catch-all `M.TlsAlert alert, _ ->
-    fail_model`).  Since `ControlFailed` is absorbing, the record counters agree
-    at EVERY reachable state whose receiver is NOT `ControlFailed`; they may
-    diverge (receiver behind) only once the receiver is `ControlFailed`.
+    THE FALSIFYING SCENARIO — a mutual-close race (single in-flight slot).
+    Start: both at `ControlApplicationData`, aligned
+    (`app_wseq client == app_rseq server == R_c`), channel `Quiet`.
+      1. Server SENDS `Close_notify` (`ControlApplicationData`,
+         `StateMachine.fst:929` Sent arm): server -> `ControlClosing`, write seq
+         `next_seq`.  Channel `ToClient`.
+      2. Deliver to client: client (`ControlApplicationData`) RECEIVES it ->
+         `ControlClosed`, read seq `next_seq` (`StateMachine.fst:943`).  Channel
+         `Quiet`.  Now client `ControlClosed`, server `ControlClosing`, still
+         `app_wseq client == app_rseq server == R_c`.
+      3. Client SENDS `Close_notify` FROM `ControlClosed`: matches the alert
+         catch-all `| M.TlsAlert alert, _ -> Some (fail_model …)`
+         (`StateMachine.fst:968`).  `fail_model` (`:303`) PRESERVES `model_record`,
+         so `app_wseq client` STAYS `R_c` — yet the send still EMITS a protected
+         record (the driver `ClientSendCloseNotify` has NO control gate,
+         `Endpoint.Client.fst:79`; `legal_tls_message` for a Sent alert is
+         `| M.TlsAlert _, _ -> True`, `StateMachine.fst:1430`; and at
+         `ControlClosed` the client still holds `Application` write keys, so the
+         seal succeeds).  Client -> `ControlFailed`.  Channel `ToServer p`,
+         `snap_app_wseq p == R_c`.
+      4. Deliver to server (`ControlClosing`) RECEIVES `Close_notify` ->
+         `ControlClosed`, read seq `next_seq` (`StateMachine.fst:949` — the ONLY
+         non-`ControlApplicationData` control whose Received arm still advances the
+         read seq).  Channel `Quiet`, server now `ControlClosed`
+         (so `~ControlFailed?` is TRUE), with `app_rseq server == R_c + 1` but
+         `app_wseq client == R_c`.
 
-    So the pairing is: an EQUALITY gated on the receiver not being failed, plus a
-    global INEQUALITY (received count ≤ sent count — the record-level prefix fact)
-    that survives the divergence.
+    At step 4's post-state a receiver-not-failed EQUALITY demands `R_c == R_c + 1`
+    and a global INEQUALITY `app_rseq server <= app_wseq client` demands
+    `R_c + 1 <= R_c` — BOTH false.  The divergence is INVISIBLE to the end-to-end
+    goal, a byte-stream PREFIX property: `Close_notify` carries zero application
+    bytes (`app_bytes_delta`, `System.fst:397`), so `app_pairing` is untouched.
 
-    NB on the gate choice: we gate on `~ControlFailed?` and NOT on
-    `ControlApplicationData?`.  The narrower `ControlApplicationData?` gate would
-    drop the equality during the whole handshake (where the receiver is at
-    `ControlHandshaking`), which would DESTROY the cheap establishment of the
-    in-flight alignment at the `ControlHandshaking -> ControlApplicationData`
-    seam: that establishment reads the equality straight off the pre-state, and
-    only `~ControlFailed?` keeps the equality live throughout the handshake (both
-    app-seqs are `0` there, so it holds trivially).  `~ControlFailed?` is thus the
-    minimal weakening: the OLD flat equality, excused EXACTLY at `ControlFailed`.
+    THE GATE.  Gate the equality on the RECEIVER being OUTSIDE the closing region,
+    i.e. `not_closing (ctrl receiver)` — TRUE on `{ControlNew, ControlHandshaking _,
+    ControlApplicationData}`, FALSE on `{ControlClosing, ControlClosed,
+    ControlFailed}`.  Every close/alert RECEIVE moves the receiver INTO the closing
+    region (`:943` ApplicationData->`ControlClosed`, `:949` Closing->`ControlClosed`,
+    the catch-all `:968`->`ControlFailed`), so the gate goes vacuous at exactly the
+    step that would desync — the step-4 post-state above (`ControlClosed`) claims
+    nothing.  No application data is ever delivered to a closing-region receiver
+    (the app-data Received arm pins `ControlApplicationData`), and closing-region
+    receivers only ever RECEIVE alerts/close, so gating them out loses no app-data
+    alignment.  App-data deliveries keep the receiver AT `ControlApplicationData`
+    and advance both sides by one, so the equality is inductive exactly where the
+    faithful-decode bridge needs it.
+
+    WHY `not_closing` AND NOT the narrower `ControlApplicationData?`.  The gate must
+    also stay TRUE across the whole HANDSHAKE, because that is where the alignment
+    is ESTABLISHED.  At the client's Finished send (`ControlHandshaking
+    HsServerFinishedVerified -> ControlApplicationData`) the post-state's client is
+    at `ControlApplicationData`, so `sc_seq_ok` on the post-state DEMANDS
+    `app_wseq server == app_rseq client`.  With a `ControlApplicationData?` gate the
+    PRE-state's `sc_seq_ok` is silent (the client is still handshaking), so nothing
+    supplies `app_wseq server == 0` — establishment has NO source and the send
+    family cannot close.  `not_closing` keeps the equality live through handshaking,
+    where it reads `0 == 0` (`lemma_handshaking_{read,write}_app_seq_zero` give
+    `app_rseq client == 0`; the carried equality then delivers `app_wseq server ==
+    0`), so it transfers to the post-state seam for free.  `not_closing` is thus the
+    MINIMAL gate: the old equality excused at exactly the absorbing closing region.
+
+    The gate is sound BECAUSE the closing region is ABSORBING under `step_model`
+    (`lemma_step_preserves_closing`, proven from the effect functions, NOT assumed):
+    once a receiver enters `{Closing, Closed, Failed}` it never returns, so a send
+    that could desync it (a `fail_model` alert emitted without advancing the write
+    seq) can only ever reach a receiver that is ALREADY in the closing region — the
+    gate is already vacuous there.
+
+    ✗ DO NOT re-gate on `~ControlFailed?` (a previous, committed attempt).  It is
+    UNSOUND: it admits `ControlClosing`/`ControlClosed` receivers, and the
+    mutual-close race above lands the receiver at `ControlClosed` (which is
+    `~ControlFailed?`) with `app_rseq server == app_wseq client + 1`.
+    ✗ DO NOT narrow to `ControlApplicationData?` either (also tried, and approved
+    on paper): it is SOUND but breaks ESTABLISHMENT at the client-Finished seam, as
+    spelled out above — the post-state claims the equality but the pre-state, being
+    handshaking, supplies nothing.  Both were tried and RETRACTED; `not_closing` is
+    the gate that is simultaneously sound (closing region absorbing) and
+    establishable (live through the handshake).
     ───────────────────────────────────────────────────────────────────────── **)
 
 (** ── C -> S direction (client writes, server reads). ── **)
 let cs_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToServer p ->
-      app_rseq s.server <= app_wseq s.client /\
-      (~(CS.ControlFailed? (SY.ctrl s.server)) ==>
-         snap_app_wseq p == app_rseq s.server)
+      not_closing (SY.ctrl s.server) ==>
+         snap_app_wseq p == app_rseq s.server
   | _ ->
-      app_rseq s.server <= app_wseq s.client /\
-      (~(CS.ControlFailed? (SY.ctrl s.server)) ==>
-         app_wseq s.client == app_rseq s.server)
+      not_closing (SY.ctrl s.server) ==>
+         app_wseq s.client == app_rseq s.server
 
 (** ── S -> C direction (server writes, client reads). ── **)
 let sc_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToClient p ->
-      app_rseq s.client <= app_wseq s.server /\
-      (~(CS.ControlFailed? (SY.ctrl s.client)) ==>
-         snap_app_wseq p == app_rseq s.client)
+      not_closing (SY.ctrl s.client) ==>
+         snap_app_wseq p == app_rseq s.client
   | _ ->
-      app_rseq s.client <= app_wseq s.server /\
-      (~(CS.ControlFailed? (SY.ctrl s.client)) ==>
-         app_wseq s.server == app_rseq s.client)
+      not_closing (SY.ctrl s.client) ==>
+         app_wseq s.server == app_rseq s.client
 
 (** The application-epoch record-seq pairing invariant — the seq-level analogue
     of `SY.byte_pairing`, one level up. **)
@@ -386,7 +433,7 @@ let lemma_cs_delivery_alignment (s:SY.tls_system_state) (p:SY.tls_payload)
   : Lemma
       (requires
         app_seq_pairing s /\ s.channel == MP.ToServer p /\
-        ~(CS.ControlFailed? (SY.ctrl s.server)) /\
+        CS.ControlApplicationData? (SY.ctrl s.server) /\
         R.Application? (snap_wr p).R.epoch /\
         R.Application? (rd s.server).R.epoch)
       (ensures (snap_wr p).R.seq == (rd s.server).R.seq)
@@ -396,7 +443,7 @@ let lemma_sc_delivery_alignment (s:SY.tls_system_state) (p:SY.tls_payload)
   : Lemma
       (requires
         app_seq_pairing s /\ s.channel == MP.ToClient p /\
-        ~(CS.ControlFailed? (SY.ctrl s.client)) /\
+        CS.ControlApplicationData? (SY.ctrl s.client) /\
         R.Application? (snap_wr p).R.epoch /\
         R.Application? (rd s.client).R.epoch)
       (ensures (snap_wr p).R.seq == (rd s.client).R.seq)
@@ -691,6 +738,40 @@ let lemma_server_send_pins_model
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
+    THE CLOSING REGION IS ABSORBING (the soundness AND establishment lynchpin of
+    the `not_closing` gate).
+
+    Once a connection's control enters `{ControlClosing, ControlClosed,
+    ControlFailed}` it never leaves it under ANY legal `step_model`.  Proven from
+    the EFFECT functions, not assumed:
+      * `ControlFailed` is absorbing by `CSL.lemma_step_model_from_failed_results_failed`.
+      * At `ControlClosing`/`ControlClosed`, every handshake/app-data/key-update arm
+        of `step_tls_message` is gated on a NON-closing control (so it returns
+        `None` there — `step_handshake_message` at `:831`, app-data at `:832`,
+        key-update at `:869`), and every LOCAL arm of `step_local_event` is gated on
+        `ControlNew`/`ControlHandshaking`/`ControlApplicationData` except
+        `LocalFail _ , _` which yields `fail_model` (`ControlFailed`).  The only
+        `Some` results are therefore the alert arms `:949` (`Closing`->`Closed`),
+        `:961` (`Failed`->`Failed`), and the catch-all `:968` (->`ControlFailed`),
+        plus `LocalFail` — all inside the closing region.
+
+    Stated as the contrapositive `not_closing m' ==> not_closing m`, which is the
+    form the send/local families consume: if the POST-state left the closing region
+    then the PRE-state was already out of it.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_step_preserves_closing (m m':CS.connection_model) (ce:CS.conn_event)
+  : Lemma
+      (requires CS.step_model m ce == Some m')
+      (ensures not_closing m'.CS.model_control ==> not_closing m.CS.model_control)
+  = if not_closing m.CS.model_control
+    then ()
+    else if CS.ControlFailed? m.CS.model_control
+    then CSL.lemma_step_model_from_failed_results_failed m ce m'
+    else ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
     STAGE (b) PRESERVATION — the SEND families.
 
     A `client_send`/`server_send` enters `MP.ToServer`/`MP.ToClient` from a
@@ -736,7 +817,12 @@ let lemma_asp_client_send (a b:SY.tls_system_state)
        | M.TlsHandshake hm ->
            CSL.lemma_client_handshake_send_write_epoch_not_application a.client c' hm
        | _ -> ());
-      lemma_sent_wseq_delta a.client.CS.cs_model c'.CS.cs_model sent
+      lemma_sent_wseq_delta a.client.CS.cs_model c'.CS.cs_model sent;
+      // sc-direction: the client is the RECEIVER; if the post-state client is out
+      // of the closing region, so was the pre-state client, so `sc_seq_ok a`
+      // supplies the pre-state equality that transfers (read seq unchanged).
+      lemma_step_preserves_closing a.client.CS.cs_model c'.CS.cs_model
+        (CS.ConnNetworkEvent ({ CL.message_direction = CL.Sent; CL.message_value = sent }))
     )
 #pop-options
 
@@ -766,7 +852,11 @@ let lemma_asp_server_send (a b:SY.tls_system_state)
        | M.TlsHandshake hm ->
            CSL.lemma_server_handshake_send_write_epoch_not_application a.server s' hm
        | _ -> ());
-      lemma_sent_wseq_delta a.server.CS.cs_model s'.CS.cs_model sent
+      lemma_sent_wseq_delta a.server.CS.cs_model s'.CS.cs_model sent;
+      // cs-direction: the server is the RECEIVER; closing-region absorption
+      // transfers the pre-state equality from `cs_seq_ok a` (read seq unchanged).
+      lemma_step_preserves_closing a.server.CS.cs_model s'.CS.cs_model
+        (CS.ConnNetworkEvent ({ CL.message_direction = CL.Sent; CL.message_value = sent }))
     )
 #pop-options
 
@@ -998,7 +1088,10 @@ let lemma_asp_client_local (a b:SY.tls_system_state)
            CSL.lemma_handshaking_write_app_seq_zero a.client
          end);
         lemma_step_empty_delta_preserves_app_seq
-          a.client.CS.cs_model c'.CS.cs_model ce
+          a.client.CS.cs_model c'.CS.cs_model ce;
+        // sc-direction: the client is the RECEIVER; closing-region absorption
+        // transfers the pre-state equality from `sc_seq_ok a` (read seq frozen).
+        lemma_step_preserves_closing a.client.CS.cs_model c'.CS.cs_model ce
       )
     )
 #pop-options
@@ -1032,7 +1125,10 @@ let lemma_asp_server_local (a b:SY.tls_system_state)
            CSL.lemma_handshaking_write_app_seq_zero a.server
          end);
         lemma_step_empty_delta_preserves_app_seq
-          a.server.CS.cs_model s'.CS.cs_model ce
+          a.server.CS.cs_model s'.CS.cs_model ce;
+        // cs-direction: the server is the RECEIVER; closing-region absorption
+        // transfers the pre-state equality from `cs_seq_ok a` (read seq frozen).
+        lemma_step_preserves_closing a.server.CS.cs_model s'.CS.cs_model ce
       )
     )
 #pop-options
