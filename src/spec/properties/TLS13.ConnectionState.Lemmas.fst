@@ -3348,6 +3348,213 @@ let lemma_server_handshake_send_write_epoch_not_application
     assert False
 #pop-options
 
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE (b), READ side — the handshaking read-seq shape.
+
+    During the handshake the epoch-collapsing READ projection is 0.  This is the
+    read-side analogue of the write strengthening above and is what the LOCAL
+    families need: the only local events that touch `record_read` are key
+    installs, which `R.install_keys` resets to seq 0 (checked the EFFECT function,
+    Record.Spec.fst:25) — so the post-install projection is 0, and this shape
+    supplies that the PRE-install projection was 0 too, giving preservation.
+
+    The shape is STRONG (`record_read.epoch =!= Application`) at every handshaking
+    stage EXCEPT the two where the app-read key is already installed while control
+    is still handshaking: the client's `HsServerFinishedVerified` (app-read key
+    installed atomically on receiving the server Finished, StateMachine.fst:753)
+    and the server's `HsClientFinishedReceived` (app-read installable by the
+    role-keyed local install, legality StateMachine.fst:1181).  There the epoch may
+    be `Application` but `record_read.seq` is still 0 — no application record can be
+    received before `ControlApplicationData`, and every `R.next_seq`-on-read arm of
+    `step_handshake_message` (StateMachine.fst:693/703/724) runs at read epoch
+    `Handshake`, never `Application` (verified against the effect functions). **)
+let handshaking_read_epoch_shape (model:connection_model) : prop =
+  match model.model_control with
+  | ControlHandshaking HsServerFinishedVerified
+  | ControlHandshaking HsClientFinishedReceived ->
+    model.model_record.record_read.R.epoch =!= R.Application \/
+    model.model_record.record_read.R.seq == 0
+  | ControlNew
+  | ControlHandshaking _ ->
+    model.model_record.record_read.R.epoch =!= R.Application
+  | _ -> True
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_step_model_handshaking_read_epoch_shape
+  (model:connection_model) (ev:conn_event) (model':connection_model)
+  : Lemma
+      (requires
+        handshaking_read_epoch_shape model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures handshaking_read_epoch_shape model')
+  = ()
+#pop-options
+
+let conn_handshaking_read_epoch_shape (st:connection_state) : prop =
+  handshaking_read_epoch_shape st.cs_model
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_delta_handshaking_read_epoch_shape (st0 st1:connection_state)
+  : Lemma
+      (requires
+        conn_handshaking_read_epoch_shape st0 /\ connection_state_single_step st0 st1)
+      (ensures conn_handshaking_read_epoch_shape st1)
+  = assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    lemma_step_model_handshaking_read_epoch_shape
+      st0.cs_model delta.delta_event st1.cs_model
+#pop-options
+
+let lemma_single_step_handshaking_read_epoch_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (conn_handshaking_read_epoch_shape y); (connection_state_single_step x y)}
+          conn_handshaking_read_epoch_shape x /\ connection_state_single_step x y ==>
+          conn_handshaking_read_epoch_shape y)
+  = introduce forall x y.
+      conn_handshaking_read_epoch_shape x /\ connection_state_single_step x y ==>
+      conn_handshaking_read_epoch_shape y
+    with introduce _ ==> _ with _.
+      lemma_delta_handshaking_read_epoch_shape x y
+
+let lemma_initial_handshaking_read_epoch_shape (cfg:connection_config)
+  : Lemma (ensures conn_handshaking_read_epoch_shape (initial cfg))
+  = ()
+
+(** STAGE (b), READ side, consumed form: at any reachable handshaking state the
+    epoch-collapsing read projection is 0 (`record_read` is off the Application
+    epoch, or its seq is still 0).  This is the pre-state fact the LOCAL-family
+    `app_seq_pairing` preservation needs to rule out an install RESETTING an
+    already-advanced application read seq. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshaking_read_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_read.R.seq == 0)
+  = lemma_initial_handshaking_read_epoch_shape st.cs_model.model_config;
+    lemma_single_step_handshaking_read_epoch_shape ();
+    let p = conn_handshaking_read_epoch_shape in
+    let stable :
+      squash (forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure connection_state_single_step p stable;
+    assert (p (initial st.cs_model.model_config));
+    assert (connection_state_evolves (initial st.cs_model.model_config) st);
+    assert (p st)
+#pop-options
+
+(** STAGE (b), WRITE side.  Mirror of `handshaking_read_epoch_shape` for the
+    write projection.  The shape is STRONG (`record_write.epoch =!= Application`)
+    at every handshaking stage EXCEPT the two where an app-write key can already be
+    installed while control is still handshaking: the server's `HsServerFinishedSent`
+    (app-write key installed by `LocalInstallServerApplicationTrafficKeys`) and its
+    `HsClientFinishedReceived`.  There the epoch may be `Application` but
+    `record_write.seq` is still 0 — no application record is written before
+    `ControlApplicationData`, and every `R.next_seq`-on-write arm of
+    `step_handshake_message` runs at write epoch `Handshake`, never `Application`
+    (verified against the effect functions, not the legality predicates).  The
+    client side is subsumed: a client's only legal app-write install is a no-op on
+    `record_write` (`install_record_keys`'s `TrafficApplication, TrafficWrite`
+    arm), so a client stays off the Application write epoch at every handshaking
+    stage; the two weak-stage arms just do not fire for it. **)
+let handshaking_write_epoch_shape (model:connection_model) : prop =
+  match model.model_control with
+  | ControlHandshaking HsServerFinishedSent
+  | ControlHandshaking HsClientFinishedReceived ->
+    model.model_record.record_write.R.epoch =!= R.Application \/
+    model.model_record.record_write.R.seq == 0
+  | ControlNew
+  | ControlHandshaking _ ->
+    model.model_record.record_write.R.epoch =!= R.Application
+  | _ -> True
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_step_model_handshaking_write_epoch_shape
+  (model:connection_model) (ev:conn_event) (model':connection_model)
+  : Lemma
+      (requires
+        handshaking_write_epoch_shape model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures handshaking_write_epoch_shape model')
+  = ()
+#pop-options
+
+let conn_handshaking_write_epoch_shape (st:connection_state) : prop =
+  handshaking_write_epoch_shape st.cs_model
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_delta_handshaking_write_epoch_shape (st0 st1:connection_state)
+  : Lemma
+      (requires
+        conn_handshaking_write_epoch_shape st0 /\ connection_state_single_step st0 st1)
+      (ensures conn_handshaking_write_epoch_shape st1)
+  = assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    lemma_step_model_handshaking_write_epoch_shape
+      st0.cs_model delta.delta_event st1.cs_model
+#pop-options
+
+let lemma_single_step_handshaking_write_epoch_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (conn_handshaking_write_epoch_shape y); (connection_state_single_step x y)}
+          conn_handshaking_write_epoch_shape x /\ connection_state_single_step x y ==>
+          conn_handshaking_write_epoch_shape y)
+  = introduce forall x y.
+      conn_handshaking_write_epoch_shape x /\ connection_state_single_step x y ==>
+      conn_handshaking_write_epoch_shape y
+    with introduce _ ==> _ with _.
+      lemma_delta_handshaking_write_epoch_shape x y
+
+let lemma_initial_handshaking_write_epoch_shape (cfg:connection_config)
+  : Lemma (ensures conn_handshaking_write_epoch_shape (initial cfg))
+  = ()
+
+(** STAGE (b), WRITE side, consumed form: at any reachable handshaking state the
+    epoch-collapsing write projection is 0.  This is the pre-state fact the
+    LOCAL-family `app_seq_pairing` preservation needs to rule out an install
+    RESETTING an already-advanced application write seq. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshaking_write_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_write.R.seq == 0)
+  = lemma_initial_handshaking_write_epoch_shape st.cs_model.model_config;
+    lemma_single_step_handshaking_write_epoch_shape ();
+    let p = conn_handshaking_write_epoch_shape in
+    let stable :
+      squash (forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure connection_state_single_step p stable;
+    assert (p (initial st.cs_model.model_config));
+    assert (connection_state_evolves (initial st.cs_model.model_config) st);
+    assert (p st)
+#pop-options
+
 let lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma

@@ -55,6 +55,8 @@ module EC   = TLS13.Spec.Endpoint.Client
 module ES   = TLS13.Spec.Endpoint.Server
 module EAPI = TLS13.Spec.Endpoint.API
 module L    = FStar.List.Tot
+module WStep = TLS13.System.WireStep
+module SCB  = TLS13.System.SeqCountBase
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
@@ -632,5 +634,272 @@ let lemma_asp_server_send (a b:SY.tls_system_state)
            CSL.lemma_server_handshake_send_write_epoch_not_application a.server s' hm
        | _ -> ());
       lemma_sent_wseq_delta a.server.CS.cs_model s'.CS.cs_model sent
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE (b) PRESERVATION — the LOCAL families.
+
+    A `client_local`/`server_local` step is a canonical endpoint step that emits
+    NO wire record, so the channel stays `Quiet` and only the acting endpoint's
+    model moves.  We must show the epoch-collapsing write/read projections of that
+    endpoint are UNCHANGED.
+
+    The step's `conn_ev` has an EMPTY byte-delta on both sides (no wire output ⟹
+    `raw_sent` empty; a local step has `raw_received` empty).  Two cases:
+
+      * `ConnLocalEvent lev` — a genuine local event.  Its ONLY writers of
+        `model_record` are key installs (`install_record_keys[_for_role]`), legal
+        ONLY at `ControlHandshaking`; `R.install_keys` UNCONDITIONALLY resets the
+        installed direction's `seq` to 0 (an EFFECT of the install function, not a
+        legality side-condition), so POST-install both projections are 0.  For
+        preservation we also need the PRE-install projection to be 0 — supplied by
+        the reachable handshaking-seq-zero facts
+        `CSL.lemma_handshaking_{read,write}_app_seq_zero`.  At `ControlApplicationData`
+        a local event is either `LocalDeliverApplicationData` (touches only
+        `model_application.app_log`) or `LocalFail` (`fail_model` preserves
+        `model_record`); both preserve the projections with no side fact.  This is
+        `lemma_step_local_event_preserves_app_seq`.
+
+      * `ConnNetworkEvent dm` with EMPTY byte-delta — IMPOSSIBLE for a protected
+        message (`protected_record_count` is always ≥ 1, including a `Sent`
+        `TlsApplicationData` whose count `application_data_record_count` is ≥ 1 for
+        EVERY payload, empty included: an empty app-data send still emits one
+        zero-length record and is therefore a SEND, not a local), so an empty raw
+        parses to a nonzero record count and contradicts the empty parse; and for a
+        cleartext message the step leaves `model_record` unchanged
+        (`SCB.lemma_cleartext_step_record_unchanged`).  Either way the projections
+        are unchanged.  This is `lemma_network_empty_delta_record_unchanged_ungated`.
+
+    NOTE (dependence on `tls_no_rekeying`): the LOCAL families do NOT need
+    `SY.tls_no_rekeying` — a `KeyUpdate` is a network SEND (protected handshake
+    record, non-empty), never a local step, so the key-mutating arm is already
+    excluded structurally by the empty byte-delta.  The `KeyUpdate` exclusion via
+    `tls_no_rekeying` is only load-bearing for the SEND families.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** MODEL-LEVEL: a legal local event preserves both epoch-collapsing seq
+    projections, GIVEN the handshaking-seq-zero facts (needed only when the
+    pre-state is at `ControlHandshaking`, where a key install can reset an
+    already-advanced seq). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_step_local_event_preserves_app_seq
+  (m m':CS.connection_model) (lev:CS.local_event)
+  : Lemma
+      (requires
+        CS.step_local_event m lev == Some m' /\
+        CS.legal_local_event m lev /\
+        (CS.ControlHandshaking? m.CS.model_control ==>
+           ((m_wr m).R.epoch =!= R.Application \/ (m_wr m).R.seq == 0) /\
+           ((m_rd m).R.epoch =!= R.Application \/ (m_rd m).R.seq == 0)))
+      (ensures m_wseq m' == m_wseq m /\ m_rseq m' == m_rseq m)
+  = ()
+#pop-options
+
+(** MODEL-LEVEL: a legal NETWORK step whose byte-delta is empty on both sides
+    leaves `model_record` UNCHANGED, at ANY control (no `pre_appdata` gate: an
+    empty protected raw is refuted uniformly because `protected_record_count` is
+    always ≥ 1). **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_network_empty_delta_record_unchanged_ungated
+  (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnNetworkEvent dm) /\
+        CS.step_model m (CS.ConnNetworkEvent dm) == Some m' /\
+        CS.event_raw_delta_legal m (CS.ConnNetworkEvent dm) B.empty B.empty)
+      (ensures m'.CS.model_record == m.CS.model_record)
+  = if CS.network_message_is_cleartext dm.CL.message_direction dm.CL.message_value
+    then SCB.lemma_cleartext_step_record_unchanged m dm m'
+    else begin
+      (match dm.CL.message_direction with
+       | CL.Sent ->
+         (match dm.CL.message_value with
+          | M.TlsApplicationData bytes ->
+            RF.lemma_application_data_record_count_len_positive (B.length bytes)
+          | _ -> ());
+         WStep.lemma_ws_raw_records_nonempty_parse_record
+           B.empty T.Application_data
+           (CS.protected_record_count CL.Sent dm.CL.message_value)
+       | CL.Received ->
+         WStep.lemma_ws_raw_records_nonempty_parse_record
+           B.empty T.Application_data
+           (CS.protected_record_count CL.Received dm.CL.message_value))
+    end
+#pop-options
+
+(** MODEL-LEVEL dispatch: any legal EMPTY-byte-delta step preserves both
+    projections.  `ConnLocalEvent` reduces to the local-event lemma; a network
+    event with empty delta leaves `model_record` fixed. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_step_empty_delta_preserves_app_seq
+  (m m':CS.connection_model) (ce:CS.conn_event)
+  : Lemma
+      (requires
+        CS.legal_event m ce /\
+        CS.step_model m ce == Some m' /\
+        CS.event_raw_delta_legal m ce B.empty B.empty /\
+        (CS.ControlHandshaking? m.CS.model_control ==>
+           ((m_wr m).R.epoch =!= R.Application \/ (m_wr m).R.seq == 0) /\
+           ((m_rd m).R.epoch =!= R.Application \/ (m_rd m).R.seq == 0)))
+      (ensures m_wseq m' == m_wseq m /\ m_rseq m' == m_rseq m)
+  = match ce with
+    | CS.ConnLocalEvent lev ->
+      lemma_step_local_event_preserves_app_seq m m' lev
+    | CS.ConnNetworkEvent dm ->
+      lemma_network_empty_delta_record_unchanged_ungated m dm m'
+#pop-options
+
+(** WIRE-level: a client `LocalEvent` step emitting NO wire output steps the model
+    by SOME `conn_ev` whose byte-delta is empty on both sides.  `raw_sent` is empty
+    because `client_wire_outputs_match` ties it to `serialize_all []`; the received
+    delta is `B.empty` by construction of a local step. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_client_local_extract
+  (st0 c':CS.connection_state) (local:CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires
+        EC.client_step st0 (SM.LocalEvent local) c' out /\
+        out.SM.so_wire_outputs == [])
+      (ensures
+        exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
+          CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty)
+  = let api = CTy.client_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (CTy.client_local_event_matches st0 local conn_ev /\
+       EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta st0
+         { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = B.empty; } c' /\
+       SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+       SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+    returns
+      (exists (ce:CS.conn_event).
+        CS.legal_event st0.CS.cs_model ce /\
+        CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
+        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty)
+    with _.
+    (
+      WStep.lemma_serialize_all_nil_wire ();
+      Seq.lemma_eq_elim raw_sent B.empty;
+      introduce exists (ce:CS.conn_event).
+        CS.legal_event st0.CS.cs_model ce /\
+        CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
+        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty
+      with conn_ev and ()
+    )
+#pop-options
+
+(** WIRE-level, SERVER mirror. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_server_local_extract
+  (st0 s':CS.connection_state) (local:CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires
+        ES.server_step st0 (SM.LocalEvent local) s' out /\
+        out.SM.so_wire_outputs == [])
+      (ensures
+        exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some s'.CS.cs_model /\
+          CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty)
+  = let api = CTy.server_local_event_api local in
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (CTy.server_local_event_matches local conn_ev /\
+       ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       CS.legal_connection_delta st0
+         { CS.delta_event = conn_ev; CS.delta_raw_sent = raw_sent;
+           CS.delta_raw_received = B.empty; } s' /\
+       SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
+       SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
+    returns
+      (exists (ce:CS.conn_event).
+        CS.legal_event st0.CS.cs_model ce /\
+        CS.step_model st0.CS.cs_model ce == Some s'.CS.cs_model /\
+        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty)
+    with _.
+    (
+      WStep.lemma_serialize_all_nil_wire ();
+      Seq.lemma_eq_elim raw_sent B.empty;
+      introduce exists (ce:CS.conn_event).
+        CS.legal_event st0.CS.cs_model ce /\
+        CS.step_model st0.CS.cs_model ce == Some s'.CS.cs_model /\
+        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty
+      with conn_ev and ()
+    )
+#pop-options
+
+(** LOCAL family — CLIENT.  Channel stays `Quiet`; the client's projections are
+    unchanged; the server is untouched. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_asp_client_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ app_seq_pairing a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_local a b)
+      (ensures app_seq_pairing b)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with client = c' }
+    returns app_seq_pairing b
+    with _pf.
+    (
+      lemma_client_local_extract a.client c' local out;
+      eliminate exists (ce:CS.conn_event).
+        CS.legal_event a.client.CS.cs_model ce /\
+        CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
+        CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty
+      returns app_seq_pairing b
+      with _pe.
+      (
+        (if CS.ControlHandshaking? a.client.CS.cs_model.CS.model_control then begin
+           CSL.lemma_handshaking_read_app_seq_zero a.client;
+           CSL.lemma_handshaking_write_app_seq_zero a.client
+         end);
+        lemma_step_empty_delta_preserves_app_seq
+          a.client.CS.cs_model c'.CS.cs_model ce
+      )
+    )
+#pop-options
+
+(** LOCAL family — SERVER (mirror). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_asp_server_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ app_seq_pairing a /\ MP.Quiet? a.channel /\
+        SY.tls_step_server_local a b)
+      (ensures app_seq_pairing b)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with server = s' }
+    returns app_seq_pairing b
+    with _pf.
+    (
+      lemma_server_local_extract a.server s' local out;
+      eliminate exists (ce:CS.conn_event).
+        CS.legal_event a.server.CS.cs_model ce /\
+        CS.step_model a.server.CS.cs_model ce == Some s'.CS.cs_model /\
+        CS.event_raw_delta_legal a.server.CS.cs_model ce B.empty B.empty
+      returns app_seq_pairing b
+      with _pe.
+      (
+        (if CS.ControlHandshaking? a.server.CS.cs_model.CS.model_control then begin
+           CSL.lemma_handshaking_read_app_seq_zero a.server;
+           CSL.lemma_handshaking_write_app_seq_zero a.server
+         end);
+        lemma_step_empty_delta_preserves_app_seq
+          a.server.CS.cs_model s'.CS.cs_model ce
+      )
     )
 #pop-options

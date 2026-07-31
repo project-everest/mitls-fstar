@@ -237,6 +237,38 @@ val lemma_server_handshake_send_write_epoch_not_application
       (ensures
         st.cs_model.model_record.record_write.R.epoch =!= R.Application)
 
+(** STAGE (b), READ side: at any reachable handshaking state the epoch-collapsing
+    read projection is 0 — `record_read` is off the Application epoch, or (at the
+    two stages where the app-read key is installed while control is still
+    handshaking: client `HsServerFinishedVerified`, server `HsClientFinishedReceived`)
+    its seq is still 0.  This is the pre-state fact the LOCAL-family
+    `app_seq_pairing` preservation needs to rule out a key install RESETTING an
+    already-advanced application read seq. **)
+val lemma_handshaking_read_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_read.R.seq == 0)
+
+(** STAGE (b), WRITE side: mirror of the read-side fact.  At any reachable
+    handshaking state the epoch-collapsing write projection is 0 — `record_write`
+    is off the Application epoch, or (at the two stages where the app-write key is
+    installed while control is still handshaking: server `HsServerFinishedSent`,
+    server `HsClientFinishedReceived`) its seq is still 0.  This is the pre-state
+    fact the LOCAL-family `app_seq_pairing` preservation needs to rule out a key
+    install RESETTING an already-advanced application write seq. **)
+val lemma_handshaking_write_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_write.R.seq == 0)
+
 val lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma
