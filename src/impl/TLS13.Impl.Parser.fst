@@ -6068,6 +6068,11 @@ fn parse_handshake_prefix
                L.is_valid_tls_message
                  parsed.L.parsed_handshake_message
                  (M.TlsHandshake msg) **
+               pure (CT.parsed_message_wire_success_for
+                 0x16uy
+                 prefix_bytes
+                 parsed.L.parsed_handshake_message
+                 (M.TlsHandshake msg)) **
                pure (
                  V.is_full_vec parsed.L.parsed_handshake_fragment /\
                  V.length parsed.L.parsed_handshake_fragment ==
@@ -6178,6 +6183,11 @@ fn parse_handshake_prefix_at
                L.is_valid_tls_message
                  parsed.L.parsed_handshake_message
                  (M.TlsHandshake msg) **
+               pure (CT.parsed_message_wire_success_for
+                 0x16uy
+                 prefix_bytes
+                 parsed.L.parsed_handshake_message
+                 (M.TlsHandshake msg)) **
                pure (
                  V.is_full_vec parsed.L.parsed_handshake_fragment /\
                  V.length parsed.L.parsed_handshake_fragment ==
@@ -6807,6 +6817,7 @@ fn build_decoded_buffer_ok
       V.is_full_vec fragment_vec /\
       V.length fragment_vec == SZ.v fragment_len /\
       B.length (Ghost.reveal fragment_bytes) == SZ.v fragment_len /\
+      SZ.v fragment_len <= L.max_record_fragment_len /\
       CT.network_input_wf
         (Ghost.reveal st0) content_type
         (Ghost.reveal fragment_bytes) (Ghost.reveal raw_record_bytes) /\
@@ -6884,6 +6895,8 @@ fn build_decoded_buffer_ok
             SZ.v decoded.L.decoded_buffer_fragment_len /\
           B.length fragment_bytes2 ==
             SZ.v decoded.L.decoded_buffer_fragment_len /\
+          SZ.v decoded.L.decoded_buffer_fragment_len <=
+            L.max_record_fragment_len /\
           CT.network_input_wf
             (Ghost.reveal st0)
             decoded.L.decoded_buffer_content_type
@@ -6986,6 +6999,8 @@ fn decode_network_buffer
                   SZ.v decoded.L.decoded_buffer_fragment_len /\
                 B.length fragment_bytes ==
                   SZ.v decoded.L.decoded_buffer_fragment_len /\
+                SZ.v decoded.L.decoded_buffer_fragment_len <=
+                  L.max_record_fragment_len /\
                 CT.network_input_wf
                   'st0
                   decoded.L.decoded_buffer_content_type
