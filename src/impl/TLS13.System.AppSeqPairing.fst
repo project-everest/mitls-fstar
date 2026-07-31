@@ -56,6 +56,7 @@ module ES   = TLS13.Spec.Endpoint.Server
 module EAPI = TLS13.Spec.Endpoint.API
 module L    = FStar.List.Tot
 module WStep = TLS13.System.WireStep
+module WF   = Common.WireFormat
 module SCB  = TLS13.System.SeqCountBase
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
@@ -1143,6 +1144,248 @@ let lemma_asp_server_local (a b:SY.tls_system_state)
         // cs-direction: the server is the RECEIVER; closing-region absorption
         // transfers the pre-state equality from `cs_seq_ok a` (read seq frozen).
         lemma_step_preserves_closing a.server.CS.cs_model s'.CS.cs_model ce
+      )
+    )
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    STAGE (b) PRESERVATION — the DELIVERY family to the SERVER.
+
+    An in-flight-to-server payload is delivered: the server receives the wire
+    record, steps by the decoded message `msg`, and the channel returns to `Quiet`.
+    We must re-establish `app_seq_pairing` on the post-state.
+
+    NON-CIRCULARITY (the crux of why this is a preservation, not an assumption):
+    the induction hypothesis is the STREAM BUNDLE on the PRE-state `a`
+    (`app_seq_pairing a`, `channel_seal_ok a`, and the two carried in-flight facts).
+    From the pre-state seal we drive the faithful-decode bridge to learn what the
+    server just received; the CONCLUSION `app_seq_pairing b` lands on the POST-state.
+    The bridge is fed by a pre-state fact and the equality is discharged on the
+    post-state, so nothing is assumed about the state we are proving.
+    ═══════════════════════════════════════════════════════════════════════════ **)
+
+(** A no-key-update trace whose LAST event RECEIVES `msg` cannot receive a
+    `KeyUpdate` — the RECEIVE mirror of `lemma_sent_not_key_update`
+    (`conn_event_is_key_update` flags a `TlsKeyUpdate` in EITHER direction). **)
+let lemma_recv_not_key_update (st:CS.connection_state) (msg:M.tls_message)
+  : Lemma
+      (requires
+        SMCorr.connection_state_no_key_update_trace st /\
+        (exists (prefix:list CS.conn_event).
+          st.CS.cs_event_log == prefix @ [SMKM.received_tls_event msg]))
+      (ensures ~(M.TlsKeyUpdate? msg))
+  = eliminate exists (prefix:list CS.conn_event).
+       st.CS.cs_event_log == prefix @ [SMKM.received_tls_event msg]
+    returns ~(M.TlsKeyUpdate? msg)
+    with _pf.
+      lemma_no_key_update_tail prefix (SMKM.received_tls_event msg)
+
+(** A reachable SERVER endpoint is at a server control (grounds the SH/HRR
+    exclusion in the not-cleartext helper: those handshake messages are received
+    only at CLIENT controls, which `server_ctrl_ok` excludes). **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+let lemma_server_reachable_ctrl_ok
+  (cfg:CS.connection_config) (server:CS.connection_state)
+  : Lemma
+      (requires
+        WStep.server_reachable (CS.initial cfg) server /\
+        cfg.CS.config_role == CS.ServerEndpoint)
+      (ensures WStep.server_ctrl_ok server.CS.cs_model.CS.model_control)
+  = let init : CS.connection_state = CS.initial cfg in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event EAPI.local_output)).
+      SM.trace_reaches (WStep.server_sm init) init trace server
+    returns WStep.server_ctrl_ok server.CS.cs_model.CS.model_control
+    with _.
+      WStep.lemma_server_trace_appdata_post_cf init init server trace
+#pop-options
+
+(** A RECEIVED message whose wire record has content type `Application_data` is
+    NOT a cleartext record.  For a reachable server the only cleartext RECEIVES are
+    a `ClientHello` or a `ChangeCipherSpec` (`WStep.lemma_cleartext_recv_not_appdata`
+    shows both parse to a non-`Application_data` outer type — contradiction), and a
+    `ServerHello`/`HelloRetryRequest` receive is impossible at any `server_ctrl_ok`
+    control (its `step_tls_message` arm is at a client control, so the step is
+    `None`). **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
+let lemma_recv_msg_not_cleartext
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model) (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Received msg == Some m' /\
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        WStep.server_ctrl_ok m.CS.model_control /\
+        CS.network_message_raw_delta_legal m
+          ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw /\
+        (match W.parse_record_wire raw with
+         | Some (ct, _, _) -> ct == T.Application_data
+         | None -> False))
+      (ensures CS.network_message_is_cleartext CL.Received msg == false)
+  = if CS.network_message_is_cleartext CL.Received msg then
+      (match msg with
+       | M.TlsHandshake (M.ClientHello _) ->
+           WStep.lemma_cleartext_recv_not_appdata m msg raw
+       | M.TlsChangeCipherSpec ->
+           WStep.lemma_cleartext_recv_not_appdata m msg raw
+       | _ -> ())   // ServerHello / HelloRetryRequest: step is None at a server control
+    else ()
+#pop-options
+
+(** A RECEIVE leaves the epoch-collapsing WRITE projection unchanged: no `Received`
+    arm of `step_tls_message` writes `record_write` (message-step key installs are
+    all on `record_read`; write installs are LOCAL / on `Sent` arms). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_recv_preserves_write
+  (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires CS.step_tls_message m CL.Received msg == Some m')
+      (ensures m_wseq m' == m_wseq m)
+  = ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    THE TWO CARRIED IN-FLIGHT PAYLOAD FACTS (delivery-time obligations).
+
+    Both are ESTABLISHED at the send (`client_send`/`server_send`) and vacuous on a
+    `Quiet` channel; here they are taken as EXPLICIT hypotheses of the delivery
+    lemma and wired into the stream bundle as a separate mechanical step.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** (1) FROZEN SENDER — the in-flight payload's sender snapshot stepped BY exactly
+    the sealed message to the (frozen) acting endpoint's current model.  Carrying
+    the full `step_tls_message` relation (not the two narrower seq/shape facts)
+    mirrors `step_tls_message`'s own dispatch as faithfully as possible.  The two
+    send-delta GUARDS (`~KeyUpdate`, and the handshake-write-epoch guard) are folded
+    in: both are discharged at the send from `SY.tls_no_rekeying` and the
+    reachable-shape `lemma_{client,server}_handshake_send_write_epoch_not_application`. **)
+let inflight_sender_stepped (s:SY.tls_system_state) : prop =
+  match s.channel with
+  | MP.ToServer p ->
+      CS.step_tls_message p.SY.pl_snap CL.Sent p.SY.pl_sent == Some s.client.CS.cs_model /\
+      ~(M.TlsKeyUpdate? p.SY.pl_sent) /\
+      ((snap_wr p).R.epoch =!= R.Application \/ ~(M.TlsHandshake? p.SY.pl_sent))
+  | MP.ToClient p ->
+      CS.step_tls_message p.SY.pl_snap CL.Sent p.SY.pl_sent == Some s.server.CS.cs_model /\
+      ~(M.TlsKeyUpdate? p.SY.pl_sent) /\
+      ((snap_wr p).R.epoch =!= R.Application \/ ~(M.TlsHandshake? p.SY.pl_sent))
+  | MP.Quiet -> True
+
+(** (2) SINGLE RECORD — the sealed payload is exactly one protected record.  For an
+    application-data payload this is `application_data_record_count bytes == 1`
+    (`protected_record_count CL.Sent`), i.e. `|bytes| <= 16384`.
+
+    WHY IT IS A DELIVERY-TIME OBLIGATION (not baked into `m_wadv`): `m_wadv` mirrors
+    the model, and the model's app-data SEND arm (`StateMachine.fst:841`) really does
+    advance `record_write` by `application_data_record_count bytes` (possibly >= 2),
+    while the RECEIVE arm advances by exactly one `next_seq` (`:851`).  The seal fact
+    `sent_single_protected_message_seal` (`Canonical.fst:64`) does NOT bound the
+    plaintext length, so it cannot force the count to 1.  It is the SYSTEM-level
+    emission interface that rules out a multi-record send: `SY.tls_emit`
+    (`System.fst:730`) requires `so_wire_outputs == [w]` (one wire record) and
+    `Impl.Client.Types.fst:2087` requires `protected_record_count == 1`.  So this
+    fact is established at the send from the emission interface and carried to the
+    delivery. **)
+let inflight_single_record (s:SY.tls_system_state) : prop =
+  match s.channel with
+  | MP.ToServer p -> CS.protected_record_count CL.Sent p.SY.pl_sent == 1
+  | MP.ToClient p -> CS.protected_record_count CL.Sent p.SY.pl_sent == 1
+  | MP.Quiet -> True
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_asp_deliver_to_server
+  (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+  (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\
+        app_seq_pairing a /\
+        channel_seal_ok a /\
+        inflight_sender_stepped a /\
+        inflight_single_record a /\
+        a.channel == SY.tls_to_server raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        SY.tls_no_rekeying ({ a with server = s'; channel = MP.Quiet }))
+      (ensures app_seq_pairing ({ a with server = s'; channel = MP.Quiet }))
+  = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
+    let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+    assert (a.channel == MP.ToServer p);
+    // Reachable server -> server_ctrl_ok (grounds the SH/HRR exclusion in the
+    // not-cleartext helper).
+    lemma_server_reachable_ctrl_ok a.server.CS.cs_model.CS.model_config a.server;
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.server
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } s' /\
+       SMCan.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns app_seq_pairing b
+    with _pd.
+    (
+      let conn_ev = CS.ConnNetworkEvent
+        { CL.message_direction = CL.Received; CL.message_value = msg } in
+      Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+      // The model step the server just took: step_tls_message ... Received msg.
+      assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
+      // ~KeyUpdate(msg) from the post-state's no-rekeying trace (its event log ends
+      // with `received_tls_event msg`).
+      lemma_recv_not_key_update s' msg;
+      // sc-direction (server writes, client reads): a RECEIVE freezes the server's
+      // WRITE projection, and the client is untouched, so `sc_seq_ok a` transfers.
+      lemma_recv_preserves_write a.server.CS.cs_model s'.CS.cs_model msg;
+      // cs-direction (client writes, server reads): the gated alignment.  When the
+      // POST-state server is live, the PRE-state server was live too (closing region
+      // is absorbing), so `cs_seq_ok a` supplies the pre-state seq equality.
+      introduce not_closing (SY.ctrl s') ==> app_wseq a.client == app_rseq s'
+      with _live.
+      (
+        lemma_step_preserves_closing a.server.CS.cs_model s'.CS.cs_model conn_ev;
+        // EQ_pre : snap_app_wseq p == app_rseq a.server   (cs_seq_ok a, ToServer p, live)
+        // send delta : app_wseq a.client == snap_app_wseq p + rin_app p
+        lemma_sent_wseq_delta snap a.client.CS.cs_model sent;
+        if R.Application? (rd a.server).R.epoch then
+        (
+          // BOTH-APP.  channel_seal_ok a gives the bridge inputs; EQ_pre (both App)
+          // gives the seq alignment.  The faithful-decode bridge (fed by the
+          // PRE-state seal — non-circular) pins what the server received.
+          CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+            snap a.server.CS.cs_model sent raw;
+          // FINDING-1 HINGE: the bridge is invoked only here, where the server's read
+          // epoch is Application, hence the server is not handshaking on a cleartext
+          // record; the received wire record is Application_data-typed, so the
+          // received message is not cleartext and the projection yields its decode.
+          lemma_recv_msg_not_cleartext a.server.CS.cs_model msg s'.CS.cs_model raw;
+          lemma_decode_functional a.server.CS.cs_model msg sent raw;
+          // msg == sent; the receive delta needs ~Handshake(msg) (from msg == sent an
+          // app-data payload) and ~KeyUpdate(msg) (already have).
+          lemma_recv_rseq_delta a.server.CS.cs_model s'.CS.cs_model msg;
+          // COUNT-MATCH : m_wadv snap sent == m_radv a.server msg.
+          (match sent with
+           | M.TlsApplicationData bts ->
+               // both steps force ControlApplicationData; single-record: the send
+               // advance is `application_data_record_count bts == 1`.
+               ()
+           | M.TlsAlert T.Close_notify ->
+               // a received Close_notify lands the server in the closing region,
+               // contradicting the live branch — vacuous.
+               ()
+           | _ -> ())
+        )
+        else
+        (
+          // NEITHER-APP.  Server read epoch not Application: the read projection is 0
+          // pre and post (the receive keeps it 0 — the delta is 0), and the client's
+          // write projection is 0 (snapshot write epoch not Application, by the seal
+          // biconditional), so both sides are 0.
+          lemma_recv_rseq_delta a.server.CS.cs_model s'.CS.cs_model msg
+        )
       )
     )
 #pop-options
