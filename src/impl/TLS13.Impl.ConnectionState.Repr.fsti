@@ -827,24 +827,28 @@ let client_hello_slot_exactly
   ([@@@mkey] l:IM.client_hello)
   (spec:option GCH.clientHello)
   : slprop =
-  exists* present random server_name key_share cipher_suites signature_schemes.
+  exists* present random session_id server_name key_share cipher_suites signature_schemes.
     Box.pts_to present_box present **
     V.pts_to l.IM.client_hello_random random **
+    V.pts_to l.IM.client_hello_session_id session_id **
     V.pts_to l.IM.client_hello_server_name server_name **
     V.pts_to l.IM.client_hello_key_share key_share **
     V.pts_to l.IM.client_hello_cipher_suites cipher_suites **
     V.pts_to l.IM.client_hello_signature_schemes signature_schemes **
     pure (V.is_full_vec l.IM.client_hello_random /\
+          V.is_full_vec l.IM.client_hello_session_id /\
           V.is_full_vec l.IM.client_hello_server_name /\
           V.is_full_vec l.IM.client_hello_key_share /\
           V.is_full_vec l.IM.client_hello_cipher_suites /\
           V.is_full_vec l.IM.client_hello_signature_schemes /\
           V.length l.IM.client_hello_random == 32 /\
+          V.length l.IM.client_hello_session_id == 32 /\
           V.length l.IM.client_hello_server_name == max_hostname_len /\
           V.length l.IM.client_hello_key_share == 32 /\
           V.length l.IM.client_hello_cipher_suites == max_cipher_suites /\
           V.length l.IM.client_hello_signature_schemes == max_signature_schemes /\
           B.length random == 32 /\
+          B.length session_id == 32 /\
           B.length server_name == max_hostname_len /\
           B.length key_share == 32 /\
           Seq.length cipher_suites == max_cipher_suites /\
@@ -853,8 +857,9 @@ let client_hello_slot_exactly
             match spec with
             | Some m ->
               Seq.equal random (Sem.clientHello_random m) /\
+              Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
               IM.optional_byte_prefix_matches
-                true
+                (client_hello_has_sni m)
                 server_name
                 (client_hello_server_name_len_for m)
                 (Sem.clientHello_server_name m) /\
@@ -874,7 +879,12 @@ let client_hello_slot_exactly
                | None -> False)
             | None -> False
           else
-            spec == None))
+            // The slot is allocated but empty: the session-id mirror still
+            // holds its all-zero initial content, which is exactly what
+            // [TLS13.Impl.ConnectionState.Model.stored_client_hello_session_id]
+            // reports for a state with no stored ClientHello.  Pinning it here
+            // makes the runtime session-id reader total.
+            spec == None /\ Seq.equal session_id (Seq.create 32 0uy)))
 
 let client_hello_metadata_exactly
   (has_server_name_box:box bool)
@@ -890,7 +900,7 @@ let client_hello_metadata_exactly
     Box.pts_to signature_schemes_len_box signature_schemes_len **
     pure (match spec with
       | Some m ->
-        has_server_name == true /\
+        has_server_name == client_hello_has_sni m /\
         server_name_len == client_hello_server_name_len_for m /\
         cipher_suites_len == client_hello_cipher_suites_len_for m /\
         signature_schemes_len == client_hello_signature_schemes_len_for m

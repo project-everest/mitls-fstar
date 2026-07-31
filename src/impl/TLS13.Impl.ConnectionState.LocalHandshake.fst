@@ -871,7 +871,7 @@ fn mark_sent_server_hello
   c.handshake.messages.server_hello := Some lsh;
 
   unfold (IM.is_valid_server_hello lsh sh);
-  with lsh_random lsh_key_share. _;
+  with lsh_random lsh_session_id lsh_key_share. _;
   V.to_array_pts_to lsh.IM.server_hello_key_share;
   V.to_array_pts_to c.handshake.server_key_share.bytes;
   Arr.memcpy
@@ -2314,6 +2314,7 @@ let lemma_client_hello_of_start_eq_poc
           start.CS.start_client_random
           start.CS.start_server_name
           start.CS.start_client_key_share_public
+          start.CS.start_client_random
           cs sa)
   = ()
 #pop-options
@@ -2323,8 +2324,9 @@ let lemma_client_hello_of_start_eq_poc
    start's server_name / cipher_suites / signature_schemes are non-empty -- but the
    generated wire ClientHello refinements (and client_hello_matches_start) require
    it.  This helper reads the three runtime start lengths and reports whether they
-   are all >= 1.  The runtime predicates already pin each length <= its cap
-   (255/16/16), so `ok` establishes the full Model.valid_start.  It preserves
+   are all >= 1, and that the two list lengths are <= 16 (the storage caps are now
+   larger than that, to fit a browser's offered lists), so `ok` establishes the
+   full Model.valid_start.  It preserves
    connection_exactly c st0 (symmetric unfold/refold). *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 60"
 fn client_hello_start_nonempty_runtime
@@ -2394,7 +2396,15 @@ fn client_hello_start_nonempty_runtime
     lemma_sizet_lte_plain 1sz csl;
     let sa_ok = sizet_lte_plain 1sz sal;
     lemma_sizet_lte_plain 1sz sal;
-    let nonempty = sn_ok && cs_ok && sa_ok;
+    // The storage caps (64 cipher suites / 32 signature schemes) are sized for the
+    // lists a *browser* offers us, but the ClientHello we ourselves emit is bounded
+    // by valid_start at 16/16, so the upper bounds have to be checked explicitly
+    // rather than read off the cap.
+    let cs_hi = sizet_lte_plain csl 16sz;
+    lemma_sizet_lte_plain csl 16sz;
+    let sa_hi = sizet_lte_plain sal 16sz;
+    lemma_sizet_lte_plain sal 16sz;
+    let nonempty = sn_ok && cs_ok && sa_ok && cs_hi && sa_hi;
     Model.lemma_cipher_suites_match_length cs_items (SZ.v cs_len)
       start_spec.CS.start_cipher_suites;
     Model.lemma_signature_schemes_match_length sa_items (SZ.v sa_len)
@@ -2565,7 +2575,7 @@ fn try_send_client_hello
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-    with old_client_hello_present old_l_random old_l_server_name
+    with old_client_hello_present old_l_random old_l_session_id old_l_server_name
          old_l_key_share old_l_cipher_suites old_l_signature_schemes. _;
     unfold (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
@@ -5028,7 +5038,7 @@ fn try_derive_server_shared_secret_from_private_array
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share ch_cipher_suites ch_signature_schemes. _;
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_cipher_suites ch_signature_schemes. _;
 
   let ch = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==

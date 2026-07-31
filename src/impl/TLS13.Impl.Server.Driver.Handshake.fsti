@@ -160,6 +160,7 @@ let server_driver_send_server_hello_from_payload_success_correct
     (let sh = SS.mk_server_hello_witness
                (CL.raw_slice payload 0 32)
                (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+               (CM.stored_client_hello_session_id st0)
                T.TLS_CHACHA20_POLY1305_SHA256 in
      st1 ==
       CM.sent_server_hello_state
@@ -186,7 +187,7 @@ val lemma_select_derive_success_server_hello_ready :
      Some? st2.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
      st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
      Some? st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
-     B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+     B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
        Bounds.max_transcript_len /\
      // cst-guard: the sampled 32-byte ServerHello random differs from the
      // HelloRetryRequest sentinel (serverHello_body_cst).  This is a runtime
@@ -451,6 +452,7 @@ fn send_server_hello_from_payload_once
                             (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                             (CryptoSpec.x25519_public_from_private
                               (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                            (CM.stored_client_hello_session_id 'st0)
                             T.TLS_CHACHA20_POLY1305_SHA256 in
                   CM.can_send_server_hello 'st0 sh
                     (CS.serialized_cleartext_tls_message
@@ -510,8 +512,9 @@ fn select_derive_send_server_hello_from_payload_once
                            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                            (CryptoSpec.x25519_public_from_private
                              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                           (CM.stored_client_hello_session_id 'st0)
                            T.TLS_CHACHA20_POLY1305_SHA256 in
-                 B.length (W.serialize_handshake (M.ServerHello sh)) == 90))
+                 B.length (W.serialize_handshake (M.ServerHello sh)) == 122))
  returns result:server_driver_select_derive_server_hello_result
  ensures (match result with
           | ServerDriverSelectDeriveServerHelloOk ->

@@ -319,6 +319,7 @@ fn rec drive_handshake
                   (TLS13.ConnectionLog.raw_slice material_bytes 0 32)
                   (CryptoSpec.x25519_public_from_private
                     (TLS13.ConnectionLog.raw_slice material_bytes 32 64))
+                  (CM.stored_client_hello_session_id 'st0)
                   T.TLS_CHACHA20_POLY1305_SHA256;
                 let flight =
                   BH.select_derive_send_server_hello_from_payload_once

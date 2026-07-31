@@ -24,6 +24,7 @@ module GESG = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported
 module GHS = TLS13.Wire.Generated.Handshake
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSHBody = TLS13.Wire.Generated.ServerHelloBody
@@ -277,7 +278,7 @@ val lemma_ch_extensions_cons_sv:
   sv:bool ->
   ss:list T.signature_scheme ->
   Lemma (ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
-         (if FStar.List.Tot.mem GPV.TLS_1p3 svl
+         (if FStar.List.Tot.mem GOV.Offered_TLS_1p3 svl
           then ch_extensions tl sn ks true ss
           else None))
 
@@ -573,10 +574,10 @@ val lemma_parse_supported_server_hello_fields:
       | Some sh ->
         sh.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
         Seq.equal sh.random (Seq.slice input 6 38) /\
-        ((SHC.server_hello_ok_52 input /\
-          Seq.equal sh.key_share (Seq.slice input 52 84)) \/
-         (SHC.server_hello_ok_58 input /\
-          Seq.equal sh.key_share (Seq.slice input 58 90)))
+        ((SHC.server_hello_ok_84 input /\
+          Seq.equal sh.key_share (Seq.slice input 84 116)) \/
+         (SHC.server_hello_ok_90 input /\
+          Seq.equal sh.key_share (Seq.slice input 90 122)))
       | None -> False))
 
 val parse_sealed_record:

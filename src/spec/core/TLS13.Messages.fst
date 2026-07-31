@@ -21,8 +21,8 @@ let signature_max_len : nat = 4096
 let certificate_chain_max_bytes : nat = 32768
 let certificate_chain_max_entries : nat = 8
 let client_hello_server_name_max_len : nat = 255
-let client_hello_max_cipher_suites : nat = 16
-let client_hello_max_signature_schemes : nat = 16
+let client_hello_max_cipher_suites : nat = 64
+let client_hello_max_signature_schemes : nat = 32
 
 // Phase 3b: handshake messages carry the QuackyDucky-generated wire records
 // directly (the single source of truth).  Profile-relevant fields are read via

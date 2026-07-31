@@ -214,7 +214,8 @@ static int run_openssl_client(uint16_t port, const char *ca_path) {
     ERR_print_errors_fp(stderr);
     return 1;
   }
-  SSL_CTX_clear_options(ctx, SSL_OP_ENABLE_MIDDLEBOX_COMPAT);
+  /* Middlebox-compatibility mode stays ENABLED: the verified server now
+     echoes the ClientHello legacy_session_id (RFC 8446 D.4). */
   int rc = 1;
   int fd = -1;
   SSL *ssl = NULL;

@@ -73,6 +73,11 @@ static int driver_fail_status(
         "%s: %s",
         operation,
         driver_status_message(status));
+    /* Failures on the accept path free the driver before the caller can read
+       last_error, so make the reason observable for debugging. */
+    if (getenv("TLS13_SERVER_DRIVER_DEBUG") != NULL) {
+      fprintf(stderr, "tls13_server_driver: %s\n", driver->last_error);
+    }
   }
   return 1;
 }

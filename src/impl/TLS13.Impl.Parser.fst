@@ -76,6 +76,7 @@ module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GKSSH = TLS13.Wire.Generated.KeyShareServerHello
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GSV = TLS13.Wire.Generated.SupportedVersionsServerHello
 module GKSEKE = TLS13.Wire.Generated.KeyShareEntry_key_exchange
@@ -704,6 +705,8 @@ let lemma_client_hello_conv_fields (cm: GCH.clientHello_mid) (v: GHS.handshake)
       (let ch = GHS.Body_client_hello?._0 v in
        ch.GCH.legacy_version == fst (fst (fst cm)) /\
        (ch.GCH.random <: Seq.seq U8.t) == (snd (fst (fst cm)) <: Seq.seq U8.t) /\
+       (ch.GCH.legacy_session_id <: Seq.seq U8.t) ==
+         (fst (snd (fst cm)) <: Seq.seq U8.t) /\
        (ch.GCH.cipher_suites <: list GCS.cipherSuite) ==
          (snd (snd (fst cm)) <: list GCS.cipherSuite) /\
        (ch.GCH.extensions <: list GECH.extensionClientHello) ==
@@ -775,7 +778,7 @@ let lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
 let lemma_ch_extensions_cons_sv svl tl sn ks sv ss
   : Lemma (ensures WS.ch_extensions
              (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
-             (if List.Tot.mem GPV.TLS_1p3 svl
+             (if List.Tot.mem GOV.Offered_TLS_1p3 svl
               then WS.ch_extensions tl sn ks true ss
               else None))
   = WS.lemma_ch_extensions_cons_sv svl tl sn ks sv ss
@@ -1003,6 +1006,12 @@ let lemma_protocolVersion_conv_eq (m:GPV.protocolVersion_mid) (h:GPV.protocolVer
     (ensures m == h)
   = ()
 
+let lemma_offeredVersion_conv_eq (m:GOV.offeredVersion_mid) (h:GOV.offeredVersion)
+  : Lemma
+    (requires GOV.offeredVersion_conv m == Some h)
+    (ensures m == h)
+  = ()
+
 let lemma_serverName_constructor (xl: GSN.serverName_low) (vm: GSN.serverName_mid)
   : Lemma
     (requires GSN.Name_host_name_low? xl /\
@@ -1207,7 +1216,7 @@ fn build_ch_cipher_suites
                     L.cipher_suites_match bytes (SZ.v (Mktuple3?._2 res))
                       (RV.reveal_synth_cipher_suites (Ghost.reveal cm)))))
 {
-  let dst = V.alloc 0x1303us 16sz;
+  let dst = V.alloc 0x1303us 64sz;
   match v0 {
     None -> {
       unfold (PPVCL.vmatch_vclist
@@ -1234,7 +1243,7 @@ fn build_ch_cipher_suites
                         (PPB.vmatch_conv GCS.cipherSuite_vmatch GCS.cipherSuite_conv));
       V.pts_to_len (snd nv);
       let count = fst nv;
-      let ok = count `SZ.lte` 16sz;
+      let ok = count `SZ.lte` 64sz;
       if ok {
         let mut i = 0sz;
         let proc_ref = GR.alloc (Nil #T.cipher_suite);
@@ -1257,7 +1266,7 @@ fn build_ch_cipher_suites
             SZ.v count == FStar.List.Tot.length (Ghost.reveal cm) /\
             Seq.length s == FStar.List.Tot.length (Ghost.reveal cm) /\
             V.is_full_vec (snd nv) /\
-            V.is_full_vec dst /\ V.length dst == 16 /\ Seq.length bytes == 16 /\
+            V.is_full_vec dst /\ V.length dst == 64 /\ Seq.length bytes == 64 /\
             FStar.List.Tot.length (Ghost.reveal processed) == SZ.v iv /\
             L.cipher_suites_match bytes (SZ.v iv) (Ghost.reveal processed) /\
             FStar.List.Tot.append (Ghost.reveal processed)
@@ -1427,7 +1436,7 @@ fn copy_ch_signature_schemes_into
                                          GSS.signatureScheme_conv));
       V.pts_to_len (snd nv);
       let count = fst nv;
-      let ok = count `SZ.lte` 16sz;
+      let ok = count `SZ.lte` 32sz;
       if ok {
         let mut i = 0sz;
         let proc_ref = GR.alloc (Nil #T.signature_scheme);
@@ -1450,7 +1459,7 @@ fn copy_ch_signature_schemes_into
             SZ.v count == FStar.List.Tot.length (Ghost.reveal cm) /\
             Seq.length s == FStar.List.Tot.length (Ghost.reveal cm) /\
             V.is_full_vec (snd nv) /\
-            V.is_full_vec dst /\ V.length dst == 16 /\ Seq.length bytes == 16 /\
+            V.is_full_vec dst /\ V.length dst == 32 /\ Seq.length bytes == 32 /\
             FStar.List.Tot.length (Ghost.reveal processed) == SZ.v iv /\
             L.signature_schemes_match bytes (SZ.v iv) (Ghost.reveal processed) /\
             FStar.List.Tot.append (Ghost.reveal processed)
@@ -1642,8 +1651,8 @@ let lemma_extCH_sv_data_conv
     (requires GECH.extensionClientHello_conv
                 (GECH.Extension_data_supported_versions_mid cm) == Some h)
     (ensures GECH.Extension_data_supported_versions? h /\
-             (GECH.Extension_data_supported_versions?._0 h <: list GPV.protocolVersion) ==
-             (cm <: list GPV.protocolVersion))
+             (GECH.Extension_data_supported_versions?._0 h <: list GOV.offeredVersion) ==
+             (cm <: list GOV.offeredVersion))
   = ()
 
 let lemma_extCH_sa_iff
@@ -1940,10 +1949,10 @@ fn elim_vmatch_extCH_sv
            pure (elem == GECH.Extension_data_supported_versions_low v0)
   ensures exists* (cm: GSVCH.supportedVersionsClientHello_mid).
            PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm **
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm **
            pure (GECH.Extension_data_supported_versions? h /\
-                 (GECH.Extension_data_supported_versions?._0 h <: list GPV.protocolVersion) ==
-                 (cm <: list GPV.protocolVersion) /\
+                 (GECH.Extension_data_supported_versions?._0 h <: list GOV.offeredVersion) ==
+                 (cm <: list GOV.offeredVersion) /\
                  GECH.extensionClientHello_conv
                    (GECH.Extension_data_supported_versions_mid cm) == Some h)
 {
@@ -1962,7 +1971,7 @@ fn elim_vmatch_extCH_sv
             (GECH.Extension_data_supported_versions_mid cm0));
   rewrite (GECH.extensionClientHello_extension_data_supported_versions_vmatch v0 cm0)
       as (PPVCL.vmatch_vclist
-            (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm0);
+            (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm0);
   lemma_extCH_sv_data_conv cm0 h;
 }
 
@@ -1972,14 +1981,14 @@ fn intro_vmatch_extCH_sv
   (cm: GSVCH.supportedVersionsClientHello_mid)
   (#h: GECH.extensionClientHello)
   requires PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm **
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm **
            pure (GECH.extensionClientHello_conv
                    (GECH.Extension_data_supported_versions_mid cm) == Some h)
   ensures PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
             (GECH.Extension_data_supported_versions_low v0) h
 {
   rewrite (PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm)
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm)
       as (GECH.extensionClientHello_extension_data_supported_versions_vmatch v0 cm);
   fold (GECH.extensionClientHello_vmatch
           (GECH.Extension_data_supported_versions_low v0)
@@ -2542,6 +2551,47 @@ fn copy_vec_32_into
   V.to_vec_pts_to src;
   S.to_array dst_slice;
   V.to_vec_pts_to dst;
+}
+
+(* Copy a legacy_session_id / legacy_session_id_echo lvec into a fixed 32-byte
+   destination vec, but only if it really is 32 bytes long.  [lvec_len] is a
+   sound runtime stand-in for the ghost vector length (see the refinement on
+   LowParse.PulseParse.Bytes.lvec), so this needs no length lookup.
+
+   The implementation fixes the session-id width at 32 bytes: that is what
+   every TLS 1.3 client running in middlebox-compatibility mode (RFC 8446 D.4)
+   sends, and it keeps the whole ServerHello/ClientHello wire image a constant
+   size.  A session id of a different length is still parsed (it is legal TLS)
+   but normalises to all-zeros, exactly like
+   [TLS13.Wire.Semantics.session_id_32]; the destination is required to start
+   out zeroed, so the mismatching case is a no-op. *)
+fn copy_session_id_32_checked
+  (dst: V.vec U8.t)
+  (src: PPBY.lvec U8.t)
+  (#v: Ghost.erased (Seq.seq U8.t))
+  requires V.pts_to dst 'dst_bytes **
+           LSeqB.vmatch_copy_seqbytes src v **
+           pure (V.is_full_vec dst /\ V.length dst == 32 /\
+                 Seq.equal (Ghost.reveal 'dst_bytes) (Seq.create 32 0uy))
+  ensures LSeqB.vmatch_copy_seqbytes src v **
+          (exists* dst_bytes2.
+            V.pts_to dst dst_bytes2 **
+            pure (V.is_full_vec dst /\
+                  V.length dst == 32 /\
+                  Seq.length dst_bytes2 == 32 /\
+                  Seq.equal dst_bytes2 (TLS13.Wire.Semantics.session_id_32 (Ghost.reveal v))))
+{
+  if (SZ.eq src.PPBY.lvec_len 32sz) {
+    unfold (LSeqB.vmatch_copy_seqbytes src v);
+    V.pts_to_len src.PPBY.lvec_vec;
+    copy_vec_32_into dst src.PPBY.lvec_vec;
+    fold (LSeqB.vmatch_copy_seqbytes src v);
+  } else {
+    unfold (LSeqB.vmatch_copy_seqbytes src v);
+    V.pts_to_len src.PPBY.lvec_vec;
+    fold (LSeqB.vmatch_copy_seqbytes src v);
+    V.pts_to_len dst;
+  }
 }
 
 (* Copy the first protocol name of a (non-empty) protocol-name list into the
@@ -3902,37 +3952,37 @@ fn scan_ch_supported_versions
   (v0: GSVCH.supportedVersionsClientHello_lowtype)
   (#cm: Ghost.erased GSVCH.supportedVersionsClientHello_mid)
   requires PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
              v0 cm
   returns found: bool
   ensures PPVCL.vmatch_vclist
-            (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+            (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
             v0 cm **
-          pure (found <==> FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm))
+          pure (found <==> FStar.List.Tot.mem GOV.Offered_TLS_1p3 (Ghost.reveal cm))
 {
   match v0 {
     None -> {
       unfold (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 None cm);
       fold (PPVCL.vmatch_vclist
-              (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+              (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
               None cm);
       rewrite (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 None cm)
           as (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 v0 cm);
       false
     }
     Some nv -> {
       unfold (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 (Some nv) cm);
       with s. assert (V.pts_to (snd nv) s **
                       SM.seq_list_match s cm
-                        (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv));
+                        (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv));
       V.pts_to_len (snd nv);
       let count = fst nv;
       let mut i = 0sz;
@@ -3948,15 +3998,15 @@ fn scan_ch_supported_versions
         R.pts_to found_ref f **
         V.pts_to (snd nv) s **
         SM.seq_list_match s cm
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) **
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) **
         pure (
           SZ.v iv <= SZ.v count /\
           SZ.v count == FStar.List.Tot.length (Ghost.reveal cm) /\
           Seq.length s == FStar.List.Tot.length (Ghost.reveal cm) /\
           V.is_full_vec (snd nv) /\
-          (f ==> FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm)) /\
-          ((not f) ==> (FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm) <==>
-                        FStar.List.Tot.mem GPV.TLS_1p3
+          (f ==> FStar.List.Tot.mem GOV.Offered_TLS_1p3 (Ghost.reveal cm)) /\
+          ((not f) ==> (FStar.List.Tot.mem GOV.Offered_TLS_1p3 (Ghost.reveal cm) <==>
+                        FStar.List.Tot.mem GOV.Offered_TLS_1p3
                           (RV.list_drop (SZ.v iv) (Ghost.reveal cm)))))
       decreases %[(if !found_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
@@ -3964,42 +4014,42 @@ fn scan_ch_supported_versions
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
         let el = V.op_Array_Access (snd nv) iv;
         SMU.seq_list_match_index_trade
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
           s (Ghost.reveal cm) (SZ.v iv);
         Trade.rewrite_with_trade
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              (Seq.index s (SZ.v iv)) (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)));
         Trade.trans
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              (Seq.index s (SZ.v iv)) (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
           (SM.seq_list_match s (Ghost.reveal cm)
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv));
-        PPB.elim_vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv));
+        PPB.elim_vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
           el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
-        with sq. assert (GPV.protocolVersion_vmatch el sq **
-                         pure (GPV.protocolVersion_conv sq ==
+        with sq. assert (GOV.offeredVersion_vmatch el sq **
+                         pure (GOV.offeredVersion_conv sq ==
                                Some (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv))));
-        rewrite (GPV.protocolVersion_vmatch el sq)
-            as (LPS.eq_as_slprop GPV.protocolVersion el sq);
-        unfold (LPS.eq_as_slprop GPV.protocolVersion el sq);
-        lemma_protocolVersion_conv_eq sq (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
+        rewrite (GOV.offeredVersion_vmatch el sq)
+            as (LPS.eq_as_slprop GOV.offeredVersion el sq);
+        unfold (LPS.eq_as_slprop GOV.offeredVersion el sq);
+        lemma_offeredVersion_conv_eq sq (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
         assert (pure (el == FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)));
-        fold (LPS.eq_as_slprop GPV.protocolVersion el sq);
-        rewrite (LPS.eq_as_slprop GPV.protocolVersion el sq)
-            as (GPV.protocolVersion_vmatch el sq);
-        PPB.intro_vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+        fold (LPS.eq_as_slprop GOV.offeredVersion el sq);
+        rewrite (LPS.eq_as_slprop GOV.offeredVersion el sq)
+            as (GOV.offeredVersion_vmatch el sq);
+        PPB.intro_vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
           el sq (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
         Trade.elim
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
           (SM.seq_list_match s (Ghost.reveal cm)
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv));
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv));
         RV.lemma_list_drop_index (Ghost.reveal cm) (SZ.v iv);
-        if (GPV.TLS_1p3? el) {
+        if (GOV.Offered_TLS_1p3? el) {
           found_ref := true;
         } else {
           SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
@@ -4011,13 +4061,13 @@ fn scan_ch_supported_versions
       RV.lemma_list_drop_length (Ghost.reveal cm);
       assert (pure ((not f) ==> SZ.v iv == FStar.List.Tot.length (Ghost.reveal cm)));
       fold (PPVCL.vmatch_vclist
-              (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+              (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
               (Some nv) cm);
       rewrite (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 (Some nv) cm)
           as (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 v0 cm);
       f
     }
@@ -4178,6 +4228,7 @@ fn scan_ch_key_share
   }
 }
 
+#push-options "--z3rlimit 800 --fuel 2 --ifuel 2"
 fn scan_ch_extensions
   (ext_lo: GCH.clientHello_extensions_lowtype)
   (#cext: Ghost.erased GCH.clientHello_extensions_mid)
@@ -4228,7 +4279,7 @@ fn scan_ch_extensions
 {
   let sn_vec = V.alloc 0uy 255sz;
   let key_vec = V.alloc 0uy 32sz;
-  let sig_vec = V.alloc 0us 16sz;
+  let sig_vec = V.alloc 0us 32sz;
   match ext_lo {
     None -> {
       unfold (PPVCL.vmatch_vclist
@@ -4310,13 +4361,13 @@ fn scan_ch_extensions
           V.is_full_vec (snd nv) /\
           V.is_full_vec sn_vec /\ V.length sn_vec == 255 /\ B.length sn_bytes == 255 /\
           V.is_full_vec key_vec /\ V.length key_vec == 32 /\ B.length kbytes == 32 /\
-          V.is_full_vec sig_vec /\ V.length sig_vec == 16 /\ Seq.length sig_bytes == 16 /\
+          V.is_full_vec sig_vec /\ V.length sig_vec == 32 /\ Seq.length sig_bytes == 32 /\
           (hsn <==> Some? sn_acc) /\
           (hk <==> Some? key_acc) /\
           (stl <==> (match sn_acc with
                      | Some name -> B.length (Ghost.reveal name) > 255
                      | None -> False)) /\
-          (sigtl <==> FStar.List.Tot.length (Ghost.reveal sig_acc) > 16) /\
+          (sigtl <==> FStar.List.Tot.length (Ghost.reveal sig_acc) > 32) /\
           ((not fl /\ Some? sn_acc /\ not stl) ==>
             L.byte_prefix_matches sn_bytes sl (Ghost.reveal (Some?.v sn_acc))) /\
           ((not fl /\ not hsn) ==> SZ.v sl == 0) /\
@@ -4584,7 +4635,7 @@ fn scan_ch_extensions
           let v = GECH.Extension_data_supported_versions_low?._0 el;
           elim_vmatch_extCH_sv v el #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
           with cm_sv. assert (PPVCL.vmatch_vclist
-                                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                                 v cm_sv);
           RV.lemma_reveal_ch_extensions_cons_sv
             (GECH.Extension_data_supported_versions?._0
@@ -4687,6 +4738,7 @@ fn scan_ch_extensions
     }
   }
 }
+#pop-options
 
 (* --- Certificate: eliminate / re-introduce the packed vmatch --------------- *)
 
@@ -5424,6 +5476,23 @@ fn parse_handshake_message
                   copy_vec_32_into randvec (fst (snd xsh)).PPBY.lvec_vec;
                   with rbytes. assert (V.pts_to randvec rbytes);
                   fold (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
+                  let sidvec = V.alloc 0uy 32sz;
+                  rewrite (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
+                       as (LSeqB.vmatch_copy_seqbytes
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))));
+                  copy_session_id_32_checked sidvec (fst (fst (dsnd (snd (snd xsh)))))
+                                 #(fst (fst (dsnd (snd (snd cm)))));
+                  with sidbytes. assert (V.pts_to sidvec sidbytes **
+                    pure (V.is_full_vec sidvec /\
+                          V.length sidvec == 32 /\
+                          Seq.length sidbytes == 32 /\
+                          Seq.equal sidbytes
+                            (TLS13.Wire.Semantics.session_id_32 (fst (fst (dsnd (snd (snd cm))))))));
+                  rewrite (LSeqB.vmatch_copy_seqbytes
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
+                       as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))));
                   intro_serverHelloBody (dsnd (snd (snd xsh)));
                   intro_sh_ite_payload xsh b;
                   intro_serverHello_body xsh;
@@ -5443,10 +5512,13 @@ fn parse_handshake_message
                       (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
                     WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
                     let lsh = ({ L.server_hello_random = randvec;
+                                 L.server_hello_session_id = sidvec;
                                  L.server_hello_key_share = fst res;
                                  L.server_hello_cipher_suite = 0x1303us });
                     rewrite (V.pts_to randvec rbytes)
                          as (V.pts_to lsh.L.server_hello_random rbytes);
+                    rewrite (V.pts_to sidvec sidbytes)
+                         as (V.pts_to lsh.L.server_hello_session_id sidbytes);
                     rewrite (V.pts_to (fst res) kbytes)
                          as (V.pts_to lsh.L.server_hello_key_share kbytes);
                     fold (L.is_valid_server_hello lsh
@@ -5474,6 +5546,7 @@ fn parse_handshake_message
                     (* key_share scan found nothing, or the body exceeds
                        server_hello_max_len: synth is [None]; fall back. *)
                     V.free randvec;
+                    V.free sidvec;
                     V.free (fst res);
                     RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
                       (Ghost.reveal gv) (SZ.v input_len);
@@ -5606,6 +5679,14 @@ fn parse_handshake_message
                   Seq.equal rbytes (snd (fst (fst cm)))));
           fold (LSeqB.vmatch_copy_seqbytes
                   (snd (fst (fst xch))) (snd (fst (fst cm))));
+          let sidvec = V.alloc 0uy 32sz;
+          copy_session_id_32_checked sidvec (fst (snd (fst xch)))
+                         #(fst (snd (fst cm)));
+          with sidbytes. assert (V.pts_to sidvec sidbytes **
+            pure (V.is_full_vec sidvec /\
+                  V.length sidvec == 32 /\
+                  Seq.length sidbytes == 32 /\
+                  Seq.equal sidbytes (TLS13.Wire.Semantics.session_id_32 (fst (snd (fst cm))))));
           let cs_res = build_ch_cipher_suites (snd (snd (fst xch))) #(snd (snd (fst cm)));
           with csbytes. assert (V.pts_to (Mktuple3?._1 cs_res) csbytes **
             pure (V.is_full_vec (Mktuple3?._1 cs_res) /\
@@ -5718,6 +5799,7 @@ fn parse_handshake_message
             lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
               (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
             let lch = ({ L.client_hello_random = randvec;
+                         L.client_hello_session_id = sidvec;
                          L.client_hello_server_name = Mktuple8?._1 ext_res;
                          L.client_hello_server_name_len = Mktuple8?._2 ext_res;
                          L.client_hello_has_server_name = Mktuple8?._3 ext_res;
@@ -5728,6 +5810,8 @@ fn parse_handshake_message
                          L.client_hello_signature_schemes_len = Mktuple8?._7 ext_res });
             rewrite (V.pts_to randvec rbytes)
                  as (V.pts_to lch.L.client_hello_random rbytes);
+            rewrite (V.pts_to sidvec sidbytes)
+                 as (V.pts_to lch.L.client_hello_session_id sidbytes);
             rewrite (V.pts_to (Mktuple8?._1 ext_res) snbytes)
                  as (V.pts_to lch.L.client_hello_server_name snbytes);
             rewrite (V.pts_to (Mktuple8?._4 ext_res) kbytes)
@@ -5748,6 +5832,12 @@ fn parse_handshake_message
               (snd (snd (fst cm)) <: list GCS.cipherSuite);
             assert (pure (Seq.equal rbytes
                           (TLS13.Wire.Semantics.clientHello_random (Ghost.reveal mch))));
+            assert (pure (((Ghost.reveal mch).GCH.legacy_session_id <: Seq.seq U8.t) ==
+                          (fst (snd (fst cm)) <: Seq.seq U8.t)));
+            assert (pure (TLS13.Wire.Semantics.clientHello_session_id_32 (Ghost.reveal mch) ==
+                          TLS13.Wire.Semantics.session_id_32 (fst (snd (fst cm)))));
+            assert (pure (Seq.equal sidbytes
+                          (TLS13.Wire.Semantics.clientHello_session_id_32 (Ghost.reveal mch))));
             assert (pure (L.cipher_suites_match csbytes
                           (SZ.v lch.L.client_hello_cipher_suites_len)
                           (TLS13.Wire.Semantics.clientHello_cipher_suites (Ghost.reveal mch))));
@@ -5770,6 +5860,8 @@ fn parse_handshake_message
             assert (pure (Some?.v (RV.handshake_synth (Ghost.reveal gv)) ==
                           M.ClientHello (Ghost.reveal mch)));
             assert (pure (V.is_full_vec lch.L.client_hello_random));
+            assert (pure (V.is_full_vec lch.L.client_hello_session_id));
+            assert (pure (V.length lch.L.client_hello_session_id == 32));
             assert (pure (V.is_full_vec lch.L.client_hello_server_name));
             assert (pure (V.is_full_vec lch.L.client_hello_key_share));
             assert (pure (V.is_full_vec lch.L.client_hello_cipher_suites));
@@ -5797,6 +5889,7 @@ fn parse_handshake_message
             Some (L.LTlsHandshake (L.LClientHello lch))
           } else {
             V.free randvec;
+            V.free sidvec;
             V.free (Mktuple3?._1 cs_res);
             V.free (Mktuple8?._1 ext_res);
             V.free (Mktuple8?._4 ext_res);

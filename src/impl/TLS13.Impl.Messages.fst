@@ -42,10 +42,10 @@ noextract
 let max_alpn_len : nat = 255
 
 noextract
-let max_cipher_suites : nat = 16
+let max_cipher_suites : nat = 64
 
 noextract
-let max_signature_schemes : nat = 16
+let max_signature_schemes : nat = 32
 
 noextract
 let max_certificate_chain_bytes : nat = 32768
@@ -68,6 +68,7 @@ let max_record_fragment_len : nat = 16640
 noeq
 type client_hello = {
   client_hello_random: V.vec U8.t;
+  client_hello_session_id: V.vec U8.t;
   client_hello_server_name: V.vec U8.t;
   client_hello_server_name_len: SZ.t;
   client_hello_has_server_name: bool;
@@ -81,6 +82,7 @@ type client_hello = {
 noeq
 type server_hello = {
   server_hello_random: V.vec U8.t;
+  server_hello_session_id: V.vec U8.t;
   server_hello_key_share: V.vec U8.t;
   server_hello_cipher_suite: U16.t;
 }
@@ -424,14 +426,19 @@ let rec certificate_chain_matches
   else False
 
 let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slprop =
-  exists* random server_name key_share cipher_suites signature_schemes.
+  exists* random session_id server_name key_share cipher_suites signature_schemes.
     V.pts_to l.client_hello_random random **
+    V.pts_to l.client_hello_session_id session_id **
     V.pts_to l.client_hello_server_name server_name **
     V.pts_to l.client_hello_key_share key_share **
     V.pts_to l.client_hello_cipher_suites cipher_suites **
     V.pts_to l.client_hello_signature_schemes signature_schemes **
     pure (
       V.is_full_vec l.client_hello_random /\
+      V.is_full_vec l.client_hello_session_id /\
+      V.length l.client_hello_session_id == 32 /\
+      B.length session_id == 32 /\
+      Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
       V.is_full_vec l.client_hello_server_name /\
       V.is_full_vec l.client_hello_key_share /\
       V.is_full_vec l.client_hello_cipher_suites /\
@@ -471,11 +478,16 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
        | None -> False))
 
 let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slprop =
-  exists* random key_share.
+  exists* random session_id key_share.
     V.pts_to l.server_hello_random random **
+    V.pts_to l.server_hello_session_id session_id **
     V.pts_to l.server_hello_key_share key_share **
     pure (
       V.is_full_vec l.server_hello_random /\
+      V.is_full_vec l.server_hello_session_id /\
+      V.length l.server_hello_session_id == 32 /\
+      B.length session_id == 32 /\
+      Seq.equal session_id (Sem.serverHello_session_id_echo_32 m) /\
       V.is_full_vec l.server_hello_key_share /\
       V.length l.server_hello_random == 32 /\
       V.length l.server_hello_key_share == 32 /\
@@ -630,8 +642,9 @@ fn free_client_hello
   ensures emp
 {
   with m. unfold (is_valid_client_hello l m);
-  with random server_name key_share cipher_suites signature_schemes. _;
+  with random session_id server_name key_share cipher_suites signature_schemes. _;
   V.free l.client_hello_random;
+  V.free l.client_hello_session_id;
   V.free l.client_hello_server_name;
   V.free l.client_hello_key_share;
   V.free l.client_hello_cipher_suites;
@@ -644,8 +657,9 @@ fn free_server_hello
   ensures emp
 {
   with m. unfold (is_valid_server_hello l m);
-  with random key_share. _;
+  with random session_id key_share. _;
   V.free l.server_hello_random;
+  V.free l.server_hello_session_id;
   V.free l.server_hello_key_share;
 }
 
