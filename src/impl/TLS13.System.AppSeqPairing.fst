@@ -383,6 +383,20 @@ let not_closing (c:CS.connection_control_state) : bool =
     seq) can only ever reach a receiver that is ALREADY in the closing region — the
     gate is already vacuous there.
 
+    NB — the one non-obvious soundness case.  For the gate to be inductive at a LIVE
+    receiver, every message that advances the receiver's READ seq while LEAVING it
+    live must be matched by a sender that advanced its WRITE seq by the same amount.
+    Going through `m_radv`'s non-zero arms: app-data is symmetric (both sides +N),
+    and both `Close_notify` arms move the receiver INTO the closing region (so the
+    gate goes vacuous).  The ONE arm that advances the read seq AND keeps the
+    receiver at `ControlApplicationData` is `M.TlsIgnoredPostHandshake` (`:858`).
+    That does NOT break the gate because it can never be SENT and hence never be
+    in flight: its `Sent` arm is `None` and `legal_tls_message` requires
+    `dir == CL.Received` for it (`StateMachine.fst:1413`).  A future reader who
+    spots the `:858` read-seq advance and fears a leak should stop here: no wire
+    payload can carry a `TlsIgnoredPostHandshake`, so `cs_seq_ok`/`sc_seq_ok` never
+    see it on the in-flight side.
+
     ✗ DO NOT re-gate on `~ControlFailed?` (a previous, committed attempt).  It is
     UNSOUND: it admits `ControlClosing`/`ControlClosed` receivers, and the
     mutual-close race above lands the receiver at `ControlClosed` (which is
