@@ -979,3 +979,32 @@ val lemma_legal_connection_delta_consistent
         connection_state_consistent st0 /\
         legal_connection_delta st0 delta st1)
       (ensures connection_state_consistent st1)
+
+(** NON-READY x25519 key-share projection from consistency + shared-secret
+    presence.  The consistency-side ingredient of the non-ready cross-endpoint
+    HANDSHAKE agreement producer: [Some? ks_shared_secret] is supplied non-ready
+    by the CANONICAL-shape presence bricks, and the model-level x25519 reachable
+    shape then yields the full stable projection. **)
+val lemma_consistent_shared_secret_stable_client_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures stable_client_x25519_key_share_projection st)
+
+(** Server mirror.  Excludes the two non-stable arms of
+    [server_x25519_reachable_shape] ([HsClientHelloReceived] and [ControlFailed]);
+    at [HsServerFinishedSent] both exclusions hold, so the consumer discharges
+    them for free. **)
+val lemma_consistent_shared_secret_stable_server_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived /\
+        ~(ControlFailed? st.cs_model.model_control))
+      (ensures stable_server_x25519_key_share_projection st)

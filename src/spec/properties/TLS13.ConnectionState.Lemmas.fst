@@ -10976,3 +10976,40 @@ let lemma_legal_connection_delta_consistent
   assert (connection_state_evolves st0 st1);
   assert (connection_state_evolves (initial st0.cs_model.model_config) st0);
   assert (connection_state_evolves (initial st0.cs_model.model_config) st1)
+
+(* ================================================================== *)
+(* NON-READY x25519 key-share PROJECTION from consistency + presence.  *)
+(*                                                                     *)
+(* Given [connection_state_consistent] and [Some? ks_shared_secret]    *)
+(* (the latter supplied non-ready by the CANONICAL-shape presence      *)
+(* bricks), the model-level x25519 reachable shape yields the full     *)
+(* stable per-endpoint projection.  These are the consistency-side     *)
+(* ingredient of the non-ready cross-endpoint HANDSHAKE agreement      *)
+(* producer.  The server form excludes the two non-stable arms of      *)
+(* [server_x25519_reachable_shape] ([HsClientHelloReceived], where the *)
+(* shape gives only the pre-ServerHello projection, and [ControlFailed] *)
+(* where it degrades to a disjunction); at [HsServerFinishedSent] — the *)
+(* only server control a client-Finished send's consumer needs — both  *)
+(* exclusions hold and the stable projection follows.                  *)
+(* ================================================================== *)
+let lemma_consistent_shared_secret_stable_client_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures stable_client_x25519_key_share_projection st)
+  = lemma_connection_state_consistent_client_x25519_reachable_shape st
+
+let lemma_consistent_shared_secret_stable_server_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived /\
+        ~(ControlFailed? st.cs_model.model_control))
+      (ensures stable_server_x25519_key_share_projection st)
+  = lemma_connection_state_consistent_server_x25519_reachable_shape st
