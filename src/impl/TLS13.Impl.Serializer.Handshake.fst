@@ -48,6 +48,7 @@ module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GESHKS = TLS13.Wire.Generated.ExtensionServerHello_extension_data_key_share
 module GCert = TLS13.Wire.Generated.Certificate
@@ -1388,11 +1389,11 @@ let lemma_ch_ks_ext_conv (ks: B.bytes)
 let lemma_ch_sv_ext_conv ()
   : Lemma (ensures GECH.extensionClientHello_conv
                      (GECH.Extension_data_supported_versions_mid
-                       ([GPV.TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid))
+                       ([GOV.Offered_TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid))
                    == Some ch_sv_high)
-  = LPL.serialize_list_nil _ GPV.protocolVersion_serializer;
-    LPL.serialize_list_singleton _ GPV.protocolVersion_serializer GPV.TLS_1p3;
-    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+  = LPL.serialize_list_nil _ GOV.offeredVersion_serializer;
+    LPL.serialize_list_singleton _ GOV.offeredVersion_serializer GOV.Offered_TLS_1p3;
+    GOV.offeredVersion_bytesize_eq GOV.Offered_TLS_1p3;
     ()
 #pop-options
 
@@ -1557,14 +1558,14 @@ fn intro_vmatch_extCH_sv
   (cm: GSVCH.supportedVersionsClientHello_mid)
   (#h: GECH.extensionClientHello)
   requires PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm **
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm **
            pure (GECH.extensionClientHello_conv
                    (GECH.Extension_data_supported_versions_mid cm) == Some h)
   ensures PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
             (GECH.Extension_data_supported_versions_low v0) h
 {
   rewrite (PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm)
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm)
       as (GECH.extensionClientHello_extension_data_supported_versions_vmatch v0 cm);
   fold (GECH.extensionClientHello_vmatch
           (GECH.Extension_data_supported_versions_low v0)
@@ -2030,16 +2031,16 @@ fn serialize_client_hello_handshake_poc
              ks_elem_low (ch_ks_high (reveal ks)));
 
   (* ---- supported_versions extension element ---- *)
-  fold (LPS.eq_as_slprop GPV.protocolVersion GPV.TLS_1p3 GPV.TLS_1p3);
-  rewrite (LPS.eq_as_slprop GPV.protocolVersion GPV.TLS_1p3 GPV.TLS_1p3)
-      as (GPV.protocolVersion_vmatch GPV.TLS_1p3 GPV.TLS_1p3);
-  PPB.intro_vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
-    GPV.TLS_1p3 GPV.TLS_1p3 GPV.TLS_1p3;
+  fold (LPS.eq_as_slprop GOV.offeredVersion GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3);
+  rewrite (LPS.eq_as_slprop GOV.offeredVersion GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3)
+      as (GOV.offeredVersion_vmatch GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3);
+  PPB.intro_vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
+    GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3;
   let sv_vclist = mk_singleton_vclist
-    #_ #_ #(PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
-    GPV.TLS_1p3 #GPV.TLS_1p3;
+    #_ #_ #(PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
+    GOV.Offered_TLS_1p3 #GOV.Offered_TLS_1p3;
   lemma_ch_sv_ext_conv ();
-  intro_vmatch_extCH_sv sv_vclist ([GPV.TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid) #ch_sv_high;
+  intro_vmatch_extCH_sv sv_vclist ([GOV.Offered_TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid) #ch_sv_high;
   let sv_elem_low : GECH.extensionClientHello_low = GECH.Extension_data_supported_versions_low sv_vclist;
   rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
              (GECH.Extension_data_supported_versions_low sv_vclist) ch_sv_high)

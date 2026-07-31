@@ -41,6 +41,7 @@ module GKSCH = TLS13.Wire.Generated.KeyShareClientHello
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSHBody = TLS13.Wire.Generated.ServerHelloBody
@@ -153,7 +154,7 @@ let ch_ks_high (ks: B.bytes { Seq.length ks == 32 })
 
 noextract
 let ch_sv_high : GECH.extensionClientHello
-  = GECH.Extension_data_supported_versions ([GPV.TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
+  = GECH.Extension_data_supported_versions ([GOV.Offered_TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
 #pop-options
 
 (* ---- canonical ClientHello record ---- *)

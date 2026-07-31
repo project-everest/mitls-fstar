@@ -332,7 +332,8 @@ exact list.  What a ClientHello must satisfy today:
 | ~~a `server_name` (SNI) extension is present~~ | **CLOSED** -- SNI is now optional |
 
 `supported_groups` is tolerant, TLS 1.2 legacy suites in the list are tolerated,
-GREASE values and unknown extensions parse as `Unknown_*`, and
+GREASE values (including in `supported_versions`, see below) and unknown
+extensions parse as `Unknown_*`, and
 middlebox-compatibility mode is required (Gap A).  Measured: a completely
 unpinned `curl` and a completely unpinned `openssl s_client` both handshake and
 get `HTTP/1.1 200`.
@@ -453,6 +454,45 @@ closing the connection rather than by a `decode_error` / `handshake_failure`
 alert.  That is fail-closed and safe, but it makes misconfiguration hard to
 diagnose.  Emitting an alert requires producing a record from a state where no
 connection has been established yet, so it is a non-trivial proof change.
+
+### GREASE in `supported_versions` (why Chrome/Edge failed but Firefox worked)
+
+RFC 8701 (GREASE) has clients advertise reserved `0x?A?A` values in several
+ClientHello fields so that servers stay tolerant of future extensions.  Chrome
+and Edge put a GREASE value **first** in the `supported_versions` extension;
+Firefox does not GREASE that particular field -- which is exactly why Firefox
+handshook with the verified backend and Chrome/Edge did not.
+
+Root cause: in `tls.qd.rfc`, `CipherSuite` is declared `enum /*@open*/` (unknown
+values round-trip as `Unknown_cipherSuite`) but `ProtocolVersion` was a **closed**
+enum.  A GREASE entry therefore failed to parse, which failed the whole
+ClientHello parse, and the connection was dropped.  Isolated with a synthetic
+269-byte ClientHello whose only Chrome-specific feature was the GREASE version.
+
+Fix: a **new open enum `OfferedVersion`**, used *only* by
+`SupportedVersionsClientHello.versions`:
+
+```
+enum /*@open*/ { Offered_TLS_1p2(0x0303), Offered_TLS_1p3(0x0304), (0xFFFF) }
+  OfferedVersion;
+```
+
+`ProtocolVersion` deliberately stays **closed**, because its remaining uses
+(`legacy_version`, which must be 0x0303, and the ServerHello `selected_version`,
+which must be 0x0304) are single fixed-value fields where strictness is correct.
+Opening `ProtocolVersion` instead would have rippled through ~100 references in
+12 files, including every `legacy_record_version` match in `TLS13.Wire.Spec`.
+This matches RFC 8446 4.2.1, which requires the server to ignore versions it does
+not recognise in the client's offered list.
+
+The change is confined to the QuackyDucky source, the two regenerated modules
+(plus the new `TLS13.Wire.Generated.OfferedVersion`), and a mechanical
+`GPV.TLS_1p3` -> `GOV.Offered_TLS_1p3` propagation through the spec-level
+`ch_extensions` scan, the ClientHello parser's `scan_ch_supported_versions`, and
+the client-side ClientHello serializer.  Measured after the fix: a full
+Chrome-like 1771-byte ClientHello (GREASE in cipher suites, groups, key shares,
+extensions *and* versions, plus an `X25519MLKEM768` key share, ALPS, ECH GREASE
+and certificate compression) gets a ServerHello.
 
 ### Status
 

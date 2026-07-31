@@ -17,6 +17,7 @@ module GSS = TLS13.Wire.Generated.SignatureScheme
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GSH = TLS13.Wire.Generated.ServerHello
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSHBody = TLS13.Wire.Generated.ServerHelloBody
 module GCS = TLS13.Wire.Generated.CipherSuite
@@ -301,7 +302,7 @@ let rec ch_extensions
                else None
              | None -> None)
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl
        then ch_extensions tl server_name key_share true signature_schemes
        else None
      | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
@@ -380,9 +381,10 @@ let rec lemma_connect_sn
              | Some raw -> if B.length raw = 32 then lemma_connect_sn tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl then lemma_connect_sn tl sn ks true ss else ()
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_sn tl sn ks true ss else ()
      | _ -> lemma_connect_sn tl sn ks sv ss)
 
+#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
 let rec lemma_connect_ks
   (l:list GECH.extensionClientHello)
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
@@ -413,8 +415,10 @@ let rec lemma_connect_ks
              | Some raw -> if B.length raw = 32 then lemma_connect_ks tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl then lemma_connect_ks tl sn ks true ss else ()
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_ks tl sn ks true ss else ()
      | _ -> lemma_connect_ks tl sn ks sv ss)
+
+#pop-options
 
 let rec lemma_connect_sa
   (l:list GECH.extensionClientHello)
@@ -446,7 +450,7 @@ let rec lemma_connect_sa
              | Some raw -> if B.length raw = 32 then lemma_connect_sa tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl then lemma_connect_sa tl sn ks true ss else ()
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_sa tl sn ks true ss else ()
      | _ -> lemma_connect_sa tl sn ks sv ss)
 
 // The total byte size of a certificate chain (sum of the raw DER blob lengths),

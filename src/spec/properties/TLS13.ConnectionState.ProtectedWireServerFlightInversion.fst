@@ -222,7 +222,7 @@ let lemma_ch_serialize_agree
 (* Some?; every other clause leaves both fields untouched.             *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 300"
 let lemma_step_preserves_secrets
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma

@@ -76,6 +76,7 @@ module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GKSSH = TLS13.Wire.Generated.KeyShareServerHello
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GSV = TLS13.Wire.Generated.SupportedVersionsServerHello
 module GKSEKE = TLS13.Wire.Generated.KeyShareEntry_key_exchange
@@ -777,7 +778,7 @@ let lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
 let lemma_ch_extensions_cons_sv svl tl sn ks sv ss
   : Lemma (ensures WS.ch_extensions
              (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
-             (if List.Tot.mem GPV.TLS_1p3 svl
+             (if List.Tot.mem GOV.Offered_TLS_1p3 svl
               then WS.ch_extensions tl sn ks true ss
               else None))
   = WS.lemma_ch_extensions_cons_sv svl tl sn ks sv ss
@@ -1002,6 +1003,12 @@ let lemma_cipher_suite_conv_eq (m:GCS.cipherSuite_mid) (h:GCS.cipherSuite)
 let lemma_protocolVersion_conv_eq (m:GPV.protocolVersion_mid) (h:GPV.protocolVersion)
   : Lemma
     (requires GPV.protocolVersion_conv m == Some h)
+    (ensures m == h)
+  = ()
+
+let lemma_offeredVersion_conv_eq (m:GOV.offeredVersion_mid) (h:GOV.offeredVersion)
+  : Lemma
+    (requires GOV.offeredVersion_conv m == Some h)
     (ensures m == h)
   = ()
 
@@ -1644,8 +1651,8 @@ let lemma_extCH_sv_data_conv
     (requires GECH.extensionClientHello_conv
                 (GECH.Extension_data_supported_versions_mid cm) == Some h)
     (ensures GECH.Extension_data_supported_versions? h /\
-             (GECH.Extension_data_supported_versions?._0 h <: list GPV.protocolVersion) ==
-             (cm <: list GPV.protocolVersion))
+             (GECH.Extension_data_supported_versions?._0 h <: list GOV.offeredVersion) ==
+             (cm <: list GOV.offeredVersion))
   = ()
 
 let lemma_extCH_sa_iff
@@ -1942,10 +1949,10 @@ fn elim_vmatch_extCH_sv
            pure (elem == GECH.Extension_data_supported_versions_low v0)
   ensures exists* (cm: GSVCH.supportedVersionsClientHello_mid).
            PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm **
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm **
            pure (GECH.Extension_data_supported_versions? h /\
-                 (GECH.Extension_data_supported_versions?._0 h <: list GPV.protocolVersion) ==
-                 (cm <: list GPV.protocolVersion) /\
+                 (GECH.Extension_data_supported_versions?._0 h <: list GOV.offeredVersion) ==
+                 (cm <: list GOV.offeredVersion) /\
                  GECH.extensionClientHello_conv
                    (GECH.Extension_data_supported_versions_mid cm) == Some h)
 {
@@ -1964,7 +1971,7 @@ fn elim_vmatch_extCH_sv
             (GECH.Extension_data_supported_versions_mid cm0));
   rewrite (GECH.extensionClientHello_extension_data_supported_versions_vmatch v0 cm0)
       as (PPVCL.vmatch_vclist
-            (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm0);
+            (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm0);
   lemma_extCH_sv_data_conv cm0 h;
 }
 
@@ -1974,14 +1981,14 @@ fn intro_vmatch_extCH_sv
   (cm: GSVCH.supportedVersionsClientHello_mid)
   (#h: GECH.extensionClientHello)
   requires PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm **
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm **
            pure (GECH.extensionClientHello_conv
                    (GECH.Extension_data_supported_versions_mid cm) == Some h)
   ensures PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
             (GECH.Extension_data_supported_versions_low v0) h
 {
   rewrite (PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm)
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm)
       as (GECH.extensionClientHello_extension_data_supported_versions_vmatch v0 cm);
   fold (GECH.extensionClientHello_vmatch
           (GECH.Extension_data_supported_versions_low v0)
@@ -3945,37 +3952,37 @@ fn scan_ch_supported_versions
   (v0: GSVCH.supportedVersionsClientHello_lowtype)
   (#cm: Ghost.erased GSVCH.supportedVersionsClientHello_mid)
   requires PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
              v0 cm
   returns found: bool
   ensures PPVCL.vmatch_vclist
-            (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+            (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
             v0 cm **
-          pure (found <==> FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm))
+          pure (found <==> FStar.List.Tot.mem GOV.Offered_TLS_1p3 (Ghost.reveal cm))
 {
   match v0 {
     None -> {
       unfold (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 None cm);
       fold (PPVCL.vmatch_vclist
-              (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+              (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
               None cm);
       rewrite (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 None cm)
           as (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 v0 cm);
       false
     }
     Some nv -> {
       unfold (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 (Some nv) cm);
       with s. assert (V.pts_to (snd nv) s **
                       SM.seq_list_match s cm
-                        (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv));
+                        (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv));
       V.pts_to_len (snd nv);
       let count = fst nv;
       let mut i = 0sz;
@@ -3991,15 +3998,15 @@ fn scan_ch_supported_versions
         R.pts_to found_ref f **
         V.pts_to (snd nv) s **
         SM.seq_list_match s cm
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) **
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) **
         pure (
           SZ.v iv <= SZ.v count /\
           SZ.v count == FStar.List.Tot.length (Ghost.reveal cm) /\
           Seq.length s == FStar.List.Tot.length (Ghost.reveal cm) /\
           V.is_full_vec (snd nv) /\
-          (f ==> FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm)) /\
-          ((not f) ==> (FStar.List.Tot.mem GPV.TLS_1p3 (Ghost.reveal cm) <==>
-                        FStar.List.Tot.mem GPV.TLS_1p3
+          (f ==> FStar.List.Tot.mem GOV.Offered_TLS_1p3 (Ghost.reveal cm)) /\
+          ((not f) ==> (FStar.List.Tot.mem GOV.Offered_TLS_1p3 (Ghost.reveal cm) <==>
+                        FStar.List.Tot.mem GOV.Offered_TLS_1p3
                           (RV.list_drop (SZ.v iv) (Ghost.reveal cm)))))
       decreases %[(if !found_ref then 0 else 1); (SZ.v count - SZ.v (!i))]
       {
@@ -4007,42 +4014,42 @@ fn scan_ch_supported_versions
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
         let el = V.op_Array_Access (snd nv) iv;
         SMU.seq_list_match_index_trade
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
           s (Ghost.reveal cm) (SZ.v iv);
         Trade.rewrite_with_trade
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              (Seq.index s (SZ.v iv)) (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)));
         Trade.trans
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              (Seq.index s (SZ.v iv)) (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
           (SM.seq_list_match s (Ghost.reveal cm)
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv));
-        PPB.elim_vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv));
+        PPB.elim_vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
           el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
-        with sq. assert (GPV.protocolVersion_vmatch el sq **
-                         pure (GPV.protocolVersion_conv sq ==
+        with sq. assert (GOV.offeredVersion_vmatch el sq **
+                         pure (GOV.offeredVersion_conv sq ==
                                Some (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv))));
-        rewrite (GPV.protocolVersion_vmatch el sq)
-            as (LPS.eq_as_slprop GPV.protocolVersion el sq);
-        unfold (LPS.eq_as_slprop GPV.protocolVersion el sq);
-        lemma_protocolVersion_conv_eq sq (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
+        rewrite (GOV.offeredVersion_vmatch el sq)
+            as (LPS.eq_as_slprop GOV.offeredVersion el sq);
+        unfold (LPS.eq_as_slprop GOV.offeredVersion el sq);
+        lemma_offeredVersion_conv_eq sq (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
         assert (pure (el == FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)));
-        fold (LPS.eq_as_slprop GPV.protocolVersion el sq);
-        rewrite (LPS.eq_as_slprop GPV.protocolVersion el sq)
-            as (GPV.protocolVersion_vmatch el sq);
-        PPB.intro_vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+        fold (LPS.eq_as_slprop GOV.offeredVersion el sq);
+        rewrite (LPS.eq_as_slprop GOV.offeredVersion el sq)
+            as (GOV.offeredVersion_vmatch el sq);
+        PPB.intro_vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
           el sq (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv));
         Trade.elim
-          (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
+          (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
              el (FStar.List.Tot.index (Ghost.reveal cm) (SZ.v iv)))
           (SM.seq_list_match s (Ghost.reveal cm)
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv));
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv));
         RV.lemma_list_drop_index (Ghost.reveal cm) (SZ.v iv);
-        if (GPV.TLS_1p3? el) {
+        if (GOV.Offered_TLS_1p3? el) {
           found_ref := true;
         } else {
           SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
@@ -4054,13 +4061,13 @@ fn scan_ch_supported_versions
       RV.lemma_list_drop_length (Ghost.reveal cm);
       assert (pure ((not f) ==> SZ.v iv == FStar.List.Tot.length (Ghost.reveal cm)));
       fold (PPVCL.vmatch_vclist
-              (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+              (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
               (Some nv) cm);
       rewrite (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 (Some nv) cm)
           as (PPVCL.vmatch_vclist
-                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                 v0 cm);
       f
     }
@@ -4628,7 +4635,7 @@ fn scan_ch_extensions
           let v = GECH.Extension_data_supported_versions_low?._0 el;
           elim_vmatch_extCH_sv v el #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
           with cm_sv. assert (PPVCL.vmatch_vclist
-                                (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
+                                (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
                                 v cm_sv);
           RV.lemma_reveal_ch_extensions_cons_sv
             (GECH.Extension_data_supported_versions?._0

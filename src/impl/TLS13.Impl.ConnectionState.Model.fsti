@@ -41,6 +41,7 @@ module GFin = TLS13.Wire.Generated.Finished
 module U8 = FStar.UInt8
 module LL = FStar.List.Tot
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GHN = TLS13.Wire.Generated.HostName
 module GSN = TLS13.Wire.Generated.ServerName
 module GSNL = TLS13.Wire.Generated.ServerNameList
@@ -303,7 +304,7 @@ let cho_ks_ext (ks: B.bytes { Seq.length ks == 32 })
 
 noextract
 let cho_sv_ext : GECH.extensionClientHello
-  = GECH.Extension_data_supported_versions ([GPV.TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
+  = GECH.Extension_data_supported_versions ([GOV.Offered_TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
 
 noextract
 let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
