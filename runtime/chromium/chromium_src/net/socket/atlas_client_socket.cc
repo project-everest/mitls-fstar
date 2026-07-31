@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "net/socket/verified_mitls_client_socket.h"
+#include "net/socket/atlas_client_socket.h"
 
 #include <ctime>
 #include <string>
@@ -25,7 +25,7 @@
 #include "net/socket/socket_tag.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "third_party/boringssl/src/pki/parse_certificate.h"
-#include "third_party/mitls/tls13_client_socket.h"
+#include "third_party/atlas/tls13_client_socket.h"
 
 namespace net {
 namespace {
@@ -34,15 +34,15 @@ constexpr uint16_t kTls13ChaCha20Poly1305Sha256 = 0x1303;
 constexpr uint16_t kX25519 = 29;
 constexpr uint16_t kRsaPssRsaeSha256 = 0x0804;
 
-constexpr auto kVerifiedMiTlsTrafficAnnotation =
-    DefineNetworkTrafficAnnotation("verified_mitls_socket", R"(
+constexpr auto kAtlasTrafficAnnotation =
+    DefineNetworkTrafficAnnotation("atlas_socket", R"(
       semantics {
-        sender: "Verified miTLS TLS 1.3 client"
+        sender: "ATLAS TLS 1.3 client"
         description:
-          "Carries HTTPS requests made by Chromium through the verified miTLS "
+          "Carries HTTPS requests made by Chromium through the ATLAS "
           "TLS provider."
         trigger:
-          "A Chromium HTTPS request while --use-verified-mitls is enabled."
+          "A Chromium HTTPS request while --use-atlas is enabled."
         data:
           "Encrypted HTTPS request and response data. The destination and "
           "content depend on the invoking Chromium feature."
@@ -62,7 +62,7 @@ constexpr auto kVerifiedMiTlsTrafficAnnotation =
         cookies_store: "user"
         setting:
           "This experimental provider is enabled only by the "
-          "--use-verified-mitls command-line switch."
+          "--use-atlas command-line switch."
         policy_exception_justification:
           "Experimental command-line-only TLS provider."
       })");
@@ -71,13 +71,13 @@ int ToPortableTransportResult(int result) {
   if (result > 0) {
     return result;
   }
-  return mitls::chromium::kErrorConnectionClosed;
+  return atlas::chromium::kErrorConnectionClosed;
 }
 
 }  // namespace
 
-class VerifiedMiTlsClientSocket::TransportAdapter final
-    : public mitls::chromium::StreamSocket {
+class AtlasClientSocket::TransportAdapter final
+    : public atlas::chromium::StreamSocket {
  public:
   explicit TransportAdapter(std::unique_ptr<net::StreamSocket> socket)
       : socket_(std::move(socket)) {}
@@ -86,7 +86,7 @@ class VerifiedMiTlsClientSocket::TransportAdapter final
 
   int Read(uint8_t* output,
            size_t output_capacity,
-           mitls::chromium::CompletionCallback callback) override {
+           atlas::chromium::CompletionCallback callback) override {
     CHECK(!read_buffer_);
     CHECK(output);
     CHECK_GT(output_capacity, 0u);
@@ -97,14 +97,14 @@ class VerifiedMiTlsClientSocket::TransportAdapter final
         base::BindOnce(&TransportAdapter::OnReadComplete,
                        weak_factory_.GetWeakPtr(), std::move(callback)));
     if (result == ERR_IO_PENDING) {
-      return mitls::chromium::kIoPending;
+      return atlas::chromium::kIoPending;
     }
     return CompleteRead(result);
   }
 
   int Write(const uint8_t* input,
             size_t input_len,
-            mitls::chromium::CompletionCallback callback) override {
+            atlas::chromium::CompletionCallback callback) override {
     CHECK(!write_buffer_);
     CHECK(input);
     CHECK_GT(input_len, 0u);
@@ -115,9 +115,9 @@ class VerifiedMiTlsClientSocket::TransportAdapter final
         write_buffer_.get(), static_cast<int>(input_len),
         base::BindOnce(&TransportAdapter::OnWriteComplete,
                        weak_factory_.GetWeakPtr(), std::move(callback)),
-        kVerifiedMiTlsTrafficAnnotation);
+        kAtlasTrafficAnnotation);
     if (result == ERR_IO_PENDING) {
-      return mitls::chromium::kIoPending;
+      return atlas::chromium::kIoPending;
     }
     return CompleteWrite(result);
   }
@@ -157,12 +157,12 @@ class VerifiedMiTlsClientSocket::TransportAdapter final
     return ToPortableTransportResult(result);
   }
 
-  void OnReadComplete(mitls::chromium::CompletionCallback callback,
+  void OnReadComplete(atlas::chromium::CompletionCallback callback,
                       int result) {
     std::move(callback)(CompleteRead(result));
   }
 
-  void OnWriteComplete(mitls::chromium::CompletionCallback callback,
+  void OnWriteComplete(atlas::chromium::CompletionCallback callback,
                        int result) {
     std::move(callback)(CompleteWrite(result));
   }
@@ -175,8 +175,8 @@ class VerifiedMiTlsClientSocket::TransportAdapter final
   base::WeakPtrFactory<TransportAdapter> weak_factory_{this};
 };
 
-class VerifiedMiTlsClientSocket::Authenticator final
-    : public mitls::chromium::ServerAuthenticator {
+class AtlasClientSocket::Authenticator final
+    : public atlas::chromium::ServerAuthenticator {
  public:
   Authenticator(SSLClientContext* context,
                 const SSLConfig& ssl_config,
@@ -187,9 +187,9 @@ class VerifiedMiTlsClientSocket::Authenticator final
 
   int VerifyCertificateChain(
       const std::string& hostname,
-      const mitls::chromium::CertificateChain& chain,
+      const atlas::chromium::CertificateChain& chain,
       uint64_t validation_time_seconds,
-      mitls::chromium::CompletionCallback callback) override {
+      atlas::chromium::CompletionCallback callback) override {
     CHECK(!request_);
     std::vector<std::string_view> der_chain;
     der_chain.reserve(chain.der_certificates.size());
@@ -201,7 +201,7 @@ class VerifiedMiTlsClientSocket::Authenticator final
     unverified_cert_ = X509Certificate::CreateFromDERCertChain(der_chain);
     if (!unverified_cert_ || !ExtractPublicKey()) {
       last_error_ = ERR_SSL_SERVER_CERT_BAD_FORMAT;
-      return mitls::chromium::kErrorCertificate;
+      return atlas::chromium::kErrorCertificate;
     }
     int result = context_->cert_verifier()->Verify(
         CertVerifier::RequestParams(unverified_cert_, hostname,
@@ -211,7 +211,7 @@ class VerifiedMiTlsClientSocket::Authenticator final
                        weak_factory_.GetWeakPtr(), std::move(callback)),
         &request_, net_log_);
     if (result == ERR_IO_PENDING) {
-      return mitls::chromium::kIoPending;
+      return atlas::chromium::kIoPending;
     }
     return MapVerifyResult(result);
   }
@@ -296,27 +296,27 @@ class VerifiedMiTlsClientSocket::Authenticator final
   int MapVerifyResult(int result) {
     request_.reset();
     if (result == OK) {
-      return mitls::chromium::kSuccess;
+      return atlas::chromium::kSuccess;
     }
 
     if (ssl_config_.ignore_certificate_errors) {
       if (!verify_result_.verified_cert) {
         verify_result_.verified_cert = unverified_cert_;
       }
-      return mitls::chromium::kSuccess;
+      return atlas::chromium::kSuccess;
     }
     CertStatus allowed_status = 0;
     if (ssl_config_.IsAllowedBadCert(unverified_cert_.get(), &allowed_status)) {
       verify_result_.Reset();
       verify_result_.cert_status = allowed_status;
       verify_result_.verified_cert = unverified_cert_;
-      return mitls::chromium::kSuccess;
+      return atlas::chromium::kSuccess;
     }
     last_error_ = result;
-    return mitls::chromium::kErrorCertificate;
+    return atlas::chromium::kErrorCertificate;
   }
 
-  void OnVerifyComplete(mitls::chromium::CompletionCallback callback,
+  void OnVerifyComplete(atlas::chromium::CompletionCallback callback,
                         int result) {
     std::move(callback)(MapVerifyResult(result));
   }
@@ -332,7 +332,7 @@ class VerifiedMiTlsClientSocket::Authenticator final
   base::WeakPtrFactory<Authenticator> weak_factory_{this};
 };
 
-VerifiedMiTlsClientSocket::VerifiedMiTlsClientSocket(
+AtlasClientSocket::AtlasClientSocket(
     SSLClientContext* context,
     std::unique_ptr<StreamSocket> stream_socket,
     const HostPortPair& host_and_port,
@@ -354,39 +354,39 @@ VerifiedMiTlsClientSocket::VerifiedMiTlsClientSocket(
   auto authenticator = std::make_unique<Authenticator>(
       context, ssl_config, transport_adapter_->socket()->NetLog());
   authenticator_ = authenticator.get();
-  std::unique_ptr<mitls::chromium::ServerAuthenticator> base_authenticator =
+  std::unique_ptr<atlas::chromium::ServerAuthenticator> base_authenticator =
       std::move(authenticator);
 
-  mitls::chromium::ClientSocketConfig config;
+  atlas::chromium::ClientSocketConfig config;
   config.hostname = host_and_port.host();
   config.validation_time_seconds = static_cast<uint64_t>(std::time(nullptr));
-  core_ = std::make_unique<mitls::chromium::Tls13ClientSocket>(
+  core_ = std::make_unique<atlas::chromium::Tls13ClientSocket>(
       std::move(transport), std::move(base_authenticator), std::move(config));
 }
 
-VerifiedMiTlsClientSocket::~VerifiedMiTlsClientSocket() {
+AtlasClientSocket::~AtlasClientSocket() {
   Disconnect();
 }
 
-std::vector<uint8_t> VerifiedMiTlsClientSocket::GetECHRetryConfigs() {
+std::vector<uint8_t> AtlasClientSocket::GetECHRetryConfigs() {
   return {};
 }
 
 std::vector<std::vector<uint8_t>>
-VerifiedMiTlsClientSocket::GetServerTrustAnchorIDs() {
+AtlasClientSocket::GetServerTrustAnchorIDs() {
   return {};
 }
 
-int VerifiedMiTlsClientSocket::ExportKeyingMaterial(
+int AtlasClientSocket::ExportKeyingMaterial(
     std::string_view label,
     std::optional<base::span<const uint8_t>> context,
     base::span<uint8_t> out) {
   return ERR_NOT_IMPLEMENTED;
 }
 
-int VerifiedMiTlsClientSocket::Connect(CompletionOnceCallback callback) {
+int AtlasClientSocket::Connect(CompletionOnceCallback callback) {
   if (initialization_error_ != OK) {
-    LOG(ERROR) << "Verified miTLS socket initialization failed: "
+    LOG(ERROR) << "ATLAS socket initialization failed: "
                << initialization_error_;
     return initialization_error_;
   }
@@ -399,7 +399,7 @@ int VerifiedMiTlsClientSocket::Connect(CompletionOnceCallback callback) {
       });
   int mapped = MapCoreResult(result);
   if (mapped != OK && mapped != ERR_IO_PENDING) {
-    LOG(ERROR) << "Verified miTLS synchronous connect failed: " << mapped;
+    LOG(ERROR) << "ATLAS synchronous connect failed: " << mapped;
   }
   if (mapped == ERR_IO_PENDING) {
     connect_callback_ = std::move(callback);
@@ -407,7 +407,7 @@ int VerifiedMiTlsClientSocket::Connect(CompletionOnceCallback callback) {
   return mapped;
 }
 
-void VerifiedMiTlsClientSocket::Disconnect() {
+void AtlasClientSocket::Disconnect() {
   if (disconnected_) {
     return;
   }
@@ -422,47 +422,47 @@ void VerifiedMiTlsClientSocket::Disconnect() {
   }
 }
 
-int VerifiedMiTlsClientSocket::ConfirmHandshake(
+int AtlasClientSocket::ConfirmHandshake(
     CompletionOnceCallback callback) {
   return IsConnected() ? OK : ERR_SOCKET_NOT_CONNECTED;
 }
 
-bool VerifiedMiTlsClientSocket::IsConnected() const {
+bool AtlasClientSocket::IsConnected() const {
   return !disconnected_ && core_->IsConnected() &&
          transport_adapter_->socket()->IsConnected();
 }
 
-bool VerifiedMiTlsClientSocket::IsConnectedAndIdle() const {
+bool AtlasClientSocket::IsConnectedAndIdle() const {
   return IsConnected() && core_->IsIdle() &&
          transport_adapter_->socket()->IsConnectedAndIdle();
 }
 
-int VerifiedMiTlsClientSocket::GetPeerAddress(IPEndPoint* address) const {
+int AtlasClientSocket::GetPeerAddress(IPEndPoint* address) const {
   return transport_adapter_->socket()->GetPeerAddress(address);
 }
 
-int VerifiedMiTlsClientSocket::GetLocalAddress(IPEndPoint* address) const {
+int AtlasClientSocket::GetLocalAddress(IPEndPoint* address) const {
   return transport_adapter_->socket()->GetLocalAddress(address);
 }
 
-const NetLogWithSource& VerifiedMiTlsClientSocket::NetLog() const {
+const NetLogWithSource& AtlasClientSocket::NetLog() const {
   return transport_adapter_->socket()->NetLog();
 }
 
-bool VerifiedMiTlsClientSocket::WasEverUsed() const {
+bool AtlasClientSocket::WasEverUsed() const {
   return was_ever_used_;
 }
 
-NextProto VerifiedMiTlsClientSocket::GetNegotiatedProtocol() const {
+NextProto AtlasClientSocket::GetNegotiatedProtocol() const {
   return NextProto::kProtoUnknown;
 }
 
 std::optional<std::string_view>
-VerifiedMiTlsClientSocket::GetPeerApplicationSettings() const {
+AtlasClientSocket::GetPeerApplicationSettings() const {
   return std::nullopt;
 }
 
-bool VerifiedMiTlsClientSocket::GetSSLInfo(SSLInfo* ssl_info) {
+bool AtlasClientSocket::GetSSLInfo(SSLInfo* ssl_info) {
   if (!authenticator_->has_certificate()) {
     return false;
   }
@@ -470,15 +470,15 @@ bool VerifiedMiTlsClientSocket::GetSSLInfo(SSLInfo* ssl_info) {
   return true;
 }
 
-int64_t VerifiedMiTlsClientSocket::GetTotalReceivedBytes() const {
+int64_t AtlasClientSocket::GetTotalReceivedBytes() const {
   return transport_adapter_->socket()->GetTotalReceivedBytes();
 }
 
-void VerifiedMiTlsClientSocket::ApplySocketTag(const SocketTag& tag) {
+void AtlasClientSocket::ApplySocketTag(const SocketTag& tag) {
   transport_adapter_->socket()->ApplySocketTag(tag);
 }
 
-int VerifiedMiTlsClientSocket::Read(IOBuffer* buf,
+int AtlasClientSocket::Read(IOBuffer* buf,
                                     int buf_len,
                                     CompletionOnceCallback callback) {
   if (buf_len <= 0) {
@@ -508,7 +508,7 @@ int VerifiedMiTlsClientSocket::Read(IOBuffer* buf,
   return mapped;
 }
 
-int VerifiedMiTlsClientSocket::Write(
+int AtlasClientSocket::Write(
     IOBuffer* buf,
     int buf_len,
     CompletionOnceCallback callback,
@@ -540,54 +540,54 @@ int VerifiedMiTlsClientSocket::Write(
   return mapped;
 }
 
-int VerifiedMiTlsClientSocket::SetReceiveBufferSize(int32_t size) {
+int AtlasClientSocket::SetReceiveBufferSize(int32_t size) {
   return transport_adapter_->socket()->SetReceiveBufferSize(size);
 }
 
-int VerifiedMiTlsClientSocket::SetSendBufferSize(int32_t size) {
+int AtlasClientSocket::SetSendBufferSize(int32_t size) {
   return transport_adapter_->socket()->SetSendBufferSize(size);
 }
 
-int VerifiedMiTlsClientSocket::MapCoreResult(int result) const {
+int AtlasClientSocket::MapCoreResult(int result) const {
   if (result >= 0) {
     return result;
   }
   switch (result) {
-    case mitls::chromium::kIoPending:
+    case atlas::chromium::kIoPending:
       return ERR_IO_PENDING;
-    case mitls::chromium::kErrorInvalidArgument:
+    case atlas::chromium::kErrorInvalidArgument:
       return ERR_INVALID_ARGUMENT;
-    case mitls::chromium::kErrorInvalidState:
-    case mitls::chromium::kErrorOperationPending:
+    case atlas::chromium::kErrorInvalidState:
+    case atlas::chromium::kErrorOperationPending:
       return ERR_UNEXPECTED;
-    case mitls::chromium::kErrorCertificate:
+    case atlas::chromium::kErrorCertificate:
       return authenticator_->last_error() == OK
                  ? ERR_CERT_INVALID
                  : authenticator_->last_error();
-    case mitls::chromium::kErrorConnectionClosed:
+    case atlas::chromium::kErrorConnectionClosed:
       return transport_adapter_->last_error() == OK
                  ? ERR_CONNECTION_CLOSED
                  : transport_adapter_->last_error();
-    case mitls::chromium::kErrorProtocol:
-    case mitls::chromium::kErrorFailed:
+    case atlas::chromium::kErrorProtocol:
+    case atlas::chromium::kErrorFailed:
     default:
       return ERR_SSL_PROTOCOL_ERROR;
   }
 }
 
-void VerifiedMiTlsClientSocket::OnConnectComplete(int result) {
+void AtlasClientSocket::OnConnectComplete(int result) {
   if (!connect_callback_) {
     return;
   }
   int mapped = MapCoreResult(result);
   if (mapped != OK) {
-    LOG(ERROR) << "Verified miTLS asynchronous connect failed: " << mapped
+    LOG(ERROR) << "ATLAS asynchronous connect failed: " << mapped
                << " (core result " << result << ")";
   }
   std::move(connect_callback_).Run(mapped);
 }
 
-void VerifiedMiTlsClientSocket::OnReadComplete(int result) {
+void AtlasClientSocket::OnReadComplete(int result) {
   if (!read_callback_) {
     return;
   }
@@ -599,7 +599,7 @@ void VerifiedMiTlsClientSocket::OnReadComplete(int result) {
   std::move(read_callback_).Run(mapped);
 }
 
-void VerifiedMiTlsClientSocket::OnWriteComplete(int result) {
+void AtlasClientSocket::OnWriteComplete(int result) {
   if (!write_callback_) {
     return;
   }

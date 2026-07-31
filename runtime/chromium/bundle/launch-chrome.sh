@@ -3,16 +3,27 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="local"
-if [[ "${1:-}" == "--public" ]]; then
-  MODE="public"
-  shift
-fi
-URL="${1:?usage: launch-chrome.sh [--public] URL [CHROMIUM_ARGUMENT ...]}"
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --public)
+      MODE="public"
+      shift
+      ;;
+    --trace)
+      export ATLAS_TRACE_FILE="${2:?--trace requires an output file}"
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+URL="${1:?usage: launch-chrome.sh [--public] [--trace FILE] URL [CHROMIUM_ARGUMENT ...]}"
 shift
 
 "$ROOT/check-deps.sh"
 
-PROFILE="${MITLS_CHROME_PROFILE:-${XDG_CACHE_HOME:-$HOME/.cache}/mitls-chromium-demo-profile}"
+PROFILE="${ATLAS_CHROME_PROFILE:-${XDG_CACHE_HOME:-$HOME/.cache}/atlas-chromium-demo-profile}"
 mkdir -p "$PROFILE"
 
 declare -a mode_arguments
@@ -33,7 +44,7 @@ else
 fi
 
 exec "$ROOT/chromium/chrome" \
-  --use-verified-mitls \
+  --use-atlas \
   --no-sandbox \
   --disable-gpu \
   --disable-field-trial-config \

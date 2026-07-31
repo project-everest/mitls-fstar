@@ -6,7 +6,7 @@ TLS 1.3 client engine.
 ```text
 Chromium net::SSLClientSocket
   -> Chromium StreamSocket / CertVerifier bridge
-  -> mitls::chromium::Tls13ClientSocket
+  -> atlas::chromium::Tls13ClientSocket
   -> runtime/tls13_client_engine.h
   -> extracted TLS13.Impl.Client.Engine
 ```
@@ -55,15 +55,15 @@ make -j$(nproc) test-chromium-browser-public
 
 Override `CHROMIUM_SRC`, `DEPOT_TOOLS`, or `CHROMIUM_OUT` when using other
 locations. `chromium-install-provider` builds the static verified provider,
-copies it and the portable adapter into `third_party/mitls`, and installs the
+copies it and the portable adapter into `third_party/atlas`, and installs the
 repository-owned overlay in `runtime/chromium/chromium_src`.
 
-The overlay adds `VerifiedMiTlsClientSocket : net::SSLClientSocket` and selects
-it from Chromium's default `ClientSocketFactory` only when
-`--use-verified-mitls` is present. Selection is fail-closed: a provider failure
-is returned to Chromium and never falls back to `SSLClientSocketImpl`. The
-installer also forwards the opt-in switch to Chromium utility processes, where
-the out-of-process Network Service creates client sockets.
+The overlay adds `AtlasClientSocket : net::SSLClientSocket` and selects it from
+Chromium's default `ClientSocketFactory` only when `--use-atlas` is present.
+Selection is fail-closed: a provider failure is returned to Chromium and never
+falls back to `SSLClientSocketImpl`. The installer also forwards the opt-in
+switch to Chromium utility processes, where the out-of-process Network Service
+creates client sockets.
 
 The wrapper:
 
@@ -98,6 +98,37 @@ verified-provider selection diagnostic. These sites accept the current narrow
 TLS profile over HTTP/1.1, so ALPN is not required for their top-level pages.
 Unsupported third-party subresource origins still fail closed.
 
+## Verified-code tracing
+
+Build Chromium with compile-time ATLAS tracing enabled and run the controlled
+browser smoke:
+
+```sh
+make -j$(nproc) chromium-browser-logging
+make -j$(nproc) test-chromium-browser-logging
+```
+
+The smoke writes `_extract/atlas_chromium_trace.jsonl` and its analyzed summary
+to `_extract/atlas_chromium_trace.txt`. `ATLAS_TRACE_FILE` selects the JSONL
+destination; without it, trace records go to standard error. Each record carries
+a monotonic timestamp, process and thread IDs, a connection ID, a per-process
+sequence number, an event ID, and three metadata arguments. The trace covers
+verified client/server handshake dispatch, engine actions, record key
+installation, sequence changes, and seal/open outcomes. It never includes keys,
+IVs, secrets, certificate contents, plaintext, or payload bytes.
+
+Analyze or filter a trace with:
+
+```sh
+python3 runtime/analyze_atlas_trace.py TRACE.jsonl
+python3 runtime/analyze_atlas_trace.py TRACE.jsonl \
+  --connection CONNECTION_ID --timeline
+```
+
+Normal builds use `ATLAS_LOGGING=0`; the extracted call macro expands to
+`((void)0)` without evaluating its arguments. Logging and release objects and
+provider archives use separate build directories.
+
 ## Transferable Linux bundle
 
 Build and test the Linux x86_64 demonstration archive:
@@ -108,17 +139,21 @@ make -j$(nproc) test-chromium-demo-bundle
 ```
 
 The archive is written to
-`_extract/mitls-chromium-demo-linux-x86_64.tar.gz`. Transfer it to a compatible
+`_extract/atlas-chromium-demo-linux-x86_64.tar.gz`. Transfer it to a compatible
 Linux x86_64 machine, then run:
 
 ```sh
-tar xzf mitls-chromium-demo-linux-x86_64.tar.gz
-cd mitls-chromium-demo-linux-x86_64
+tar xzf atlas-chromium-demo-linux-x86_64.tar.gz
+cd atlas-chromium-demo-linux-x86_64
 ./run-demo.sh --headless
 ./run-demo.sh
 ./launch-chrome.sh --public https://www.google.com/
 ./launch-chrome.sh --public https://www.microsoft.com/
 ```
+
+For a trace-capable archive, run
+`make -j$(nproc) chromium-demo-bundle-logging`, then pass
+`--trace atlas-trace.jsonl` to `run-demo.sh` or `launch-chrome.sh`.
 
 The headless invocation is a self-test that requires both the expected HTTPS
 DOM and the verified-provider selection diagnostic. The visible invocation
@@ -132,7 +167,7 @@ directory. The bundle records source revisions, SHA-256 checksums, and
 build-host dynamic dependencies and checks destination dependencies before
 launch.
 
-The browser provider is statically linked into `chrome`; no miTLS shared
+The ATLAS provider is statically linked into `chrome`; no ATLAS shared
 library is required. The archive still relies on compatible Linux system
 libraries, including glibc and the libraries reported by `check-deps.sh`. It
 uses `--no-sandbox`, because a transferable archive cannot install Chromium's

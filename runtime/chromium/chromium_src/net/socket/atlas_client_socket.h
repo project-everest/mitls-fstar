@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef NET_SOCKET_VERIFIED_MITLS_CLIENT_SOCKET_H_
-#define NET_SOCKET_VERIFIED_MITLS_CLIENT_SOCKET_H_
+#ifndef NET_SOCKET_ATLAS_CLIENT_SOCKET_H_
+#define NET_SOCKET_ATLAS_CLIENT_SOCKET_H_
 
 #include <memory>
 #include <optional>
@@ -16,7 +16,7 @@
 #include "net/base/net_export.h"
 #include "net/socket/ssl_client_socket.h"
 
-namespace mitls::chromium {
+namespace atlas::chromium {
 class Tls13ClientSocket;
 }
 
@@ -28,21 +28,20 @@ class IOBuffer;
 class SSLClientContext;
 struct SSLConfig;
 
-// Chromium's SSLClientSocket facade over the transport-neutral verified miTLS
-// TLS 1.3 client engine. This initial integration profile is deliberately
+// Chromium's SSLClientSocket facade over the transport-neutral verified ATLAS
+// TLS 1.3 client engine. This integration profile is deliberately
 // limited to X25519, ChaCha20-Poly1305, RSA-PSS-SHA256, and HTTP/1.1.
-class NET_EXPORT_PRIVATE VerifiedMiTlsClientSocket final
+class NET_EXPORT_PRIVATE AtlasClientSocket final
     : public SSLClientSocket {
  public:
-  VerifiedMiTlsClientSocket(SSLClientContext* context,
-                            std::unique_ptr<StreamSocket> stream_socket,
-                            const HostPortPair& host_and_port,
-                            const SSLConfig& ssl_config);
-  ~VerifiedMiTlsClientSocket() override;
+  AtlasClientSocket(SSLClientContext* context,
+                    std::unique_ptr<StreamSocket> stream_socket,
+                    const HostPortPair& host_and_port,
+                    const SSLConfig& ssl_config);
+  ~AtlasClientSocket() override;
 
-  VerifiedMiTlsClientSocket(const VerifiedMiTlsClientSocket&) = delete;
-  VerifiedMiTlsClientSocket& operator=(const VerifiedMiTlsClientSocket&) =
-      delete;
+  AtlasClientSocket(const AtlasClientSocket&) = delete;
+  AtlasClientSocket& operator=(const AtlasClientSocket&) = delete;
 
   std::vector<uint8_t> GetECHRetryConfigs() override;
   std::vector<std::vector<uint8_t>> GetServerTrustAnchorIDs() override;
@@ -86,7 +85,7 @@ class NET_EXPORT_PRIVATE VerifiedMiTlsClientSocket final
   void OnReadComplete(int result);
   void OnWriteComplete(int result);
 
-  std::unique_ptr<mitls::chromium::Tls13ClientSocket> core_;
+  std::unique_ptr<atlas::chromium::Tls13ClientSocket> core_;
   raw_ptr<TransportAdapter> transport_adapter_;
   raw_ptr<Authenticator> authenticator_;
 
@@ -103,4 +102,4 @@ class NET_EXPORT_PRIVATE VerifiedMiTlsClientSocket final
 
 }  // namespace net
 
-#endif  // NET_SOCKET_VERIFIED_MITLS_CLIENT_SOCKET_H_
+#endif  // NET_SOCKET_ATLAS_CLIENT_SOCKET_H_

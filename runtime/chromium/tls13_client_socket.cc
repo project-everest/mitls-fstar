@@ -9,7 +9,7 @@
 #include <limits>
 #include <utility>
 
-namespace mitls::chromium {
+namespace atlas::chromium {
 namespace {
 
 constexpr size_t kNetworkInputCapacity = 65535u;
@@ -274,7 +274,7 @@ class Tls13ClientSocket::Impl {
     if (error != TLS13_CLIENT_ENGINE_SUCCESS) {
       fprintf(
           stderr,
-          "Verified miTLS engine call failed: operation=%s error=%d\n",
+          "ATLAS engine call failed: operation=%s error=%d\n",
           operation,
           error);
       return false;
@@ -283,7 +283,7 @@ class Tls13ClientSocket::Impl {
         result.application_out_len > application_out_buffer_.size()) {
       fprintf(
           stderr,
-          "Verified miTLS engine returned invalid lengths: "
+          "ATLAS engine returned invalid lengths: "
           "operation=%s network=%zu application=%zu\n",
           operation,
           result.network_out_len,
@@ -293,7 +293,7 @@ class Tls13ClientSocket::Impl {
     if (result.action == TLS13_CLIENT_ENGINE_FAILED) {
       fprintf(
           stderr,
-          "Verified miTLS engine rejected input: operation=%s "
+          "ATLAS engine rejected input: operation=%s "
           "previous_action=%d status=%d consumed=%zu buffered=%zu\n",
           operation,
           have_engine_result_ ? static_cast<int>(engine_result_.action) : -1,
@@ -946,4 +946,4 @@ uint16_t Tls13ClientSocket::peer_signature_scheme() const {
   return impl_->peer_signature_scheme();
 }
 
-}  // namespace mitls::chromium
+}  // namespace atlas::chromium

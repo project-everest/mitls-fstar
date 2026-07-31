@@ -1,7 +1,7 @@
-# Verified miTLS Chromium demo
+# Verified ATLAS Chromium demo
 
 This Linux x86_64 bundle contains a custom Chromium browser with the verified
-miTLS TLS 1.3 client linked into its Network Service and a small OpenSSL HTTPS
+ATLAS TLS 1.3 client linked into its Network Service and a small OpenSSL HTTPS
 server for the controlled demonstration.
 
 Run the automated headless demonstration:
@@ -24,9 +24,9 @@ Browse a public HTTPS origin with normal DNS and certificate enforcement:
 ```
 
 The scripts start the bundled server on an automatically selected localhost
-port and launch this bundle's Chromium binary with `--use-verified-mitls`.
+port and launch this bundle's Chromium binary with `--use-atlas`.
 Success requires the page to contain `verified chromium demo` and Chromium's
-diagnostics to report that the verified miTLS provider was selected.
+diagnostics to report that the ATLAS provider was selected.
 The controlled localhost mode forces software rendering and prevents DNS
 resolution for non-localhost names, avoiding destination-specific GPU drivers
 and unrelated browser background connections.
@@ -50,8 +50,21 @@ trusted sites in a controlled environment.
 
 If a run fails, `run-demo.sh` retains its temporary directory and prints its
 location. That directory contains `chromium.log`, `server.log`, and
-`netlog.json` for diagnosis. Set `MITLS_DEMO_KEEP_ARTIFACTS=1` to retain these
+`netlog.json` for diagnosis. Set `ATLAS_DEMO_KEEP_ARTIFACTS=1` to retain these
 files after a successful run as well.
+
+A logging-enabled bundle can capture verified handshake and record-layer
+metadata:
+
+```sh
+./run-demo.sh --headless --trace atlas-trace.jsonl
+./launch-chrome.sh --public --trace atlas-trace.jsonl https://www.google.com/
+./analyze-atlas-trace.py atlas-trace.jsonl --timeline
+```
+
+Trace records contain event tags, lengths, sequence numbers, status tags, and
+connection/process/thread correlation only. They do not contain secrets,
+plaintext, certificates, or payload bytes.
 
 `server/leaf.key` is a public, test-only private key. Never reuse it outside
 this demonstration.

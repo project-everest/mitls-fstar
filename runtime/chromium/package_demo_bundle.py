@@ -12,7 +12,7 @@ import tarfile
 import tempfile
 
 
-BUNDLE_NAME = "mitls-chromium-demo-linux-x86_64"
+BUNDLE_NAME = "atlas-chromium-demo-linux-x86_64"
 
 REQUIRED_CHROMIUM_FILES = (
     "chrome",
@@ -153,6 +153,11 @@ def package_bundle(args: argparse.Namespace) -> None:
             copy_file(bundle_sources / relative_path, root / relative_path)
         for relative_path in EXECUTABLE_BUNDLE_FILES:
             (root / relative_path).chmod(0o755)
+        copy_file(
+            args.trace_analyzer.resolve(),
+            root / "analyze-atlas-trace.py",
+        )
+        (root / "analyze-atlas-trace.py").chmod(0o755)
         (server_destination / "openssl_http_server").chmod(0o755)
         (chromium_destination / "chrome").chmod(0o755)
         (chromium_destination / "chrome_crashpad_handler").chmod(0o755)
@@ -169,7 +174,7 @@ def package_bundle(args: argparse.Namespace) -> None:
             f"Bundle: {BUNDLE_NAME}\n"
             f"Architecture: Linux x86_64\n"
             f"Created: {build_time}\n"
-            f"miTLS revision: {repository_revision}\n"
+            f"ATLAS revision: {repository_revision}\n"
             f"Chromium revision: {chromium_revision}\n"
         )
 
@@ -199,7 +204,7 @@ def package_bundle(args: argparse.Namespace) -> None:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Package the verified miTLS Chromium HTTPS demo"
+        description="Package the verified ATLAS Chromium HTTPS demo"
     )
     parser.add_argument("--repository", required=True, type=Path)
     parser.add_argument("--chromium-source", required=True, type=Path)
@@ -208,6 +213,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--certificate", required=True, type=Path)
     parser.add_argument("--private-key", required=True, type=Path)
     parser.add_argument("--bundle-sources", required=True, type=Path)
+    parser.add_argument("--trace-analyzer", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     return parser.parse_args()
 

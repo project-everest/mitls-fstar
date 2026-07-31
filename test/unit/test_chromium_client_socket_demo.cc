@@ -22,18 +22,18 @@
 
 namespace {
 
-using mitls::chromium::CertificateChain;
-using mitls::chromium::ClientSocketConfig;
-using mitls::chromium::CompletionCallback;
-using mitls::chromium::ServerAuthenticator;
-using mitls::chromium::StreamSocket;
-using mitls::chromium::Tls13ClientSocket;
-using mitls::chromium::kErrorCertificate;
-using mitls::chromium::kErrorConnectionClosed;
-using mitls::chromium::kErrorInvalidArgument;
-using mitls::chromium::kErrorOperationPending;
-using mitls::chromium::kIoPending;
-using mitls::chromium::kSuccess;
+using atlas::chromium::CertificateChain;
+using atlas::chromium::ClientSocketConfig;
+using atlas::chromium::CompletionCallback;
+using atlas::chromium::ServerAuthenticator;
+using atlas::chromium::StreamSocket;
+using atlas::chromium::Tls13ClientSocket;
+using atlas::chromium::kErrorCertificate;
+using atlas::chromium::kErrorConnectionClosed;
+using atlas::chromium::kErrorInvalidArgument;
+using atlas::chromium::kErrorOperationPending;
+using atlas::chromium::kIoPending;
+using atlas::chromium::kSuccess;
 
 constexpr size_t kTransportFragment = 7u;
 

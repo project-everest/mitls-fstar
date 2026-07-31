@@ -62,7 +62,10 @@ make test-chromium-client-demo  # async HTTPS/1.1 Chromium adapter demo
 make chromium-browser            # build Chromium with the verified provider
 make test-chromium-browser       # actual browser HTTPS smoke test
 make test-chromium-browser-public # network-dependent Google/Microsoft smoke
+make chromium-browser-logging    # build Chromium with ATLAS JSONL tracing
+make test-chromium-browser-logging # capture and analyze a browser trace
 make chromium-demo-bundle        # transferable Linux x86_64 browser/server demo
+make chromium-demo-bundle-logging # trace-capable transferable demo
 make test-chromium-demo-bundle   # test the freshly extracted demo archive
 ```
 
@@ -77,6 +80,12 @@ includes the portable asynchronous adapter demo, a pinned Chromium overlay with
 a concrete `net::SSLClientSocket`, and a transferable Linux x86_64
 browser/server demo bundle; none gives the verified engine socket or browser
 trust-policy ownership.
+
+ATLAS tracing is compile-time controlled with `ATLAS_LOGGING=0` by default.
+Logging builds emit connection-correlated JSONL metadata from verified
+handshake, engine, and record-layer control flow. Analyze traces with
+`runtime/analyze_atlas_trace.py`; see `runtime/chromium/README.md` for the trace
+schema, safety boundary, and browser workflow.
 
 For the methodology reference:
 

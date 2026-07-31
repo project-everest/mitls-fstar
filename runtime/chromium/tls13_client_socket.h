@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace mitls::chromium {
+namespace atlas::chromium {
 
 constexpr int kSuccess = 0;
 constexpr int kIoPending = -1;
@@ -105,6 +105,6 @@ class Tls13ClientSocket {
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace mitls::chromium
+}  // namespace atlas::chromium
 
 #endif

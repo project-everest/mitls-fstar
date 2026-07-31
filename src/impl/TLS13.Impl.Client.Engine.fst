@@ -15,6 +15,7 @@ module L = TLS13.Impl.Messages
 module Sem = TLS13.Wire.Semantics
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module Trace = TLS13.Trace
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
@@ -22,6 +23,43 @@ noeq
 type client_engine = {
   engine_client: C.client;
   engine_empty_payload: V.vec U8.t;
+}
+
+inline_for_extraction
+let engine_action_tag (action:engine_action) : FStar.UInt64.t =
+  match action with
+  | EngineProgress -> 0UL
+  | EngineNeedNetworkInput -> 1UL
+  | EngineNeedCertificateVerification -> 2UL
+  | EngineNeedCertificateSignatureVerification -> 3UL
+  | EngineNetworkOutput -> 4UL
+  | EngineApplicationData -> 5UL
+  | EngineReady -> 6UL
+  | EngineClosing -> 7UL
+  | EngineClosed -> 8UL
+  | EngineFailed -> 9UL
+
+inline_for_extraction
+let engine_status_tag (status:CT.client_status) : FStar.UInt64.t =
+  match status with
+  | CT.StepOk -> 0UL
+  | CT.NeedMoreInput -> 1UL
+  | CT.DecodeError -> 2UL
+  | CT.IllegalTransition -> 3UL
+  | CT.OutputBufferTooSmall -> 4UL
+  | CT.ConnectionFailed -> 5UL
+
+fn trace_engine_result
+  (event:FStar.UInt32.t)
+  (result:engine_step_result)
+  requires emp
+  ensures emp
+{
+  Trace.emit
+    event
+    (engine_action_tag result.engine_step_action)
+    (engine_status_tag result.engine_step_status)
+    (SZ.sizet_to_uint64 result.engine_step_consumed_len);
 }
 
 let engine_live
@@ -197,6 +235,10 @@ fn new_engine
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_context_bytes)
       validation_time_seconds));
+  Trace.emit Trace.engine_new
+    (SZ.sizet_to_uint64 server_name_len)
+    (SZ.sizet_to_uint64 trust_context_len)
+    (SZ.sizet_to_uint64 validation_time_seconds);
   e
 }
 
@@ -231,6 +273,7 @@ fn poll
                  st1.CS.cs_model.CS.model_control ==
                    CS.ControlApplicationData))
 {
+  Trace.emit Trace.engine_poll_begin 0UL 0UL 0UL;
   unfold (engine_live e 'st0);
   with empty_payload.
     assert (V.pts_to e.engine_empty_payload #1.0R empty_payload);
@@ -258,6 +301,7 @@ fn poll
         observation_result EngineNeedCertificateVerification;
       assert (pure (engine_waiting_for_certificate 'st0));
       fold (engine_live e 'st0);
+      trace_engine_result Trace.engine_poll_end result;
       result
     } else {
       let needs_signature =
@@ -267,6 +311,7 @@ fn poll
           observation_result EngineNeedCertificateSignatureVerification;
         assert (pure (engine_waiting_for_certificate_signature 'st0));
         fold (engine_live e 'st0);
+        trace_engine_result Trace.engine_poll_end result;
         result
       } else {
         assert (pure (CT.local_input_wf
@@ -296,6 +341,7 @@ fn poll
           engine_result_buffers_wf result network_out_bytes app_out_bytes));
         lemma_local_action_is_not_observation resp;
         fold (engine_live e st1);
+        trace_engine_result Trace.engine_poll_end result;
         result
       }
     }
@@ -322,6 +368,7 @@ fn poll
           result.engine_step_action == EngineReady ==>
           'st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
         fold (engine_live e 'st0);
+        trace_engine_result Trace.engine_poll_end result;
         result
       }
       Some resp -> {
@@ -333,6 +380,7 @@ fn poll
             (Ghost.reveal 'old_app_out)));
         lemma_local_action_is_not_observation resp;
         fold (engine_live e st_pending);
+        trace_engine_result Trace.engine_poll_end result;
         result
       }
     }
@@ -374,6 +422,10 @@ fn feed_network
                   'old_app_out
                   app_out_bytes)
 {
+  Trace.emit Trace.engine_feed_begin
+    (SZ.sizet_to_uint64 network_input_len)
+    0UL
+    0UL;
   unfold (engine_live e 'st0);
   with empty_payload.
     assert (V.pts_to e.engine_empty_payload #1.0R empty_payload);
@@ -405,6 +457,7 @@ fn feed_network
       'old_app_out
       app_out_bytes));
   fold (engine_live e st1);
+  trace_engine_result Trace.engine_feed_end result;
   result
 }
 
@@ -466,6 +519,10 @@ fn copy_certificate_chain
       lens_out
       lens_out_len;
   fold (engine_live e 'st0);
+  Trace.emit Trace.engine_certificate_chain
+    (SZ.sizet_to_uint64 snapshot.CR.certificate_chain_bytes_len)
+    (SZ.sizet_to_uint64 snapshot.CR.certificate_chain_cert_count)
+    0UL;
   snapshot
 }
 
@@ -729,7 +786,11 @@ fn complete_certificate_verification
                   network_out_bytes
                   app_out_bytes)
 {
-  process_external_local_event
+  Trace.emit Trace.engine_certificate_verified
+    (SZ.sizet_to_uint64 public_key_len)
+    0UL
+    0UL;
+  let result = process_external_local_event
     e
     CT.LocalValidateCertificate
     public_key
@@ -737,7 +798,9 @@ fn complete_certificate_verification
     network_out
     network_out_len
     app_out
-    app_out_len
+    app_out_len;
+  trace_engine_result Trace.engine_certificate_verified result;
+  result
 }
 
 fn complete_certificate_signature_verification
@@ -770,13 +833,16 @@ fn complete_certificate_signature_verification
                   network_out_bytes
                   app_out_bytes)
 {
-  process_empty_local_event
+  Trace.emit Trace.engine_certificate_signature_verified 0UL 0UL 0UL;
+  let result = process_empty_local_event
     e
     CT.LocalVerifyCertificateSignature
     network_out
     network_out_len
     app_out
-    app_out_len
+    app_out_len;
+  trace_engine_result Trace.engine_certificate_signature_verified result;
+  result
 }
 
 fn send_application_data
@@ -818,7 +884,11 @@ fn send_application_data
                   network_out_bytes
                   app_out_bytes)
 {
-  process_external_local_event
+  Trace.emit Trace.engine_send_application
+    (SZ.sizet_to_uint64 payload_len)
+    0UL
+    0UL;
+  let result = process_external_local_event
     e
     CT.LocalSendApplicationData
     payload
@@ -826,7 +896,9 @@ fn send_application_data
     network_out
     network_out_len
     app_out
-    app_out_len
+    app_out_len;
+  trace_engine_result Trace.engine_send_application result;
+  result
 }
 
 fn send_close_notify
@@ -859,13 +931,16 @@ fn send_close_notify
                   network_out_bytes
                   app_out_bytes)
 {
-  process_empty_local_event
+  Trace.emit Trace.engine_send_close 0UL 0UL 0UL;
+  let result = process_empty_local_event
     e
     CT.LocalSendCloseNotify
     network_out
     network_out_len
     app_out
-    app_out_len
+    app_out_len;
+  trace_engine_result Trace.engine_send_close result;
+  result
 }
 
 fn free_engine
@@ -873,6 +948,7 @@ fn free_engine
   requires engine_live e 'st0
   ensures engine_released e 'st0
 {
+  Trace.emit Trace.engine_free 0UL 0UL 0UL;
   unfold (engine_live e 'st0);
   with empty_payload.
     assert (V.pts_to e.engine_empty_payload #1.0R empty_payload);

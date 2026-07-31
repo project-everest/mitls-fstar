@@ -1,6 +1,7 @@
 #include "tls13_client_engine.h"
 
 #include "TLS13_Impl_Client_Engine.h"
+#include "atlas_trace.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -9,6 +10,9 @@ struct tls13_client_engine_s {
   TLS13_Impl_Client_Engine_client_engine verified_engine;
   tls13_client_engine_action last_action;
   bool application_ready;
+#if ATLAS_ENABLE_LOGGING
+  uint64_t trace_connection;
+#endif
 };
 
 static bool capacities_match(void) {
@@ -131,6 +135,10 @@ int tls13_client_engine_new(
   if (engine == NULL) {
     return TLS13_CLIENT_ENGINE_ERROR_ALLOCATION;
   }
+#if ATLAS_ENABLE_LOGGING
+  engine->trace_connection = atlas_trace_new_connection();
+  atlas_trace_set_connection(engine->trace_connection);
+#endif
   engine->verified_engine = TLS13_Impl_Client_Engine_new_engine(
       (uint8_t *)(uintptr_t)(server_name_len == 0u ? &empty : server_name),
       server_name_len,
@@ -158,6 +166,7 @@ int tls13_client_engine_poll(
           application_out_capacity)) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_ARGUMENT;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   store_result(
       engine,
       TLS13_Impl_Client_Engine_poll(
@@ -194,6 +203,7 @@ int tls13_client_engine_feed_network(
       engine->last_action != TLS13_CLIENT_ENGINE_CLOSING) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   store_result(
       engine,
       TLS13_Impl_Client_Engine_feed_network(
@@ -229,6 +239,7 @@ int tls13_client_engine_copy_certificate_chain(
       TLS13_CLIENT_ENGINE_NEED_CERTIFICATE_VERIFICATION) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   TLS13_Impl_ConnectionState_Repr_certificate_chain_snapshot snapshot =
       TLS13_Impl_Client_Engine_copy_certificate_chain(
           engine->verified_engine,
@@ -261,6 +272,7 @@ int tls13_client_engine_copy_certificate_verify_request(
       TLS13_CLIENT_ENGINE_NEED_CERTIFICATE_SIGNATURE_VERIFICATION) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   TLS13_Impl_Client_Engine_certificate_verify_request verified_request =
       TLS13_Impl_Client_Engine_copy_certificate_verify_request(
           engine->verified_engine,
@@ -302,6 +314,7 @@ int tls13_client_engine_complete_certificate_verification(
       TLS13_CLIENT_ENGINE_NEED_CERTIFICATE_VERIFICATION) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   store_result(
       engine,
       TLS13_Impl_Client_Engine_complete_certificate_verification(
@@ -338,6 +351,7 @@ int tls13_client_engine_complete_certificate_signature_verification(
       TLS13_CLIENT_ENGINE_NEED_CERTIFICATE_SIGNATURE_VERIFICATION) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   store_result(
       engine,
       TLS13_Impl_Client_Engine_complete_certificate_signature_verification(
@@ -373,6 +387,7 @@ int tls13_client_engine_send_application_data(
   if (!engine->application_ready) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   store_result(
       engine,
       TLS13_Impl_Client_Engine_send_application_data(
@@ -405,6 +420,7 @@ int tls13_client_engine_send_close_notify(
   if (!engine->application_ready) {
     return TLS13_CLIENT_ENGINE_ERROR_INVALID_STATE;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   store_result(
       engine,
       TLS13_Impl_Client_Engine_send_close_notify(
@@ -421,6 +437,7 @@ void tls13_client_engine_free(tls13_client_engine *engine) {
   if (engine == NULL) {
     return;
   }
+  atlas_trace_set_connection(engine->trace_connection);
   TLS13_Impl_Client_Engine_free_engine(engine->verified_engine);
   free(engine);
 }

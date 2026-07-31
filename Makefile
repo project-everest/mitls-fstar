@@ -64,6 +64,7 @@ INCLUDES = \
 FSTAR_DEP_OPTIONS := --extract '*,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,+Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*'
 
 EXTRACT_DEBUG ?= 0
+ATLAS_LOGGING ?= 0
 ifeq ($(EXTRACT_DEBUG),1)
 FSTAR_EXTRACT_DEBUG_FLAGS = --trace_error --profile '*' --profile_component FStarC.Extraction
 KRML_DEBUG_FLAGS = -verbose -dbacktrace
@@ -426,7 +427,7 @@ BUNDLE_KRML_FILES = $(filter-out \
 
 TLS13_BUNDLE_DIR = $(EXTRACT_DIR)/tls13_bundle
 TLS13_BUNDLE_STAMP = $(TLS13_BUNDLE_DIR)/.generated
-TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
+TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj-logging-$(ATLAS_LOGGING)
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
@@ -551,6 +552,7 @@ TLS13_BUNDLE_KRML_FILES = \
   $(OUTPUT_DIR)/Common_BufferedTCP.krml \
   $(OUTPUT_DIR)/Common_BufferedStream.krml \
   $(OUTPUT_DIR)/Common_Memmove.krml \
+  $(OUTPUT_DIR)/TLS13_Trace.krml \
   $(OUTPUT_DIR)/FStar_Pervasives_Native.krml \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
@@ -680,11 +682,13 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/common_tcp_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
+	  -add-include '"../../c_stubs/atlas_trace.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
 	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
-	  -library TLS13.OpenSSL \
+	  -library TLS13.OpenSSL -library TLS13.Trace \
 	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
+	  -bundle 'TLS13.Trace' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
@@ -795,6 +799,7 @@ HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJE
 
 ECHO_STUB_SOURCES = \
   runtime/common_memmove.c \
+  c_stubs/atlas_trace.c \
   c_stubs/common_tcp_karamel.c \
   c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
@@ -804,6 +809,7 @@ ECHO_STUB_SOURCES = \
 
 ECHO_STUB_HEADERS = \
   runtime/common_memmove.h \
+  c_stubs/atlas_trace.h \
   c_stubs/common_tcp_karamel.h \
   c_stubs/common_tcp_stubs.h \
   c_stubs/tls13_bytes_karamel.h \
@@ -815,6 +821,7 @@ ECHO_STUB_HEADERS = \
 # Common C flags for all test builds
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -ffunction-sections -fdata-sections \
+  -DATLAS_ENABLE_LOGGING=$(ATLAS_LOGGING) \
   -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
   -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
   -I c_stubs \
@@ -829,10 +836,11 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
 
 LDFLAGS_COMMON = -Wl,--gc-sections
 
-TLS13_PROVIDER_DIR = $(EXTRACT_DIR)/tls13_provider
+TLS13_PROVIDER_DIR = $(EXTRACT_DIR)/atlas_provider/logging-$(ATLAS_LOGGING)
 TLS13_PROVIDER_OBJ_DIR = $(TLS13_PROVIDER_DIR)/obj
-TLS13_PROVIDER_ARCHIVE = $(TLS13_PROVIDER_DIR)/libmitls_tls13_client_engine.a
+TLS13_PROVIDER_ARCHIVE = $(TLS13_PROVIDER_DIR)/libatlas_tls13_client_engine.a
 TLS13_PROVIDER_C_SOURCES = \
+  c_stubs/atlas_trace.c \
   c_stubs/tls13_crypto_external.c \
   runtime/common_memmove.c \
   runtime/tls13_client_engine.c \
@@ -842,9 +850,9 @@ TLS13_PROVIDER_OBJ_STAMP = $(TLS13_PROVIDER_OBJ_DIR)/.built
 
 CHROMIUM_SRC ?= $(abspath ../chromium/src)
 DEPOT_TOOLS ?= $(abspath ../depot_tools)
-CHROMIUM_OUT ?= out/mitls
+CHROMIUM_OUT ?= out/atlas
 CHROMIUM_OUT_ABS = $(if $(filter /%,$(CHROMIUM_OUT)),$(CHROMIUM_OUT),$(CHROMIUM_SRC)/$(CHROMIUM_OUT))
-CHROMIUM_DEMO_BUNDLE = $(EXTRACT_DIR)/mitls-chromium-demo-linux-x86_64.tar.gz
+CHROMIUM_DEMO_BUNDLE = $(EXTRACT_DIR)/atlas-chromium-demo-linux-x86_64.tar.gz
 
 CHROMIUM_DEMO_OBJ_DIR = $(EXTRACT_DIR)/chromium_demo_obj
 CHROMIUM_DEMO_C_SOURCES = c_stubs/tls13_openssl_stubs.c
@@ -932,6 +940,7 @@ define link_benchmark
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(2)/*.o \
 	  $(4) \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
@@ -986,10 +995,11 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # ──────────────────────────────────────────────────────────────────────────────
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
-.PHONY: tls13-client-provider chromium-install-provider chromium-configure \
-  chromium-net chromium-browser test-chromium-browser \
+.PHONY: atlas-client-provider tls13-client-provider chromium-install-provider \
+  chromium-configure chromium-net chromium-browser chromium-browser-logging \
+  test-chromium-browser test-chromium-browser-logging \
   test-chromium-browser-public chromium-demo-bundle \
-  test-chromium-demo-bundle \
+  chromium-demo-bundle-logging test-chromium-demo-bundle \
   test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
   test-openssl-http-preconnect test-openssl-sclient test-hacl-stubs \
@@ -1061,6 +1071,7 @@ test/test_extracted_client_openssl_echo: \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
@@ -1085,6 +1096,7 @@ test/test_extracted_client_engine_openssl_echo: \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_engine.c \
@@ -1171,11 +1183,14 @@ $(TLS13_PROVIDER_ARCHIVE): $(TLS13_BUNDLE_OBJS_STAMP) \
 	  $(HACL_TEST_OBJECTS)
 
 tls13-client-provider: $(TLS13_PROVIDER_ARCHIVE)
-	@echo "TLS 1.3 client provider: $(TLS13_PROVIDER_ARCHIVE)"
+	@echo "ATLAS TLS 1.3 client provider: $(TLS13_PROVIDER_ARCHIVE)"
+
+atlas-client-provider: tls13-client-provider
 
 chromium-install-provider: $(TLS13_PROVIDER_ARCHIVE)
 	python3 runtime/chromium/install_chromium_overlay.py \
-	  --chromium-src "$(CHROMIUM_SRC)"
+	  --chromium-src "$(CHROMIUM_SRC)" \
+	  --provider-archive "$(abspath $(TLS13_PROVIDER_ARCHIVE))"
 
 chromium-configure: chromium-install-provider
 	cd "$(CHROMIUM_SRC)" && \
@@ -1189,6 +1204,9 @@ chromium-net: chromium-configure
 chromium-browser: chromium-configure
 	cd "$(CHROMIUM_SRC)" && \
 	  PATH="$(DEPOT_TOOLS):$$PATH" autoninja -C "$(CHROMIUM_OUT)" chrome
+
+chromium-browser-logging:
+	$(MAKE) ATLAS_LOGGING=1 chromium-browser
 
 test-chromium-browser: chromium-browser test/openssl_http_server \
   test/certs/chain.pem test/certs/leaf.key
@@ -1217,16 +1235,27 @@ test-chromium-browser: chromium-browser test/openssl_http_server \
 	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
 	    --enable-logging=stderr --log-level=0 --no-first-run \
 	    --no-proxy-server --ignore-certificate-errors \
-	    --use-verified-mitls \
+	    --use-atlas \
 	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_browser_profile)" \
 	    --dump-dom "https://localhost:$$port/" \
 	    > $(EXTRACT_DIR)/chromium_browser.dom \
 	    2> $(EXTRACT_DIR)/chromium_browser.log; \
 	  wait $$server_pid; \
 	  grep -q "verified chromium demo" $(EXTRACT_DIR)/chromium_browser.dom; \
-	  grep -q "Verified miTLS provider selected for localhost:" \
+	  grep -q "ATLAS provider selected for localhost:" \
 	    $(EXTRACT_DIR)/chromium_browser.log; \
-	  echo "Chromium verified-miTLS HTTPS smoke test passed"
+	  echo "Chromium ATLAS HTTPS smoke test passed"
+
+test-chromium-browser-logging:
+	@rm -f $(EXTRACT_DIR)/atlas_chromium_trace.jsonl \
+	  $(EXTRACT_DIR)/atlas_chromium_trace.txt
+	ATLAS_TRACE_FILE="$(abspath $(EXTRACT_DIR)/atlas_chromium_trace.jsonl)" \
+	  $(MAKE) ATLAS_LOGGING=1 test-chromium-browser
+	python3 runtime/analyze_atlas_trace.py \
+	  $(EXTRACT_DIR)/atlas_chromium_trace.jsonl --timeline \
+	  > $(EXTRACT_DIR)/atlas_chromium_trace.txt
+	@echo "ATLAS trace: $(EXTRACT_DIR)/atlas_chromium_trace.jsonl"
+	@echo "ATLAS analysis: $(EXTRACT_DIR)/atlas_chromium_trace.txt"
 
 test-chromium-browser-public: chromium-browser
 	@rm -f $(EXTRACT_DIR)/chromium_google.dom \
@@ -1243,13 +1272,13 @@ test-chromium-browser-public: chromium-browser
 	    --disable-field-trial-config \
 	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
 	    --enable-logging=stderr --log-level=0 --no-first-run \
-	    --no-proxy-server --use-verified-mitls \
+	    --no-proxy-server --use-atlas \
 	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_google_profile)" \
 	    --dump-dom "https://www.google.com/" \
 	    > $(EXTRACT_DIR)/chromium_google.dom \
 	    2> $(EXTRACT_DIR)/chromium_google.log; \
 	  grep -q '<title>Google</title>' $(EXTRACT_DIR)/chromium_google.dom; \
-	  grep -q "Verified miTLS provider selected for www.google.com:443" \
+	  grep -q "ATLAS provider selected for www.google.com:443" \
 	    $(EXTRACT_DIR)/chromium_google.log; \
 	  timeout 90 "$(CHROMIUM_SRC)/$(CHROMIUM_OUT)/chrome" \
 	    --headless --no-sandbox --disable-gpu --disable-quic \
@@ -1258,15 +1287,15 @@ test-chromium-browser-public: chromium-browser
 	    --disable-field-trial-config \
 	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
 	    --enable-logging=stderr --log-level=0 --no-first-run \
-	    --no-proxy-server --use-verified-mitls \
+	    --no-proxy-server --use-atlas \
 	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_microsoft_profile)" \
 	    --dump-dom "https://www.microsoft.com/" \
 	    > $(EXTRACT_DIR)/chromium_microsoft.dom \
 	    2> $(EXTRACT_DIR)/chromium_microsoft.log; \
 	  grep -q '<title>Microsoft' $(EXTRACT_DIR)/chromium_microsoft.dom; \
-	  grep -q "Verified miTLS provider selected for www.microsoft.com:443" \
+	  grep -q "ATLAS provider selected for www.microsoft.com:443" \
 	    $(EXTRACT_DIR)/chromium_microsoft.log; \
-	  echo "Chromium verified-miTLS public HTTPS smoke tests passed"
+	  echo "Chromium ATLAS public HTTPS smoke tests passed"
 
 $(CHROMIUM_DEMO_BUNDLE): chromium-browser test/openssl_http_server \
   test/certs/chain.pem test/certs/leaf.key \
@@ -1280,17 +1309,23 @@ $(CHROMIUM_DEMO_BUNDLE): chromium-browser test/openssl_http_server \
 	  --certificate test/certs/chain.pem \
 	  --private-key test/certs/leaf.key \
 	  --bundle-sources runtime/chromium/bundle \
+	  --trace-analyzer runtime/analyze_atlas_trace.py \
 	  --output "$@"
 
 chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
 	@echo "Chromium demo bundle: $(CHROMIUM_DEMO_BUNDLE)"
+
+chromium-demo-bundle-logging:
+	$(MAKE) ATLAS_LOGGING=1 \
+	  CHROMIUM_DEMO_BUNDLE=$(EXTRACT_DIR)/atlas-chromium-demo-logging-linux-x86_64.tar.gz \
+	  chromium-demo-bundle
 
 test-chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
 	@set -e; \
 	  test_dir=$$(mktemp -d "$(abspath $(EXTRACT_DIR))/chromium_bundle_test.XXXXXX"); \
 	  trap 'rm -rf "'"$$test_dir"'"' EXIT; \
 	  tar xzf "$(CHROMIUM_DEMO_BUNDLE)" -C "$$test_dir"; \
-	  cd "$$test_dir/mitls-chromium-demo-linux-x86_64"; \
+	  cd "$$test_dir/atlas-chromium-demo-linux-x86_64"; \
 	  sha256sum --check SHA256SUMS; \
 	  timeout 90 \
 	    ./run-demo.sh --headless
@@ -1391,6 +1426,7 @@ test/test_extracted_server_openssl_client: \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \

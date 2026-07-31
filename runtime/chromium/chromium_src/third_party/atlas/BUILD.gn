@@ -1,4 +1,4 @@
-source_set("mitls") {
+source_set("atlas") {
   sources = [ "tls13_client_socket.cc" ]
 
   public = [
@@ -8,5 +8,5 @@ source_set("mitls") {
 
   include_dirs = [ "." ]
   lib_dirs = [ "lib" ]
-  libs = [ "mitls_tls13_client_engine" ]
+  libs = [ "atlas_tls13_client_engine" ]
 }

@@ -3,16 +3,28 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="visible"
-if [[ "${1:-}" == "--headless" ]]; then
-  MODE="headless"
-  shift
-fi
+TRACE_FILE=""
+while (( $# > 0 )); do
+  case "$1" in
+    --headless)
+      MODE="headless"
+      shift
+      ;;
+    --trace)
+      TRACE_FILE="${2:?--trace requires an output file}"
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 if (( $# != 0 )); then
-  echo "usage: run-demo.sh [--headless]" >&2
+  echo "usage: run-demo.sh [--headless] [--trace FILE]" >&2
   exit 2
 fi
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/mitls-chromium-demo.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/atlas-chromium-demo.XXXXXX")"
 SERVER_PID=""
 cleanup() {
   status=$?
@@ -21,7 +33,7 @@ cleanup() {
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
-  if [[ "${MITLS_DEMO_KEEP_ARTIFACTS:-0}" == "1" || "$status" != "0" ]]; then
+  if [[ "${ATLAS_DEMO_KEEP_ARTIFACTS:-0}" == "1" || "$status" != "0" ]]; then
     echo "Demo artifacts retained in $WORK" >&2
   else
     rm -rf "$WORK"
@@ -51,7 +63,10 @@ fi
 
 PORT="$(cat "$WORK/server.port")"
 URL="https://localhost:$PORT/"
-export MITLS_CHROME_PROFILE="$WORK/chromium-profile"
+export ATLAS_CHROME_PROFILE="$WORK/chromium-profile"
+if [[ -n "$TRACE_FILE" ]]; then
+  export ATLAS_TRACE_FILE="$TRACE_FILE"
+fi
 NET_LOG_ARGUMENT="--log-net-log=$WORK/netlog.json"
 
 if [[ "$MODE" == "headless" ]]; then
@@ -65,7 +80,7 @@ if [[ "$MODE" == "headless" ]]; then
     exit 1
   fi
 else
-  echo "Opening $URL with the verified miTLS Chromium build."
+  echo "Opening $URL with the verified ATLAS Chromium build."
   "$ROOT/launch-chrome.sh" "$URL" \
     "$NET_LOG_ARGUMENT" \
     2> >(tee "$WORK/chromium.log" >&2)
@@ -98,13 +113,13 @@ if [[ "$MODE" == "headless" ]] &&
   cat "$WORK/chromium.log" >&2
   exit 1
 fi
-if ! grep -q "Verified miTLS provider selected" "$WORK/chromium.log"; then
-  echo "Chromium did not report selection of the verified miTLS provider." >&2
+if ! grep -q "ATLAS provider selected" "$WORK/chromium.log"; then
+  echo "Chromium did not report selection of the ATLAS provider." >&2
   cat "$WORK/chromium.log" >&2
   exit 1
 fi
 if [[ "$MODE" == "headless" ]] &&
-   grep "Verified miTLS provider selected for" "$WORK/chromium.log" |
+   grep "ATLAS provider selected for" "$WORK/chromium.log" |
      grep -Fv "for localhost:$PORT" >/dev/null; then
   echo "Chromium selected the TLS provider for a non-localhost connection." >&2
   cat "$WORK/chromium.log" >&2
@@ -112,7 +127,10 @@ if [[ "$MODE" == "headless" ]] &&
 fi
 
 if [[ "$MODE" == "headless" ]]; then
-  echo "Verified miTLS Chromium rendered the bundled HTTPS page successfully."
+  echo "ATLAS Chromium rendered the bundled HTTPS page successfully."
 else
-  echo "Verified miTLS Chromium completed the bundled HTTPS request successfully."
+  echo "ATLAS Chromium completed the bundled HTTPS request successfully."
+fi
+if [[ -n "$TRACE_FILE" && -s "$TRACE_FILE" ]]; then
+  "$ROOT/analyze-atlas-trace.py" "$TRACE_FILE"
 fi

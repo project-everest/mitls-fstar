@@ -26,7 +26,9 @@ module P = TLS13.Impl.Parser
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module Trace = TLS13.Trace
 module U8 = FStar.UInt8
+module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
 
@@ -210,6 +212,10 @@ fn try_process_protected_handshake_head
               'old_app_out) /\
           CT.client_end_to_end_invariant st1))
 {
+  Trace.emit Trace.client_protected_head
+    (SZ.sizet_to_uint64 consumed)
+    (SZ.sizet_to_uint64 protected_fragment_len)
+    (SZ.sizet_to_uint64 raw_len);
   with msg. assert (
     L.is_valid_tls_message parsed (M.TlsHandshake msg));
   let protected_buffer_empty =
@@ -716,6 +722,10 @@ fn try_process_protected_handshake_drain
                'st0 st1 resp step B.empty B.empty B.empty) /\
            CT.client_end_to_end_invariant st1))
 {
+  Trace.emit Trace.client_protected_drain
+    (SZ.sizet_to_uint64 offset)
+    (SZ.sizet_to_uint64 consumed)
+    (SZ.sizet_to_uint64 pending_fragment_len);
   with msg. assert (
     L.is_valid_tls_message parsed (M.TlsHandshake msg));
   match parsed {
@@ -1084,6 +1094,7 @@ fn new_client_default ()
   CSL.lemma_initial_received_decode_replay_consistent CR.default_connection_config;
   CSL.lemma_initial_received_decode_key_schedule_replay_consistent CR.default_connection_config;
   CT.lemma_client_state_correct_protected_raw_segmented_replay CR.default_initial_state;
+  Trace.emit Trace.client_new 0UL 0UL 0UL;
   c
 }
 
@@ -1196,6 +1207,10 @@ fn new_client
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
+  Trace.emit Trace.client_new
+    (SZ.sizet_to_uint64 server_name_len)
+    (SZ.sizet_to_uint64 trust_anchors_len)
+    (SZ.sizet_to_uint64 validation_time_seconds);
   c
 }
 
@@ -1687,9 +1702,17 @@ fn process_network_bytes
                  buffer_resp.CT.response.CT.network_out_len == 0sz) /\
                 (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False))
 {
+  Trace.emit Trace.client_network_begin
+    (SZ.sizet_to_uint64 raw_len)
+    0UL
+    0UL;
   let decoded = P.decode_network_buffer c raw raw_len;
   match decoded {
     L.NetworkBufferNeedMoreInput -> {
+      Trace.emit Trace.client_network_need_more
+        (SZ.sizet_to_uint64 raw_len)
+        0UL
+        0UL;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -1734,6 +1757,10 @@ fn process_network_bytes
       buffer_resp
     }
     L.NetworkBufferDecodeError -> {
+      Trace.emit Trace.client_network_decode_error
+        (SZ.sizet_to_uint64 raw_len)
+        0UL
+        0UL;
       let resp =
         HDecodeError.handle_decode_error
           c
@@ -1793,6 +1820,13 @@ fn process_network_bytes
       buffer_resp
     }
     L.NetworkBufferOk decoded_buffer -> {
+      Trace.emit Trace.client_network_record
+        (FStar.Int.Cast.uint8_to_uint64
+          decoded_buffer.L.decoded_buffer_content_type)
+        (SZ.sizet_to_uint64
+          decoded_buffer.L.decoded_buffer_raw_record_len)
+        (SZ.sizet_to_uint64
+          decoded_buffer.L.decoded_buffer_fragment_len);
       with raw_record_bytes fragment_bytes.
         assert (V.pts_to decoded_buffer.L.decoded_buffer_raw_record raw_record_bytes **
                 V.pts_to decoded_buffer.L.decoded_buffer_fragment fragment_bytes);
@@ -2120,6 +2154,10 @@ fn process_coalesced_network_bytes
                 (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==>
                  False))
 {
+  Trace.emit Trace.client_network_begin
+    (SZ.sizet_to_uint64 raw_len)
+    1UL
+    0UL;
   let decoded = P.decode_network_buffer c raw raw_len;
   match decoded {
     L.NetworkBufferNeedMoreInput -> {
@@ -2131,6 +2169,13 @@ fn process_coalesced_network_bytes
         c raw raw_len network_out network_out_len app_out app_out_len
     }
     L.NetworkBufferOk decoded_buffer -> {
+      Trace.emit Trace.client_network_record
+        (FStar.Int.Cast.uint8_to_uint64
+          decoded_buffer.L.decoded_buffer_content_type)
+        (SZ.sizet_to_uint64
+          decoded_buffer.L.decoded_buffer_raw_record_len)
+        (SZ.sizet_to_uint64
+          decoded_buffer.L.decoded_buffer_fragment_len);
       with raw_record_bytes protected_fragment_bytes.
         assert (
           V.pts_to
@@ -2158,6 +2203,11 @@ fn process_coalesced_network_bytes
                 decoded_buffer.L.decoded_buffer_fragment_len;
             match prefix {
               None -> {
+                Trace.emit Trace.client_protected_error
+                  0UL
+                  (SZ.sizet_to_uint64
+                    decoded_buffer.L.decoded_buffer_fragment_len)
+                  0UL;
                 V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
                 V.free decoded_buffer.L.decoded_buffer_fragment;
                 V.free decoded_buffer.L.decoded_buffer_raw_record;
@@ -2347,6 +2397,7 @@ fn process_pending_protected_handshake
   let pending = CQ.copy_pending_protected_handshake c;
   match pending {
     None -> {
+      Trace.emit Trace.client_protected_empty 0UL 0UL 0UL;
       assert (pure (
         CT.pending_protected_handshake_result_correct
           'st0 'st0 None));
@@ -2365,6 +2416,12 @@ fn process_pending_protected_handshake
           snapshot.CR.pending_protected_parsed;
       match prefix {
         None -> {
+          Trace.emit Trace.client_protected_error
+            (SZ.sizet_to_uint64
+              snapshot.CR.pending_protected_parsed)
+            (SZ.sizet_to_uint64
+              snapshot.CR.pending_protected_fragment_len)
+            0UL;
           V.to_vec_pts_to snapshot.CR.pending_protected_fragment;
           V.free snapshot.CR.pending_protected_fragment;
           let resp = {
@@ -2496,6 +2553,26 @@ fn process_local_event
                  resp.CT.status == CT.IllegalTransition \/
                  resp.CT.status == CT.ConnectionFailed))
 {
+  Trace.emit Trace.client_local_event_begin
+    (match kind with
+     | CT.LocalStartHandshake -> 0UL
+     | CT.LocalDeriveSharedSecret -> 1UL
+     | CT.LocalInstallClientHandshakeTrafficKeys -> 2UL
+     | CT.LocalInstallServerHandshakeTrafficKeys -> 3UL
+     | CT.LocalInstallClientApplicationTrafficKeys -> 4UL
+     | CT.LocalInstallServerApplicationTrafficKeys -> 5UL
+     | CT.LocalValidateCertificate -> 6UL
+     | CT.LocalVerifyCertificateSignature -> 7UL
+     | CT.LocalVerifyFinished -> 8UL
+     | CT.LocalDeliverApplicationData -> 9UL
+     | CT.LocalSendClientHello -> 10UL
+     | CT.LocalSendClientFinished -> 11UL
+     | CT.LocalSendApplicationData -> 12UL
+     | CT.LocalSendKeyUpdate -> 13UL
+     | CT.LocalSendCloseNotify -> 14UL
+     | CT.LocalFail -> 15UL)
+    (SZ.sizet_to_uint64 payload_len)
+    0UL;
   let resp =
     HLocal.handle_local_event
       c
@@ -2518,6 +2595,16 @@ fn process_local_event
     (Ghost.reveal 'payload_bytes)
     network_out_bytes
     app_out_bytes;
+  Trace.emit Trace.client_local_event_end
+    (match resp.CT.status with
+     | CT.StepOk -> 0UL
+     | CT.NeedMoreInput -> 1UL
+     | CT.DecodeError -> 2UL
+     | CT.IllegalTransition -> 3UL
+     | CT.OutputBufferTooSmall -> 4UL
+     | CT.ConnectionFailed -> 5UL)
+    (SZ.sizet_to_uint64 resp.CT.network_out_len)
+    (SZ.sizet_to_uint64 resp.CT.app_out_len);
   resp
 }
 
@@ -2526,6 +2613,7 @@ fn free_client
   requires connection_exactly c 'st0
   ensures connection_released c 'st0
 {
+  Trace.emit Trace.client_free 0UL 0UL 0UL;
   rewrite (connection_exactly c 'st0) as (CR.connection_exactly c 'st0);
   CR.free_connection c;
   rewrite (CR.connection_released c 'st0) as (connection_released c 'st0)
