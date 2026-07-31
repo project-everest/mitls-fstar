@@ -81,6 +81,12 @@ let rec canonical_log_append (left right:list CS.conn_event)
   | [] -> ()
   | _ :: rest -> canonical_log_append rest right
 
+let rec lemma_append_nil (events:list CS.conn_event)
+  : Lemma (L.append events [] == events)
+  = match events with
+    | [] -> ()
+    | _ :: rest -> lemma_append_nil rest
+
 let lemma_client_hs_install_canonical (ev:CS.conn_event)
   : Lemma
       (requires is_client_hs_install ev)
@@ -141,6 +147,137 @@ let has_read_install (region:list CS.conn_event) : prop =
 let has_write_install (region:list CS.conn_event) : prop =
   exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew
 
+#push-options "--fuel 8 --ifuel 2 --z3rlimit 20"
+let rec append_left_cancel
+  (left right0 right1:list CS.conn_event)
+  : Lemma
+      (requires L.append left right0 == L.append left right1)
+      (ensures right0 == right1)
+      (decreases left)
+  = match left with
+    | [] -> ()
+    | _ :: rest -> append_left_cancel rest right0 right1
+
+let rec canonical_log_length (events:list CS.conn_event)
+  : Lemma (ensures L.length (canonical_log events) == L.length events)
+      (decreases events)
+  = match events with
+    | [] -> ()
+    | _ :: rest -> canonical_log_length rest
+
+let lemma_canonical_flight_raw_spine
+  (raw_suffix:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event)
+  (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event)
+  (sf:GFin.finished)
+  (tail:list CS.conn_event)
+  : Lemma
+      (requires
+        canonical_log raw_suffix ==
+          flight_suffix ee cert cv_validate cv cv_verify sf tail)
+      (ensures
+        raw_flight_spine raw_suffix ee cert cv_validate cv cv_verify sf tail)
+  =
+  canonical_log_length raw_suffix;
+  assert (L.length (canonical_log raw_suffix) ==
+          L.length (flight_suffix ee cert cv_validate cv cv_verify sf tail));
+  assert_norm (L.length
+    (flight_suffix ee cert cv_validate cv cv_verify sf tail) ==
+    6 + L.length tail);
+  match raw_suffix with
+  | raw_ee :: raw_cert :: raw_validate :: raw_cv ::
+    raw_verify :: raw_sf :: raw_tail ->
+    ( assert_norm (canonical_log
+          (raw_ee :: raw_cert :: raw_validate :: raw_cv ::
+           raw_verify :: raw_sf :: raw_tail) ==
+        canonical_event raw_ee :: canonical_event raw_cert ::
+        canonical_event raw_validate :: canonical_event raw_cv ::
+        canonical_event raw_verify :: canonical_event raw_sf ::
+        canonical_log raw_tail);
+      assert_norm (flight_suffix ee cert cv_validate cv cv_verify sf tail ==
+        ev_recv_ee ee :: ev_recv_cert cert :: CS.ConnLocalEvent cv_validate ::
+        ev_recv_cv cv :: CS.ConnLocalEvent cv_verify :: ev_recv_fin sf :: tail);
+      assert (canonical_event raw_ee == ev_recv_ee ee);
+      assert (canonical_event raw_cert == ev_recv_cert cert);
+      assert (canonical_event raw_validate == CS.ConnLocalEvent cv_validate);
+      assert (canonical_event raw_cv == ev_recv_cv cv);
+      assert (canonical_event raw_verify == CS.ConnLocalEvent cv_verify);
+      assert (canonical_event raw_sf == ev_recv_fin sf);
+      assert (canonical_log raw_tail == tail);
+      match raw_validate with
+      | CS.ConnLocalEvent validate ->
+        assert (validate == cv_validate)
+      | _ ->
+        assert False;
+      match raw_verify with
+      | CS.ConnLocalEvent verify ->
+        assert (verify == cv_verify)
+      | _ ->
+        assert False;
+      introduce exists
+        (raw_ee0 raw_cert0 raw_cv0 raw_sf0:CS.conn_event)
+        (raw_tail0:list CS.conn_event).
+        raw_suffix ==
+          raw_ee0 :: raw_cert0 :: CS.ConnLocalEvent cv_validate ::
+          raw_cv0 :: CS.ConnLocalEvent cv_verify :: raw_sf0 :: raw_tail0 /\
+        canonical_event raw_ee0 == ev_recv_ee ee /\
+        canonical_event raw_cert0 == ev_recv_cert cert /\
+        canonical_event raw_cv0 == ev_recv_cv cv /\
+        canonical_event raw_sf0 == ev_recv_fin sf /\
+        canonical_log raw_tail0 == tail
+      with raw_ee raw_cert raw_cv raw_sf raw_tail and () )
+  | [] -> assert False
+  | _ :: [] -> assert False
+  | _ :: _ :: [] -> assert False
+  | _ :: _ :: _ :: [] -> assert False
+  | _ :: _ :: _ :: _ :: [] ->
+    assert (L.length raw_suffix == 4);
+    assert False
+  | _ :: _ :: _ :: _ :: _ :: [] ->
+    assert (L.length raw_suffix == 5);
+    assert False
+#pop-options
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30"
+let lemma_client_raw_suffix_flight_spine
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (client_shared:C.x25519_shared_secret)
+  (region raw_suffix log:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event)
+  (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event)
+  (sf:GFin.finished)
+  (tail:list CS.conn_event)
+  : Lemma
+      (requires
+        all_hs_installs region /\
+        log == L.append (prefix start ch sh client_shared)
+          (L.append region raw_suffix) /\
+        canonical_log log == L.append (prefix start ch sh client_shared)
+          (L.append region
+            (flight_suffix ee cert cv_validate cv cv_verify sf tail)))
+      (ensures
+        raw_flight_spine raw_suffix ee cert cv_validate cv cv_verify sf tail)
+  =
+  let pfx = prefix start ch sh client_shared in
+  let flight = flight_suffix ee cert cv_validate cv cv_verify sf tail in
+  canonical_log_append pfx (L.append region raw_suffix);
+  canonical_log_append region raw_suffix;
+  lemma_prefix_canonical start ch sh client_shared;
+  lemma_hs_install_region_canonical region;
+  assert (canonical_log log ==
+    L.append pfx (L.append region (canonical_log raw_suffix)));
+  append_left_cancel pfx
+    (L.append region (canonical_log raw_suffix))
+    (L.append region flight);
+  append_left_cancel region (canonical_log raw_suffix) flight;
+  lemma_canonical_flight_raw_spine
+    raw_suffix ee cert cv_validate cv cv_verify sf tail
+#pop-options
+
 let region_installs_ok (keys:CS.key_schedule_state) (region:list CS.conn_event) : prop =
   all_hs_installs region /\
   (Some? keys.CS.ks_server_handshake_traffic ==> has_read_install region) /\
@@ -187,6 +324,9 @@ let eer_region_ok (m:CS.connection_model) (log:list CS.conn_event)
     hs.CS.hs_server_finished == None /\
     Some? keys.CS.ks_server_handshake_traffic /\
     region_installs_ok keys region /\
+    (exists (raw_suffix:list CS.conn_event).
+       log == L.append (prefix start ch sh shared)
+         (L.append region raw_suffix)) /\
     canonical_log log == L.append (prefix start ch sh shared)
       (L.append region [ ev_recv_ee ee ])
   | _ -> False
@@ -204,6 +344,9 @@ let cr_region_ok (m:CS.connection_model) (log:list CS.conn_event)
     hs.CS.hs_server_finished == None /\
     Some? keys.CS.ks_server_handshake_traffic /\
     region_installs_ok keys region /\
+    (exists (raw_suffix:list CS.conn_event).
+       log == L.append (prefix start ch sh shared)
+         (L.append region raw_suffix)) /\
     canonical_log log == L.append (prefix start ch sh shared)
       (L.append region [ ev_recv_ee ee; ev_recv_cert cert ])
   | _ -> False
@@ -221,6 +364,9 @@ let cvd_region_ok (m:CS.connection_model) (log:list CS.conn_event)
     hs.CS.hs_server_finished == None /\
     Some? keys.CS.ks_server_handshake_traffic /\
     region_installs_ok keys region /\
+    (exists (raw_suffix:list CS.conn_event).
+       log == L.append (prefix start ch sh shared)
+         (L.append region raw_suffix)) /\
     canonical_log log == L.append (prefix start ch sh shared)
       (L.append region [ ev_recv_ee ee; ev_recv_cert cert;
                          CS.ConnLocalEvent validate ])
@@ -239,6 +385,9 @@ let cvr_region_ok (m:CS.connection_model) (log:list CS.conn_event)
     hs.CS.hs_server_finished == None /\
     Some? keys.CS.ks_server_handshake_traffic /\
     region_installs_ok keys region /\
+    (exists (raw_suffix:list CS.conn_event).
+       log == L.append (prefix start ch sh shared)
+         (L.append region raw_suffix)) /\
     canonical_log log == L.append (prefix start ch sh shared)
       (L.append region [ ev_recv_ee ee; ev_recv_cert cert;
                          CS.ConnLocalEvent validate; ev_recv_cv cv ])
@@ -258,6 +407,9 @@ let cvv_region_ok (m:CS.connection_model) (log:list CS.conn_event)
     hs.CS.hs_server_finished == None /\
     Some? keys.CS.ks_server_handshake_traffic /\
     region_installs_ok keys region /\
+    (exists (raw_suffix:list CS.conn_event).
+       log == L.append (prefix start ch sh shared)
+         (L.append region raw_suffix)) /\
     canonical_log log == L.append (prefix start ch sh shared)
       (L.append region [ ev_recv_ee ee; ev_recv_cert cert;
                          CS.ConnLocalEvent validate; ev_recv_cv cv;
@@ -279,6 +431,9 @@ let sfv_region_ok (m:CS.connection_model) (log:list CS.conn_event)
     hs.CS.hs_server_finished_verified == true /\
     Some? keys.CS.ks_server_handshake_traffic /\
     region_installs_ok keys region /\
+    (exists (raw_suffix:list CS.conn_event).
+       log == L.append (prefix start ch sh shared)
+         (L.append region raw_suffix)) /\
     canonical_log log == L.append (prefix start ch sh shared)
       (L.append region (flight_suffix ee cert validate cv verifysig sf tail))
   | _ -> False
@@ -298,6 +453,9 @@ let appdata_region_ok (m:CS.connection_model) (log:list CS.conn_event)
     Some? keys.CS.ks_server_handshake_traffic /\
     Some? keys.CS.ks_client_handshake_traffic /\
     all_hs_installs region /\ has_read_install region /\ has_write_install region /\
+    (exists (raw_suffix:list CS.conn_event).
+       log == L.append (prefix start ch sh shared)
+         (L.append region raw_suffix)) /\
     canonical_log log == L.append (prefix start ch sh shared)
       (L.append region (flight_suffix ee cert validate cv verifysig sf tail))
   | _ -> False
@@ -512,6 +670,29 @@ let snoc_tail (p r ss:list CS.conn_event) (x:CS.conn_event)
            L.append p (L.append r (L.append ss [x])))
   = L.append_assoc p (L.append r ss) [x];
     L.append_assoc r ss [x]
+
+let raw_suffix_snoc
+  (p region:list CS.conn_event)
+  (old_log new_log:list CS.conn_event)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        (exists (raw_suffix:list CS.conn_event).
+           old_log == L.append p (L.append region raw_suffix)) /\
+        new_log == L.append old_log [ev])
+      (ensures
+        (exists (raw_suffix:list CS.conn_event).
+           new_log == L.append p (L.append region raw_suffix)))
+  = eliminate exists (raw_suffix:list CS.conn_event).
+      old_log == L.append p (L.append region raw_suffix)
+    returns
+      (exists (raw_suffix':list CS.conn_event).
+         new_log == L.append p (L.append region raw_suffix'))
+    with _.
+    ( snoc_tail p region raw_suffix ev;
+      introduce exists (raw_suffix':list CS.conn_event).
+          new_log == L.append p (L.append region raw_suffix')
+      with (L.append raw_suffix [ev]) and () )
 
 let cons_append (h:CS.conn_event) (l m:list CS.conn_event)
   : Lemma (L.append (h :: l) m == h :: (L.append l m))
@@ -744,10 +925,33 @@ let step_from_shr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
               canonical_log_append pfx region;
               assert (canonical_log st0.CS.cs_event_log == L.append pfx region);
               canonical_log_append st0.CS.cs_event_log [conn_ev];
+              lemma_append_nil region;
+              introduce exists (raw_suffix:list CS.conn_event).
+                  st0.CS.cs_event_log == L.append pfx (L.append region raw_suffix)
+              with [] and ();
+              raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
+              snoc_region pfx region conn_ev;
+              introduce exists (raw_suffix:list CS.conn_event).
+                  s'.CS.cs_event_log == L.append pfx (L.append region raw_suffix)
+              with [conn_ev] and ();
               assert (canonical_event conn_ev == ev_recv_ee ee);
               snoc_region pfx region (canonical_event conn_ev);
               assert (canonical_log s'.CS.cs_event_log ==
                       L.append pfx (L.append region [ev_recv_ee ee]));
+              let hs' = s'.CS.cs_model.CS.model_handshake in
+              let keys' = hs'.CS.hs_keys in
+              assert (hs'.CS.hs_start == Some start);
+              assert (hs'.CS.hs_client_hello == Some ch);
+              assert (hs'.CS.hs_server_hello == Some sh);
+              assert (keys'.CS.ks_shared_secret == Some shared);
+              assert (hs'.CS.hs_encrypted_extensions == Some ee);
+              assert (hs'.CS.hs_certificate == None);
+              assert (hs'.CS.hs_validated_peer == None);
+              assert (hs'.CS.hs_certificate_verify == None);
+              assert (hs'.CS.hs_certificate_verify_verified == false);
+              assert (hs'.CS.hs_server_finished == None);
+              assert (Some? keys'.CS.ks_server_handshake_traffic);
+              assert (region_installs_ok keys' region);
               assert (s'.CS.cs_model.CS.model_control ==
                       CS.ControlHandshaking CS.HsEncryptedExtensionsReceived);
               introduce exists (region2:list CS.conn_event).
@@ -779,6 +983,7 @@ let step_from_eer (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
            let ee = Some?.v hs.CS.hs_encrypted_extensions in
            let pfx = prefix start ch sh shared in
            canonical_log_append st0.CS.cs_event_log [conn_ev];
+           raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
            assert (canonical_event conn_ev == ev_recv_cert cert);
            cons_append (ev_recv_ee ee) [] [canonical_event conn_ev];
            snoc_tail pfx region [ ev_recv_ee ee ] (canonical_event conn_ev);
@@ -837,6 +1042,7 @@ let step_from_cr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         let validate = CS.LocalValidateCertificate peer in
         assert (conn_ev == CS.ConnLocalEvent validate);
         canonical_log_append st0.CS.cs_event_log [conn_ev];
+        raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
         cons_append (ev_recv_ee ee) [ ev_recv_cert cert ] [conn_ev];
         cons_append (ev_recv_cert cert) [] [conn_ev];
         snoc_tail pfx region [ ev_recv_ee ee; ev_recv_cert cert ] conn_ev;
@@ -876,6 +1082,7 @@ let step_from_cvd (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
            let cert = Some?.v hs.CS.hs_certificate in
            let pfx = prefix start ch sh shared in
            canonical_log_append st0.CS.cs_event_log [conn_ev];
+           raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
            assert (canonical_event conn_ev == ev_recv_cv cv);
            cons_append (ev_recv_ee ee) [ ev_recv_cert cert; CS.ConnLocalEvent validate ]
              [canonical_event conn_ev];
@@ -931,6 +1138,7 @@ let step_from_cvr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         let verifysig = CS.LocalVerifyCertificateSignature cv0 in
         assert (conn_ev == CS.ConnLocalEvent verifysig);
         canonical_log_append st0.CS.cs_event_log [conn_ev];
+        raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
         cons_append (ev_recv_ee ee)
           [ ev_recv_cert cert; CS.ConnLocalEvent validate; ev_recv_cv cv ] [conn_ev];
         cons_append (ev_recv_cert cert)
@@ -979,6 +1187,7 @@ let step_from_cvv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
            let ps = [ ev_recv_ee ee; ev_recv_cert cert; CS.ConnLocalEvent validate;
                       ev_recv_cv cv; CS.ConnLocalEvent verifysig ] in
            canonical_log_append st0.CS.cs_event_log [conn_ev];
+           raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
            assert (canonical_event conn_ev == ev_recv_fin sf);
            (* flight_suffix ... [] == ps ++ [ev_recv_fin sf] *)
            cons_append (ev_recv_ee ee)
@@ -1058,6 +1267,14 @@ let step_from_sfv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         let keys' = s'.CS.cs_model.CS.model_handshake.CS.hs_keys in
         region_installs_ok_key_frame keys keys' region;
         canonical_log_append st0.CS.cs_event_log [conn_ev];
+        raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
+        let hs' = s'.CS.cs_model.CS.model_handshake in
+        assert (hs'.CS.hs_start == Some start);
+        assert (hs'.CS.hs_client_hello == Some ch);
+        assert (hs'.CS.hs_server_hello == Some sh);
+        assert (keys'.CS.ks_shared_secret == Some shared);
+        assert (exists (raw_suffix:list CS.conn_event).
+          s'.CS.cs_event_log == L.append pfx (L.append region raw_suffix));
         flight_suffix_snoc ee cert validate cv verifysig sf tail (canonical_event conn_ev);
         snoc_tail pfx region (flight_suffix ee cert validate cv verifysig sf tail)
           (canonical_event conn_ev);
@@ -1090,6 +1307,15 @@ let step_from_sfv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
            let pfx = prefix start ch sh shared in
            let tail' = L.append tail [canonical_event conn_ev] in
            canonical_log_append st0.CS.cs_event_log [conn_ev];
+           raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
+           let hs' = s'.CS.cs_model.CS.model_handshake in
+           let keys' = hs'.CS.hs_keys in
+           assert (hs'.CS.hs_start == Some start);
+           assert (hs'.CS.hs_client_hello == Some ch);
+           assert (hs'.CS.hs_server_hello == Some sh);
+           assert (keys'.CS.ks_shared_secret == Some shared);
+           assert (exists (raw_suffix:list CS.conn_event).
+             s'.CS.cs_event_log == L.append pfx (L.append region raw_suffix));
            flight_suffix_snoc ee cert validate cv verifysig sf tail (canonical_event conn_ev);
            snoc_tail pfx region (flight_suffix ee cert validate cv verifysig sf tail)
              (canonical_event conn_ev);
@@ -1149,6 +1375,15 @@ let step_from_appdata (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         let pfx = prefix start ch sh shared in
         let tail' = L.append tail [canonical_event conn_ev] in
         canonical_log_append st0.CS.cs_event_log [conn_ev];
+        raw_suffix_snoc pfx region st0.CS.cs_event_log s'.CS.cs_event_log conn_ev;
+        let hs' = s'.CS.cs_model.CS.model_handshake in
+        let keys' = hs'.CS.hs_keys in
+        assert (hs'.CS.hs_start == Some start);
+        assert (hs'.CS.hs_client_hello == Some ch);
+        assert (hs'.CS.hs_server_hello == Some sh);
+        assert (keys'.CS.ks_shared_secret == Some shared);
+        assert (exists (raw_suffix:list CS.conn_event).
+          s'.CS.cs_event_log == L.append pfx (L.append region raw_suffix));
         flight_suffix_snoc ee cert validate cv verifysig sf tail (canonical_event conn_ev);
         snoc_tail pfx region (flight_suffix ee cert validate cv verifysig sf tail)
           (canonical_event conn_ev);
@@ -1353,6 +1588,12 @@ let lemma_client_canonical_appdata_exact_spine
           (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
           (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
           (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
+          (exists (raw_suffix:list CS.conn_event).
+             s.CS.cs_event_log ==
+               L.append
+                 (PWSeg.client_cleartext_handshake_prefix_events
+                   start ch sh client_shared)
+                 (L.append region raw_suffix)) /\
           canonical_log s.CS.cs_event_log ==
             L.append
               (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
@@ -1382,6 +1623,12 @@ let lemma_client_canonical_appdata_exact_spine
           (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
           (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
           (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
+          (exists (raw_suffix:list CS.conn_event).
+             s.CS.cs_event_log ==
+               L.append
+                 (PWSeg.client_cleartext_handshake_prefix_events
+                   start ch sh client_shared)
+                 (L.append region raw_suffix)) /\
           canonical_log s.CS.cs_event_log ==
             L.append
               (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
@@ -1414,6 +1661,12 @@ let lemma_client_canonical_appdata_exact_spine
             (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
             (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
             (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
+            (exists (raw_suffix:list CS.conn_event).
+               s.CS.cs_event_log ==
+                 L.append
+                   (PWSeg.client_cleartext_handshake_prefix_events
+                     start ch sh client_shared)
+                   (L.append region raw_suffix)) /\
             canonical_log s.CS.cs_event_log ==
               L.append
                 (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
@@ -1449,6 +1702,12 @@ let lemma_client_canonical_appdata_exact_spine
             (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
             (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
             (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
+            (exists (raw_suffix:list CS.conn_event).
+               s.CS.cs_event_log ==
+                 L.append
+                   (PWSeg.client_cleartext_handshake_prefix_events
+                     start ch sh client_shared)
+                   (L.append region raw_suffix)) /\
             canonical_log s.CS.cs_event_log ==
               L.append
                 (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)

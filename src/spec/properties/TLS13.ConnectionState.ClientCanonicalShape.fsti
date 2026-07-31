@@ -116,6 +116,90 @@ let rec canonical_log (events:list CS.conn_event) : Tot (list CS.conn_event)
   | [] -> []
   | ev :: rest -> canonical_event ev :: canonical_log rest
 
+(** The actual raw encrypted-flight suffix, retaining protected head/drain
+    events while identifying their canonical handshake messages. *)
+let raw_flight_spine
+  (raw_suffix:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event)
+  (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event)
+  (sf:GFin.finished)
+  (tail:list CS.conn_event)
+  : prop =
+  exists (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
+         (raw_tail:list CS.conn_event).
+    raw_suffix ==
+      raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate ::
+      raw_cv :: CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail /\
+    canonical_event raw_ee ==
+      CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+      } /\
+    canonical_event raw_cert ==
+      CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.Certificate cert);
+      } /\
+    canonical_event raw_cv ==
+      CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+      } /\
+    canonical_event raw_sf ==
+      CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.Finished sf);
+      } /\
+    canonical_log raw_tail == tail
+
+val lemma_client_raw_suffix_flight_spine
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (client_shared:C.x25519_shared_secret)
+  (region raw_suffix log:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event)
+  (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event)
+  (sf:GFin.finished)
+  (tail:list CS.conn_event)
+  : Lemma
+      (requires
+        (forall (e:CS.conn_event).
+           L.memP e region ==> is_client_hs_install e == true) /\
+        log ==
+          L.append
+            (PWSeg.client_cleartext_handshake_prefix_events
+              start ch sh client_shared)
+            (L.append region raw_suffix) /\
+        canonical_log log ==
+          L.append
+            (PWSeg.client_cleartext_handshake_prefix_events
+              start ch sh client_shared)
+            (L.append region
+              (CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+               } ::
+               CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.Certificate cert);
+               } ::
+               CS.ConnLocalEvent cv_validate ::
+               CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+               } ::
+               CS.ConnLocalEvent cv_verify ::
+               CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.Finished sf);
+               } ::
+               tail)))
+      (ensures
+        raw_flight_spine raw_suffix ee cert cv_validate cv cv_verify sf tail)
+
 (* ------------------------------------------------------------------ *)
 (* Top lemma                                                           *)
 (* ------------------------------------------------------------------ *)
@@ -141,6 +225,12 @@ val lemma_client_canonical_appdata_exact_spine
           (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
           (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
           (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
+          (exists (raw_suffix:list CS.conn_event).
+             s.CS.cs_event_log ==
+               L.append
+                 (PWSeg.client_cleartext_handshake_prefix_events
+                   start ch sh client_shared)
+                 (L.append region raw_suffix)) /\
           canonical_log s.CS.cs_event_log ==
             L.append
               (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
