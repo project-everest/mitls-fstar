@@ -2,7 +2,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-URL="${1:?usage: launch-chrome.sh URL [CHROMIUM_ARGUMENT ...]}"
+MODE="local"
+if [[ "${1:-}" == "--public" ]]; then
+  MODE="public"
+  shift
+fi
+URL="${1:?usage: launch-chrome.sh [--public] URL [CHROMIUM_ARGUMENT ...]}"
 shift
 
 "$ROOT/check-deps.sh"
@@ -10,13 +15,29 @@ shift
 PROFILE="${MITLS_CHROME_PROFILE:-${XDG_CACHE_HOME:-$HOME/.cache}/mitls-chromium-demo-profile}"
 mkdir -p "$PROFILE"
 
+declare -a mode_arguments
+if [[ "$MODE" == "public" ]]; then
+  mode_arguments=()
+else
+  case "$URL" in
+    https://localhost|https://localhost/*|https://localhost:*) ;;
+    *)
+      echo "Non-local URLs require --public so certificate errors are enforced." >&2
+      exit 2
+      ;;
+  esac
+  mode_arguments=(
+    --ignore-certificate-errors
+    '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost'
+  )
+fi
+
 exec "$ROOT/chromium/chrome" \
   --use-verified-mitls \
   --no-sandbox \
   --disable-gpu \
   --disable-field-trial-config \
   --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs,Prewarm \
-  --ignore-certificate-errors \
   --disable-background-networking \
   --disable-client-side-phishing-detection \
   --disable-component-extensions-with-background-pages \
@@ -25,7 +46,6 @@ exec "$ROOT/chromium/chrome" \
   --disable-domain-reliability \
   --disable-sync \
   --disable-quic \
-  --host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE localhost" \
   --no-proxy-server \
   --no-service-autorun \
   --no-default-browser-check \
@@ -35,5 +55,6 @@ exec "$ROOT/chromium/chrome" \
   --enable-logging=stderr \
   --log-level=0 \
   --user-data-dir="$PROFILE" \
+  "${mode_arguments[@]}" \
   "$@" \
   "$URL"

@@ -987,7 +987,8 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: tls13-client-provider chromium-install-provider chromium-configure \
-  chromium-net chromium-browser test-chromium-browser chromium-demo-bundle \
+  chromium-net chromium-browser test-chromium-browser \
+  test-chromium-browser-public chromium-demo-bundle \
   test-chromium-demo-bundle \
   test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
@@ -1227,6 +1228,46 @@ test-chromium-browser: chromium-browser test/openssl_http_server \
 	    $(EXTRACT_DIR)/chromium_browser.log; \
 	  echo "Chromium verified-miTLS HTTPS smoke test passed"
 
+test-chromium-browser-public: chromium-browser
+	@rm -f $(EXTRACT_DIR)/chromium_google.dom \
+	  $(EXTRACT_DIR)/chromium_google.log \
+	  $(EXTRACT_DIR)/chromium_microsoft.dom \
+	  $(EXTRACT_DIR)/chromium_microsoft.log
+	@rm -rf $(EXTRACT_DIR)/chromium_google_profile \
+	  $(EXTRACT_DIR)/chromium_microsoft_profile
+	@set -e; \
+	  timeout 90 "$(CHROMIUM_SRC)/$(CHROMIUM_OUT)/chrome" \
+	    --headless --no-sandbox --disable-gpu --disable-quic \
+	    --disable-background-networking \
+	    --disable-component-update --disable-sync \
+	    --disable-field-trial-config \
+	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
+	    --enable-logging=stderr --log-level=0 --no-first-run \
+	    --no-proxy-server --use-verified-mitls \
+	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_google_profile)" \
+	    --dump-dom "https://www.google.com/" \
+	    > $(EXTRACT_DIR)/chromium_google.dom \
+	    2> $(EXTRACT_DIR)/chromium_google.log; \
+	  grep -q '<title>Google</title>' $(EXTRACT_DIR)/chromium_google.dom; \
+	  grep -q "Verified miTLS provider selected for www.google.com:443" \
+	    $(EXTRACT_DIR)/chromium_google.log; \
+	  timeout 90 "$(CHROMIUM_SRC)/$(CHROMIUM_OUT)/chrome" \
+	    --headless --no-sandbox --disable-gpu --disable-quic \
+	    --disable-background-networking \
+	    --disable-component-update --disable-sync \
+	    --disable-field-trial-config \
+	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
+	    --enable-logging=stderr --log-level=0 --no-first-run \
+	    --no-proxy-server --use-verified-mitls \
+	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_microsoft_profile)" \
+	    --dump-dom "https://www.microsoft.com/" \
+	    > $(EXTRACT_DIR)/chromium_microsoft.dom \
+	    2> $(EXTRACT_DIR)/chromium_microsoft.log; \
+	  grep -q '<title>Microsoft' $(EXTRACT_DIR)/chromium_microsoft.dom; \
+	  grep -q "Verified miTLS provider selected for www.microsoft.com:443" \
+	    $(EXTRACT_DIR)/chromium_microsoft.log; \
+	  echo "Chromium verified-miTLS public HTTPS smoke tests passed"
+
 $(CHROMIUM_DEMO_BUNDLE): chromium-browser test/openssl_http_server \
   test/certs/chain.pem test/certs/leaf.key \
   runtime/chromium/package_demo_bundle.py \
@@ -1411,7 +1452,8 @@ clean:
   test-client test-openssl-echo test-client-engine-openssl-echo \
   test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient \
   tls13-client-provider chromium-install-provider chromium-configure \
-  chromium-net chromium-browser test-chromium-browser chromium-demo-bundle \
+  chromium-net chromium-browser test-chromium-browser \
+  test-chromium-browser-public chromium-demo-bundle \
   test-chromium-demo-bundle \
   check-c-stubs check-toolchain check-deps benchmark benchmark-build \
   benchmark-profile-build profile clean

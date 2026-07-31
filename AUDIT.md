@@ -62,6 +62,9 @@ For accepted network/local steps, the public postconditions prove that:
   recursive raw-record segmentation facts;
 - successful non-decode-error network input projects to decoded TLS messages and
   legal received events;
+- coalesced protected handshake messages are drained through verified client
+  events while raw record accounting advances exactly once for the enclosing
+  record;
 - protected received records expose record-layer open facts and read-key/IV
   provenance from the installed key schedule;
 - emitted protected records expose seal facts and write-key/IV provenance;
@@ -183,6 +186,8 @@ portable path, while `make test-chromium-browser` exercises the actual Chromium
 binary and its out-of-process Network Service over a real TLS 1.3 HTTP/1.1
 exchange. The browser smoke is fail-closed and asserts the provider-selection
 diagnostic, so Chromium's BoringSSL TLS socket cannot satisfy it.
+`make test-chromium-browser-public` separately checks network-dependent Google
+and Microsoft top-level navigation through the same fail-closed provider.
 
 These C drivers are thin ABI wrappers around the extracted endpoint/canonical
 runtime path:

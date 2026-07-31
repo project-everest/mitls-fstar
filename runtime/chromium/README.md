@@ -50,6 +50,7 @@ The checked integration is pinned to Chromium revision
 make -j$(nproc) chromium-net
 make -j$(nproc) chromium-browser
 make -j$(nproc) test-chromium-browser
+make -j$(nproc) test-chromium-browser-public
 ```
 
 Override `CHROMIUM_SRC`, `DEPOT_TOOLS`, or `CHROMIUM_OUT` when using other
@@ -91,6 +92,12 @@ provider's profile. It uses Chromium's explicit certificate-error override for
 the local test CA; the bridge still invokes `CertVerifier` and verifies the
 server's CertificateVerify signature.
 
+`test-chromium-browser-public` is a separate, network-dependent smoke test for
+Google and Microsoft. It requires each real top-level DOM marker and the exact
+verified-provider selection diagnostic. These sites accept the current narrow
+TLS profile over HTTP/1.1, so ALPN is not required for their top-level pages.
+Unsupported third-party subresource origins still fail closed.
+
 ## Transferable Linux bundle
 
 Build and test the Linux x86_64 demonstration archive:
@@ -109,6 +116,8 @@ tar xzf mitls-chromium-demo-linux-x86_64.tar.gz
 cd mitls-chromium-demo-linux-x86_64
 ./run-demo.sh --headless
 ./run-demo.sh
+./launch-chrome.sh --public https://www.google.com/
+./launch-chrome.sh --public https://www.microsoft.com/
 ```
 
 The headless invocation is a self-test that requires both the expected HTTPS
@@ -127,9 +136,10 @@ The browser provider is statically linked into `chrome`; no miTLS shared
 library is required. The archive still relies on compatible Linux system
 libraries, including glibc and the libraries reported by `check-deps.sh`. It
 uses `--no-sandbox`, because a transferable archive cannot install Chromium's
-setuid sandbox with root ownership. This bundle is therefore only for the
-controlled localhost demonstration. The included certificate private key is
-public test material and must not be reused.
+setuid sandbox with root ownership. Public mode restores normal DNS and enforces
+certificate errors, but should still be used only against trusted sites in a
+controlled environment. The included certificate private key is public test
+material and must not be reused.
 
 The relevant Chromium source surfaces are:
 

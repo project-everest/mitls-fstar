@@ -16,15 +16,25 @@ Launch a visible browser:
 ./run-demo.sh
 ```
 
+Browse a public HTTPS origin with normal DNS and certificate enforcement:
+
+```sh
+./launch-chrome.sh --public https://www.google.com/
+./launch-chrome.sh --public https://www.microsoft.com/
+```
+
 The scripts start the bundled server on an automatically selected localhost
 port and launch this bundle's Chromium binary with `--use-verified-mitls`.
 Success requires the page to contain `verified chromium demo` and Chromium's
 diagnostics to report that the verified miTLS provider was selected.
-The controlled launcher forces software rendering and prevents DNS resolution
-for non-localhost names, avoiding destination-specific GPU drivers and unrelated
-browser background connections.
+The controlled localhost mode forces software rendering and prevents DNS
+resolution for non-localhost names, avoiding destination-specific GPU drivers
+and unrelated browser background connections.
 The HTTPS server tolerates Chromium's speculative TLS preconnections and keeps
 listening until the navigation sends the real HTTP request.
+Public mode removes the localhost DNS block and does not ignore certificate
+errors. Unsupported TLS profiles fail closed; some third-party subresources may
+therefore fail even when the requested top-level page renders.
 
 This is a narrow demonstration profile: TLS 1.3, X25519,
 TLS_CHACHA20_POLY1305_SHA256, RSA-PSS-RSAE-SHA256, and HTTP/1.1 without ALPN.
@@ -36,7 +46,7 @@ to diagnose missing dependencies; the build host's dependency list is recorded
 in `SYSTEM_LIBRARIES.txt`. A visible run also requires a graphical Linux
 desktop. The demo uses `--no-sandbox` because an archive cannot install
 Chromium's setuid sandbox with the required root ownership. Run it only against
-the bundled localhost server in a controlled environment.
+trusted sites in a controlled environment.
 
 If a run fails, `run-demo.sh` retains its temporary directory and prints its
 location. That directory contains `chromium.log`, `server.log`, and

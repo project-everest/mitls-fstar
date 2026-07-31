@@ -61,6 +61,7 @@ make test            # verify, check echo stubs, and run OpenSSL echo interop
 make test-chromium-client-demo  # async HTTPS/1.1 Chromium adapter demo
 make chromium-browser            # build Chromium with the verified provider
 make test-chromium-browser       # actual browser HTTPS smoke test
+make test-chromium-browser-public # network-dependent Google/Microsoft smoke
 make chromium-demo-bundle        # transferable Linux x86_64 browser/server demo
 make test-chromium-demo-bundle   # test the freshly extracted demo archive
 ```
