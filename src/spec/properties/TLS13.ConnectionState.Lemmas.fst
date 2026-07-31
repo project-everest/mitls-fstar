@@ -2453,7 +2453,15 @@ let server_application_record_epoch_reachable_shape
   | ControlHandshaking HsClientHelloReceived
   | ControlHandshaking HsServerHelloSent
   | ControlHandshaking HsServerEncryptedFlightSent ->
-    no_application_traffic_keys keys
+    no_application_traffic_keys keys /\
+    // STAGE (b), server mirror: the server installs its application WRITE key only
+    // at HsServerFinishedSent (LocalInstallServerApplicationTrafficKeys), which is
+    // strictly AFTER every server handshake SEND (ServerHello .. Finished, all at
+    // HsServerHelloSent/HsServerEncryptedFlightSent).  So record_write stays off
+    // the Application epoch throughout the server's sending stages, pinning
+    // app_wseq to 0 there — exactly the guard the send-delta lemma needs at a
+    // server handshake send.
+    model.model_record.record_write.R.epoch =!= R.Application
   | ControlHandshaking HsServerFinishedSent ->
     keys.ks_client_application_traffic == None /\
     server_application_record_write_epoch_link model /\
@@ -2802,21 +2810,24 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             (match model.model_control with
              | ControlNew ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalSelectServerParameters _ ->
             (match model.model_control with
              | ControlHandshaking HsClientHelloReceived ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalDeriveSharedSecret _ ->
             (match model.model_control with
              | ControlHandshaking HsClientHelloReceived ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalInstallTrafficKeysForRole role_install ->
@@ -2830,7 +2841,10 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                 | TrafficHandshake, _ ->
                   assert (stage == HsServerHelloSent);
                   assert (no_application_traffic_keys model.model_handshake.hs_keys);
-                  assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+                  assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+                  // handshake write-key install lands record_write at the Handshake
+                  // epoch, never Application.
+                  assert (model'.model_record.record_write.R.epoch =!= R.Application)
                 | TrafficApplication, TrafficWrite ->
                   assert (stage == HsServerFinishedSent);
                   assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
@@ -2863,7 +2877,8 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             (match model.model_control with
              | ControlHandshaking HsServerEncryptedFlightSent ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalVerifyClientFinished _ ->
@@ -2915,7 +2930,12 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
           | M.TlsHandshake (M.CertificateVerify _), CL.Sent,
             ControlHandshaking HsServerEncryptedFlightSent ->
             assert (no_application_traffic_keys model.model_handshake.hs_keys);
-            assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+            assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+            // These arms either leave record_write untouched (received ClientHello)
+            // or advance it by `next_seq` (server handshake sends), both of which
+            // PRESERVE the write epoch; the strengthened pre-shape gives it off
+            // Application, so it stays off Application.
+            assert (model'.model_record.record_write.R.epoch =!= R.Application)
           | M.TlsHandshake (M.Finished _), CL.Sent,
             ControlHandshaking HsServerEncryptedFlightSent ->
             assert (no_application_traffic_keys model.model_handshake.hs_keys);
@@ -3217,6 +3237,116 @@ let lemma_client_finished_verified_write_epoch_not_application
   assert (connection_state_evolves (initial st.cs_model.model_config) st);
   assert (p st);
   assert (client_application_record_epoch_reachable_shape st.cs_model)
+
+(** STAGE (b), message-keyed form: whenever a reachable CLIENT endpoint legally
+    *sends* a handshake message, its record_write is still at the Handshake epoch
+    (not Application).  This packages the two client Sent-handshake sites uniformly:
+    by `legal_handshake_message` (StateMachine.fst:1300) the only `CL.Sent` arms
+    with `config_role == ClientEndpoint` are `ClientHello @ HsStarted` and
+    `Finished @ HsServerFinishedVerified` — every other Sent arm requires
+    `ServerEndpoint` or falls through to `False`.  Both of those stages sit in the
+    strengthened `client_application_record_epoch_reachable_shape`, which pins
+    record_write off the Application epoch throughout the client handshake.  This
+    is the guard the application record-seq delta lemma needs at a client send. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_client_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role ClientEndpoint in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert (client_application_record_epoch_reachable_shape st.cs_model);
+  // Client handshaking stages: the strengthened shape gives record_write off the
+  // Application epoch directly.  Everything else is unreachable for a legal client
+  // Sent handshake (legal_handshake_message has no ClientEndpoint Sent arm there).
+  match st.cs_model.model_control with
+  | ControlHandshaking HsStarted
+  | ControlHandshaking HsClientHelloSent
+  | ControlHandshaking HsServerHelloReceived
+  | ControlHandshaking HsEncryptedExtensionsReceived
+  | ControlHandshaking HsCertificateReceived
+  | ControlHandshaking HsCertificateValidated
+  | ControlHandshaking HsCertificateVerifyReceived
+  | ControlHandshaking HsCertificateVerifyVerified
+  | ControlHandshaking HsServerFinishedReceived
+  | ControlHandshaking HsServerFinishedVerified -> ()
+  | _ ->
+    assert False
+#pop-options
+
+(** STAGE (b), server mirror of the message-keyed extraction: any legal SERVER
+    *send* of a handshake message happens with record_write off the Application
+    epoch.  The only server Sent-handshake sites are ServerHello @
+    HsClientHelloReceived, EncryptedExtensions @ HsServerHelloSent, and
+    Certificate/CertificateVerify/Finished @ HsServerEncryptedFlightSent — all in
+    the strengthened grouped arm of `server_application_record_epoch_reachable_shape`,
+    which pins record_write off Application throughout the server's sending
+    stages (the server app write key installs only later, at HsServerFinishedSent). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_server_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role ServerEndpoint in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    ServerEndpoint
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    ServerEndpoint;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert (server_application_record_epoch_reachable_shape st.cs_model);
+  match st.cs_model.model_control with
+  | ControlNew
+  | ControlHandshaking HsAwaitingClientHello
+  | ControlHandshaking HsClientHelloReceived
+  | ControlHandshaking HsServerHelloSent
+  | ControlHandshaking HsServerEncryptedFlightSent -> ()
+  | _ ->
+    assert False
+#pop-options
 
 let lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)

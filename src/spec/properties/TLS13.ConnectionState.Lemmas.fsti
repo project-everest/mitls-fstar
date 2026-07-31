@@ -207,6 +207,36 @@ val lemma_client_finished_verified_write_epoch_not_application
       (ensures
         st.cs_model.model_record.record_write.R.epoch =!= R.Application)
 
+(** STAGE (b), message-keyed: any legal CLIENT *send* of a handshake message
+    happens with record_write still off the Application epoch.  The only client
+    Sent-handshake sites are ClientHello @ HsStarted and Finished @
+    HsServerFinishedVerified, both covered by the strengthened reachable shape. **)
+val lemma_client_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+
+(** STAGE (b), server mirror: any legal SERVER *send* of a handshake message
+    happens with record_write off the Application epoch. **)
+val lemma_server_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+
 val lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma

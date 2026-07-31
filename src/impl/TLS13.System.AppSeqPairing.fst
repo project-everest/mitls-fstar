@@ -159,28 +159,6 @@ let rin (p:SY.tls_payload) : nat =
 let rin_app (p:SY.tls_payload) : nat =
   if R.Application? (snap_wr p).R.epoch then rin p else 0
 
-(** The app-epoch WRITE advance a SENT message applies (when the writer is at the
-    `Application` epoch): `application_data_record_count` for app data, one for a
-    protected `Close_notify`, zero otherwise. **)
-let msg_wcount (msg:M.tls_message) : nat =
-  match msg with
-  | M.TlsApplicationData b -> RF.application_data_record_count b
-  | M.TlsAlert T.Close_notify -> 1
-  | _ -> 0
-
-(** The app-epoch READ advance a RECEIVED message applies (when the reader is at
-    the `Application` epoch): a single record for every deliverable protected
-    payload (`step_tls_message` bumps `record_read` by exactly one via `next_seq`),
-    zero otherwise.  Note this differs from `msg_wcount` on multi-record app data —
-    but such a send is UNDELIVERABLE (`tls_carries` forces a single wire record),
-    so at any real delivery `msg_wcount == msg_rcount == 1`. **)
-let msg_rcount (msg:M.tls_message) : nat =
-  match msg with
-  | M.TlsApplicationData _ -> 1
-  | M.TlsAlert T.Close_notify -> 1
-  | M.TlsIgnoredPostHandshake _ -> 1
-  | _ -> 0
-
 (** A no-key-update event log whose LAST event sends `msg` cannot send a
     `KeyUpdate` — the tail element must itself be non-`KeyUpdate`.  This is how
     `SY.tls_no_rekeying` on the POST-state excludes the `KeyUpdate` arms of
@@ -210,7 +188,7 @@ let lemma_sent_not_key_update (st:CS.connection_state) (msg:M.tls_message)
       lemma_no_key_update_tail prefix (SMKM.sent_tls_event msg)
 
 (** SEND DELTA.  A legal `Sent` model step advances the epoch-collapsing WRITE
-    projection by `msg_wcount msg` (when the writer is at the `Application` epoch)
+    projection by `m_wadv m msg` (when the writer is at the `Application` epoch)
     and leaves the READ projection unchanged.
 
     The GUARD `((m_wr m).epoch =!= Application \/ ~TlsHandshake? msg)` excludes the
@@ -280,7 +258,7 @@ let lemma_sent_wseq_delta (m m':CS.connection_model) (msg:M.tls_message)
 #pop-options
 
 (** RECEIVE DELTA.  A legal `Received` model step advances the epoch-collapsing
-    READ projection by `msg_rcount msg` (when the reader is at the `Application`
+    READ projection by `m_radv m msg` (when the reader is at the `Application`
     epoch) and leaves the WRITE projection unchanged.  Same guard rationale. **)
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
 (** The `Received` handshake sub-case of the receive delta. **)
@@ -542,5 +520,117 @@ let lemma_client_send_pins_model
       // on the shared head pins the singleton tails equal.
       L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
       assert (conn_ev == SMKM.sent_tls_event sent)
+    )
+#pop-options
+
+(** WIRE-level, SERVER mirror: a server `LocalEvent` send whose event-log delta
+    records `SMKM.sent_tls_event sent` pins the model transition to that message.
+    Same append-injectivity argument as the client, against the
+    `canonical_wire_step` inside `ES.server_step`'s `LocalEvent` arm. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_server_send_pins_model
+  (st0 s':CS.connection_state)
+  (local:CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        ES.server_step st0 (SM.LocalEvent local) s' out /\
+        s'.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent])
+      (ensures
+        CS.legal_event st0.CS.cs_model (SMKM.sent_tls_event sent) /\
+        CS.step_model st0.CS.cs_model (SMKM.sent_tls_event sent) == Some s'.CS.cs_model)
+  = eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      ES.server_representation_matches local conn_ev /\
+      ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty
+    returns
+      CS.legal_event st0.CS.cs_model (SMKM.sent_tls_event sent) /\
+      CS.step_model st0.CS.cs_model (SMKM.sent_tls_event sent) == Some s'.CS.cs_model
+    with _pf.
+    (
+      L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
+      assert (conn_ev == SMKM.sent_tls_event sent)
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE (b) PRESERVATION — the SEND families.
+
+    A `client_send`/`server_send` enters `MP.ToServer`/`MP.ToClient` from a
+    `Quiet` pre-state.  The acting endpoint steps by exactly the message it appends
+    to its event log (`lemma_*_send_pins_model`), so the epoch-collapsing write
+    projection advances by `rin_app` of the freshly-created payload and the read
+    projection is unchanged (`lemma_sent_wseq_delta`).  The two send-delta GUARDS
+    are discharged HERE:
+
+      * `~M.TlsKeyUpdate? sent` from `SY.tls_no_rekeying b` on the post-state's
+        acting endpoint (`lemma_sent_not_key_update`); and
+      * `(m_wr …).epoch =!= Application \/ ~M.TlsHandshake? sent`: trivial for a
+        non-handshake send, and for a handshake send exactly the new reachable-shape
+        extraction lemma `CSL.lemma_{client,server}_handshake_send_write_epoch_not_application`
+        (a client/server never sends a handshake once its write epoch is
+        Application).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_asp_client_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ app_seq_pairing a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_send a b /\ SY.tls_no_rekeying b)
+      (ensures app_seq_pairing b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    returns app_seq_pairing b
+    with _pf.
+    (
+      assert (SMCorr.connection_state_no_key_update_trace c');
+      lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      // ~KeyUpdate from the post-state's no-rekeying trace.
+      lemma_sent_not_key_update c' sent;
+      // write-epoch guard: trivial for non-handshake, extraction lemma otherwise.
+      (match sent with
+       | M.TlsHandshake hm ->
+           CSL.lemma_client_handshake_send_write_epoch_not_application a.client c' hm
+       | _ -> ());
+      lemma_sent_wseq_delta a.client.CS.cs_model c'.CS.cs_model sent
+    )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_asp_server_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ app_seq_pairing a /\ MP.Quiet? a.channel /\
+        SY.tls_step_server_send a b /\ SY.tls_no_rekeying b)
+      (ensures app_seq_pairing b)
+  = SY.lemma_server_send_shape a b;
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
+    returns app_seq_pairing b
+    with _pf.
+    (
+      assert (SMCorr.connection_state_no_key_update_trace s');
+      lemma_server_send_pins_model a.server s' local out sent;
+      assert (CS.step_tls_message a.server.CS.cs_model CL.Sent sent == Some s'.CS.cs_model);
+      lemma_sent_not_key_update s' sent;
+      (match sent with
+       | M.TlsHandshake hm ->
+           CSL.lemma_server_handshake_send_write_epoch_not_application a.server s' hm
+       | _ -> ());
+      lemma_sent_wseq_delta a.server.CS.cs_model s'.CS.cs_model sent
     )
 #pop-options
