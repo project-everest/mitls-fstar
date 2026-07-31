@@ -459,6 +459,7 @@ let lemma_step_record_schedule_coupling
       (ensures record_schedule_coupling m')
   = match ev with
     | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnProtectedHandshake _ -> ()
     | CS.ConnLocalEvent local ->
       (match local with
        | CS.LocalInstallTrafficKeys install -> ()
@@ -651,6 +652,7 @@ let lemma_nonempty_sent_event
       (ensures (exists (msg:M.tls_message). ev == SMKM.sent_tls_event msg))
   = match ev with
     | CS.ConnLocalEvent _ -> ()
+    | CS.ConnProtectedHandshake _ -> ()
     | CS.ConnNetworkEvent dm ->
       (match dm.CL.message_direction with
        | CL.Sent ->
@@ -1119,6 +1121,7 @@ let lemma_step_record_app_epoch_coupling
       (ensures record_app_epoch_coupling m')
   = match ev with
     | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnProtectedHandshake _ -> ()
     | CS.ConnLocalEvent local ->
       (match local with
        | CS.LocalInstallTrafficKeys install -> ()
@@ -1333,6 +1336,49 @@ let lemma_network_empty_delta_record_unchanged
            B.empty T.Application_data
            (CS.protected_record_count CL.Received dm.CL.message_value))
     end
+#pop-options
+
+(** A buffered protected-handshake drain has no raw bytes.  Non-Finished
+    drains restore the source read-record state; Finished atomically installs
+    the application read state, making all handshake/initial post-state gates
+    vacuous. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_client_protected_empty_delta_read_facts
+  (m:CS.connection_model) (step:CS.protected_handshake_step)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnProtectedHandshake step) /\
+        CS.step_model m (CS.ConnProtectedHandshake step) == Some m' /\
+        CS.event_raw_delta_legal m (CS.ConnProtectedHandshake step) B.empty B.empty)
+      (ensures
+        (PC.pre_appdata_control m'.CS.model_control /\
+         m.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         m'.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
+           m'.CS.model_record.CS.record_read.R.seq ==
+             m.CS.model_record.CS.record_read.R.seq) /\
+        (PC.pre_appdata_control m'.CS.model_control /\
+         m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
+         ~(m.CS.model_record.CS.record_read.R.epoch == R.Handshake) ==>
+           m'.CS.model_record.CS.record_read.R.seq == 0) /\
+        (PC.pre_appdata_control m'.CS.model_control /\
+         m'.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
+           m.CS.model_record.CS.record_read.R.epoch == R.Initial))
+  =
+  if step.CS.protected_handshake_head
+  then
+    ( assert (CS.raw_records_exactly B.empty T.Application_data 1);
+      WStep.lemma_ws_raw_records_nonempty_parse_record B.empty T.Application_data 1 )
+  else
+    match step.CS.protected_handshake_message with
+    | M.EncryptedExtensions _
+    | M.Certificate _
+    | M.CertificateVerify _ ->
+      assert (m'.CS.model_record.CS.record_read == m.CS.model_record.CS.record_read)
+    | M.Finished _ ->
+      assert (m'.CS.model_record.CS.record_read.R.epoch == R.Application)
+    | _ ->
+      assert False
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -1587,6 +1633,7 @@ let lemma_client_local_pwrite
            lemma_discharge_client_write a local';
            lemma_client_local_record_seq_stable_write a.CS.cs_model local' c'.CS.cs_model;
            lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnProtectedHandshake _ -> ()
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
         lemma_pwrite_algebra a d c' msgs
@@ -1636,6 +1683,14 @@ let lemma_client_local_pread
            lemma_discharge_client_read a local';
            lemma_client_local_record_seq_stable_read a.CS.cs_model local' c'.CS.cs_model;
            lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnProtectedHandshake step ->
+           assert (CS.legal_event a.CS.cs_model (CS.ConnProtectedHandshake step));
+           assert (CS.step_model a.CS.cs_model (CS.ConnProtectedHandshake step) ==
+                   Some c'.CS.cs_model);
+           assert (CS.event_raw_delta_legal a.CS.cs_model
+                     (CS.ConnProtectedHandshake step) B.empty B.empty);
+           lemma_client_protected_empty_delta_read_facts
+             a.CS.cs_model step c'.CS.cs_model
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
         lemma_pread_algebra a d c' msgs
@@ -1689,6 +1744,7 @@ let lemma_server_local_pwrite
            lemma_discharge_server_write a local';
            lemma_server_local_record_seq_stable_write a.CS.cs_model local' c'.CS.cs_model;
            lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnProtectedHandshake _ -> ()
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
         lemma_pwrite_algebra a d c' msgs
@@ -1736,6 +1792,7 @@ let lemma_server_local_pread
            lemma_discharge_server_read a local';
            lemma_server_local_record_seq_stable_read a.CS.cs_model local' c'.CS.cs_model;
            lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         | CS.ConnProtectedHandshake _ -> ()
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
         lemma_pread_algebra a d c' msgs
