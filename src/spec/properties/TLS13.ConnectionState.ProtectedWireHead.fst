@@ -48,7 +48,8 @@ let lemma_sent_replay_skip_empty_head_preserves_peer_stream
           sender_final /\
         (match ev with
          | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+           | ConnProtectedHandshake _ -> True
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists sender1 sender_tail_sent sender_tail_received.
           legal_event sender ev /\
@@ -101,6 +102,8 @@ let lemma_sent_replay_skip_empty_head_preserves_peer_stream
   ( match ev with
     | ConnLocalEvent _ ->
       assert (Seq.equal delta_sent B.empty)
+    | ConnProtectedHandshake _ ->
+      assert (Seq.equal delta_sent B.empty)
     | ConnNetworkEvent msg ->
       assert (msg.CL.message_direction == CL.Received);
       assert (Seq.equal delta_sent B.empty);
@@ -143,7 +146,8 @@ let lemma_received_replay_skip_empty_head_preserves_peer_stream
           receiver_final /\
         (match ev with
          | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+           | ConnProtectedHandshake step -> not step.protected_handshake_head
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists receiver1 receiver_tail_sent receiver_tail_received.
           legal_event receiver ev /\
@@ -196,6 +200,8 @@ let lemma_received_replay_skip_empty_head_preserves_peer_stream
   ( match ev with
     | ConnLocalEvent _ ->
       assert (Seq.equal delta_received B.empty)
+    | ConnProtectedHandshake _ ->
+      assert (Seq.equal delta_received B.empty)
     | ConnNetworkEvent msg ->
       assert (msg.CL.message_direction == CL.Sent);
       assert (Seq.equal delta_received B.empty);
@@ -238,7 +244,8 @@ let lemma_sent_replay_skip_zero_received_head_preserves_peer_stream
           sender_final /\
         (match ev with
          | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+           | ConnProtectedHandshake step -> not step.protected_handshake_head
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists sender1 sender_tail_sent sender_tail_received.
           legal_event sender ev /\
@@ -291,6 +298,8 @@ let lemma_sent_replay_skip_zero_received_head_preserves_peer_stream
   ( match ev with
     | ConnLocalEvent _ ->
       assert (Seq.equal delta_received B.empty)
+    | ConnProtectedHandshake _ ->
+      assert (Seq.equal delta_received B.empty)
     | ConnNetworkEvent msg ->
       assert (msg.CL.message_direction == CL.Sent);
       assert (Seq.equal delta_received B.empty);
@@ -333,7 +342,8 @@ let lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
           receiver_final /\
         (match ev with
          | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+           | ConnProtectedHandshake _ -> True
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists receiver1 receiver_tail_sent receiver_tail_received.
           legal_event receiver ev /\
@@ -385,6 +395,8 @@ let lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
   with _.
   ( match ev with
     | ConnLocalEvent _ ->
+      assert (Seq.equal delta_sent B.empty)
+    | ConnProtectedHandshake _ ->
       assert (Seq.equal delta_sent B.empty)
     | ConnNetworkEvent msg ->
       assert (msg.CL.message_direction == CL.Received);
@@ -439,10 +451,12 @@ let lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
           receiver_final /\
         (match sender_ev with
          | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
-        (match receiver_ev with
-         | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+           | ConnProtectedHandshake step -> not step.protected_handshake_head
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
+          (match receiver_ev with
+           | ConnLocalEvent _ -> True
+           | ConnProtectedHandshake _ -> True
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists sender1 receiver1
           sender_tail_sent sender_tail_received
@@ -614,10 +628,12 @@ let lemma_sent_received_replays_skip_empty_opposite_heads_preserve_peer_stream
           receiver_final /\
         (match sender_ev with
          | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
-        (match receiver_ev with
-         | ConnLocalEvent _ -> True
-         | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+           | ConnProtectedHandshake _ -> True
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
+          (match receiver_ev with
+           | ConnLocalEvent _ -> True
+           | ConnProtectedHandshake step -> not step.protected_handshake_head
+           | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists sender1 receiver1
           sender_tail_sent sender_tail_received
@@ -2426,6 +2442,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         step_model sender skip_ev == Some sender_after /\
         (match skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake _ -> True
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         sender_after.model_record.record_write.R.seq ==
           receiver.model_record.record_read.R.seq /\
@@ -2547,6 +2564,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         step_model sender skip_ev == Some sender_after /\
         (match skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake _ -> True
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         write_read_record_material_aligned sender_after receiver /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -2809,6 +2827,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
           R.next_seq receiver.model_record.record_read /\
         (match skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake _ -> True
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         write_read_record_material_aligned sender_after receiver /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -2993,6 +3012,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         step_model receiver skip_ev == Some receiver_after /\
         (match skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake step -> not step.protected_handshake_head
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         sender.model_record.record_write.R.seq ==
           receiver_after.model_record.record_read.R.seq /\
@@ -3114,6 +3134,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         step_model receiver skip_ev == Some receiver_after /\
         (match skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake step -> not step.protected_handshake_head
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -3376,6 +3397,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
           R.next_seq receiver_after.model_record.record_read /\
         (match skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake step -> not step.protected_handshake_head
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -3563,9 +3585,11 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads
         step_model receiver receiver_skip_ev == Some receiver_after /\
         (match sender_skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake _ -> True
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake step -> not step.protected_handshake_head
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         sender_after.model_record.record_write.R.seq ==
           receiver_after.model_record.record_read.R.seq /\
@@ -3728,9 +3752,11 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
         step_model receiver receiver_skip_ev == Some receiver_after /\
         (match sender_skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake _ -> True
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake step -> not step.protected_handshake_head
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender_after receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -4044,9 +4070,11 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
           R.next_seq receiver_after.model_record.record_read /\
         (match sender_skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake _ -> True
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | ConnLocalEvent _ -> True
+         | ConnProtectedHandshake step -> not step.protected_handshake_head
          | ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender_after receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\

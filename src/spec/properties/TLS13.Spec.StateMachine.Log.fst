@@ -79,6 +79,7 @@ let state_event_of_conn_event (ev:conn_event) : GTot (option S.event) =
      | _, _ -> None)
   | ConnProtectedHandshake step ->
     (match step.protected_handshake_message with
+     | M.ServerHello sh -> Some (S.RecvServerHello sh)
      | M.EncryptedExtensions ee -> Some (S.RecvEncryptedExtensions ee)
      | M.Certificate cert -> Some (S.RecvCertificate cert)
      | M.CertificateVerify cv -> Some (S.RecvCertificateVerify cv)

@@ -650,6 +650,24 @@ let lemma_step_model_handshake_fields
      | M.TlsAlert _, _, _
      | M.TlsChangeCipherSpec, _, CS.ControlHandshaking _ -> ()
      | _, _, _ -> ())
+  | CS.ConnProtectedHandshake step ->
+    assert_norm (
+      CS.step_model model (CS.ConnProtectedHandshake step) ==
+        CS.step_protected_handshake model step);
+    assert (CS.legal_protected_handshake_step model step);
+    (match
+       step.CS.protected_handshake_message,
+       model.CS.model_control
+     with
+     | M.EncryptedExtensions _,
+       CS.ControlHandshaking CS.HsServerHelloReceived
+     | M.Certificate _,
+       CS.ControlHandshaking CS.HsEncryptedExtensionsReceived
+     | M.CertificateVerify _,
+       CS.ControlHandshaking CS.HsCertificateValidated
+     | M.Finished _,
+       CS.ControlHandshaking CS.HsCertificateVerifyVerified -> ()
+     | _, _ -> assert False)
 #pop-options
 
 (* ------------------------------------------------------------------------- *)

@@ -312,6 +312,7 @@ let lemma_ksp_step
               install.CS.install_direction)
            install.CS.install_material
        | _ -> ())
+    | CS.ConnProtectedHandshake _ -> ()
     | CS.ConnNetworkEvent _ -> ()
 #pop-options
 

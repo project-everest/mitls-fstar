@@ -370,6 +370,10 @@ let lemma_legal_response_observable_receive_log
        TChannel.lemma_observable_received_append
          st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
          [])
+  | CS.ConnProtectedHandshake _ ->
+    TChannel.lemma_observable_received_append
+      st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+      []
   | CS.ConnLocalEvent local ->
     (match local with
      | CS.LocalDeliverApplicationData bytes ->

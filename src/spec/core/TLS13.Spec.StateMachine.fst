@@ -1500,6 +1500,7 @@ let legal_protected_handshake_step
   let fragment = step.protected_handshake_fragment in
   let offset = step.protected_handshake_offset in
   let consumed = step.protected_handshake_consumed in
+  model.model_config.config_role == ClientEndpoint /\
   offset < B.length fragment /\
   0 < consumed /\
   offset + consumed <= B.length fragment /\

@@ -98,6 +98,24 @@ let is_client_hs_install_dir (d:CS.traffic_direction) (ev:CS.conn_event) : bool 
     install.CS.install_direction = d
   | _ -> false
 
+(** Project an authenticated protected-handshake step to the received
+    handshake message it contributes to the top-level audit trace. *)
+let canonical_event (ev:CS.conn_event) : CS.conn_event =
+  match ev with
+  | CS.ConnProtectedHandshake step ->
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake step.CS.protected_handshake_message;
+    })
+  | _ -> ev
+
+let rec canonical_log (events:list CS.conn_event) : Tot (list CS.conn_event)
+  (decreases events)
+=
+  match events with
+  | [] -> []
+  | ev :: rest -> canonical_event ev :: canonical_log rest
+
 (* ------------------------------------------------------------------ *)
 (* Top lemma                                                           *)
 (* ------------------------------------------------------------------ *)
@@ -123,7 +141,7 @@ val lemma_client_canonical_appdata_exact_spine
           (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
           (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
           (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
-          s.CS.cs_event_log ==
+          canonical_log s.CS.cs_event_log ==
             L.append
               (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
               (L.append region

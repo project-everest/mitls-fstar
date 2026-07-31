@@ -149,6 +149,18 @@ let server_hello_window_rank
   | _ ->
     0
 
+noextract
+let server_hello_window_control
+  (control:CS.connection_control_state)
+  : bool =
+  match control with
+  | CS.ControlHandshaking CS.HsServerHelloSent
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
+  | CS.ControlHandshaking CS.HsServerFinishedSent
+  | CS.ControlHandshaking CS.HsClientFinishedReceived
+  | CS.ControlApplicationData -> true
+  | _ -> false
+
 val lemma_server_hello_window_rank_fresh_is_nine
   (model:CS.connection_model)
   : Lemma
@@ -243,7 +255,8 @@ val lemma_server_hello_window_rank_step
         CS.step_model model ev == Some model')
       (ensures
         CS.ControlFailed? model'.CS.model_control \/
-        server_hello_window_rank model <= server_hello_window_rank model' + 1)
+        (server_hello_window_rank model <= server_hello_window_rank model' + 1 /\
+         server_hello_window_control model'.CS.model_control))
 
 val lemma_server_hello_window_rank_replay_lower_bound
   (model:CS.connection_model)

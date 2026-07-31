@@ -62,6 +62,7 @@ let lemma_legal_protected_handshake_head
   (step:CS.protected_handshake_step)
   : Lemma
      (requires
+       model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        step.CS.protected_handshake_offset == 0 /\
        step.CS.protected_handshake_head /\
        0 < step.CS.protected_handshake_consumed /\
@@ -92,6 +93,7 @@ let lemma_legal_protected_handshake_drain
   (step:CS.protected_handshake_step)
   : Lemma
      (requires
+       model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        step.CS.protected_handshake_head == false /\
        Seq.equal
          step.CS.protected_handshake_fragment
