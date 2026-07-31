@@ -1918,6 +1918,26 @@ let lemma_server_side (s:sysp)
 (* Client-side package.                                                *)
 (* ================================================================== *)
 
+let client_raw_prefix_package
+  (s:sysp) (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (raw_flight:list CS.conn_event) : prop =
+  exists (start:CS.handshake_start)
+         (client_shared:C.x25519_shared_secret)
+         (region:list CS.conn_event).
+    (forall (e:CS.conn_event).
+      L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+    (exists (er:CS.conn_event).
+      L.memP er region /\
+      CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+    (exists (ew:CS.conn_event).
+      L.memP ew region /\
+      CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+    s.client.CS.cs_event_log ==
+      L.append
+        (PWSeg.client_cleartext_handshake_prefix_events
+          start ch sh client_shared)
+        (L.append region raw_flight)
+
 let client_side_package (s:sysp)
   (mc:CS.connection_model) (material_c:CS.traffic_key_material)
   (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
@@ -1932,6 +1952,7 @@ let client_side_package (s:sysp)
     fl_sent_c fl_recv_c s.client.CS.cs_model /\
   CCShape.raw_flight_spine
     raw_flight_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c /\
+  client_raw_prefix_package s ch_c sh_c raw_flight_c /\
   Some? mc.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
   CS.protected_handshake_buffer_empty mc /\
   mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
@@ -1943,6 +1964,26 @@ let client_side_package (s:sysp)
   Seq.equal s.client.CS.cs_wire_log.CL.raw_sent
     (B.append (W.serialize_record T.Handshake (W.serialize_handshake (M.ClientHello ch_c))) rest_cs) /\
   B.length (W.serialize_handshake (M.ClientHello ch_c)) <= 16640
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_client_side_package_has_raw_prefix
+  (s:sysp)
+  (mc:CS.connection_model) (material_c:CS.traffic_key_material)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate)
+  (cv_validate_c:CS.local_event) (cv_c:GCV.certificateVerify)
+  (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
+  (tail_c raw_flight_c:list CS.conn_event)
+  (fl_sent_c fl_recv_c:B.bytes)
+  (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
+  (rest_cs:B.bytes)
+  : Lemma
+      (requires
+        client_side_package s mc material_c ee_c cert_c cv_validate_c
+          cv_c cv_verify_c sf_c tail_c raw_flight_c fl_sent_c fl_recv_c
+          ch_c sh_c rest_cs)
+      (ensures client_raw_prefix_package s ch_c sh_c raw_flight_c)
+  = ()
+#pop-options
 
 let client_side_exists (s:sysp) : prop =
   exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
@@ -3142,6 +3183,118 @@ let lemma_conclude_pinned_server_flight
   assert (server_flight_pairs_conclusion client server)
 #pop-options
 
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30 --split_queries always"
+let lemma_conclude_normalized_client_spine
+  (s:sysp)
+  (start:CS.handshake_start)
+  (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (client_shared:C.x25519_shared_secret)
+  (region:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event) (sf:GFin.finished)
+  (tail raw_flight:list CS.conn_event)
+  : Lemma
+      (requires
+        (forall (e:CS.conn_event).
+          L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+        (exists (er:CS.conn_event).
+          L.memP er region /\
+          CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+        (exists (ew:CS.conn_event).
+          L.memP ew region /\
+          CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+        s.client.CS.cs_event_log ==
+          L.append
+            (PWSeg.client_cleartext_handshake_prefix_events
+              start ch sh client_shared)
+            (L.append region raw_flight) /\
+        raw_flight ==
+          client_flight_events
+            ee cert cv_validate cv cv_verify sf tail)
+      (ensures client_normalized_appdata_exact_spine s.client)
+  =
+  introduce exists
+    (start0:CS.handshake_start)
+    (ch0:GCH.clientHello) (sh0:GSH.serverHello)
+    (client_shared0:C.x25519_shared_secret)
+    (region0:list CS.conn_event)
+    (ee0:GEE.encryptedExtensions) (cert0:GCert.certificate)
+    (cv_validate0:CS.local_event)
+    (cv0:GCV.certificateVerify)
+    (cv_verify0:CS.local_event)
+    (sf0:GFin.finished)
+    (tail0:list CS.conn_event).
+      (forall (e:CS.conn_event).
+        L.memP e region0 ==> CCShape.is_client_hs_install e == true) /\
+      (exists (er:CS.conn_event).
+        L.memP er region0 /\
+        CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+      (exists (ew:CS.conn_event).
+        L.memP ew region0 /\
+        CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+      s.client.CS.cs_event_log ==
+        L.append
+          (PWSeg.client_cleartext_handshake_prefix_events
+            start0 ch0 sh0 client_shared0)
+          (L.append region0
+            (client_flight_events
+              ee0 cert0 cv_validate0 cv0 cv_verify0 sf0 tail0))
+  with start ch sh client_shared region
+       ee cert cv_validate cv cv_verify sf tail
+  and ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40 --split_queries always"
+let lemma_normalized_client_spine_from_raw
+  (s:sysp)
+  (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (raw_flight:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event) (sf:GFin.finished)
+  (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
+  (raw_tail:list CS.conn_event)
+  : Lemma
+      (requires
+        client_raw_prefix_package s ch sh raw_flight /\
+        raw_flight ==
+          raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate ::
+          raw_cv :: CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail /\
+        raw_ee == recv_ev (M.EncryptedExtensions ee) /\
+        raw_cert == recv_ev (M.Certificate cert) /\
+        raw_cv == recv_ev (M.CertificateVerify cv) /\
+        raw_sf == recv_ev (M.Finished sf))
+      (ensures client_normalized_appdata_exact_spine s.client)
+  =
+  eliminate exists
+    (start:CS.handshake_start)
+    (client_shared:C.x25519_shared_secret)
+    (region:list CS.conn_event).
+      (forall (e:CS.conn_event).
+        L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+      (exists (er:CS.conn_event).
+        L.memP er region /\
+        CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+      (exists (ew:CS.conn_event).
+        L.memP ew region /\
+        CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+      s.client.CS.cs_event_log ==
+        L.append
+          (PWSeg.client_cleartext_handshake_prefix_events
+            start ch sh client_shared)
+          (L.append region raw_flight)
+  returns client_normalized_appdata_exact_spine s.client
+  with _.
+  (
+    assert (raw_flight ==
+      client_flight_events ee cert cv_validate cv cv_verify sf raw_tail);
+    lemma_conclude_normalized_client_spine s
+      start ch sh client_shared region
+      ee cert cv_validate cv cv_verify sf raw_tail raw_flight
+  )
+#pop-options
+
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
 let lemma_finish_strong (s:sysp)
   (ms:CS.connection_model) (material_s:CS.traffic_key_material)
@@ -3162,7 +3315,9 @@ let lemma_finish_strong (s:sysp)
           fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr /\
         client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
           tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs)
-      (ensures server_flight_pairs_conclusion s.client s.server)
+      (ensures
+        server_flight_pairs_conclusion s.client s.server /\
+        client_normalized_appdata_exact_spine s.client)
   =
   lemma_goalA_state s;
   lemma_byte_pairing_quiet s;
@@ -3172,6 +3327,9 @@ let lemma_finish_strong (s:sysp)
   let cr = s.client.CS.cs_wire_log.CL.raw_received in
   let final_s = s.server.CS.cs_model in
   let final_c = s.client.CS.cs_model in
+  lemma_client_side_package_has_raw_prefix s mc material_c
+    ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+    tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs;
   (* ---- CH agreement ---- *)
   lemma_ch_serialize_agree ch_c ch_s cs sr rest_cs rest_sr d_ch_s;
   (* ---- SH agreement + flight-byte pairing ---- *)
@@ -3204,7 +3362,9 @@ let lemma_finish_strong (s:sysp)
       CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
       CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
       CCShape.canonical_log raw_tail == tail_c
-  returns server_flight_pairs_conclusion s.client s.server
+  returns
+    (server_flight_pairs_conclusion s.client s.server /\
+     client_normalized_appdata_exact_spine s.client)
   with _.
   (
     let server_list_stageA =
@@ -3274,9 +3434,14 @@ let lemma_finish_strong (s:sysp)
         raw_cert == recv_ev (M.Certificate cert_c) /\
         raw_cv == recv_ev (M.CertificateVerify cv_c) /\
         raw_sf == recv_ev (M.Finished sf_c)
-    returns server_flight_pairs_conclusion s.client s.server
+    returns
+      (server_flight_pairs_conclusion s.client s.server /\
+       client_normalized_appdata_exact_spine s.client)
     with _.
     (
+      lemma_normalized_client_spine_from_raw s ch_c sh_c raw_flight_c
+        ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+        raw_ee raw_cert raw_cv raw_sf raw_tail;
       lemma_replay_cong_recv mc client_list_stageA client_list_ordinary
         fl_sent_c fl_recv_c final_c;
       lemma_client_fields_pinned mc (install_ev_client material_c)
@@ -3300,7 +3465,9 @@ let lemma_finish_strong (s:sysp)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
 let lemma_combine_strong (s:sysp)
   : Lemma (requires server_flight_bridge_inputs s.client s.server)
-          (ensures server_flight_pairs_conclusion s.client s.server)
+          (ensures
+            server_flight_pairs_conclusion s.client s.server /\
+            client_normalized_appdata_exact_spine s.client)
   =
   lemma_server_side s;
   lemma_client_side s;
@@ -3311,7 +3478,9 @@ let lemma_combine_strong (s:sysp)
     (d_ch_s rest_sr:B.bytes).
     server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
       fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-  returns server_flight_pairs_conclusion s.client s.server
+  returns
+    (server_flight_pairs_conclusion s.client s.server /\
+     client_normalized_appdata_exact_spine s.client)
   with _.
   (
     eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
@@ -3322,7 +3491,9 @@ let lemma_combine_strong (s:sysp)
       (rest_cs:B.bytes).
       client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
         tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    returns server_flight_pairs_conclusion s.client s.server
+    returns
+      (server_flight_pairs_conclusion s.client s.server /\
+       client_normalized_appdata_exact_spine s.client)
     with _.
     (
       lemma_finish_strong s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
@@ -3338,5 +3509,10 @@ let lemma_combine_strong (s:sysp)
 (* The deliverable.                                                    *)
 (* ================================================================== *)
 let lemma_server_flight_pairs_from_replays_and_pairing client server =
+  let s : sysp = { client = client; server = server } in
+  lemma_combine_strong s
+
+let lemma_client_normalized_appdata_exact_spine_from_replays_and_pairing
+  client server =
   let s : sysp = { client = client; server = server } in
   lemma_combine_strong s

@@ -27,6 +27,7 @@ module PWSFlight = TLS13.ConnectionState.ProtectedWireServerFlight
 module PWHead = TLS13.ConnectionState.ProtectedWireHead
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module PWStaged = TLS13.ConnectionState.ProtectedWireStaged
+module SFInv = TLS13.ConnectionState.ProtectedWireServerFlightInversion
 module Pairing = TLS13.Impl.Driver.Pairing
 module R = TLS13.Record.Spec
 module RR = TLS13.Wire.Spec.Reveal.Record
@@ -241,6 +242,7 @@ let lemma_step_preserves_secrets
         Some? m1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
 =
   match ev with
+  | CS.ConnProtectedHandshake _ -> ()
   | CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> ()
   | _ -> ()
 #pop-options
@@ -1426,6 +1428,7 @@ let lemma_step_preserves_config (m:CS.connection_model) (ev:CS.conn_event) (m1:C
   : Lemma (requires CS.step_model m ev == Some m1)
           (ensures m1.CS.model_config == m.CS.model_config)
   = match ev with
+    | CS.ConnProtectedHandshake _ -> ()
     | CS.ConnLocalEvent local -> ()
     | CS.ConnNetworkEvent msg -> ()
 
@@ -2451,7 +2454,8 @@ let lemma_client_side_cf (s:sysp)
   assert (WStep.client_reachable (CS.initial cfg_c) s.client);
   assert (cfg_c.CS.config_role == CS.ClientEndpoint);
   assert (CCShape.log_has_no_received_ccs s.client.CS.cs_event_log);
-  CCShape.lemma_client_canonical_appdata_exact_spine cfg_c s.client;
+  SFInv.lemma_client_normalized_appdata_exact_spine_from_replays_and_pairing
+    s.client s.server;
   eliminate exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
                    (client_shared:C.x25519_shared_secret)
                    (region:list CS.conn_event)
@@ -3540,6 +3544,7 @@ let lemma_server_step_classify
          m1.CS.model_config.CS.config_role == CS.ServerEndpoint))
   =
   match ev with
+  | CS.ConnProtectedHandshake _ -> ()
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg ->
     match msg.CL.message_value with
@@ -3584,6 +3589,7 @@ let lemma_client_step_classify
            c <= B.length ds))
   =
   match ev with
+  | CS.ConnProtectedHandshake _ -> ()
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg ->
     match msg.CL.message_value with
