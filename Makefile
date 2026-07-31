@@ -525,7 +525,6 @@ SERVER_DRIVER_MODULES = \
   Common.TCP \
   TLS13.OpenSSL \
   TLS13.Impl.Server.Driver.State \
-  TLS13.Impl.Server.Driver.Network \
   TLS13.Impl.Server.Driver.BufferedNetwork \
   TLS13.Impl.Server.Driver.BufferedTransport \
   TLS13.Impl.Server.Driver.BufferedLifecycle \

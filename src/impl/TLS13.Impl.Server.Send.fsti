@@ -161,7 +161,7 @@ val lemma_can_send_server_hello_witness_of_selection
    and the cipher suite is CHACHA), the canonical [CM.server_hello_of_selection
    selection] can be sent, so plain [ST.server_local_event_input_ready]/
    LocalSendServerHello holds.  Mirrors the inline reasoning in
-   [TLS13.Impl.Server.Driver.Handshake] (valid_selection +
+   [TLS13.Impl.Server.Driver.BufferedHandshake] (valid_selection +
    [CM.lemma_server_hello_of_selection_matches] +
    [CM.lemma_server_hello_of_selection_bytesize]); factored into a lemma so the
    heavy [can_send_server_hello] derivation stays out of the large deferred-action
