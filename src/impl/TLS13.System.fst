@@ -3439,12 +3439,25 @@ let lemma_reachable_inv cfg_c cfg_s s =
   RTC.stable_on_closure tls_sys_step combined_inv ()
 
 (** ─────────────────────────────────────────────────────────────────────────
-    The payoff at a completed, quiescent state.
+    The payoff at a completed state.
+
+    NOTE: this lemma does NOT require `tls_quiescent`.  It once did, back when
+    the witnesses were produced on demand from a byte trace (the retired clean16
+    route), which needed a `Quiet` channel in order to use `byte_pairing`.  Since
+    the witnesses became an invariant conjunct (`protected_witnesses_ok`, gated
+    on readiness alone) the quiescence hypothesis has been dead weight.
+
+    Dropping it is not cosmetic: it makes record-material agreement available at
+    NON-quiescent states, i.e. with a message in flight.  That is exactly what is
+    needed to prove decode-faithfulness at an application-data DELIVERY, since
+    both `step_tls_message` arms for `M.TlsApplicationData` pin
+    `model_control == ControlApplicationData` -- so at a delivery step the
+    receiver, not just the sender, is application-ready.
     ───────────────────────────────────────────────────────────────────────── **)
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
 val lemma_ready_quiescent_agrees (s:tls_system_state)
-  : Lemma (requires tls_system_inv s /\ tls_quiescent s /\ tls_application_ready s)
+  : Lemma (requires tls_system_inv s /\ tls_application_ready s)
           (ensures SMKM.supported_profile_application_record_material_agrees s.client s.server)
 let lemma_ready_quiescent_agrees s =
   let hc = hsf s.client in
