@@ -1375,7 +1375,17 @@ let legal_handshake_message
   | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
     model.model_config.config_role == ServerEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
-    Some? hs.hs_keys.ks_master_secret
+    Some? hs.hs_keys.ks_master_secret /\
+    // Stream-integrity fix: a server may not accept the client Finished (and
+    // thereby atomically enter ControlApplicationData) until it has installed its
+    // own application WRITE key.  Faithful to TLS 1.3 (both application traffic
+    // secrets are derived together, through the server Finished), and it removes a
+    // Fix-1 atomicity wart whereby a server could reach application data
+    // permanently unable to send.  The Pulse server driver already installs this
+    // key (LocalInstallServerApplicationTrafficKeys at HsServerFinishedSent) before
+    // it can process the client Finished, so this guard is always satisfied by the
+    // implementation.
+    Some? hs.hs_keys.ks_server_application_traffic
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\

@@ -168,6 +168,20 @@ val lemma_connection_application_ready_record_epochs_installed
         application_record_keys_installed_for_role role st.cs_model)
       (ensures application_record_epochs_installed_for_role role st.cs_model)
 
+(** Sub-goal (a) BRIDGE: a reachable endpoint at `ControlApplicationData` has both
+    of its own application record keys installed (key + iv matching for read and
+    write).  Established purely from reachability via the strengthened application
+    record-epoch reachable shape, so no additional invariant is required. **)
+val lemma_connection_appdata_keys_installed_for_role
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        st.cs_model.model_control == ControlApplicationData)
+      (ensures application_record_keys_installed_for_role role st.cs_model)
+
 (** A reachable SERVER endpoint at `HsServerFinishedSent` has not yet installed the
     client application (read) traffic secret. **)
 val lemma_server_finished_sent_no_client_application_traffic

@@ -625,9 +625,43 @@ let tls_system_inv (s:tls_system_state) : prop =
   app_pending_empty s /\
   protected_witnesses_ok s
 
-(** ─────────────────────────────────────────────────────────────────────────
-    The step relation, as an instance of the generic machine product.
-    ───────────────────────────────────────────────────────────────────────── **)
+(** Application record-epoch reachable-shape bridge (sub-goal (a)).  The
+    orphaned-but-inductive shapes from `TLS13.ConnectionState.Lemmas` have been
+    strengthened so that at `ControlApplicationData` they carry
+    `application_record_keys_installed_for_role` for the endpoint's own role, and
+    that shape is established purely from `connection_state_consistent` (already an
+    invariant conjunct) via RTC closure.  So no new `tls_system_inv` conjunct is
+    needed for the KEY-INSTALLATION half of driver readiness:
+    `CSL.lemma_connection_appdata_keys_installed_for_role` bridges the existing
+    `connection_state_consistent` conjunct to `application_record_keys_installed_for_role`.
+
+    CLIENT: the bridge completes `client_ready` outright, because `client_e2e`
+    (an *unconditional* invariant conjunct) supplies `client_end_to_end_invariant`
+    and the bridge supplies the app record keys.
+
+    SERVER: `server_ready` (= `server_driver_application_ready`) additionally
+    requires `server_end_to_end_invariant`, which is only carried by the invariant
+    conditionally (`server_e2e s = server_config_valid_e2e s.server ==>
+    server_end_to_end_invariant s.server`).  `server_config_valid_e2e` demands
+    `B.length server_certificate_chain <= max_server_certificate_chain_len` (16610),
+    but spec-level reachability only bounds a sent certificate chain by the *wire*
+    limit `certificate_chain_max_bytes` (32768); since the server config is
+    immutable and unconstrained by the flagship entry precondition, this is a
+    genuine gap.  See the checkpoint report for the two resolution options — this
+    is a spec-design decision left to the maintainer. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_appdata_implies_client_ready
+  (s:tls_system_state)
+  : Lemma
+      (requires
+        client_e2e s /\
+        s.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        SMR.connection_state_consistent s.client /\
+        ctrl s.client == CS.ControlApplicationData)
+      (ensures client_ready s)
+= CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint s.client
+#pop-options
+
 
 (** The wire-level EMISSION interface.  Both endpoints are
     `CS.connection_state`s stepping by the same kind of relation, so the client

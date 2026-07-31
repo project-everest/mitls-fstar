@@ -569,6 +569,7 @@ let rec lemma_closing_or_closed_never_returns_to_application_data
           assert False)
     )
 
+#push-options "--z3rlimit 40"
 let rec lemma_server_hello_window_rank_replay_lower_bound
   (model:CS.connection_model)
   (events:list CS.conn_event)
@@ -683,6 +684,7 @@ let rec lemma_server_hello_window_rank_replay_lower_bound
   See the [.fsti] comment for why this auxiliary fact is necessary in
   addition to the numeric rank bound above.
 **)
+#pop-options
 let rec lemma_server_hello_window_stuck_without_client_handshake_traffic
   (model:CS.connection_model)
   (events:list CS.conn_event)
