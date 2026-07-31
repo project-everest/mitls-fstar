@@ -736,6 +736,8 @@ val lemma_parse_tls_message_round_trip:
         Seq.equal fragment (serialize_handshake (M.Certificate c))
       | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
         Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | Some (M.TlsHandshake (M.Finished fin)) ->
+        Seq.equal fragment (serialize_handshake (M.Finished fin))
       | _ -> True))
 
 

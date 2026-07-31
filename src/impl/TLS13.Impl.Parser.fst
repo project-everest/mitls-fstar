@@ -5226,6 +5226,9 @@ fn parse_handshake_message
         RV.lemma_handshake_synth_finished (cm <: GHS.handshake_body_finished);
         RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
           (M.Finished (cm <: GFin.finished));
+        WS.lemma_parse_tls_message_round_trip
+          T.Handshake
+          (Ghost.reveal 'input_bytes);
         let lfin = ({ L.finished_verify_data = xfin.PPBY.lvec_vec });
         rewrite (V.pts_to xfin.PPBY.lvec_vec cm)
              as (V.pts_to lfin.L.finished_verify_data cm);

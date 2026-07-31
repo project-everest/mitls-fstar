@@ -300,13 +300,42 @@ fn poll
       }
     }
   } else {
-    let snapshot = C.control_snapshot e.engine_client;
-    let result = observation_result (action_from_control_snapshot snapshot);
-    assert (pure (
-      result.engine_step_action == EngineReady ==>
-      'st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
-    fold (engine_live e 'st0);
-    result
+    V.to_array_pts_to e.engine_empty_payload;
+    let pending =
+      C.process_pending_protected_handshake
+        e.engine_client
+        (V.vec_to_array e.engine_empty_payload);
+    with st_pending. assert (
+      CR.connection_exactly e.engine_client st_pending);
+    V.to_vec_pts_to e.engine_empty_payload;
+    match pending {
+      None -> {
+        assert (pure (st_pending == 'st0));
+        rewrite
+          (CR.connection_exactly e.engine_client st_pending)
+          as
+          (CR.connection_exactly e.engine_client 'st0);
+        let snapshot = C.control_snapshot e.engine_client;
+        let result =
+          observation_result (action_from_control_snapshot snapshot);
+        assert (pure (
+          result.engine_step_action == EngineReady ==>
+          'st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+        fold (engine_live e 'st0);
+        result
+      }
+      Some resp -> {
+        let result = local_result resp;
+        assert (pure (
+          engine_result_buffers_wf
+            result
+            (Ghost.reveal 'old_network_out)
+            (Ghost.reveal 'old_app_out)));
+        lemma_local_action_is_not_observation resp;
+        fold (engine_live e st_pending);
+        result
+      }
+    }
   }
 }
 
@@ -349,7 +378,7 @@ fn feed_network
   with empty_payload.
     assert (V.pts_to e.engine_empty_payload #1.0R empty_payload);
   let buffer_resp =
-    C.process_network_bytes
+    C.process_coalesced_network_bytes
       e.engine_client
       network_input
       network_input_len

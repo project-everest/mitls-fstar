@@ -479,6 +479,22 @@ fn process_coalesced_network_bytes
                 (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==>
                 False))
 
+fn process_pending_protected_handshake
+  (c:client)
+  (empty:array U8.t)
+  requires CR.connection_exactly c 'st0 **
+           pts_to empty 'empty_bytes **
+           pure (Seq.equal (Ghost.reveal 'empty_bytes) B.empty /\
+                CT.client_end_to_end_invariant 'st0)
+  returns result:option CT.client_response
+  ensures exists* st1.
+          CR.connection_exactly c st1 **
+          pts_to empty 'empty_bytes **
+          pure (
+            CT.pending_protected_handshake_result_correct
+              'st0 st1 result /\
+            CT.client_end_to_end_invariant st1)
+
 fn process_local_event
   (c:client)
   (kind:CT.local_event_kind)

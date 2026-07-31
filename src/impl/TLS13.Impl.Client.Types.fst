@@ -2127,8 +2127,8 @@ let parsed_message_wire_success_for
     Seq.equal fragment (WS.serialize_handshake (M.CertificateVerify cv))
   | L.LTlsHandshake (L.LCertificateVerify _), _ ->
     False
-  | L.LTlsHandshake (L.LFinished _), M.TlsHandshake (M.Finished _) ->
-    True
+  | L.LTlsHandshake (L.LFinished _), M.TlsHandshake (M.Finished fin) ->
+    Seq.equal fragment (WS.serialize_handshake (M.Finished fin))
   | L.LTlsHandshake (L.LFinished _), _ ->
     False
   | L.LTlsIgnoredPostHandshake _, M.TlsIgnoredPostHandshake _ ->
@@ -2632,6 +2632,27 @@ let protected_handshake_step_correct
     st0.CS.cs_model
     (CS.ConnProtectedHandshake step)
     raw_received
+
+let pending_protected_handshake_result_correct
+  (st0 st1:CS.connection_state)
+  (result:option client_response)
+  : prop =
+  match result with
+  | None ->
+    st1 == st0
+  | Some resp ->
+    resp.network_out_len == 0sz /\
+    resp.app_out_len == 0sz /\
+    (match resp.status with
+     | StepOk ->
+       exists step.
+         protected_handshake_step_correct
+           st0 st1 resp step B.empty B.empty B.empty
+     | DecodeError
+     | IllegalTransition ->
+       st1 == st0
+     | _ ->
+       False)
 
 let lemma_legal_protected_handshake_step_some
   (model:CS.connection_model)

@@ -87,6 +87,41 @@ let lemma_legal_protected_handshake_head
     (B.length step.CS.protected_handshake_fragment) ==
      step.CS.protected_handshake_fragment)
 
+let lemma_legal_protected_handshake_drain
+  (model:CS.connection_model)
+  (step:CS.protected_handshake_step)
+  : Lemma
+     (requires
+       step.CS.protected_handshake_head == false /\
+       Seq.equal
+         step.CS.protected_handshake_fragment
+         model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+       step.CS.protected_handshake_offset ==
+         model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed /\
+       0 < step.CS.protected_handshake_consumed /\
+       step.CS.protected_handshake_offset +
+         step.CS.protected_handshake_consumed <=
+           B.length step.CS.protected_handshake_fragment /\
+       CS.protected_handshake_message_supported
+         step.CS.protected_handshake_message /\
+       WS.parse_handshake
+         (Seq.slice
+           step.CS.protected_handshake_fragment
+           step.CS.protected_handshake_offset
+           (B.length step.CS.protected_handshake_fragment)) ==
+         Some
+           (step.CS.protected_handshake_message,
+            step.CS.protected_handshake_consumed) /\
+       CS.legal_handshake_message
+         model
+         TLS13.ConnectionLog.Received
+         step.CS.protected_handshake_message)
+     (ensures
+       CS.legal_event model (CS.ConnProtectedHandshake step))
+=
+  assert (step.CS.protected_handshake_offset <
+    B.length step.CS.protected_handshake_fragment)
+
 fn try_process_protected_handshake_head
   (c:client)
   (content_type:U8.t)
@@ -611,6 +646,412 @@ fn try_process_protected_handshake_head
    }
   } else {
     None #CT.client_response
+  }
+}
+
+fn try_process_protected_handshake_drain
+  (c:client)
+  (parsed:L.tls_message)
+  (consumed:SZ.t)
+  (offset:SZ.t)
+  (parsed_total:SZ.t)
+  (empty:array U8.t)
+  (message_fragment:array U8.t)
+  (pending_fragment:array U8.t)
+  (pending_fragment_len:SZ.t)
+  requires CR.connection_exactly c 'st0 **
+           (exists* msg.
+             L.is_valid_tls_message parsed (M.TlsHandshake msg) **
+             pure (
+               CT.parsed_message_wire_success_for
+                 0x16uy
+                 (Ghost.reveal 'message_fragment_bytes)
+                 parsed
+                 (M.TlsHandshake msg) /\
+               SZ.v offset <
+                 B.length (Ghost.reveal 'pending_fragment_bytes) /\
+               WS.parse_handshake
+                 (Seq.slice
+                   (Ghost.reveal 'pending_fragment_bytes)
+                   (SZ.v offset)
+                   (B.length (Ghost.reveal 'pending_fragment_bytes))) ==
+                 Some (msg, SZ.v consumed))) **
+           pts_to empty 'empty_bytes **
+           pts_to message_fragment 'message_fragment_bytes **
+           pts_to pending_fragment 'pending_fragment_bytes **
+           pure (
+             Seq.equal (Ghost.reveal 'empty_bytes) B.empty /\
+             B.length 'message_fragment_bytes == SZ.v consumed /\
+             B.length 'pending_fragment_bytes == SZ.v pending_fragment_len /\
+             Seq.equal
+               (Ghost.reveal 'pending_fragment_bytes)
+               'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+             SZ.v offset ==
+               'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed /\
+             0 < SZ.v consumed /\
+             SZ.v offset + SZ.v consumed == SZ.v parsed_total /\
+             SZ.v parsed_total <= SZ.v pending_fragment_len /\
+             CT.client_end_to_end_invariant 'st0)
+  returns handled:option CT.client_response
+  ensures
+    (match handled with
+     | None ->
+       CR.connection_exactly c 'st0 **
+       (exists* msg.
+         L.is_valid_tls_message parsed (M.TlsHandshake msg)) **
+       pts_to empty 'empty_bytes **
+       pts_to message_fragment 'message_fragment_bytes **
+       pts_to pending_fragment 'pending_fragment_bytes
+     | Some resp ->
+       exists* st1.
+         CR.connection_exactly c st1 **
+         pts_to empty 'empty_bytes **
+         pts_to message_fragment 'message_fragment_bytes **
+         pts_to pending_fragment 'pending_fragment_bytes **
+         pure (
+           (exists step.
+             CT.protected_handshake_step_correct
+               'st0 st1 resp step B.empty B.empty B.empty) /\
+           CT.client_end_to_end_invariant st1))
+{
+  with msg. assert (
+    L.is_valid_tls_message parsed (M.TlsHandshake msg));
+  match parsed {
+    L.LTlsHandshake lhs -> {
+      unfold
+        (L.is_valid_tls_message
+          (L.LTlsHandshake lhs)
+          (M.TlsHandshake msg));
+      assert (L.is_valid_handshake_msg lhs msg);
+      match lhs {
+        L.LCertificate lcert -> {
+          unfold
+            (L.is_valid_handshake_msg
+              (L.LCertificate lcert)
+              msg);
+          with cert. _;
+          assert (pure (msg == M.Certificate cert));
+          assert (pure (CT.parsed_message_wire_success_for
+            0x16uy
+            (Ghost.reveal 'message_fragment_bytes)
+            (L.LTlsHandshake (L.LCertificate lcert))
+            (M.TlsHandshake (M.Certificate cert))));
+          assert (pure (CT.wire_parse_success
+            0x16uy
+            (Ghost.reveal 'message_fragment_bytes)
+            (M.TlsHandshake (M.Certificate cert))));
+          assert (pure (Seq.equal
+            (Ghost.reveal 'message_fragment_bytes)
+            (WS.serialize_handshake (M.Certificate cert))));
+          let ready = CQ.can_receive_certificate c lcert #cert consumed;
+          if ready {
+            let step = Ghost.hide {
+              CS.protected_handshake_message = M.Certificate cert;
+              CS.protected_handshake_fragment =
+                Ghost.reveal 'pending_fragment_bytes;
+              CS.protected_handshake_offset = SZ.v offset;
+              CS.protected_handshake_consumed = SZ.v consumed;
+              CS.protected_handshake_head = false;
+            };
+            assert (pure (CS.legal_handshake_message
+              'st0.CS.cs_model
+              TLS13.ConnectionLog.Received
+              (M.Certificate cert)));
+            assert (pure (CS.protected_handshake_message_supported
+              (M.Certificate cert)));
+            lemma_legal_protected_handshake_drain
+              'st0.CS.cs_model
+              (Ghost.reveal step);
+            CT.lemma_legal_protected_handshake_step_some
+              'st0.CS.cs_model
+              (Ghost.reveal step);
+            assert (pure (CS.event_raw_delta_legal
+              'st0.CS.cs_model
+              (CS.ConnProtectedHandshake (Ghost.reveal step))
+              B.empty
+              B.empty));
+            CN.mark_received_protected_certificate_drain
+              c
+              empty
+              message_fragment
+              consumed
+              parsed_total
+              lcert
+              #cert
+              #step;
+            let resp = {
+              CT.network_out_len = 0sz;
+              CT.app_out_len = 0sz;
+              CT.status = CT.StepOk;
+            };
+            CT.lemma_protected_handshake_step_correct_intro
+              'st0
+              resp
+              (Ghost.reveal step)
+              B.empty
+              B.empty
+              B.empty;
+            CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+              'st0
+              (CM.protected_handshake_state
+                'st0
+                (Ghost.reveal step)
+                B.empty)
+              resp
+              (Ghost.reveal step)
+              B.empty
+              B.empty
+              B.empty;
+            Some resp
+          } else {
+            fold
+              (L.is_valid_handshake_msg
+                (L.LCertificate lcert)
+                (M.Certificate cert));
+            fold
+              (L.is_valid_tls_message
+                (L.LTlsHandshake (L.LCertificate lcert))
+                (M.TlsHandshake (M.Certificate cert)));
+            rewrite
+              (L.is_valid_tls_message
+                (L.LTlsHandshake (L.LCertificate lcert))
+                (M.TlsHandshake (M.Certificate cert)))
+              as
+              (L.is_valid_tls_message
+                parsed
+                (M.TlsHandshake (M.Certificate cert)));
+            None #CT.client_response
+          }
+        }
+        L.LCertificateVerify lcv -> {
+          unfold
+            (L.is_valid_handshake_msg
+              (L.LCertificateVerify lcv)
+              msg);
+          with cv. _;
+          assert (pure (msg == M.CertificateVerify cv));
+          assert (pure (CT.parsed_message_wire_success_for
+            0x16uy
+            (Ghost.reveal 'message_fragment_bytes)
+            (L.LTlsHandshake (L.LCertificateVerify lcv))
+            (M.TlsHandshake (M.CertificateVerify cv))));
+          assert (pure (CT.wire_parse_success
+            0x16uy
+            (Ghost.reveal 'message_fragment_bytes)
+            (M.TlsHandshake (M.CertificateVerify cv))));
+          assert (pure (Seq.equal
+            (Ghost.reveal 'message_fragment_bytes)
+            (WS.serialize_handshake (M.CertificateVerify cv))));
+          let ready =
+            CQ.can_receive_certificate_verify c #cv consumed;
+          if ready {
+            let step = Ghost.hide {
+              CS.protected_handshake_message = M.CertificateVerify cv;
+              CS.protected_handshake_fragment =
+                Ghost.reveal 'pending_fragment_bytes;
+              CS.protected_handshake_offset = SZ.v offset;
+              CS.protected_handshake_consumed = SZ.v consumed;
+              CS.protected_handshake_head = false;
+            };
+            assert (pure (CS.legal_handshake_message
+              'st0.CS.cs_model
+              TLS13.ConnectionLog.Received
+              (M.CertificateVerify cv)));
+            assert (pure (CS.protected_handshake_message_supported
+              (M.CertificateVerify cv)));
+            lemma_legal_protected_handshake_drain
+              'st0.CS.cs_model
+              (Ghost.reveal step);
+            CT.lemma_legal_protected_handshake_step_some
+              'st0.CS.cs_model
+              (Ghost.reveal step);
+            assert (pure (CS.event_raw_delta_legal
+              'st0.CS.cs_model
+              (CS.ConnProtectedHandshake (Ghost.reveal step))
+              B.empty
+              B.empty));
+            CN.mark_received_protected_certificate_verify_drain
+              c
+              empty
+              message_fragment
+              consumed
+              parsed_total
+              lcv
+              #cv
+              #step;
+            let resp = {
+              CT.network_out_len = 0sz;
+              CT.app_out_len = 0sz;
+              CT.status = CT.StepOk;
+            };
+            CT.lemma_protected_handshake_step_correct_intro
+              'st0
+              resp
+              (Ghost.reveal step)
+              B.empty
+              B.empty
+              B.empty;
+            CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+              'st0
+              (CM.protected_handshake_state
+                'st0
+                (Ghost.reveal step)
+                B.empty)
+              resp
+              (Ghost.reveal step)
+              B.empty
+              B.empty
+              B.empty;
+            Some resp
+          } else {
+            fold
+              (L.is_valid_handshake_msg
+                (L.LCertificateVerify lcv)
+                (M.CertificateVerify cv));
+            fold
+              (L.is_valid_tls_message
+                (L.LTlsHandshake (L.LCertificateVerify lcv))
+                (M.TlsHandshake (M.CertificateVerify cv)));
+            rewrite
+              (L.is_valid_tls_message
+                (L.LTlsHandshake (L.LCertificateVerify lcv))
+                (M.TlsHandshake (M.CertificateVerify cv)))
+              as
+              (L.is_valid_tls_message
+                parsed
+                (M.TlsHandshake (M.CertificateVerify cv)));
+            None #CT.client_response
+          }
+        }
+        L.LFinished lfin -> {
+          unfold
+            (L.is_valid_handshake_msg
+              (L.LFinished lfin)
+              msg);
+          with fin. _;
+          assert (pure (msg == M.Finished fin));
+          assert (pure (CT.parsed_message_wire_success_for
+            0x16uy
+            (Ghost.reveal 'message_fragment_bytes)
+            (L.LTlsHandshake (L.LFinished lfin))
+            (M.TlsHandshake (M.Finished fin))));
+          assert (pure (CT.wire_parse_success
+            0x16uy
+            (Ghost.reveal 'message_fragment_bytes)
+            (M.TlsHandshake (M.Finished fin))));
+          assert (pure (Seq.equal
+            (Ghost.reveal 'message_fragment_bytes)
+            (WS.serialize_handshake (M.Finished fin))));
+          let ready = CQ.can_receive_server_finished c #fin;
+          if ready {
+            let step = Ghost.hide {
+              CS.protected_handshake_message = M.Finished fin;
+              CS.protected_handshake_fragment =
+                Ghost.reveal 'pending_fragment_bytes;
+              CS.protected_handshake_offset = SZ.v offset;
+              CS.protected_handshake_consumed = SZ.v consumed;
+              CS.protected_handshake_head = false;
+            };
+            assert (pure (CS.legal_handshake_message
+              'st0.CS.cs_model
+              TLS13.ConnectionLog.Received
+              (M.Finished fin)));
+            assert (pure (CS.protected_handshake_message_supported
+              (M.Finished fin)));
+            lemma_legal_protected_handshake_drain
+              'st0.CS.cs_model
+              (Ghost.reveal step);
+            CT.lemma_legal_protected_handshake_step_some
+              'st0.CS.cs_model
+              (Ghost.reveal step);
+            assert (pure (CS.event_raw_delta_legal
+              'st0.CS.cs_model
+              (CS.ConnProtectedHandshake (Ghost.reveal step))
+              B.empty
+              B.empty));
+            CN.mark_received_protected_server_finished_drain
+              c
+              empty
+              message_fragment
+              consumed
+              parsed_total
+              lfin
+              #fin
+              #step;
+            let resp = {
+              CT.network_out_len = 0sz;
+              CT.app_out_len = 0sz;
+              CT.status = CT.StepOk;
+            };
+            CT.lemma_protected_handshake_step_correct_intro
+              'st0
+              resp
+              (Ghost.reveal step)
+              B.empty
+              B.empty
+              B.empty;
+            CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+              'st0
+              (CM.protected_handshake_state
+                'st0
+                (Ghost.reveal step)
+                B.empty)
+              resp
+              (Ghost.reveal step)
+              B.empty
+              B.empty
+              B.empty;
+            Some resp
+          } else {
+            fold
+              (L.is_valid_handshake_msg
+                (L.LFinished lfin)
+                (M.Finished fin));
+            fold
+              (L.is_valid_tls_message
+                (L.LTlsHandshake (L.LFinished lfin))
+                (M.TlsHandshake (M.Finished fin)));
+            rewrite
+              (L.is_valid_tls_message
+                (L.LTlsHandshake (L.LFinished lfin))
+                (M.TlsHandshake (M.Finished fin)))
+              as
+              (L.is_valid_tls_message
+                parsed
+                (M.TlsHandshake (M.Finished fin)));
+            None #CT.client_response
+          }
+        }
+        lhs_other -> {
+          fold
+            (L.is_valid_tls_message
+              (L.LTlsHandshake lhs_other)
+              (M.TlsHandshake msg));
+          rewrite
+            (L.is_valid_tls_message
+              (L.LTlsHandshake lhs_other)
+              (M.TlsHandshake msg))
+            as
+            (L.is_valid_tls_message parsed (M.TlsHandshake msg));
+          None #CT.client_response
+        }
+      }
+    }
+    parsed_other -> {
+      with returned_msg. assert (
+        L.is_valid_tls_message
+          parsed_other
+          (M.TlsHandshake returned_msg));
+      rewrite
+        (L.is_valid_tls_message
+          parsed_other
+          (M.TlsHandshake returned_msg))
+        as
+        (L.is_valid_tls_message
+          parsed
+          (M.TlsHandshake returned_msg));
+      None #CT.client_response
+    }
   }
 }
 
@@ -1878,6 +2319,134 @@ fn process_coalesced_network_bytes
             V.free decoded_buffer.L.decoded_buffer_raw_record;
             process_legacy_coalesced_fallback
               c raw raw_len network_out network_out_len app_out app_out_len
+          }
+        }
+      }
+    }
+  }
+}
+
+fn process_pending_protected_handshake
+  (c:client)
+  (empty:array U8.t)
+  requires CR.connection_exactly c 'st0 **
+           pts_to empty 'empty_bytes **
+           pure (Seq.equal (Ghost.reveal 'empty_bytes) B.empty /\
+                 CT.client_end_to_end_invariant 'st0)
+  returns result:option CT.client_response
+  ensures exists* st1.
+          CR.connection_exactly c st1 **
+          pts_to empty 'empty_bytes **
+          pure (
+            CT.pending_protected_handshake_result_correct
+              'st0 st1 result /\
+            CT.client_end_to_end_invariant st1)
+{
+  let pending = CQ.copy_pending_protected_handshake c;
+  match pending {
+    None -> {
+      assert (pure (
+        CT.pending_protected_handshake_result_correct
+          'st0 'st0 None));
+      None #CT.client_response
+    }
+    Some snapshot -> {
+      with pending_fragment_bytes. assert (
+        V.pts_to
+          snapshot.CR.pending_protected_fragment
+          pending_fragment_bytes);
+      V.to_array_pts_to snapshot.CR.pending_protected_fragment;
+      let prefix =
+        P.parse_handshake_prefix_at
+          (V.vec_to_array snapshot.CR.pending_protected_fragment)
+          snapshot.CR.pending_protected_fragment_len
+          snapshot.CR.pending_protected_parsed;
+      match prefix {
+        None -> {
+          V.to_vec_pts_to snapshot.CR.pending_protected_fragment;
+          V.free snapshot.CR.pending_protected_fragment;
+          let resp = {
+            CT.network_out_len = 0sz;
+            CT.app_out_len = 0sz;
+            CT.status = CT.DecodeError;
+          };
+          assert (pure (
+            CT.pending_protected_handshake_result_correct
+              'st0 'st0 (Some resp)));
+          Some resp
+        }
+        Some parsed_prefix -> {
+          with msg message_fragment_bytes. assert (
+            V.pts_to
+              parsed_prefix.L.parsed_handshake_fragment
+              message_fragment_bytes **
+            L.is_valid_tls_message
+              parsed_prefix.L.parsed_handshake_message
+              (M.TlsHandshake msg));
+          let parsed_total =
+            SZ.add
+              snapshot.CR.pending_protected_parsed
+              parsed_prefix.L.parsed_handshake_consumed;
+          V.to_array_pts_to
+            parsed_prefix.L.parsed_handshake_fragment;
+          let handled =
+            try_process_protected_handshake_drain
+              c
+              parsed_prefix.L.parsed_handshake_message
+              parsed_prefix.L.parsed_handshake_consumed
+              snapshot.CR.pending_protected_parsed
+              parsed_total
+              empty
+              (V.vec_to_array
+                parsed_prefix.L.parsed_handshake_fragment)
+              (V.vec_to_array
+                snapshot.CR.pending_protected_fragment)
+              snapshot.CR.pending_protected_fragment_len;
+          match handled {
+            None -> {
+              with returned_msg. assert (
+                L.is_valid_tls_message
+                  parsed_prefix.L.parsed_handshake_message
+                  (M.TlsHandshake returned_msg));
+              L.free_tls_message
+                parsed_prefix.L.parsed_handshake_message;
+              V.to_vec_pts_to
+                parsed_prefix.L.parsed_handshake_fragment;
+              V.free
+                parsed_prefix.L.parsed_handshake_fragment;
+              V.to_vec_pts_to
+                snapshot.CR.pending_protected_fragment;
+              V.free snapshot.CR.pending_protected_fragment;
+              let resp = {
+                CT.network_out_len = 0sz;
+                CT.app_out_len = 0sz;
+                CT.status = CT.IllegalTransition;
+              };
+              assert (pure (
+                CT.pending_protected_handshake_result_correct
+                  'st0 'st0 (Some resp)));
+              Some resp
+            }
+            Some resp -> {
+              with st1. assert (
+                CR.connection_exactly c st1 **
+                pure (
+                  (exists step.
+                    CT.protected_handshake_step_correct
+                      'st0 st1 resp step B.empty B.empty B.empty) /\
+                  CT.client_end_to_end_invariant st1));
+              V.to_vec_pts_to
+                parsed_prefix.L.parsed_handshake_fragment;
+              V.free
+                parsed_prefix.L.parsed_handshake_fragment;
+              V.to_vec_pts_to
+                snapshot.CR.pending_protected_fragment;
+              V.free snapshot.CR.pending_protected_fragment;
+              assert (pure (
+                CT.pending_protected_handshake_result_correct
+                  'st0 st1 (Some resp)));
+              Some resp
+            }
           }
         }
       }

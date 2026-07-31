@@ -185,7 +185,7 @@ let engine_network_step_correct
   (old_app_out app_out:B.bytes)
   : prop =
   exists buffer_resp.
-    CT.network_bytes_end_to_end_correct
+    CT.coalesced_network_bytes_end_to_end_correct
       st0
       st1
       buffer_resp
