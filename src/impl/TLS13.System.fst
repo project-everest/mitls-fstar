@@ -469,41 +469,34 @@ let lemma_append_empty_r (x:B.bytes)
     lemma is fully proved and reduces the open end-to-end goal to the single
     invariant `app_pairing`.
 
-    WHY `app_pairing` IS NOT YET A `tls_system_inv` CONJUNCT (the genuine gap).
-    Adding `app_pairing` requires proving it INDUCTIVELY preserved by all six
-    step families.  Send and local cases are within reach (send grows the
-    sender's `app_sent` stream by exactly `app_bytes_of p` via `tls_emit`'s
-    event-log equation; local leaves `app_received` unchanged up to `B.empty`
-    chunks by `app_pending_empty`).  The DELIVERY case is blocked:
+    STATUS.  The delivery case is no longer blocked.  The record-seq pairing
+    invariant this note called for now exists as `app_seq_pairing`
+    (`TLS13.System.AppSeqPairing.fst`), together with the decode-determinism
+    lemma (`lemma_decode_functional`) and all six preservation families
+    (2 send, 2 local, 2 delivery).  None of this required an AEAD-authenticity
+    assumption or a global deadlock argument: the delivery families close by
+    carrying the sender's model step and a single-record fact on the in-flight
+    payload, feeding the faithful-decode bridge from the PRE-state seal.
 
-      * The receiver's `app_received` stream grows by the bytes of the message
-        IT decodes from the in-flight wire, so preservation needs
-        `decoded_message == p.pl_sent` for application-data records — a
-        decode-FAITHFULNESS fact.
-      * The natural bridge (establish faithfulness at SEND time, when the channel
-        is `Quiet`, and merely consume it at delivery, as `channel_consistent`
-        does) FAILS for application data: a client legally sends app data at
-        `model_control == ControlApplicationData`, but `client_clean` then only
-        gives the peer `server_post_cf` (which includes `HsClientFinishedReceived`
-        — the server has RECEIVED but not yet locally VERIFIED the client Finished).
-        So the quiescent application-traffic-key AGREEMENT
-        (`lemma_ready_quiescent_agrees`) is NOT available at such sends: in real
-        TLS 1.3 the client may send app data before the server verifies CF.
-      * Even with key agreement, the existing seal→decode bridges
-        (`TLS13.Impl.Driver.Pairing.fsti`) additionally require record
-        sequence-number ALIGNMENT (a new "record-count pairing" invariant, not
-        present) and a decode-DETERMINISM/INJECTIVITY lemma (buildable but not
-        present).  Finally the AEAD TCB (`TLS13.Crypto.Spec.fsti`) assumes only
-        open-after-seal CORRECTNESS, with no authenticity/wrong-key-fails or
-        injectivity lemma, so a decode by a not-yet-ready receiver is left
-        unconstrained by the model.
+    Two corrections to the reasoning above, both worth keeping.  First, the
+    quiescent key-agreement objection is real but not fatal: the client may
+    indeed send app data while the server is still at `HsClientFinishedReceived`,
+    so agreement is NOT available at such sends — the delivery proof therefore
+    does not rely on it, and instead aligns record sequence numbers directly.
+    Second, the seq-alignment "new invariant" is exactly `app_seq_pairing`, whose
+    correct statement needed three attempts: a flat write/read equality is FALSE
+    (a `Close_notify` sent from the closing region emits a record without
+    advancing the write seq), and the equality must be gated on `not_closing`,
+    which excuses it precisely over the absorbing closing region while keeping it
+    available across the handshake seam where it is established.
 
-    Closing this would need new infrastructure (record-count pairing + decode
-    determinism) and EITHER an AEAD-authenticity crypto assumption (a TCB change,
-    out of scope) OR a global deadlock argument that no legal app-data delivery
-    to a pre-`ControlApplicationData` receiver can occur.  Rather than admit any
-    of these, `app_pairing` is left as a standalone definition with this proven
-    reduction to the end-to-end property.
+    `app_pairing` remains a standalone definition with this proven reduction only
+    because the bundle assembly (`stream2_combined_inv` and the Temporal wiring)
+    is still in progress — NOT because of a soundness gap.  Note that
+    `app_pairing`, like `channel_seal_ok` and `app_material_agreement`, belongs in
+    the stream bundle and NOT in `tls_system_inv`: a conjunct there would force an
+    entry hypothesis onto `lemma_reachable_inv` and change the statement of
+    `lemma_flagship_record_material_agreement`.
     ───────────────────────────────────────────────────────────────────────── **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
 let lemma_app_pairing_implies_stream_integrity (s:tls_system_state)

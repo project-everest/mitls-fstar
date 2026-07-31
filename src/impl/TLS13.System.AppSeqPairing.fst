@@ -648,16 +648,9 @@ let channel_seal_ok (s:SY.tls_system_state) : prop =
         inflight_bridge_ready p.SY.pl_snap s.client.CS.cs_model p.SY.pl_sent p.SY.pl_raw)
   | MP.Quiet -> True
 
-(** The full STAGE (b)+(c) extras carried on top of the stream bundle. **)
-let app_extras (s:SY.tls_system_state) : prop =
-  app_seq_pairing s /\ cf_inflight_client_appdata s /\
-  app_material_agreement s /\ channel_seal_ok s
-
-(** Initial state: both record epochs are `Initial`, so `cf_delivered` is false
-    and the agreement is vacuous; `app_seq_pairing` was shown initial above. **)
-let lemma_initial_app_extras (cfg_c cfg_s:CS.connection_config)
-  : Lemma (app_extras (SY.initial_tls_system cfg_c cfg_s))
-  = ()
+(** The full STAGE (b)+(c) extras bundle is defined further down, AFTER the two
+    carried in-flight payload facts (`inflight_sender_stepped`,
+    `inflight_single_record`) it now includes.  See `app_extras` below. **)
 
 (** ─────────────────────────────────────────────────────────────────────────
     ESTABLISHMENT HELPERS for `cf_inflight_client_appdata`.
@@ -1292,6 +1285,218 @@ let inflight_single_record (s:SY.tls_system_state) : prop =
   | MP.ToClient p -> CS.protected_record_count CL.Sent p.SY.pl_sent == 1
   | MP.Quiet -> True
 
+(** The full STAGE (b)+(c) extras carried on top of the stream bundle.  Defined
+    here (rather than next to the STAGE-(b) send families) because it now folds in
+    the two carried in-flight payload facts above. **)
+let app_extras (s:SY.tls_system_state) : prop =
+  app_seq_pairing s /\ cf_inflight_client_appdata s /\
+  app_material_agreement s /\ channel_seal_ok s /\
+  inflight_sender_stepped s /\ inflight_single_record s
+
+(** Initial state: both record epochs are `Initial`, so `cf_delivered` is false
+    and the agreement is vacuous; `app_seq_pairing` was shown initial above; and
+    the initial channel is `Quiet`, so the two in-flight facts are vacuous. **)
+let lemma_initial_app_extras (cfg_c cfg_s:CS.connection_config)
+  : Lemma (app_extras (SY.initial_tls_system cfg_c cfg_s))
+  = ()
+
+(** A `Quiet` channel carries no in-flight payload, so both carried facts hold
+    vacuously.  This is what the LOCAL and DELIVERY families discharge (their
+    post-states are `Quiet`). **)
+let lemma_quiet_inflight_vacuous (s:SY.tls_system_state)
+  : Lemma (requires MP.Quiet? s.channel)
+          (ensures inflight_sender_stepped s /\ inflight_single_record s)
+  = ()
+
+(** ─────────────────────────────────────────────────────────────────────────
+    ESTABLISHMENT of `inflight_single_record` at the send.
+
+    `protected_record_count CL.Sent` is `1` for every message EXCEPT a
+    `Sent, TlsApplicationData bytes`, where it is `application_data_record_count
+    bytes` (possibly >= 2) — the model's app-data SEND arm really does allow a
+    multi-record send.  The count-1 obligation is therefore a genuine SYSTEM-level
+    fact recovered from the emission interface: the send emits exactly ONE wire
+    record `w`, and a legal Sent-app-data delta is `raw_records_exactly raw
+    Application_data count`.  Since `w` is one FULL wire record
+    (`w.wm_parse_ok`), the nonempty first parse of `raw` consumes all of it, so
+    `raw_records_exactly raw Application_data 1` also holds — and
+    `raw_records_exactly` pins `length (parse_record_prefix raw).values` to BOTH
+    counts, forcing `count == 1`.  (This is NOT baked into `m_wadv`, which mirrors
+    the model and must stay faithful to the multi-record send arm.) **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80"
+let lemma_send_single_record_count
+  (m:CS.connection_model) (sent:M.tls_message) (w:CW.wire_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal raw (CW.wire_serialize w) /\
+        CS.network_message_raw_delta_legal m
+          ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw)
+      (ensures CS.protected_record_count CL.Sent sent == 1)
+  = match sent with
+    | M.TlsApplicationData bytes ->
+        let count = RF.application_data_record_count bytes in
+        RF.lemma_application_data_record_count_len_positive (B.length bytes);
+        // App-data is NOT cleartext, so the legal delta is exactly
+        //   raw_records_exactly raw Application_data count.
+        assert (CS.raw_records_exactly raw T.Application_data count);
+        // `raw` is one full wire record (`w.wm_parse_ok`).
+        Seq.lemma_eq_elim raw (CW.wire_serialize w);
+        let _pk = w.CW.wm_parse_ok in
+        assert (W.parse_record_wire raw ==
+                  Some (w.CW.wm_content_type, w.CW.wm_fragment, B.length raw));
+        WStep.lemma_ws_raw_records_nonempty_parse_record raw T.Application_data count;
+        eliminate exists (fragment:M.sealed_record) (consumed:nat).
+          W.parse_record raw == Some (T.Application_data, fragment, consumed) /\
+          consumed > 0 /\ consumed <= B.length raw
+        returns CS.protected_record_count CL.Sent sent == 1
+        with _pe.
+        (
+          // parse_record -> parse_record_wire agreement: the third component
+          // (consumed) must equal `B.length raw` by injectivity of `Some`.
+          W.lemma_parse_record_implies_parse_record_wire raw;
+          assert (consumed == B.length raw);
+          CSL.lemma_parse_record_full_raw_records_exactly raw T.Application_data fragment;
+          assert (CS.raw_records_exactly raw T.Application_data 1)
+        )
+    | _ -> ()
+#pop-options
+
+(** Extract the count-1 fact from a CLIENT send: `client_step`'s
+    `canonical_wire_step` carries a `legal_connection_delta` whose Sent-arm gives
+    `network_message_raw_delta_legal` on the emitted `raw_sent`, which equals the
+    single wire record `w`'s bytes. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60"
+let lemma_client_send_count
+  (st0 c':CS.connection_state)
+  (local:CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  (w:CW.wire_message)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        EC.client_step st0 (SM.LocalEvent local) c' out /\
+        out.SM.so_wire_outputs == [w] /\
+        c'.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent])
+      (ensures CS.protected_record_count CL.Sent sent == 1)
+  = eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      EC.client_representation_matches st0 local conn_ev /\
+      EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      SMCan.canonical_wire_step st0 c' conn_ev raw_sent B.empty
+    returns CS.protected_record_count CL.Sent sent == 1
+    with _pf.
+    (
+      L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
+      assert (conn_ev == SMKM.sent_tls_event sent);
+      assert (CS.network_message_raw_delta_legal st0.CS.cs_model
+                ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw_sent);
+      SY.lemma_serialize_all_single w;
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
+      lemma_send_single_record_count st0.CS.cs_model sent w raw_sent
+    )
+#pop-options
+
+(** Server mirror of `lemma_client_send_count`. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60"
+let lemma_server_send_count
+  (st0 s':CS.connection_state)
+  (local:CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  (w:CW.wire_message)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        ES.server_step st0 (SM.LocalEvent local) s' out /\
+        out.SM.so_wire_outputs == [w] /\
+        s'.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent])
+      (ensures CS.protected_record_count CL.Sent sent == 1)
+  = eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      ES.server_representation_matches local conn_ev /\
+      ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty
+    returns CS.protected_record_count CL.Sent sent == 1
+    with _pf.
+    (
+      L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
+      assert (conn_ev == SMKM.sent_tls_event sent);
+      assert (CS.network_message_raw_delta_legal st0.CS.cs_model
+                ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw_sent);
+      SY.lemma_serialize_all_single w;
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
+      lemma_send_single_record_count st0.CS.cs_model sent w raw_sent
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    ESTABLISHMENT of BOTH in-flight facts at the SEND families.  Same eliminate
+    shape as `lemma_asp_client_send`/`lemma_asp_server_send`: the send enters
+    `MP.ToServer`/`MP.ToClient` from `Quiet`.  `inflight_sender_stepped` is the
+    same three facts those families already discharge (frozen step + the two
+    send-delta guards); `inflight_single_record` is `lemma_{client,server}_send_count`.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_asp_client_send_inflight (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_send a b /\ SY.tls_no_rekeying b)
+      (ensures inflight_sender_stepped b /\ inflight_single_record b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    returns inflight_sender_stepped b /\ inflight_single_record b
+    with _pf.
+    (
+      assert (SMCorr.connection_state_no_key_update_trace c');
+      lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      lemma_sent_not_key_update c' sent;
+      (match sent with
+       | M.TlsHandshake hm ->
+           CSL.lemma_client_handshake_send_write_epoch_not_application a.client c' hm
+       | _ -> ());
+      lemma_client_send_count a.client c' local out w sent
+    )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_asp_server_send_inflight (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+        SY.tls_step_server_send a b /\ SY.tls_no_rekeying b)
+      (ensures inflight_sender_stepped b /\ inflight_single_record b)
+  = SY.lemma_server_send_shape a b;
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
+    returns inflight_sender_stepped b /\ inflight_single_record b
+    with _pf.
+    (
+      assert (SMCorr.connection_state_no_key_update_trace s');
+      lemma_server_send_pins_model a.server s' local out sent;
+      assert (CS.step_tls_message a.server.CS.cs_model CL.Sent sent == Some s'.CS.cs_model);
+      lemma_sent_not_key_update s' sent;
+      (match sent with
+       | M.TlsHandshake hm ->
+           CSL.lemma_server_handshake_send_write_epoch_not_application a.server s' hm
+       | _ -> ());
+      lemma_server_send_count a.server s' local out w sent
+    )
+#pop-options
+
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
 let lemma_asp_deliver_to_server
   (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
@@ -1300,10 +1505,7 @@ let lemma_asp_deliver_to_server
   : Lemma
       (requires
         SY.tls_system_inv a /\
-        app_seq_pairing a /\
-        channel_seal_ok a /\
-        inflight_sender_stepped a /\
-        inflight_single_record a /\
+        app_extras a /\
         a.channel == SY.tls_to_server raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
@@ -1311,6 +1513,9 @@ let lemma_asp_deliver_to_server
       (ensures app_seq_pairing ({ a with server = s'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+    // Unfold the extras bundle to recover the four facts this body consumes.
+    assert (app_seq_pairing a /\ channel_seal_ok a /\
+            inflight_sender_stepped a /\ inflight_single_record a);
     assert (a.channel == MP.ToServer p);
     // Reachable server -> server_ctrl_ok (grounds the SH/HRR exclusion in the
     // not-cleartext helper).
@@ -1469,10 +1674,7 @@ let lemma_asp_deliver_to_client
   : Lemma
       (requires
         SY.tls_system_inv a /\
-        app_seq_pairing a /\
-        channel_seal_ok a /\
-        inflight_sender_stepped a /\
-        inflight_single_record a /\
+        app_extras a /\
         a.channel == SY.tls_to_client raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
@@ -1480,6 +1682,9 @@ let lemma_asp_deliver_to_client
       (ensures app_seq_pairing ({ a with client = c'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with client = c'; channel = MP.Quiet } in
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+    // Unfold the extras bundle to recover the four facts this body consumes.
+    assert (app_seq_pairing a /\ channel_seal_ok a /\
+            inflight_sender_stepped a /\ inflight_single_record a);
     assert (a.channel == MP.ToClient p);
     eliminate exists (msg:M.tls_message).
       (let conn_ev = CS.ConnNetworkEvent
