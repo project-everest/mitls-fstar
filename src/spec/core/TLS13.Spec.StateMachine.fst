@@ -1284,6 +1284,13 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
        H.verify_finished client_hs.traffic_secret (Tr.hash hs.hs_transcript) fin
      | _, _ -> False)
   | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    (* NOTE (application-data stream integrity): `app_pending_plaintext` is set
+       once to `B.empty` in `empty_application_state` and never written again by
+       any step, so this legality guard forces `bytes == B.empty`.  The
+       TLS-to-host-application delivery hop is thus unimplemented: it can only
+       ever append an empty chunk to `app_received`, leaving the received byte
+       stream (the concatenation) unchanged.  The Pulse drivers statically
+       exclude this event. *)
     exists pending.
       Seq.equal model.model_application.app_pending_plaintext (B.append bytes pending)
   | LocalFail _, _ ->

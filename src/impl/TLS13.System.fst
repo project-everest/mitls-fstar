@@ -374,6 +374,163 @@ let byte_pairing (s:tls_system_state) : prop =
   | MP.ToClient p ->
     Seq.equal ss (B.append cr p.pl_raw) /\ Seq.equal cs sr
 
+(** ─────────────────────────────────────────────────────────────────────────
+    Application-data STREAM integrity (STAGE C).
+
+    The application-data BYTE STREAM each endpoint sends is the CONCATENATION of
+    its `app_log.app_sent` chunks; likewise what it has received is the
+    concatenation of its `app_log.app_received` chunks.  These are the honest
+    TLS byte streams (record boundaries need not align, so the statement must be
+    about the concatenations, not the chunk lists — see the note at
+    `CS.LocalDeliverApplicationData` in `TLS13.Spec.StateMachine.fst`).
+    ───────────────────────────────────────────────────────────────────────── **)
+
+let app_stream_sent (st:CS.connection_state) : GTot B.bytes =
+  CL.concat_bytes st.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent
+
+let app_stream_received (st:CS.connection_state) : GTot B.bytes =
+  CL.concat_bytes st.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+
+(** The application-data byte delta a single (received or sent) TLS message
+    carries: the plaintext of an application-data record, and nothing for every
+    other message kind. **)
+let app_bytes_delta (msg:M.tls_message) : GTot B.bytes =
+  match msg with
+  | M.TlsApplicationData b -> b
+  | _ -> B.empty
+
+(** The application-data bytes an in-flight payload carries — the byte delta of
+    the message the sender appended to its event log when it emitted the payload. **)
+let app_bytes_of (p:tls_payload) : GTot B.bytes =
+  app_bytes_delta p.pl_sent
+
+(** Phase 2 — the pending-plaintext field is pinned empty on both endpoints.
+    `app_pending_plaintext` is assigned exactly once (to `B.empty`, in
+    `empty_application_state`) and never written by any step, so this is a trivial
+    per-endpoint inductive property.  It is what forces the (unimplemented)
+    `LocalDeliverApplicationData` hop to deliver only `B.empty`, keeping the
+    received byte STREAM (concatenation) unchanged in the LOCAL case of
+    `app_pairing`. **)
+let app_pending_empty (s:tls_system_state) : prop =
+  Seq.equal s.client.CS.cs_model.CS.model_application.CS.app_pending_plaintext B.empty /\
+  Seq.equal s.server.CS.cs_model.CS.model_application.CS.app_pending_plaintext B.empty
+
+(** ─────────────────────────────────────────────────────────────────────────
+    Application-data STREAM pairing (the analogue of `byte_pairing` at the
+    application byte-stream level) and the end-to-end STREAM-INTEGRITY payoff.
+
+    `app_pairing` says: each endpoint's SENT application byte stream equals the
+    peer's RECEIVED application byte stream plus whatever application bytes are
+    currently in flight (`app_bytes_of p`); at `Quiet` (nothing in flight) it
+    collapses to exact stream equality in both directions.  This mirrors
+    `byte_pairing` exactly, one level up (streams instead of raw records).
+
+    NOTE (status): `app_pairing` is provided as a STANDALONE definition together
+    with the fully-verified PURE reduction `lemma_app_pairing_implies_stream_integrity`
+    below, which shows it entails end-to-end stream integrity.  It is NOT (yet) a
+    conjunct of `tls_system_inv`: its inductive DELIVERY case requires an
+    application-data decode-faithfulness bridge that is currently a genuine gap in
+    this model — see the extended note above `lemma_app_pairing_implies_stream_integrity`
+    for the precise obstruction.
+    ───────────────────────────────────────────────────────────────────────── **)
+let app_pairing (s:tls_system_state) : prop =
+  let cs = app_stream_sent s.client in
+  let cr = app_stream_received s.client in
+  let ss = app_stream_sent s.server in
+  let sr = app_stream_received s.server in
+  match s.channel with
+  | MP.Quiet ->
+    Seq.equal cs sr /\ Seq.equal ss cr
+  | MP.ToServer p ->
+    Seq.equal cs (B.append sr (app_bytes_of p)) /\ Seq.equal ss cr
+  | MP.ToClient p ->
+    Seq.equal ss (B.append cr (app_bytes_of p)) /\ Seq.equal cs sr
+
+(** `pre` is a prefix of the byte string `full`. **)
+let is_byte_prefix (pre full:B.bytes) : prop =
+  exists (rest:B.bytes). Seq.equal full (B.append pre rest)
+
+(** End-to-end application-data STREAM INTEGRITY: each endpoint's received
+    application byte stream is a prefix of the peer's sent application byte
+    stream. **)
+let stream_integrity_holds (s:tls_system_state) : prop =
+  is_byte_prefix (app_stream_received s.client) (app_stream_sent s.server) /\
+  is_byte_prefix (app_stream_received s.server) (app_stream_sent s.client)
+
+(** Appending the empty byte string is the identity (extensional). **)
+let lemma_append_empty_r (x:B.bytes)
+  : Lemma (Seq.equal (B.append x B.empty) x)
+  = ()
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PURE reduction: the stream-pairing invariant entails end-to-end stream
+    integrity.  In every channel state the in-flight application delta (or
+    `B.empty` at `Quiet`) is exactly the `rest` witnessing the prefix.  This
+    lemma is fully proved and reduces the open end-to-end goal to the single
+    invariant `app_pairing`.
+
+    WHY `app_pairing` IS NOT YET A `tls_system_inv` CONJUNCT (the genuine gap).
+    Adding `app_pairing` requires proving it INDUCTIVELY preserved by all six
+    step families.  Send and local cases are within reach (send grows the
+    sender's `app_sent` stream by exactly `app_bytes_of p` via `tls_emit`'s
+    event-log equation; local leaves `app_received` unchanged up to `B.empty`
+    chunks by `app_pending_empty`).  The DELIVERY case is blocked:
+
+      * The receiver's `app_received` stream grows by the bytes of the message
+        IT decodes from the in-flight wire, so preservation needs
+        `decoded_message == p.pl_sent` for application-data records — a
+        decode-FAITHFULNESS fact.
+      * The natural bridge (establish faithfulness at SEND time, when the channel
+        is `Quiet`, and merely consume it at delivery, as `channel_consistent`
+        does) FAILS for application data: a client legally sends app data at
+        `model_control == ControlApplicationData`, but `client_clean` then only
+        gives the peer `server_post_cf` (which includes `HsClientFinishedReceived`
+        — the server has RECEIVED but not yet locally VERIFIED the client Finished).
+        So the quiescent application-traffic-key AGREEMENT
+        (`lemma_ready_quiescent_agrees`) is NOT available at such sends: in real
+        TLS 1.3 the client may send app data before the server verifies CF.
+      * Even with key agreement, the existing seal→decode bridges
+        (`TLS13.Impl.Driver.Pairing.fsti`) additionally require record
+        sequence-number ALIGNMENT (a new "record-count pairing" invariant, not
+        present) and a decode-DETERMINISM/INJECTIVITY lemma (buildable but not
+        present).  Finally the AEAD TCB (`TLS13.Crypto.Spec.fsti`) assumes only
+        open-after-seal CORRECTNESS, with no authenticity/wrong-key-fails or
+        injectivity lemma, so a decode by a not-yet-ready receiver is left
+        unconstrained by the model.
+
+    Closing this would need new infrastructure (record-count pairing + decode
+    determinism) and EITHER an AEAD-authenticity crypto assumption (a TCB change,
+    out of scope) OR a global deadlock argument that no legal app-data delivery
+    to a pre-`ControlApplicationData` receiver can occur.  Rather than admit any
+    of these, `app_pairing` is left as a standalone definition with this proven
+    reduction to the end-to-end property.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_app_pairing_implies_stream_integrity (s:tls_system_state)
+  : Lemma (requires app_pairing s)
+          (ensures stream_integrity_holds s)
+  = let cs = app_stream_sent s.client in
+    let cr = app_stream_received s.client in
+    let ss = app_stream_sent s.server in
+    let sr = app_stream_received s.server in
+    // stream_integrity needs: is_byte_prefix cr ss  and  is_byte_prefix sr cs.
+    lemma_append_empty_r cr;   // Seq.equal (B.append cr B.empty) cr
+    lemma_append_empty_r sr;   // Seq.equal (B.append sr B.empty) sr
+    match s.channel with
+    | MP.Quiet ->
+      // cs == sr and ss == cr: both prefixes witnessed by B.empty.
+      assert (Seq.equal cs (B.append sr B.empty));
+      assert (Seq.equal ss (B.append cr B.empty))
+    | MP.ToServer p ->
+      // cs == sr ++ (app_bytes_of p): server-received prefixes client-sent;
+      // ss == cr: client-received prefixes server-sent (rest B.empty).
+      assert (Seq.equal cs (B.append sr (app_bytes_of p)));
+      assert (Seq.equal ss (B.append cr B.empty))
+    | MP.ToClient p ->
+      assert (Seq.equal ss (B.append cr (app_bytes_of p)));
+      assert (Seq.equal cs (B.append sr B.empty))
+#pop-options
+
 (** STAGE 2A — key-schedule prefix on each endpoint: an application traffic
     secret implies the master secret, and the master secret implies the shared
     secret.  Used to pin the client's late-obligation rank at send-CF. **)
@@ -465,6 +622,7 @@ let tls_system_inv (s:tls_system_state) : prop =
   client_e2e s /\
   server_e2e s /\
   client_clean s /\
+  app_pending_empty s /\
   protected_witnesses_ok s
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -1006,7 +1164,9 @@ let lemma_initial_inv (cfg_c cfg_s:CS.connection_config)
     // protected_witnesses_ok is vacuous at the initial state (client not ready).
     reveal_opaque (`%protected_witnesses_ok)
       (protected_witnesses_ok (initial_tls_system cfg_c cfg_s));
-    assert (~(client_ready (initial_tls_system cfg_c cfg_s)))
+    assert (~(client_ready (initial_tls_system cfg_c cfg_s)));
+    // app_pending_empty: fresh endpoints start from empty_application_state.
+    assert (app_pending_empty (initial_tls_system cfg_c cfg_s))
 
 (** ─────────────────────────────────────────────────────────────────────────
     Wire / projection FACT preservation.
@@ -1827,6 +1987,88 @@ let lemma_bp_server_local
     Seq.lemma_eq_elim
       a.server.CS.cs_wire_log.CL.raw_sent
       a.client.CS.cs_wire_log.CL.raw_received
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    Phase 2 — `app_pending_empty` preservation.
+
+    `app_pending_plaintext` is written exactly once (`empty_application_state`)
+    and carried unchanged by every model step, so it stays empty on both
+    endpoints.  The two step-level sublemmas below establish the field is
+    preserved by any legal model step; the endpoint wrappers lift that through
+    the (existentially bundled) legal delta of a canonical step.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_step_local_preserves_pending
+  (model0:CS.connection_model) (ev:CS.local_event) (model1:CS.connection_model)
+  : Lemma (requires CS.step_local_event model0 ev == Some model1)
+          (ensures model1.CS.model_application.CS.app_pending_plaintext ==
+                   model0.CS.model_application.CS.app_pending_plaintext)
+  = ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_step_tls_preserves_pending
+  (model0:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (model1:CS.connection_model)
+  : Lemma (requires CS.step_tls_message model0 dir msg == Some model1)
+          (ensures model1.CS.model_application.CS.app_pending_plaintext ==
+                   model0.CS.model_application.CS.app_pending_plaintext)
+  = ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_step_model_preserves_pending
+  (model0:CS.connection_model) (ev:CS.conn_event) (model1:CS.connection_model)
+  : Lemma (requires CS.step_model model0 ev == Some model1)
+          (ensures model1.CS.model_application.CS.app_pending_plaintext ==
+                   model0.CS.model_application.CS.app_pending_plaintext)
+  = match ev with
+    | CS.ConnNetworkEvent msg ->
+      lemma_step_tls_preserves_pending model0 msg.CL.message_direction msg.CL.message_value model1
+    | CS.ConnLocalEvent local ->
+      lemma_step_local_preserves_pending model0 local model1
+#pop-options
+
+(** A canonical client step preserves the pending-plaintext field: the step
+    supplies a legal connection delta, whose model transition carries the field
+    unchanged. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_client_step_preserves_pending
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires EC.client_step st0 e st1 out)
+      (ensures
+        st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+        st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext)
+  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
+    eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
+    returns
+      st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+      st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext
+    with _pf.
+      lemma_step_model_preserves_pending st0.CS.cs_model d.CS.delta_event st1.CS.cs_model
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_step_preserves_pending
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires ES.server_step st0 e st1 out)
+      (ensures
+        st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+        st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext)
+  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
+    eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
+    returns
+      st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+      st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext
+    with _pf.
+      lemma_step_model_preserves_pending st0.CS.cs_model d.CS.delta_event st1.CS.cs_model
 #pop-options
 
 (** Bridge: driver readiness entails `ControlApplicationData`.  Needed to relate
@@ -2869,6 +3111,7 @@ let lemma_pres_client_send (a b:tls_system_state)
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
        lemma_bp_client_send a local c' out w sent;
        lemma_wire_facts_client_send a b;
+       lemma_client_step_preserves_pending a.client c' (SM.LocalEvent local) out;
        lemma_pw_pres_client_send a b local c' out w sent)
 #pop-options
 
@@ -2895,6 +3138,7 @@ let lemma_pres_server_send (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
        lemma_bp_server_send a local s' out w sent;
        lemma_wire_facts_server_send a b;
+       lemma_server_step_preserves_pending a.server s' (SM.LocalEvent local) out;
        lemma_pw_pres_server_send a b local s' out w sent)
 #pop-options
 
@@ -2948,6 +3192,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_server a wire s' out raw snap sent;
        lemma_wire_facts_deliver_to_server a b;
+       lemma_server_step_preserves_pending a.server s' (SM.WireEvent wire) out;
        lemma_pw_pres_deliver_to_server a b wire s' out raw snap sent;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -2978,6 +3223,7 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        lemma_client_step_e2e a.client c' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_client a wire c' out raw snap sent;
        lemma_wire_facts_deliver_to_client a b;
+       lemma_client_step_preserves_pending a.client c' (SM.WireEvent wire) out;
        lemma_pw_pres_deliver_to_client a b wire c' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3005,6 +3251,7 @@ let lemma_pres_client_local (a b:tls_system_state)
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
        lemma_bp_client_local a local c' out;
        lemma_wire_facts_client_local a b;
+       lemma_client_step_preserves_pending a.client c' (SM.LocalEvent local) out;
        lemma_pw_pres_client_local a b local c' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3032,6 +3279,7 @@ let lemma_pres_server_local (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
        lemma_bp_server_local a local s' out;
        lemma_wire_facts_server_local a b;
+       lemma_server_step_preserves_pending a.server s' (SM.LocalEvent local) out;
        lemma_pw_pres_server_local a b local s' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
