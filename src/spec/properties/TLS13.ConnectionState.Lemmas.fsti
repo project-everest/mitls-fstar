@@ -194,6 +194,19 @@ val lemma_server_finished_sent_no_client_application_traffic
       (ensures
         st.cs_model.model_handshake.hs_keys.ks_client_application_traffic == None)
 
+(** STAGE (b): a reachable CLIENT endpoint at `HsServerFinishedVerified` still has
+    its record_write at the Handshake epoch (the application write key is installed
+    only at the Finished send, which advances control to ControlApplicationData). **)
+val lemma_client_finished_verified_write_epoch_not_application
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+
 val lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma

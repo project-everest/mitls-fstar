@@ -47,6 +47,7 @@ module CSL  = TLS13.ConnectionState.Lemmas
 module W    = TLS13.Wire.Spec
 module T    = TLS13.Types
 module SMKM = TLS13.Spec.StateMachine.KeyMaterial
+module SMCorr = TLS13.Spec.StateMachine.Correspondence
 module SM   = Common.StateMachine
 module CW   = TLS13.Spec.Endpoint.Wire
 module CTy  = TLS13.Impl.CanonicalTypes
@@ -84,33 +85,229 @@ let snap_app_wseq (p:SY.tls_payload) : nat =
     `application_data_record_count` of an application-data payload, and one for
     every other (single-record) message.  This is exactly the advance applied by
     `CS.step_tls_message` at the app-data arm, and by `R.next_seq` elsewhere. **)
-(** The application-epoch record-seq advance a SEND/RECEIVE of this message applies
-    to `record_write`/`record_read` (as read through the epoch-collapsing
-    projection), when the acting direction is at the `Application` epoch:
 
-      * `TlsApplicationData b`  → `application_data_record_count b`
-          (`step_tls_message` app-data arm advances by exactly that many records);
-      * `TlsAlert Close_notify` → `1`  (a single protected close record; `next_seq`);
-      * anything else           → `0`.
+(** ─────────────────────────────────────────────────────────────────────────
+    MODEL-LEVEL seq machinery and the SEND / RECEIVE record-seq DELTA lemmas.
 
-    The `0` for a NON-close alert is load-bearing and was WRONG in the first cut:
-    a non-close `TlsAlert` at any control hits the `fail_model` catch-all of
-    `step_tls_message` (`StateMachine.fst:966`), which preserves `model_record`
-    entirely — so it advances neither the write nor the read seq.  (Handshake sends
-    are illegal at the `Application` epoch — `None` — and `KeyUpdate` is excluded by
-    `SY.tls_no_rekeying`, so their `rin` values are never consulted while the
-    snapshot epoch is `Application`.) **)
+    These are the engine behind the 6-family `app_seq_pairing` preservation: they
+    say EXACTLY how a legal `step_tls_message` moves the epoch-collapsing write /
+    read projections, so each family lemma reduces to "the acting endpoint stepped
+    by this message".
+    ───────────────────────────────────────────────────────────────────────── **)
+
+let m_wr (m:CS.connection_model) : R.direction_state =
+  m.CS.model_record.CS.record_write
+let m_rd (m:CS.connection_model) : R.direction_state =
+  m.CS.model_record.CS.record_read
+
+(** The epoch-collapsing seq projections at the MODEL level.  Definitionally
+    `app_wseq st == m_wseq st.cs_model`, `app_rseq st == m_rseq st.cs_model`, and
+    `snap_app_wseq p == m_wseq p.pl_snap`. **)
+let m_wseq (m:CS.connection_model) : nat =
+  if R.Application? (m_wr m).R.epoch then (m_wr m).R.seq else 0
+let m_rseq (m:CS.connection_model) : nat =
+  if R.Application? (m_rd m).R.epoch then (m_rd m).R.seq else 0
+
+(** The app-epoch WRITE advance a SENT message applies to `record_write.seq`,
+    keyed on the SENDER'S CONTROL (which is what `step_tls_message` actually
+    dispatches on).  Only two `Sent` arms advance the write seq while at the
+    application region:
+
+      * `TlsApplicationData b` at `ControlApplicationData`
+          → `application_data_record_count b`  (the app-data arm);
+      * `TlsAlert Close_notify` at `ControlApplicationData`
+          → `1`  (`next_seq`, moving to `ControlClosing`).
+
+    EVERYTHING ELSE is `0`: a non-close alert (or a close at any OTHER control,
+    e.g. `ControlClosed`) hits the `fail_model` catch-all, which PRESERVES
+    `model_record` (no seq advance); a `Close_notify` re-send at `ControlClosing`
+    or `ControlFailed` is `None`.  Keying on control — not on the message alone —
+    is load-bearing: a message-only count would wrongly credit a close that failed
+    from `ControlClosed`. **)
+let m_wadv (m:CS.connection_model) (msg:M.tls_message) : nat =
+  match msg, m.CS.model_control with
+  | M.TlsApplicationData b, CS.ControlApplicationData -> RF.application_data_record_count b
+  | M.TlsAlert T.Close_notify, CS.ControlApplicationData -> 1
+  | _, _ -> 0
+
+(** The app-epoch READ advance a RECEIVED message applies to `record_read.seq`,
+    keyed on the RECEIVER'S CONTROL.  Every deliverable protected payload bumps the
+    read seq by exactly one (`step_tls_message` uses `next_seq`):
+
+      * `TlsApplicationData`/`TlsIgnoredPostHandshake`/`Close_notify` at
+        `ControlApplicationData` → `1`;
+      * `Close_notify` at `ControlClosing` → `1`  (`next_seq`, moving to
+        `ControlClosed`);
+      * everything else → `0`  (`fail_model` catch-all preserves `model_record`,
+        or the arm is `None`). **)
+let m_radv (m:CS.connection_model) (msg:M.tls_message) : nat =
+  match msg, m.CS.model_control with
+  | M.TlsApplicationData _, CS.ControlApplicationData -> 1
+  | M.TlsIgnoredPostHandshake _, CS.ControlApplicationData -> 1
+  | M.TlsAlert T.Close_notify, CS.ControlApplicationData -> 1
+  | M.TlsAlert T.Close_notify, CS.ControlClosing -> 1
+  | _, _ -> 0
+
+(** The application record delta an in-flight payload contributes — the
+    control-aware write advance evaluated at the SENDER'S sealing SNAPSHOT
+    (`pl_snap`), counted only when that snapshot was at the `Application` epoch (a
+    protected handshake record snapshots at the `Handshake` epoch and contributes
+    `0`). **)
 let rin (p:SY.tls_payload) : nat =
-  match p.SY.pl_sent with
+  m_wadv p.SY.pl_snap p.SY.pl_sent
+
+let rin_app (p:SY.tls_payload) : nat =
+  if R.Application? (snap_wr p).R.epoch then rin p else 0
+
+(** The app-epoch WRITE advance a SENT message applies (when the writer is at the
+    `Application` epoch): `application_data_record_count` for app data, one for a
+    protected `Close_notify`, zero otherwise. **)
+let msg_wcount (msg:M.tls_message) : nat =
+  match msg with
   | M.TlsApplicationData b -> RF.application_data_record_count b
   | M.TlsAlert T.Close_notify -> 1
   | _ -> 0
 
-(** The application record delta an in-flight payload contributes — `rin` when the
-    sender sealed it at the application epoch, and `0` for a protected handshake
-    record (whose sender snapshot is at the `Handshake` epoch). **)
-let rin_app (p:SY.tls_payload) : nat =
-  if R.Application? (snap_wr p).R.epoch then rin p else 0
+(** The app-epoch READ advance a RECEIVED message applies (when the reader is at
+    the `Application` epoch): a single record for every deliverable protected
+    payload (`step_tls_message` bumps `record_read` by exactly one via `next_seq`),
+    zero otherwise.  Note this differs from `msg_wcount` on multi-record app data —
+    but such a send is UNDELIVERABLE (`tls_carries` forces a single wire record),
+    so at any real delivery `msg_wcount == msg_rcount == 1`. **)
+let msg_rcount (msg:M.tls_message) : nat =
+  match msg with
+  | M.TlsApplicationData _ -> 1
+  | M.TlsAlert T.Close_notify -> 1
+  | M.TlsIgnoredPostHandshake _ -> 1
+  | _ -> 0
+
+(** A no-key-update event log whose LAST event sends `msg` cannot send a
+    `KeyUpdate` — the tail element must itself be non-`KeyUpdate`.  This is how
+    `SY.tls_no_rekeying` on the POST-state excludes the `KeyUpdate` arms of
+    `step_tls_message` from the SEND families. **)
+let rec lemma_no_key_update_tail (log:list CS.conn_event) (ev:CS.conn_event)
+  : Lemma
+      (requires SMCorr.conn_events_no_key_update (log @ [ev]) == true)
+      (ensures SMCorr.conn_event_is_key_update ev == false)
+      (decreases log)
+  = match log with
+    | [] -> ()
+    | _ :: rest -> lemma_no_key_update_tail rest ev
+
+(** A client/server that sent `msg` last, in a no-key-update trace, did not send a
+    `KeyUpdate`. **)
+let lemma_sent_not_key_update (st:CS.connection_state) (msg:M.tls_message)
+  : Lemma
+      (requires
+        SMCorr.connection_state_no_key_update_trace st /\
+        (exists (prefix:list CS.conn_event).
+          st.CS.cs_event_log == prefix @ [SMKM.sent_tls_event msg]))
+      (ensures ~(M.TlsKeyUpdate? msg))
+  = eliminate exists (prefix:list CS.conn_event).
+       st.CS.cs_event_log == prefix @ [SMKM.sent_tls_event msg]
+    returns ~(M.TlsKeyUpdate? msg)
+    with _pf.
+      lemma_no_key_update_tail prefix (SMKM.sent_tls_event msg)
+
+(** SEND DELTA.  A legal `Sent` model step advances the epoch-collapsing WRITE
+    projection by `msg_wcount msg` (when the writer is at the `Application` epoch)
+    and leaves the READ projection unchanged.
+
+    The GUARD `((m_wr m).epoch =!= Application \/ ~TlsHandshake? msg)` excludes the
+    single false case — a HANDSHAKE send while the write epoch is already
+    `Application` — which is unreachable in the real system (client: the
+    strengthened `HsServerFinishedVerified` shape gives write epoch `=!= Application`
+    at every handshaking control; app-data control forbids handshake sends).  The
+    `~TlsKeyUpdate? msg` hypothesis excludes the rekeying arms (which `install_keys`
+    and would reset seq), supplied by `SY.tls_no_rekeying`. **)
+(** `advance_direction_records` bumps `seq` by exactly `n` (and preserves the
+    epoch, per the existing `CSL.lemma_advance_direction_records_preserves_epoch`).
+    Needed for the app-data SEND arm, which advances the write by
+    `application_data_record_count` records at once. **)
+let rec lemma_advance_direction_records_seq (st:R.direction_state) (n:nat)
+  : Lemma
+      (ensures (CS.advance_direction_records st n).R.seq == st.R.seq + n)
+      (decreases n)
+  = if n = 0 then () else lemma_advance_direction_records_seq st (n - 1)
+
+let rec lemma_advance_direction_records_epoch (st:R.direction_state) (n:nat)
+  : Lemma
+      (ensures (CS.advance_direction_records st n).R.epoch == st.R.epoch)
+      (decreases n)
+  = if n = 0 then () else lemma_advance_direction_records_epoch st (n - 1)
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+(** The `Sent` handshake sub-case of the send delta.  With write epoch
+    =!= Application, every arm keeps the epoch-collapsing write projection at 0
+    (next_seq preserves the non-Application epoch; the client-Finished install
+    lands Application at seq 0) and leaves the read projection unchanged. **)
+let lemma_sent_handshake_wseq
+  (m m':CS.connection_model) (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        CS.step_handshake_message m CL.Sent hm == Some m' /\
+        (m_wr m).R.epoch =!= R.Application)
+      (ensures m_wseq m' == m_wseq m /\ m_rseq m' == m_rseq m)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+let lemma_sent_wseq_delta (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Sent msg == Some m' /\
+        ~(M.TlsKeyUpdate? msg) /\
+        ((m_wr m).R.epoch =!= R.Application \/ ~(M.TlsHandshake? msg)))
+      (ensures
+        m_wseq m' == m_wseq m + (if R.Application? (m_wr m).R.epoch then m_wadv m msg else 0) /\
+        m_rseq m' == m_rseq m)
+  = match msg with
+    | M.TlsHandshake hm ->
+        // guard forces (m_wr m).epoch =!= Application here.  Every `Sent`
+        // handshake arm of `step_handshake_message` touches `record_write` only
+        // through `R.next_seq` (epoch-preserving, so it stays =!= Application and
+        // the projection stays 0) or through
+        // `install_client_application_write_after_finished`, which installs the
+        // Application epoch at seq 0 (projection 0).  `record_read` is untouched
+        // on `Sent` arms (read installs are all `Received`).
+        lemma_sent_handshake_wseq m m' hm
+    | M.TlsApplicationData b ->
+        // app-data SEND at ControlApplicationData advances the write by
+        // `application_data_record_count b` records at once.
+        lemma_advance_direction_records_seq (m_wr m) (RF.application_data_record_count b);
+        lemma_advance_direction_records_epoch (m_wr m) (RF.application_data_record_count b)
+    | _ -> ()
+#pop-options
+
+(** RECEIVE DELTA.  A legal `Received` model step advances the epoch-collapsing
+    READ projection by `msg_rcount msg` (when the reader is at the `Application`
+    epoch) and leaves the WRITE projection unchanged.  Same guard rationale. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+(** The `Received` handshake sub-case of the receive delta. **)
+let lemma_recv_handshake_rseq
+  (m m':CS.connection_model) (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        CS.step_handshake_message m CL.Received hm == Some m' /\
+        (m_rd m).R.epoch =!= R.Application)
+      (ensures m_rseq m' == m_rseq m /\ m_wseq m' == m_wseq m)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+let lemma_recv_rseq_delta (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Received msg == Some m' /\
+        ~(M.TlsKeyUpdate? msg) /\
+        ((m_rd m).R.epoch =!= R.Application \/ ~(M.TlsHandshake? msg)))
+      (ensures
+        m_rseq m' == m_rseq m + (if R.Application? (m_rd m).R.epoch then m_radv m msg else 0) /\
+        m_wseq m' == m_wseq m)
+  = match msg with
+    | M.TlsHandshake hm -> lemma_recv_handshake_rseq m m' hm
+    | _ -> ()
+#pop-options
 
 (** ── C -> S direction (client writes, server reads). ── **)
 let cs_seq_ok (s:SY.tls_system_state) : prop =

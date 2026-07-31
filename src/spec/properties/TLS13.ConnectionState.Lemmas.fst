@@ -2415,12 +2415,23 @@ let client_application_record_epoch_reachable_shape
   | ControlHandshaking HsCertificateVerifyReceived
   | ControlHandshaking HsCertificateVerifyVerified
   | ControlHandshaking HsServerFinishedReceived ->
-    keys.ks_server_application_traffic == None
+    keys.ks_server_application_traffic == None /\
+    // STAGE (b): the client installs its application WRITE key only at the
+    // Finished send (HsServerFinishedVerified -> ControlApplicationData); the
+    // legal local (TrafficApplication, TrafficWrite) install is a NO-OP on
+    // record_write for a client (install_record_keys, StateMachine.fst:399), so
+    // record_write stays at the Handshake epoch throughout the handshake.  This
+    // pins app_wseq to 0 at the Finished send, discharging the record-seq pairing.
+    model.model_record.record_write.R.epoch =!= R.Application
   | ControlHandshaking HsServerFinishedVerified ->
     client_application_record_read_epoch_link model /\
     (match keys.ks_server_application_traffic with
      | Some m -> traffic_material_matches_record_direction m model.model_record.record_read
-     | None -> True)
+     | None -> True) /\
+    // STAGE (b): see the grouped handshaking arm above — record_write is still at
+    // the Handshake epoch at the instant the Finished send installs the client
+    // application write key.
+    model.model_record.record_write.R.epoch =!= R.Application
   | ControlApplicationData ->
     application_record_keys_installed_for_role ClientEndpoint model /\
     client_application_record_epoch_link model
@@ -3167,6 +3178,45 @@ let lemma_server_finished_sent_no_client_application_traffic
   assert (connection_state_evolves (initial st.cs_model.model_config) st);
   assert (p st);
   assert (server_application_record_epoch_reachable_shape st.cs_model)
+
+(** STAGE (b): a reachable CLIENT endpoint at `HsServerFinishedVerified` has not
+    yet installed its application WRITE key — record_write is still at the
+    Handshake epoch.  The client's application write key is installed only by the
+    Finished send (`install_client_application_write_after_finished`), which moves
+    control to `ControlApplicationData`; the legal local (TrafficApplication,
+    TrafficWrite) install is a no-op on record_write for a client
+    (`install_record_keys`, StateMachine.fst:399).  Hence app_wseq is 0 at the
+    Finished send, which is what makes the application record-seq pairing hold
+    across that step. **)
+let lemma_client_finished_verified_write_epoch_not_application
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role ClientEndpoint in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert (client_application_record_epoch_reachable_shape st.cs_model)
 
 let lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
