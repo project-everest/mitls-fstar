@@ -1042,3 +1042,41 @@ let lemma_server_canonical_appdata_exact_spine
       )
     )
 #pop-options
+
+(* ================================================================== *)
+(* Shared-secret PRESENCE at HsServerFinishedSent.                     *)
+(*                                                                     *)
+(* Server mirror of                                                    *)
+(* [ClientCanonicalShape.lemma_client_reachable_sfv_shared_secret_present]. *)
+(* [sfs_region_ok] matches [Some shared] and every other case is       *)
+(* [False], so the canonical shape pins [Some? ks_shared_secret] at    *)
+(* [HsServerFinishedSent] — non-ready, from canonical reachability +   *)
+(* no-received-CCS.                                                     *)
+(* ================================================================== *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_server_reachable_sfs_shared_secret_present
+  (cfg:CS.connection_config) (s:CS.connection_state)
+  : Lemma
+    (requires
+       WStep.server_reachable (CS.initial cfg) s /\
+       s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+       s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
+       log_has_no_received_ccs s.CS.cs_event_log)
+    (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
+  = let init = CS.initial cfg in
+    lemma_shape_initial cfg;
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                                 CTy.server_local_event EAPI.local_output)).
+      SM.trace_reaches (WStep.server_sm init) init trace s
+    returns Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret
+    with _.
+    (
+      lemma_trace_config init init s trace;
+      lemma_trace_shape init init s trace;
+      assert (server_canonical_shape s);
+      eliminate exists (region:list CS.conn_event) (tail:list CS.conn_event).
+          sfs_region_ok s.CS.cs_model s.CS.cs_event_log region tail
+      returns Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret
+      with _. ()
+    )
+#pop-options
