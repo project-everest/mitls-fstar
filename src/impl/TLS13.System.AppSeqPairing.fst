@@ -289,23 +289,84 @@ let lemma_recv_rseq_delta (m m':CS.connection_model) (msg:M.tls_message)
     | _ -> ()
 #pop-options
 
+(** ─────────────────────────────────────────────────────────────────────────
+    GATED record-seq pairing.  (History: this arm USED to be a flat equality
+    `app_wseq client == app_rseq server`, which is FALSE at a reachable state.
+    DO NOT re-strengthen it to a flat equality.)
+
+    THE FALSIFYING SCENARIO (record-count divergence at a failed receiver):
+      1. Both endpoints reach `ControlApplicationData`; the server holds app read
+         keys, so `Application?(rd server).epoch` and `app_rseq server == S`.
+      2. The server takes `LocalFail` (legal from ANY control,
+         `StateMachine.fst:1296`); `fail_model` (`StateMachine.fst:303`) touches
+         ONLY `model_control`/`model_failure`, so `record_read` — hence the
+         `Application` read epoch and `app_rseq server == S` — is PRESERVED.  The
+         server is now `ControlFailed`, which is ABSORBING (every arm of
+         `step_local_event`/`step_handshake_message`/`step_tls_message` at
+         `ControlFailed` is either `None` or `fail_model`, never leaving it).
+      3. The client (still `ControlApplicationData`) sends `Close_notify`:
+         `record_write = R.next_seq …` (`StateMachine.fst:929`), so its write seq
+         advances to `S+1`, i.e. `app_wseq client == S+1`.
+      4. The `Close_notify` is delivered to the FAILED server: it hits
+         `| M.TlsAlert alert, ControlFailed _ -> Received -> fail_model …`
+         (`StateMachine.fst:961`), which again preserves `record_read`, so
+         `app_rseq server` stays `S`.  The channel returns to `Quiet` with
+         `app_wseq client == S+1` but `app_rseq server == S`.
+
+    The client legitimately counted a record (its own `Close_notify`) that the
+    failed server will NEVER count.  The two record counters diverge PERMANENTLY.
+    A flat `Quiet`-arm equality is therefore irreparably false.  This divergence
+    is INVISIBLE to the end-to-end goal, which is a byte-stream PREFIX property:
+    `Close_notify` carries zero application bytes (`app_bytes_delta`,
+    `System.fst:397`), so `app_pairing` itself is untouched.
+
+    THE GATE.  Divergence can only BEGIN by delivering a `Close_notify`
+    (`m_wadv == 1`) to a receiver that will not count it, and the ONLY receiver
+    that fails to count a `Close_notify` is one at `ControlFailed`/`ControlClosed`
+    — and BOTH of those transitions leave the receiver at `ControlFailed`
+    (`ControlClosed` + `Close_notify` hits the catch-all `M.TlsAlert alert, _ ->
+    fail_model`).  Since `ControlFailed` is absorbing, the record counters agree
+    at EVERY reachable state whose receiver is NOT `ControlFailed`; they may
+    diverge (receiver behind) only once the receiver is `ControlFailed`.
+
+    So the pairing is: an EQUALITY gated on the receiver not being failed, plus a
+    global INEQUALITY (received count ≤ sent count — the record-level prefix fact)
+    that survives the divergence.
+
+    NB on the gate choice: we gate on `~ControlFailed?` and NOT on
+    `ControlApplicationData?`.  The narrower `ControlApplicationData?` gate would
+    drop the equality during the whole handshake (where the receiver is at
+    `ControlHandshaking`), which would DESTROY the cheap establishment of the
+    in-flight alignment at the `ControlHandshaking -> ControlApplicationData`
+    seam: that establishment reads the equality straight off the pre-state, and
+    only `~ControlFailed?` keeps the equality live throughout the handshake (both
+    app-seqs are `0` there, so it holds trivially).  `~ControlFailed?` is thus the
+    minimal weakening: the OLD flat equality, excused EXACTLY at `ControlFailed`.
+    ───────────────────────────────────────────────────────────────────────── **)
+
 (** ── C -> S direction (client writes, server reads). ── **)
 let cs_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToServer p ->
-      app_wseq s.client == app_rseq s.server + rin_app p /\
-      snap_app_wseq p == app_rseq s.server
+      app_rseq s.server <= app_wseq s.client /\
+      (~(CS.ControlFailed? (SY.ctrl s.server)) ==>
+         snap_app_wseq p == app_rseq s.server)
   | _ ->
-      app_wseq s.client == app_rseq s.server
+      app_rseq s.server <= app_wseq s.client /\
+      (~(CS.ControlFailed? (SY.ctrl s.server)) ==>
+         app_wseq s.client == app_rseq s.server)
 
 (** ── S -> C direction (server writes, client reads). ── **)
 let sc_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToClient p ->
-      app_wseq s.server == app_rseq s.client + rin_app p /\
-      snap_app_wseq p == app_rseq s.client
+      app_rseq s.client <= app_wseq s.server /\
+      (~(CS.ControlFailed? (SY.ctrl s.client)) ==>
+         snap_app_wseq p == app_rseq s.client)
   | _ ->
-      app_wseq s.server == app_rseq s.client
+      app_rseq s.client <= app_wseq s.server /\
+      (~(CS.ControlFailed? (SY.ctrl s.client)) ==>
+         app_wseq s.server == app_rseq s.client)
 
 (** The application-epoch record-seq pairing invariant — the seq-level analogue
     of `SY.byte_pairing`, one level up. **)
@@ -325,6 +386,7 @@ let lemma_cs_delivery_alignment (s:SY.tls_system_state) (p:SY.tls_payload)
   : Lemma
       (requires
         app_seq_pairing s /\ s.channel == MP.ToServer p /\
+        ~(CS.ControlFailed? (SY.ctrl s.server)) /\
         R.Application? (snap_wr p).R.epoch /\
         R.Application? (rd s.server).R.epoch)
       (ensures (snap_wr p).R.seq == (rd s.server).R.seq)
@@ -334,6 +396,7 @@ let lemma_sc_delivery_alignment (s:SY.tls_system_state) (p:SY.tls_payload)
   : Lemma
       (requires
         app_seq_pairing s /\ s.channel == MP.ToClient p /\
+        ~(CS.ControlFailed? (SY.ctrl s.client)) /\
         R.Application? (snap_wr p).R.epoch /\
         R.Application? (rd s.client).R.epoch)
       (ensures (snap_wr p).R.seq == (rd s.client).R.seq)
@@ -484,33 +547,42 @@ let inflight_bridge_ready
         snapshot's write epoch is `Application` — so the two seq-delta guards agree
         (`rin_app` gates on the snapshot's write epoch; the server's read advance
         gates on the server's read epoch); and
-      * when both are at `Application`, the bridge inputs hold AND the sender's
-        control-aware write advance equals the receiver's control-aware read advance
-        for the very message in flight (`m_radv server pl_sent == m_wadv snap
-        pl_sent`) — which, after faithful decode pins the delivered message to
-        `pl_sent`, makes the two seq deltas identical.
+      * when both are at `Application`, the bridge inputs (`inflight_bridge_ready`:
+        key/iv agreement, single-record seal witness, message round-trip) hold.
+        The record-seq ALIGNMENT the bridge additionally needs is derived at the
+        delivery from `cs_seq_ok`'s gated alignment conjunct via
+        `lemma_cs_delivery_alignment`, so it is NOT restated here.
 
     Symmetric for an in-flight-to-client payload.  A `Quiet` channel carries no
     payload, so the conjunct is vacuous — hence trivial at the initial state.
 
+    HISTORY (do not re-add): this conjunct USED to also carry
+    `m_radv server pl_sent == m_wadv snap pl_sent` (a record-COUNT advance
+    equality).  That is FALSE at a reachable `ToServer` state — a `Close_notify`
+    sent from `ControlApplicationData` (`m_wadv == 1`) in flight to a server that
+    took `LocalFail` and is now `ControlFailed` (`m_radv == 0`), the very scenario
+    spelled out at `cs_seq_ok` — and it is also UNNECESSARY: the end-to-end goal is
+    a byte-stream prefix property, and a `Close_notify` carries no application
+    bytes, so the record-count divergence is invisible to it.  The bridge needs
+    only key/iv agreement plus the seq alignment (supplied by `cs_seq_ok`), never
+    the count equality.
+
     NOTE (why this is stable and where establishment lives): a `ToServer` channel is
     entered ONLY by `client_send`, and the ONLY family enabled from a non-`Quiet`
     channel is the matching delivery (every send/local gates on `is_quiet`), which
-    exits to `Quiet`.  So the SERVER is frozen while `ToServer`, and both the
-    biconditional and the advance-equality are established at the send and never
+    exits to `Quiet`.  So the SERVER is frozen while `ToServer`, and the
+    biconditional and the bridge inputs are established at the send and never
     perturbed until the delivery consumes them. **)
 let channel_seal_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToServer p ->
       (R.Application? (rd s.server).R.epoch <==> R.Application? (snap_wr p).R.epoch) /\
       (R.Application? (rd s.server).R.epoch ==>
-        (inflight_bridge_ready p.SY.pl_snap s.server.CS.cs_model p.SY.pl_sent p.SY.pl_raw /\
-         m_radv s.server.CS.cs_model p.SY.pl_sent == m_wadv p.SY.pl_snap p.SY.pl_sent))
+        inflight_bridge_ready p.SY.pl_snap s.server.CS.cs_model p.SY.pl_sent p.SY.pl_raw)
   | MP.ToClient p ->
       (R.Application? (rd s.client).R.epoch <==> R.Application? (snap_wr p).R.epoch) /\
       (R.Application? (rd s.client).R.epoch ==>
-        (inflight_bridge_ready p.SY.pl_snap s.client.CS.cs_model p.SY.pl_sent p.SY.pl_raw /\
-         m_radv s.client.CS.cs_model p.SY.pl_sent == m_wadv p.SY.pl_snap p.SY.pl_sent))
+        inflight_bridge_ready p.SY.pl_snap s.client.CS.cs_model p.SY.pl_sent p.SY.pl_raw)
   | MP.Quiet -> True
 
 (** The full STAGE (b)+(c) extras carried on top of the stream bundle. **)
