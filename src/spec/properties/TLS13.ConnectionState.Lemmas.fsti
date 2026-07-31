@@ -1008,3 +1008,49 @@ val lemma_consistent_shared_secret_stable_server_x25519_projection
         st.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived /\
         ~(ControlFailed? st.cs_model.model_control))
       (ensures stable_server_x25519_key_share_projection st)
+
+(** NON-READY record-keys consistency producer.  Part 1 of the handshake-epoch
+    material bridge: closes [connection_state_record_keys_consistent_for_role]
+    (= [model_record_keys_consistent_for_role role st.cs_model]) over the reachable
+    closure from a bare [connection_state_consistent].  Standard [stable_on_closure]
+    over the already-exposed initial ([lemma_initial_record_keys_consistent_for_role])
+    and step ([lemma_legal_connection_delta_record_keys_consistent_for_role])
+    ingredients.  No readiness. **)
+val lemma_connection_state_consistent_record_keys_consistent_for_config_role
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures
+        connection_state_record_keys_consistent_for_role
+          st.cs_model.model_config.config_role
+          st)
+
+(** NON-READY handshake-epoch material producer.  Part 2 of the bridge, the
+    HANDSHAKE mirror of [lemma_application_record_direction_material_matches_key_schedule_for_role].
+    Given [model_record_keys_consistent_for_role role model] (past the
+    [ControlFailed _ -> True] guard via [~(ControlFailed?)]) and a record direction
+    whose epoch is [Handshake], the [R.Handshake] arm of
+    [record_keys_match_key_schedule_for_role] supplies
+    [traffic_material_matches_record_direction], which bridges to the
+    [record_key_iv_material_agrees] form the consumer needs by the SAME [Seq.equal]
+    step the application producer discharges.  The handshake arm carries NO
+    [ControlHandshaking _ -> True] vacuity (unlike the application arm), so this
+    goes directly through [record_keys_match_key_schedule_for_role] with no
+    installed-helper detour.  The two obligations ([~ControlFailed], epoch ==
+    Handshake) are discharged by the client-Finished send's control gates
+    (client [HsServerFinishedVerified], server [HsServerFinishedSent]). **)
+val lemma_handshake_record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : Lemma
+      (requires
+        model_record_keys_consistent_for_role role model /\
+        ~(ControlFailed? model.model_control) /\
+        (record_direction_for_endpoint role dir model).R.epoch == R.Handshake)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          role
+          dir
+          (traffic_id TrafficHandshake (traffic_label_for_endpoint_direction role dir))
+          model)

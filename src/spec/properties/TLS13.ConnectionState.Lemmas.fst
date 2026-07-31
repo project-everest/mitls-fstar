@@ -11013,3 +11013,166 @@ let lemma_consistent_shared_secret_stable_server_x25519_projection
         ~(ControlFailed? st.cs_model.model_control))
       (ensures stable_server_x25519_key_share_projection st)
   = lemma_connection_state_consistent_server_x25519_reachable_shape st
+
+(* ================================================================== *)
+(* NON-READY handshake-epoch material bridge (Brick 3).               *)
+(*                                                                     *)
+(* Part 1: consistency -> record-keys consistency.  [stable_on_closure] *)
+(* over the reachable closure, using the already-exposed initial and   *)
+(* delta record-keys ingredients.  The stable predicate tracks the     *)
+(* config role (preserved by every step).                              *)
+(* ================================================================== *)
+let record_keys_consistent_config_role_shape (st:connection_state) : prop =
+  connection_state_record_keys_consistent_for_role
+    st.cs_model.model_config.config_role
+    st
+
+let lemma_delta_record_keys_consistent_config_role_shape
+  (st0 st1:connection_state)
+  : Lemma
+      (requires
+        record_keys_consistent_config_role_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures record_keys_consistent_config_role_shape st1)
+=
+  eliminate exists delta. legal_connection_delta st0 delta st1
+  returns record_keys_consistent_config_role_shape st1
+  with _.
+    (lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+     assert (st1.cs_model.model_config == st0.cs_model.model_config);
+     lemma_legal_connection_delta_record_keys_consistent_for_role
+       st0.cs_model.model_config.config_role st0 delta st1)
+
+let lemma_single_step_record_keys_consistent_config_role_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (record_keys_consistent_config_role_shape y);
+                    (connection_state_single_step x y)}
+          record_keys_consistent_config_role_shape x /\
+          connection_state_single_step x y ==>
+          record_keys_consistent_config_role_shape y)
+=
+  introduce forall (x:connection_state) (y:connection_state).
+    record_keys_consistent_config_role_shape x /\
+    connection_state_single_step x y ==>
+    record_keys_consistent_config_role_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_delta_record_keys_consistent_config_role_shape x y
+
+let lemma_initial_record_keys_consistent_config_role_shape (cfg:connection_config)
+  : Lemma (ensures record_keys_consistent_config_role_shape (initial cfg))
+=
+  lemma_initial_record_keys_consistent_for_role cfg.config_role cfg
+
+let lemma_connection_state_consistent_record_keys_consistent_for_config_role
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures
+        connection_state_record_keys_consistent_for_role
+          st.cs_model.model_config.config_role
+          st)
+=
+  lemma_initial_record_keys_consistent_config_role_shape st.cs_model.model_config;
+  lemma_single_step_record_keys_consistent_config_role_shape ();
+  let p = record_keys_consistent_config_role_shape in
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure connection_state_single_step p stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+
+(* ================================================================== *)
+(* Part 2: handshake-epoch material producer.  HANDSHAKE mirror of     *)
+(* [lemma_application_record_direction_material_matches_key_schedule_for_role]. *)
+(* From [model_record_keys_consistent_for_role role model] (past the   *)
+(* [ControlFailed] guard) and a [Handshake]-epoch record direction, the *)
+(* [R.Handshake] arm of [record_keys_match_key_schedule_for_role]       *)
+(* delivers [traffic_material_matches_record_direction material st]     *)
+(* (= [st.key == Some material.traffic_key /\ st.static_iv == Some ..]);*)
+(* the [Seq.equal] bridge to [record_key_iv_material_agrees] is the     *)
+(* SAME one proved in the application producer.  No vacuity clause on   *)
+(* the handshake arm, so no installed-helper detour is needed.          *)
+(* ================================================================== *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshake_record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : Lemma
+      (requires
+        model_record_keys_consistent_for_role role model /\
+        ~(ControlFailed? model.model_control) /\
+        (record_direction_for_endpoint role dir model).R.epoch == R.Handshake)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          role
+          dir
+          (traffic_id TrafficHandshake (traffic_label_for_endpoint_direction role dir))
+          model)
+=
+  let keys = model.model_handshake.hs_keys in
+  match role, dir with
+  | ClientEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ClientEndpoint TrafficWrite model.model_control keys model.model_record.record_write);
+    (match
+      traffic_material_for_label keys TrafficHandshake ClientTraffic,
+      record_direction_material model.model_record.record_write
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_write);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ClientEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ClientEndpoint TrafficRead model.model_control keys model.model_record.record_read);
+    (match
+      traffic_material_for_label keys TrafficHandshake ServerTraffic,
+      record_direction_material model.model_record.record_read
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_read);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ServerEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ServerEndpoint TrafficRead model.model_control keys model.model_record.record_read);
+    (match
+      traffic_material_for_label keys TrafficHandshake ClientTraffic,
+      record_direction_material model.model_record.record_read
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_read);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ServerEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ServerEndpoint TrafficWrite model.model_control keys model.model_record.record_write);
+    (match
+      traffic_material_for_label keys TrafficHandshake ServerTraffic,
+      record_direction_material model.model_record.record_write
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_write);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+#pop-options
