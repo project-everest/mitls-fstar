@@ -3455,6 +3455,37 @@ let lemma_handshaking_read_app_seq_zero (st:connection_state)
     assert (p st)
 #pop-options
 
+(** STAGE (b), READ side, STRONG form: at any reachable handshaking state OTHER
+    than client `HsServerFinishedVerified` / server `HsClientFinishedReceived`, the
+    record read epoch is strictly off `Application`.  Same read-epoch reachable
+    shape as `lemma_handshaking_read_app_seq_zero`, but reading its strong
+    (non-`seq==0`) arm; used by the client delivery family to rule out a cleartext
+    `ServerHello`/`HelloRetryRequest` receive (legal only at `HsClientHelloSent`)
+    when the client's read epoch is `Application`.  See the `.fsti` for the full
+    rationale. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshaking_nonfinal_read_not_application (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control /\
+        st.cs_model.model_control =!= ControlHandshaking HsServerFinishedVerified /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientFinishedReceived)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application)
+  = lemma_initial_handshaking_read_epoch_shape st.cs_model.model_config;
+    lemma_single_step_handshaking_read_epoch_shape ();
+    let p = conn_handshaking_read_epoch_shape in
+    let stable :
+      squash (forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure connection_state_single_step p stable;
+    assert (p (initial st.cs_model.model_config));
+    assert (connection_state_evolves (initial st.cs_model.model_config) st);
+    assert (p st)
+#pop-options
+
 (** STAGE (b), WRITE side.  Mirror of `handshaking_read_epoch_shape` for the
     write projection.  The shape is STRONG (`record_write.epoch =!= Application`)
     at every handshaking stage EXCEPT the two where an app-write key can already be

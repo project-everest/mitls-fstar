@@ -253,6 +253,33 @@ val lemma_handshaking_read_app_seq_zero (st:connection_state)
         st.cs_model.model_record.record_read.R.epoch =!= R.Application \/
         st.cs_model.model_record.record_read.R.seq == 0)
 
+(** STAGE (b), READ side, STRONG form: at any reachable handshaking state OTHER
+    than the two where the app-read key is installed while control is still
+    handshaking (client `HsServerFinishedVerified`, server `HsClientFinishedReceived`),
+    the record read epoch is strictly off `Application`.  This is the strong
+    (non-`seq==0`) arm of the same read-epoch reachable shape exposed by
+    `lemma_handshaking_read_app_seq_zero`.
+
+    NEEDED BY the client DELIVERY family: a client legally RECEIVES a cleartext
+    `ServerHello`/`HelloRetryRequest` ONLY at `HsClientHelloSent`
+    (`step_tls_message` has no other `Received` arm for them), which this lemma
+    places off the Application read epoch.  So in the delivery's both-application
+    branch (client read epoch `Application`) a `ServerHello`/`HelloRetryRequest`
+    receive is impossible, discharging the not-cleartext side condition for those
+    two messages WITHOUT a wire-length bound.  The asymmetry with the server: a
+    server never receives `ServerHello`/`HelloRetryRequest` at any control, so the
+    server delivery excluded them by `server_ctrl_ok` alone; the client does
+    receive them (early), so it needs this read-epoch placement instead. **)
+val lemma_handshaking_nonfinal_read_not_application (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control /\
+        st.cs_model.model_control =!= ControlHandshaking HsServerFinishedVerified /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientFinishedReceived)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application)
+
 (** STAGE (b), WRITE side: mirror of the read-side fact.  At any reachable
     handshaking state the epoch-collapsing write projection is 0 — `record_write`
     is off the Application epoch, or (at the two stages where the app-write key is

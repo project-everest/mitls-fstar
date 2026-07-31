@@ -48,6 +48,7 @@ module W    = TLS13.Wire.Spec
 module T    = TLS13.Types
 module SMKM = TLS13.Spec.StateMachine.KeyMaterial
 module SMCorr = TLS13.Spec.StateMachine.Correspondence
+module SMR  = TLS13.Spec.StateMachine.Reachability
 module SM   = Common.StateMachine
 module CW   = TLS13.Spec.Endpoint.Wire
 module CTy  = TLS13.Impl.CanonicalTypes
@@ -1385,6 +1386,177 @@ let lemma_asp_deliver_to_server
           // write projection is 0 (snapshot write epoch not Application, by the seal
           // biconditional), so both sides are 0.
           lemma_recv_rseq_delta a.server.CS.cs_model s'.CS.cs_model msg
+        )
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    THE CLIENT NOT-CLEARTEXT HELPER (bridge-first, client mirror of
+    `lemma_recv_msg_not_cleartext`).
+
+    A RECEIVED message whose wire record has content type `Application_data` is NOT
+    a cleartext record, for a reachable CLIENT whose READ epoch is `Application`.
+
+    The client is NOT symmetric to the server here, and that is the whole reason a
+    separate helper (and the new spec lemma) exists.  On the server side, the four
+    cleartext receives were excluded either by a raw-type contradiction
+    (`ClientHello`/`ChangeCipherSpec`) or by `server_ctrl_ok`
+    (`ServerHello`/`HelloRetryRequest` are received only at CLIENT controls, so the
+    step is `None`).  A client, by contrast, LEGITIMATELY receives
+    `ServerHello`/`HelloRetryRequest`, so `server_ctrl_ok` has no mirror.  But those
+    two are received ONLY at `HsClientHelloSent` (`step_tls_message` has no other
+    `Received` arm for them), a NON-FINAL handshaking control that
+    `CSL.lemma_handshaking_nonfinal_read_not_application` places OFF the
+    `Application` read epoch — contradicting the both-application hypothesis under
+    which this helper is invoked.  So they are discharged by read-epoch placement,
+    with NO wire-length bound (which the serialize/parse roundtrip of a
+    `ServerHello` would otherwise demand).  `ClientHello`/`ChangeCipherSpec` are
+    excluded by the same raw-type contradiction as on the server. **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
+let lemma_client_recv_msg_not_cleartext
+  (client:CS.connection_state) (msg:M.tls_message) (m':CS.connection_model) (raw:B.bytes)
+  : Lemma
+      (requires
+        CS.step_tls_message client.CS.cs_model CL.Received msg == Some m' /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        SMR.connection_state_consistent client /\
+        R.Application? (rd client).R.epoch /\
+        CS.network_message_raw_delta_legal client.CS.cs_model
+          ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw /\
+        (match W.parse_record_wire raw with
+         | Some (ct, _, _) -> ct == T.Application_data
+         | None -> False))
+      (ensures CS.network_message_is_cleartext CL.Received msg == false)
+  = if CS.network_message_is_cleartext CL.Received msg then
+      (match msg with
+       | M.TlsHandshake (M.ClientHello _) ->
+           WStep.lemma_cleartext_recv_not_appdata client.CS.cs_model msg raw
+       | M.TlsChangeCipherSpec ->
+           WStep.lemma_cleartext_recv_not_appdata client.CS.cs_model msg raw
+       | _ ->
+           // ServerHello / HelloRetryRequest: the ONLY `Received` arm of
+           // `step_tls_message` for either is at `HsClientHelloSent`, so step-success
+           // pins the control there — a non-final handshaking control, off the
+           // Application read epoch by the new spec lemma, contradicting the App-read
+           // hypothesis of the both-application branch.  No length bound needed.
+           assert (client.CS.cs_model.CS.model_control ==
+                     CS.ControlHandshaking CS.HsClientHelloSent);
+           CSL.lemma_handshaking_nonfinal_read_not_application client)
+    else ()
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    STAGE (b) PRESERVATION — DELIVERY TO CLIENT (mirror of `lemma_asp_deliver_to_server`).
+
+    A `deliver_to_client` consumes an in-flight `MP.ToClient` payload (sealed by the
+    SERVER) and steps the CLIENT by the message it decodes to.  As on the server
+    side the proof is NON-CIRCULAR: the faithful-decode bridge is fed by the
+    PRE-state seal (`channel_seal_ok a`, `sc_seq_ok a`, and the two carried in-flight
+    facts), and the CONCLUSION `app_seq_pairing b` lands on the POST-state.
+
+    The mirror is NOT a syntactic dual: the gated direction is now `sc_seq_ok`
+    (server writes -> client reads), and the not-cleartext hinge cannot reuse the
+    server's `lemma_recv_msg_not_cleartext` (which grounds the SH/HRR exclusion in
+    `server_ctrl_ok`, absent for a client that legitimately receives them).  It uses
+    the client helper above instead, which excludes SH/HRR by read-epoch placement.
+    ═══════════════════════════════════════════════════════════════════════════ **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_asp_deliver_to_client
+  (a:SY.tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
+  (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+  (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\
+        app_seq_pairing a /\
+        channel_seal_ok a /\
+        inflight_sender_stepped a /\
+        inflight_single_record a /\
+        a.channel == SY.tls_to_client raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+        SY.tls_no_rekeying ({ a with client = c'; channel = MP.Quiet }))
+      (ensures app_seq_pairing ({ a with client = c'; channel = MP.Quiet }))
+  = let b : SY.tls_system_state = { a with client = c'; channel = MP.Quiet } in
+    let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+    assert (a.channel == MP.ToClient p);
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       CS.legal_connection_delta a.client
+         { CS.delta_event = conn_ev;
+           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+           CS.delta_raw_received = CW.wire_serialize wire } c' /\
+       SMCan.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+       SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+         (CW.wire_serialize wire) /\
+       EC.network_input_message_projection a.client wire msg /\
+       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns app_seq_pairing b
+    with _pd.
+    (
+      let conn_ev = CS.ConnNetworkEvent
+        { CL.message_direction = CL.Received; CL.message_value = msg } in
+      Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+      // The model step the client just took: step_tls_message ... Received msg.
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
+      // ~KeyUpdate(msg) from the post-state's no-rekeying trace (its event log ends
+      // with `received_tls_event msg`).
+      lemma_recv_not_key_update c' msg;
+      // cs-direction (client writes, server reads): a RECEIVE freezes the client's
+      // WRITE projection, and the server is untouched, so `cs_seq_ok a` transfers.
+      lemma_recv_preserves_write a.client.CS.cs_model c'.CS.cs_model msg;
+      // sc-direction (server writes, client reads): the gated alignment.  When the
+      // POST-state client is live, the PRE-state client was live too (closing region
+      // is absorbing), so `sc_seq_ok a` supplies the pre-state seq equality.
+      introduce not_closing (SY.ctrl c') ==> app_wseq a.server == app_rseq c'
+      with _live.
+      (
+        lemma_step_preserves_closing a.client.CS.cs_model c'.CS.cs_model conn_ev;
+        // EQ_pre : snap_app_wseq p == app_rseq a.client   (sc_seq_ok a, ToClient p, live)
+        // send delta : app_wseq a.server == snap_app_wseq p + rin_app p
+        lemma_sent_wseq_delta snap a.server.CS.cs_model sent;
+        if R.Application? (rd a.client).R.epoch then
+        (
+          // BOTH-APP.  channel_seal_ok a gives the bridge inputs; EQ_pre (both App)
+          // gives the seq alignment.  The faithful-decode bridge (fed by the
+          // PRE-state seal — non-circular) pins what the client received.
+          CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+            snap a.client.CS.cs_model sent raw;
+          // FINDING-1 HINGE: the bridge is invoked only here, where the client's read
+          // epoch is Application; the received wire record is Application_data-typed,
+          // so by the client not-cleartext helper the received message is not
+          // cleartext and the projection yields its decode.  (Unlike the server, the
+          // client's App read epoch does NOT imply `ControlApplicationData` — the
+          // `HsServerFinishedVerified` window — so the helper excludes SH/HRR by
+          // read-epoch placement, not by control.)
+          lemma_client_recv_msg_not_cleartext a.client msg c'.CS.cs_model raw;
+          lemma_decode_functional a.client.CS.cs_model msg sent raw;
+          // msg == sent; the receive delta needs ~Handshake(msg) (from msg == sent an
+          // app-data payload) and ~KeyUpdate(msg) (already have).
+          lemma_recv_rseq_delta a.client.CS.cs_model c'.CS.cs_model msg;
+          // COUNT-MATCH : m_wadv snap sent == m_radv a.client msg.
+          (match sent with
+           | M.TlsApplicationData bts ->
+               // both steps force ControlApplicationData; single-record: the send
+               // advance is `application_data_record_count bts == 1`.
+               ()
+           | M.TlsAlert T.Close_notify ->
+               // a received Close_notify lands the client in the closing region
+               // (`:943` ApplicationData->ControlClosed, `:949` Closing->ControlClosed),
+               // contradicting the live branch — vacuous.
+               ()
+           | _ -> ())
+        )
+        else
+        (
+          // NEITHER-APP.  Client read epoch not Application: the read projection is 0
+          // pre and post (the receive keeps it 0 — the delta is 0), and the server's
+          // write projection is 0 (snapshot write epoch not Application, by the seal
+          // biconditional), so both sides are 0.
+          lemma_recv_rseq_delta a.client.CS.cs_model c'.CS.cs_model msg
         )
       )
     )
