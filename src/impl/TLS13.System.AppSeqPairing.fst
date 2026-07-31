@@ -453,9 +453,70 @@ let cf_inflight_client_appdata (s:SY.tls_system_state) : prop =
         SY.ctrl s.client == CS.ControlApplicationData
   | _ -> True
 
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE (c) — THE FAITHFUL-DECODE SEAL CONJUNCT.
+
+    The in-flight protected payload's seal fact is NOT available from
+    `SY.tls_system_inv` — `SY.channel_consistent` (System.fst:290) constrains only
+    the two CLEARTEXT hellos and says nothing about a protected payload.  So a
+    delivery cannot, from `tls_system_inv` alone, decode the wire back to the
+    message the sender sealed.  We therefore CARRY, on the in-flight payload, exactly
+    the inputs the faithful-decode bridge
+    (`CSL.lemma_received_single_protected_message_decode_from_..._seal_peer`)
+    consumes: key/iv material agreement between the sealing snapshot's write
+    direction and the receiver's read direction, the single-record seal witness, and
+    the message round-trip.  (The seq-alignment hypothesis of the bridge is derived
+    at the delivery from `app_seq_pairing` via `lemma_cs_delivery_alignment`, so it
+    is not carried here.) **)
+let inflight_bridge_ready
+  (snap receiver:CS.connection_model) (msg:M.tls_message) (raw:B.bytes) : prop =
+  (match SMKM.record_direction_material snap.CS.model_record.CS.record_write,
+         SMKM.record_direction_material receiver.CS.model_record.CS.record_read with
+   | Some sw, Some rr -> SMKM.record_key_iv_material_agrees sw rr
+   | _, _ -> False) /\
+  SMCan.sent_single_protected_message_seal snap msg raw /\
+  (let (ct, frag) = W.serialize_tls_message msg in
+   W.parse_tls_message ct frag == Some msg)
+
+(** The seal conjunct proper.  For an in-flight-to-server payload:
+
+      * the receiver's (server's) read epoch is `Application` IFF the sealing
+        snapshot's write epoch is `Application` — so the two seq-delta guards agree
+        (`rin_app` gates on the snapshot's write epoch; the server's read advance
+        gates on the server's read epoch); and
+      * when both are at `Application`, the bridge inputs hold AND the sender's
+        control-aware write advance equals the receiver's control-aware read advance
+        for the very message in flight (`m_radv server pl_sent == m_wadv snap
+        pl_sent`) — which, after faithful decode pins the delivered message to
+        `pl_sent`, makes the two seq deltas identical.
+
+    Symmetric for an in-flight-to-client payload.  A `Quiet` channel carries no
+    payload, so the conjunct is vacuous — hence trivial at the initial state.
+
+    NOTE (why this is stable and where establishment lives): a `ToServer` channel is
+    entered ONLY by `client_send`, and the ONLY family enabled from a non-`Quiet`
+    channel is the matching delivery (every send/local gates on `is_quiet`), which
+    exits to `Quiet`.  So the SERVER is frozen while `ToServer`, and both the
+    biconditional and the advance-equality are established at the send and never
+    perturbed until the delivery consumes them. **)
+let channel_seal_ok (s:SY.tls_system_state) : prop =
+  match s.channel with
+  | MP.ToServer p ->
+      (R.Application? (rd s.server).R.epoch <==> R.Application? (snap_wr p).R.epoch) /\
+      (R.Application? (rd s.server).R.epoch ==>
+        (inflight_bridge_ready p.SY.pl_snap s.server.CS.cs_model p.SY.pl_sent p.SY.pl_raw /\
+         m_radv s.server.CS.cs_model p.SY.pl_sent == m_wadv p.SY.pl_snap p.SY.pl_sent))
+  | MP.ToClient p ->
+      (R.Application? (rd s.client).R.epoch <==> R.Application? (snap_wr p).R.epoch) /\
+      (R.Application? (rd s.client).R.epoch ==>
+        (inflight_bridge_ready p.SY.pl_snap s.client.CS.cs_model p.SY.pl_sent p.SY.pl_raw /\
+         m_radv s.client.CS.cs_model p.SY.pl_sent == m_wadv p.SY.pl_snap p.SY.pl_sent))
+  | MP.Quiet -> True
+
 (** The full STAGE (b)+(c) extras carried on top of the stream bundle. **)
 let app_extras (s:SY.tls_system_state) : prop =
-  app_seq_pairing s /\ cf_inflight_client_appdata s /\ app_material_agreement s
+  app_seq_pairing s /\ cf_inflight_client_appdata s /\
+  app_material_agreement s /\ channel_seal_ok s
 
 (** Initial state: both record epochs are `Initial`, so `cf_delivered` is false
     and the agreement is vacuous; `app_seq_pairing` was shown initial above. **)
