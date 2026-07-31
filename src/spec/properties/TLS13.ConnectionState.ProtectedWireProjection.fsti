@@ -87,6 +87,37 @@ val lemma_protected_handshake_wire_equal_from_event_projections_peer
           (W.serialize_handshake sent_msg)
           (W.serialize_handshake received_msg))
 
+val lemma_single_protected_message_seal_excludes_protected_head
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sent_msg:M.handshake_msg)
+  (step:CS.protected_handshake_step)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.CS.model_record.CS.record_write.R.seq ==
+          receiver.CS.model_record.CS.record_read.R.seq /\
+        (match
+          TLS13.Spec.StateMachine.KeyMaterial.record_direction_material sender.CS.model_record.CS.record_write,
+          TLS13.Spec.StateMachine.KeyMaterial.record_direction_material receiver.CS.model_record.CS.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          TLS13.Spec.StateMachine.KeyMaterial.record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal
+          sender
+          (M.TlsHandshake sent_msg)
+          raw /\
+        step.CS.protected_handshake_head /\
+        CS.legal_event receiver (CS.ConnProtectedHandshake step) /\
+        TLS13.Spec.StateMachine.Canonical.received_event_decode_projection
+          receiver
+          (CS.ConnProtectedHandshake step)
+          raw)
+      (ensures False)
+
 val lemma_protected_finished_not_certificate_verify_from_event_projections_peer
   (sender:CS.connection_model)
   (receiver:CS.connection_model)

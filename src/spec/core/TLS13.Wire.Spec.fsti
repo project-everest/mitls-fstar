@@ -616,6 +616,32 @@ val lemma_parse_tls_message_handshake_some:
       parse_handshake fragment ==
         Some (msg, B.length fragment))
 
+val lemma_parse_tls_message_handshake_partial_none:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake fragment == Some (msg, consumed) /\
+      consumed < B.length fragment)
+    (ensures parse_tls_message T.Handshake fragment == None)
+
+val lemma_parse_handshake_serialize_protected_consumes_all:
+  sent_msg:M.handshake_msg ->
+  parsed_msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      (match sent_msg with
+       | M.EncryptedExtensions _
+       | M.Certificate _
+       | M.CertificateVerify _
+       | M.Finished _ -> True
+       | _ -> False) /\
+      parse_handshake (serialize_handshake sent_msg) ==
+        Some (parsed_msg, consumed))
+    (ensures consumed == B.length (serialize_handshake sent_msg))
+
 (* The generated [Invalid] content type (wire byte 0) never carries a TLS
    message: the spec parser rejects it.  Exposed so consumers can discharge the
    "no content type matches" obligation for an unknown record content type. *)

@@ -947,6 +947,38 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
 
 let lemma_parse_tls_message_handshake_some fragment msg = ()
 
+let lemma_parse_tls_message_handshake_partial_none fragment msg consumed = ()
+
+#push-options "--z3rlimit 20"
+let lemma_parse_handshake_serialize_protected_consumes_all
+  sent_msg
+  parsed_msg
+  consumed
+=
+  match sent_msg with
+  | M.EncryptedExtensions ee ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_encrypted_extensions ee)
+  | M.Certificate cert ->
+    if GCert.certificate_bytesize cert <= 16777215
+    then
+      LP.parse_serialize
+        GHS.handshake_serializer
+        (GHS.Body_certificate (cert <: GHS.handshake_body_certificate))
+    else ()
+  | M.CertificateVerify cv ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_certificate_verify cv)
+  | M.Finished fin ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_finished fin)
+  | _ ->
+    assert False
+#pop-options
+
 let lemma_parse_tls_message_invalid_none fragment = ()
 
 let lemma_parse_handshake_none_of_lp_none fragment = ()

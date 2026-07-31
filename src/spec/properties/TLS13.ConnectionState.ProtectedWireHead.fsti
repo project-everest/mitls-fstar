@@ -326,6 +326,55 @@ val lemma_received_event_nonempty_decode_projection_protected
           })
           delta_received)
 
+val lemma_single_message_sender_normalizes_received_handshake_head
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (receiver_head:CS.conn_event)
+  (sender_rest:list CS.conn_event)
+  (receiver_rest:list CS.conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:CS.connection_model)
+  (receiver_final:CS.connection_model)
+  : Lemma
+      (requires
+        write_read_record_material_aligned sender receiver /\
+        CS.protected_handshake_buffer_empty receiver /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        (match receiver_head with
+         | CS.ConnNetworkEvent directed ->
+           directed.CL.message_direction == CL.Received /\
+           directed.CL.message_value == M.TlsHandshake received_msg
+         | CS.ConnProtectedHandshake step ->
+           step.CS.protected_handshake_message == received_msg
+         | CS.ConnLocalEvent _ ->
+           False) /\
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          } :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+          receiver
+          (receiver_head :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
+      (ensures
+        receiver_head == CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake received_msg;
+        })
+
 val lemma_protected_handshake_event_projection_pair_from_aligned_heads
   (sender:CS.connection_model)
   (receiver:CS.connection_model)
