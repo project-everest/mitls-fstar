@@ -44,7 +44,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/prctl.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <openssl/ssl.h>
@@ -68,6 +70,22 @@
 #define MAX_LINE      8192     /* per-header-line byte cap (431) */
 #define MAX_BODY      1048576  /* request-body cap (413 Payload Too Large) */
 #define READ_TIMEOUT_SECS 5    /* default per-connection read timeout (408) */
+#define HTTP_WORKERS_DEFAULT 8 /* pre-forked accept-loop workers (env HTTP_WORKERS) */
+
+/* ---- worker pool bookkeeping (supervisor process only) ------------------- */
+static pid_t http_workers[256];
+static int http_worker_count;
+
+static void http_kill_workers(void) {
+  for (int i = 0; i < http_worker_count; i++)
+    if (http_workers[i] > 0) kill(http_workers[i], SIGTERM);
+}
+
+static void http_supervisor_signal(int sig) {
+  (void)sig;
+  http_kill_workers();
+  _exit(0);
+}
 
 static const char DEFAULT_BODY[] =
   "Served by the verified FStar/Pulse HTTP/1.1 server!\n";
@@ -379,6 +397,63 @@ int main(int argc, char **argv) {
           port,
           want_verified_tls ? "https/VERIFIED TLS 1.3" : (tls_ctx ? "https/TLS" : "http"),
           body_len);
+
+  /* 1b. Pre-fork a small pool of worker processes, each running the accept loop
+     below on the SHARED listening socket (the verified backend's listener is
+     created once, in tls13_server_config_new, before this fork).  Without this
+     the server is strictly serial: HTTP/1.1 keep-alive means a worker stays
+     blocked in read() on an idle connection, and browsers routinely open
+     several connections at once and pre-connect without sending anything, so a
+     single-process server wedges after the first request.  Each worker is
+     independent -- there is no shared state between connections -- so this is
+     purely an availability fix and does not affect the verified code paths. */
+  long workers = HTTP_WORKERS_DEFAULT;
+  { const char *w = getenv("HTTP_WORKERS");
+    if (w && *w) { long v = atol(w); if (v > 0 && v <= 256) workers = v; } }
+  if (workers > 1) {
+    if (workers > (long)(sizeof http_workers / sizeof http_workers[0]))
+      workers = (long)(sizeof http_workers / sizeof http_workers[0]);
+    http_worker_count = (int)workers;
+    for (int i = 0; i < http_worker_count; i++) {
+      pid_t pid = fork();
+      if (pid < 0) { perror("fork"); http_worker_count = i; break; }
+      if (pid == 0) goto worker;
+      http_workers[i] = pid;
+    }
+    /* Supervisor: forward termination to the pool, respawn workers that die so
+       the pool cannot silently shrink, and exit once the pool is empty. */
+    signal(SIGTERM, http_supervisor_signal);
+    signal(SIGINT, http_supervisor_signal);
+    for (;;) {
+      int st;
+      pid_t done = wait(&st);
+      if (done < 0) {
+        if (errno == EINTR) continue;
+        break;                                   /* ECHILD: pool is empty */
+      }
+      for (int i = 0; i < http_worker_count; i++) {
+        if (http_workers[i] != done) continue;
+        pid_t pid = fork();
+        if (pid == 0) goto worker;
+        http_workers[i] = pid > 0 ? pid : -1;
+        break;
+      }
+    }
+    http_kill_workers();
+    free(body);
+    if (lfd >= 0) close(lfd);
+    return 0;
+  }
+worker:
+  /* Worker: if the supervisor dies (tests `kill` the parent pid), do not linger
+     holding the listening port. */
+#ifdef PR_SET_PDEATHSIG
+  if (workers > 1) {
+    prctl(PR_SET_PDEATHSIG, SIGTERM);
+    if (getppid() == 1) _exit(0);
+  }
+#endif
+  http_worker_count = 0;                 /* a worker owns no children */
 
   /* Staging buffers for the verified exchange: the request head buffer, the
      recovered target-length out-param, the 43-byte response head, and the body

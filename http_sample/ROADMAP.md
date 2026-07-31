@@ -494,6 +494,44 @@ Chrome-like 1771-byte ClientHello (GREASE in cipher suites, groups, key shares,
 extensions *and* versions, plus an `X25519MLKEM768` key share, ALPS, ECH GREASE
 and certificate compression) gets a ServerHello.
 
+### Serving a browser: the demo server is pre-forked
+
+Closing the parse-level gaps was necessary but not sufficient: with a real
+browser the server answered the first request and then wedged, with every
+process parked in `read()` (`Common_TCP_read` <- `Common_BufferedTCP_read_more`
+<- the verified receive loop).  Two unverified-glue problems, both about
+*availability*, not about the protocol:
+
+1. **The accept loop was strictly serial.**  HTTP/1.1 keep-alive means a
+   connection stays open after a response, so the single process sat in `read()`
+   on connection #1 while the browser's other connections were never accepted.
+   Browsers make this immediate: they open several connections at once and
+   *pre-connect* (open TCP, send nothing until a subresource is needed), and on
+   the verified path the whole handshake also runs inside
+   `tls13_server_driver_accept_with_config`, so even a silent pre-connect
+   blocked the loop.  `http_server` now **pre-forks a pool of workers**
+   (`HTTP_WORKERS`, default 8) that all accept on the shared listener -- the
+   verified listener is created once in `tls13_server_config_new`, before the
+   fork.  The supervisor forwards `SIGTERM`/`SIGINT` to the pool, respawns
+   workers that die, and workers set `PR_SET_PDEATHSIG` so `kill <server-pid>`
+   (what the test harness does) never leaves the port held.
+
+2. **Idle connections were never timed out on the verified path.**  The
+   plaintext path armed `SO_RCVTIMEO` in `http_server.c`, but on the verified
+   path the socket is accepted *inside* the driver and was never reachable.
+   `common_tcp_accept` now arms a receive timeout on every accepted socket
+   (`COMMON_TCP_ACCEPT_TIMEOUT_SECS`, default 15s, 0 disables), which also
+   bounds the handshake.  A timeout alone was not enough: `Common_TCP_read` maps
+   any short read to "0 bytes", which the verified receive loop treats as *need
+   more input* and retries against its fuel budget -- so an idle connection was
+   retried `fuel x timeout` instead of being dropped.  `common_tcp_read_fd` now
+   makes a timeout **terminal** by half-closing the socket, so subsequent reads
+   report a clean end-of-stream and the worker is released at once.
+
+Measured: 6 silent pre-connects followed by 6 real requests all return `200` in
+0.3s; with every worker deliberately pinned by a silent connection the next
+request still succeeds, one idle timeout later.
+
 ### Status
 
 A completely unpinned `curl` and a completely unpinned `openssl s_client` now

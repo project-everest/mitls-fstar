@@ -4,7 +4,10 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -93,11 +96,34 @@ int common_tcp_listen(const char *bind_host, uint16_t port) {
   return fd;
 }
 
+/* Default per-socket receive timeout armed on accepted connections.  Without
+   one, a client that opens a connection and then goes quiet -- a browser
+   pre-connect, or an HTTP/1.1 keep-alive connection parked between requests --
+   pins the accepting process inside read() forever.  Override with
+   COMMON_TCP_ACCEPT_TIMEOUT_SECS (0 disables the timeout). */
+#define COMMON_TCP_ACCEPT_TIMEOUT_SECS 15
+
+static void common_tcp_arm_accept_timeout(int fd) {
+  long secs = COMMON_TCP_ACCEPT_TIMEOUT_SECS;
+  const char *env = getenv("COMMON_TCP_ACCEPT_TIMEOUT_SECS");
+  if (env != NULL && *env != '\0') {
+    long v = atol(env);
+    if (v >= 0) secs = v;
+  }
+  if (secs <= 0) return;
+  struct timeval tv;
+  tv.tv_sec = (time_t)secs;
+  tv.tv_usec = 0;
+  (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
+}
+
 int common_tcp_accept(int listener_fd) {
   int fd;
   do {
     fd = accept(listener_fd, NULL, NULL);
   } while (fd < 0 && errno == EINTR);
+  if (fd >= 0) common_tcp_arm_accept_timeout(fd);
   return fd;
 }
 
@@ -111,6 +137,14 @@ ssize_t common_tcp_read_fd(int fd, uint8_t *out, size_t max_len) {
   do {
     n = read(fd, out, max_len);
   } while (n < 0 && errno == EINTR);
+  /* A receive timeout (armed by common_tcp_accept) means the peer has gone
+     quiet.  Callers above translate a short read into "no data yet" and retry
+     on a fuel budget, so make the timeout TERMINAL: half-close the socket so
+     every subsequent read reports a clean end-of-stream immediately and the
+     connection is torn down instead of being retried for fuel x timeout. */
+  if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    (void)shutdown(fd, SHUT_RDWR);
+  }
   return n;
 }
 
