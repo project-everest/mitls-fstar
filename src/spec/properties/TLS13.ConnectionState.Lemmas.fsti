@@ -1095,3 +1095,19 @@ val lemma_server_finished_sent_read_epoch_handshake
         Some? st.cs_model.model_record.record_read.R.key)
       (ensures
         st.cs_model.model_record.record_read.R.epoch == R.Handshake)
+
+(* Brick 3.7 : NON-READY key-schedule lineage producer.  From bare          *)
+(* consistency plus [Some? ks_shared_secret], derive the full               *)
+(* [connection_supported_profile_key_schedule_lineage] via the internal     *)
+(* reachable-shape lemma (the [base_lineage_or_empty] shape collapses to     *)
+(* all-Some once the shared secret is present).  Lets the non-ready          *)
+(* cross-endpoint handshake-agreement route (Brick 4) discharge lineage      *)
+(* internally instead of surfacing it as a hypothesis.                       *)
+val lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        connection_supported_profile_key_schedule_lineage st)

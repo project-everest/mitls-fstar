@@ -11894,3 +11894,43 @@ let lemma_server_finished_sent_read_epoch_handshake
   | R.Application -> ()
   | R.Initial -> assert (rr.R.key == None)
 #pop-options
+
+(* ------------------------------------------------------------------------ *)
+(* Brick 3.7 : NON-READY key-schedule lineage producer.                      *)
+(*                                                                           *)
+(* Exposes [connection_supported_profile_key_schedule_lineage] from bare     *)
+(* consistency plus [Some? ks_shared_secret].  The committed interface only  *)
+(* exposes the app-keys-GATED producer [lemma_connection_application_keys_   *)
+(* supported_profile_key_schedule_lineage] (:102), whose precondition        *)
+(* [application_record_keys_installed_for_role] is NOT available at the       *)
+(* client-Finished send.  This producer routes instead through the INTERNAL  *)
+(* reachable-shape lemma (:1171): its [supported_profile_base_lineage_or_    *)
+(* empty] conjunct has only all-None / all-Some / False arms, so a present    *)
+(* shared secret collapses it to the all-Some arm -- master included --        *)
+(* whence [lemma_supported_profile_base_lineage_or_empty_to_lineage] gives    *)
+(* the full lineage.  No readiness, no app-keys gate.                         *)
+(* ------------------------------------------------------------------------ *)
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        connection_supported_profile_key_schedule_lineage st)
+=
+  lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape st;
+  let keys = st.cs_model.model_handshake.hs_keys in
+  assert (supported_profile_base_lineage_or_empty keys);
+  match
+    keys.ks_shared_secret,
+    keys.ks_early_secret,
+    keys.ks_handshake_secret,
+    keys.ks_master_secret
+  with
+  | Some _, Some _, Some _, Some _ ->
+    lemma_supported_profile_base_lineage_or_empty_to_lineage keys
+  | _ -> assert False
+#pop-options
