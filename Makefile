@@ -109,6 +109,7 @@ ROOT_FILES = \
   src/impl/TLS13.System.SeqCountBase.fst \
   src/impl/TLS13.System.AppSeqPairing.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeAgreementNonReady.fst \
+  src/spec/properties/TLS13.ConnectionState.HandshakeSeqZero.fst \
   src/impl/TLS13.System.Ordering.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
   src/impl/TLS13.Impl.Server.Driver.fst
