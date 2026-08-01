@@ -1054,3 +1054,15 @@ val lemma_handshake_record_direction_material_matches_key_schedule_for_role
           dir
           (traffic_id TrafficHandshake (traffic_label_for_endpoint_direction role dir))
           model)
+
+(* Non-ready handshake-epoch analogue of the application slots-match       *)
+(* producer.  Establishes, from consistency alone (no readiness), that     *)
+(* each present handshake traffic slot matches its expected derived        *)
+(* material.  Consumed by the non-ready cross-endpoint handshake-agreement *)
+(* route (Brick 4).                                                        *)
+val lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures
+        first_epoch_handshake_traffic_material_slots_match_expected st)
