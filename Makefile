@@ -111,6 +111,7 @@ ROOT_FILES = \
   src/impl/TLS13.System.ServerReadRecvCount.fst \
   src/impl/TLS13.System.ServerNotCFR.fst \
   src/impl/TLS13.System.AppBothCongruence.fst \
+  src/impl/TLS13.System.AppMaterialFamilies.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeAgreementNonReady.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeSeqZero.fst \
   src/impl/TLS13.System.Ordering.fst \
