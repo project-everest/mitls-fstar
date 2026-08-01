@@ -539,46 +539,6 @@ let app_material_agreement (s:SY.tls_system_state) : prop =
   cf_delivered s ==>
     SMKM.supported_profile_application_record_material_agrees s.client s.server
 
-(** ─────────────────────────────────────────────────────────────────────────
-    OPTION-4 FROZEN-CLIENT COUPLING — the establishment seam for agreement.
-
-    Agreement is ESTABLISHED at the atomic client-Finished delivery to the server
-    (the unique step that turns `cf_delivered` true), by invoking
-    `SY.lemma_ready_quiescent_agrees` on the post-state.  That tool needs BOTH
-    endpoints at `ControlApplicationData`.  The server lands there atomically; the
-    CLIENT's control must be recovered from the pre-state, where the client is
-    FROZEN with its Finished in flight.
-
-    We capture "the client is frozen at application data while its Finished is in
-    flight" as an invariant KEYED ON THE IN-FLIGHT MESSAGE (`pl_sent` is a
-    Finished), NOT on the client's key-epoch state.  The message key is what makes
-    it cheap:
-
-      * ESTABLISHMENT (at `client_send`): a client (`config_role == ClientEndpoint`,
-        a `tls_system_inv` conjunct) Finished send is legal only from
-        `HsServerFinishedVerified` — the sibling `HsServerEncryptedFlightSent`
-        Finished arm requires `ServerEndpoint` — and that arm sets
-        `model_control := ControlApplicationData` unconditionally
-        (`StateMachine.fst:809`).  So any client Finished send lands the client at
-        application data, BY CONSTRUCTION.  No cross-endpoint progress coupling and
-        no `close_notify` case-analysis is needed: a `close_notify` is not a
-        `Finished`, so the antecedent is simply false for it (this is exactly the
-        `ControlClosing` wart that a key-epoch-keyed antecedent would have hit).
-
-      * PRESERVATION: a `MP.ToServer` channel is entered only by `client_send`
-        (the establishment case).  From a `ToServer` state the ONLY enabled family
-        is `deliver_to_server` (every send/local gates on `is_quiet`,
-        `deliver_to_client` needs `ToClient`, and `server_serve` is disabled in
-        this instance), and it yields `Quiet`, making the antecedent vacuous.
-        Every OTHER family starts from `Quiet`, so `MP.ToServer? s.channel` is
-        false in its pre-state and there is nothing to preserve.
-    ───────────────────────────────────────────────────────────────────────── **)
-let cf_inflight_client_appdata (s:SY.tls_system_state) : prop =
-  match s.channel with
-  | MP.ToServer p ->
-      (M.TlsHandshake? p.SY.pl_sent /\ M.Finished? (M.TlsHandshake?._0 p.SY.pl_sent)) ==>
-        SY.ctrl s.client == CS.ControlApplicationData
-  | _ -> True
 
 (** ─────────────────────────────────────────────────────────────────────────
     STAGE (c) — THE FAITHFUL-DECODE SEAL CONJUNCT.
@@ -654,7 +614,13 @@ let channel_seal_ok (s:SY.tls_system_state) : prop =
     `inflight_single_record`) it now includes.  See `app_extras` below. **)
 
 (** ─────────────────────────────────────────────────────────────────────────
-    ESTABLISHMENT HELPERS for `cf_inflight_client_appdata`.
+    CLIENT-CONTROL RECOVERY HELPERS (client Finished send lands the client at
+    `ControlApplicationData`).  Consumed by `lemma_ama_deliver_to_server`'s B2
+    branch via `lemma_client_send_installs_app_write_pins` to recover the client
+    control at the delivery.  (Formerly the establishment helpers for the retired
+    `cf_inflight_client_appdata` conjunct — see git history; that conjunct was a
+    Route-X leftover whose control-recovery job is now done by
+    `read_write_coupling` + the write pin, so it was dropped.)
     ───────────────────────────────────────────────────────────────────────── **)
 
 (** SPEC-level: a *client* Finished send lands the client at
@@ -1329,7 +1295,7 @@ let read_write_coupling (s:SY.tls_system_state) : prop =
   | _ -> True
 
 let app_extras (s:SY.tls_system_state) : prop =
-  app_seq_pairing s /\ cf_inflight_client_appdata s /\
+  app_seq_pairing s /\
   app_material_agreement s /\ channel_seal_ok s /\
   inflight_sender_stepped s /\ inflight_single_record s /\
   read_write_coupling s
@@ -2017,7 +1983,7 @@ let lemma_ama_deliver_to_server
       (ensures app_material_agreement ({ a with server = s'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
-    assert (app_seq_pairing a /\ cf_inflight_client_appdata a /\
+    assert (app_seq_pairing a /\
             app_material_agreement a /\ channel_seal_ok a /\
             inflight_sender_stepped a /\ inflight_single_record a /\
             read_write_coupling a);
@@ -2065,65 +2031,6 @@ let lemma_ama_deliver_to_server
           SY.lemma_appdata_implies_server_ready b;
           SY.lemma_ready_quiescent_agrees b
         )
-      )
-    )
-#pop-options
-
-(** ═══════════════════════════════════════════════════════════════════════════
-    STREAM2 FAMILY PRESERVATION — `cf_inflight_client_appdata`.
-
-    A channel-shaped conjunct (non-trivial only for `MP.ToServer`): it is
-    ESTABLISHED at the `client_send` that creates the `ToServer` channel, and
-    VACUOUS for every family whose post-channel is not `ToServer` (server_send
-    yields `ToClient`; the two deliveries and the two locals yield `Quiet`).  This
-    mirrors the `read_write_coupling` dispatch (`lemma_rwc_client_send` /
-    `lemma_rwc_not_to_server`).
-    ═══════════════════════════════════════════════════════════════════════════ **)
-
-(** VACUITY: a non-`ToServer` post-channel satisfies the conjunct outright. **)
-let lemma_cfia_not_to_server (s:SY.tls_system_state)
-  : Lemma (requires ~(MP.ToServer? s.channel))
-          (ensures cf_inflight_client_appdata s)
-  = ()
-
-(** ESTABLISHMENT at the client send: a client Finished send lands the client at
-    `ControlApplicationData` (StateMachine.fst:809, unconditional control update),
-    so the `Finished? pl_sent ==> ctrl client == ControlApplicationData` guard
-    holds by construction — no cross-endpoint coupling, and the `close_notify`
-    threat is structurally excluded (a `close_notify` is not a `Finished`, and
-    every client family gates on `is_quiet` so the frozen client cannot emit a
-    second in-flight message). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
-let lemma_cfia_client_send (a b:SY.tls_system_state)
-  : Lemma
-      (requires
-        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
-        SY.tls_step_client_send a b)
-      (ensures cf_inflight_client_appdata b)
-  = SY.lemma_client_send_shape a b;
-    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
-                     (sent:M.tls_message).
-      EC.client_step a.client (SM.LocalEvent local) c' out /\
-      out.SM.so_wire_outputs == [w] /\
-      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
-      b == { a with client = c';
-                    channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns cf_inflight_client_appdata b
-    with _pf.
-    (
-      let p : SY.tls_payload =
-        { SY.pl_raw = SY.emitted_raw out;
-          SY.pl_snap = a.client.CS.cs_model;
-          SY.pl_sent = sent } in
-      assert (b.channel == MP.ToServer p);
-      assert (b.client == c');
-      introduce (M.TlsHandshake? p.SY.pl_sent /\ M.Finished? (M.TlsHandshake?._0 p.SY.pl_sent)) ==>
-                  SY.ctrl b.client == CS.ControlApplicationData
-      with _fin.
-      (
-        lemma_client_send_pins_model a.client c' local out sent;
-        lemma_client_finished_send_lands_appdata a.client.CS.cs_model c'.CS.cs_model sent
       )
     )
 #pop-options
