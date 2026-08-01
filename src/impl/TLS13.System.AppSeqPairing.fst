@@ -292,6 +292,41 @@ let lemma_recv_rseq_delta (m m':CS.connection_model) (msg:M.tls_message)
     | _ -> ()
 #pop-options
 
+(** A RECEIVE off both `ControlApplicationData` and `ControlClosing` advances the
+    read seq by ZERO: every nonzero arm of `m_radv` is at one of those two controls
+    (`TlsApplicationData`/`TlsIgnoredPostHandshake`/`Close_notify @ App`, and
+    `Close_notify @ Closing`).  Used at the delivery `~App (snap_wr)` branch, where
+    the control-gated backward gives `~ControlApplicationData?` and `not_closing`
+    gives `~ControlClosing?`. **)
+let lemma_m_radv_zero_non_cad_closing (m:CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires ~(CS.ControlApplicationData? m.CS.model_control) /\
+                ~(CS.ControlClosing? m.CS.model_control))
+      (ensures m_radv m msg == 0)
+  = ()
+
+(** Discharges `lemma_recv_rseq_delta`'s Handshake-vs-App precondition for ANY legal
+    receive from a consistent state, WITHOUT needing to know the receiver's read
+    epoch.  Enumeration: a `TlsHandshake` receive that STEPS from a consistent state
+    sits at one of the seven handshaking-nonfinal receive controls (none is
+    `HsServerFinishedVerified` / `HsClientFinishedReceived` — those are LOCAL
+    Finished-verify controls, not receive arms), and
+    `lemma_handshaking_nonfinal_read_not_application` then forces `~App (rd)` there.
+    A non-Handshake `msg` takes the right disjunct directly.  This is what lets the
+    `~App (snap_wr)` delivery branch invoke the receive-seq delta lemma even when the
+    receiver's read epoch is unknown. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_recv_precond (st st':CS.connection_state) (msg:M.tls_message)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st /\
+        CS.step_tls_message st.CS.cs_model CL.Received msg == Some st'.CS.cs_model)
+      (ensures (m_rd st.CS.cs_model).R.epoch =!= R.Application \/ ~(M.TlsHandshake? msg))
+  = match msg with
+    | M.TlsHandshake hm -> CSL.lemma_handshaking_nonfinal_read_not_application st
+    | _ -> ()
+#pop-options
+
 (** The RECEIVER-side gate for the record-seq pairing.  TRUE on the "pre-closing"
     controls `{ControlNew, ControlHandshaking _, ControlApplicationData}`, FALSE on
     the "closing region" `{ControlClosing, ControlClosed, ControlFailed _}`.  This
@@ -565,20 +600,51 @@ let inflight_bridge_ready
   (let (ct, frag) = W.serialize_tls_message msg in
    W.parse_tls_message ct frag == Some msg)
 
-(** The seal conjunct proper.  For an in-flight-to-server payload:
+(** The seal conjunct proper.  For an in-flight-to-server payload, THREE components,
+    all keyed on READABLE fields (the snapshot write epoch and the receiver control):
 
-      * the receiver's (server's) read epoch is `Application` IFF the sealing
-        snapshot's write epoch is `Application` — so the two seq-delta guards agree
-        (`rin_app` gates on the snapshot's write epoch; the server's read advance
-        gates on the server's read epoch); and
-      * when both are at `Application`, the bridge inputs (`inflight_bridge_ready`:
-        key/iv agreement, single-record seal witness, message round-trip) hold.
-        The record-seq ALIGNMENT the bridge additionally needs is derived at the
-        delivery from `cs_seq_ok`'s gated alignment conjunct via
-        `lemma_cs_delivery_alignment`, so it is NOT restated here.
+      * FORWARD (ungated): if the sealing snapshot's write epoch is `Application`
+        then the receiver's (server's) read epoch is `Application`.  This is the
+        direction consumed at the delivery's NEITHER-APP arm (contrapositive) and by
+        `inflight_sender_stepped`'s handshake-exclusion disjunct.
+
+      * CONTROL-GATED BACKWARD: if the receiver's CONTROL is
+        `ControlApplicationData` then the snapshot write epoch is `Application`.
+        This replaces the old read-epoch biconditional, which was UNSOUND — see
+        HISTORY below.  The gate is on the CONTROL because
+        `ControlApplicationData` is STRICTLY STRONGER than the app read epoch: the
+        epoch survives into `HsServerFinishedVerified` and the entire closure region
+        (`fail_model` preserves `model_record`), whereas the control does NOT.  A
+        reader must NOT "simplify" this gate back to `R.Application? (rd server)` —
+        that reintroduces CE1/CE2 (an alert or Finished payload with the receiver on
+        app read keys but the SNAPSHOT still on handshake write keys).
+
+      * BRIDGE, gated on the snapshot write epoch: when `App (snap_wr)`, the bridge
+        inputs (`inflight_bridge_ready`: key/iv agreement between the SNAPSHOT write
+        material and the receiver read material, single-record seal witness, message
+        round-trip) hold.  Snapshot-keyed so that in an alert-inflation window
+        (`~App (snap_wr)`, receiver possibly on app read keys) the bridge is simply
+        not asserted — protocol-faithful, since a handshake-keyed alert is
+        undecryptable to a client on app keys.  The record-seq ALIGNMENT the bridge
+        additionally needs is derived at the delivery from `cs_seq_ok`'s gated
+        alignment conjunct via `lemma_cs_delivery_alignment`, so it is NOT restated
+        here.
 
     Symmetric for an in-flight-to-client payload.  A `Quiet` channel carries no
     payload, so the conjunct is vacuous — hence trivial at the initial state.
+
+    HISTORY — why the biconditional `App (rd receiver) <==> App (snap_wr)` was
+    UNSOUND (do not re-add).  The `<==` (read-epoch backward) direction is false:
+    a protected alert is `Application_data`-typed at the wire, a `Sent` alert is
+    legal from any control, and epochs are field-keyed and preserved by
+    `fail_model`.  So a server at `HsServerFinishedSent` (App read keys installed)
+    with a client `Close_notify` sealed on HANDSHAKE write keys in flight has
+    `App (rd server)` true and `App (snap_wr)` false — the biconditional's `<==`
+    fails.  The fix keeps the FORWARD `App (snap_wr) ==> App (rd receiver)` (sound:
+    an app-sealed snapshot forces the receiver onto app read keys via the delivery)
+    and replaces the false `<==` with the control-gated backward above, which is the
+    direction actually consumed and is closure-safe.  The two delivery consume sites
+    branch on `App (snap_wr p)` (readable), NOT on the receiver read epoch.
 
     HISTORY (do not re-add): this conjunct USED to also carry
     `m_radv server pl_sent == m_wadv snap pl_sent` (a record-COUNT advance
@@ -594,18 +660,32 @@ let inflight_bridge_ready
     NOTE (why this is stable and where establishment lives): a `ToServer` channel is
     entered ONLY by `client_send`, and the ONLY family enabled from a non-`Quiet`
     channel is the matching delivery (every send/local gates on `is_quiet`), which
-    exits to `Quiet`.  So the SERVER is frozen while `ToServer`, and the
-    biconditional and the bridge inputs are established at the send and never
-    perturbed until the delivery consumes them. **)
+    exits to `Quiet`.  So the SERVER is frozen while `ToServer`, and the three
+    components are established at the send and never perturbed until the delivery
+    consumes them.  IMPORTANT: `pl_snap` is the PRE-send snapshot (System.fst:826 —
+    the channel is `tls_to_server (emitted_raw out) a.client.CS.cs_model sent`, the
+    model BEFORE the send mutates it), so a client's atomic app-write-at-Finished-
+    send is NOT reflected in `snap_wr`: the client-Finished payload has
+    `~App (snap_wr)` even though the post-send client is on app write keys.
+    "Atomic at the send" reads as "already in the snapshot" but it is not. **)
 let channel_seal_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToServer p ->
-      (R.Application? (rd s.server).R.epoch <==> R.Application? (snap_wr p).R.epoch) /\
-      (R.Application? (rd s.server).R.epoch ==>
+      // forward (ungated, readable antecedent): a snapshot sealed on app write keys
+      // is delivered to a server whose read epoch is Application.
+      (R.Application? (snap_wr p).R.epoch ==> R.Application? (rd s.server).R.epoch) /\
+      // control-gated backward: keyed on the CONTROL, not the read epoch.  See the
+      // doc comment above for why the read-epoch gate (the old biconditional) is
+      // UNSOUND (CE1/CE2) and why ControlApplicationData is the right, closure-safe
+      // strengthening.
+      (CS.ControlApplicationData? (SY.ctrl s.server) ==> R.Application? (snap_wr p).R.epoch) /\
+      // bridge, gated on the readable snapshot write epoch.
+      (R.Application? (snap_wr p).R.epoch ==>
         inflight_bridge_ready p.SY.pl_snap s.server.CS.cs_model p.SY.pl_sent p.SY.pl_raw)
   | MP.ToClient p ->
-      (R.Application? (rd s.client).R.epoch <==> R.Application? (snap_wr p).R.epoch) /\
-      (R.Application? (rd s.client).R.epoch ==>
+      (R.Application? (snap_wr p).R.epoch ==> R.Application? (rd s.client).R.epoch) /\
+      (CS.ControlApplicationData? (SY.ctrl s.client) ==> R.Application? (snap_wr p).R.epoch) /\
+      (R.Application? (snap_wr p).R.epoch ==>
         inflight_bridge_ready p.SY.pl_snap s.client.CS.cs_model p.SY.pl_sent p.SY.pl_raw)
   | MP.Quiet -> True
 
@@ -1563,11 +1643,13 @@ let lemma_asp_deliver_to_server
         // EQ_pre : snap_app_wseq p == app_rseq a.server   (cs_seq_ok a, ToServer p, live)
         // send delta : app_wseq a.client == snap_app_wseq p + rin_app p
         lemma_sent_wseq_delta snap a.client.CS.cs_model sent;
-        if R.Application? (rd a.server).R.epoch then
+        if R.Application? (snap_wr p).R.epoch then
         (
-          // BOTH-APP.  channel_seal_ok a gives the bridge inputs; EQ_pre (both App)
+          // App(snap_wr) BRANCH (was BOTH-APP).  channel_seal_ok a's FORWARD gives
+          // App(rd a.server); its snapshot-keyed bridge fires; EQ_pre (both App)
           // gives the seq alignment.  The faithful-decode bridge (fed by the
           // PRE-state seal — non-circular) pins what the server received.
+          assert (R.Application? (rd a.server).R.epoch);   // forward, from App(snap_wr)
           CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
             snap a.server.CS.cs_model sent raw;
           // FINDING-1 HINGE: the bridge is invoked only here, where the server's read
@@ -1593,11 +1675,32 @@ let lemma_asp_deliver_to_server
         )
         else
         (
-          // NEITHER-APP.  Server read epoch not Application: the read projection is 0
-          // pre and post (the receive keeps it 0 — the delta is 0), and the client's
-          // write projection is 0 (snapshot write epoch not Application, by the seal
-          // biconditional), so both sides are 0.
-          lemma_recv_rseq_delta a.server.CS.cs_model s'.CS.cs_model msg
+          // ~App(snap_wr) BRANCH (was NEITHER-APP).  LHS `app_wseq a.client == 0`
+          // (snap_app_wseq p == 0 and rin_app p == 0, both by ~App(snap_wr)).  For
+          // the RHS: the control-gated backward (channel_seal_ok a, ToServer p)
+          // CONTRAPOSITIVE gives ~ControlApplicationData?(ctrl a.server), and
+          // `_live` + `lemma_step_preserves_closing` gives not_closing(ctrl
+          // a.server) hence ~ControlClosing?.  Off both controls a receive advances
+          // the read seq by 0 (`lemma_m_radv_zero_non_cad_closing`), and the delta
+          // lemma's Handshake precondition is discharged by `lemma_recv_precond`
+          // (single-endpoint enumeration, needs no read-epoch knowledge).  With
+          // `m_rseq a.server == 0` from EQ_pre + ~App(snap_wr), `app_rseq s' == 0`.
+          //
+          // The residue this closes: a HANDSHAKE payload with ~App(snap_wr) whose
+          // receive moves the read projection.  The read projection can move only two
+          // ways, and both self-discharge: either the receiver was ALREADY on app
+          // read keys (Case A: impossible — every handshake-receive control is
+          // handshaking-nonfinal, so `lemma_handshaking_nonfinal_read_not_application`
+          // inside `lemma_recv_precond` forces ~App(rd), and here `m_radv == 0`
+          // anyway off {CAD,Closing}); or the receive INSTALLS app read keys (Case B:
+          // `install_keys` (TLS13.Record.Spec.fst:31) zeroes the seq, so the read
+          // projection posts 0).  There is no third way for `app_rseq` to exceed 0
+          // after a handshake delivery, which is why no cross-endpoint content is
+          // needed here.
+          assert (~(CS.ControlApplicationData? (SY.ctrl a.server)));  // control-gated backward
+          lemma_recv_precond a.server s' msg;
+          lemma_recv_rseq_delta a.server.CS.cs_model s'.CS.cs_model msg;
+          lemma_m_radv_zero_non_cad_closing a.server.CS.cs_model msg
         )
       )
     )
@@ -1730,11 +1833,13 @@ let lemma_asp_deliver_to_client
         // EQ_pre : snap_app_wseq p == app_rseq a.client   (sc_seq_ok a, ToClient p, live)
         // send delta : app_wseq a.server == snap_app_wseq p + rin_app p
         lemma_sent_wseq_delta snap a.server.CS.cs_model sent;
-        if R.Application? (rd a.client).R.epoch then
+        if R.Application? (snap_wr p).R.epoch then
         (
-          // BOTH-APP.  channel_seal_ok a gives the bridge inputs; EQ_pre (both App)
+          // App(snap_wr) BRANCH (was BOTH-APP).  channel_seal_ok a's FORWARD gives
+          // App(rd a.client); its snapshot-keyed bridge fires; EQ_pre (both App)
           // gives the seq alignment.  The faithful-decode bridge (fed by the
           // PRE-state seal — non-circular) pins what the client received.
+          assert (R.Application? (rd a.client).R.epoch);   // forward, from App(snap_wr)
           CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
             snap a.client.CS.cs_model sent raw;
           // FINDING-1 HINGE: the bridge is invoked only here, where the client's read
@@ -1764,11 +1869,24 @@ let lemma_asp_deliver_to_client
         )
         else
         (
-          // NEITHER-APP.  Client read epoch not Application: the read projection is 0
-          // pre and post (the receive keeps it 0 — the delta is 0), and the server's
-          // write projection is 0 (snapshot write epoch not Application, by the seal
-          // biconditional), so both sides are 0.
-          lemma_recv_rseq_delta a.client.CS.cs_model c'.CS.cs_model msg
+          // ~App(snap_wr) BRANCH (was NEITHER-APP).  LHS `app_wseq a.server == 0`
+          // (snap_app_wseq p == 0 and rin_app p == 0, both by ~App(snap_wr)).  For
+          // the RHS: the control-gated backward (channel_seal_ok a, ToClient p)
+          // CONTRAPOSITIVE gives ~ControlApplicationData?(ctrl a.client), and `_live`
+          // + `lemma_step_preserves_closing` gives not_closing(ctrl a.client) hence
+          // ~ControlClosing?.  This branch is REQUIRED to use the control route (not
+          // ~App(rd a.client)): CE1 puts a client at `HsServerFinishedVerified` here,
+          // which is App-READ yet ~App(snap_wr) — so the read epoch is unusable, but
+          // the control is not `ControlApplicationData` and `m_radv == 0` off
+          // {CAD,Closing}.  The delta lemma's Handshake precondition is discharged by
+          // `lemma_recv_precond`.  With `m_rseq a.client == 0` from EQ_pre +
+          // ~App(snap_wr), `app_rseq c' == 0`.  Same two-way read-projection
+          // enumeration as the server site (Case A vacuous, Case B `install_keys`
+          // zeroes the seq).
+          assert (~(CS.ControlApplicationData? (SY.ctrl a.client)));  // control-gated backward
+          lemma_recv_precond a.client c' msg;
+          lemma_recv_rseq_delta a.client.CS.cs_model c'.CS.cs_model msg;
+          lemma_m_radv_zero_non_cad_closing a.client.CS.cs_model msg
         )
       )
     )
