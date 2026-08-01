@@ -1887,3 +1887,184 @@ let lemma_rwc_client_send (a b:SY.tls_system_state)
       )
     )
 #pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    STAGE — APPLICATION RECORD-MATERIAL AGREEMENT ESTABLISHMENT at the
+    client-Finished DELIVERY TO SERVER (the unique step turning `cf_delivered`
+    true).  Three pure-model/state pins feed the system-level producer.
+    ═══════════════════════════════════════════════════════════════════════════ **)
+
+(** B2 RECEIVE PIN: a SERVER taking a LEGAL receive that installs the application
+    READ epoch (`record_read.epoch` non-`Application` -> `Application`, ~KeyUpdate)
+    is at `HsServerFinishedSent` taking the client-Finished receive — the UNIQUE
+    server-legal install arm — landing at `ControlApplicationData`.  The sibling
+    install arm (client Finished-receive at `HsCertificateVerifyVerified`,
+    StateMachine.fst:738) is excluded by LEGALITY: `legal_tls_message` requires
+    `config_role == ClientEndpoint` for it (StateMachine.fst:1371), contradicting
+    role Server.  (Note: the KeyUpdate-receive install is excluded by ~KeyUpdate.)
+    Legality is available at the delivery from `legal_connection_delta`, so this is
+    cheaper than pinning the control to the receive region and enumerating it. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_server_recv_installs_app_read_pins
+  (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        CS.legal_tls_message m CL.Received msg /\
+        CS.step_tls_message m CL.Received msg == Some m' /\
+        ~(M.TlsKeyUpdate? msg) /\
+        ~(R.Application? m.CS.model_record.CS.record_read.R.epoch) /\
+        R.Application? m'.CS.model_record.CS.record_read.R.epoch)
+      (ensures
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
+        m'.CS.model_control == CS.ControlApplicationData)
+  = ()
+#pop-options
+
+(** B1 MATERIAL CONGRUENCE: at a CONSISTENT endpoint whose read epoch is ALREADY
+    `Application`, a receive (~KeyUpdate) touches neither `record_write` (receives
+    never write) nor the read epoch/key/iv (only `record_read.seq` advances;
+    `fail_model` preserves `model_record` entirely).  The two Finished-receive
+    arms — the only read re-installs — sit at handshaking controls
+    `HsCertificateVerifyVerified` (client) / `HsServerFinishedSent` (server); at
+    either, `CSL.lemma_handshaking_nonfinal_read_not_application` forces the read
+    epoch OFF `Application`, contradicting the hypothesis, so they are vacuously
+    excluded.  `peer_record_material_agrees` reads ONLY key/iv/epoch (never seq),
+    so this is exactly the stability the congruence transfer needs — which is why
+    a server receive (advancing only `rd.seq`) and `fail_model` (preserving
+    `model_record`) are both harmless to agreement. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_recv_app_preserves_record_material
+  (st st':CS.connection_state) (msg:M.tls_message)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st /\
+        CS.step_tls_message st.CS.cs_model CL.Received msg == Some st'.CS.cs_model /\
+        ~(M.TlsKeyUpdate? msg) /\
+        R.Application? st.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
+      (ensures
+        st'.CS.cs_model.CS.model_record.CS.record_write == st.CS.cs_model.CS.model_record.CS.record_write /\
+        st'.CS.cs_model.CS.model_record.CS.record_read.R.epoch == st.CS.cs_model.CS.model_record.CS.record_read.R.epoch /\
+        st'.CS.cs_model.CS.model_record.CS.record_read.R.key == st.CS.cs_model.CS.model_record.CS.record_read.R.key /\
+        st'.CS.cs_model.CS.model_record.CS.record_read.R.static_iv == st.CS.cs_model.CS.model_record.CS.record_read.R.static_iv)
+  = match st.CS.cs_model.CS.model_control with
+    | CS.ControlHandshaking CS.HsCertificateVerifyVerified
+    | CS.ControlHandshaking CS.HsServerFinishedSent ->
+        CSL.lemma_handshaking_nonfinal_read_not_application st
+    | _ -> ()
+#pop-options
+
+(** B2 CLIENT-CONTROL PIN (write mirror of the receive pin): a send that installs
+    the application WRITE epoch (`record_write.epoch` non-`Application` ->
+    `Application`, ~KeyUpdate) lands the sender at `ControlApplicationData`.  The
+    UNIQUE `step_tls_message` `Sent` arm that installs app write from a non-app
+    snapshot is the client Finished-send (StateMachine.fst:809, at
+    `HsServerFinishedVerified`), whose control update to `ControlApplicationData` is
+    UNCONDITIONAL (it fires even on the `install_client_application_write_after_finished`
+    `None`-arm hole, where the write epoch would stay `Handshake` — but then the
+    hypothesis `Application? client'.write` is false and the lemma is vacuous); the
+    sibling KeyUpdate-send installer is excluded by ~KeyUpdate, and every other
+    `Sent` arm leaves the write epoch unchanged.  Role- and consistency-free: no
+    competing arm exists (unlike the receive side's two Finished arms). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_client_send_installs_app_write_pins
+  (snap client':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message snap CL.Sent sent == Some client' /\
+        ~(M.TlsKeyUpdate? sent) /\
+        ~(R.Application? snap.CS.model_record.CS.record_write.R.epoch) /\
+        R.Application? client'.CS.model_record.CS.record_write.R.epoch)
+      (ensures client'.CS.model_control == CS.ControlApplicationData)
+  = ()
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    SYSTEM-LEVEL PRODUCER: `app_material_agreement b` at a `deliver_to_server`.
+
+    Split on the PRE-state server read epoch:
+      * B1 (already `Application`): the receive is monotone — `cf_delivered a`
+        holds, `app_material_agreement a` (from `app_extras a`) gives agreement at
+        `a`, and the receive preserves the material `peer_record_material_agrees`
+        reads (key/iv/epoch, never seq), so agreement transfers to `s'`.
+      * B2 (not yet `Application`, becomes `Application` at `s'` by `cf_delivered b`):
+        the receive INSTALLS app read — the receive pin lands `a.server` at
+        `HsServerFinishedSent` (in the recv region, so `read_write_coupling a` fires
+        and gives `snap_wr p =!= Application`) and `s'` at `ControlApplicationData`;
+        with `inflight_sender_stepped a` and `cf_delivered b`'s `Application?
+        (wr a.client)`, the write pin lands `a.client` at `ControlApplicationData`.
+        Both endpoints ready, `lemma_ready_quiescent_agrees b` closes it.
+
+    NOTE on the B1/B2 division of labour: the `ControlApplicationData` arm of the
+    server reachable shape is USELESS for monotone preservation (it drops
+    keys-installed at the closure controls) but SUFFICIENT for the B2 readiness
+    establishment via `CSL.lemma_connection_appdata_keys_installed_for_role`
+    (through `SY.lemma_appdata_implies_{client,server}_ready`). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_ama_deliver_to_server
+  (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+  (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\
+        app_extras a /\
+        a.channel == SY.tls_to_server raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        SY.tls_system_inv ({ a with server = s'; channel = MP.Quiet }) /\
+        SY.server_config_valid_e2e s')
+      (ensures app_material_agreement ({ a with server = s'; channel = MP.Quiet }))
+  = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
+    let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+    assert (app_seq_pairing a /\ cf_inflight_client_appdata a /\
+            app_material_agreement a /\ channel_seal_ok a /\
+            inflight_sender_stepped a /\ inflight_single_record a /\
+            read_write_coupling a);
+    assert (a.channel == MP.ToServer p);
+    introduce cf_delivered b ==>
+                SMKM.supported_profile_application_record_material_agrees b.client b.server
+    with _cfd.
+    (
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent
+            { CL.message_direction = CL.Received; CL.message_value = msg } in
+         CS.legal_connection_delta a.server
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire } s' /\
+         SMCan.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
+           (CW.wire_serialize wire) /\
+         ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns SMKM.supported_profile_application_record_material_agrees b.client b.server
+      with _pd.
+      (
+        let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+        assert (CS.legal_tls_message a.server.CS.cs_model CL.Received msg);
+        assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
+        lemma_recv_not_key_update s' msg;
+        if R.Application? (rd a.server).R.epoch then
+        (
+          // B1 MONOTONE: agreement at `a` transfers to `s'` (write + read
+          // key/iv/epoch preserved; agreement reads no seq).
+          lemma_recv_app_preserves_record_material a.server s' msg
+        )
+        else
+        (
+          // B2 ESTABLISHMENT: the receive installs app read.
+          lemma_server_recv_installs_app_read_pins a.server.CS.cs_model s'.CS.cs_model msg;
+          // `a.server @ HsServerFinishedSent` is in the recv region, so
+          // `read_write_coupling a` gives `snap_wr p =!= Application`, and the write
+          // pin then lands `a.client @ ControlApplicationData`.
+          lemma_client_send_installs_app_write_pins snap a.client.CS.cs_model sent;
+          SY.lemma_appdata_implies_client_ready b;
+          SY.lemma_appdata_implies_server_ready b;
+          SY.lemma_ready_quiescent_agrees b
+        )
+      )
+    )
+#pop-options
